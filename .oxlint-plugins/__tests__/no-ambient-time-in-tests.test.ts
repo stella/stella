@@ -129,6 +129,56 @@ describe(RULE, () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 10]);
   });
 
+  test.each([
+    "const { now = Date.now } = {}; now();",
+    "let now; ({ now = Date.now } = {}); now();",
+    "const { clock: { now = Date.now } = {} } = {}; now();",
+    "let now; ({ clock: { now = Date.now } = {} } = {}); now();",
+    "const { clock: { now } = Date } = {}; now();",
+    "let now; ({ clock: { now } = Date } = {}); now();",
+    "const { clock: { now: read = Date.now } } = { clock: {} }; read();",
+    "let read; ({ clock: { now: read = Date.now } } = { clock: {} }); read();",
+    "const { Clock = Date } = {}; Clock();",
+    "let Clock; ({ Clock = Date } = {}); Clock();",
+  ])(
+    "follows missing declaration and assignment binding defaults: %s",
+    async (source) => {
+      expect(await lint(source)).toEqual([1]);
+    },
+  );
+
+  test.each([
+    "const [now = Date.now] = []; now();",
+    "let now; ([now = Date.now] = []); now();",
+    "const [[now = Date.now] = []] = []; now();",
+    "let now; ([[now = Date.now] = []] = []); now();",
+    "const [{ now } = Date] = []; now();",
+    "let now; ([{ now } = Date] = []); now();",
+    "const key = unknown; const { [key]: now = Date.now } = {}; now();",
+    "const key = unknown; let now; ({ [key]: now = Date.now } = {}); now();",
+  ])("follows array and unknown-key clock defaults: %s", async (source) => {
+    expect(await lint(source)).toEqual([1]);
+  });
+
+  test("keeps local and shadowed clock binding defaults clean", async () => {
+    expect(
+      await lint(
+        [
+          "const { now = () => 0 } = {}; now();",
+          "let read; ({ now: read = () => 0 } = {}); read();",
+          "const local = (Date, globalThis) => {",
+          "  const { now = Date.now } = {}; now();",
+          "  let read; ({ now: read = Date.now } = {}); read();",
+          "  const { clock: { now: nested } = Date } = {}; nested();",
+          "  let late; ({ clock: { now: late = Date.now } = {} } = {}); late();",
+          "  const { Clock = globalThis.Date } = {}; Clock();",
+          "};",
+          "void local;",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("recognizes node performance imports and expression wrappers", async () => {
     expect(
       await lint(

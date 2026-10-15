@@ -41,11 +41,14 @@ const GLOBAL_CLOCKS = new Set([
 
 type BindingSelector = string | Reference["identifier"];
 
+type BindingSource = { source: unknown; properties: string[] };
+type BindingPaths = {
+  properties: string[] | null;
+  fallbacks: BindingSource[];
+};
+
 const bindingProperties = (binding: BindingSelector) => {
-  const propertiesForBinding = (
-    pattern: unknown,
-    properties: string[] = [],
-  ): string[] | null => {
+  const propertiesForBinding = (pattern: unknown): BindingPaths | null => {
     if (!isAstNode(pattern)) {
       return null;
     }
@@ -54,10 +57,46 @@ const bindingProperties = (binding: BindingSelector) => {
         typeof binding === "string"
           ? pattern.name === binding
           : pattern === binding;
-      return matches ? properties : null;
+      return matches ? { properties: [], fallbacks: [] } : null;
     }
     if (pattern.type === "AssignmentPattern") {
-      return propertiesForBinding(pattern.left, properties);
+      const found = propertiesForBinding(pattern.left);
+      if (found === null) {
+        return null;
+      }
+      if (found.properties !== null) {
+        // A parent default supplies this subtree, so its path starts here.
+        found.fallbacks.push({
+          source: pattern.right,
+          properties: found.properties,
+        });
+      }
+      return found;
+    }
+    const withProperty = (
+      value: unknown,
+      property: string | null,
+    ): BindingPaths | null => {
+      const found = propertiesForBinding(value);
+      if (found === null) {
+        return null;
+      }
+      return {
+        properties:
+          property === null || found.properties === null
+            ? null
+            : [property, ...found.properties],
+        fallbacks: found.fallbacks,
+      };
+    };
+    if (pattern.type === "ArrayPattern" && Array.isArray(pattern.elements)) {
+      for (const [index, element] of pattern.elements.entries()) {
+        const found = withProperty(element, String(index));
+        if (found !== null) {
+          return found;
+        }
+      }
+      return null;
     }
     if (
       pattern.type !== "ObjectPattern" ||
@@ -73,10 +112,7 @@ const bindingProperties = (binding: BindingSelector) => {
         property.computed === true
           ? staticStringValue(property.key)
           : getPropertyName(property.key);
-      if (name === null) {
-        continue;
-      }
-      const found = propertiesForBinding(property.value, [...properties, name]);
+      const found = withProperty(property.value, name);
       if (found !== null) {
         return found;
       }
@@ -201,16 +237,25 @@ export const createTimeResolver = (
       binding: BindingSelector;
     };
     const appendPaths = ({ pattern, source, binding }: AppendPathsOptions) => {
-      const properties = bindingProperties(binding)(pattern);
-      if (properties === null) {
+      const bindingPaths = bindingProperties(binding)(pattern);
+      if (bindingPaths === null) {
         return;
       }
-      for (const base of paths(source, { seen: nextSeen, invocation })) {
-        let resolved = base;
-        for (const property of properties) {
-          resolved = memberPath({ base: resolved, property });
+      const candidates = bindingPaths.fallbacks;
+      if (bindingPaths.properties !== null) {
+        candidates.push({ source, properties: bindingPaths.properties });
+      }
+      for (const candidate of candidates) {
+        for (const base of paths(candidate.source, {
+          seen: nextSeen,
+          invocation,
+        })) {
+          let resolved = base;
+          for (const property of candidate.properties) {
+            resolved = memberPath({ base: resolved, property });
+          }
+          result.push(resolved);
         }
-        result.push(resolved);
       }
     };
     for (const definition of variable.defs) {

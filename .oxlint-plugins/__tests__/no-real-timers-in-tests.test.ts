@@ -107,6 +107,55 @@ test("tracks later destructuring assignments to native and imported timer aliase
   ]);
 });
 
+test.each([
+  "const { pause = setTimeout } = {}; pause(() => {}, 1);",
+  "let pause; ({ pause = setTimeout } = {}); pause(() => {}, 1);",
+  "const { unrelated: pause = globalThis.setTimeout } = {}; pause(() => {}, 1);",
+  "let pause; ({ unrelated: pause = globalThis.setTimeout } = {}); pause(() => {}, 1);",
+  "const { clock: { pause = setTimeout } = {} } = {}; pause(() => {}, 1);",
+  "let pause; ({ clock: { pause = setTimeout } = {} } = {}); pause(() => {}, 1);",
+  "const { clock: { setTimeout: pause } = globalThis } = {}; pause(() => {}, 1);",
+  "let pause; ({ clock: { setTimeout: pause } = globalThis } = {}); pause(() => {}, 1);",
+  "const { clock: { sleep: pause } = Bun } = {}; pause(1);",
+  "let pause; ({ clock: { sleep: pause } = Bun } = {}); pause(1);",
+  "const { clock: { pause = setTimeout } } = { clock: {} }; pause(() => {}, 1);",
+  "let pause; ({ clock: { pause = setTimeout } } = { clock: {} }); pause(() => {}, 1);",
+])(
+  "follows missing declaration and assignment timer defaults: %s",
+  async (source) => {
+    expect(await lintSingleRule(rule, source, options)).toEqual([1]);
+  },
+);
+
+test.each([
+  "const [pause = setTimeout] = []; pause(() => {}, 1);",
+  "let pause; ([pause = setTimeout] = []); pause(() => {}, 1);",
+  "const [[pause = setTimeout] = []] = []; pause(() => {}, 1);",
+  "let pause; ([[pause = setTimeout] = []] = []); pause(() => {}, 1);",
+  "const [{ setTimeout: pause } = globalThis] = []; pause(() => {}, 1);",
+  "let pause; ([{ setTimeout: pause } = globalThis] = []); pause(() => {}, 1);",
+  "const key = unknown; const { [key]: pause = setTimeout } = {}; pause(() => {}, 1);",
+  "const key = unknown; let pause; ({ [key]: pause = setTimeout } = {}); pause(() => {}, 1);",
+])("follows array and unknown-key timer defaults: %s", async (source) => {
+  expect(await lintSingleRule(rule, source, options)).toEqual([1]);
+});
+
+test("keeps local and shadowed timer binding defaults clean", async () => {
+  const source = [
+    "const { pause = () => {} } = {}; pause();",
+    "let wait; ({ pause: wait = () => {} } = {}); wait();",
+    "const local = (setTimeout, globalThis, Bun) => {",
+    "  const { pause = setTimeout } = {}; pause(() => {}, 1);",
+    "  let later; ({ unrelated: later = globalThis.setTimeout } = {}); later(() => {}, 1);",
+    "  const { clock: { pause: nestedPause = setTimeout } = {} } = {}; nestedPause(() => {}, 1);",
+    "  let nested; ({ clock: { setTimeout: nested } = globalThis } = {}); nested(() => {}, 1);",
+    "  const { clock: { sleep: nap } = Bun } = {}; nap(1);",
+    "};",
+    "void local;",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([]);
+});
+
 test("keeps unrelated and shadowed later destructuring assignments clean", async () => {
   const source = [
     "function shadowed(globalThis, Bun) {",
