@@ -61,7 +61,7 @@ describe("an answer's context notice", () => {
   for (const recordAt of [0, 3]) {
     test(`reads the same live as stored when recorded before chunk ${recordAt}`, () => {
       const stamp = createContextNoticeStamp(null);
-      const streamed = answerChunks().map((chunk, index) => {
+      const streamed = answerChunks().flatMap((chunk, index) => {
         if (index === recordAt) {
           stamp.record(HISTORY_TRIMMED_NOTICE);
         }
@@ -88,8 +88,57 @@ describe("an answer's context notice", () => {
   test("leaves an answer without a notice untouched, live and stored", () => {
     const stamp = createContextNoticeStamp(null);
     const chunks = answerChunks();
-    expect(chunks.map((chunk) => stamp.stamp(chunk))).toEqual(chunks);
+    expect(chunks.flatMap((chunk) => stamp.stamp(chunk))).toEqual(chunks);
     expect(liveAnswer(chunks).metadata?.["contextNotice"]).toBeUndefined();
     expect(stamp.metadata()).toEqual({});
+  });
+
+  test("reaches an answer that opens with a tool call, live as stored", () => {
+    const stamp = createContextNoticeStamp(null);
+    stamp.record(HISTORY_TRIMMED_NOTICE);
+    const chunks: StreamChunk[] = [
+      { type: EventType.RUN_STARTED, runId: "run", threadId: "thread" },
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "call-1",
+        toolCallName: "ask_user",
+        parentMessageId: MESSAGE_ID,
+      },
+      { type: EventType.TOOL_CALL_ARGS, toolCallId: "call-1", delta: "{}" },
+      { type: EventType.TOOL_CALL_END, toolCallId: "call-1" },
+      {
+        type: EventType.RUN_FINISHED,
+        runId: "run",
+        threadId: "thread",
+        finishReason: "tool_calls",
+      },
+    ];
+    const streamed = chunks.flatMap((chunk) => stamp.stamp(chunk));
+
+    const live = liveAnswer(streamed);
+    expect(live.id).toBe(MESSAGE_ID);
+    expect(live.metadata?.["contextNotice"]).toEqual(HISTORY_TRIMMED_NOTICE);
+    // The carrier adds no text: the answer is the tool call alone.
+    expect(live.parts.map(({ type }) => type)).toEqual(["tool-call"]);
+    expect(stamp.metadata()).toEqual({
+      contextNotice: HISTORY_TRIMMED_NOTICE,
+    });
+  });
+
+  test("speaks only for the attempt that answers, keeping a notice known before the turn", () => {
+    const stepOnly = createContextNoticeStamp(null);
+    stepOnly.beginAttempt();
+    stepOnly.record(HISTORY_TRIMMED_NOTICE);
+    stepOnly.beginAttempt();
+    const streamed = answerChunks().flatMap((chunk) => stepOnly.stamp(chunk));
+    expect(stepOnly.metadata()).toEqual({});
+    expect(liveAnswer(streamed).metadata?.["contextNotice"]).toBeUndefined();
+
+    const preflight = createContextNoticeStamp(HISTORY_TRIMMED_NOTICE);
+    preflight.beginAttempt();
+    preflight.beginAttempt();
+    expect(preflight.metadata()).toEqual({
+      contextNotice: HISTORY_TRIMMED_NOTICE,
+    });
   });
 });

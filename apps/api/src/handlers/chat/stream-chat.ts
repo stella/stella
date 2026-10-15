@@ -721,6 +721,7 @@ export const streamChat = async ({
         ? deadlineSignal
         : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId: turnModelSelection.modelId,
+    onAttemptStarted: contextNotice.beginAttempt,
     onHistoryTrimmed: contextNotice.record,
     onModelDispatched: (model) => {
       servedTurnModel = {
@@ -876,25 +877,26 @@ export const streamChat = async ({
     settlement.source = "started";
     const finalChunks: StreamChunk[] = [];
     for await (const visibleChunk of visibleOutput) {
-      const chunk = contextNotice.stamp(visibleChunk);
-      if (
-        settlement.event !== undefined &&
-        (chunk.type === EventType.RUN_FINISHED ||
-          chunk.type === EventType.RUN_ERROR)
-      ) {
+      for (const chunk of contextNotice.stamp(visibleChunk)) {
         if (
-          chunk.type === EventType.RUN_FINISHED &&
-          chunk.outcome?.type === "interrupt"
+          settlement.event !== undefined &&
+          (chunk.type === EventType.RUN_FINISHED ||
+            chunk.type === EventType.RUN_ERROR)
         ) {
-          settlement.resumeSnapshot = {
-            resumeState: { threadId, runId },
-            pendingInterrupts: chunk.outcome.interrupts,
-          };
+          if (
+            chunk.type === EventType.RUN_FINISHED &&
+            chunk.outcome?.type === "interrupt"
+          ) {
+            settlement.resumeSnapshot = {
+              resumeState: { threadId, runId },
+              pendingInterrupts: chunk.outcome.interrupts,
+            };
+          }
+          finalChunks.push(chunk);
+          continue;
         }
-        finalChunks.push(chunk);
-        continue;
+        yield chunk;
       }
-      yield chunk;
     }
     // The visual transform can flush buffered refs after the source terminal.
     // Deliver that content before terminalizing, and identify the last terminal
@@ -1296,6 +1298,8 @@ export type GuardedChatSurfaces = {
 };
 
 type RunChatAttemptsProps = {
+  /** A model attempt is about to run; only the last one answers. */
+  onAttemptStarted: () => void;
   onHistoryTrimmed: (notice: ChatContextNotice) => void;
   onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
@@ -1330,6 +1334,7 @@ const runChatAttempts = async function* ({
   abortController,
   abortSignal,
   devModelId,
+  onAttemptStarted,
   onHistoryTrimmed,
   onModelDispatched,
   externalMcpToolSource,
@@ -1360,6 +1365,7 @@ const runChatAttempts = async function* ({
   // incoming message. A normal chat never carries a plan, even when the engine
   // is enabled, so BYOK/model-selected turns keep the chosen adapter.
   onModelDispatched(primaryModel);
+  onAttemptStarted();
   yield* runChatAttempt({
     abortController,
     abortSignal,
@@ -1415,6 +1421,7 @@ const runChatAttempts = async function* ({
 
   const fallbackState = createChatAttemptState();
   onModelDispatched(fallbackModel);
+  onAttemptStarted();
   yield* runChatAttempt({
     abortController,
     abortSignal,
