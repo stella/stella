@@ -69,7 +69,7 @@ export const FAILURE_REASON_GRADE = {
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",
   sanctions_matcher_closed: "anticipated",
-  sanctions_screening_work_limit: "anticipated",
+  sanctions_screening_work_limit: "defect",
   request_invalid: "client",
   access_denied: "client",
   usage_limited: "client",

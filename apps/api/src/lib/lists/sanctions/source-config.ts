@@ -10,8 +10,7 @@ export const SANCTIONS_SOURCE_CONFIG = {
   eu: {
     allowedRedirectHosts: SANCTIONS_SOURCES.eu.allowedRedirectHosts,
     issuer: "European Union",
-    markerUrl:
-      "https://data.europa.eu/api/hub/repo/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
+    markerUrl: SANCTIONS_SOURCES.eu.discoveryUrl,
     freshnessMs: 48 * HOUR_MS,
   },
   un: {
@@ -23,8 +22,7 @@ export const SANCTIONS_SOURCE_CONFIG = {
   cz: {
     allowedRedirectHosts: SANCTIONS_SOURCES.cz.allowedRedirectHosts,
     issuer: "Czech Republic",
-    markerUrl:
-      "https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html",
+    markerUrl: SANCTIONS_SOURCES.cz.download.pageUrl,
     freshnessMs: 14 * DAY_MS,
   },
   "us-sdn": {

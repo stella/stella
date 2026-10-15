@@ -1162,6 +1162,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
+        "cheerio": "^1.2.0",
         "saxes": "catalog:",
       },
       "devDependencies": {

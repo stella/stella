@@ -12,7 +12,6 @@ import type {
 } from "./entry";
 import {
   matchNames,
-  MAX_SCREENING_WORK,
   nameIndexSteps,
   runSteps,
   spendScreeningWork,
@@ -31,6 +30,11 @@ import {
 import type { NameReading } from "./normalise";
 import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
 import type { ScreeningEntry } from "./screening-entries";
+import {
+  screeningWorkBound,
+  screeningWorkStatsSteps,
+} from "./screening-work-bound";
+import type { ScreeningWorkStats } from "./screening-work-bound";
 import { isCalendarDate } from "./values";
 
 /**
@@ -69,6 +73,7 @@ export type ScreeningIndex = {
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
   readonly identifierEntries: Pick<IdentifierPostings, "get">;
+  readonly workStats: ScreeningWorkStats;
 };
 
 const identifierKey = (value: string): string =>
@@ -100,11 +105,13 @@ function* screeningIndexSteps(
       yield;
     }
   }
+  const names = yield* nameIndexSteps(sourceEntries);
   return {
+    workStats: yield* screeningWorkStatsSteps(names, entries.entries),
     entries: entries.entries,
     entryStorage: entries,
     versions: lists.map((list) => list.version),
-    names: yield* nameIndexSteps(sourceEntries),
+    names,
     identifierEntries,
   };
 }
@@ -261,7 +268,7 @@ export type ScreeningResult = {
   versions: readonly ListVersion[];
   /** The best `limit` of the entries at or above the cutoff. */
   possibleMatches: PossibleMatch[];
-  /** Count found at or above the cutoff; a lower bound when candidate scoring is truncated. */
+  /** Exact count found at or above the cutoff before limiting returned matches. */
   totalMatches: number;
   truncated: boolean;
 };
@@ -293,7 +300,7 @@ type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
-  /** Optional tighter budget; callers cannot exceed the global work bound. */
+  /** Optional tighter budget for exercising the defensive invariant. */
   maxWork?: number;
   /** Receives the work a completed screening spent, for headroom monitoring. */
   onWork?: (usage: ScreeningWorkUsage) => void;
@@ -505,7 +512,6 @@ const screenNameReadings = ({
   work,
 }: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
   const nameMatches = new Map<number, NameMatch>();
-  let truncated = false;
   const distinctReadings = new Map(
     readings.map((reading) => [
       `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
@@ -527,7 +533,6 @@ const screenNameReadings = ({
     if (matched === undefined) {
       return workLimit();
     }
-    truncated ||= matched.truncated;
     for (const [entryIndex, match] of matched.matches) {
       const known = nameMatches.get(entryIndex);
       if (known === undefined || match.score > known.score) {
@@ -535,7 +540,7 @@ const screenNameReadings = ({
       }
     }
   }
-  return Result.ok({ matches: nameMatches, truncated });
+  return Result.ok({ matches: nameMatches });
 };
 
 type PreparedScreeningQuery = {
@@ -601,12 +606,7 @@ const prepareScreeningQuery = (
 export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
-  {
-    cutoff,
-    limit = DEFAULT_LIMIT,
-    maxWork = MAX_SCREENING_WORK,
-    onWork,
-  }: ScreenOptions,
+  { cutoff, limit = DEFAULT_LIMIT, maxWork, onWork }: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
@@ -615,17 +615,22 @@ export const screen = (
     panic(`limit must be a positive integer, got ${limit}`);
   }
   if (
-    !Number.isInteger(maxWork) ||
-    maxWork < 1 ||
-    maxWork > MAX_SCREENING_WORK
+    maxWork !== undefined &&
+    (!Number.isSafeInteger(maxWork) || maxWork < 1)
   ) {
-    panic(`maxWork must be within 1..${MAX_SCREENING_WORK}, got ${maxWork}`);
+    panic(`maxWork must be a positive safe integer, got ${maxWork}`);
   }
   const prepared = prepareScreeningQuery(query);
   if (prepared.isErr()) {
     return prepared;
   }
   const { readings, identifierKeys } = prepared.value;
+  const staticBound = screeningWorkBound({
+    stats: index.workStats,
+    readings,
+    identifierCount: identifierKeys.size,
+  });
+  const workBudgetLimit = Math.min(maxWork ?? staticBound, staticBound);
 
   // The best final score a name could reach if every identity field matched,
   // given the share of the query it explains; the geometric mean with the
@@ -641,9 +646,8 @@ export const screen = (
     return score;
   };
   const work = {
-    remaining: maxWork,
+    remaining: workBudgetLimit,
     exhausted: false,
-    selection: "complete" as const,
   };
   const matched = screenNameReadings({
     index: index.names,
@@ -731,12 +735,12 @@ export const screen = (
     evidence: match.evidence,
     entry: index.entryStorage.hydrate(match.entryIndex),
   }));
-  onWork?.({ spent: maxWork - work.remaining, limit: maxWork });
+  onWork?.({ spent: workBudgetLimit - work.remaining, limit: workBudgetLimit });
   return Result.ok({
     cutoff,
     versions: index.versions,
     possibleMatches: selectedMatches,
     totalMatches: possibleMatches.length,
-    truncated: matched.value.truncated || possibleMatches.length > limit,
+    truncated: possibleMatches.length > limit,
   });
 };

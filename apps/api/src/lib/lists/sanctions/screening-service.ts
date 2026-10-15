@@ -41,6 +41,7 @@ import type {
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
+import { emitSanctionsScreeningCompletionMetric } from "@/api/lib/observability/request-metrics";
 
 import {
   reportSanctionsScreeningFailure,
@@ -470,6 +471,11 @@ const screenList = async ({
   if (matched.value.isErr()) {
     const failure = matched.value.error;
     if (failure.code === "work-limit") {
+      reportFailure({
+        stage: "list-screening",
+        reason: "work-limit",
+        source: freshness.source,
+      });
       return incompleteList(base, screenedEdition);
     }
     if (failure.reason !== null) {
@@ -633,23 +639,28 @@ export const screenSanctionsSubjects = async ({
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
-      lists.push(
-        // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
-        await screenList({
-          db,
-          freshness: sourceFreshness,
-          query: query.query,
-          base: listBase({
-            source: sourceFreshness.source,
-            practiceJurisdictions,
-            heldUpdate: sourceFreshness.heldUpdate,
-          }),
-          indexCache,
-          matcher,
-          resultMode,
-          reportFailure,
+      // db-await-in-loop: bounded sources and subjects; sequential macrotask yields keep warm matching responsive
+      const list = await screenList({
+        db,
+        freshness: sourceFreshness,
+        query: query.query,
+        base: listBase({
+          source: sourceFreshness.source,
+          practiceJurisdictions,
+          heldUpdate: sourceFreshness.heldUpdate,
         }),
-      );
+        indexCache,
+        matcher,
+        resultMode,
+        reportFailure,
+      });
+      if (list.status !== "unavailable") {
+        emitSanctionsScreeningCompletionMetric({
+          source: list.source,
+          outcome: list.status === "incomplete" ? "incomplete" : "complete",
+        });
+      }
+      lists.push(list);
     }
     results.push(
       Result.ok({

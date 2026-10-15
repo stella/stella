@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 
 import {
   appendUnsigned,
-  BoundedCache,
   SpellingColumn,
   stringIdsSteps,
   UnsignedReader,
@@ -172,26 +171,4 @@ test("an object column returns stored nulls instead of treating them as missing"
   expect(column.get(present)).toBe("listed");
   expect(column.get(absent)).toBeNull();
   expect([...column]).toEqual(["listed", null]);
-});
-
-test("a bounded cache never holds more than its limit and evicts the least recently used entry", () => {
-  const cache = new BoundedCache<number, string>(2);
-  cache.set(1, "a");
-  cache.set(2, "b");
-  expect(cache.get(1)).toBe("a");
-  cache.set(3, "c");
-  expect(cache.size).toBe(2);
-  expect(cache.get(2)).toBeUndefined();
-  expect(cache.get(1)).toBe("a");
-  expect(cache.get(3)).toBe("c");
-  cache.set(1, "updated");
-  cache.set(4, "d");
-  expect(cache.get(3)).toBeUndefined();
-  expect(cache.get(1)).toBe("updated");
-  for (let key = 10; key < 1000; key += 1) {
-    cache.set(key, String(key));
-    expect(cache.size).toBe(2);
-    expect(cache.get(key - 1)).toBe(key === 10 ? undefined : String(key - 1));
-    expect(cache.get(key)).toBe(String(key));
-  }
 });

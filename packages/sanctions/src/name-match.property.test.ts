@@ -10,7 +10,7 @@ import {
 import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { AliasQuality, SanctionsEntry } from "./entry";
-import { buildNameIndex, matchNames, MAX_SCREENING_WORK } from "./name-match";
+import { buildNameIndex, matchNames } from "./name-match";
 import { nameReading, nameTokens } from "./normalise";
 
 const config = () => propertyConfig({ seed: propertySeed() });
@@ -72,15 +72,13 @@ const matchesFor = (
     rankEntry: (_entry, nameScore) => nameScore,
     cutoff: 0,
     work: {
-      remaining: MAX_SCREENING_WORK,
+      remaining: Number.MAX_SAFE_INTEGER,
       exhausted: false,
-      selection: "complete",
     },
   });
   if (result === undefined) {
     panic("Small generated names exceeded the screening work budget");
   }
-  expect(result.truncated).toBe(false);
   return result.matches;
 };
 

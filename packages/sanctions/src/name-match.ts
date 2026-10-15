@@ -4,27 +4,22 @@ import { distance } from "@stll/fuzzy-search";
 
 import {
   type SpellingColumn,
-  appendUnsigned,
   spellingColumnSteps,
   stringIdsSteps,
-  UnsignedReader,
-  BoundedCache,
   NumberColumn,
   ObjectColumn,
   PostingColumn,
-  type PackedPostings,
   StringMap,
 } from "./compact-storage";
+import { BuildingDeletions, deletionKey } from "./deletion-keys";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
 import { nameReading } from "./normalise";
 import type { NameToken, NameReading } from "./normalise";
 
-// One budget covers vocabulary lookups, postings and scoring across readings.
-export const MAX_SCREENING_WORK = 2_000_000;
+// Defensive invariant: the edition/input-derived bound covers the full scan.
 export type ScreeningWorkBudget = {
   remaining: number;
   exhausted: boolean;
-  selection: "complete" | "partial";
 };
 export const spendScreeningWork = (
   budget: ScreeningWorkBudget,
@@ -42,13 +37,6 @@ export const spendScreeningWork = (
 const screeningWorkExhausted = (budget: ScreeningWorkBudget): boolean =>
   budget.exhausted;
 
-const MAX_SCORED_PATTERNS = 256;
-const MAX_FUZZY_STRINGS = 64;
-// Screening caches are bounded so a long-lived index cannot grow with every
-// distinct query token: about 65 matches per similarity entry, and one
-// short histogram and spelling per decoded string.
-const SIMILARITY_CACHE_LIMIT = 2048;
-const CHARACTER_CACHE_LIMIT = 16_384;
 const SPELLING_CACHE_LIMIT = 16_384;
 const NO_VOCABULARY_ID = -1;
 
@@ -93,17 +81,9 @@ const editBudget = (length: number): number => {
   return length <= 5 ? 1 : 2;
 };
 
-/**
- * Distinct strings of one spelling form, with a bigram index over them keyed
- * by string length, so a lookup only walks lengths within its edit budget.
- */
+/** Spellings are shared between the folded and raw vocabularies. */
 type Spellings = {
   strings: ObjectColumn<string> | SpellingColumn;
-  lengths: NumberColumn;
-  gramCounts: NumberColumn;
-  characterOffsets: NumberColumn;
-  characterCounts: NumberColumn;
-  characterCache: BoundedCache<number, Uint32Array>;
 };
 
 class VocabularyStrings {
@@ -147,62 +127,21 @@ type Vocabulary = {
   spellingIds: NumberColumn;
   spellings: Spellings;
   ids: Pick<StringMap<number>, "get">;
-  bigrams: StringMap<number>;
-  gramPostings: ReadonlyPostings & Pick<PackedPostings, "reader">;
+  lengths: Set<number>;
+  deletes: { get: (key: number) => number | undefined };
+  deletePostings: ReadonlyPostings;
   postings: ReadonlyPostings;
   joinPostings: ReadonlyPostings;
-  lookupScratch?: LookupScratch;
-  similarityCache: BoundedCache<
-    string,
-    {
-      readonly matches: Map<number, number>;
-      readonly cost: number;
-      readonly partial: boolean;
-    }
-  >;
 };
 
 type BuildingVocabulary = Omit<
   Vocabulary,
-  "ids" | "gramPostings" | "postings" | "joinPostings"
+  "ids" | "deletes" | "deletePostings" | "postings" | "joinPostings"
 > & {
   ids: StringMap<number>;
-  gramPostings: PostingColumn;
+  deletions: BuildingDeletions;
   postings: PostingColumn;
   joinPostings: PostingColumn;
-};
-
-type LookupScratch = {
-  counts: Uint32Array;
-  generations: Uint32Array;
-  generation: number;
-  touched: number[];
-  candidates: number[];
-  queryCounts: Map<number, number>;
-};
-
-const MAX_LOOKUP_GENERATION = 0xff_ff_ff_ff;
-
-const nextLookupScratch = (vocabulary: Vocabulary): LookupScratch => {
-  let scratch = vocabulary.lookupScratch;
-  if (scratch === undefined) {
-    scratch = {
-      counts: new Uint32Array(vocabulary.strings.length),
-      generations: new Uint32Array(vocabulary.strings.length),
-      generation: 0,
-      touched: [],
-      candidates: [],
-      queryCounts: new Map(),
-    };
-    vocabulary.lookupScratch = scratch;
-  }
-  if (scratch.generation >= MAX_LOOKUP_GENERATION) {
-    scratch.generations.fill(0);
-    scratch.generation = 1;
-  } else {
-    scratch.generation += 1;
-  }
-  return scratch;
 };
 
 type IndexedAlias = {
@@ -354,52 +293,37 @@ const emptyVocabulary = (spellings: Spellings): BuildingVocabulary => {
     spellingIds,
     spellings,
     ids: new StringMap(),
-    bigrams: new StringMap(),
-    gramPostings: new PostingColumn(),
+    lengths: new Set(),
+    deletions: new BuildingDeletions(),
     postings: new PostingColumn(),
     joinPostings: new PostingColumn(),
-    similarityCache: new BoundedCache(SIMILARITY_CACHE_LIMIT),
   };
 };
 
-const bigrams = (text: string): Set<string> => {
-  const chars = ["^", ...Array.from(text), "$"];
-  const grams = new Set<string>();
-  for (const [index, char] of chars.entries()) {
-    const previous = chars[index - 1];
-    if (previous !== undefined) {
-      grams.add(`${previous}${char}`);
+/** Every distinct deletion through the budget, including the original string.
+ * Deleting the affected characters on both sides of each edit (including a
+ * transposition) leaves a common subsequence within that many deletions.
+ */
+export const deletionVariants = (text: string): Set<string> => {
+  const variants = new Set([text]);
+  let frontier = [text];
+  for (let depth = 0; depth < editBudget(Array.from(text).length); depth += 1) {
+    const next: string[] = [];
+    for (const current of frontier) {
+      const characters = Array.from(current);
+      for (let position = 0; position < characters.length; position += 1) {
+        const variant = characters
+          .filter((_, index) => index !== position)
+          .join("");
+        if (!variants.has(variant)) {
+          variants.add(variant);
+          next.push(variant);
+        }
+      }
     }
+    frontier = next;
   }
-  return grams;
-};
-
-const gramKey = (length: number, gram: string) => `${length}:${gram}`;
-
-const characterHistogram = (
-  text: string,
-  counts = new Map<number, number>(),
-): Map<number, number> => {
-  counts.clear();
-  for (const character of text) {
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined) {
-      panic("Missing code point in character histogram");
-    }
-    counts.set(codePoint, (counts.get(codePoint) ?? 0) + 1);
-  }
-  return counts;
-};
-
-const compactCharacterCounts = (text: string): Uint32Array => {
-  const sortedCounts = [...characterHistogram(text)].toSorted(
-    ([left], [right]) => left - right,
-  );
-  const pairs: number[] = [];
-  for (const [codePoint, count] of sortedCounts) {
-    pairs.push(codePoint, count);
-  }
-  return Uint32Array.from(pairs);
+  return variants;
 };
 
 type InternOptions = {
@@ -413,41 +337,19 @@ const intern = ({ vocabulary, text, spellingIds }: InternOptions): number => {
     return known;
   }
   const id = vocabulary.strings.length;
-  const grams = bigrams(text);
-  const length = Array.from(text).length;
   const { spellings } = vocabulary;
   let spelling = spellingIds.get(text);
   if (spelling === undefined) {
     spelling = spellings.strings.push(text);
     spellingIds.set(text, spelling);
-    spellings.lengths.push(length);
-    spellings.gramCounts.push(grams.size);
-    let previousCodePoint = 0;
-    const counts = compactCharacterCounts(text);
-    for (let offset = 0; offset < counts.length; offset += 2) {
-      const codePoint =
-        counts.at(offset) ?? panic("Missing spelling code point");
-      appendUnsigned(spellings.characterCounts, codePoint - previousCodePoint);
-      appendUnsigned(
-        spellings.characterCounts,
-        counts.at(offset + 1) ?? panic("Missing spelling count"),
-      );
-      previousCodePoint = codePoint;
-    }
-    spellings.characterOffsets.push(spellings.characterCounts.length);
   }
   vocabulary.spellingIds.push(spelling);
   vocabulary.ids.set(text, id);
+  vocabulary.lengths.add(Array.from(text).length);
   vocabulary.postings.addList();
   vocabulary.joinPostings.addList();
-  for (const gram of grams) {
-    const key = gramKey(length, gram);
-    let list = vocabulary.bigrams.get(key);
-    if (list === undefined) {
-      list = vocabulary.gramPostings.addList();
-      vocabulary.bigrams.set(key, list);
-    }
-    vocabulary.gramPostings.push(list, id);
+  for (const key of new Set(Array.from(deletionVariants(text), deletionKey))) {
+    vocabulary.deletions.add(key, id);
   }
   return id;
 };
@@ -461,10 +363,13 @@ const post = (lists: PostingColumn, ids: readonly number[], alias: number) => {
 function* compactVocabulary(
   vocabulary: BuildingVocabulary,
 ): Generator<void, Vocabulary, void> {
+  const deletions = yield* vocabulary.deletions.compact();
+  const { deletions: _buildingDeletions, ...columns } = vocabulary;
   return {
-    ...vocabulary,
+    ...columns,
     ids: yield* stringIdsSteps(vocabulary.strings),
-    gramPostings: yield* vocabulary.gramPostings.compact(),
+    deletes: deletions.keys,
+    deletePostings: deletions.postings,
     postings: yield* vocabulary.postings.compact(),
     joinPostings: yield* vocabulary.joinPostings.compact(),
   };
@@ -496,13 +401,7 @@ export function* nameIndexSteps(
   }
   const spellings: Spellings = {
     strings: new ObjectColumn(),
-    lengths: new NumberColumn(),
-    gramCounts: new NumberColumn(),
-    characterOffsets: new NumberColumn(),
-    characterCounts: new NumberColumn("byte"),
-    characterCache: new BoundedCache(CHARACTER_CACHE_LIMIT),
   };
-  spellings.characterOffsets.push(0);
   const spellingIds = new StringMap<number>();
   const folded = emptyVocabulary(spellings);
   const raw = canShareVocabularies ? folded : emptyVocabulary(spellings);
@@ -632,315 +531,73 @@ export const runSteps = <T>(steps: Generator<void, T, void>): T => {
 export const buildNameIndex = (entries: readonly SanctionsEntry[]): NameIndex =>
   runSteps(nameIndexSteps(entries));
 
-/**
- * Vocabulary strings within the edit budget of `text`, with similarity
- * 1 - distance / longer length. A bigram count filter limits the exact edit
- * distance to a few candidates instead of the whole vocabulary: one edit (or
- * transposition) destroys at most three of a string's distinct bigrams, so a
- * string within budget k shares at least max(bigrams) - 3k of them.
- */
-type CharacterDistanceOptions = {
-  query: ReadonlyMap<number, number>;
-  candidate: Uint32Array;
-  lengthDifference: number;
-};
-
-// Transpositions preserve counts; other edits repair at most one deficit per side.
-const characterDistanceLowerBound = ({
-  query,
-  candidate,
-  lengthDifference,
-}: CharacterDistanceOptions): number => {
-  let missing = 0;
-  for (const count of query.values()) {
-    missing += count;
-  }
-  for (let offset = 0; offset < candidate.length; offset += 2) {
-    const codePoint =
-      candidate[offset] ?? panic("Missing compact character code point");
-    const count =
-      candidate[offset + 1] ?? panic("Missing compact character count");
-    missing -= Math.min(count, query.get(codePoint) ?? 0);
-  }
-  return Math.max(missing, lengthDifference + missing);
-};
-
-const spellingCharacterCounts = (
-  spellings: Spellings,
-  spelling: number,
-): Uint32Array => {
-  const known = spellings.characterCache.get(spelling);
-  if (known !== undefined) {
-    return known;
-  }
-  const reader = new UnsignedReader({
-    bytes: spellings.characterCounts,
-    from: spellings.characterOffsets.get(spelling),
-    to: spellings.characterOffsets.get(spelling + 1),
-  });
-  const counts: number[] = [];
-  let codePoint = 0;
-  while (!reader.done) {
-    codePoint += reader.read();
-    counts.push(codePoint, reader.read());
-  }
-  const decoded = Uint32Array.from(counts);
-  spellings.characterCache.set(spelling, decoded);
-  return decoded;
-};
-
-// A linear one-edit check tightens the character bound without running a
-// quadratic distance for every spelling in a dense vocabulary.
-const withinOneEdit = (
-  query: readonly string[],
-  candidate: readonly string[],
-) => {
-  if (Math.abs(query.length - candidate.length) > 1) {
-    return false;
-  }
-  let left = 0;
-  let right = 0;
-  let edits = 0;
-  while (left < query.length && right < candidate.length) {
-    if (query[left] === candidate[right]) {
-      left += 1;
-      right += 1;
-      continue;
-    }
-    if (edits > 0) {
-      return false;
-    }
-    edits += 1;
-    if (query.length < candidate.length) {
-      right += 1;
-      continue;
-    }
-    if (query.length > candidate.length) {
-      left += 1;
-      continue;
-    }
-    if (
-      query[left] === candidate[right + 1] &&
-      query[left + 1] === candidate[right]
-    ) {
-      left += 2;
-      right += 2;
-      continue;
-    }
-    left += 1;
-    right += 1;
-  }
-  return edits + (query.length - left) + (candidate.length - right) <= 1;
-};
-
-type FuzzyCandidate = { id: number; score: number };
-type SelectFuzzyStringsOptions = {
-  vocabulary: Vocabulary;
-  text: string;
-  queryCharacters: readonly string[];
-  candidates: readonly number[];
-  lowerBounds: Uint32Array;
-  work: ScreeningWorkBudget;
-};
-
-const selectFuzzyStrings = ({
-  vocabulary,
-  text,
-  queryCharacters,
-  candidates,
-  lowerBounds,
-  work,
-}: SelectFuzzyStringsOptions): FuzzyCandidate[] | undefined => {
-  const length = queryCharacters.length;
-  // Keep only the best actual similarities. Character bounds avoid an
-  // expensive distance when even the candidate's best score cannot enter
-  // the retained set. Both selection and distance work share the hard bound.
-  const selected: FuzzyCandidate[] = [];
-  const compare = (left: FuzzyCandidate, right: FuzzyCandidate) =>
-    right.score - left.score ||
-    vocabulary.postings.size(left.id) +
-      vocabulary.joinPostings.size(left.id) -
-      vocabulary.postings.size(right.id) -
-      vocabulary.joinPostings.size(right.id) ||
-    left.id - right.id;
-  for (const id of candidates) {
-    if (!spendScreeningWork(work)) {
-      return undefined;
-    }
-    const candidateLength = vocabulary.spellings.lengths.getUnchecked(
-      vocabulary.spellingIds.getUnchecked(id),
-    );
-    const longerLength = Math.max(length, candidateLength);
-    let lowerBound = lowerBounds[id] ?? 0;
-    let oneEdit = false;
-    if (lowerBound < 2) {
-      if (!spendScreeningWork(work, length + candidateLength)) {
-        return undefined;
-      }
-      oneEdit = withinOneEdit(
-        queryCharacters,
-        Array.from(vocabulary.strings.get(id)),
-      );
-      lowerBound = oneEdit ? 1 : 2;
-    }
-    const optimistic = { id, score: 1 - lowerBound / longerLength };
-    const worst = selected.at(-1);
-    if (
-      selected.length === MAX_FUZZY_STRINGS &&
-      worst !== undefined &&
-      compare(optimistic, worst) >= 0
-    ) {
-      continue;
-    }
-    if (!oneEdit && !spendScreeningWork(work, length * candidateLength)) {
-      return undefined;
-    }
-    const edits = oneEdit
-      ? 1
-      : distance(text, vocabulary.strings.get(id), METRIC);
-    if (edits > editBudget(Math.min(length, candidateLength))) {
-      continue;
-    }
-    const candidate = { id, score: 1 - edits / longerLength };
-    if (!spendScreeningWork(work, selected.length * 2 + 1)) {
-      return undefined;
-    }
-    const position = selected.findIndex(
-      (other) => compare(candidate, other) < 0,
-    );
-    if (position === -1) {
-      if (selected.length < MAX_FUZZY_STRINGS) {
-        selected.push(candidate);
-      }
-      continue;
-    }
-    selected.splice(position, 0, candidate);
-    if (selected.length > MAX_FUZZY_STRINGS) {
-      selected.pop();
-    }
-  }
-  return selected;
-};
-
+/** Complete symmetric-deletion neighbourhood, followed by exact verification. */
 type SimilarStringsOptions = {
   vocabulary: Vocabulary;
   text: string;
   work: ScreeningWorkBudget;
 };
-const similarStrings = ({
+export const similarStrings = ({
   vocabulary,
   text,
   work,
 }: SimilarStringsOptions): Map<number, number> => {
-  const initialWork = work.remaining;
   const similar = new Map<number, number>();
   if (!spendScreeningWork(work, text.length + 1)) {
     return similar;
   }
+  const length = Array.from(text).length;
   const exact = vocabulary.ids.get(text);
   if (exact !== undefined) {
     similar.set(exact, 1);
   }
-  const cached = vocabulary.similarityCache.get(text);
-  if (cached !== undefined) {
-    const remainingCost = cached.cost - (text.length + 1);
-    if (!spendScreeningWork(work, remainingCost)) {
-      return similar;
-    }
-    if (cached.partial) {
-      work.selection = "partial";
-    }
-    return cached.matches;
-  }
-  const queryCharacters = Array.from(text);
-  const length = queryCharacters.length;
   const budget = editBudget(length);
-  if (budget === 0) {
+  // No edit can cross this length boundary. Avoid generating quadratic
+  // deletion sets for long, valid input absent from the edition vocabulary.
+  if (
+    budget === 0 ||
+    !Array.from(vocabulary.lengths).some(
+      (other) =>
+        Math.abs(length - other) <= editBudget(Math.min(length, other)),
+    )
+  ) {
     return similar;
   }
-  const grams = bigrams(text);
-  const scratch = nextLookupScratch(vocabulary);
-  const counts = characterHistogram(text, scratch.queryCounts);
-  const generation = scratch.generation;
-  const { counts: sharedCounts, generations, touched, candidates } = scratch;
-  touched.length = 0;
-  candidates.length = 0;
-  for (let other = length - budget; other <= length + budget; other += 1) {
-    for (const gram of grams) {
-      const list = vocabulary.bigrams.get(gramKey(other, gram));
-      if (list === undefined) {
-        continue;
-      }
-      const postings = vocabulary.gramPostings.reader(list);
-      for (let id = postings.read(); id !== undefined; id = postings.read()) {
-        if (!spendScreeningWork(work)) {
-          return similar;
-        }
-        if (generations[id] !== generation) {
-          generations[id] = generation;
-          sharedCounts[id] = 0;
-          touched.push(id);
-        }
-        sharedCounts[id] = (sharedCounts[id] ?? 0) + 1;
-      }
-    }
-  }
-  for (const id of touched) {
-    if (!spendScreeningWork(work)) {
+  const candidates = new Set<number>();
+  for (const variant of deletionVariants(text)) {
+    if (!spendScreeningWork(work, variant.length + 1)) {
       return similar;
     }
-    const spelling = vocabulary.spellingIds.getUnchecked(id);
-    const candidateLength = vocabulary.spellings.lengths.getUnchecked(spelling);
+    const list = vocabulary.deletes.get(deletionKey(variant));
+    if (list === undefined) {
+      continue;
+    }
+    for (const id of vocabulary.deletePostings.get(list)) {
+      if (!spendScreeningWork(work)) {
+        return similar;
+      }
+      candidates.add(id);
+    }
+  }
+  for (const id of candidates) {
+    const candidate = vocabulary.strings.get(id);
+    const candidateLength = Array.from(candidate).length;
     const pairBudget = editBudget(Math.min(length, candidateLength));
+    if (Math.abs(length - candidateLength) > pairBudget) {
+      continue;
+    }
     if (
-      id === exact ||
-      pairBudget === 0 ||
-      Math.abs(candidateLength - length) > pairBudget ||
-      (sharedCounts[id] ?? 0) <
-        Math.max(
-          grams.size,
-          vocabulary.spellings.gramCounts.getUnchecked(spelling),
-        ) -
-          3 * pairBudget
+      !spendScreeningWork(work, Math.max(1, text.length * candidate.length))
     ) {
-      continue;
+      return similar;
     }
-    const lowerBound = characterDistanceLowerBound({
-      query: counts,
-      candidate: spellingCharacterCounts(vocabulary.spellings, spelling),
-      lengthDifference: candidateLength - length,
-    });
-    if (lowerBound > pairBudget) {
-      continue;
+    const edits = distance(text, candidate, METRIC);
+    if (edits <= pairBudget) {
+      similar.set(
+        id,
+        length === 0 ? 1 : 1 - edits / Math.max(length, candidateLength),
+      );
     }
-    sharedCounts[id] = lowerBound;
-    candidates.push(id);
-  }
-  const selected = selectFuzzyStrings({
-    vocabulary,
-    text,
-    queryCharacters,
-    candidates,
-    lowerBounds: sharedCounts,
-    work,
-  });
-  if (selected === undefined) {
-    return similar;
-  }
-  // Cache this lookup's own truncation, independently of earlier tokens.
-  const truncated = candidates.length > MAX_FUZZY_STRINGS;
-  if (truncated) {
-    work.selection = "partial";
-  }
-  for (const { id, score } of selected) {
-    similar.set(id, score);
-  }
-  if (!screeningWorkExhausted(work)) {
-    vocabulary.similarityCache.set(text, {
-      matches: similar,
-      cost: initialWork - work.remaining,
-      partial: truncated,
-    });
   }
   return similar;
 };
@@ -1414,7 +1071,6 @@ const candidateEstimate = ({
 
 export type NameMatches = {
   matches: Map<number, NameMatch>;
-  truncated: boolean;
 };
 
 export type NameMatch = { score: number; name: string };
@@ -1608,13 +1264,7 @@ export const matchNames = ({
     return undefined;
   }
   const best = new Map<number, NameMatch>();
-  const selected = [
-    ...candidates.filter((candidate) => candidate.exact),
-    ...candidates
-      .filter((candidate) => !candidate.exact)
-      .slice(0, MAX_SCORED_PATTERNS),
-  ];
-  for (const { aliasIndices, exact } of selected) {
+  for (const { aliasIndices, exact } of candidates) {
     const alias = index.aliases.get(aliasIndices[0]);
     let score = alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1;
     if (!exact) {
@@ -1645,7 +1295,5 @@ export const matchNames = ({
   }
   return {
     matches: best,
-    truncated:
-      work.selection === "partial" || selected.length < candidates.length,
   };
 };

@@ -154,9 +154,10 @@ test("dense common names screen normally within the warm work bound", () => {
     }
   }
   console.info(JSON.stringify({ denseNames: timings }));
-});
+}, 30_000);
 
 test("repeated rejected name patterns stay within a linear screening work budget", () => {
+  let baseline: { count: number; spent: number } | undefined;
   for (const count of [100, 1000, 10_000]) {
     const index = buildNameIndex(
       Array.from({ length: count }, () =>
@@ -170,7 +171,7 @@ test("repeated rejected name patterns stay within a linear screening work budget
       ceiling: Math.sqrt,
       rankEntry: (_entry, score) => score,
       cutoff: 0,
-      work: { remaining: 100 * count, exhausted: false, selection: "complete" },
+      work: { remaining: 100 * count, exhausted: false },
     });
     expect(exhaustive?.matches.size).toBe(count);
     for (const match of exhaustive?.matches.values() ?? []) {
@@ -178,9 +179,8 @@ test("repeated rejected name patterns stay within a linear screening work budget
       expect(match.score).toBeLessThan(DEFAULT_CUTOFF);
     }
     const work = {
-      remaining: 8 * count,
+      remaining: Number.MAX_SAFE_INTEGER,
       exhausted: false,
-      selection: "complete",
     } satisfies ScreeningWorkBudget;
     const filtered = matchNames({
       index,
@@ -190,9 +190,17 @@ test("repeated rejected name patterns stay within a linear screening work budget
       cutoff: DEFAULT_CUTOFF,
       work,
     });
+    const spent = Number.MAX_SAFE_INTEGER - work.remaining;
+    if (baseline === undefined) {
+      baseline = { count, spent };
+    } else {
+      // Fixed vocabulary lookup cost is independent of repeated alias count.
+      expect(spent - baseline.spent).toBeLessThanOrEqual(
+        8 * (count - baseline.count),
+      );
+    }
     expect(work.exhausted).toBe(false);
     expect(filtered?.matches.size).toBe(0);
-    expect(filtered?.truncated).toBe(false);
   }
 });
 
@@ -356,8 +364,8 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
   const index = buildScreeningIndex([
     { version, entries: [...fillers, ...decoys, ...planted] },
   ]);
-  // Partition postings, retaining the full vocabulary and IDF weights. Each
-  // relevant partition has fewer patterns than the cap; fillers share an
+  // Partition postings, retaining the full vocabulary and IDF weights. The
+  // relevant aliases are divided into small partitions; fillers share an
   // irrelevant partition. Their union is exhaustive for these queries.
   const partitions: ScreeningIndex[] = [];
   for (let start = 0; start < index.names.aliases.length;) {
@@ -435,16 +443,15 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
           cutoff: DEFAULT_CUTOFF,
           limit: 25,
         }).unwrap();
-        expect(bounded.truncated).toBe(true);
+        expect(bounded.truncated).toBe(bounded.totalMatches > 25);
         expect(bounded.possibleMatches).toEqual(exhaustive);
       }
     }
   }
 }, 20_000);
 
-test("a cached fuzzy lookup keeps its own truncation when an earlier token already truncated", () => {
-  // Many spellings sharing a stem push each stem lookup past the fuzzy
-  // candidate cap, so every lookup of these tokens is itself truncated.
+test("dense fuzzy neighbourhoods complete on both first and repeated lookups", () => {
+  // More than 64 spellings are viable; every neighbour must be retained.
   // Letters only: name normalisation drops digits, which would collapse the
   // variants into one spelling.
   const letters = "abcdefghijklmnopqrst";
@@ -464,14 +471,17 @@ test("a cached fuzzy lookup keeps its own truncation when an earlier token alrea
       ],
     },
   ]);
-  // "novac" truncates first, so the shared selection is already partial when
-  // "novak" is looked up and cached.
   const first = screen(
     index,
     { name: "Novac Novak" },
-    { cutoff: 0.5 },
+    { cutoff: 0.5, limit: index.entries.length },
   ).unwrap();
-  expect(first.truncated).toBe(true);
-  const replayed = screen(index, { name: "Novak" }, { cutoff: 0.5 }).unwrap();
-  expect(replayed.truncated).toBe(true);
+  expect(first.truncated).toBe(false);
+  const replayed = screen(
+    index,
+    { name: "Novak" },
+    { cutoff: 0, limit: index.entries.length },
+  ).unwrap();
+  expect(replayed.truncated).toBe(false);
+  expect(replayed.totalMatches).toBeGreaterThan(64);
 });

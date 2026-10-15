@@ -2,7 +2,12 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
+import {
+  SANCTIONS_SOURCES,
+  readUnListVersion,
+  discoverCzCsvUrl,
+  discoverEuXmlUrl,
+} from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -15,12 +20,7 @@ import {
 } from "@/api/lib/safe-outbound-fetch";
 
 import { SANCTIONS_SOURCE_CONFIG } from "./source-config";
-import {
-  discoverCzCsvUrl,
-  discoverEuXmlUrl,
-  fetchSanctionsEdition,
-  fetchSanctionsMarker,
-} from "./source-fetch";
+import { fetchSanctionsEdition, fetchSanctionsMarker } from "./source-fetch";
 
 const FIXTURES = path.join(
   import.meta.dir,

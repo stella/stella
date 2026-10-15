@@ -34,6 +34,7 @@ type SourceMetadata = {
   licence?: Licence;
   editionMarker: EditionMarker;
   access?: { kind: "query-token"; parameter: "token" };
+  discoveryUrl?: string;
 };
 
 const EU_XML =
@@ -44,7 +45,7 @@ const UN_XML = "https://scsanctions.un.org/resources/xml/en/consolidated.xml";
 const UN_PAGE =
   "https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list";
 const CZ_PAGE =
-  "https://mzv.gov.cz/jnp/cz/zahranicni_vztahy/sankcni_politika/sankcni_seznam_cr/vnitrostatni_sankcni_seznam.html";
+  "https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html";
 const CZ_FILE = "Vnitrostatni_sankcni_seznam_YYYY_MM_DD.csv";
 const OFAC_EXPORT =
   "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/";
@@ -66,6 +67,8 @@ export const SANCTIONS_SOURCES = {
     },
     editionMarker: { kind: "publisher-checksum", url: EU_CHECKSUM },
     access: { kind: "query-token", parameter: "token" },
+    discoveryUrl:
+      "https://data.europa.eu/api/hub/repo/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions",
   },
   un: {
     id: "un",

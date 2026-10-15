@@ -77,24 +77,38 @@ deduplication. Excess input returns `excess-query-tokens`; register-resolved
 names bypass this input cap because callers cannot correct a publisher's name.
 Repeated query and alias spellings retain their original adjacency graph.
 
-A cheap optimistic score filters candidates that cannot reach the cutoff and
-ranks the rest using the entry's birth-date, nationality and entity-type
-evidence, with exact names first. Equivalent aliases share a score; their
-group uses its best entry's evidence for selection, so
-a frequent spelling never consumes the candidate allowance repeatedly. Each
-query unit retains its exact vocabulary token and at most 64 fuzzy spellings,
-ranked by shared bigrams before edit distance. Exact name patterns bypass the
-full-alignment cap. At
-most 256 distinct name patterns receive full alignment per reading. A
-2,000,000-unit screening budget covers vocabulary expansion, postings, ranking,
-scoring, identifiers and sorting across both readings of an unknown party.
-Exhaustion returns `ScreeningWorkLimitError` (`work-limit`); both API paths
-report the affected list unavailable with the existing `load-failed` reason.
+An optimistic score filters alias groups only when their upper bound cannot
+reach the cutoff. Every remaining group receives full alignment, with exact
+groups first; equivalent aliases share a score and results stay grouped by entry.
+Each folded and raw vocabulary has a symmetric-deletion index: every spelling
+is indexed under hashes of all distinct deletions through its edit budget (zero below
+four characters, one for four or five, two otherwise). Append-only numeric pairs sort and pack by hash shard, avoiding a mutable map
+and linked node for every deletion. Query deletions union
+postings, then exact Damerau–Levenshtein verifies every candidate (including hash collisions). There is no
+neighbour or alias-pattern cap. Index construction and posting packing remain
+incremental. The old bigram/histogram candidate path and similarity cache are gone.
 
-`truncated` also marks candidate selection that omitted viable patterns;
-`totalMatches` is then the number found, a lower bound. Partial results retain
-possible matches for review. A truncated search with no possible matches is
-unavailable, never clear. Index construction remains cached separately.
+`screening-work-bound.ts` derives a defensive work invariant from the edition
+and prepared input, independently of candidate order. For normalized token
+length L there are at most D=1+L+L(L−1)/2 deletion keys. With V vocabulary
+spellings of maximum length M, lookup costs at most
+(L+1)(D+1)+DV+V·max(1,LM): each posting and neighbour count is bounded by V.
+For T query tokens and J original adjacent pairs, U=T+J; both spelling forms
+are covered. The bound also covers all alias postings, every alias's full
+pair alignment and sorting, identity evidence, identifiers and result sorting.
+The implementation derives these edition dimensions during the incremental
+build. It uses actual validated input lengths, including register-resolved
+names. The public contract caps organisation names at 512 characters and person
+name parts at 100 each; the free-text token ceiling remains 24.
+
+Exhausting this bound is an invariant failure: `ScreeningWorkLimitError`
+(`work-limit`) propagates to the API's reported, typed `incomplete` list status.
+Callers may supply a smaller budget for failure-path tests. `truncated` still
+marks a returned-match limit: `totalMatches` is the exact total after all
+candidate scoring completes. API completion metrics count these fully scored
+shortlists as complete; only the typed incomplete result counts as incomplete.
+Unavailable lists retain failure metrics and emit no completion metric.
+
 The shared API service yields to the event loop between list screenings;
 anonymous screenings additionally allow at most two active requests per API
 process and reject excess work before database reads. The work budget is a
@@ -102,9 +116,9 @@ backstop, not a wall-clock deadline. Public matching uses a bounded worker-threa
 pool (one worker by default, at most two), with indexes built and cached in the
 worker. Its 250 ms total screening deadline includes queueing and database reads;
 expiry or a worker crash reports unavailable and recycles the worker. Large cold
-editions are rebuilt without identity input in a bounded 10-second background
+editions are rebuilt without identity input in a bounded two-minute background
 lease after expiry. Edition changes replace the worker cache on the next check.
-The product path retains its existing cache and work-budget behavior.
+The product path retains its existing cache. Both paths use the derived work invariant.
 
 ## Evaluation
 
@@ -130,3 +144,14 @@ The library code is Apache-2.0. Source data has separate terms:
 | [US OFAC lists](https://ofac.treasury.gov/sanctions-list-service)                                                                                       | US federal government work is [public domain under 17 USC § 105](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm). |
 | [UK Sanctions List](https://www.gov.uk/government/publications/the-uk-sanctions-list)                                                                   | Terms are on the [publication page](https://www.gov.uk/government/publications/the-uk-sanctions-list).                                                               |
 | [Swiss SECO list](https://www.seco.admin.ch/en/searching-for-subjects-sanctions)                                                                        | Terms are on the [federal terms page](https://www.admin.ch/en/terms-and-conditions).                                                                                 |
+
+## Optional real-edition proof
+
+`bun run prove:real-editions` downloads current public publisher editions with
+the existing source metadata and parsers; `--directory` accepts previously
+downloaded official editions. The nightly/on-demand full-test workflow runs it
+outside PR checks. It measures build time, retained/peak process RSS, work,
+observed neighbourhood size and p99 screening latency over common names across
+scripts and organisations, with every list screened without a result cap.
+The proof requires all sources; publisher failures are reported rather than
+substituted with fixtures.
