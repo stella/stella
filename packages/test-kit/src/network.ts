@@ -348,11 +348,17 @@ export const installNetworkGuard = ({
     guardMethod(Bun, "connect", refuseSocket("Bun.connect"), "reject"),
   ];
 
-  installed = () => {
+  // Tied to this installation: once it has run, or once a later guard took
+  // over, calling it again does nothing.
+  const uninstall = () => {
+    if (installed !== uninstall) {
+      return;
+    }
     for (const restore of restores.toReversed()) {
       restore();
     }
     installed = undefined;
   };
-  return installed;
+  installed = uninstall;
+  return uninstall;
 };

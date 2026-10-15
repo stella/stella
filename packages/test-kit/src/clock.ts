@@ -38,6 +38,9 @@ const assertDuration = (milliseconds: number, what: string) => {
   }
 };
 
+/** The longest delay a platform timer holds before it overflows. */
+export const MAX_TIMER_MS = 2 ** 31 - 1;
+
 const abortableTimeout = async (
   milliseconds: number,
   { signal }: SleepOptions = {},
@@ -46,15 +49,26 @@ const abortableTimeout = async (
     signal.throwIfAborted();
   }
   const { promise, resolve, reject } = Promise.withResolvers<undefined>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const onAbort = () => {
     clearTimeout(timer);
     reject(signal?.reason);
   };
-  // kit-allow: the system clock is the one owner of real timers.
-  const timer = setTimeout(() => {
-    signal?.removeEventListener("abort", onAbort);
-    resolve(undefined);
-  }, milliseconds);
+  // Timers overflow above MAX_TIMER_MS and fire at once, so a longer sleep
+  // waits in chunks until the whole duration has passed.
+  const wait = (remaining: number) => {
+    const chunk = Math.min(remaining, MAX_TIMER_MS);
+    // kit-allow: the system clock is the one owner of real timers.
+    timer = setTimeout(() => {
+      if (remaining > chunk) {
+        wait(remaining - chunk);
+        return;
+      }
+      signal?.removeEventListener("abort", onAbort);
+      resolve(undefined);
+    }, chunk);
+  };
+  wait(milliseconds);
   signal?.addEventListener("abort", onAbort, { once: true });
   return promise;
 };

@@ -400,6 +400,16 @@ describe("network guard", () => {
     expect(error).toBeInstanceOf(NetworkAccessError);
   });
 
+  test("a stale uninstall cannot remove a later guard", async () => {
+    const first = installNetworkGuard();
+    first();
+    uninstall = installNetworkGuard();
+    first();
+    first();
+    const error = await rejectionOf(fetch("https://example.com/"));
+    expect(error).toBeInstanceOf(NetworkAccessError);
+  });
+
   test("uninstall restores the originals and a second install panics", () => {
     const originalFetch = globalThis.fetch;
     const originalConnect = net.Socket.prototype.connect;

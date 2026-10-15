@@ -1,8 +1,13 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { TEST_CLOCK_START, createTestClock } from "./clock.ts";
+import {
+  MAX_TIMER_MS,
+  TEST_CLOCK_START,
+  createTestClock,
+  systemClock,
+} from "./clock.ts";
 
 describe("test clock", () => {
   test("starts at a fixed instant and only moves when advanced", async () => {
@@ -110,5 +115,36 @@ describe("test clock", () => {
       "already running",
     );
     await first;
+  });
+});
+
+describe("system clock", () => {
+  test("a sleep longer than a platform timer waits in chunks", async () => {
+    const delays: number[] = [];
+    const pending: (() => void)[] = [];
+    // Records the timers instead of waiting for them.
+    const timers = spyOn(globalThis, "setTimeout").mockImplementation(
+      // @ts-expect-error -- a recording stand-in for the timer overloads.
+      (callback: () => void, delay: number) => {
+        delays.push(delay);
+        pending.push(callback);
+        return 0;
+      },
+    );
+    try {
+      let woke = false;
+      const sleeping = systemClock.sleep(MAX_TIMER_MS + 5).then(() => {
+        woke = true;
+        return woke;
+      });
+      expect(delays).toEqual([MAX_TIMER_MS]);
+      pending.shift()?.();
+      expect(delays).toEqual([MAX_TIMER_MS, 5]);
+      expect(woke).toBe(false);
+      pending.shift()?.();
+      expect(await sleeping).toBe(true);
+    } finally {
+      timers.mockRestore();
+    }
   });
 });
