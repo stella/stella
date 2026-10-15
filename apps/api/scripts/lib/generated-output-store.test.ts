@@ -59,7 +59,7 @@ const portableStamp = (root: string): CompilerInputStamp => {
   return recorder.portableStamp(CONTEXT, root);
 };
 
-const restore = (root: string, context = CONTEXT) =>
+const restore = async (root: string, context = CONTEXT) =>
   restoreGeneratedOutput({ storeDir, root, context });
 
 beforeEach(() => {
