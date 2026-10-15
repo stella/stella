@@ -3,6 +3,51 @@ import type * as v from "valibot";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
+export type CitationPage = {
+  decisionId: string;
+  direction: "cites" | "cited_by";
+  nextCursor: string | null;
+  citations: Array<{
+    citationId: string;
+    citationText: string | null;
+    textWithheldReason: "source_licence" | null;
+    polarity:
+      | "negative"
+      | "neutral"
+      | "positive"
+      | "supportive"
+      | "mixed"
+      | "unclassified";
+    decision: {
+      appUrl: string | null;
+      url: string | null;
+      source_url?: string | undefined;
+      caseNumber: string;
+      caseNumberType?:
+        | "case-number"
+        | "neutral-citation"
+        | "reporter-citation"
+        | undefined;
+      citationAuthority: number;
+      court: string;
+      decisionDate: string | null;
+      decisionId: string;
+      decisionType: string | null;
+      resourceName: string;
+    } | null;
+    passage: {
+      anchorId: string;
+      text: string;
+      truncated: boolean;
+      mention: "sole" | "classified_section" | "latest_of_several";
+    } | null;
+  }>;
+};
+export declare const APP_CITATION_PAGE_SCHEMA: v.GenericSchema<
+  unknown,
+  CitationPage
+>;
+
 export type ProvisionHistory = {
   anchor: string;
   eli: string;
