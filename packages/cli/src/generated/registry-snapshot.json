@@ -3964,6 +3964,7 @@
                 "properties": {
                   "kind": {
                     "enum": ["levelOnly"],
+                    "description": "Set only the paragraph's list nesting depth",
                     "type": "string"
                   },
                   "ilvl": {
@@ -3974,7 +3975,8 @@
                   }
                 },
                 "required": ["kind", "ilvl"],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
