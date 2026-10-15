@@ -269,7 +269,7 @@ const resolveReleaseExpression = (expression: unknown, context: unknown) => {
     typeof expression === "string",
     "Release expression must be a string",
   );
-  const path = expression.match(/^\$\{\{\s*([\w.-]+)\s*\}\}$/u)?.[1];
+  const path = /^\$\{\{\s*([\w.-]+)\s*\}\}$/u.exec(expression)?.[1];
   assert.ok(path !== undefined, "Expected a release output reference");
   let value = context;
   for (const key of path.split(".")) {
