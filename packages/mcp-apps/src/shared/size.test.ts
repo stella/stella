@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { createAppSizeReporter, INLINE_APP_HEIGHT_CAP } from "./size";
+import {
+  createAppSizeReporter,
+  INLINE_APP_HEIGHT_CAP,
+  mountAppViewport,
+} from "./size";
 
 test("shared bridge reports natural short heights, caps long inline content and fills fullscreen", async () => {
   const heights: number[] = [];
@@ -75,4 +79,43 @@ test("fullscreen without host dimensions uses the viewport and size failures are
   });
   expect(sentHeight).toBe(800);
   expect(failures).toBe(1);
+});
+
+const viewportHost = () => {
+  const listeners = new Set<unknown>();
+  return {
+    listeners,
+    app: {
+      addEventListener: (_event: "hostcontextchanged", listener: unknown) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (
+        _event: "hostcontextchanged",
+        listener: unknown,
+      ) => {
+        listeners.delete(listener);
+      },
+      getHostContext: () => ({}),
+      requestDisplayMode: async () => ({ mode: "inline" as const }),
+      sendSizeChanged: async () => {},
+    },
+  };
+};
+
+test("a second viewport mount replaces the first, and stopping restores the app root", () => {
+  document.body.innerHTML = '<main id="app"><p>Results</p></main>';
+  const content = document.querySelector("#app");
+  const host = viewportHost();
+  const stopFirst = mountAppViewport({ app: host.app, onFailure: () => {} });
+  const stop = mountAppViewport({ app: host.app, onFailure: () => {} });
+  expect(document.querySelectorAll("[data-app-shell]")).toHaveLength(1);
+  expect(document.querySelectorAll("[data-app-toolbar]")).toHaveLength(1);
+  expect(content?.parentElement?.dataset["appViewport"]).toBe("");
+  expect(host.listeners.size).toBe(1);
+  stopFirst();
+  expect(document.querySelectorAll("[data-app-shell]")).toHaveLength(1);
+  stop();
+  expect(document.querySelector("[data-app-shell]")).toBeNull();
+  expect(content?.parentElement).toBe(document.body);
+  expect(host.listeners.size).toBe(0);
 });

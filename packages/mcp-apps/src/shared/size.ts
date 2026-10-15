@@ -64,11 +64,26 @@ export const createAppSizeReporter = ({
 };
 
 type AppViewportOptions = {
-  app: App;
+  app: Pick<
+    App,
+    | "addEventListener"
+    | "getHostContext"
+    | "removeEventListener"
+    | "requestDisplayMode"
+    | "sendSizeChanged"
+  >;
   onFailure: () => void;
   onDisplayModeChange?: (context: McpUiHostContext) => void;
 };
-/** Shared chrome keeps the fullscreen action reachable while the app scrolls. */
+
+/** The viewport currently wrapped around each app root. */
+const mountedViewports = new WeakMap<HTMLElement, () => void>();
+
+/**
+ * Shared chrome keeps the fullscreen action reachable while the app scrolls.
+ * Mounting again replaces the current viewport, and stopping restores the
+ * root where it was.
+ */
 export const mountAppViewport = ({
   app,
   onFailure,
@@ -77,6 +92,7 @@ export const mountAppViewport = ({
   const content =
     document.querySelector<HTMLElement>("#app") ??
     panic("MCP app root is missing");
+  mountedViewports.get(content)?.();
   const shell = document.createElement("div");
   shell.dataset["appShell"] = "";
   const toolbar = document.createElement("div");
@@ -147,10 +163,18 @@ export const mountAppViewport = ({
   };
   app.addEventListener("hostcontextchanged", hostContextChanged);
   detached(update(context), "mcp-viewport.initialize");
-  return () => {
+  const stop = () => {
+    if (stopped) {
+      return;
+    }
     stopped = true;
     observer.disconnect();
     window.removeEventListener("resize", report);
     app.removeEventListener("hostcontextchanged", hostContextChanged);
+    shell.before(content);
+    shell.remove();
+    mountedViewports.delete(content);
   };
+  mountedViewports.set(content, stop);
+  return stop;
 };
