@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "A stella még ellenőrzi, hogy ez a DOCX biztonságosan szerkeszthető-e. Próbálja újra, amikor a dokumentum betöltődött.",
     "checkingDocxEditTitle": "Dokumentum ellenőrzése",
     "chooseEvidence": "Válasszon ki egy fájlt számozott bizonyíték-hivatkozás beszúrásához.",
+    "collaborationSnapshotRecovered": "A tárolt együttműködési példányt nem lehetett újra megnyitni. A szoba az utoljára mentett dokumentumból lett helyreállítva; a nem mentett módosítások elveszhettek.",
     "comment": "Megjegyzés",
     "comments": {
       "addPlaceholder": "Megjegyzés hozzáadása…",

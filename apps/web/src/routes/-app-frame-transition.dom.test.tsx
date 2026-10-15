@@ -6,6 +6,7 @@ import { afterAll, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
 Object.assign(import.meta.env, { VITE_PUBLIC_KNOWLEDGE_ENABLED: "true" });
@@ -45,7 +46,7 @@ afterAll(async () => {
   await testing.act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("frame replacement completes cleanup after a delayed route update", async () => {

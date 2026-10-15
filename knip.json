@@ -210,7 +210,9 @@
       "entry": [
         "src/i18n-check.ts",
         "src/i18n-typegen.ts",
-        "src/dev-postgres.ts"
+        "src/dev-postgres.ts",
+        // Test fixture processes are spawned by path from the tests.
+        "src/test-fixtures/*.ts"
       ]
     },
     // The three `exports` entry points are derived from package.json, so
