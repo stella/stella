@@ -1,7 +1,12 @@
 import { useTranslations } from "use-intl";
 
 import { CHAT_REFERENCE_CATEGORIES } from "@stll/api-contract";
-import { LandmarkIcon, LibraryIcon } from "@stll/ui/icons";
+import {
+  Building2Icon,
+  LandmarkIcon,
+  LibraryIcon,
+  PlugIcon,
+} from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
 import type {
@@ -16,6 +21,8 @@ const CATEGORY_LABEL_KEYS = {
   workspace: "common.matters",
   decision: "common.caseLaw",
   corpus: "chat.mention.category.sources",
+  registry: "search.scopeRegistries",
+  connector: "settings.connections.title",
 } as const satisfies Record<ChatReferenceCategory, TranslationKey>;
 
 /**
@@ -60,6 +67,16 @@ export const MentionIcon = ({ mention }: { mention: ChatMentionOption }) => {
     ) : (
       <LibraryIcon className="text-muted-foreground size-3.5 shrink-0" />
     );
+  }
+
+  if (mention.category === "registry") {
+    return (
+      <Building2Icon className="text-muted-foreground size-3.5 shrink-0" />
+    );
+  }
+
+  if (mention.category === "connector") {
+    return <PlugIcon className="text-muted-foreground size-3.5 shrink-0" />;
   }
 
   return (
