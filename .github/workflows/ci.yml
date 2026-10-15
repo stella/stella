@@ -213,6 +213,9 @@ jobs:
         with:
           retries: 0
           script: |
+            // Dependabot-triggered runs get a read-only token: they cannot
+            // write the status or cancel, so they never defer.
+            if (context.actor === "dependabot[bot]") return;
             const repo = context.repo;
             const sha = context.payload.pull_request.head.sha;
             if (Number(process.env.GITHUB_RUN_ATTEMPT ?? "1") > 1) {

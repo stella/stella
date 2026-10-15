@@ -35,15 +35,18 @@ const runYield = async ({
   attempt,
   queueWaiting,
   yieldStatus,
+  actor = "octocat",
 }: {
   attempt: number;
   queueWaiting: boolean;
   yieldStatus?: string;
+  actor?: string;
 }) => {
   const statuses: { state: string; context: string }[] = [];
   const cancelled: number[] = [];
   await script.runInNewContext({
     context: {
+      actor,
       repo: { owner: "test", repo: "test" },
       runId: 7,
       serverUrl: "https://github.com",
@@ -99,6 +102,16 @@ test("a first run defers while the merge queue has waiting work", async () => {
     statuses: [{ state: "pending", context: "ci/merge-queue-yield" }],
     cancelled: [7],
   });
+});
+
+test("a Dependabot run never defers, because its token is read-only", async () => {
+  expect(
+    await runYield({
+      attempt: 1,
+      queueWaiting: true,
+      actor: "dependabot[bot]",
+    }),
+  ).toEqual({ statuses: [], cancelled: [] });
 });
 
 test("a first run with an idle merge queue continues untouched", async () => {
