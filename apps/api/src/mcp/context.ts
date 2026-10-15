@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
@@ -7,7 +6,6 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -113,6 +111,7 @@ import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
@@ -368,21 +367,22 @@ type LoadAccessibleMcpWorkspacesOptions = {
 };
 
 /**
- * Enumerate the workspace metadata MCP's current access maps require. Keep the
- * organization predicate explicit even though RLS independently enforces it,
- * so the tenant index bounds the query before policy evaluation.
+ * Enumerate the workspace metadata MCP's current access maps require, from
+ * the authorized-workspace owner in the credential's scoped transaction.
  */
 export const loadAccessibleMcpWorkspaces = async ({
   organizationId,
   scopedDb,
-}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.organizationId, organizationId)),
+}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
   );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
 
 export const resolveMcpSessionContext = async (
   session: McpSession,

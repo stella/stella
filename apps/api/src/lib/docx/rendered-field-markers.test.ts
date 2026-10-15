@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 import { resolvePath } from "@stll/template-conditions";
 
@@ -139,11 +140,12 @@ for (const part of ["document", "header1", "footer1"]) {
             ? `<w:document xmlns:w="${W_NS}"><w:body>${content}</w:body></w:document>`
             : `<w:${part === "header1" ? "hdr" : "ftr"} xmlns:w="${W_NS}">${content}</w:${part === "header1" ? "hdr" : "ftr"}>`;
         const zip = new JSZip();
-        zip.file(
+        writeZipEntry(
+          zip,
           "word/document.xml",
           `<w:document xmlns:w="${W_NS}"><w:body/></w:document>`,
         );
-        zip.file(`word/${part}.xml`, wrap(paragraph));
+        writeZipEntry(zip, `word/${part}.xml`, wrap(paragraph));
         const file = testDocxFile(
           await zip.generateAsync({ type: "uint8array" }),
         );
@@ -240,7 +242,8 @@ test("paragraph marker ownership is independent of text-box nesting depth", () =
 
 test("authored text outside a run produces a typed template refusal", async () => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<w:document xmlns:w="${W_NS}"><w:body><w:p><w:t>{{ name }}</w:t></w:p></w:body></w:document>`,
   );

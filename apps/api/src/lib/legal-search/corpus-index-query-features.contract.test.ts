@@ -19,6 +19,7 @@ import {
   courtYearAggregation,
   parseCourtYearAggregation,
 } from "@/api/lib/legal-search/corpus-index-court-year";
+import { QUICKWIT_V09_RUNTIME } from "@/api/lib/legal-search/corpus-index-engine-version";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -35,10 +36,10 @@ const RUN_ENGINE = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 const engineLabel = () =>
   engineBuilds.every(
     ({ version, commit }) =>
-      version === "0.9.0" &&
-      commit === "cc420c34d686a75f412b7cd450564c5c99ad6f21",
+      version === QUICKWIT_V09_RUNTIME.version &&
+      commit === QUICKWIT_V09_RUNTIME.commit,
   )
-    ? "stock 0.9.0"
+    ? `stock ${QUICKWIT_V09_RUNTIME.version}`
     : "recorded engine build";
 const engineBuilds: {
   endpoint: string;

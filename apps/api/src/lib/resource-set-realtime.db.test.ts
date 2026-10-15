@@ -262,11 +262,11 @@ describe("a matter write announces its resource set on the matter's event stream
       expect(renamed.status, await renamed.clone().text()).toBe(200);
       expect(await events.untilMarker()).toEqual([RESOURCE_TYPE.WORKSPACE]);
 
-      // Refused inside the handler: a bare client on a personal matter.
+      // Refused inside the handler: the contact does not exist.
       const refused = await restUpdateMatter(fixture, {
         clientId: createSafeId<"contact">(),
       });
-      expect(refused.status).toBe(400);
+      expect(refused.status).toBe(404);
       // Rolled back: the reference belongs to another matter, so the UPDATE
       // fails on the unique index and the transaction aborts.
       const rolledBack = await restUpdateMatter(fixture, {

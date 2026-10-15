@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import type { InstalledSkillResourceTab } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -33,7 +34,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const tab = {
