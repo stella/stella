@@ -86,21 +86,29 @@ export const readExpiryCheckScope = (): ExpiryCheckScope => {
       throw new ExpiryScopeError("Cannot fetch the expiry scope base commit");
     }
   }
-  // The checked-out PR merge commit and merge-group commit already contain the
-  // base. A two-tree diff remains valid with the shallow checkout used in CI.
-  const diff = spawnSync("git", ["diff", "--name-only", "-z", base, "HEAD"], {
-    cwd,
-  });
+  return {
+    type: "changes",
+    baseSha: base,
+    changedFiles: changedFilesSince(base, cwd),
+  };
+};
+
+// The checked-out PR merge commit and merge-group commit already contain the
+// base. A two-tree diff remains valid with the shallow checkout used in CI.
+// Rename detection is off: a moved owner path must stay in scope under its
+// old name too, as a deletion plus an addition.
+export const changedFilesSince = (base: string, cwd: string): Set<string> => {
+  const diff = spawnSync(
+    "git",
+    ["diff", "--name-only", "--no-renames", "-z", base, "HEAD"],
+    { cwd },
+  );
   if (diff.status !== 0) {
     throw new ExpiryScopeError(
       "Cannot determine changed files for expiry scope",
     );
   }
-  return {
-    type: "changes",
-    baseSha: base,
-    changedFiles: new Set(diff.stdout.toString().split("\0").filter(Boolean)),
-  };
+  return new Set(diff.stdout.toString().split("\0").filter(Boolean));
 };
 
 if (import.meta.main) {

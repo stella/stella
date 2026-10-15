@@ -459,6 +459,7 @@ const gitSha = () => {
 };
 const reportSchema = v.object({
   sha: v.string(),
+  now: v.pipe(v.string(), v.isoTimestamp()),
   entries: v.array(
     v.object({
       key: v.string(),
@@ -475,9 +476,9 @@ const main = async () => {
     panic("Radar evidence path required");
   }
   const inventory = loadWaivers(trackedPolicyFiles());
-  const now = new Date();
-  const groups = radarGroups(dueWaivers(inventory, now, 3));
   if (process.argv.includes("--probe")) {
+    const now = new Date();
+    const groups = radarGroups(dueWaivers(inventory, now, 3));
     const budget = createProbeBudget({
       attempts: groups.reduce(
         (total, group) =>
@@ -506,9 +507,13 @@ const main = async () => {
       }
       entries.push({ key: group.key, status });
     }
-    writeFileSync(evidence, JSON.stringify({ sha: gitSha(), entries }), {
-      mode: 0o600,
-    });
+    writeFileSync(
+      evidence,
+      JSON.stringify({ sha: gitSha(), now: now.toISOString(), entries }),
+      {
+        mode: 0o600,
+      },
+    );
     const orphans = await Result.tryPromise(async () =>
       discoverRadarOrphans(inventory),
     );
@@ -533,6 +538,10 @@ const main = async () => {
   if (report.sha !== gitSha()) {
     panic("Radar evidence checkout mismatch");
   }
+  // Publish on the probe's clock: a waiver that turns due between the two
+  // steps has no probe evidence yet and waits for the next run.
+  const now = new Date(report.now);
+  const groups = radarGroups(dueWaivers(inventory, now, 3));
   const statuses = new Map(
     report.entries.map(({ key, status }) => [key, status]),
   );
