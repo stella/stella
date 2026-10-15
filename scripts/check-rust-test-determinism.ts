@@ -102,7 +102,10 @@ export const discoverRustTestFiles = (
   const modules = new Map(
     sources.map(({ file }) => [
       file,
-      findRustExternalModules(readFileSync(path.join(repoRoot, file), "utf-8")),
+      findRustExternalModules(
+        readFileSync(path.join(repoRoot, file), "utf-8"),
+        file,
+      ),
     ]),
   );
   // Each source can enter whole-file test scope only once, so cycles terminate.
@@ -196,6 +199,7 @@ if (import.meta.main) {
     sources.map(({ file, integrationTest }) => [
       file,
       scanRustTestDeterminism({
+        file,
         source: readFileSync(path.join(ROOT, file), "utf-8"),
         integrationTest,
       }),

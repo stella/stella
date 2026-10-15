@@ -8,6 +8,8 @@
  * resolved. Identifier touches count even when a local shadows a static.
  */
 
+import { panic } from "better-result";
+
 export type RustTestDeterminismHit = {
   line: number;
   kind: "sleep" | "clock" | "process" | "global-lock";
@@ -155,7 +157,12 @@ const hasFileTestAttribute = (code: string): boolean => {
   return false;
 };
 
-const itemBodyStart = (code: string, start: number): number | undefined => {
+type ItemBoundary =
+  | { type: "body"; start: number }
+  | { type: "declaration"; end: number }
+  | { type: "unparseable" };
+
+const itemBodyStart = (code: string, start: number): ItemBoundary => {
   const closing: string[] = [];
   for (let cursor = start; cursor < code.length; cursor += 1) {
     const token = code.charAt(cursor);
@@ -163,7 +170,12 @@ const itemBodyStart = (code: string, start: number): number | undefined => {
       closing.length === 0 &&
       (token === "{" || token === ";" || token === "}")
     ) {
-      return token === "{" ? cursor : undefined;
+      if (token === "{") {
+        return { type: "body", start: cursor };
+      }
+      return token === ";"
+        ? { type: "declaration", end: cursor }
+        : { type: "unparseable" };
     }
     switch (token) {
       case "(":
@@ -173,8 +185,8 @@ const itemBodyStart = (code: string, start: number): number | undefined => {
         closing.push("]");
         break;
       case "<":
-        // Braced const expressions may contain comparison operators.
-        if (!closing.includes("}")) {
+        // Array lengths and braced const expressions use shifts/comparisons.
+        if (!closing.includes("]") && !closing.includes("}")) {
           closing.push(">");
         }
         break;
@@ -191,34 +203,96 @@ const itemBodyStart = (code: string, start: number): number | undefined => {
         }
     }
   }
+  return { type: "unparseable" };
+};
+
+const testItemKind = (code: string, start: number) => {
+  let cursor = start;
+  while (cursor < code.length) {
+    const attribute = /^\s*#\s*\[/u.exec(code.slice(cursor));
+    if (attribute !== null) {
+      cursor += attribute[0].length;
+      let depth = 1;
+      while (cursor < code.length && depth > 0) {
+        if (code[cursor] === "[") {
+          depth += 1;
+        }
+        if (code[cursor] === "]") {
+          depth -= 1;
+        }
+        cursor += 1;
+      }
+      if (depth !== 0) {
+        return "unparseable";
+      }
+      continue;
+    }
+    const word = /^\s*([A-Za-z_]\w*)/u.exec(code.slice(cursor));
+    const token = word?.[1];
+    if (word === null || token === undefined) {
+      return undefined;
+    }
+    if (token === "fn" || token === "mod" || token === "impl") {
+      return token;
+    }
+    if (
+      !["pub", "async", "const", "unsafe", "default", "extern"].includes(token)
+    ) {
+      return undefined;
+    }
+    cursor += word[0].length;
+    const visibility =
+      token === "pub" ? /^\s*\([^)]*\)/u.exec(code.slice(cursor)) : null;
+    if (visibility !== null) {
+      cursor += visibility[0].length;
+    }
+  }
   return undefined;
 };
 
-const testSpans = (code: string, integrationTest: boolean): Span[] => {
-  if (integrationTest || hasFileTestAttribute(code)) {
-    return [{ start: 0, end: code.length }];
-  }
+type TestSpansOptions = {
+  code: string;
+  integrationTest: boolean;
+  file: string;
+};
+
+const testSpans = ({
+  code,
+  integrationTest,
+  file,
+}: TestSpansOptions): Span[] => {
+  const wholeFile = integrationTest || hasFileTestAttribute(code);
   const braces = closingBraces(code);
   const spans: Span[] = [];
   const attribute =
     /#\s*\[\s*(?:cfg\s*\(\s*test\s*\)|(?:tokio\s*::\s*)?test(?:\s*\([^\]]*\))?)\s*\]/gu;
   for (const match of code.matchAll(attribute)) {
     const after = match.index + match[0].length;
-    const open = itemBodyStart(code, after);
-    if (open === undefined) {
+    const kind = testItemKind(code, after);
+    if (kind === undefined) {
       continue;
     }
+    const boundary = itemBodyStart(code, after);
+    // External modules have no body here; discovery validates their child files.
     if (
-      !/\b(?:(?:fn|mod)\s+[A-Za-z_]\w*|impl\b)/u.test(code.slice(after, open))
+      kind === "mod" &&
+      boundary.type === "declaration" &&
+      /\bmod\s+[A-Za-z_]\w*\s*;$/u.test(code.slice(after, boundary.end + 1))
     ) {
       continue;
     }
-    const close = braces.get(open);
-    if (close !== undefined) {
-      spans.push({ start: open + 1, end: close });
+    const line = code.slice(0, match.index).split("\n").length;
+    const failure = `cannot parse test item at ${file}:${line}`;
+    if (kind === "unparseable" || boundary.type !== "body") {
+      panic(failure);
     }
+    const close = braces.get(boundary.start);
+    if (close === undefined) {
+      panic(failure);
+    }
+    spans.push({ start: boundary.start + 1, end: close });
   }
-  return spans;
+  return wholeFile ? [{ start: 0, end: code.length }] : spans;
 };
 
 const inlineModuleSpans = (code: string) => {
@@ -235,9 +309,9 @@ const inlineModuleSpans = (code: string) => {
   return modules;
 };
 
-export const findRustExternalModules = (source: string) => {
+export const findRustExternalModules = (source: string, file = "<source>") => {
   const { code } = maskRust(source);
-  const spans = testSpans(code, false);
+  const spans = testSpans({ code, integrationTest: false, file });
   const inlineModules = inlineModuleSpans(code);
   const modules: { name: string; test: boolean }[] = [];
   const external =
@@ -316,14 +390,16 @@ const occurrences = (code: string): Occurrence[] => {
 type ScanRustTestDeterminismOptions = {
   source: string;
   integrationTest: boolean;
+  file?: string;
 };
 
 export const scanRustTestDeterminism = ({
   source,
   integrationTest,
+  file = "<source>",
 }: ScanRustTestDeterminismOptions): RustTestDeterminismHit[] => {
   const { code, escapedLines } = maskRust(source);
-  const spans = testSpans(code, integrationTest);
+  const spans = testSpans({ code, integrationTest, file });
   const hits: RustTestDeterminismHit[] = [];
   let line = 1;
   let cursor = 0;

@@ -516,6 +516,23 @@ test("whole-file inner test scope discovers an isolated crate and propagates to 
 
 test.each([
   ["array return", "fn helper() -> [u8; 1]", "[0]"],
+  ["left-shift array length", "fn helper() -> [u8; 1 << 2]", "[0; 4]"],
+  ["right-shift array length", "fn helper() -> [u8; 8 >> 1]", "[0; 4]"],
+  [
+    "nested shifted array lengths",
+    "fn helper() -> [[u8; 1 << 2]; 8 >> 1]",
+    "[[0; 4]; 4]",
+  ],
+  [
+    "generic shifted array length",
+    "fn helper() -> Result<[u8; 1 << 2], &'static str>",
+    "Ok([0; 4])",
+  ],
+  [
+    "braced shifted const argument",
+    "fn helper() -> Option<Buffer<{ 8 >> 1 }>>",
+    "None",
+  ],
   ["nested array return", "fn helper() -> [[u8; 1]; 2]", "[[0], [0]]"],
   ["function type argument", "fn helper() -> Option<fn() -> [u8; 1]>", "None"],
   ["braced array length", "fn helper() -> [u8; { (1 < 2) as usize }]", "[0]"],
@@ -673,3 +690,61 @@ test.each(["", "#[cfg(not(test))]"])(
     );
   },
 );
+
+test.each([
+  "fn helper( { thread::sleep(duration); }",
+  "mod helpers",
+  "impl<T Helper<T> { fn helper() { thread::sleep(duration); } }",
+])("unparseable test items fail with their repository location: %s", (item) => {
+  const source = `// Header documentation\n#[cfg(test)] ${item}`;
+  expect(() =>
+    scanRustTestDeterminism({
+      source,
+      integrationTest: false,
+      file: FILE,
+    }),
+  ).toThrow(`cannot parse test item at ${FILE}:2`);
+});
+
+test("unparseable test items retain a source location without an explicit filename", () => {
+  expect(() =>
+    scanRustTestDeterminism({
+      source:
+        "// Header documentation\n#[cfg(test)] fn helper( { thread::sleep(duration); }",
+      integrationTest: false,
+    }),
+  ).toThrow("cannot parse test item at <source>:2");
+});
+
+test("external test module declarations remain valid without an inline body", () => {
+  expect(
+    scanRustTestDeterminism({
+      source: "#[cfg(test)] mod checks;\nfn production() { Instant::now(); }",
+      integrationTest: false,
+      file: FILE,
+    }),
+  ).toEqual([]);
+});
+
+test("discovery passes the tracked filename into test-item parse failures", () => {
+  const repoRoot = mkdtempSync(
+    path.join(tmpdir(), "rust-malformed-test-discovery-"),
+  );
+  const sources = {
+    "crates/example/Cargo.toml":
+      '[package]\nname = "example"\nversion = "0.1.0"',
+    [FILE]:
+      "// Header documentation\n#[cfg(test)] fn helper( { thread::sleep(duration); }",
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(repoRoot, file)), { recursive: true });
+      writeFileSync(path.join(repoRoot, file), source);
+    }
+    expect(() => discoverRustTestFiles(repoRoot, Object.keys(sources))).toThrow(
+      `cannot parse test item at ${FILE}:2`,
+    );
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
