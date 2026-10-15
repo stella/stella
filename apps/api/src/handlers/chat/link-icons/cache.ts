@@ -11,9 +11,11 @@ import { coordinationKey } from "@/api/lib/redis-keys";
 import type { LinkIcon } from "./origin";
 
 type RedisLike = {
+  connect: () => Promise<unknown>;
   send: (command: string, args: string[]) => Promise<unknown>;
   close: () => void;
 };
+type ConnectionAttempt = { client: RedisLike; ready: Promise<unknown> };
 type ReadResult =
   | { type: "hit"; icon: LinkIcon }
   | { type: "no-icon" }
@@ -119,20 +121,38 @@ export const createLinkIconCache = ({
   const keys = ["entries", "expiry"].map((suffix) =>
     coordinationKey({ scope: "link-icons", slot, suffix }),
   );
-  let redis: RedisLike | null = null;
+  let connection: ConnectionAttempt | null = null;
+  const getConnection = () => {
+    if (connection !== null) {
+      return connection;
+    }
+    const client = createRedis();
+    connection = {
+      client,
+      ready: Promise.resolve().then(async () => await client.connect()),
+    };
+    return connection;
+  };
   const command = async (script: string, args: string[]) => {
-    const attempt: { client: RedisLike | null } = { client: null };
+    const attempt: { connection: ConnectionAttempt | null } = {
+      connection: null,
+    };
     const outcome = await Result.tryPromise({
       try: async () => {
-        redis ??= createRedis();
-        attempt.client = redis;
+        const active = getConnection();
+        attempt.connection = active;
         return await withCommandTimeout({
-          command: redis.send("EVAL", [
-            script,
-            String(keys.length),
-            ...keys,
-            ...args,
-          ]),
+          command: active.ready.then(async () => {
+            if (connection !== active) {
+              return null;
+            }
+            return await active.client.send("EVAL", [
+              script,
+              String(keys.length),
+              ...keys,
+              ...args,
+            ]);
+          }),
           commandTimeoutMs: COMMAND_TIMEOUT_MS,
           label: "link-icons",
         });
@@ -143,9 +163,9 @@ export const createLinkIconCache = ({
       return outcome.value;
     }
     onRedisError(outcome.error);
-    if (redis === attempt.client) {
-      redis?.close();
-      redis = null;
+    if (connection === attempt.connection) {
+      connection?.client.close();
+      connection = null;
     }
     return null;
   };
@@ -222,8 +242,9 @@ export const createLinkIconCache = ({
       );
     },
     close: () => {
-      redis?.close();
-      redis = null;
+      const closing = connection;
+      connection = null;
+      closing?.client.close();
     },
   };
 };

@@ -17,6 +17,7 @@ test("cache failures never authorize outbound work and a later request reconnect
     createRedis: () => {
       connections++;
       return {
+        connect: () => Promise.resolve(),
         send: () => Promise.reject(new Error("offline")),
         close: () => undefined,
       };
@@ -37,6 +38,7 @@ test("positive cache envelopes round trip bytes and oversized fills are rejected
   let sends = 0;
   const cache = createLinkIconCache({
     createRedis: () => ({
+      connect: () => Promise.resolve(),
       send: (_command, args) => {
         sends++;
         if (args.at(0)?.includes("local cost")) {
@@ -65,5 +67,36 @@ test("positive cache envelopes round trip bytes and oversized fills are rejected
     icon: { bytes: new Uint8Array(65_537), mime: "image/png" },
   });
   expect(sends).toBe(before);
+  cache.close();
+});
+
+test("cold requests share their connection and send only after it is ready", async () => {
+  const connected = Promise.withResolvers();
+  let connects = 0;
+  let sends = 0;
+  const cache = createLinkIconCache({
+    createRedis: () => ({
+      connect: () => {
+        connects++;
+        return connected.promise;
+      },
+      send: (_command, args) => {
+        sends++;
+        const token = args.at(7);
+        expect(typeof token).toBe("string");
+        return Promise.resolve(`A${token}`);
+      },
+      close: () => undefined,
+    }),
+  });
+  const first = cache.readOrLease(subject);
+  const second = cache.readOrLease(subject);
+  await Promise.resolve();
+  expect(connects).toBe(1);
+  expect(sends).toBe(0);
+  connected.resolve(undefined);
+  const results = await Promise.all([first, second]);
+  expect(results.every((result) => result.type === "lease")).toBe(true);
+  expect(sends).toBe(2);
   cache.close();
 });

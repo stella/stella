@@ -24,7 +24,7 @@ const createFixture = async () => {
     slot,
     suffix: "expiry",
   });
-  const cache = createLinkIconCache({ slot, createRedis: () => raw });
+  const cache = createLinkIconCache({ slot });
   return {
     cache,
     raw,
@@ -33,6 +33,7 @@ const createFixture = async () => {
     dispose: async () => {
       await raw.send("DEL", [entries, expiry]);
       cache.close();
+      raw.close();
     },
   };
 };
