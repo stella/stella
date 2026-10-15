@@ -1,10 +1,32 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
+import getSkill from "@/api/handlers/skills/get";
+import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
+import {
+  offerSkillsToModel,
+  SKILL_INVOCATION,
+} from "@/api/lib/agent-skills/invocation";
+import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
+import { loadVisibleSkillTools } from "@/api/mcp/gateway/skills";
+import {
+  handlerFailure,
+  skillHandlerContext,
+} from "@/api/tests/helpers/agent-skill-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -259,6 +281,116 @@ describe("bound agent skill RLS", () => {
 
     expect(updatedByOther).toEqual([]);
     expect(updatedByAuthor).toEqual([{ id: skillId }]);
+  });
+
+  test("a member outside the matter cannot read or use its skill through chat, MCP or the API", async () => {
+    const skillId = await insertBoundSkill({
+      boundWorkspaceId: ids.wsA1,
+      scope: "team",
+      userId: ids.userA1,
+    });
+    const [skill] = await testDb
+      .select({ slug: agentSkills.slug })
+      .from(agentSkills)
+      .where(eq(agentSkills.id, skillId));
+    if (skill === undefined) {
+      throw new TypeError("expected the bound skill row");
+    }
+    // The outsider's queries run under row security, reaching wsA2 only.
+    const outsiderDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+    );
+    // A scope that names wsA1 takes the app-side binding check out of play,
+    // so only the policy stands between the outsider and the skill.
+    const ownerDb: SafeDb = async (callback) =>
+      await Result.tryPromise(
+        async () => await callback(asTestRaw<Transaction>(testDb)),
+      );
+    const matterScope = await resolveSkillBindingScope({
+      homeWorkspaceId: ids.wsA1,
+      otherWorkspaceIds: [],
+      safeDb: ownerDb,
+    });
+    if (Result.isError(matterScope)) {
+      throw matterScope.error;
+    }
+
+    // Chat
+    const loadSkill = asTestRaw<{
+      execute: (input: unknown, context: unknown) => Promise<unknown>;
+    }>(
+      createSkillTools({
+        bindingScope: matterScope.value,
+        organizationId: ids.orgA,
+        safeDb: outsiderDb,
+        skills: offerSkillsToModel({
+          invokedSkillNames: new Set(),
+          skills: [
+            {
+              description: "Binding RLS test skill",
+              invocation: SKILL_INVOCATION.auto,
+              name: skill.slug,
+              version: null,
+            },
+          ],
+        }),
+        userId: ids.userA2,
+      })["load-skill"],
+    );
+    const loaded = await Result.tryPromise({
+      try: async () => await loadSkill.execute({ skillName: skill.slug }, {}),
+      catch: (error) => error,
+    });
+    expect(
+      Result.isError(loaded) &&
+        loaded.error instanceof ChatToolError &&
+        loaded.error.kind === "not-found",
+    ).toBe(true);
+
+    // MCP
+    const context = asTestRaw<McpRequestContext>({
+      enabledRegistrySlugs: undefined,
+      grantedScopes: [],
+      memberRole: "member",
+      organizationId: ids.orgA,
+      recordAuditEvent: createAuditRecorder({
+        organizationId: ids.orgA,
+        request: new Request("http://localhost/mcp"),
+        server: null,
+        userId: ids.userA2,
+        workspaceId: null,
+      }),
+      safeDb: outsiderDb,
+      userId: ids.userA2,
+    });
+    const toolName = namespaceSkillToolName(skill.slug);
+    const listed = await loadVisibleSkillTools({ context, mode: "default" });
+    expect(listed.map(({ exposedName }) => exposedName)).not.toContain(
+      toolName,
+    );
+    expect(
+      await dispatchGatewayToolCall({
+        args: {},
+        context,
+        mode: "default",
+        toolName,
+      }),
+    ).toMatchObject({
+      result: { error: { code: "unknown_tool" }, status: "error" },
+    });
+
+    // API (what the CLI calls)
+    const read = await getSkill.handler({
+      ...skillHandlerContext<Parameters<typeof getSkill.handler>[0]>({
+        organizationId: ids.orgA,
+        params: { skillId },
+        role: "member",
+        testDb,
+        userId: ids.userA2,
+      }),
+      safeDb: outsiderDb,
+    });
+    expect(handlerFailure(read)?.code).toBe(404);
   });
 
   test("a skill cannot be bound to a matter and a client at once", async () => {
