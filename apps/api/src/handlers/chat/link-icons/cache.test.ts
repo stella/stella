@@ -17,8 +17,8 @@ test("cache failures never authorize outbound work and a later request reconnect
     createRedis: () => {
       connections++;
       return {
-        connect: () => Promise.resolve(),
-        send: () => Promise.reject(new Error("offline")),
+        connect: async () => Promise.resolve(),
+        send: async () => Promise.reject(new Error("offline")),
         close: () => undefined,
       };
     },
@@ -38,8 +38,8 @@ test("positive cache envelopes round trip bytes and oversized fills are rejected
   let sends = 0;
   const cache = createLinkIconCache({
     createRedis: () => ({
-      connect: () => Promise.resolve(),
-      send: (_command, args) => {
+      connect: async () => Promise.resolve(),
+      send: async (_command, args) => {
         sends++;
         if (args.at(0)?.includes("local cost")) {
           payload = args.at(6);
@@ -76,11 +76,11 @@ test("cold requests share their connection and send only after it is ready", asy
   let sends = 0;
   const cache = createLinkIconCache({
     createRedis: () => ({
-      connect: () => {
+      connect: async () => {
         connects++;
         return connected.promise;
       },
-      send: (_command, args) => {
+      send: async (_command, args) => {
         sends++;
         const token = args.at(7);
         expect(typeof token).toBe("string");

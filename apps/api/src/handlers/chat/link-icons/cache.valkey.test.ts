@@ -49,7 +49,7 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
     };
     try {
       const results = await Promise.all(
-        Array.from({ length: 8 }, () => cache.readOrLease(subject)),
+        Array.from({ length: 8 }, async () => cache.readOrLease(subject)),
       );
       const leases = results.filter((result) => result.type === "lease");
       expect(leases).toHaveLength(1);
