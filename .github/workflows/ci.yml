@@ -4249,6 +4249,7 @@ jobs:
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+          scripts/workflow-call-permissions.test.ts
 
       - name: Test main network recording selection
         env:
