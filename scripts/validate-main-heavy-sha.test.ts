@@ -171,6 +171,8 @@ test("only trusted main tooling is checked out before target verification", () =
     "Check release candidate",
     "Validate merge queue depth",
     "Checkout trusted release proof tooling",
+    // Uncached runtime for the release queue history check; no target code.
+    "Setup Bun",
     "Reuse completed release proof",
     "Dispatch release PR-depth checks",
     "Select untested heavy SHA",

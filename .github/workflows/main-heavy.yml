@@ -44,6 +44,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       actions: write
       pull-requests: read
       issues: read
@@ -100,6 +101,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           sparse-checkout: scripts
+
+      # Bun runs the release queue history check the health gate needs before
+      # a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .release-proof/package.json
+          no-cache: true
 
       - name: Reuse completed release proof
         id: reuse
