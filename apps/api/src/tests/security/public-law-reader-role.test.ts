@@ -1276,7 +1276,7 @@ describe("public-law reader role", () => {
     );
   });
 
-  test("reads the case-law views and cannot read the base relation", async () => {
+  test("reads the case-law views and the previous base-table reads still work", async () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
       await tx.execute(
@@ -1285,15 +1285,12 @@ describe("public-law reader role", () => {
       await tx.execute(
         sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
       );
+      await tx.execute(
+        sql.raw(
+          'SELECT "id", "case_number", "fulltext", "metadata" FROM "case_law_decisions" LIMIT 0',
+        ),
+      );
     });
-
-    const baseRelationRejection = await readerStatementFailure(
-      'SELECT "id" FROM "case_law_decisions" LIMIT 0',
-    );
-    expect(baseRelationRejection).toBeInstanceOf(Error);
-    expect(errorMessageChain(baseRelationRejection)).toContain(
-      "permission denied",
-    );
   });
 
   test("has SELECT policies for required relations and only declared relations", async () => {
@@ -1503,7 +1500,7 @@ describe("public-law reader migrations", () => {
     expect([...granted].filter((column) => !declared.has(column))).toEqual([]);
   });
 
-  test("replaces the legacy base-table grant with published views", () => {
+  test("keeps the legacy base-table grant beside the published views", () => {
     const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>

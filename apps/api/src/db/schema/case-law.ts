@@ -1015,6 +1015,10 @@ export const caseLawDecisions = p.pgTable(
     // every such citation.
     p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
+    // Expand phase: the reader policies stay while older readers query this
+    // table. The contract step in `lib/db/pending-contract-migrations`
+    // removes them together with the reader grants.
+    ...publicCaseLawReaderPolicies(),
     ...caseLawAnalysisWriterPolicies(),
     ...caseLawAnalysisReaderDecisionPolicies(),
     ...corpusSampleReaderDecisionPolicies(),

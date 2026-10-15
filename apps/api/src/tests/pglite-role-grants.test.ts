@@ -265,8 +265,12 @@ describe("pglite role grants mirror the committed migrations", () => {
     expect(
       migrationPairs.has("stella_public_law_reader:case_law_decisions"),
     ).toBe(false);
+    // Expand phase: the previous release still reads the base table.
     expect(migrationPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
-      false,
+      true,
+    );
+    expect(harnessPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
+      true,
     );
     for (const view of [
       "case_law_published_decisions",
@@ -289,7 +293,12 @@ describe("pglite role grants mirror the committed migrations", () => {
       migrationColumns.has(
         "stella_public_law_reader:case_law_decisions:case_number:SELECT",
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      harnessColumns.has(
+        "stella_public_law_reader:case_law_decisions:case_number:SELECT",
+      ),
+    ).toBe(true);
     expect(
       migrationColumns.has(
         "stella_public_law_reader:case_law_published_decisions:case_number:SELECT",

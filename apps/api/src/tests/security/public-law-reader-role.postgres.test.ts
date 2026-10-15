@@ -4,7 +4,11 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { stella, stellaPublicLawReader } from "@/api/db/rls";
+import {
+  stella,
+  stellaCaseLawReader,
+  stellaPublicLawReader,
+} from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
@@ -14,6 +18,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { readPendingContractSources } from "@/api/lib/db/pending-contract-migrations/registry";
 import {
   publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
@@ -76,8 +81,9 @@ const withClient = async <T>(
  * Run `fn` as the reader role in a transaction that always rolls back.
  * `setup` runs first, as the owner.
  */
-const asReader = async (
+const asRole = async (
   url: string,
+  role: string,
   fn: (tx: Transaction) => Promise<void>,
   setup: (tx: Transaction) => Promise<void> = async () => {},
 ): Promise<void> =>
@@ -85,7 +91,7 @@ const asReader = async (
     try {
       await database.transaction(async (tx) => {
         await setup(tx);
-        await tx.execute(sql.raw(`SET LOCAL ROLE "${READER_ROLE}"`));
+        await tx.execute(sql.raw(`SET LOCAL ROLE "${role}"`));
         await fn(tx);
         tx.rollback();
       });
@@ -95,6 +101,23 @@ const asReader = async (
       }
     }
   });
+
+const asReader = async (
+  url: string,
+  fn: (tx: Transaction) => Promise<void>,
+  setup: (tx: Transaction) => Promise<void> = async () => {},
+): Promise<void> => await asRole(url, READER_ROLE, fn, setup);
+
+/** Apply every pending contract step inside the (rolled back) transaction. */
+const applyPendingContractSteps = async (tx: Transaction): Promise<void> => {
+  for (const source of readPendingContractSources()) {
+    for (const statement of source.split("--> statement-breakpoint")) {
+      if (statement.trim().length > 0) {
+        await tx.execute(sql.raw(statement));
+      }
+    }
+  }
+};
 
 /** Seed the search census, run `fn`, and remove the census again. */
 const withSearchCensus = async (
@@ -195,7 +218,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("reads the decision views and cannot read the base relation", async () => {
+    test("reads the decision views", async () => {
       await asReader(databaseUrl, async (tx) => {
         await tx.execute(
           sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
@@ -204,17 +227,73 @@ if (!databaseUrl || !runPostgresTests) {
           sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
         );
       });
+    });
 
-      const baseRelationFailure = await rejectionOf(
-        asReader(databaseUrl, async (tx) => {
+    // Migrations run before the new API starts, so the previous API version
+    // keeps reading the base table through both reader roles until its tasks
+    // are gone. The migrated database must still serve those reads.
+    test("previous-version base-table reads still work after the migrations", async () => {
+      await asReader(databaseUrl, async (tx) => {
+        await tx.execute(
+          sql.raw(
+            'SELECT "id", "case_number", "fulltext", "metadata", "redacted_at" FROM "case_law_decisions" LIMIT 0',
+          ),
+        );
+      });
+      await asRole(databaseUrl, stellaCaseLawReader.name, async (tx) => {
+        await tx.execute(sql.raw('SELECT * FROM "case_law_decisions" LIMIT 0'));
+      });
+    });
+
+    test("previous-version base-table reads return rows the policies admit", async () => {
+      await withSearchCensus(databaseUrl, async ({ decisionId }) => {
+        const idsSeenBy = async (role: string): Promise<string[]> => {
+          const seen: string[] = [];
+          await asRole(databaseUrl, role, async (tx) => {
+            const result = await tx.execute<{ id: string }>(
+              sql.raw(
+                `SELECT "id" FROM "case_law_decisions" WHERE "id" = '${decisionId}'`,
+              ),
+            );
+            seen.push(...result.map(({ id }) => id));
+          });
+          return seen;
+        };
+        expect(await idsSeenBy(READER_ROLE)).toEqual([decisionId]);
+        expect(await idsSeenBy(stellaCaseLawReader.name)).toEqual([decisionId]);
+      });
+    });
+
+    // The pending contract step is what closes the base table to the readers;
+    // it is held to doing exactly that, with the views left readable.
+    test("the pending contract step closes the base relation and keeps the views", async () => {
+      for (const role of [READER_ROLE, stellaCaseLawReader.name]) {
+        const failure = await rejectionOf(
+          asRole(
+            databaseUrl,
+            role,
+            async (tx) => {
+              await tx.execute(
+                sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
+              );
+            },
+            applyPendingContractSteps,
+          ),
+        );
+        expect(failure).toBeInstanceOf(Error);
+        expect(errorAndCauseMessages(failure)).toContain("permission denied");
+      }
+      await asReader(
+        databaseUrl,
+        async (tx) => {
           await tx.execute(
-            sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
+            sql.raw('SELECT "id" FROM "case_law_published_decisions" LIMIT 0'),
           );
-        }),
-      );
-      expect(baseRelationFailure).toBeInstanceOf(Error);
-      expect(errorAndCauseMessages(baseRelationFailure)).toContain(
-        "permission denied",
+          await tx.execute(
+            sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
+          );
+        },
+        applyPendingContractSteps,
       );
     });
 
