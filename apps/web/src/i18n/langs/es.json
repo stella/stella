@@ -173,6 +173,7 @@
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
       "heldForReview": "Pendiente de revisión",
       "holdOutOfScoring": "Excluir de la puntuación",
+      "inScoring": "En la puntuación",
       "includeInScoring": "Incluir en la puntuación",
       "interpretationNote": "Nota de interpretación",
       "interpretationNotePlaceholder": "Si el significado de esta prueba es cuestionado, explique cómo. Déjelo en blanco si no lo es.",

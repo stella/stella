@@ -173,6 +173,7 @@
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
       "heldForReview": "Sulaikyta peržiūrai",
       "holdOutOfScoring": "Neįtraukti į vertinimą",
+      "inScoring": "Įtraukta į vertinimą",
       "includeInScoring": "Įtraukti į vertinimą",
       "interpretationNote": "Aiškinimo pastaba",
       "interpretationNotePlaceholder": "Jei šio įrodymo reikšmė yra ginčijama, aprašykite, kaip. Jei ne, palikite lauką tuščią.",

@@ -173,6 +173,7 @@
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
+      "inScoring": "Zahrnuté do hodnotenia",
       "includeInScoring": "Zahrnúť do hodnotenia",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",

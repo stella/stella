@@ -176,6 +176,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
