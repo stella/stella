@@ -1172,7 +1172,7 @@ test("conflicting edge inserts preserve exact projections for both endpoints", a
 test("expand release reports doctrine capability unavailable instead of unread", async () => {
   const page = await readCitationPage("incoming", undefined);
   if (!("items" in page)) {
-    return panic("Expected a citation page");
+    throw new Error("Expected a citation page");
   }
   expect(page.doctrineAvailability).toBe("unavailable");
   expect(
@@ -1272,8 +1272,8 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
     .update(caseLawCitations)
     .set({ citationKey: null, doctrinalTreatment: null })
     .where(eq(caseLawCitations.id, citationId(999)));
-  if (read === null || read.type !== "page") {
-    return panic("Expected a citation page");
+  if (read?.type !== "page") {
+    throw new Error("Expected a citation page");
   }
   expect(summary).toEqual({
     status: "available",

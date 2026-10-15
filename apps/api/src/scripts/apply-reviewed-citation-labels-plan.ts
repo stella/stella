@@ -989,6 +989,7 @@ const decideReviewedLabels = async ({
     const current = planReviewedLabels(
       labels,
       executedRows(
+        // db-await-in-loop: one batched read per label domain (stance and doctrine), never per entry
         await tx.execute(reviewedLabelStateStatement(labels, currentDomain)),
       ),
     );
