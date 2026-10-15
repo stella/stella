@@ -1263,7 +1263,13 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     process.stdout.write(
       `code-check: skipped; ${plan.changedPath} requires the full repository check, which CI runs\n`,
     );
-    return Result.ok(0);
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        budgetDeadlineMs,
+      }),
+    );
   }
   if (plan.type === "fallback") {
     process.stdout.write(
