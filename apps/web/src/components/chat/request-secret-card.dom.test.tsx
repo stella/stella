@@ -14,6 +14,7 @@ import type {
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
@@ -116,7 +117,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("request secret card", () => {
