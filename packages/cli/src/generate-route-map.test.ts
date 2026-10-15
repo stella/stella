@@ -229,6 +229,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
       "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",
+      "--matter-numbering-enabled",
       "--prompt-caching-enabled",
       "--time-edit-window-days",
       "--time-locked-through-month",
