@@ -39,7 +39,7 @@ const config = {
   contract: "patch",
   description:
     "Read the organization's general settings: document processing mode, " +
-    "matter-number pattern and padding, practice jurisdictions, prompt " +
+    "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
     "caching, organization AI instructions, memory extraction, time policy, and the time zone whose calendar " +
     "decides the organization's day. declaredFeatureIds identifies policies in force; " +
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
@@ -60,6 +60,7 @@ const config = {
 
 type OrganizationSettingsRow = {
   documentProcessingMode: DocumentProcessingMode;
+  matterNumberingEnabled: boolean;
   matterNumberPadding: number;
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
@@ -74,10 +75,7 @@ type OrganizationSettingsRow = {
   timeZone: TimeZoneId | null;
 };
 
-export const projectOrganizationSettingsRow = (
-  row: OrganizationSettingsRow | null | undefined,
-  snapshot: FeatureAccessSnapshot,
-) => {
+const projectFeatureAccess = (snapshot: FeatureAccessSnapshot) => {
   const visibleDecisions = Array.from(snapshot.decisions).filter(
     ([featureId]) =>
       featureId !== LIST_VERIFICATION_FEATURE_ID ||
@@ -101,35 +99,48 @@ export const projectOrganizationSettingsRow = (
           ] as const,
       ),
     ),
-    documentProcessingMode:
-      row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-    matterNumberPattern:
-      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-    matterNumberPadding:
-      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-    promptCachingEnabled: row?.promptCachingEnabled ?? true,
-    aiInstructions: row?.aiInstructions ?? "",
-    aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
-    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-    memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
-    timeMinimumUnitMinutes:
-      row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
-    timeEditWindowDays:
-      row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
-    timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
-    timeNarrativeRequired:
-      row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
-    timeZone: effectiveOrganizationTimeZone({
-      timeZone: row?.timeZone ?? null,
-      practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-    }),
-    timeZoneSource:
-      (row?.timeZone ?? null) === null
-        ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
-        : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
   };
 };
+
+const projectTimePolicy = (
+  row: OrganizationSettingsRow | null | undefined,
+) => ({
+  timeMinimumUnitMinutes:
+    row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
+  timeEditWindowDays: row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
+  timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
+  timeNarrativeRequired:
+    row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+});
+
+export const projectOrganizationSettingsRow = (
+  row: OrganizationSettingsRow | null | undefined,
+  snapshot: FeatureAccessSnapshot,
+) => ({
+  ...projectFeatureAccess(snapshot),
+  documentProcessingMode:
+    row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+  matterNumberPattern:
+    row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+  matterNumberPadding:
+    row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+  matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
+  practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+  promptCachingEnabled: row?.promptCachingEnabled ?? true,
+  aiInstructions: row?.aiInstructions ?? "",
+  aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+  managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+  memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+  ...projectTimePolicy(row),
+  timeZone: effectiveOrganizationTimeZone({
+    timeZone: row?.timeZone ?? null,
+    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+  }),
+  timeZoneSource:
+    (row?.timeZone ?? null) === null
+      ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
+      : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
+});
 
 const readOrganizationSettings = createSafeRootHandler(
   config,
@@ -142,6 +153,7 @@ const readOrganizationSettings = createSafeRootHandler(
             documentProcessingMode: true,
             matterNumberPattern: true,
             matterNumberPadding: true,
+            matterNumberingEnabled: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
             aiInstructions: true,

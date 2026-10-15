@@ -321,6 +321,7 @@ describe("reading the organization time zone", () => {
         documentProcessingMode: "off",
         matterNumberPadding: 3,
         matterNumberPattern: "{SEQ}",
+        matterNumberingEnabled: false,
         practiceJurisdictions,
         promptCachingEnabled: true,
         aiInstructions: "",

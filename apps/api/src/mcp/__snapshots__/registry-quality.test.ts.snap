@@ -524,7 +524,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read how citing decisions stood to one, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Pass nextCursor back as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -3238,7 +3238,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
         },
         "reference": {
           "type": "string",
@@ -5928,7 +5928,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "update_org_settings"
           ],
           "type": "string",
-          "description": "Administrative action to perform"
+          "description": "Administrative action; the settings fields apply only to update_org_settings"
         },
         "matter_id": {
           "type": "string",
@@ -5949,22 +5949,21 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Pattern; pair with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Zero-padding width; pair with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
         },
-        "ai_instructions": {
-          "type": "string",
-          "maxLength": 3000,
-          "description": "Org-wide AI instructions (3000 chars); empty clears. Next message onward; override personal preferences."
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Enable AI prompt caching"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -5972,13 +5971,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "searchable-text"
           ],
           "type": "string",
-          "description": "Automatic PDF searchable-text extraction"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Time increment in minutes; must divide 60"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
@@ -5995,11 +5994,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Latest locked month's last day; null unlocks"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require time-entry narratives"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [
@@ -7014,7 +7013,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read how citing decisions stood to one, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Pass nextCursor back as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -9728,7 +9727,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
         },
         "reference": {
           "type": "string",
@@ -12418,7 +12417,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "update_org_settings"
           ],
           "type": "string",
-          "description": "Administrative action to perform"
+          "description": "Administrative action; the settings fields apply only to update_org_settings"
         },
         "matter_id": {
           "type": "string",
@@ -12439,22 +12438,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Pattern; pair with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Zero-padding width; pair with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
         },
-        "ai_instructions": {
-          "type": "string",
-          "maxLength": 3000,
-          "description": "Org-wide AI instructions (3000 chars); empty clears. Next message onward; override personal preferences."
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Enable AI prompt caching"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -12462,13 +12460,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "searchable-text"
           ],
           "type": "string",
-          "description": "Automatic PDF searchable-text extraction"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Time increment in minutes; must divide 60"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
@@ -12485,11 +12483,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Latest locked month's last day; null unlocks"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require time-entry narratives"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [
@@ -14286,7 +14284,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read how citing decisions stood to one, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Pass nextCursor back as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
@@ -16228,7 +16226,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law citations is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read how citing decisions stood to one, or what it cited. One page, each citation with a polarity and an excerpt of its paragraph. \`cited_by\` returns the decisions that cite this one, \`cites\` the ones it cites; neither means agreement. \`polarity\` is one of negative, neutral, positive, supportive, mixed, unclassified: a stance, not a doctrinal act, so it never says followed, distinguished or overruled. 'unclassified' means none was read, 'mixed' that mentions disagreed. \`passage.text\` is at most 1200 characters centred on the citation, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention the polarity came from), or 'latest_of_several' (it may not be). Pass nextCursor back as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Read one page of citations with their citing passages. \`cited_by\` reads decisions citing this one, \`cites\` what it cites. \`polarity\` is a stance: 'unclassified' means none was read, 'mixed' that mentions disagreed. \`doctrine\` is 'distinguishes' or 'limits' only where a reviewed reading found the court doing so in its own words; 'not_stated' does not mean followed; 'unread' means none was read; null when \`doctrineAvailability\` is 'unavailable'. \`passage.evidenceQuote\` is the verbatim evidence when text is available. \`passage.text\` is at most 1200 characters, cut when \`passage.truncated\`; \`passage.mention\` is 'sole', 'classified_section' (the mention polarity came from) or 'latest_of_several' (it may not be). Pass nextCursor as cursor. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Read case-law citations",
       "destructiveHint": false,
