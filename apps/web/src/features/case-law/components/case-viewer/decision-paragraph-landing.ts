@@ -76,6 +76,7 @@ type DecisionParagraphLandingSyncOptions = {
   /** The decision's stored AST; its reference, not a per-render parse, keys the landing. */
   documentAst: unknown;
   fragment: string | undefined;
+  sessionId?: string | undefined;
 };
 
 /**
@@ -87,6 +88,7 @@ export const useDecisionParagraphLanding = ({
   containerRef,
   documentAst,
   fragment,
+  sessionId,
 }: DecisionParagraphLandingSyncOptions) => {
   useExternalSyncEffect(() => {
     const container = containerRef.current;
@@ -97,5 +99,5 @@ export const useDecisionParagraphLanding = ({
       container,
       decisionParagraphLanding(parseDocumentAst(documentAst), fragment),
     );
-  }, [containerRef, documentAst, fragment]);
+  }, [containerRef, documentAst, fragment, sessionId]);
 };

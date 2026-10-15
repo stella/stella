@@ -74,10 +74,16 @@ function generateManifest(manifest: Manifest) {
   const importBlock = imports.length > 0 ? `${imports.join("\n")}\n\n` : "";
   const body =
     entries.length > 0 ? `\n${entries.map(formatEntry).join(",\n")}\n` : "";
+  const skillIdUnion =
+    entries.length > 0
+      ? entries.map((entry) => JSON.stringify(entry.id)).join(" | ")
+      : "never";
   const typeDeclaration =
     manifest.exportName === "GENERATED_SKILLS"
-      ? `type GeneratedSkillEntry = {
-  id: string;
+      ? `export type BuiltInSkillId = ${skillIdUnion};
+
+type GeneratedSkillEntry = {
+  id: BuiltInSkillId;
   source: string;
   resources: readonly {
     path: string;

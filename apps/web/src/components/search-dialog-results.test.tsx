@@ -11,7 +11,7 @@ import {
 } from "@/components/search-dialog-results";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 const resource = resourceRef({
@@ -70,7 +70,7 @@ const recent = {
   filePropertyId: hit.filePropertyId,
   mimeType: hit.mimeType,
   openedAt: hit.updatedAt,
-} as const satisfies RecentFile;
+} as const satisfies RecentFileWithIdentity;
 
 test.each([
   {
@@ -142,5 +142,55 @@ test.each([
     }
     expect(client.getQueryState(options.queryKey)?.fetchStatus).toBe("idle");
     client.clear();
+  },
+);
+
+test.each([
+  [{ kind: "statute", number: "172", year: "2026" }, "172/26"],
+  [{ kind: "decision", courtAbbreviation: "NS", courtTier: "supreme" }, "NS"],
+  [
+    { kind: "decision", courtAbbreviation: "ÚS", courtTier: "constitutional" },
+    "ÚS",
+  ],
+  [{ kind: "decision", courtAbbreviation: null }, 'data-kind="unknown"'],
+] as const)(
+  "recents render their document identity without fetching file metadata: %j",
+  (documentIdentity, label) => {
+    const markup = renderToStaticMarkup(
+      <RecentFileIcon file={{ ...recent, documentIdentity }} />,
+    );
+    expect(markup).toContain('data-slot="document-identity-badge"');
+    expect(markup).toContain(label);
+    expect(markup).not.toContain("/thumbnail/");
+  },
+);
+
+test.each([
+  { color: "--option-red", expected: "var(--option-red)" },
+  { color: "#336699", expected: "#336699" },
+  { color: null, expected: "var(--option-amber)" },
+])(
+  "matter search identities preserve their colour: %j",
+  ({ color, expected }) => {
+    const matterResource = resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE,
+      id: toSafeId<"workspace">("matter_search_badge"),
+    });
+    const matter = {
+      id: "matter:badge",
+      type: "matter",
+      resource: matterResource,
+      resourceName: toResourceName(matterResource),
+      title: "Civil proceeding",
+      headline: null,
+      updatedAt: hit.updatedAt,
+      workspaceId: "matter_search_badge",
+      workspaceName: "Civil proceeding",
+      color,
+    } as const satisfies GlobalSearchHit;
+    const markup = renderToStaticMarkup(<SearchHitIcon hit={matter} />);
+    expect(markup).not.toContain('data-slot="document-identity-badge"');
+    expect(markup).toContain("lucide-layers");
+    expect(markup).toContain(`color:${expected}`);
   },
 );

@@ -45,8 +45,6 @@
     "apps/api": {
       "entry": [
         "src/server.ts!",
-        // Browser entrypoints bundled by build-mcp-apps.ts.
-        "src/mcp/apps/*/app.{ts,tsx}",
         // Ignored runtime aggregates import every committed capability shard.
         "src/mcp/generated/capability-dispatch.ts!",
         "src/mcp/generated/capability-catalog.ts!",
@@ -59,6 +57,10 @@
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
         "src/lib/ocr-searchable-pdf-worker.ts!",
+        // Spike renderer process and its memory watchdog thread, started by
+        // path from the session.
+        "src/handlers/invoices/pdf/typst/worker.ts",
+        "src/handlers/invoices/pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
@@ -162,6 +164,13 @@
     "packages/legal-ast": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/mcp-apps": {
+      "entry": [
+        "src/*/app.tsx",
+        "src/**/*.{test,spec}.{ts,tsx}",
+        "scripts/**/*.ts"
+      ]
+    },
     "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
@@ -197,7 +206,14 @@
       "ignore": ["generated/**"]
     },
     "packages/scripts": {
-      "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
+      // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
+      "entry": [
+        "src/i18n-check.ts",
+        "src/i18n-typegen.ts",
+        "src/dev-postgres.ts",
+        // Test fixture processes are spawned by path from the tests.
+        "src/test-fixtures/*.ts"
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries

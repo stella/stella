@@ -56,7 +56,7 @@ test("rejects paired decision date pickers in MCP result apps", async () => {
         "@/components/date-picker-popover",
         "@stll/ui/date-picker-popover",
       ),
-      { sourcePath: "apps/api/src/mcp/apps/case-law-results/app.tsx" },
+      { sourcePath: "packages/mcp-apps/src/case-law-results/view.tsx" },
     ),
   ).toEqual([2]);
 });

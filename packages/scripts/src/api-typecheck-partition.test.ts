@@ -81,7 +81,7 @@ test("API test ownership follows transitive imports and fails when its derived p
         exclude: ["src/alpha.test.ts"],
       }),
     );
-    for (const name of ["scripts", "contracts", "mcp-apps", "visual-sandbox"]) {
+    for (const name of ["scripts", "contracts", "visual-sandbox"]) {
       write(
         `apps/api/tsconfig.${name}.json`,
         JSON.stringify({
@@ -100,7 +100,6 @@ test("API test ownership follows transitive imports and fails when its derived p
             "declarations",
             "scripts",
             "contracts",
-            "mcp-apps",
             "visual-sandbox",
           ].map((name) => [
             `typecheck:${name}`,
@@ -116,7 +115,6 @@ test("API test ownership follows transitive imports and fails when its derived p
         "declarations",
         "scripts",
         "contracts",
-        "mcp-apps",
         "visual-sandbox",
       ].map((name) => [
         `@stll/api#typecheck:${name}`,
