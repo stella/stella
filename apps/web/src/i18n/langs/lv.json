@@ -4338,6 +4338,8 @@
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
       },
+      "showInTitle": "Rādīt numuru blakus lietas nosaukumam",
+      "showInTitleDescription": "Ja tas ir izslēgts, virsraksts ir tieši ievadītais nosaukums.",
       "title": "Lietu numerācija",
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
@@ -5675,7 +5677,7 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "ownerTypeToggle": "Lietas veids",
+      "matterName": "Lietas nosaukums",
       "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
@@ -6127,15 +6129,12 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
-    "ownerType": {
-      "client": "Klients",
-      "personal": "Personīga"
-    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
       "noClient": "Klients nav piešķirts",
+      "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
       "partyRoles": {
         "co_counsel": "Līdzadvokāts",

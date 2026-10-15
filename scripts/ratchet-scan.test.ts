@@ -178,6 +178,35 @@ describe("shared ratchet scan", () => {
     }
   });
 
+  test("a quote inside a comment cannot hide the code after it", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-comment-quote-"));
+    const file = "apps/api/src/handlers/comment-quote.ts";
+    try {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(
+        path.join(root, file),
+        [
+          "// the model's reply",
+          "const a = input ?? [];",
+          "/** Pass `items once. */",
+          "const b = items ?? [];",
+          "const url = 'http://x/?? []'; const c = more ?? []; // it's done",
+          "/* a ` b */ const d = rest ?? [];",
+        ].join("\n"),
+      );
+      const metrics = RATCHET_METRICS.filter(
+        ({ id }) => id === "nullish-array-fallback",
+      );
+      expect(
+        scanTree({ tree: openSourceTree(root), metrics }).snapshot[
+          "nullish-array-fallback"
+        ]?.files,
+      ).toEqual({ [file]: 4 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("an earlier scan's counts carry over only for identical text", () => {
     const metrics = RATCHET_METRICS.filter(({ id }) => id === "as-casts");
     const root = mkdtempSync(path.join(tmpdir(), "ratchet-scan-"));

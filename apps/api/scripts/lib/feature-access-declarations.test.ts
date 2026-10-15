@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
 import {
   assertFeatureAccessDeclarations,
+  parseDeclarationSource,
   validateFeatureAccessDeclarations,
 } from "./feature-access-declarations";
 
@@ -1189,5 +1190,37 @@ describe("module paths and SQL table ownership", () => {
       file: endpoint,
       message: "source ownership requires featureAccess fixture",
     });
+  });
+});
+
+describe("parsed declaration sources", () => {
+  test("reuse a tree only for the identical file name and source text", () => {
+    const file = "apps/api/src/feature/parse-cache-probe.ts";
+    const source = "export const value = 1;";
+    const first = parseDeclarationSource(file, source);
+    expect(parseDeclarationSource(file, source)).toBe(first);
+    expect(first.getFullText()).toBe(source);
+
+    const changed = parseDeclarationSource(file, "export const value = 2;");
+    expect(changed).not.toBe(first);
+    expect(changed.getFullText()).toBe("export const value = 2;");
+
+    const renamed = parseDeclarationSource(
+      "apps/api/src/feature/parse-cache-other.ts",
+      "export const value = 2;",
+    );
+    expect(renamed).not.toBe(changed);
+    expect(renamed.fileName).toBe("apps/api/src/feature/parse-cache-other.ts");
+  });
+
+  test("a validation over reused trees matches the first and sees edits", () => {
+    const direct =
+      'import { run } from "@/api/feature/core"; export const go = () => run();';
+    const first = check(direct);
+    expect(first).not.toEqual([]);
+    expect(check(direct)).toEqual(first);
+    expect(check(direct, required)).toEqual([]);
+    expect(check("export const go = () => true;")).toEqual([]);
+    expect(check(direct)).toEqual(first);
   });
 });

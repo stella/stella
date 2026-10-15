@@ -8,6 +8,24 @@ import { compareCodeUnit } from "@stll/collation";
 import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 
+/**
+ * Parsed sources by file name, reused across validations in one process (the
+ * capability exporter validates on every export). A hit needs the identical
+ * name and source text, so it returns exactly the tree a fresh parse builds.
+ * Validation only reads trees: narrowing a schema module builds a new node
+ * through `ts.factory.updateSourceFile`.
+ */
+const parsedSources = new Map<string, { source: string; ast: ts.SourceFile }>();
+export const parseDeclarationSource = (file: string, source: string) => {
+  const cached = parsedSources.get(file);
+  if (cached?.source === source) {
+    return cached.ast;
+  }
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  parsedSources.set(file, { source, ast });
+  return ast;
+};
+
 type DeclarationOptions = {
   registry: FeatureRegistry;
   endpoints: readonly { file: string; config: Record<string, unknown> }[];
@@ -228,7 +246,7 @@ class DeclarationSourceGraph {
     if (source === undefined) {
       return undefined;
     }
-    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    const ast = parseDeclarationSource(file, source);
     this.parsed.set(file, ast);
     return ast;
   }
@@ -1814,7 +1832,7 @@ const dispatchEntryEndpoints = (sources: DeclarationOptions["sources"]) => {
     ) {
       continue;
     }
-    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    const ast = parseDeclarationSource(file, source);
     const visit = (node: ts.Node) => {
       if (
         !ts.isVariableDeclaration(node) ||
