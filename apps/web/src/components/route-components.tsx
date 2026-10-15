@@ -9,13 +9,13 @@ import { useTranslations } from "use-intl";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
-import { MattersNavIcon } from "@/components/matter-icon";
 import {
   isNetworkError,
   recoverRouteError,

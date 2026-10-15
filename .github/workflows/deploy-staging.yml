@@ -1,14 +1,14 @@
 name: Deploy main to staging
+run-name: "Staging release proof ${{ inputs.sha || github.sha }}"
 
 defaults:
   run:
     shell: bash
 
 # Deploys a commit on main into staging on demand: the tip by default, or a
-# pinned `sha` that main already contains, so a release candidate can be
-# verified while main keeps moving. A pinned SHA that is not on main fails
-# the run. The tagged release workflow remains the production path and does
-# not depend on this one.
+# pinned `sha` on main or a verified same-repository release PR head, so a
+# release candidate can be verified while main keeps moving. Evidence reuse requires an identical tree
+# and a verified main/PR chain. Tags remain the production path.
 #
 # Staging is off unless someone starts it, so this runs only when
 # dispatched. A dispatch while staging is not answering deploys nothing and
@@ -25,7 +25,11 @@ on:
         type: boolean
         default: false
       sha:
-        description: "Commit SHA on main to deploy (blank deploys the main tip)"
+        description: "Commit SHA to deploy (blank deploys main; release_candidate allows a release PR head)"
+        required: false
+        type: string
+      proof_sha:
+        description: "Reuse the release gates of a tree-identical commit instead of deploying again"
         required: false
         type: string
       waive_check:
@@ -57,10 +61,16 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      statuses: read
+      checks: read
+      actions: read
+      issues: read
+      pull-requests: read
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
       tip: ${{ steps.resolve.outputs.tip }}
       main-sha: ${{ steps.resolve.outputs.main-sha }}
+      reused: ${{ steps.proof.outputs.reused }}
       corpus_search_waived: ${{ steps.waiver.outputs.corpus_search_waived }}
 
     steps:
@@ -71,6 +81,9 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
           REQUESTED_SHA: ${{ inputs.sha }}
+          RELEASE_PROOF_REPOSITORY: ${{ github.repository }}
+          RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
+          GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
           set -euo pipefail
           directory="$RUNNER_TEMP/release-candidate-validation"
@@ -81,6 +94,9 @@ jobs:
           echo "::add-mask::$auth"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
+          git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
+          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
           bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
 
@@ -119,18 +135,44 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Bun runs the release queue history check the pinned-proof health gate
+      # needs before a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        if: inputs.proof_sha != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
       - name: Resolve the commit to deploy
         id: resolve
         env:
           REQUESTED_SHA: ${{ inputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR_HEAD: ${{ inputs.release_candidate && inputs.sha != '' }}
+          RELEASE_TREE_PROOF_VERIFIER: ${{ github.workspace }}/scripts/verify-release-tree-proof.sh
         run: bash scripts/resolve-staging-deploy-sha.sh --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pinned release proof
+        id: proof
+        if: inputs.proof_sha != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_SHA: ${{ steps.resolve.outputs.sha }}
+          PROOF_SHA: ${{ inputs.proof_sha }}
+          WAIVE_CHECK: ${{ inputs.waive_check || 'none' }}
+        run: |
+          [[ "$WAIVE_CHECK" == none ]] || { echo '::error::Proof reuse cannot add a staging waiver'; exit 1; }
+          bash scripts/verify-release-tree-proof.sh "$GITHUB_REPOSITORY" "$DEPLOY_SHA" "$PROOF_SHA" >/dev/null
+          bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$DEPLOY_SHA" "$PROOF_SHA"
+          echo "reused=true" >> "$GITHUB_OUTPUT"
 
   # Tie promotion and its dependent smoke job to the current health of the
   # staging environment.
   staging-health:
     name: Check staging health
     needs: resolve
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && needs.resolve.outputs.reused != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -333,6 +375,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -573,7 +616,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -745,6 +788,7 @@ jobs:
           CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
           WAIVE_REASON: ${{ inputs.waive_reason }}
           JOB_STATUS: ${{ job.status }}
+          PROOF_MAIN_BASE: ${{ needs.resolve.outputs.main-sha }}
         run: |
           set -euo pipefail
           state=failure
@@ -769,6 +813,10 @@ jobs:
                 printf 'Verification status: %s.\n' "$state"
               fi
             } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -n "${PROOF_MAIN_BASE:-}" ]]; then
+            # The full waiver reason remains in the summary; statuses allow 140 characters.
+            description="${description:0:93}; main=$PROOF_MAIN_BASE"
           fi
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           jq -n --arg state "$state" --arg description "$description" --arg url "$run_url" \

@@ -15,6 +15,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawDecisionCitationStats: "case_law_decision_citation_stats",
+  caseLawDecisionCitationStatsState: "case_law_decision_citation_stats_state",
   caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
@@ -173,6 +175,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     name_key: "permitted",
     role: "required",
     position: "required",
+  },
+  case_law_decision_citation_stats: {
+    decision_id: "permitted",
+    direction: "permitted",
+    related_year: "permitted",
+    related_country: "permitted",
+    related_source_id: "permitted",
+    polarity: "permitted",
+    count: "permitted",
+  },
+  case_law_decision_citation_stats_state: {
+    decision_id: "permitted",
+    status: "permitted",
   },
   case_law_decisions: {
     id: "required",

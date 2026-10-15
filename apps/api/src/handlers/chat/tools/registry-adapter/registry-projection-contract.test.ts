@@ -505,6 +505,18 @@ const CONTRACT_CORPUS = {
               assignedToDeletedAt: null,
             },
           ],
+          // The web agenda stays out of the matter detail projection.
+          upcomingAgenda: [
+            {
+              entityId: toSafeId<"entity">(uid(43)),
+              name: "File the response",
+              status: null,
+              dueDate: "2026-01-10",
+              assignedTo: "Petr",
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({
@@ -1699,10 +1711,16 @@ const CONTRACT_CORPUS = {
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
-            capped: { incoming: false, outgoing: false },
+            precision: {
+              status: "bounded",
+              capped: { incoming: false, outgoing: false },
+            },
             incomingByYear: [],
           },
-          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          topCiting: {
+            precision: "exact",
+            items: [relatedDecision(58, "23 Cdo 200/2021")],
+          },
           cites: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -1853,6 +1871,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"legislationDocument">(uid(72)),
             astS3Key: null,
             documentAst: null,
+            eli: "/eli/cz/sb/2012/89",
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
             expressionKind: "consolidation" as const,
@@ -2464,10 +2483,10 @@ describe("decision text in chat projection", () => {
       summary: {
         incoming: noCitations,
         outgoing: noCitations,
-        capped: { incoming: false, outgoing: false },
+        precision: { status: "exact" },
         incomingByYear: [],
       },
-      topCiting: [],
+      topCiting: { precision: "exact", items: [] },
       cites: [],
       citesMore: false,
     } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);

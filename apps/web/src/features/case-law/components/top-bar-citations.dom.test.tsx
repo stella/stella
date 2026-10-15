@@ -5,6 +5,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { DecisionCitationSummary } from "@/features/case-law/citation-treatment";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;
@@ -33,7 +34,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const decision = {
@@ -64,7 +65,7 @@ const summary = (positive: number) =>
       mixed: 0,
       unclassified: 0,
     },
-    capped: { incoming: false, outgoing: false },
+    precision: { status: "exact" },
     incomingByYear: [],
   }) satisfies DecisionCitationSummary;
 const defaultLocaleOptions = { locale: "en", messages };

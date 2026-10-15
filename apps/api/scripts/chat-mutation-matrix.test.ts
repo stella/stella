@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
 import { namedOracles, scenarioTestPattern } from "./chat-mutation-matrix";
 
@@ -20,7 +22,7 @@ test("data-only checking requires exactly one mutation target without executing 
             behaviour: "fixture behaviour",
             fix: "fixture",
             status: "active",
-            file: path.relative(
+            file: repoRelativePath(
               path.resolve(import.meta.dirname, ".."),
               target,
             ),

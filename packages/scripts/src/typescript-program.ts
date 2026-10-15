@@ -4,6 +4,9 @@ import ts from "typescript";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
+// TypeScript 6 serves the JavaScript compiler API; native typechecks use TypeScript 7.
+export { ts };
+
 type CreateProgramOptions = {
   readonly configPath: string;
   readonly rootNames?: readonly string[];

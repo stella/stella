@@ -55,8 +55,8 @@ type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
 /**
  * What the reader does to a public-law result set: read how large it is,
  * narrow it, order it, and choose what each row shows. The reading controls
- * scroll as one row, so a narrow viewport drops none of them; the actions wrap
- * beside it instead, because a write affordance that scrolls out of a
+ * scroll as one row, so a narrow viewport drops none of them; the summary takes
+ * a row of its own there; the actions wrap beside the controls instead, because a write affordance that scrolls out of a
  * scrollbar-less row is one the reader cannot find.
  */
 export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
@@ -73,9 +73,22 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
   const t = useTranslations();
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1">
+    <div
+      className="@container/results-toolbar flex min-w-0 flex-wrap items-center gap-1"
+      data-slot="public-law-results-toolbar"
+    >
       {filters}
-      <div className="text-muted-foreground min-w-0 flex-1 text-xs">
+      {/*
+        The summary never shares a narrow row with the controls: there it took
+        whatever width they left, and a query broke word by word under them.
+        Below the container breakpoint it is a full row of its own above the
+        controls; above it, it keeps a floor width, and the controls wrap to
+        the next row before the summary is squeezed under that floor.
+      */}
+      <div
+        className="text-muted-foreground order-first min-w-0 basis-full text-xs @2xl/results-toolbar:order-0 @2xl/results-toolbar:min-w-56 @2xl/results-toolbar:flex-1 @2xl/results-toolbar:basis-0"
+        data-slot="public-law-results-summary"
+      >
         {summary}
       </div>
       <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
@@ -260,7 +273,7 @@ export const PublicLawFilterChips = ({
         type="button"
         variant="ghost"
       >
-        {t("workspaces.views.clearFilters")}
+        {t("common.clearFilters")}
       </Button>
     </div>
   );

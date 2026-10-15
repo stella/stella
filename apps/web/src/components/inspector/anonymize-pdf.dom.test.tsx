@@ -4,6 +4,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, afterEach, beforeEach, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 
 const { QueryClient, QueryClientProvider } =
@@ -27,7 +29,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const failedRead of ["terms", "allowlist", "both"]) {

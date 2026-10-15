@@ -6,6 +6,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { parseBunLockText } from "./bun-lock-text";
 import {
   checkTauriPackageAlignment,
@@ -486,7 +487,9 @@ const fix = async () => {
   }
   const output = Bun.env["GITHUB_OUTPUT"];
   if (output !== undefined) {
-    const allowed = [...writes.keys()].map((file) => path.relative(ROOT, file));
+    const allowed = [...writes.keys()].map((file) =>
+      repoRelativePath(ROOT, file),
+    );
     allowed.push(BUN_LOCK, CARGO_LOCK);
     if (allowed.some((file) => /[|\r\n]/u.test(file))) {
       throw new TauriAutofixError("Invalid autofix output path");

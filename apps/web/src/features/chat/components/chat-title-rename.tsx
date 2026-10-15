@@ -37,7 +37,7 @@ type ChatTitleSuggestButtonProps = {
 
 /**
  * The magic-wand "suggest a title" trigger, shared by every rename surface
- * (rename editors, the inspector tab header, threads-sheet rows) so the
+ * (rename editors, the inspector tab header, chat history rows) so the
  * icon, pending spinner, and disabled explanations stay identical.
  */
 export const ChatTitleSuggestButton = ({
@@ -115,7 +115,7 @@ type ChatTitleRenameProps = {
   ownsRenameCommand: boolean;
   /**
    * Surface-specific view-mode content. Defaults to the click-to-edit title
-   * button the breadcrumb established. The threads sheet substitutes its
+   * button the breadcrumb established. The chat history page substitutes its
    * navigation row and triggers editing from its own wand.
    */
   renderView?:

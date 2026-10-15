@@ -14,6 +14,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/popover";
 
+import { toMatterOption } from "@/components/workspaces/matter-combobox";
 import { useTimerMutation } from "@/features/time-timers/mutations";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { TimerError } from "@/features/time-timers/timer-error";
@@ -94,13 +95,7 @@ export const GlobalTimerContent = ({
   const selectedMatter = matters.data?.workspaces.find(
     (matter) => matter.id === selectedMatterId,
   );
-  const initialMatter = selectedMatter
-    ? {
-        id: selectedMatter.id,
-        name: selectedMatter.name,
-        clientName: selectedMatter.client?.displayName ?? null,
-      }
-    : null;
+  const initialMatter = selectedMatter ? toMatterOption(selectedMatter) : null;
 
   return (
     <div className="flex items-center">

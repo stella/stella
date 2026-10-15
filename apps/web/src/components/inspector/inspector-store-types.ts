@@ -4,6 +4,7 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { ComposerSource } from "@/components/chat-editor-source";
+import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
@@ -37,13 +38,19 @@ export type ChatTab = {
   contextMatterIds: string[];
   /** The legal document this chat is about, when it was opened from one. */
   activeLegalKey?: LegalDocumentChatKey | undefined;
+  /**
+   * The conversation has a message on the server. A document's chat that
+   * never got one is not kept across reloads: the document reopens its
+   * conversation from the server, so an empty tab would only pile up.
+   */
+  started?: true | undefined;
   activeSkill?:
     | {
         /** Absent for a built-in skill, which has no row: `skillName` names it. */
         skillId?: string | undefined;
         /** The skill's identifier (its slug), never shown as its title. */
         skillName: string;
-        /** The title a person reads (`skillLabel`); absent on older tabs. */
+        /** The title a person reads (`useSkillLabel`); absent on older tabs. */
         skillDisplayName?: string | undefined;
       }
     | undefined;
@@ -123,29 +130,29 @@ type SkillResourceTabFields = {
   label: string;
   /** The skill's identifier (its slug), never shown as its title. */
   skillName: string;
-  /** The title a person reads (`skillLabel`), when it was known. */
-  skillDisplayName?: string | undefined;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;
   content: string;
 };
 
-export type SkillResourceTab = SkillResourceTabFields & SkillResourceSource;
+/**
+ * A built-in skill's title follows the reader's language (`useSkillLabel`),
+ * so only an installed skill's tab stores one.
+ */
+type SkillResourceTabSource =
+  | { origin: typeof BUILT_IN_SKILL_ORIGIN; skillId: null }
+  | {
+      origin: SkillResourceOrigin;
+      skillId: string;
+      /** The title a person reads, when it was known. */
+      skillDisplayName?: string | undefined;
+    };
 
-/** What a skill is called on screen: its title, or its slug if none is known. */
-export const skillLabel = ({
-  skillDisplayName,
-  skillName,
-}: {
-  skillDisplayName?: string | undefined;
-  skillName: string;
-}): string => skillDisplayName ?? skillName;
+export type SkillResourceTab = SkillResourceTabFields & SkillResourceTabSource;
 
-export type InstalledSkillResourceTab = SkillResourceTabFields & {
-  origin: SkillResourceOrigin;
-  skillId: string;
-};
+export type InstalledSkillResourceTab = SkillResourceTabFields &
+  Exclude<SkillResourceTabSource, { origin: typeof BUILT_IN_SKILL_ORIGIN }>;
 
 export type GenericTab = {
   type: "view";
@@ -326,7 +333,7 @@ type InspectorTabsActions = {
   }) => void;
   openSkillResourceTab: (
     tab: Omit<SkillResourceTabFields, "type" | "id" | "target"> &
-      SkillResourceSource & {
+      SkillResourceTabSource & {
         refreshContent?: boolean | undefined;
         target?: SkillResourceTab["target"];
       },
@@ -342,9 +349,13 @@ type InspectorTabsActions = {
     contextMatterIds?: string[];
     activeLegalKey?: LegalDocumentChatKey;
     activeSkill?: ChatTab["activeSkill"];
+    /** The thread is known to have messages on the server. */
+    started?: true;
     pane?: InspectorPaneIntent;
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;
+  /** Records that a chat tab's conversation has a message on the server. */
+  markChatStarted: (tabId: string) => void;
   resetChatTabId: (oldId: ChatThreadId, newId: ChatThreadId) => void;
   openView: <P>(args: {
     type: string;
@@ -352,6 +363,8 @@ type InspectorTabsActions = {
     label: string;
     payload: StructuredCloneable<P>;
     ownerRouteId?: InspectorOwnerRouteId;
+    /** Explicit docking may move the current main decision into the inspector. */
+    decisionPlacement?: CaseDecisionPlacement;
     pane?: InspectorPaneIntent;
   }) => void;
   updateView: <P>(args: {

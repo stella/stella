@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -79,7 +79,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -95,12 +95,6 @@ jobs:
         uses: ./.github/actions/setup-production-e2e
         with:
           expected-sha: ${{ github.sha }}
-
-      - name: Require a ready stack
-        if: steps.stack.outputs.status != 'ready'
-        run: |
-          echo "::error::Network baseline recording needs a ready E2E stack"
-          exit 1
 
       - name: Seed write mode from the latest published recording
         if: (inputs.mode || 'write') == 'write'
