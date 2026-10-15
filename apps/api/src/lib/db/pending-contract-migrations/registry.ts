@@ -27,7 +27,7 @@ export const PENDING_CONTRACT_MIGRATIONS_DIR = import.meta.dir;
 export const PENDING_CONTRACT_MIGRATIONS = [
   {
     name: "20261015060000_case_law_decisions_base_table_contract",
-    expiresAt: "2026-11-15",
+    expiresAt: "2026-10-22",
     relations: ["case_law_decisions"],
   },
 ] as const satisfies readonly PendingContractMigration[];
