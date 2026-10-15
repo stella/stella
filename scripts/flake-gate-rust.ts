@@ -30,8 +30,36 @@ const moduleFor = (crateDir: string, file: string) => {
   return parts.filter((part) => part !== "mod").join("::");
 };
 
-const hasTest = (file: string) =>
-  /#\s*\[(?:[\w:]+::)?test\s*\]/u.test(readFileSync(file, "utf-8"));
+const hasTest = (file: string) => {
+  const source = readFileSync(file, "utf-8");
+  for (const attribute of source.matchAll(
+    /#\s*\[\s*(?:[A-Za-z_]\w*\s*::\s*)*test\s*(?=\]|\()/gu,
+  )) {
+    const start = attribute.index + attribute[0].length;
+    if (source[start] === "]") {
+      return true;
+    }
+    let depth = 0;
+    // Quoted arguments may contain parentheses; only delimiter tokens count.
+    const tokens =
+      /(?:br|r)(?<hashes>#{0,})"[\s\S]*?"\k<hashes>|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'|\/\/[^\n]*|\/\*[\s\S]*?\*\/|[()]/gu;
+    tokens.lastIndex = start;
+    for (const token of source.matchAll(tokens)) {
+      if (token[0] === "(") {
+        depth += 1;
+      } else if (token[0] === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          if (/^\s*\]/u.test(source.slice(token.index + 1))) {
+            return true;
+          }
+          break;
+        }
+      }
+    }
+  }
+  return false;
+};
 
 export const selectRustTargets = (
   root: string,

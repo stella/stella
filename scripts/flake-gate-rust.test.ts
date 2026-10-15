@@ -20,6 +20,62 @@ const write = (root: string, file: string, contents: string) => {
   writeFileSync(absolute, contents);
 };
 
+test.each([
+  '#[tokio::test(flavor = "multi_thread")]',
+  '#[sqlx::test(migrations = "./migrations")]',
+  '#[custom::test(options(nested("a ) bracket")))]',
+  `#[custom::test(options(r#"quote ")"#, ')', /* ) */ nested()))]`,
+])(
+  "argument-bearing Rust test attribute selects its changed module: %s",
+  (attribute) => {
+    withFixture((root) => {
+      write(
+        root,
+        "Cargo.toml",
+        '[package]\nname = "fixture"\nversion = "0.1.0"\n',
+      );
+      write(root, "src/feature.rs", `${attribute}\nasync fn works() {}\n`);
+      expect(selectRustTargets(root, ["src/feature.rs"])).toEqual({
+        targets: [
+          {
+            file: "src/feature.rs",
+            cwd: root,
+            crate: "fixture",
+            module: "feature",
+          },
+        ],
+        unsupported: [],
+      });
+    });
+  },
+);
+
+test.each([
+  '#[tokio::test(flavor = "multi_thread"]',
+  "#[tokio::test(options(nested())]",
+  '#[tokio::test_helper(flavor = "multi_thread")]',
+])(
+  "incomplete or non-test Rust attributes do not select tests: %s",
+  (attribute) => {
+    withFixture((root) => {
+      write(
+        root,
+        "Cargo.toml",
+        '[package]\nname = "fixture"\nversion = "0.1.0"\n',
+      );
+      write(root, "src/lib.rs", `${attribute}\nasync fn works() {}\n`);
+      const selected = selectRustTargets(root, ["src/lib.rs"]);
+      expect(selected.targets).toEqual([]);
+      expect(selected.unsupported).toEqual([
+        {
+          file: "src/lib.rs",
+          reason: "changed file has no test in module <crate>",
+        },
+      ]);
+    });
+  },
+);
+
 test("changed Rust modules with unit tests select one crate/module target", () => {
   withFixture((root) => {
     write(
