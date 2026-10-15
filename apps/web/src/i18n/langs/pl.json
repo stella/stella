@@ -363,6 +363,8 @@
       "chooseList": "Wybierz listę",
       "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
+      "loadSample": "Wczytaj przykładową sprawę",
+      "loadSampleFailed": "Nie udało się wczytać przykładowej sprawy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
     }
@@ -2922,6 +2924,7 @@
     "checkingDocxEditDescription": "stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
     "checkingDocxEditTitle": "Sprawdzanie dokumentu",
     "chooseEvidence": "Wybierz plik, aby wstawić numerowane odniesienie do dowodu.",
+    "collaborationSnapshotRecovered": "Nie udało się ponownie otworzyć zapisanej kopii współpracy. Pokój został odtworzony z ostatniego zapisanego dokumentu; niezapisane zmiany mogły zostać utracone.",
     "comment": "Komentarz",
     "comments": {
       "addPlaceholder": "Dodaj komentarz...",
@@ -4518,6 +4521,8 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
     "dateTo": "Do",

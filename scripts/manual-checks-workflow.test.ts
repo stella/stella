@@ -110,6 +110,9 @@ const workflowProblems = (text: string): string[] => {
 
 test("workflow preserves the dispatch-only least-privilege contract", () => {
   expect(workflowProblems(workflowText)).toEqual([]);
+  expect(parseWorkflow(workflowText).jobs.check["if"]).toBe(
+    "inputs.check != 'install-cache-benchmark' && inputs.check != 'store-cache-save-benchmark'",
+  );
   const mutations: [string, string, string][] = [
     [
       "trigger",

@@ -25,7 +25,12 @@ const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 export type SelectionGraph = {
   packages: ReadonlyMap<
     string,
-    { directory: string; tests: boolean; dependencies: ReadonlySet<string> }
+    {
+      directory: string;
+      tests: boolean;
+      scripts: Readonly<Record<string, string>>;
+      dependencies: ReadonlySet<string>;
+    }
   >;
   inputs: ReadonlyMap<string, readonly string[]>;
   globalInputs: readonly string[];
@@ -60,7 +65,24 @@ const GLOBAL_INPUTS = [
   "packages/typescript-config/**",
   "**/package.json",
   "**/tsconfig*.json",
+  "apps/*/scripts/**",
+  "packages/*/scripts/**",
+  ".ai/**",
+  ".agents/**",
+  ".claude/**",
+  "**/Cargo.toml",
+  "**/Cargo.lock",
 ] as const;
+
+export const requiresFullSelection = (
+  changed: readonly string[],
+  graph: SelectionGraph,
+) =>
+  changed.some(
+    (file) =>
+      ownerOf(file, graph) === undefined ||
+      graph.globalInputs.some((input) => matches(file, input)),
+  );
 
 export const readSelectionGraph = (repository = root): SelectionGraph => {
   const lock =
@@ -73,7 +95,12 @@ export const readSelectionGraph = (repository = root): SelectionGraph => {
   );
   const packages = new Map<
     string,
-    { directory: string; tests: boolean; dependencies: ReadonlySet<string> }
+    {
+      directory: string;
+      tests: boolean;
+      scripts: Readonly<Record<string, string>>;
+      dependencies: ReadonlySet<string>;
+    }
   >();
   for (const parent of ["apps", "packages"]) {
     for (const entry of readdirSync(path.join(repository, parent), {
@@ -98,6 +125,7 @@ export const readSelectionGraph = (repository = root): SelectionGraph => {
       packages.set(manifest.name, {
         directory,
         tests: manifest.scripts?.["test"] !== undefined,
+        scripts: manifest.scripts ?? {},
         dependencies: closure.workspaceDirectories,
       });
     }
@@ -161,11 +189,7 @@ export const affectedPackages = (
 ) => {
   const affected = new Set<string>();
   const files = new Set(changed);
-  if (
-    changed.some((file) =>
-      graph.globalInputs.some((input) => matches(file, input)),
-    )
-  ) {
+  if (requiresFullSelection(changed, graph)) {
     return new Set(graph.packages.keys());
   }
   // Generated files need not exist in a clean checkout. Propagate their input

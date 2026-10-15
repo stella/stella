@@ -8,6 +8,7 @@ import { panic } from "better-result";
  */
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { printError } from "@stll/errors";
 
 const INPUT = new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url)
@@ -76,7 +77,7 @@ const run = async () => {
     });
   }
 
-  zip.file("word/document.xml", xml);
+  writeZipEntry(zip, "word/document.xml", xml);
 
   const buffer = await zip.generateAsync({
     type: "nodebuffer",
