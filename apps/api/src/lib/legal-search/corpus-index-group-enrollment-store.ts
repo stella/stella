@@ -629,8 +629,13 @@ export const readServingCorpusIndexTargetTx = async (
   let merged = primary.value;
   for (const [flippedJurisdiction, generation] of flipped) {
     // db-await-in-loop: at most a handful of flipped jurisdictions per family
+    const attachedServing = await readAttachedGenerationTx(tx, {
+      family,
+      generation,
+    });
+    // db-await-in-loop: the same handful of flipped jurisdictions
     const attached = await resolveGenerationTargetTx(tx, {
-      serving: await readAttachedGenerationTx(tx, { family, generation }),
+      serving: attachedServing,
       jurisdiction: flippedJurisdiction,
     });
     // An attached group that is not attested is left out of a generation-wide
