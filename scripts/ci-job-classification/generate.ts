@@ -136,13 +136,9 @@ export const generateClassification = ({
           }),
         } satisfies PublicMetadata["nodes"][number];
         nodes.set(node.id, node);
-        const used = new Set(
-          [
-            ...Object.values(parsed.value.jobs).flatMap((job) => job.steps),
-            ...parsed.value.steps,
-          ].flatMap((step) => (step.uses === null ? [] : [step.uses])),
-        );
-        for (const reference of [...used].toSorted()) {
+        for (const [reference, kind] of Object.entries(
+          parsed.value.dependencies,
+        ).toSorted(([left], [right]) => compareCodeUnit(left, right))) {
           let target = manifest.nodes.find((entry) =>
             entry.type === "supplier"
               ? entry.reference === reference
@@ -169,10 +165,7 @@ export const generateClassification = ({
             };
           }
           if (!target) {
-            const reusable = Object.values(parsed.value.jobs).some(
-              (job) => job.reusableWorkflow === reference,
-            );
-            if (reusable) {
+            if (kind === "reusable-workflow") {
               throw new AdmissionError({
                 message: `Reusable workflow snapshot required: ${reference}`,
               });

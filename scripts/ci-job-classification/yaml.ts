@@ -5,26 +5,21 @@ export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
 }> {}
 
-// Only these job/step keys are omitted; new keys participate automatically.
+// Only these document/job/step keys are omitted; new keys participate automatically.
 // YAML comments are absent from the parsed objects. Action inputs stay intact.
 export const CLASSIFICATION_EXCLUSIONS = {
+  document: ["name", "run-name"],
   job: ["name", "timeout-minutes"],
   step: ["name", "timeout-minutes", "run"],
 } as const;
 
-const STEP = v.strictObject({
-  uses: v.nullable(v.string()),
-  run: v.nullable(v.string()),
-});
-const JOB = v.strictObject({
-  digest: v.string(),
-  reusableWorkflow: v.nullable(v.string()),
-  steps: v.array(STEP),
-});
 const DOCUMENT = v.strictObject({
   digest: v.string(),
-  jobs: v.record(v.string(), JOB),
-  steps: v.array(STEP),
+  jobs: v.record(v.string(), v.strictObject({ digest: v.string() })),
+  dependencies: v.record(
+    v.string(),
+    v.picklist(["action", "reusable-workflow"]),
+  ),
 });
 
 // Validate duplicate keys and bound alias expansion before projecting classification metadata.
@@ -39,6 +34,13 @@ MAX_EXPANDED_NODES = 250_000
 MAX_EXPANDED_BYTES = 16 * 1024 * 1024
 MAX_DEPTH = 256
 
+def string_scalar(node)
+  node.tag = 'tag:yaml.org,2002:str'
+  node.plain = false
+  node.quoted = true
+  node.style = Psych::Nodes::Scalar::DOUBLE_QUOTED
+end
+
 def check(node, anchors, count, depth = 0)
   raise 'YAML nesting limit exceeded' if depth > MAX_DEPTH
   count[0] += 1
@@ -51,6 +53,9 @@ def check(node, anchors, count, depth = 0)
     raise "duplicate YAML anchor #{node.anchor}" if anchors.key?(node.anchor)
     anchors[node.anchor] = node
   end
+  if node.is_a?(Psych::Nodes::Scalar) && node.tag.nil? && !node.quoted && node.value.match?(/\A(?:yes|no|on|off)\z/i)
+    string_scalar(node)
+  end
   if node.is_a?(Psych::Nodes::Mapping)
     seen = {}
     node.children.each_slice(2) do |k,v|
@@ -58,6 +63,8 @@ def check(node, anchors, count, depth = 0)
       raise "duplicate YAML key #{k.value}" if seen[k.value]
       raise 'YAML merge key' if k.value == '<<'
       seen[k.value] = true
+      # GitHub mapping keys are strings (not YAML 1.1 booleans such as on).
+      string_scalar(k)
       check(k, anchors, count, depth + 1)
       check(v, anchors, count, depth + 1)
     end
@@ -110,7 +117,7 @@ def steps(value)
   value.flat_map do |s|
     raise 'step must be mapping' unless s.is_a?(Hash)
     if s.key?('parallel')
-      raise 'parallel group cannot have leaf fields' unless s.keys == ['parallel']
+      raise 'parallel group cannot have leaf fields' if s.key?('uses') || s.key?('run')
       next steps(s['parallel'])
     end
     ['uses','run'].each { |k| raise "#{k} must be string" if s.key?(k) && !s[k].is_a?(String) }
@@ -144,12 +151,13 @@ def step_shapes(value)
     {'definition'=>shape, 'run-secret-refs'=>refs}
   end
 end
-def job_shape(job, workflow)
+def job_shape(job)
   shape = project(job, 'job')
   shape['steps'] = step_shapes(job['steps']) if job.key?('steps')
-  shape['permissions'] = job.fetch('permissions', workflow['permissions'])
-  shape['env'] = (workflow['env'] || {}).merge(job['env'] || {})
-  {'definition'=>shape, 'workflow-defaults'=>workflow['defaults']}
+  shape
+end
+def add_action_dependencies(dependencies, steps)
+  steps.each { |step| dependencies[step['uses']] ||= 'action' if step['uses'] }
 end
 def digest(value)
   Digest::SHA256.hexdigest(JSON.generate(canon(value)))
@@ -161,9 +169,15 @@ raise 'one YAML document required' unless tree.children.length == 1
 anchors = {}
 check(tree, anchors, [0])
 expansion(tree, anchors, {}, {})
-data = Psych.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: true)
+data = Psych.safe_load(tree.to_yaml, permitted_classes: [], permitted_symbols: [], aliases: true)
 raise 'document must be mapping' unless data.is_a?(Hash)
+shape = project(data, 'document')
+if data['runs'].is_a?(Hash) && data['runs'].key?('steps')
+  shape['runs'] = data['runs'].merge('steps'=>step_shapes(data['runs']['steps']))
+end
+context = shape.reject { |key,_| key == 'jobs' }
 jobs = {}
+dependencies = {}
 if data.key?('jobs')
   raise 'jobs must be nonempty mapping' unless data['jobs'].is_a?(Hash) && !data['jobs'].empty?
   data['jobs'].each do |id,j|
@@ -171,9 +185,10 @@ if data.key?('jobs')
     ss = j.key?('steps') ? steps(j['steps']) : []
     if j.key?('uses')
       raise 'job uses must be string' unless j['uses'].is_a?(String)
-      ss << {'uses'=>j['uses'],'run'=>nil}
+      dependencies[j['uses']] = 'reusable-workflow'
     end
-    jobs[id] = {'digest'=>digest(job_shape(j, data)),'reusableWorkflow'=>j['uses'],'steps'=>ss}
+    add_action_dependencies(dependencies, ss)
+    jobs[id] = {'digest'=>digest({'document'=>context, 'job'=>job_shape(j)})}
   end
 end
 ss = []
@@ -187,12 +202,9 @@ if data.key?('runs')
     ss = [{'uses'=>nil,'run'=>JSON.generate(canon(r))}]
   end
 end
-action = data['runs']&.dup
-if action && action.key?('steps')
-  action['steps'] = step_shapes(action['steps'])
-end
-shape = {'jobs'=>jobs.transform_values { |j| j['digest'] }, 'runs'=>action, 'inputs'=>data['inputs'], 'outputs'=>data['outputs']}
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'steps'=>ss}))
+add_action_dependencies(dependencies, ss)
+shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies}))
 `;
 
 export const parseDocument = (text: string) =>

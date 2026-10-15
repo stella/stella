@@ -240,24 +240,16 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
               `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then run ${REFRESH_COMMAND}`,
             );
           }
-          const references = new Set(
-            [
-              ...Object.values(parsed.value.jobs).flatMap((job) => job.steps),
-              ...parsed.value.steps,
-            ].flatMap((step) => (step.uses === null ? [] : [step.uses])),
-          );
+          const references = new Set(Object.keys(parsed.value.dependencies));
           if (
             Object.keys(node.edges).length !== references.size ||
             Object.keys(node.edges).some((ref) => !references.has(ref))
           ) {
             reject(`metadata edge totality mismatch: ${id}`);
           }
-          const reusableWorkflows = new Set(
-            Object.values(parsed.value.jobs).flatMap((job) =>
-              job.reusableWorkflow === null ? [] : [job.reusableWorkflow],
-            ),
-          );
-          for (const reference of references) {
+          for (const [reference, kind] of Object.entries(
+            parsed.value.dependencies,
+          )) {
             const targetId = node.edges[reference];
             const target = targetId ? nodes.get(targetId) : undefined;
             if (!targetId || !target) {
@@ -268,9 +260,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
               callerOrigin: node.origin,
               target,
               reference,
-              kind: reusableWorkflows.has(reference)
-                ? "reusable-workflow"
-                : "action",
+              kind,
             });
             visit(targetId);
           }

@@ -964,7 +964,64 @@ test("reusable workflow caller inputs require review until metadata is refreshed
 
 // Key census from https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.
 // Separate fixtures retain the job/step variants; future keys prove default inclusion.
+const invocationKeyFixture = {
+  workflow_call: {
+    inputs: {
+      channel: {
+        type: "string",
+        default: "preview",
+        required: false,
+        description: "Channel",
+        "future-input-key": "value",
+      },
+    },
+    secrets: {
+      token: {
+        required: false,
+        description: "Token",
+        "future-secret-key": "value",
+      },
+    },
+    outputs: {
+      artifact: {
+        value: "result",
+        description: "Artifact",
+        "future-output-key": "value",
+      },
+    },
+    "future-call-key": "value",
+  },
+  workflow_dispatch: {
+    inputs: {
+      channel: {
+        type: "choice",
+        options: ["preview", "stable"],
+        default: "preview",
+        required: false,
+        description: "Channel",
+        "future-dispatch-input-key": "value",
+      },
+    },
+    "future-dispatch-key": "value",
+  },
+  "future-trigger-key": { mode: "value" },
+} as const;
+
 const classificationKeyFixtures = {
+  document: [
+    {
+      name: "Workflow",
+      "run-name": "Checks",
+      on: invocationKeyFixture,
+      permissions: { contents: "read" },
+      env: { MODE: "check" },
+      defaults: { run: { shell: "bash" } },
+      concurrency: { group: "checks" },
+      "cache-mode": "read-only",
+      jobs: { check: { steps: [{ run: "echo initial" }] } },
+      "future-document-key": { nested: "value" },
+    },
+  ],
   job: [
     {
       name: "Checks",
@@ -1014,19 +1071,27 @@ const classificationKeyFixtures = {
     { wait: "worker" },
     { "wait-all": true },
     { cancel: "worker" },
-    { parallel: [{ run: "echo child", env: { MODE: "check" } }] },
+    {
+      parallel: [{ run: "echo child", env: { MODE: "check" } }],
+      id: "group",
+      "future-parallel-key": "value",
+    },
   ],
 } as const;
 
-for (const scope of ["job", "step"] as const) {
+for (const scope of ["document", "job", "step"] as const) {
   test(`every fixture ${scope} key is projected or explicitly excluded`, () => {
     const seen = new Set<string>();
     const digest = (definition: Record<string, unknown>) => {
-      const workflow =
-        scope === "job"
-          ? { jobs: { check: definition } }
-          : { jobs: { check: { steps: [definition] } } };
-      const result = parseDocument(JSON.stringify(workflow));
+      const workflows = {
+        document: definition,
+        job: { jobs: { check: definition } },
+        step: { jobs: { check: { steps: [definition] } } },
+      } as const satisfies Record<
+        keyof typeof CLASSIFICATION_EXCLUSIONS,
+        unknown
+      >;
+      const result = parseDocument(JSON.stringify(workflows[scope]));
       if (result.isErr()) {
         throw result.error;
       }
@@ -1053,3 +1118,108 @@ for (const scope of ["job", "step"] as const) {
     );
   }, 15_000);
 }
+
+for (const [before, after] of [
+  [
+    "on: {workflow_call: {inputs: {channel: {type: string, default: latest}}}}",
+    "on: {workflow_call: {inputs: {channel: {type: string, default: next}}}}",
+  ],
+  ["on: pull_request", "on: pull_request_target"],
+  ["future-workflow-key: preview", "future-workflow-key: stable"],
+]) {
+  test(`document configuration changes require classification refresh: ${before}`, () => {
+    const f = fixture();
+    const key = "candidate:.github/workflows/ci.yml";
+    const workflow = `${before}\n${f.reader.read("candidate", ".github/workflows/ci.yml")}`;
+    f.documents.set(key, workflow);
+    const options = {
+      ...f,
+      decisions: fixtureDecisions(f.manifest),
+      localActionPath: (directory: string) => `${directory}/action.yml`,
+    };
+    const baseline = generateClassification(options);
+    if (baseline.isErr()) {
+      throw baseline.error;
+    }
+    const changed = workflow.replace(before, () => after);
+    expect(changed).not.toBe(workflow);
+    f.documents.set(key, changed);
+    failure(
+      verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
+      "bun scripts/check-ci-job-classification.ts --write",
+    );
+    const refreshed = generateClassification({
+      ...options,
+      manifest: baseline.value,
+    });
+    if (refreshed.isErr()) {
+      throw refreshed.error;
+    }
+    expect(
+      verifyPublicMetadata({
+        manifest: refreshed.value,
+        reader: f.reader,
+      }).isOk(),
+    ).toBe(true);
+  });
+}
+
+test("every nested invocation key participates in document classification", () => {
+  const mapping = v.record(v.string(), v.unknown());
+  const keyPaths = (value: unknown): string[][] => {
+    if (!v.is(mapping, value)) {
+      return [];
+    }
+    return Object.entries(value).flatMap(([key, child]) => [
+      [key],
+      ...keyPaths(child).map((keyPath) => [key, ...keyPath]),
+    ]);
+  };
+  const withoutKey = (value: unknown, keyPath: string[]): unknown => {
+    const [head, ...tail] = keyPath;
+    return Object.fromEntries(
+      Object.entries(v.parse(mapping, value)).flatMap(([key, child]) => {
+        if (key !== head) {
+          return [[key, child]];
+        }
+        return tail.length ? [[key, withoutKey(child, tail)]] : [];
+      }),
+    );
+  };
+  const digest = (on: unknown) => {
+    const result = parseDocument(
+      JSON.stringify({ on, jobs: { check: { steps: [] } } }),
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+    return result.value.digest;
+  };
+  const baseline = digest(invocationKeyFixture);
+  const paths = keyPaths(invocationKeyFixture);
+  expect(paths.length).toBeGreaterThan(20);
+  for (const keyPath of paths) {
+    expect({
+      keyPath,
+      stable: digest(withoutKey(invocationKeyFixture, keyPath)) === baseline,
+    }).toEqual({ keyPath, stable: false });
+  }
+}, 15_000);
+
+test("GitHub on keys retain their string identity in canonical YAML", () => {
+  const unquoted = "on: push\njobs: {check: {steps: []}}";
+  const original = parseDocument(unquoted);
+  const quoted = parseDocument(unquoted.replace("on:", "'on':"));
+  const extraKey = parseDocument(`'true': distinct\n${unquoted}`);
+  if (original.isErr()) {
+    throw original.error;
+  }
+  if (quoted.isErr()) {
+    throw quoted.error;
+  }
+  if (extraKey.isErr()) {
+    throw extraKey.error;
+  }
+  expect(quoted.value.digest).toBe(original.value.digest);
+  expect(extraKey.value.digest).not.toBe(original.value.digest);
+});
