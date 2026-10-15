@@ -826,7 +826,7 @@ test("workflow permission defaults and publication gates enter classification di
       "jobs: {check: {secrets: inherit, uses: './child.yml'}}",
       "jobs: {check: {secrets: {}, uses: './child.yml'}}",
     ],
-  ]) {
+  ] satisfies readonly (readonly [string, string])[]) {
     const original = parseDocument(before);
     const changed = parseDocument(after);
     if (original.isErr()) {
@@ -845,7 +845,7 @@ for (const [before, after] of [
   ["with: {source: value}", "with: {destination: value}"],
   ["env: {MODE: check}", "env: {MODE: write}"],
   ["env: {SOURCE: value}", "env: {DESTINATION: value}"],
-]) {
+] satisfies readonly (readonly [string, string])[]) {
   test(`action configuration changes require classification refresh: ${before}`, () => {
     const f = fixture();
     const workflow = `jobs:\n  caller:\n    steps:\n      - uses: docker/build-push-action@${"a".repeat(40)}\n        if: always()\n        ${before}\n      - run: echo initial\n`;
@@ -1126,7 +1126,7 @@ for (const [before, after] of [
   ],
   ["on: pull_request", "on: pull_request_target"],
   ["future-workflow-key: preview", "future-workflow-key: stable"],
-]) {
+] satisfies readonly (readonly [string, string])[]) {
   test(`document configuration changes require classification refresh: ${before}`, () => {
     const f = fixture();
     const key = "candidate:.github/workflows/ci.yml";
