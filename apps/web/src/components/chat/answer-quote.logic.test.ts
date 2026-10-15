@@ -22,6 +22,7 @@ const paragraph = (anchorId: string, number: number, text: string) =>
     id: anchorId,
     inlines: [{ text, type: "text" }],
     number,
+    plainText: text,
     type: "paragraph",
   }) satisfies Block;
 
@@ -30,6 +31,7 @@ const DECISION_BLOCKS = [
     anchorId: "h-5",
     id: "h-5",
     inlines: [{ text: "V. a)", type: "text" }],
+    plainText: "V. a)",
     level: 2,
     type: "heading",
   },
