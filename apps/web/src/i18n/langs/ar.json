@@ -363,6 +363,8 @@
       "chooseList": "اختيار قائمة",
       "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
+      "loadSample": "تحميل قضية نموذجية",
+      "loadSampleFailed": "تعذّر تحميل القضية النموذجية",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
@@ -2921,6 +2923,7 @@
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
     "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
+    "collaborationSnapshotRecovered": "تعذر إعادة فتح نسخة التعاون المخزنة. تمت استعادة الغرفة من آخر مستند محفوظ؛ وربما فُقدت التغييرات التي لم تُحفظ.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",
@@ -4536,6 +4539,8 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",
     "dateTo": "إلى",

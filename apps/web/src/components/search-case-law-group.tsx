@@ -50,8 +50,8 @@ export const SearchCaseLawGroup = ({
       <Button
         aria-controls={contentId}
         aria-expanded={expanded}
-        className="min-h-11 w-full justify-start gap-2 px-2 text-start"
         onClick={() => onExpandedChange(!expanded)}
+        size="row"
         variant="ghost"
       >
         <DirectionalIcon

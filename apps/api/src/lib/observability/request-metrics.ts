@@ -144,6 +144,25 @@ const EVENT_LOOP_DELAY_METRIC = {
   p99: "EventLoopDelayP99",
 } as const;
 
+const PROCESS_MEMORY_METRIC = {
+  rss: "ProcessRssBytes",
+  heapUsed: "ProcessHeapUsedBytes",
+  arrayBuffers: "ProcessArrayBuffersBytes",
+  uploadFinalizeInFlight: "UploadFinalizeInFlightBytes",
+} as const;
+
+/**
+ * The process's memory at the end of a reporting window. File work holds its
+ * bytes in array buffers outside the JS heap, so those are reported apart
+ * from the heap, beside the bytes upload finalization has admitted.
+ */
+export type ProcessMemoryReport = {
+  rssBytes: number;
+  heapUsedBytes: number;
+  arrayBuffersBytes: number;
+  uploadFinalizeInFlightBytes: number;
+};
+
 /**
  * One reporting window of the process's event-loop delay. Undimensioned: the
  * process is the unit, and a task or route id would only multiply series.
@@ -152,10 +171,12 @@ export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
   rootPool,
+  memory,
 }: {
   maxMs: number;
   p99Ms: number;
   rootPool?: RootPoolReport;
+  memory?: ProcessMemoryReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -167,6 +188,12 @@ export const emitEventLoopDelayMetric = ({
           Metrics: [
             { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
             { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
+            ...(memory === undefined
+              ? []
+              : Object.values(PROCESS_MEMORY_METRIC).map((Name) => ({
+                  Name,
+                  Unit: "Bytes",
+                }))),
           ],
         },
       ],
@@ -175,6 +202,15 @@ export const emitEventLoopDelayMetric = ({
     ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
+    ...(memory === undefined
+      ? {}
+      : {
+          [PROCESS_MEMORY_METRIC.rss]: memory.rssBytes,
+          [PROCESS_MEMORY_METRIC.heapUsed]: memory.heapUsedBytes,
+          [PROCESS_MEMORY_METRIC.arrayBuffers]: memory.arrayBuffersBytes,
+          [PROCESS_MEMORY_METRIC.uploadFinalizeInFlight]:
+            memory.uploadFinalizeInFlightBytes,
+        }),
   });
 };
 

@@ -102,6 +102,13 @@ const visualLoaders = {
       return { default: WorkspaceTablePlayground };
     },
   },
+  "public-law-toolbar": {
+    load: async () => {
+      const { PublicLawToolbarPlayground } =
+        await import("./-components/public-law-toolbar-playground");
+      return { default: PublicLawToolbarPlayground };
+    },
+  },
 } as const satisfies Record<VisualName, VisualLoader>;
 
 const isVisualName = (input: unknown): input is VisualName =>

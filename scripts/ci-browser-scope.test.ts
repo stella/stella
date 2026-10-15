@@ -230,3 +230,199 @@ test("browser source consumption preserves an independently pinned alias chain",
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// The UI and extension scope steps decide in their own shell bodies; run
+// those exact bodies against a scratch history whose only change is the probe.
+const scopeStep = (name: string) => {
+  const step = workflow.jobs["ci-browser"].steps.find(
+    (candidate) => candidate.name === name,
+  );
+  if (step?.run === undefined) {
+    throw new Error(`Missing browser scope step: ${name}`);
+  }
+  return step.run;
+};
+
+const PATHSPEC_START = "HEAD -- \\\n";
+
+const declaredPathspecs = (run: string) => {
+  const start = run.indexOf(PATHSPEC_START);
+  const end = run.indexOf("; then", start);
+  if (start === -1 || end === -1) {
+    throw new Error("Browser scope step has no declared pathspecs");
+  }
+  return run
+    .slice(start + PATHSPEC_START.length, end)
+    .split("\\\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+};
+
+const scrubbedEnvironment = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+);
+
+type ScopeRun = {
+  changed?: string;
+  event?: string;
+  heavyOnly?: string;
+  withBase?: boolean;
+};
+
+const emittedScope = (run: string, options: ScopeRun) => {
+  const repository = mkdtempSync(path.join(tmpdir(), "browser-scope-"));
+  const vcs = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      env: {
+        ...scrubbedEnvironment,
+        GIT_AUTHOR_NAME: "probe",
+        GIT_AUTHOR_EMAIL: "probe@example.invalid",
+        GIT_COMMITTER_NAME: "probe",
+        GIT_COMMITTER_EMAIL: "probe@example.invalid",
+      },
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
+    }
+  };
+  try {
+    vcs("init", "-q", "-b", "main");
+    writeFileSync(path.join(repository, "base.txt"), "base\n");
+    vcs("add", ".");
+    vcs("commit", "-q", "--no-gpg-sign", "-m", "base");
+    if (options.withBase !== false) {
+      vcs("update-ref", "refs/remotes/origin/main", "HEAD");
+    }
+    if (options.changed !== undefined) {
+      const file = path.join(repository, options.changed);
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, "probe\n");
+      vcs("add", ".");
+      vcs("commit", "-q", "--no-gpg-sign", "-m", "probe");
+    }
+    const output = path.join(repository, ".github-output");
+    writeFileSync(output, "");
+    const result = Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", run], {
+      cwd: repository,
+      env: {
+        ...scrubbedEnvironment,
+        GITHUB_OUTPUT: output,
+        BASE_REF: "main",
+        EVENT_NAME: options.event ?? "merge_group",
+        HEAVY_ONLY: options.heavyOnly ?? "false",
+      },
+      stderr: "ignore",
+    });
+    if (result.exitCode !== 0) {
+      throw new Error(`Browser scope step exited ${String(result.exitCode)}`);
+    }
+    const emitted = readFileSync(output, "utf-8").trim();
+    if (emitted === "required=true") {
+      return true;
+    }
+    return emitted === "required=false" ? false : emitted;
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+};
+
+const ROOT_FILES = new Set([
+  "bunfig.toml",
+  ".npmrc",
+  "VERSION",
+  "bun.lock",
+  "package.json",
+]);
+
+// A pathspec naming a file is changed itself; a directory gets a file inside.
+const probeFor = (pathspec: string) =>
+  /\.[a-z]+$/u.test(path.basename(pathspec)) ||
+  ROOT_FILES.has(path.basename(pathspec))
+    ? pathspec
+    : `${pathspec}/browser-scope-probe.txt`;
+
+const scopeProofViolations = (run: string) => {
+  const violations: string[] = [];
+  const check = (label: string, actual: unknown, wanted: boolean) => {
+    if (actual !== wanted) {
+      violations.push(`${label}: emitted ${String(actual)}`);
+    }
+  };
+  for (const pathspec of declaredPathspecs(run)) {
+    check(pathspec, emittedScope(run, { changed: probeFor(pathspec) }), true);
+  }
+  check(
+    "unrelated change",
+    emittedScope(run, { changed: "docs/unrelated-probe.md" }),
+    false,
+  );
+  check("manual run", emittedScope(run, { event: "workflow_dispatch" }), true);
+  check("heavy run", emittedScope(run, { heavyOnly: "true" }), true);
+  check(
+    "unreadable base",
+    emittedScope(run, { changed: "docs/unrelated-probe.md", withBase: false }),
+    true,
+  );
+  return violations;
+};
+
+for (const name of [
+  "Check UI browser test scope",
+  "Check extension browser test scope",
+]) {
+  test(`${name} emits its declared selection and fails open`, () => {
+    const run = scopeStep(name);
+    expect(declaredPathspecs(run).length).toBeGreaterThan(3);
+    expect(scopeProofViolations(run)).toEqual([]);
+  }, 60_000);
+}
+
+test("the emitted-scope proof rejects constant emitters", () => {
+  const run = scopeStep("Check extension browser test scope");
+  const selector = run.slice(
+    run.indexOf("HEAD -- "),
+    run.indexOf("; then") + "; then".length,
+  );
+  for (const constant of ["false", "true"]) {
+    const planted = `if false && git diff --quiet origin/main...${selector}\n  :\nfi\necho "required=${constant}" >> "$GITHUB_OUTPUT"`;
+    expect(declaredPathspecs(planted)).toEqual(declaredPathspecs(run));
+    expect(scopeProofViolations(planted).length, constant).toBeGreaterThan(0);
+  }
+}, 60_000);
+
+test("the desktop browser scope passes through the plan's emitted value", () => {
+  const run = scopeStep("Check desktop browser test scope");
+  for (const required of ["true", "false"]) {
+    const directory = mkdtempSync(path.join(tmpdir(), "desktop-scope-"));
+    const output = path.join(directory, "out");
+    try {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-e", "-c", run], {
+        env: {
+          ...scrubbedEnvironment,
+          GITHUB_OUTPUT: output,
+          REQUIRED: required,
+        },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(output, "utf-8").trim()).toBe(`required=${required}`);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+  const plan = (file: string) =>
+    Bun.spawnSync(
+      ["bun", "scripts/ci-package-scope.ts", "--desktop-browser", file],
+      { cwd: ROOT, env: scrubbedEnvironment, stderr: "ignore" },
+    )
+      .stdout.toString()
+      .trim();
+  expect(plan("apps/desktop/src/mainview/browser-scope-probe.ts")).toBe("true");
+  expect(plan("docs/unrelated-probe.md")).toBe("false");
+  // The plan fails open when the selector cannot decide.
+  const changedFiles = ["$", "{changed_files[@]}"].join("");
+  expect(source).toContain(
+    `--desktop-browser "${changedFiles}") || desktop_browser_required=true`,
+  );
+}, 60_000);

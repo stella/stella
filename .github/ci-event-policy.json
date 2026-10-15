@@ -160,6 +160,7 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",

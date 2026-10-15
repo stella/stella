@@ -35,6 +35,7 @@ export const visualRegistry = {
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
   "shell-pending": { label: "Shell pending", layout: "plain" },
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
+  "public-law-toolbar": { label: "Public law toolbar", layout: "plain" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
 } as const satisfies Record<string, VisualEntry>;
 
