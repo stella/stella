@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -85,6 +86,25 @@ describe("desktop account link across a sign-in redirect", () => {
 
     expect(captureDesktopAccountLink()).toBe(true);
     expect(window.location.hash).toBe("");
+  });
+
+  test("a newer address-bar challenge also clears an older stash", () => {
+    tabStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        hash: fragment,
+        savedAt: Temporal.Now.instant().epochMilliseconds,
+      }),
+    );
+    window.history.replaceState(
+      null,
+      "",
+      `/settings/account/desktop${fragment}`,
+    );
+
+    expect(captureDesktopAccountLink()).toBe(true);
+    expect(tabStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(captureDesktopAccountLink()).toBe(false);
   });
 
   test("pages without a challenge stash nothing", () => {

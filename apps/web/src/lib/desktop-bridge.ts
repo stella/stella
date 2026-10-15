@@ -177,9 +177,12 @@ const takeStashedDesktopAccountLink = () => {
 
 export const captureDesktopAccountLink = () => {
   const addressHash = window.location.hash;
+  // Always consume the stash, so an older challenge never outlives a newer
+  // one that arrived in the address bar.
+  const stashed = takeStashedDesktopAccountLink();
   const hash = addressHash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)
     ? addressHash
-    : takeStashedDesktopAccountLink();
+    : stashed;
   if (!hash?.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
     return false;
   }
