@@ -10,6 +10,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import type { ChatToolExecutionAuditContext } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
+import { applyChatToolGrants } from "@/api/handlers/chat/tools/chat-tool-grants";
 import {
   applyChatToolPolicy,
   getChatToolPolicy,
@@ -100,6 +101,7 @@ describe("chat tool execution audit", () => {
         resourceType: AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION,
         resourceId: "call_7",
         metadata: {
+          approval: "per-call",
           approvalId: "approval_call_7",
           durationMs: expect.any(Number),
           outcome: "success",
@@ -113,6 +115,45 @@ describe("chat tool execution audit", () => {
     const serialized = JSON.stringify(rows);
     expect(serialized).not.toContain(PRIVILEGED_ARGUMENT);
     expect(serialized).not.toContain(PRIVILEGED_RESULT);
+  });
+
+  test("a call a stored grant ungated records the grant and names no approval", async () => {
+    const { audit, rows } = auditFixture();
+    const audited = auditChatToolExecutions({
+      audit,
+      tools: {
+        web_search: toolWithPolicy(
+          "web_search",
+          CHAT_TOOL_POLICY_KIND.external,
+        ),
+      },
+    });
+    const granted = applyChatToolGrants({
+      externalConnectors: [],
+      grants: [
+        {
+          id: toSafeId<"chatToolGrant">("grant_1"),
+          scope: "conversation",
+          chatThreadId: threadId,
+          toolName: "web_search",
+          mcpConnectorId: null,
+          mcpConnectorToolNamespace: null,
+        },
+      ],
+      tools: audited,
+    });
+
+    await granted["web_search"]?.execute?.({}, { toolCallId: "call_9" });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          approval: "grant",
+          approvalId: null,
+          toolCallId: "call_9",
+        }),
+      }),
+    ]);
   });
 
   test("a failing execution records an error outcome and rethrows", async () => {
