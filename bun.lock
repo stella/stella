@@ -1018,6 +1018,8 @@
         "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tanstack/charts": "catalog:",
+        "ajv": "catalog:",
+        "ajv-formats": "catalog:",
         "better-result": "catalog:",
         "d3-scale": "catalog:",
         "react": "catalog:react19",

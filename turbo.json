@@ -953,6 +953,7 @@
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
+        "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
