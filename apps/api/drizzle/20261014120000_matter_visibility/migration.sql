@@ -181,3 +181,49 @@ WHERE (
     m.role IN ('owner', 'admin', 'member', 'intern')
     AND w.visibility = 'all_members'
   );
+--> statement-breakpoint
+
+-- The steward invariant under concurrency. A role change runs in the
+-- membership plugin's own transaction, after the readable refusal in its
+-- hook, so the guard holding the invariant lives here, on the member row the
+-- change updates. Lock order matches the registered aggregate ranks: the
+-- member row first (held by the UPDATE), then the matters the member is
+-- assigned to FOR SHARE. Narrowing a matter or changing its lead holds the
+-- matter row FOR UPDATE before reading the lead's role, so the two serialize
+-- on the matter row: whichever commits second sees the first and is refused.
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked; runs only as a member role-update trigger, writes nothing, and share-locks then reads the matters the updated member is assigned to in that member's organization
+CREATE FUNCTION "enforce_member_role_keeps_matter_leads"()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM (
+      SELECT w.visibility, w.lead_user_id
+      FROM public.workspaces AS w
+      JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
+      WHERE wm.user_id = NEW.user_id
+        AND w.organization_id = NEW.organization_id
+      FOR SHARE OF w
+    ) AS assigned_matter
+    WHERE assigned_matter.visibility = 'assigned_only'
+      AND assigned_matter.lead_user_id = NEW.user_id
+  ) THEN
+    RAISE EXCEPTION 'member leads a matter visible to assigned members only'
+      USING ERRCODE = 'check_violation',
+            CONSTRAINT = 'member_role_keeps_matter_leads';
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION "enforce_member_role_keeps_matter_leads"() FROM PUBLIC;--> statement-breakpoint
+
+CREATE TRIGGER "member_role_keeps_matter_leads"
+BEFORE UPDATE OF "role" ON "member"
+FOR EACH ROW
+WHEN (NEW.role NOT IN ('owner', 'admin', 'member', 'intern'))
+EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();

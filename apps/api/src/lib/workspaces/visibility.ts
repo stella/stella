@@ -17,6 +17,7 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 
 /** The visibilities owners and admins reach without an assignment. */
@@ -103,7 +104,7 @@ export const tMatterVisibility = (options?: { description?: string }) =>
  * lead's assignment or membership keeps it through this module.
  */
 export const hasUsableSteward = async (
-  tx: Pick<Transaction, "select">,
+  tx: Transaction,
   {
     organizationId,
     workspaceId,
@@ -120,6 +121,23 @@ export const hasUsableSteward = async (
   if (leadUserId === null) {
     return false;
   }
+  // The matter row is the invariant's lock: holding it before reading the
+  // lead's role and assignment means a concurrent role change (whose member
+  // trigger share-locks this row) or lead removal either committed already
+  // and is read here, or waits for this transaction and then sees its result.
+  await withAggregateRowQuery({
+    tx,
+    aggregate: "workspace",
+    id: { id: workspaceId, organizationId },
+    mode: "update",
+    select: (lockTx) =>
+      lockTx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+        })
+        .from(workspaces),
+  });
   const internal = await tx
     .select({ id: member.id })
     .from(member)
@@ -167,6 +185,11 @@ const restoredSteward = v.object({
  * as lead; with none left it reopens to owners and admins plus assigned
  * members, so it can always be managed. The departing user is never chosen,
  * whether or not their rows are already gone. Each repair is audited.
+ *
+ * Callers hold the matter rows already (they cleared the lead with an
+ * UPDATE in the same transaction), so a concurrent role change of the chosen
+ * lead, whose member trigger share-locks those rows, waits for this
+ * transaction and then refuses, or committed first and is read here.
  */
 export const restoreMatterStewards = async (
   tx: Pick<Transaction, "execute">,
