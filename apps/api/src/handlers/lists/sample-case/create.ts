@@ -10,7 +10,7 @@ import {
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { safeDbFromScoped } from "@/api/db/safe-db";
+import { abortTransaction, safeDbFromScoped } from "@/api/db/safe-db";
 import {
   entities,
   legalListFactDetails,
@@ -48,6 +48,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { ensureFileProperty } from "@/api/lib/properties/ensure-file-property";
@@ -120,8 +121,10 @@ const readLockedSample = async (
   // first too, preserving the creation owner's lock order before this fence.
   const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
   if (status !== "active") {
-    throw documentWriteRefusal(
-      status === undefined ? "workspace-not-found" : "workspace-not-active",
+    return abortTransaction(
+      documentWriteRefusal(
+        status === undefined ? "workspace-not-found" : "workspace-not-active",
+      ),
     );
   }
   await withAggregateLock({ tx, aggregate: "sampleCase", id: { workspaceId } });
@@ -164,6 +167,156 @@ const readSampleReceipt = async (
       ? documentWriteRefusalHandlerError(error.cause)
       : error,
   );
+};
+
+type InsertSampleOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  listId: SafeId<"legalList">;
+  document: { entityId: SafeId<"entity">; fieldId: SafeId<"field"> };
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Writes the sample list, its facts and their details in the creator's transaction. */
+const insertSample = async ({
+  tx,
+  workspaceId,
+  userId,
+  listId,
+  document,
+  recordAuditEvent,
+}: InsertSampleOptions) => {
+  const listCount = await tx.$count(
+    legalLists,
+    eq(legalLists.workspaceId, workspaceId),
+  );
+  if (listCount >= LIMITS.legalListsPerWorkspace) {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "This matter has reached the list limit.",
+      }),
+    );
+  }
+  const entityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, workspaceId),
+  );
+  if (entityCount + SAMPLE_FACTS.length > LIMITS.entitiesCount) {
+    return abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "This matter has no room for all sample facts.",
+      }),
+    );
+  }
+  await tx.insert(legalLists).values({
+    id: listId,
+    workspaceId,
+    name: SAMPLE_LIST_NAME,
+    createdBy: userId,
+    sampleCase: {
+      documentEntityId: document.entityId,
+      fileFieldId: document.fieldId,
+    },
+  });
+  const resolveName = await createSiblingNamePlan({
+    tx,
+    workspaceId,
+  });
+  const facts = SAMPLE_FACTS.map((fact, position) => ({
+    ...fact,
+    entityId: createSafeId<"entity">(),
+    versionId: createSafeId<"entityVersion">(),
+    name: resolveName({
+      name: fact.statement,
+      kind: "task",
+      parentId: null,
+    }).name,
+    position: String(position).padStart(2, "0"),
+  }));
+  await insertEntityBatch({
+    tx,
+    stampOrigin: "issued",
+    fieldRows: [],
+    entityRows: facts.map((fact) => ({
+      id: fact.entityId,
+      workspaceId,
+      kind: "task",
+      listItemType: LIST_ITEM_TYPE.FACT,
+      name: fact.name,
+      createdBy: userId,
+      agendaKind: AGENDA_ITEM_KIND.TASK,
+      status: TASK_STATUS.OPEN,
+      priority: ENTITY_PRIORITY.NONE,
+      agendaSource: AGENDA_ITEM_SOURCE.MANUAL,
+    })),
+    versionRows: facts.map((fact) => ({
+      id: fact.versionId,
+      entityId: fact.entityId,
+      workspaceId,
+      versionNumber: 1,
+    })),
+    currentVersions: facts.map((fact) => ({
+      entityId: fact.entityId,
+      versionId: fact.versionId,
+    })),
+  });
+  await tx.insert(legalListItems).values(
+    facts.map((fact) => ({
+      entityId: fact.entityId,
+      workspaceId,
+      listId,
+      position: fact.position,
+      addedBy: userId,
+    })),
+  );
+  await tx.insert(legalListFactDetails).values(
+    facts.map((fact) => ({
+      itemEntityId: fact.entityId,
+      workspaceId,
+      listId,
+      ...fact.details,
+      updatedBy: userId,
+    })),
+  );
+  await enqueueEntitySearchRepairs(
+    tx,
+    facts.map((fact) => fact.entityId),
+  );
+  await recordAuditEvent(tx, [
+    {
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST,
+      resourceId: listId,
+      metadata: {
+        operation: "sample_case_loaded",
+        documentEntityId: document.entityId,
+      },
+    },
+    ...facts.map((fact) => ({
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: fact.entityId,
+      metadata: {
+        operation: "sample_case_fact_created",
+        kind: "task",
+        listItemType: LIST_ITEM_TYPE.FACT,
+        listId,
+      },
+    })),
+    ...facts.map((fact) => ({
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+      resourceId: fact.entityId,
+      metadata: {
+        operation: LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet,
+        listId,
+        factDetails: fact.details,
+      },
+    })),
+  ]);
 };
 
 type LoadSampleCaseOptions = {
@@ -221,127 +374,14 @@ export const loadSampleCase = async ({
               // document, stamp, audit and intent finalization before this returns.
               return tx.rollback();
             }
-            const listCount = await tx.$count(
-              legalLists,
-              eq(legalLists.workspaceId, workspaceId),
-            );
-            if (listCount >= LIMITS.legalListsPerWorkspace) {
-              throw new HandlerError({
-                status: 409,
-                message: "This matter has reached the list limit.",
-              });
-            }
-            const entityCount = await tx.$count(
-              entities,
-              eq(entities.workspaceId, workspaceId),
-            );
-            if (entityCount + SAMPLE_FACTS.length > LIMITS.entitiesCount) {
-              throw new HandlerError({
-                status: 409,
-                message: "This matter has no room for all sample facts.",
-              });
-            }
-            await tx.insert(legalLists).values({
-              id: listId,
-              workspaceId,
-              name: SAMPLE_LIST_NAME,
-              createdBy: userId,
-              sampleCase: {
-                documentEntityId: document.entityId,
-                fileFieldId: document.fieldId,
-              },
-            });
-            const resolveName = await createSiblingNamePlan({
+            await insertSample({
               tx,
               workspaceId,
+              userId,
+              listId,
+              document,
+              recordAuditEvent,
             });
-            const facts = SAMPLE_FACTS.map((fact, position) => ({
-              ...fact,
-              entityId: createSafeId<"entity">(),
-              versionId: createSafeId<"entityVersion">(),
-              name: resolveName({
-                name: fact.statement,
-                kind: "task",
-                parentId: null,
-              }).name,
-              position: String(position).padStart(2, "0"),
-            }));
-            await insertEntityBatch({
-              tx,
-              stampOrigin: "issued",
-              fieldRows: [],
-              entityRows: facts.map((fact) => ({
-                id: fact.entityId,
-                workspaceId,
-                kind: "task",
-                listItemType: LIST_ITEM_TYPE.FACT,
-                name: fact.name,
-                createdBy: userId,
-                agendaKind: AGENDA_ITEM_KIND.TASK,
-                status: TASK_STATUS.OPEN,
-                priority: ENTITY_PRIORITY.NONE,
-                agendaSource: AGENDA_ITEM_SOURCE.MANUAL,
-              })),
-              versionRows: facts.map((fact) => ({
-                id: fact.versionId,
-                entityId: fact.entityId,
-                workspaceId,
-                versionNumber: 1,
-              })),
-              currentVersions: facts.map((fact) => ({
-                entityId: fact.entityId,
-                versionId: fact.versionId,
-              })),
-            });
-            await tx.insert(legalListItems).values(
-              facts.map((fact) => ({
-                entityId: fact.entityId,
-                workspaceId,
-                listId,
-                position: fact.position,
-                addedBy: userId,
-              })),
-            );
-            await tx.insert(legalListFactDetails).values(
-              facts.map((fact) => ({
-                itemEntityId: fact.entityId,
-                workspaceId,
-                listId,
-                ...fact.details,
-                updatedBy: userId,
-              })),
-            );
-            await enqueueEntitySearchRepairs(
-              tx,
-              facts.map((fact) => fact.entityId),
-            );
-            await recordAuditEvent(tx, [
-              {
-                action: AUDIT_ACTION.CREATE,
-                resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST,
-                resourceId: listId,
-                metadata: {
-                  operation: "sample_case_loaded",
-                  documentEntityId: document.entityId,
-                },
-              },
-              ...facts.map((fact) => ({
-                action: AUDIT_ACTION.CREATE,
-                resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-                resourceId: fact.entityId,
-                metadata: {
-                  kind: "task",
-                  listItemType: LIST_ITEM_TYPE.FACT,
-                  listId,
-                },
-              })),
-              ...facts.map((fact) => ({
-                action: AUDIT_ACTION.CREATE,
-                resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
-                resourceId: fact.entityId,
-                metadata: { listId, factDetails: fact.details },
-              })),
-            ]);
           },
         }),
     );
@@ -442,6 +482,7 @@ export default createSafeHandler(
         ctx: { workspaceId },
       });
     }
-    return yield* Result.await(Promise.resolve(result));
+    const sample = yield* Result.await(Promise.resolve(result));
+    return Result.ok(sample);
   },
 );
