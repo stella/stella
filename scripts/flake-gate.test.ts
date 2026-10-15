@@ -23,6 +23,9 @@ import {
   type Target,
 } from "./flake-gate";
 
+// Markdown reads consume temporary CLI output only.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
 const withFixture = async (run: (root: string) => void | Promise<void>) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-"));
   try {

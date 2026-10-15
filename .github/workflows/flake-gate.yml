@@ -73,7 +73,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
