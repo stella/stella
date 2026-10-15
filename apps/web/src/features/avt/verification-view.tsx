@@ -93,6 +93,27 @@ type VerificationViewProps = {
   run: VerificationRun;
 };
 
+type OriginalDocumentProps = React.ComponentProps<typeof OriginalDocxView> & {
+  kind: "docx" | "pdf";
+};
+
+/** The file as it is laid out, with the claims drawn over it. */
+const OriginalDocument = ({
+  kind,
+  scrollTarget,
+  ...props
+}: OriginalDocumentProps) => (
+  <div className="min-h-0 flex-1">
+    <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
+      {kind === "pdf" ? (
+        <OriginalPdfView {...props} />
+      ) : (
+        <OriginalDocxView {...props} scrollTarget={scrollTarget} />
+      )}
+    </React.Suspense>
+  </div>
+);
+
 export const VerificationView = ({
   workspaceId,
   run,
@@ -380,31 +401,17 @@ export const VerificationView = ({
               {stepper.total > 0 && <MatchStepper stepper={stepper} />}
             </div>
           )}
-          {view === "original" ? (
-            <div className="min-h-0 flex-1">
-              <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
-                {original === "pdf" ? (
-                  <OriginalPdfView
-                    claims={claims}
-                    markOf={originalMark}
-                    onSelect={setSelected}
-                    run={run}
-                    selected={selected}
-                    workspaceId={workspaceId}
-                  />
-                ) : (
-                  <OriginalDocxView
-                    claims={claims}
-                    markOf={originalMark}
-                    onSelect={setSelected}
-                    run={run}
-                    scrollTarget={originalScroll}
-                    selected={selected}
-                    workspaceId={workspaceId}
-                  />
-                )}
-              </React.Suspense>
-            </div>
+          {view === "original" && original !== null ? (
+            <OriginalDocument
+              claims={claims}
+              kind={original}
+              markOf={originalMark}
+              onSelect={setSelected}
+              run={run}
+              scrollTarget={originalScroll}
+              selected={selected}
+              workspaceId={workspaceId}
+            />
           ) : (
             <ReadingDocument
               presentation={presentation}
