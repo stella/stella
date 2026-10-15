@@ -10,18 +10,16 @@ test("quick start accepts a three-matter LAB import without polling for completi
   expect(source).not.toContain('api.dev["seed-firm-knowledge"].get');
 });
 
-test("quick start accepts the professional-use statement before its first signed-in request", () => {
-  const accept = source.indexOf('api.me["professional-use"].post(');
-  const orgStep = source.indexOf(
-    "const createOrganization = async (identity: DevQuickStartIdentity) => {\n  // Runs after both sign-in paths, before the first signed-in API request.\n  await acceptProfessionalUse();",
-  );
+test("quick start accepts the professional-use statement right before the import", () => {
+  const importStep = source.indexOf("const startMatterImport = async (");
+  const accept = source.indexOf("await acceptProfessionalUse();", importStep);
   const importStart = source.indexOf('api.dev["seed-firm-knowledge"].post');
-  expect(accept).toBeGreaterThan(-1);
-  // The organization step runs after password and two-factor sign-in alike.
-  expect(orgStep).toBeGreaterThan(-1);
-  // The API refuses every signed-in request of an account that has not
-  // accepted the statement, so acceptance precedes the import.
-  expect(importStart).toBeGreaterThan(orgStep);
+  // The import step runs on fresh, two-factor and resumed attempts alike, and
+  // the API refuses signed-in requests until the statement is accepted.
+  expect(importStep).toBeGreaterThan(-1);
+  expect(accept).toBeGreaterThan(importStep);
+  expect(importStart).toBeGreaterThan(accept);
+  expect(source.split("await acceptProfessionalUse();").length - 1).toBe(1);
   expect(source).toContain(
     "statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION",
   );

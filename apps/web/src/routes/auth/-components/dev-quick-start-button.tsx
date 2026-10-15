@@ -97,7 +97,7 @@ function refusedStep(
 // A new quick-start account has not seen the professional-use statement, and
 // the API refuses its signed-in requests until it is accepted. Record it the
 // way the professional-use page does; this also covers accounts created
-// before this step existed and accounts that signed in through two-factor.
+// before this step existed, two-factor sign-in and resumed attempts.
 const acceptProfessionalUse = async () => {
   const accepted = await api.me["professional-use"].post({
     statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
@@ -141,8 +141,6 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
 };
 
 const createOrganization = async (identity: DevQuickStartIdentity) => {
-  // Runs after both sign-in paths, before the first signed-in API request.
-  await acceptProfessionalUse();
   const resolved = await resolveDevQuickStartOrganization({
     identity,
     listOrganizations: async () => {
@@ -182,6 +180,9 @@ const startMatterImport = async (
   { selectionSeed }: DevQuickStartIdentity,
   organizationId: string,
 ) => {
+  // Every path reaches here, including attempts resumed after the
+  // organization step; acceptance is idempotent.
+  await acceptProfessionalUse();
   const response = await api.dev["seed-firm-knowledge"].post({
     incompleteMatterMode: QUICK_START_INCOMPLETE_MATTER_MODE,
     matters: QUICK_START_MATTER_COUNT,
