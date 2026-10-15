@@ -43,7 +43,7 @@ export const discoverRustTestFiles = (
       const manifest: unknown = Bun.TOML.parse(
         readFileSync(path.join(repoRoot, file), "utf-8"),
       );
-      return isRecord(manifest) && isRecord(manifest.package);
+      return isRecord(manifest) && isRecord(manifest["package"]);
     })
     .map((file) => path.posix.dirname(file))
     .toSorted((a, b) => b.length - a.length);

@@ -64,11 +64,11 @@ const literalEnd = (source: string, start: number): number | undefined => {
   if (char !== "r" && char !== "b" && char !== "c") {
     return undefined;
   }
-  const raw = /^(?:br|cr|r)(#*)"/u.exec(source.slice(start));
+  const raw = /^(?:br|cr|r)#*"/u.exec(source.slice(start));
   if (!raw) {
     return undefined;
   }
-  const delimiter = `"${raw[1]}`;
+  const delimiter = `"${raw[0].slice(raw[0].indexOf("r") + 1, -1)}`;
   const end = source.indexOf(delimiter, start + raw[0].length);
   return end === -1 ? source.length : end + delimiter.length;
 };
@@ -165,13 +165,14 @@ const testSpans = (code: string, integrationTest: boolean): Span[] => {
     /#\s*\[\s*(?:cfg\s*\(\s*test\s*\)|(?:tokio\s*::\s*)?test(?:\s*\([^\]]*\))?)\s*\]/gu;
   for (const match of code.matchAll(attribute)) {
     const after = match.index + match[0].length;
-    const header = /^[^;{}]*?\b(fn|mod)\s+[A-Za-z_]\w*[^;{}]*\{/u.exec(
-      code.slice(after),
-    );
-    if (!header) {
+    const headerEnd = /[;{}]/u.exec(code.slice(after));
+    if (headerEnd === null || headerEnd[0] !== "{") {
       continue;
     }
-    const open = after + header[0].length - 1;
+    const open = after + headerEnd.index;
+    if (!/\b(?:fn|mod)\s+[A-Za-z_]\w*/u.test(code.slice(after, open))) {
+      continue;
+    }
     const close = braces.get(open);
     if (close !== undefined) {
       spans.push({ start: open + 1, end: close });
@@ -221,7 +222,7 @@ const globalStatics = (code: string) => {
   const names = new Set<string>();
   const declarations: Span[] = [];
   const declaration =
-    /\bstatic\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^=;]+)[=;]/gu;
+    /\bstatic\s+(?:mut\s+)?([A-Za-z_]\w*)\s*:\s*([^\s=;][^=;]*)[=;]/gu;
   for (const match of code.matchAll(declaration)) {
     if (!/\b(?:Mutex|RwLock|OnceLock)\b/u.test(match[2] ?? "")) {
       continue;
