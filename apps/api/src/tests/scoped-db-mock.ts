@@ -66,11 +66,12 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
       orderBy: () => ({ limit, offset }),
     });
   return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-      leftJoin: () => ({ where }),
-    }),
+    from: () =>
+      Object.assign(Promise.resolve(rows), {
+        where,
+        innerJoin: () => ({ where }),
+        leftJoin: () => ({ where }),
+      }),
   };
 };
 
