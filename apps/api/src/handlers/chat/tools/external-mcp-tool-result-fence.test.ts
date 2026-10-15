@@ -117,6 +117,22 @@ describe("external MCP tool result fence", () => {
     expect(JSON.stringify(result)).not.toContain(UNTRUSTED_CONTENT_CLOSE);
   });
 
+  test("an error of a client library class is fenced like a plain one", async () => {
+    class ProtocolError extends Error {
+      override name = "ProtocolError";
+    }
+    const upstream = normalizedLookup(() => {
+      throw new ProtocolError("Resource not found");
+    });
+
+    const thrown = await rejectionOf(Promise.resolve(upstream({})));
+
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    expect(message).toContain('connector "registry", tool "lookup"');
+    expect(countOccurrences(message, UNTRUSTED_CONTENT_OPEN)).toBe(1);
+  });
+
   test("an upstream error message is fenced, typed errors pass through", async () => {
     const upstream = normalizedLookup(() => {
       throw new Error('MCP tool "lookup" returned an error: not found');

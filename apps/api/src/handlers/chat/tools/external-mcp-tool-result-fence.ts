@@ -121,11 +121,14 @@ export const fenceExternalMcpToolResult = (
   };
 };
 
-// The MCP client reports an upstream `isError` result as a plain `Error` whose
-// message carries the server's own text. Typed errors (timeouts, aborts,
-// input-required signals) are ours and pass through untouched.
-const isPlainError = (error: unknown): error is Error =>
-  error instanceof Error && Object.getPrototypeOf(error) === Error.prototype;
+// Any error raised while calling the connector can carry the remote server's
+// own text (an `isError` result, a JSON-RPC error, a transport message), so
+// every error is fenced except stella's own tagged errors (timeouts and other
+// typed failures raised locally) and aborts, which carry no remote text.
+const isLocalControlFlowError = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.name === "AbortError" ||
+    typeof Reflect.get(error, "_tag") === "string");
 
 export const fenceExternalMcpToolError = (
   provenance: ExternalMcpToolProvenance,
@@ -149,9 +152,12 @@ export const fenceExternalMcpToolExecute =
       const result: unknown = await execute(...args);
       return fenceExternalMcpToolResult(provenance, result);
     } catch (error) {
-      if (isPlainError(error)) {
-        throw fenceExternalMcpToolError(provenance, error);
+      if (isLocalControlFlowError(error)) {
+        throw error;
       }
-      throw error;
+      throw fenceExternalMcpToolError(
+        provenance,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   };

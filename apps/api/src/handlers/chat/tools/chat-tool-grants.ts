@@ -18,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import {
   dynamicToolNamespacePrefix,
+  isExternalMcpToolName,
   sanitizeToolNamePart,
 } from "@/api/lib/mcp-upstream/namespace";
 
@@ -87,9 +88,33 @@ export type ChatToolGrantSubjectResolution =
   | { type: "not-grantable" };
 
 /**
- * What a grant for `toolName` covers. A tool of a loaded external connector
- * is covered through its connector, never by name; any other tool by name.
- * Tools whose grant policy is not grantable resolve to `not-grantable`.
+ * The connector each exposed external tool name belongs to. A name two
+ * connectors expose maps to null: it belongs to neither for a grant.
+ */
+const exposedToolConnectors = (
+  externalConnectors: readonly LoadedExternalMcpConnector[],
+): Map<string, SafeId<"mcpConnector"> | null> => {
+  const owners = new Map<string, SafeId<"mcpConnector"> | null>();
+  for (const connector of externalConnectors) {
+    for (const exposedToolName of connector.exposedToolNames) {
+      const owner = owners.get(exposedToolName);
+      owners.set(
+        exposedToolName,
+        owner === undefined || owner === connector.connectorId
+          ? connector.connectorId
+          : null,
+      );
+    }
+  }
+  return owners;
+};
+
+/**
+ * What a grant for `toolName` covers. Only a name in the external connector
+ * namespace that exactly one loaded connector exposes is covered through that
+ * connector; such a name is never covered by name. Any other tool is covered
+ * by its name, and what a connector advertises upstream never matters. Tools
+ * whose grant policy is not grantable resolve to `not-grantable`.
  */
 export const resolveChatToolGrantSubject = ({
   externalConnectors,
@@ -101,12 +126,13 @@ export const resolveChatToolGrantSubject = ({
   if (!isGrantableChatTool(toolName)) {
     return { type: "not-grantable" };
   }
-  const connector = externalConnectors.find((candidate) =>
-    candidate.toolNames.includes(toolName),
-  );
-  return connector === undefined
-    ? { type: "tool", toolName }
-    : { type: "mcp-connector", connectorId: connector.connectorId };
+  if (!isExternalMcpToolName(toolName)) {
+    return { type: "tool", toolName };
+  }
+  const connectorId = exposedToolConnectors(externalConnectors).get(toolName);
+  return connectorId === undefined || connectorId === null
+    ? { type: "not-grantable" }
+    : { type: "mcp-connector", connectorId };
 };
 
 /**
@@ -130,20 +156,21 @@ export const resolveExternalMcpGrantConnectorId = ({
   return matches.length === 1 ? (matches[0]?.id ?? null) : null;
 };
 
-const isCoveredByGrant = ({
+/** The stored grant that covers `subject`, if any. */
+const coveringGrant = ({
   grants,
   subject,
 }: {
   grants: readonly StoredChatToolGrant[];
   subject: ChatToolGrantSubjectResolution;
-}): boolean => {
+}): StoredChatToolGrant | undefined => {
   switch (subject.type) {
     case "not-grantable":
-      return false;
+      return undefined;
     case "tool":
-      return grants.some((grant) => grant.toolName === subject.toolName);
+      return grants.find((grant) => grant.toolName === subject.toolName);
     case "mcp-connector":
-      return grants.some(
+      return grants.find(
         (grant) => grant.mcpConnectorId === subject.connectorId,
       );
     default:
@@ -213,14 +240,14 @@ const withGrantDecision = ({
     externalConnectors,
     toolName: name,
   });
-  if (
-    !getChatToolPolicy(toolDefinition).needsApproval ||
-    !isCoveredByGrant({ grants, subject })
-  ) {
+  const grant = getChatToolPolicy(toolDefinition).needsApproval
+    ? coveringGrant({ grants, subject })
+    : undefined;
+  if (grant === undefined) {
     return toolDefinition;
   }
   // The execution audit reads this to record the call as granted.
-  markChatToolExecutionGranted(toolDefinition);
+  markChatToolExecutionGranted(toolDefinition, grant.id);
   if (subject.type === "mcp-connector") {
     delete toolDefinition.needsApproval;
     return toolDefinition;

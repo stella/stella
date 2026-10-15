@@ -52,7 +52,10 @@ export type LoadedExternalMcpConnector = {
   description: string;
   displayName: string;
   slug: string;
+  /** Upstream tool names, as the connector advertises them. */
   toolNames: string[];
+  /** The namespaced names these tools are exposed under in chat. */
+  exposedToolNames: string[];
 };
 
 export type ExternalMcpDiscoveryDependencies = {
@@ -326,6 +329,7 @@ const loadConnectorTools = async ({
           displayName: row.displayName,
           slug: row.slug,
           toolNames: normalized.toolNames,
+          exposedToolNames: Object.keys(normalized.tools),
         },
         tools:
           executionAudit === undefined

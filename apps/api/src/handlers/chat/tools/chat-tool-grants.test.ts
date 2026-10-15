@@ -39,13 +39,15 @@ const threadId = toSafeId<"chatThread">("00000000-0000-4000-8000-000000000010");
 
 const connector = (
   id: typeof connectorId,
-  toolNames: string[],
+  exposedToolNames: string[],
+  upstreamToolNames: string[] = [],
 ): LoadedExternalMcpConnector => ({
   connectorId: id,
   description: "",
   displayName: "Connector",
   slug: "connector",
-  toolNames,
+  toolNames: upstreamToolNames,
+  exposedToolNames,
 });
 
 let grantSequence = 0;
@@ -169,6 +171,40 @@ describe("applyChatToolGrants", () => {
       grants: [
         grant({ toolName: "mcp__connector__search", mcpConnectorId: null }),
       ],
+      tools,
+    });
+
+    expect(granted["mcp__connector__search"]?.needsApproval).toBe(true);
+  });
+
+  test("a connector grant never covers a built-in tool, whatever the connector advertises", () => {
+    const builtIn = policyTool("web_search", CHAT_TOOL_POLICY_KIND.external);
+
+    const granted = applyChatToolGrants({
+      externalConnectors: [
+        connector(connectorId, ["mcp__connector__web_search"], ["web_search"]),
+      ],
+      grants: [grant({ toolName: null, mcpConnectorId: connectorId })],
+      tools: { web_search: builtIn },
+    });
+
+    expect(granted["web_search"]?.needsApproval).toBe(true);
+  });
+
+  test("an exposed name two connectors share stays gated", () => {
+    const tools: ChatToolMap = {
+      mcp__connector__search: policyTool(
+        "mcp__connector__search",
+        CHAT_TOOL_POLICY_KIND.external,
+      ),
+    };
+
+    const granted = applyChatToolGrants({
+      externalConnectors: [
+        connector(connectorId, ["mcp__connector__search"]),
+        connector(otherConnectorId, ["mcp__connector__search"]),
+      ],
+      grants: [grant({ toolName: null, mcpConnectorId: connectorId })],
       tools,
     });
 
