@@ -168,8 +168,12 @@ describe("file derivative worker", () => {
         paused = false;
       },
       recheckMs: LIMITS.fileDerivativeDeferDelayMs,
-      onClose: () => transitions.push("closed"),
-      onOpen: () => transitions.push("opened"),
+      onClose: () => {
+        transitions.push("closed");
+      },
+      onOpen: () => {
+        transitions.push("opened");
+      },
       setTimer: (run) => {
         pendingRecheck = run;
         return () => {
