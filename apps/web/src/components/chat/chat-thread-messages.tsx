@@ -377,7 +377,6 @@ export const ChatThreadMessages = ({
                       threadRef={threadRef}
                     />
                     <SourceChips
-                      activeOrganizationId={activeOrganizationId}
                       messageId={message.id}
                       parts={message.parts}
                       sourceDocuments={message.metadata?.sourceDocuments}
