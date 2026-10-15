@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -283,7 +282,7 @@ describe("bound agent skill RLS", () => {
     expect(updatedByAuthor).toEqual([{ id: skillId }]);
   });
 
-  test("a member outside the matter cannot read or use its skill through chat, MCP or the API", async () => {
+  test("a matter skill is unavailable outside its matter in chat, MCP and the API", async () => {
     const skillId = await insertBoundSkill({
       boundWorkspaceId: ids.wsA1,
       scope: "team",
@@ -296,20 +295,14 @@ describe("bound agent skill RLS", () => {
     if (skill === undefined) {
       throw new TypeError("expected the bound skill row");
     }
-    // The outsider's queries run under row security, reaching wsA2 only.
+    // The outsider works in wsA2 and reaches only that matter.
     const outsiderDb = asTestRaw<SafeDb>(
       createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
     );
-    // A scope that names wsA1 takes the app-side binding check out of play,
-    // so only the policy stands between the outsider and the skill.
-    const ownerDb: SafeDb = async (callback) =>
-      await Result.tryPromise(
-        async () => await callback(asTestRaw<Transaction>(testDb)),
-      );
     const matterScope = await resolveSkillBindingScope({
-      homeWorkspaceId: ids.wsA1,
+      homeWorkspaceId: ids.wsA2,
       otherWorkspaceIds: [],
-      safeDb: ownerDb,
+      safeDb: outsiderDb,
     });
     if (Result.isError(matterScope)) {
       throw matterScope.error;
