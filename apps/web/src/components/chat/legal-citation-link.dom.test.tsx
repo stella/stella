@@ -537,7 +537,7 @@ test("Arabic clarification questions use automatic direction and localized numbe
   } satisfies AskUserInput;
   const view = await renderChat(
     <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
-      <FormattingProvider locale="ar" timeZone="UTC">
+      <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
         <AskUserCard
           isAwaitingUser
           onSubmit={() => undefined}

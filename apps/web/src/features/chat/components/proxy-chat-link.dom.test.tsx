@@ -14,6 +14,7 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { ProxyChatLink } = await import("./proxy-chat-link");
+const { apiUrl } = await import("@/lib/api-url");
 
 class VisibleIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null;
@@ -159,11 +160,11 @@ test("loads visible host icons once through the authenticated API and cleans loc
     await waitFor(() => expect(requests).toHaveLength(2));
     expect(requests).toEqual([
       {
-        url: "https://api.example.test/v1/chat/link-icons/example.com",
+        url: apiUrl("/chat/link-icons/example.com"),
         credentials: "include",
       },
       {
-        url: "https://api.example.test/v1/chat/link-icons/no-icon.example",
+        url: apiUrl("/chat/link-icons/no-icon.example"),
         credentials: "include",
       },
     ]);
