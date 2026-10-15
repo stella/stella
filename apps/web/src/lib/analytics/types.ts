@@ -1,4 +1,5 @@
 import type { FeedbackArea, FeedbackKind } from "@stll/api-contract/feedback";
+import type { ProvisionPlacementFailureReason } from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 
@@ -19,6 +20,7 @@ export const WEB_ANALYTICS_EVENTS = {
   routeErrorRecovery: "route_error_recovery",
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
+  provisionPlacementGaps: "provision_placement_gaps",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -33,6 +35,9 @@ export type Analytics = {
   ) => void;
   captureFeedbackReportSubmitted: (
     properties: FeedbackDialogSubmittedProperties,
+  ) => void;
+  captureProvisionPlacementGaps: (
+    properties: ProvisionPlacementGapsProperties,
   ) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
@@ -78,6 +83,15 @@ type FeedbackDialogSubmittedProperties = {
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
   | { type: "recovery"; reference: ErrorReference };
+
+// Stored citations a decision reader could not place: one event per decision,
+// reader surface and reason, counting the rows. A placement gap is a data
+// outcome (corpus coverage or linker drift), not an exception.
+type ProvisionPlacementGapsProperties = {
+  surface: string;
+  reason: ProvisionPlacementFailureReason;
+  count: number;
+};
 
 type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;

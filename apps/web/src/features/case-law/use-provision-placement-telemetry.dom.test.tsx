@@ -15,19 +15,27 @@ const { useProvisionPlacementTelemetry } =
   await import("./use-provision-placement-telemetry");
 
 type TelemetryOptions = Parameters<typeof useProvisionPlacementTelemetry>[0];
+type GapEvent = Parameters<
+  (typeof noopAnalytics)["captureProvisionPlacementGaps"]
+>[0];
 
 const PlacementReports = (options: TelemetryOptions) => {
   useProvisionPlacementTelemetry(options);
   return null;
 };
 
+// One reporter is one page load: a fresh analytics client.
 const reporter = () => {
   const errors: unknown[] = [];
+  const gaps: GapEvent[] = [];
   const value = {
     analytics: {
       ...noopAnalytics,
       captureError: (error: unknown) => {
         errors.push(error);
+      },
+      captureProvisionPlacementGaps: (event: GapEvent) => {
+        gaps.push(event);
       },
     },
     client: null,
@@ -39,7 +47,8 @@ const reporter = () => {
       </AnalyticsProvider>
     </StrictMode>
   );
-  return { errors, tree };
+  const total = () => gaps.reduce((sum, { count }) => sum + count, 0);
+  return { errors, gaps, total, tree };
 };
 
 afterEach(() => {
@@ -49,35 +58,54 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-test("placement telemetry reports structured failures once across strict effects and fresh-array rerenders", () => {
-  const { errors, tree } = reporter();
+test("a decision's gaps are one counted event per reason, never an exception", () => {
+  const { errors, gaps, tree } = reporter();
+  const failures = Array.from({ length: 40 }, (_, index) => ({
+    id: `row-${String(index)}`,
+    reason: index < 30 ? "work-unresolved" : "span-overlap",
+  })) satisfies TelemetryOptions["failures"];
+
+  render(
+    tree({ decisionId: "decision-one", surface: "full-reader", failures }),
+  );
+
+  expect(errors).toEqual([]);
+  expect(gaps).toEqual([
+    { count: 30, reason: "work-unresolved", surface: "full-reader" },
+    { count: 10, reason: "span-overlap", surface: "full-reader" },
+  ]);
+});
+
+test("strict effects, fresh arrays and remounts never count a row twice", () => {
+  const { gaps, total, tree } = reporter();
   const options = {
     decisionId: "decision-one",
-    surface: "full-reader",
+    surface: "inspector",
     failures: [
-      { id: "row-one", reason: "sentence-unlocatable" },
-      { id: "row-one", reason: "sentence-unlocatable" },
+      { id: "row-one", reason: "statute-not-loaded" },
+      { id: "row-one", reason: "statute-not-loaded" },
     ],
   } as const satisfies TelemetryOptions;
+
   const view = render(tree(options));
-  expect(errors).toHaveLength(1);
-  expect(errors.at(0)).toMatchObject({
-    message:
-      "Stored provision placement failed: full-reader/sentence-unlocatable",
-    reason: "sentence-unlocatable",
-    surface: "full-reader",
-  });
   view.rerender(
     tree({
       ...options,
       failures: options.failures.map((failure) => ({ ...failure })),
     }),
   );
-  expect(errors).toHaveLength(1);
+  view.unmount();
+  // Reopening the same decision in the same page load.
+  for (let mount = 0; mount < 15; mount += 1) {
+    render(tree(options)).unmount();
+  }
+
+  expect(gaps).toHaveLength(1);
+  expect(total()).toBe(1);
 });
 
-test("recovered placement stops reporting while a later reason and another row remain observable", () => {
-  const { errors, tree } = reporter();
+test("rows that settle later add only themselves", () => {
+  const { gaps, tree } = reporter();
   const base = { decisionId: "decision-one", surface: "inspector" } as const;
   const view = render(
     tree({
@@ -85,75 +113,59 @@ test("recovered placement stops reporting while a later reason and another row r
       failures: [{ id: "row-one", reason: "statute-not-loaded" }],
     }),
   );
-  expect(errors).toHaveLength(1);
   view.rerender(tree({ ...base, failures: [] }));
-  expect(errors).toHaveLength(1);
-  // Recovery cannot make a repeated render of the same mounted incident noisy.
-  view.rerender(
-    tree({
-      ...base,
-      failures: [{ id: "row-one", reason: "statute-not-loaded" }],
-    }),
-  );
-  expect(errors).toHaveLength(1);
   view.rerender(
     tree({
       ...base,
       failures: [
+        { id: "row-one", reason: "statute-not-loaded" },
         { id: "row-one", reason: "no-version-in-force" },
         { id: "row-two", reason: "statute-not-loaded" },
       ],
     }),
   );
-  expect(errors).toHaveLength(3);
-  expect(errors.at(1)).toMatchObject({
-    reason: "no-version-in-force",
-    surface: "inspector",
-  });
-  expect(errors.at(2)).toMatchObject({
-    reason: "statute-not-loaded",
-    surface: "inspector",
-  });
+
+  expect(gaps).toEqual([
+    { count: 1, reason: "statute-not-loaded", surface: "inspector" },
+    { count: 1, reason: "no-version-in-force", surface: "inspector" },
+    { count: 1, reason: "statute-not-loaded", surface: "inspector" },
+  ]);
 });
 
-test("decision or surface changes and a fresh mount each report their own placement incident", () => {
-  const { errors, tree } = reporter();
+test("each decision and surface counts its own rows; a new page load counts again", () => {
+  const first = reporter();
   const failure = { id: "row-one", reason: "span-overlap" } as const;
   const view = render(
-    tree({
+    first.tree({
       decisionId: "decision-one",
       surface: "full-reader",
       failures: [failure],
     }),
   );
-  expect(errors).toHaveLength(1);
   view.rerender(
-    tree({
+    first.tree({
       decisionId: "decision-two",
       surface: "full-reader",
       failures: [failure],
     }),
   );
-  expect(errors).toHaveLength(2);
   view.rerender(
-    tree({
+    first.tree({
       decisionId: "decision-two",
       surface: "inspector",
       failures: [failure],
     }),
   );
-  expect(errors).toHaveLength(3);
-  expect(errors.at(2)).toMatchObject({
-    reason: "span-overlap",
-    surface: "inspector",
-  });
+  expect(first.total()).toBe(3);
   view.unmount();
+
+  const second = reporter();
   render(
-    tree({
+    second.tree({
       decisionId: "decision-two",
       surface: "inspector",
       failures: [failure],
     }),
   );
-  expect(errors).toHaveLength(4);
+  expect(second.total()).toBe(1);
 });
