@@ -383,10 +383,12 @@ const resume = async ({
   waiting = false,
   pages,
   rerunFailure = false,
+  inFlight = [],
 }: {
   waiting?: boolean;
   pages: DeferredPull[][];
   rerunFailure?: boolean;
+  inFlight?: { status: string; run_attempt: number }[];
 }) => {
   const reruns: number[] = [];
   const routes: string[] = [];
@@ -464,7 +466,22 @@ const resume = async ({
                 workflow_runs: [],
               },
             }),
-            listWorkflowRuns: async ({ head_sha }: { head_sha: string }) => {
+            listWorkflowRuns: async ({
+              head_sha,
+              status,
+            }: {
+              head_sha?: string;
+              status?: string;
+            }) => {
+              if (status !== undefined) {
+                return {
+                  data: {
+                    workflow_runs: inFlight.filter(
+                      (run) => run.status === status,
+                    ),
+                  },
+                };
+              }
               const pull = pulls.find(
                 (candidate) => candidate.head === head_sha,
               );
@@ -509,26 +526,53 @@ test("while the merge queue waits, only the oldest deferred head resumes each ti
     pages: [
       [
         { number: 1, head: "head-1", deferredMinutesAgo: 5 },
-        { number: 2, head: "head-2", deferredMinutesAgo: 20 },
-        { number: 3, head: "head-3", deferredMinutesAgo: 10 },
+        { number: 2, head: "head-2", deferredMinutesAgo: 45 },
+        { number: 3, head: "head-3", deferredMinutesAgo: 31 },
       ],
     ],
   });
   expect(result.reruns).toEqual([20]);
 });
 
-test("a head deferred for half an hour resumes even while the merge queue waits", async () => {
+test.each(["in_progress", "queued"])(
+  "while the merge queue waits, nothing resumes until the resumed run (%s) finishes",
+  async (status) => {
+    const result = await resume({
+      waiting: true,
+      inFlight: [
+        { status, run_attempt: 2 },
+        { status: "in_progress", run_attempt: 1 },
+      ],
+      pages: [
+        [
+          { number: 1, head: "head-1", deferredMinutesAgo: 90 },
+          { number: 2, head: "head-2", deferredMinutesAgo: 60 },
+        ],
+      ],
+    });
+    expect(result.reruns).toEqual([]);
+    expect(result.statuses).toEqual([]);
+  },
+);
+
+test("first-attempt pull request runs never hold back a resume", async () => {
   const result = await resume({
     waiting: true,
-    pages: [
-      [
-        { number: 1, head: "head-1", deferredMinutesAgo: 5 },
-        { number: 2, head: "head-2", deferredMinutesAgo: 31 },
-        { number: 3, head: "head-3", deferredMinutesAgo: 45 },
-      ],
+    inFlight: [
+      { status: "in_progress", run_attempt: 1 },
+      { status: "queued", run_attempt: 1 },
     ],
+    pages: [deferred(3)],
   });
-  expect(result.reruns).toEqual([30, 20]);
+  expect(result.reruns).toEqual([10]);
+});
+
+test("a cleared queue resumes a few at a time even with a resumed run in flight", async () => {
+  const result = await resume({
+    inFlight: [{ status: "in_progress", run_attempt: 2 }],
+    pages: [deferred(6)],
+  });
+  expect(result.reruns).toEqual([10, 20, 30, 40]);
 });
 
 test("a cleared queue resumes deferred runs a few at a time and marks them", async () => {
