@@ -42,7 +42,7 @@ const ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 // A GitHub token shape the scanner's default rules report, assembled at run
 // time so this file never holds one.
 const token = (): string =>
-  `${"gh"}${"p_"}${Array.from({ length: 36 }, () => ALNUM[randomInt(ALNUM.length)]).join("")}`;
+  `gh${"p_"}${Array.from({ length: 36 }, () => ALNUM[randomInt(ALNUM.length)]).join("")}`;
 
 // The fake scanner reads the staged diff, as the real one does, reports every
 // added line holding the token shape as a JSON finding at its line in the
