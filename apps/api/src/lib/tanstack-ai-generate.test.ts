@@ -1033,18 +1033,22 @@ describe("TanStack AI structured output generation", () => {
         provider,
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
       } as ResolvedTanStackTextModel;
-      const options: Record<string, unknown> = mergeGenerationOptions({
+      const options: object = mergeGenerationOptions({
         caching: noCaching,
         maxOutputTokens: SHORT_REPLY,
         model,
         serviceTier: "standard",
         temperature: undefined,
       });
-      return (
-        options["maxOutputTokens"] ??
-        options["maxCompletionTokens"] ??
-        options["max_output_tokens"]
-      );
+      if ("maxOutputTokens" in options) {
+        return options.maxOutputTokens;
+      }
+      if ("maxCompletionTokens" in options) {
+        return options.maxCompletionTokens;
+      }
+      return "max_output_tokens" in options
+        ? options.max_output_tokens
+        : undefined;
     };
 
     test("Gemini reserves its thinking level on top of the reply", () => {

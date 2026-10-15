@@ -1718,7 +1718,8 @@ const requestReasoningEffort = (
   if (model.provider !== "google") {
     return model.modelOptions.reasoning?.effort ?? fallback;
   }
-  const level = model.modelOptions.thinkingConfig?.thinkingLevel;
+  const level: keyof typeof REASONING_EFFORT_BY_GOOGLE_LEVEL | undefined =
+    model.modelOptions.thinkingConfig?.thinkingLevel;
   return level === undefined
     ? fallback
     : REASONING_EFFORT_BY_GOOGLE_LEVEL[level];
