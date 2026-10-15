@@ -28,6 +28,9 @@ import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
@@ -59,6 +62,18 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: savedSecret.config.params,
     query: savedSecret.config.query,
     permissions: savedSecret.config.permissions,
+  })
+  .get("/tool-grants", listChatToolGrants.handler, {
+    query: listChatToolGrants.config.query,
+    permissions: listChatToolGrants.config.permissions,
+  })
+  .post("/tool-grants", createChatToolGrant.handler, {
+    body: createChatToolGrant.config.body,
+    permissions: createChatToolGrant.config.permissions,
+  })
+  .delete("/tool-grants/:grantId", deleteChatToolGrant.handler, {
+    params: deleteChatToolGrant.config.params,
+    permissions: deleteChatToolGrant.config.permissions,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,

@@ -319,6 +319,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   chat_file: "other",
   chat_message: "other",
   chat_thread: "other",
+  chat_tool_grant: "other",
   clause: "other",
   clause_category: "other",
   clause_template_link: "other",

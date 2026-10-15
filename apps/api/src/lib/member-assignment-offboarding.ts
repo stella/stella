@@ -32,6 +32,7 @@ import {
   flowDefinitions,
   flowRunSteps,
   mcpUserConnections,
+  chatToolGrants,
   sharepointConnections,
   sharepointOAuthState,
   mcpOAuthState,
@@ -1569,6 +1570,14 @@ export const removeOrganizationMemberInTransaction = async (
       and(
         eq(sharepointConnections.organizationId, organizationId),
         eq(sharepointConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
       ),
     );
   await tx
