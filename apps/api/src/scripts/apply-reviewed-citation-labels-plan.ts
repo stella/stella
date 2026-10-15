@@ -1088,6 +1088,7 @@ const applyReviewedLabelsTx = async ({
     }
     // audit: skip — operator pass over global case-law labels
     const stored = executedRows(
+      // db-await-in-loop: one batched upsert per label domain (stance and doctrine), never per entry
       await tx.execute(upsertReviewsStatement(labels, currentDomain)),
     );
     for (const row of stored) {
