@@ -24,7 +24,6 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
-import { getCategoryVar } from "./category-color";
 import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
@@ -39,7 +38,8 @@ const capitalize = (s: string): string =>
 type AnalysisMarginItemBase = {
   id: string;
   heading?: string | undefined;
-  category: string;
+  /** The CSS custom property the note's stripe and leader are drawn in. */
+  accentVar: string;
   depth: number;
   startAnchorId: string;
 };
@@ -332,7 +332,7 @@ const GutterNotes = ({
         const color =
           item.kind === "comment"
             ? "var(--option-sky)"
-            : `var(${getCategoryVar(item.category)})`;
+            : `var(${item.accentVar})`;
         return (
           <div
             className="pointer-events-none absolute end-0 opacity-90"
@@ -472,7 +472,7 @@ const analysisNoteStyle = ({
   placement,
   presence,
 }: AnalysisNoteStyleOptions) => {
-  const cssVar = getCategoryVar(item.category);
+  const cssVar = item.accentVar;
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
   // full colour, doubled by an inset glow.

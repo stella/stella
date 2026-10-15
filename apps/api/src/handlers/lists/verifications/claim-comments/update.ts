@@ -15,6 +15,7 @@ import {
   annotationVisibilitySchema,
 } from "@/api/lib/legal-search/reader-annotations/schema";
 import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 /** One named change per request, so an update cannot be empty or ambiguous. */
 const bodySchema = t.Union([
@@ -30,6 +31,9 @@ const bodySchema = t.Union([
 
 const config = {
   contract: "patch",
+  realtime: noResourceSetUpdates(
+    "Claim comments refresh through the claim's own comment query; no listed resource set changes",
+  ),
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Change one of the user's comments on a list verification claim: its " +

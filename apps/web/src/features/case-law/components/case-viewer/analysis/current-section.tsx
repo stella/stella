@@ -6,8 +6,8 @@ import { useTranslations } from "use-intl";
 import { ChevronUpIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { getCategoryVar } from "@/components/legal-reader/category-color";
 import type { FlatAnalysisHeading } from "@/features/case-law/components/case-viewer/analysis/types";
+import { getCategoryVar } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 

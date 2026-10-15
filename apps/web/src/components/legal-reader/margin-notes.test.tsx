@@ -15,7 +15,7 @@ const renderInline = (items: MarginItem[]): string =>
   );
 
 const analysisNote: MarginItem = {
-  category: "reasoning",
+  accentVar: "--option-violet",
   depth: 0,
   id: "note-1",
   kind: "annotation",

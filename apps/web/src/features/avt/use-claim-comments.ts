@@ -22,7 +22,7 @@ type ClaimCommentsScope = {
 };
 
 /** Only a comment's words and visibility change on a claim. */
-export type ClaimCommentChange = Extract<
+type ClaimCommentChange = Extract<
   UpdateAnnotationInput,
   { change: "body" | "visibility" }
 >;

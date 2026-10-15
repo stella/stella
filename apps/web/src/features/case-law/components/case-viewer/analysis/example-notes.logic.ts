@@ -1,4 +1,4 @@
-import { hashString } from "@/components/legal-reader/category-color";
+import { hashString } from "./types";
 
 /**
  * The categories an analysis fills, in reading order, with the placeholder

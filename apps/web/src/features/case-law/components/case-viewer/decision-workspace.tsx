@@ -25,7 +25,6 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
-import { getCategoryVar } from "@/components/legal-reader/category-color";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
 import type { AnalysisMarginItem } from "@/components/legal-reader/margin-notes";
@@ -46,6 +45,7 @@ import {
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
+  getCategoryVar,
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
@@ -342,7 +342,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       id: heading.id,
       heading: heading.label,
       text: first?.summary ?? "",
-      category: heading.category,
+      accentVar: getCategoryVar(heading.category),
       depth: heading.depth,
       startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
     });
@@ -352,7 +352,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         kind: "annotation",
         id: annotation.id,
         text: annotation.summary,
-        category: heading.category,
+        accentVar: getCategoryVar(heading.category),
         depth: heading.depth + 1,
         startAnchorId: annotation.startAnchorId,
       });
@@ -385,7 +385,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   kind: "example",
                   id: `example:${note.category}`,
                   heading: t(`caseLaw.analysis.categories.${note.category}`),
-                  category: note.category,
+                  accentVar: getCategoryVar(note.category),
                   depth: 0,
                   lines: note.lines,
                   startAnchorId,

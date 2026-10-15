@@ -23,6 +23,7 @@ import {
   annotationVisibilitySchema,
   requireAnnotationVisibility,
 } from "@/api/lib/legal-search/reader-annotations/schema";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const bodySchema = t.Object(
   {
@@ -37,6 +38,9 @@ const bodySchema = t.Object(
 
 const config = {
   contract: "patch",
+  realtime: noResourceSetUpdates(
+    "Claim comments refresh through the claim's own comment query; no listed resource set changes",
+  ),
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Comment on one claim of a list verification, as the user. The comment " +

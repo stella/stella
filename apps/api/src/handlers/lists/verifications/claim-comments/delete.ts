@@ -8,9 +8,13 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
+  realtime: noResourceSetUpdates(
+    "Claim comments refresh through the claim's own comment query; no listed resource set changes",
+  ),
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Permanently delete one of the user's comments on a list verification claim.",
