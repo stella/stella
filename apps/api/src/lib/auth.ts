@@ -157,6 +157,7 @@ import {
   requireReviewAccountAccess,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { ROUTE_ACCESS_DETAIL } from "@/api/lib/auth/route-access-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
@@ -2481,6 +2482,7 @@ const VALIDATE_AUTH_REJECTION_BODY = {
 
 export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   validateSession: {
+    detail: { [ROUTE_ACCESS_DETAIL.authentication]: "session" },
     async resolve({ status, request, set }) {
       const sessionResult = await Result.tryPromise(async () => {
         const resolved = await getAuth().api.getSession({
@@ -3209,7 +3211,10 @@ export const createAuthMacro = ({
 
   return new Elysia({ name: "authMacro" }).macro({
     validateAuth: {
-      detail: { [TENANT_ACTION_DETAIL]: true },
+      detail: {
+        [TENANT_ACTION_DETAIL]: true,
+        [ROUTE_ACCESS_DETAIL.authentication]: "organization",
+      },
       async resolve({ params, query, status, request, server, set }) {
         const result = await resolveAuth({
           params,
@@ -3237,6 +3242,7 @@ export const authMacro = createAuthMacro();
 export const permissionMacro = new Elysia({ name: "permissionMacro" })
   .use(authMacro)
   .macro("permissions", (permissions: PermissionInput) => ({
+    detail: { [ROUTE_ACCESS_DETAIL.permissions]: permissions },
     // Reuse authMacro's resolved member role instead of asking better-auth to
     // perform the same permission check through a second session read.
     validateAuth: true,
@@ -3292,6 +3298,7 @@ export const workspaceAccessMacro = new Elysia({
 })
   .use(authMacro)
   .macro("validateWorkspaceAccess", {
+    detail: { [ROUTE_ACCESS_DETAIL.matter]: "active" },
     validateAuth: true,
     params: t.Object({ workspaceId: tUuid }),
     // Without this, when this macro is used with another macro that extends the body,
@@ -3312,6 +3319,7 @@ export const workspaceAccessMacro = new Elysia({
     },
   })
   .macro("validateWorkspaceAccessIncludingArchived", {
+    detail: { [ROUTE_ACCESS_DETAIL.matter]: "including-archived" },
     validateAuth: true,
     params: t.Object({ workspaceId: tUuid }),
     body: t.Object({}),

@@ -60,6 +60,10 @@ import {
   checkResponseConformanceCensus,
   responseConformanceGuardSelfTest,
 } from "./response-conformance-guard";
+import {
+  checkRouteAccessCensus,
+  routeAccessGuardSelfTest,
+} from "./route-access-guard";
 
 const BASELINE_PATH = path.resolve(
   REPO_ROOT,
@@ -535,6 +539,8 @@ const runCheck = async (): Promise<number> => {
   const { generateResponseConformanceCensus } =
     await import("./response-conformance-census");
   checkResponseConformanceCensus(await generateResponseConformanceCensus());
+  const { generateRouteAccessCensus } = await import("./route-access-census");
+  checkRouteAccessCensus(await generateRouteAccessCensus());
 
   console.log(
     `mcp-coverage-guard: OK. ${endpoints.length} endpoint modules enumerated; ${currentPending.length} pending (baselined); ${MCP_STATIC_TOOL_NAMES.length} static tools, no orphans.`,
@@ -696,6 +702,7 @@ const runSelfTest = (): number => {
 const main = async (): Promise<number> => {
   if (process.argv.includes("--self-test")) {
     responseConformanceGuardSelfTest();
+    routeAccessGuardSelfTest();
     return runSelfTest();
   }
   if (process.argv.includes("--write-baseline")) {

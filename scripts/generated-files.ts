@@ -185,6 +185,23 @@ const GENERATOR_DECLARATIONS = [
     after: ["capability-runtime"],
   },
   {
+    id: "route-access-census",
+    outputKind: "committed",
+    outputs: ["apps/api/route-access-census.json"],
+    inputs: [
+      "apps/api/src/**",
+      "apps/api/scripts/**",
+      "apps/api/route-access-baseline.json",
+      "packages/**",
+      "scripts/baseline-paths.ts",
+      "scripts/baseline-shrink.ts",
+    ],
+    write: ["bun", "apps/api/scripts/route-access-census.ts", "--write"],
+    check: ["bun", "apps/api/scripts/route-access-census.ts", "--check"],
+    autofix: false,
+    after: ["response-conformance-census"],
+  },
+  {
     id: "capability-catalog",
     outputKind: "committed",
     outputs: [

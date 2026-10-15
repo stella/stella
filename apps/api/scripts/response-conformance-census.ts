@@ -6,8 +6,9 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 
 import { createRouteRegistryMatcher } from "../src/lib/route-registry-matcher";
+import { loadComposedRouteRegistry } from "./lib/composed-route-registry";
 import { collectConformanceTestEvidence } from "./lib/conformance-test-evidence";
-import { discoverSafeHandlers, REPO_ROOT } from "./lib/enumerate-safe-handlers";
+import { REPO_ROOT } from "./lib/enumerate-safe-handlers";
 import {
   buildResponseConformanceCensus,
   isConformanceRecord,
@@ -18,16 +19,9 @@ export const RESPONSE_CONFORMANCE_CENSUS =
   "apps/api/response-conformance-census.json";
 
 export const generateResponseConformanceCensus = async () => {
-  await import("../src/tests/setup-env");
-  const { default: api } = await import("../src/server");
+  const { api, discovery, rows } = await loadComposedRouteRegistry();
   const { collectMcpConformanceRows } =
     await import("./lib/conformance-mcp-census");
-  const discovery = await discoverSafeHandlers();
-  if (discovery.importErrors.length !== 0) {
-    panic(
-      `Response census could not load: ${discovery.importErrors.map(({ id }) => id).join(", ")}`,
-    );
-  }
   const tests = execFileSync("git", ["ls-files", "-z", "--", "apps/api"], {
     cwd: REPO_ROOT,
     encoding: "utf-8",
@@ -45,9 +39,6 @@ export const generateResponseConformanceCensus = async () => {
       endpoint,
       files,
     ]),
-  );
-  const endpointByHandler = new Map(
-    discovery.endpoints.map((endpoint) => [endpoint.handler, endpoint.id]),
   );
   const match = createRouteRegistryMatcher({
     routes: api.routes,
@@ -75,23 +66,20 @@ export const generateResponseConformanceCensus = async () => {
     }
     httpTests.set(key, files);
   }
-  const routes = api.routes.map((route) => {
-    const id = `${route.method} ${route.path}`;
-    const hooks: unknown = route.hooks;
-    const endpoint = endpointByHandler.get(route.handler);
-    return {
-      kind: "route" as const,
-      id,
-      owner: "stella" as const,
-      schema: isConformanceRecord(hooks) ? hooks["response"] : undefined,
-      schemaSource: `${id}#hooks.response`,
-      ...(endpoint === undefined ? {} : { handlerEndpoint: endpoint }),
-      httpTests: [...(httpTests.get(id) ?? [])].toSorted(),
-      handlerTests:
-        endpoint === undefined ? [] : (handlerTests.get(endpoint) ?? []),
-      toolTests: [],
-    };
-  });
+  const routes = rows.map(({ id, hooks, handlerEndpoint }) => ({
+    kind: "route" as const,
+    id,
+    owner: "stella" as const,
+    schema: isConformanceRecord(hooks) ? hooks["response"] : undefined,
+    schemaSource: `${id}#hooks.response`,
+    ...(handlerEndpoint === undefined ? {} : { handlerEndpoint }),
+    httpTests: [...(httpTests.get(id) ?? [])].toSorted(),
+    handlerTests:
+      handlerEndpoint === undefined
+        ? []
+        : (handlerTests.get(handlerEndpoint) ?? []),
+    toolTests: [],
+  }));
   const tools = collectMcpConformanceRows(discovery.endpoints).map((row) => ({
     ...row,
     httpTests: [],

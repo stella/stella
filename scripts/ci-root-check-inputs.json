@@ -105,6 +105,8 @@
       "@stll/cli",
       "apps/api/response-conformance-census.json",
       "apps/api/response-conformance-baseline.json",
+      "apps/api/route-access-census.json",
+      "apps/api/route-access-baseline.json",
       "apps/api/src/**",
       "apps/api/scripts/**",
       "packages/**",

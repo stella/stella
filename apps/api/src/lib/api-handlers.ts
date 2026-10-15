@@ -488,7 +488,17 @@ type SandboxAccountAccess = {
  * declares. A route census reads it: a mounted handler missing here skipped
  * every factory, so it carries no account decision of its own.
  */
-const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
+type SafeHandlerAccessPolicy = {
+  accountAccess: AccountAccess;
+  permissions: unknown;
+  featureAccess: unknown;
+  requiresUsage: unknown;
+  actionAdmission: unknown;
+};
+const safeHandlerAccessPolicies = new WeakMap<
+  object,
+  SafeHandlerAccessPolicy
+>();
 
 const recordSafeHandler = <
   TDefinition extends {
@@ -515,16 +525,26 @@ const recordSafeHandler = <
     }
   }
   recordWriteContract(definition.handler, definition.config);
-  safeHandlerAccountAccess.set(
-    definition.handler,
-    definition.config.accountAccess,
-  );
+  const config = definition.config;
+  safeHandlerAccessPolicies.set(definition.handler, {
+    accountAccess: config.accountAccess,
+    permissions: "permissions" in config ? config.permissions : undefined,
+    featureAccess: "featureAccess" in config ? config.featureAccess : undefined,
+    requiresUsage: "requiresUsage" in config ? config.requiresUsage : undefined,
+    actionAdmission:
+      "actionAdmission" in config ? config.actionAdmission : undefined,
+  });
   return definition;
 };
 
 export const getSafeHandlerAccountAccess = (handler: unknown) =>
   typeof handler === "function"
-    ? safeHandlerAccountAccess.get(handler)
+    ? safeHandlerAccessPolicies.get(handler)?.accountAccess
+    : undefined;
+
+export const getSafeHandlerAccessPolicy = (handler: unknown) =>
+  typeof handler === "function"
+    ? safeHandlerAccessPolicies.get(handler)
     : undefined;
 
 export type SessionHandlerConfig = InputSchema &
