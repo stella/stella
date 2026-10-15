@@ -363,6 +363,8 @@
       "chooseList": "Liste auswählen",
       "createList": "Liste erstellen",
       "evidenceList": "Fakten aus",
+      "loadSample": "Beispielfall laden",
+      "loadSampleFailed": "Der Beispielfall konnte nicht geladen werden",
       "noLists": "Diese Akte hat keine Listen.",
       "pickList": "Wählen Sie die Liste, mit deren Fakten die Dokumente dieser Akte abgeglichen werden."
     }
@@ -2938,6 +2940,7 @@
     "checkingDocxEditDescription": "stella prüft noch, ob diese DOCX-Datei sicher bearbeitet werden kann. Versuchen Sie es erneut, sobald das Dokument vollständig geladen ist.",
     "checkingDocxEditTitle": "Dokument wird geprüft",
     "chooseEvidence": "Wählen Sie eine Datei aus, um einen nummerierten Beweisverweis einzufügen.",
+    "collaborationSnapshotRecovered": "Die gespeicherte Arbeitskopie konnte nicht erneut geöffnet werden. Der Raum wurde aus dem zuletzt gespeicherten Dokument wiederhergestellt; nicht gespeicherte Änderungen sind möglicherweise verloren gegangen.",
     "comment": "Kommentar",
     "comments": {
       "addPlaceholder": "Kommentar hinzufügen...",
@@ -4534,6 +4537,8 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
     "dateTo": "Bis",

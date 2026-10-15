@@ -363,6 +363,8 @@
       "chooseList": "Lista kiválasztása",
       "createList": "Lista létrehozása",
       "evidenceList": "Tények forrása",
+      "loadSample": "Mintaügy betöltése",
+      "loadSampleFailed": "Nem sikerült betölteni a mintaügyet",
       "noLists": "Ehhez az ügyhöz nem tartozik lista.",
       "pickList": "Válassza ki azt a listát, amelynek tényeihez az ügy iratait viszonyítja a rendszer."
     }
@@ -2938,6 +2940,7 @@
     "checkingDocxEditDescription": "A stella még ellenőrzi, hogy ez a DOCX biztonságosan szerkeszthető-e. Próbálja újra, amikor a dokumentum betöltődött.",
     "checkingDocxEditTitle": "Dokumentum ellenőrzése",
     "chooseEvidence": "Válasszon ki egy fájlt számozott bizonyíték-hivatkozás beszúrásához.",
+    "collaborationSnapshotRecovered": "A tárolt együttműködési példányt nem lehetett újra megnyitni. A szoba az utoljára mentett dokumentumból lett helyreállítva; a nem mentett módosítások elveszhettek.",
     "comment": "Megjegyzés",
     "comments": {
       "addPlaceholder": "Megjegyzés hozzáadása…",
@@ -4534,6 +4537,8 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
+    "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
     "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",

@@ -160,6 +160,7 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -176,10 +177,6 @@
     "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
-    "audit-image.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false

@@ -3,6 +3,8 @@ import { createRef } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
@@ -51,7 +53,7 @@ afterAll(async () => {
   if (originalRects) {
     Object.defineProperty(Range.prototype, "getClientRects", originalRects);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mountSelection = async ({

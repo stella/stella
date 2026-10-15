@@ -21,11 +21,10 @@ const policy = (key: string) => ({
   visibility: "public",
 });
 
-const withDatabase = async (
-  check: (db: ReturnType<typeof drizzle>, dir: string) => Promise<void>,
-) => {
+/** The fixture table, built once: a fresh PGlite initdb costs seconds, while
+ *  each test restores this data directory into its own database. */
+const buildFixtureSnapshot = async (): Promise<Blob> => {
   const client = new PGlite();
-  const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-report-"));
   // Derive fixture columns and defaults from the owning schema.
   const columns = getTableConfig(usagePolicies).columns.map(
     (column) =>
@@ -50,6 +49,21 @@ const withDatabase = async (
   ].map((statement) => dialect.sqlToQuery(statement.inlineParams()).sql);
   try {
     await client.exec(statements.join(";\n"));
+    return await client.dumpDataDir("none");
+  } finally {
+    await client.close();
+  }
+};
+
+let fixtureSnapshot: Promise<Blob> | undefined;
+
+const withDatabase = async (
+  check: (db: ReturnType<typeof drizzle>, dir: string) => Promise<void>,
+) => {
+  fixtureSnapshot ??= buildFixtureSnapshot();
+  const client = await PGlite.create({ loadDataDir: await fixtureSnapshot });
+  const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-report-"));
+  try {
     await check(drizzle({ client }), dir);
   } finally {
     await client.close();

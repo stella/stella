@@ -534,11 +534,11 @@ const auditExitedProcessGroup = async ({
         `Cannot inspect owned process group ${group}: ${failureMessage(groupSnapshot.error)}\n`,
       );
       terminate();
-      return true;
+      return "unavailable" as const;
     }
     const leftovers = ownedProcessGroupMembers(groupSnapshot.value, group);
     if (leftovers.length === 0) {
-      return false;
+      return "empty" as const;
     }
     const remainingMs = drainUntil - Date.now();
     if (remainingMs > 0) {
@@ -549,12 +549,12 @@ const auditExitedProcessGroup = async ({
       leftovers
         .map(
           ({ pid, command: processCommand }) =>
-            `Owned process remained after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
+            `Notice: Terminating owned process after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
         )
         .join(""),
     );
     terminate();
-    return true;
+    return "terminated" as const;
   }
 };
 
@@ -863,7 +863,8 @@ export const runBudgetedCheck = async ({
   };
   child.stdout.on("data", (chunk: Buffer) => tee(chunk, "stdout"));
   child.stderr.on("data", (chunk: Buffer) => tee(chunk, "stderr"));
-  let cleanupFailed = false;
+  let cleanupRequired = false;
+  let groupAudit: "empty" | "terminated" | "unavailable" = "empty";
   let cleanupGrace: Promise<void> | undefined;
   const terminateLeftovers = () => {
     killGroup("SIGTERM");
@@ -899,7 +900,7 @@ export const runBudgetedCheck = async ({
     closed,
     new Promise<void>((resolve) => {
       drainTimer = setTimeout(() => {
-        cleanupFailed = true;
+        cleanupRequired = true;
         const diagnostic =
           "Command pipes remained open after leader exit; terminating owned group and closing pipes\n";
         reportDiagnostic(diagnostic);
@@ -911,7 +912,7 @@ export const runBudgetedCheck = async ({
     }),
   ]).finally(() => clearTimeout(drainTimer));
   if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
-    const groupCleanupFailed = await auditExitedProcessGroup({
+    groupAudit = await auditExitedProcessGroup({
       group: child.pid,
       // Let short-lived descendants finish within the existing termination grace.
       drainUntil: endedAt + graceMs,
@@ -919,13 +920,13 @@ export const runBudgetedCheck = async ({
       report: reportDiagnostic,
       terminate: terminateLeftovers,
     });
-    cleanupFailed = groupCleanupFailed || cleanupFailed;
+    cleanupRequired = groupAudit !== "empty" || cleanupRequired;
   }
   if (cleanupGrace !== undefined) {
     await cleanupGrace;
   }
   await pipesDrained;
-  if (cleanupFailed) {
+  if (cleanupRequired) {
     killGroup("SIGKILL");
   }
   monitor.stop();
@@ -942,13 +943,12 @@ export const runBudgetedCheck = async ({
   );
   process.off("SIGTERM", onTerm);
   process.off("SIGINT", onInt);
-  const finalExitCode = cleanupFailed && exitCode === 0 ? 1 : exitCode;
   return await finishBudgetedCheck({
     turbo,
     runDirectory,
     previous,
     tracker,
-    exitCode: finalExitCode,
+    exitCode: groupAudit === "unavailable" && exitCode === 0 ? 1 : exitCode,
     termination,
     output,
     writeStderr,

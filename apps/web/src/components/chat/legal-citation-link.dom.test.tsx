@@ -7,6 +7,7 @@ import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.l
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawDecisionLocator } from "./case-law-open";
 
@@ -87,7 +88,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderChat = async (

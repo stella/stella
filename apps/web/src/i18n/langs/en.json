@@ -363,6 +363,8 @@
       "chooseList": "Choose a list",
       "createList": "Create a list",
       "evidenceList": "Facts from",
+      "loadSample": "Load sample case",
+      "loadSampleFailed": "Couldn't load the sample case",
       "noLists": "This matter has no lists",
       "pickList": "Choose the list whose facts this matter's documents are checked against."
     }
@@ -2938,6 +2940,7 @@
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.",
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.",
     "comment": "Comment",
     "comments": {
       "addPlaceholder": "Add a comment...",
@@ -4534,6 +4537,8 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
     "dateTo": "To",
