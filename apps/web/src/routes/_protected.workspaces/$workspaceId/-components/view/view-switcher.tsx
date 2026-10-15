@@ -23,7 +23,7 @@ import {
   BookmarkIcon,
   BookmarkPlusIcon,
   CalendarIcon,
-  CopyIcon,
+  DuplicateIcon,
   FileCheckIcon,
   FolderTreeIcon,
   GanttChartIcon,
@@ -573,7 +573,7 @@ const useViewActionsMenu = ({
         )}
         {canCreateView && !isSingleViewLayout(layout.type) && (
           <MenuItem onClick={() => handleDuplicate(view)}>
-            <CopyIcon />
+            <DuplicateIcon />
             {t("common.duplicate")}
           </MenuItem>
         )}

@@ -3,18 +3,17 @@ import { lazy, Suspense, useState, useTransition } from "react";
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { CopyIcon, MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
+import { MegaphoneIcon, RefreshCcwIcon } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import {
   isNetworkError,
@@ -35,7 +34,6 @@ import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-co
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -295,19 +293,6 @@ const UnexpectedRouteError = ({
     });
   }, [routeErrorLifecycle, routeError, errorReference, recovery.type]);
 
-  const handleCopyReference = async () => {
-    if (errorReference === null) {
-      return;
-    }
-    const copied = await copyToClipboard(errorReference);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   const handleRecovery = () => {
     if (errorReference === null) {
       return;
@@ -411,17 +396,15 @@ const UnexpectedRouteError = ({
               {visibleErrorReference}
             </bdi>
           </div>
-          <Button
-            aria-label={t("routeError.copyReference")}
+          <CopyActionButton
             disabled={errorReference === null}
-            onClick={() => {
-              detached(handleCopyReference(), "route-error.copy-reference");
-            }}
+            iconClassName="size-4"
+            iconOnly
+            label={t("routeError.copyReference")}
             size="icon"
+            text={errorReference ?? ""}
             variant="ghost"
-          >
-            <CopyIcon />
-          </Button>
+          />
         </div>
       </section>
     </div>

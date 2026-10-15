@@ -9,7 +9,7 @@ import { Button } from "@stll/ui/button";
 import {
   Building2Icon,
   ChevronDownIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
   AddCommentIcon,
@@ -735,7 +735,7 @@ export const AnnotationToolbar = ({
             size="sm"
             variant="ghost"
           >
-            <CopyIcon className="size-3.5" />
+            <CopyFromMenuIcon className="size-3.5" />
             {t("common.copy")}
             <ChevronDownIcon className="size-3" />
           </Button>

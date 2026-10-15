@@ -1,7 +1,7 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -10,7 +10,6 @@ import {
   FEEDBACK_KINDS,
   FEEDBACK_LIMITS,
 } from "@stll/api-contract/feedback";
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
@@ -30,7 +29,6 @@ import {
   FieldLabel,
 } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { CopyIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -40,8 +38,8 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 
+import { CopyActionButton } from "@/components/copy-action-button";
 import { COMMUNITY_CHANNELS } from "@/components/feedback-community-items";
 import {
   buildFeedbackRequestBody,
@@ -393,17 +391,6 @@ type FeedbackReceiptProps = {
 
 const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(response.receipt);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   return (
     <>
@@ -425,16 +412,14 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
               {response.receipt}
             </bdi>
           </div>
-          <Button
-            aria-label={t("feedback.copyReceipt")}
-            onClick={() => {
-              detached(handleCopy(), "feedback-dialog.copy-receipt");
-            }}
+          <CopyActionButton
+            iconClassName="size-4"
+            iconOnly
+            label={t("feedback.copyReceipt")}
             size="icon"
+            text={response.receipt}
             variant="ghost"
-          >
-            <CopyIcon />
-          </Button>
+          />
         </div>
         {response.warning !== undefined && (
           <p className="text-muted-foreground text-xs text-pretty">

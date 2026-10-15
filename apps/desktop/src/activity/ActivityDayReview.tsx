@@ -14,6 +14,7 @@ import type {
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { CopyButton } from "@stll/ui/copy-button";
 import {
   Dialog,
   DialogPopup,
@@ -23,7 +24,7 @@ import {
   DialogFooter,
   DialogClose,
 } from "@stll/ui/dialog";
-import { CopyIcon, LockKeyholeIcon } from "@stll/ui/icons";
+import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
@@ -202,7 +203,6 @@ export const ActivityDayReview = ({
   });
   const [localDrafts, setLocalDrafts] = useState(snapshot.draftedEntries);
   const [errorMessage, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [leaveOut, setLeaveOut] = useState(false);
   const [discardPrompt, setDiscardPrompt] = useState<"closed" | "confirming">(
     "closed",
@@ -239,7 +239,6 @@ export const ActivityDayReview = ({
       ...edits,
       [group.matter?.id ?? "unmatched"]: { ...editFor(group), ...change },
     });
-    setCopied(false);
   };
   const eligible = day.groups.filter(
     (
@@ -445,17 +444,20 @@ export const ActivityDayReview = ({
         hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
-        copied={copied}
         onCopy={() =>
-          onCopy(
-            selected
-              .map(
-                (group) =>
-                  `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
-              )
-              .join("\n"),
-            () => setCopied(true),
-          )
+          // Resolves once the copy lands; a failed copy is reported by the
+          // command runner and leaves the button unconfirmed.
+          new Promise<boolean>((resolve) => {
+            onCopy(
+              selected
+                .map(
+                  (group) =>
+                    `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
+                )
+                .join("\n"),
+              () => resolve(true),
+            );
+          })
         }
         onSubmit={submit}
         valid={
@@ -636,7 +638,6 @@ const ReviewBar = ({
   hours,
   snapshot,
   submission,
-  copied,
   onCopy,
   onSubmit,
   valid,
@@ -646,8 +647,7 @@ const ReviewBar = ({
   hours: string;
   snapshot: ActivityDaySnapshot;
   submission: Submission;
-  copied: boolean;
-  onCopy: () => void;
+  onCopy: () => Promise<boolean>;
   onSubmit: () => void;
   valid: boolean;
 }) => {
@@ -670,15 +670,15 @@ const ReviewBar = ({
         <LockKeyholeIcon aria-hidden="true" className="size-3" />
         {t("batchPrivacy")}
       </span>
-      <Button
-        variant="outline"
-        size="sm"
+      <CopyButton
+        copiedLabel={t("copied")}
         disabled={selected.length === 0}
-        onClick={onCopy}
-      >
-        <CopyIcon aria-hidden="true" />
-        {copied ? t("copied") : t("copySummary")}
-      </Button>
+        iconClassName="size-4"
+        label={t("copySummary")}
+        onCopy={onCopy}
+        size="sm"
+        variant="outline"
+      />
       <Button size="sm" disabled={disabled} onClick={onSubmit}>
         {submission.type === "retry"
           ? t("pendingRetry")

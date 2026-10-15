@@ -29,7 +29,6 @@
   },
   "agentSetup": {
     "addressLabel": "Assistent küsib seda aadressi",
-    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
     "copy": "Kopeeri talle juhised",
     "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
     "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",

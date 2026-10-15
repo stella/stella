@@ -29,7 +29,6 @@
   },
   "agentSetup": {
     "addressLabel": "Seu assistente vai pedir este endereço",
-    "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
     "copy": "Copie as instruções para ele",
     "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
     "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",

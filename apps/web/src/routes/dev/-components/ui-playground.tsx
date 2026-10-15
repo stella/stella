@@ -86,7 +86,7 @@ import {
   Clock3Icon,
   ClockIcon,
   CogIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
   FileTextIcon,
   FilterIcon,
   LinkIcon,
@@ -433,7 +433,7 @@ export function UiPlayground() {
                       <MenuShortcut>O</MenuShortcut>
                     </MenuItem>
                     <MenuItem>
-                      <CopyIcon />
+                      <CopyFromMenuIcon />
                       Copy link
                       <MenuShortcut>C</MenuShortcut>
                     </MenuItem>

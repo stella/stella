@@ -25,7 +25,7 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  CopyIcon,
+  DuplicateIcon,
   FlagIcon,
   GripVerticalIcon,
   Link2Icon,
@@ -381,7 +381,7 @@ export const PositionEditor = ({
               </MenuTrigger>
               <MenuPopup align="end">
                 <MenuItem onClick={onDuplicate}>
-                  <CopyIcon />
+                  <DuplicateIcon />
                   {t("knowledge.playbooks.duplicatePosition")}
                 </MenuItem>
                 <MenuItem onClick={onRemove} variant="destructive">

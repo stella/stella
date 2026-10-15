@@ -29,7 +29,6 @@
   },
   "agentSetup": {
     "addressLabel": "Asistent si vyžádá tuto adresu",
-    "copiedToast": "Pokyny zkopírovány. Vložte je do chatu se svým asistentem.",
     "copy": "Zkopírujte mu pokyny",
     "description": "Ptejte se Claude nebo ChatGPT na své spisy a dokumenty. Vyberte svého asistenta a otevře se krátký návod; zabere asi minutu.",
     "instructions": "Připoj mě ke stelle, mému právnímu pracovnímu prostoru. Postupuj podle části „Instructions for AI agents“ na {guideUrl} a použij tuto adresu serveru: {mcpUrl}",
