@@ -41,6 +41,7 @@ import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
@@ -256,22 +257,14 @@ export const ProtectedAppFrame = ({
       return;
     }
     if (activeWorkspaceId) {
-      store.openChat({
-        workspaceId: activeWorkspaceId,
-        contextMatterIds: [activeWorkspaceId],
-      });
+      store.openChat(newChatMatterScope(activeWorkspaceId));
     }
   }, [activeWorkspaceId]);
   useHotkey(useEffectiveHotkey("toggleChat"), handleToggleInspectorHotkey);
   useHotkey(useEffectiveHotkey("newChat"), () => {
-    useInspectorTabsStore.getState().openChat(
-      activeWorkspaceId === undefined
-        ? {}
-        : {
-            workspaceId: activeWorkspaceId,
-            contextMatterIds: [activeWorkspaceId],
-          },
-    );
+    useInspectorTabsStore
+      .getState()
+      .openChat(newChatMatterScope(activeWorkspaceId));
   });
 
   return (

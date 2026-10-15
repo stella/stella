@@ -73,6 +73,7 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { dockNewChatArgs } from "@/components/inspector/new-chat-scope";
 import {
   AIUnavailableDialogTrigger,
   useAIKeyGate,
@@ -119,6 +120,8 @@ type ChatTabPanelProps = {
   tab: ChatTab;
   onClose: () => void;
   onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  /** The matter in the URL, or undefined off a matter route. */
+  routeWorkspaceId: string | undefined;
 };
 
 const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
@@ -134,6 +137,7 @@ export const ChatTabPanel = ({
   tab,
   onClose,
   onLabelContextMenu,
+  routeWorkspaceId,
 }: ChatTabPanelProps) => {
   // The inspector pane mounts under a workspace route, but the
   // *thread* itself can be either workspace-scoped (chat lives
@@ -449,20 +453,11 @@ export const ChatTabPanel = ({
   };
 
   // New-chat lives in the composer's status row (the dock), not the
-  // pane header: opens a fresh tab with the same scope + context.
+  // pane header: opens a fresh tab scoped to the route's matter.
   const startNewThread = () => {
-    openChat({
-      // Named explicitly: a chat about a legal document otherwise continues
-      // that document's one conversation, and this button asks for a fresh
-      // one. Naming it also makes it the document's conversation, so the
-      // reader's floating composer follows rather than staying on the thread
-      // left here.
-      id: createChatThreadId(),
-      workspaceId: tabWorkspaceId,
-      contextMatterIds: tab.contextMatterIds,
-      ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
-      ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
-    });
+    openChat(
+      dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
+    );
   };
 
   // The shared tab context menu (right-click on rail icon or
