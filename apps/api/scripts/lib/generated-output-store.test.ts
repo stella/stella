@@ -136,6 +136,39 @@ test("checkouts reached through a symbolic link restore each other's output", as
   expect((await restore(other))?.output.toString()).toBe("printed");
 });
 
+test("a checkout under other parents restores only while its ancestors resolve alike", async () => {
+  write(checkout, "src/b.ts", 'export type { Extra } from "extra";\n');
+  const publisher = path.join(scratch, "parent-a/repo");
+  mkdirSync(path.dirname(publisher), { recursive: true });
+  renameSync(checkout, publisher);
+  publishGeneratedOutput({
+    storeDir,
+    stamp: portableStamp(publisher),
+    output: "printed",
+  });
+  const other = path.join(scratch, "parent-b/repo");
+  cpSync(publisher, other, { recursive: true });
+  expect((await restore(other))?.output.toString()).toBe("printed");
+
+  // Only the receiving checkout's ancestors provide the unresolved import.
+  write(
+    path.join(other, ".."),
+    "node_modules/extra/package.json",
+    JSON.stringify({ name: "extra", types: "index.d.ts" }),
+  );
+  write(
+    path.join(other, ".."),
+    "node_modules/extra/index.d.ts",
+    "export type Extra = string;\n",
+  );
+  expect(await restore(other)).toBeUndefined();
+
+  // A deeper checkout walks ancestors the publisher never probed.
+  const deeper = path.join(scratch, "parent-c/deeper/repo");
+  cpSync(publisher, deeper, { recursive: true });
+  expect(await restore(deeper)).toBeUndefined();
+});
+
 test("a changed source or dependency misses", async () => {
   publishGeneratedOutput({
     storeDir,

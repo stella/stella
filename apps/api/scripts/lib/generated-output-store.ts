@@ -141,7 +141,10 @@ export const restoreGeneratedOutput = async ({
       continue;
     }
     const stamp = localizeStamp(parsed.value.inputs, root);
-    if (await isCompilerInputStampCurrent(stamp, context)) {
+    if (
+      stamp !== undefined &&
+      (await isCompilerInputStampCurrent(stamp, context))
+    ) {
       const now = new Date();
       Result.try(() => utimesSync(directory, now, now));
       return { output, stamp, outputHash: parsed.value.outputHash };

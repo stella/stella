@@ -11,6 +11,7 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 const pathListSchema = v.array(v.string());
@@ -106,29 +107,50 @@ export type CompilerInputRecorder = {
   portableStamp: (context: string, root: string) => CompilerInputStamp;
 };
 
-// Stands for the checkout root in a portable stamp.
-const ROOT_TOKEN = "<root>";
-// Stands for the checkout root's real path. Real paths leave the root's
-// spelling when it is reached through a symbolic link (macOS /var and /tmp
-// are), so they move with the real root, not the root.
-const REAL_ROOT_TOKEN = "<real-root>";
+// Stands for the checkout root, or its real path, in a portable stamp. Real
+// paths leave the root's spelling when it is reached through a symbolic link
+// (macOS /var and /tmp are), so they move with the real root instead. The
+// depth is part of the token: only a checkout with as many ancestors gets the
+// same module-resolution walk, so only it can reuse the stamp.
+const ROOT_TOKEN_PATTERN = /<(?:real-)?root:\d+>/gu;
+const rootToken = (kind: "root" | "real-root", base: string) =>
+  `<${kind}:${base.split(path.sep).filter(Boolean).length}>`;
 
-const relocatePath = (value: string, from: string, to: string) => {
-  if (value === from) {
-    return to;
+// Module resolution walks up from the root: each ancestor's node_modules and
+// package.json scope. Those probes follow the checkout to its new parents;
+// any other path outside the root names the same file everywhere.
+const isAncestorWalkProbe = (fromAncestor: string) =>
+  fromAncestor === "" ||
+  fromAncestor === "package.json" ||
+  fromAncestor === "node_modules" ||
+  fromAncestor.startsWith("node_modules/");
+
+const toPortablePath = (value: string, base: string, token: string) => {
+  const relative = repoRelativePath(base, value);
+  if (relative === "") {
+    return token;
   }
-  return value.startsWith(`${from}/`)
-    ? `${to}${value.slice(from.length)}`
+  if (relative !== ".." && !relative.startsWith("../")) {
+    return `${token}/${relative}`;
+  }
+  const fromAncestor = relative.replace(/^(?:\.\.(?:\/|$))+/u, "");
+  return isAncestorWalkProbe(fromAncestor) ? `${token}/${relative}` : value;
+};
+
+const toLocalPath = (value: string, token: string, base: string) => {
+  if (value === token) {
+    return base;
+  }
+  return value.startsWith(`${token}/`)
+    ? path.join(base, value.slice(token.length + 1))
     : value;
 };
 
-/** Rewrites every path in a stamp that lies under `from` to lie under `to`. */
+/** Rewrites every path in a stamp with `move`. */
 const relocateStamp = (
   stamp: CompilerInputStamp,
-  from: string,
-  to: string,
+  move: (value: string) => string,
 ): CompilerInputStamp => {
-  const move = (value: string) => relocatePath(value, from, to);
   const moveList = (values: readonly string[]) => values.map(move);
   const moveKeys = <Value>(
     record: Record<string, Value>,
@@ -170,21 +192,38 @@ const relocateStamp = (
   };
 };
 
-/** Stores the paths under a checkout `root` relative to it. */
-export const toPortableStamp = (stamp: CompilerInputStamp, root: string) =>
-  relocateStamp(
-    relocateStamp(stamp, root, ROOT_TOKEN),
-    realpathSync(root),
-    REAL_ROOT_TOKEN,
-  );
+/**
+ * Stores the paths under a checkout `root`, and the probes module resolution
+ * makes in its ancestors, relative to it.
+ */
+export const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  const token = rootToken("root", root);
+  const realToken = rootToken("real-root", realRoot);
+  return relocateStamp(stamp, (value) => {
+    const portable = toPortablePath(value, root, token);
+    return portable === value
+      ? toPortablePath(value, realRoot, realToken)
+      : portable;
+  });
+};
 
-/** Places a portable stamp's relative paths under the checkout `root`. */
-export const localizeStamp = (stamp: CompilerInputStamp, root: string) =>
-  relocateStamp(
-    relocateStamp(stamp, REAL_ROOT_TOKEN, realpathSync(root)),
-    ROOT_TOKEN,
-    root,
+/**
+ * Places a portable stamp's relative paths under the checkout `root`, or
+ * returns undefined when the stamp came from a root at another depth.
+ */
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  const token = rootToken("root", root);
+  const realToken = rootToken("real-root", realRoot);
+  const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
+  if (tokens.some((found) => found !== token && found !== realToken)) {
+    return undefined;
+  }
+  return relocateStamp(stamp, (value) =>
+    toLocalPath(toLocalPath(value, realToken, realRoot), token, root),
   );
+};
 
 // Paths and keys, not text: a stable code-unit order on every machine.
 const compareKeys = (left: string, right: string) =>
