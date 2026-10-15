@@ -101,7 +101,6 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
   expect(JSON.stringify(main)).toContain("main/pr-depth");
   expect(JSON.stringify(main)).toContain('"pr_depth_only":true');
   expect(prDepthJobs(ci)).toEqual([
-    "ci-generated-sources",
     "ci-checks-generated",
     "ci-checks-policy",
     "ci-checks-rest",

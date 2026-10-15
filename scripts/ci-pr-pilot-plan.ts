@@ -18,7 +18,6 @@ export const PILOT_ALWAYS = ["dated-waiver-expiry"] as const;
 export const PILOT_DEFERRED = [
   "docker-checks",
   "parser-version-guard",
-  "ci-generated-sources",
   "ci-browser",
   "service-suites",
   "postgres-service-suites",
@@ -81,10 +80,7 @@ export const pilotFastJobs = (workflow: unknown) => {
     if (name === undefined || selected.has(name)) {
       continue;
     }
-    if (
-      name !== "ci-generated-sources" &&
-      !PILOT_FAST_ROOTS.some((root) => root === name)
-    ) {
+    if (!PILOT_FAST_ROOTS.some((root) => root === name)) {
       return invalid(`Pilot prerequisite is deferred: ${name}`);
     }
     const job = jobs[name];

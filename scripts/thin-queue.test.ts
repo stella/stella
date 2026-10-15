@@ -845,6 +845,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  // Retired jobs: ci-plan now produces the generated sources itself.
+  const retiredJobs = new Set([
+    "merge-group-fail-fast",
+    "ci-generated-sources",
+  ]);
   const collapsedJobs = new Map([
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
@@ -855,12 +860,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
+          (id) => !retiredJobs.has(id) && !collapsedJobs.has(id),
         ),
         "api-test-durations",
         "postgres-service-suites",
         "marketing-screenshots-cancel",
-        "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
         "dated-waiver-expiry",
@@ -886,7 +890,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     )) {
       const value = context({ event, variable, queueDepth: "full", proveFix });
       for (const [job, body] of Object.entries(baseline.jobs)) {
-        if (job === "merge-group-fail-fast") {
+        if (retiredJobs.has(job)) {
           continue;
         }
         let expected = selected(body.if, value);
