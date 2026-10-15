@@ -6,6 +6,7 @@ import { cn } from "@stll/ui/utils";
 import {
   CostBadge,
   FirstPartyMark,
+  ManualInvocationBadge,
   SetupBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
@@ -27,6 +28,8 @@ export type CatalogueRowDisplay = {
   icon: string | null;
   iconUrl?: string | null | undefined;
   jurisdictions: readonly string[];
+  /** An installed skill's invocation; only `manual` shows a badge. */
+  invocation?: "auto" | "manual" | null | undefined;
 };
 
 type CatalogueRowProps = {
@@ -125,6 +128,7 @@ export const CatalogueRow = ({
           <div className="flex flex-wrap items-center gap-1.5">
             <CostBadge cost={display.cost} />
             <SetupBadge setup={display.setup} />
+            {display.invocation === "manual" && <ManualInvocationBadge />}
             {display.jurisdictions.length > 0 && (
               <div className="ms-auto flex flex-wrap items-center gap-1.5">
                 {display.jurisdictions.map((code) => (

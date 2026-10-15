@@ -86,6 +86,7 @@ const buildParsedBlueprint = (
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
     entrypointHash: hashSkillPackage({ resources, source }),
+    invocation: metadata.invocation,
     license: metadata.license ?? null,
     metadata: { ...metadata.metadata, blueprintId: blueprint.id },
     name: metadata.name,

@@ -1,6 +1,9 @@
+import { ProtocolError } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -11,6 +14,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
+import {
+  getSkillPrompt,
+  listSkillPrompts,
+} from "@/api/mcp/gateway/skill-prompts";
 import {
   loadVisibleSkillTools,
   readSkillTool,
@@ -310,5 +317,110 @@ describe("MCP skill tools against the database", () => {
         skill: resolved,
       }),
     ).toBeNull();
+  });
+
+  test("a manual skill is a prompt with its instructions and files, and never a tool", async () => {
+    const slug = `manual-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill({
+      body: `body of ${slug}`,
+      slug,
+      userId: ids.userA1,
+    });
+    await testDb
+      .update(agentSkills)
+      .set({ invocation: "manual" })
+      .where(eq(agentSkills.id, skillId));
+    await testDb.insert(agentSkillResources).values({
+      id: testId(),
+      organizationId: ids.orgA,
+      skillId,
+      path: "references/checklist.md",
+      content: "1. Parties\n2. Term",
+      sizeBytes: 19,
+    });
+    const recording = createRecordingContext(ids.userA1);
+    const context = asTestRaw<McpRequestContext>({
+      ...recording.context,
+      grantedScopes: ["stella:skills"],
+    });
+    const name = namespaceSkillToolName(slug);
+
+    const tools = await loadVisibleSkillTools({
+      context,
+      mode: "default",
+      scopes: ["stella:skills"],
+    });
+    expect(tools.map((tool) => tool.exposedName)).not.toContain(name);
+
+    const prompts = await listSkillPrompts({
+      context,
+      mode: "default",
+      scopes: ["stella:skills"],
+    });
+    expect(prompts.map((prompt) => prompt.name)).toContain(name);
+    expect(
+      await listSkillPrompts({ context, mode: "default", scopes: [] }),
+    ).toEqual([]);
+
+    const prompt = await getSkillPrompt({
+      args: { request: "Check the lease." },
+      context,
+      mode: "default",
+      name,
+    });
+    const [instructions, resource] = prompt.messages;
+    expect(instructions?.content).toMatchObject({ type: "text" });
+    expect(
+      instructions?.content.type === "text" ? instructions.content.text : "",
+    ).toContain(`body of ${slug}`);
+    expect(
+      instructions?.content.type === "text" ? instructions.content.text : "",
+    ).toContain("Check the lease.");
+    expect(resource?.content).toMatchObject({
+      resource: { text: "1. Parties\n2. Term" },
+      type: "resource",
+    });
+
+    const called = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: name,
+    });
+    expect(called).toMatchObject({
+      result: { error: { code: "unknown_tool" }, status: "error" },
+      type: "internal",
+    });
+
+    const audited = await testDb
+      .select({ metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, skillId));
+    expect(audited.map(({ metadata }) => metadata)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: null, surface: "mcp" }),
+        expect.objectContaining({
+          path: "references/checklist.md",
+          surface: "mcp",
+        }),
+      ]),
+    );
+  });
+
+  test("an unknown prompt name is an invalid-params error", async () => {
+    const { context } = createRecordingContext(ids.userA1);
+    expect(
+      await rejectionOf(
+        getSkillPrompt({
+          args: undefined,
+          context: asTestRaw<McpRequestContext>({
+            ...context,
+            grantedScopes: ["stella:skills"],
+          }),
+          mode: "default",
+          name: "skill__does_not_exist",
+        }),
+      ),
+    ).toBeInstanceOf(ProtocolError);
   });
 });

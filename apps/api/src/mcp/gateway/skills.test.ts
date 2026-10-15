@@ -15,6 +15,7 @@ import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { GatewayDispatchDependencies } from "@/api/mcp/gateway/dispatch-call";
 import {
   exposeSkillTools,
+  loadSkillPrompts,
   loadVisibleSkillTools,
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
@@ -35,6 +36,7 @@ type SkillRow = {
   compatibility: string | null;
   metadata: Record<string, string>;
   body: string;
+  invocation: "auto" | "manual";
   origin: "authored" | "bundled" | "upload" | "url";
 };
 
@@ -53,6 +55,7 @@ const skillRow = (
   compatibility: null,
   metadata: {},
   body: `body ${overrides.slug}`,
+  invocation: "auto",
   origin: "authored",
   ...overrides,
 });
@@ -402,6 +405,48 @@ describe("MCP gateway skill tools", () => {
     expect(resolved?.availability).toEqual({
       status: "unavailable",
       missingTools: ["save_playbook"],
+    });
+  });
+
+  test("serves a manual skill as a prompt, never as a tool, and refuses a call to it", async () => {
+    const context = createContext({
+      rows: [
+        skillRow({ slug: "auto-skill" }),
+        skillRow({ invocation: "manual", slug: "manual-skill" }),
+      ],
+    });
+
+    expect(
+      installedOnly(
+        await loadVisibleSkillTools({ context, mode: "default" }),
+      ).map(({ name }) => name),
+    ).toEqual(["auto-skill"]);
+    expect(
+      installedOnly(await loadSkillPrompts({ context, mode: "default" })).map(
+        ({ exposedName }) => exposedName,
+      ),
+    ).toEqual(["skill__manual_skill"]);
+
+    let reads = 0;
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      dependencies: asTestRaw<GatewayDispatchDependencies>({
+        readSkillTool: async () => {
+          reads += 1;
+          return null;
+        },
+        recordSkillReadAudit: async () => undefined,
+        resolveSkillTool,
+      }),
+      mode: "default",
+      toolName: "skill__manual_skill",
+    });
+
+    expect(reads).toBe(0);
+    expect(result).toMatchObject({
+      type: "internal",
+      result: { status: "error", error: { code: "unknown_tool" } },
     });
   });
 

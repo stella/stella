@@ -3650,6 +3650,12 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationLabel": "When to use";
+      "invocationManual": "Only when invoked";
+      "invocationManualBadge": "Manual";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";

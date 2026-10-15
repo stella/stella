@@ -30,6 +30,13 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -62,6 +69,7 @@ import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
 } from "./skill-metadata-draft.logic";
+import type { SkillInvocation } from "./skill-metadata-draft.logic";
 import {
   FILENAME_PATTERN,
   reserveReferencesPath,
@@ -143,6 +151,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     detail.data?.description ?? "",
   );
   const [enabled, setEnabled] = useState(detail.data?.enabled ?? false);
+  const [invocation, setInvocation] = useState<SkillInvocation>(() =>
+    detail.data ? skillMetadataDraft(detail.data).invocation : "auto",
+  );
   const [command, setCommand] = useState(() =>
     detail.data ? skillMetadataDraft(detail.data).command : "",
   );
@@ -183,13 +194,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       lastDetailData === undefined
         ? skillMetadataDraft(detail.data)
         : rebaseSkillMetadataDraft({
-            draft: { command, description, enabled, name },
+            draft: { command, description, enabled, invocation, name },
             next: detail.data,
             previous: lastDetailData,
           });
     setName(rebased.name);
     setDescription(rebased.description);
     setEnabled(rebased.enabled);
+    setInvocation(rebased.invocation);
     setCommand(rebased.command);
   }
 
@@ -329,6 +341,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         description: string;
         version: string | null;
         enabled: boolean;
+        invocation: SkillInvocation;
         command: string | null;
       }>,
     ) => {
@@ -347,11 +360,12 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         return;
       }
       toastError(error, t("common.unexpectedError"));
-      // The power toggle flips `enabled` optimistically; snap it back so the
-      // UI doesn't show an enable the server rejected. Text fields
-      // commit on blur and keep the user's draft for another attempt.
+      // The power toggle and the invocation choice apply optimistically; snap
+      // them back so the UI doesn't show a change the server rejected. Text
+      // fields commit on blur and keep the user's draft for another attempt.
       if (detail.data) {
         setEnabled(detail.data.enabled);
+        setInvocation(detail.data.invocation);
       }
     },
   });
@@ -514,6 +528,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     const next = !enabled;
     setEnabled(next);
     patchMetadata.mutate({ enabled: next });
+  };
+  const changeInvocation = (next: SkillInvocation) => {
+    if (next === invocation) {
+      return;
+    }
+    setInvocation(next);
+    patchMetadata.mutate({ invocation: next });
   };
 
   const COMMAND_PATTERN_LOCAL = /^[a-z0-9][a-z0-9_-]{0,48}$/u;
@@ -750,6 +771,12 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 </p>
               )}
             </div>
+            <SkillInvocationField
+              locked={access === "none"}
+              onChange={changeInvocation}
+              saving={patchMetadata.isPending}
+              value={invocation}
+            />
           </div>
         </div>
       </div>
@@ -881,6 +908,61 @@ type SkillFileTreeProps = {
 // The SKILL.md body isn't a stored resource, so it gets a synthetic node id and
 // is pinned at the top of the tree.
 const BODY_NODE_ID = "__body__";
+
+/**
+ * Whether the assistant may use the skill on its own or only when the user
+ * invokes it. A label/field pair for the metadata grid it sits in.
+ */
+function SkillInvocationField({
+  locked,
+  onChange,
+  saving,
+  value,
+}: {
+  /** The caller may not change this skill's settings. */
+  locked: boolean;
+  onChange: (next: SkillInvocation) => void;
+  saving: boolean;
+  value: SkillInvocation;
+}) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  return (
+    <>
+      <label
+        className="text-muted-foreground pt-1.5 text-xs"
+        htmlFor="edit-skill-invocation"
+      >
+        {tSkills("invocationLabel")}
+      </label>
+      <div className="flex flex-col gap-1">
+        <Select
+          disabled={locked || saving}
+          onValueChange={(next) => {
+            if (next === "auto" || next === "manual") {
+              onChange(next);
+            }
+          }}
+          value={value}
+        >
+          <SelectTrigger className="w-fit min-w-48" id="edit-skill-invocation">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="auto">{tSkills("invocationAuto")}</SelectItem>
+            <SelectItem value="manual">
+              {tSkills("invocationManual")}
+            </SelectItem>
+          </SelectPopup>
+        </Select>
+        <p className="text-muted-foreground text-xs">
+          {value === "auto"
+            ? tSkills("invocationAutoHelp")
+            : tSkills("invocationManualHelp")}
+        </p>
+      </div>
+    </>
+  );
+}
 
 function SkillFileTree({
   access,
