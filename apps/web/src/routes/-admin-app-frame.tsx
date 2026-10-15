@@ -150,7 +150,11 @@ const AdminSidebar = () => {
     roleView.type === "items" && roleView.refetchError === undefined
       ? roleView.items
       : undefined;
-  const organizationQuery = useChromeQuery(organizationListOptions(user.id));
+  // The switcher loads memberships when opened; chrome only reads its cache.
+  const organizationQuery = useChromeQuery({
+    ...organizationListOptions(user.id),
+    enabled: false,
+  });
   const organizationView = useQueryView(organizationQuery);
   useQueryViewError(organizationView);
   const organization =

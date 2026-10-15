@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
-import { sleep } from "@stll/concurrency/sleep";
 
 import type { Role } from "@/lib/auth-client";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin" });
 Object.assign(import.meta.env, {
@@ -24,7 +24,7 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { act, cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const en = (await import("@/i18n/langs/en.json")).default;
@@ -71,10 +71,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await act(async () => {
-    await sleep(50);
-  });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const serve = (role: Role) => {
@@ -178,7 +175,7 @@ const renderFrame = async (locale: "en" | "ar", role: Role) => {
       view.getByRole("button", {
         name: messages.organization.switchOrganization,
       }).textContent,
-    ).toContain("First firm"),
+    ).toContain(messages.common.organization),
   );
   return { view, appRouter, requests, messages };
 };
@@ -188,7 +185,7 @@ test.each(
 )(
   "admin shell preserves navigation order and translated labels in %s",
   async (locale) => {
-    const { view, messages } = await renderFrame(locale, "owner");
+    const { view, messages, requests } = await renderFrame(locale, "owner");
     await waitFor(() =>
       expect(
         view.getAllByRole("link").map((link) => link.getAttribute("href")),
@@ -230,6 +227,9 @@ test.each(
         .getAttribute("href"),
     ).toBe("/admin/usage");
     expect(view.getByTestId("admin-content")).toBeDefined();
+    expect(
+      requests.filter(({ path }) => path.endsWith("/organization/list")),
+    ).toEqual([]);
   },
 );
 

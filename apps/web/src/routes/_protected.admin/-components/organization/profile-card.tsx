@@ -56,7 +56,7 @@ export const OrganizationProfileCard = () => {
 
   const performRename = async () => {
     if (!pendingName) {
-      return;
+      return undefined;
     }
     const result = await authClient.organization.update({
       data: { name: pendingName },
@@ -79,6 +79,7 @@ export const OrganizationProfileCard = () => {
       type: "success",
     });
     setPendingName(null);
+    return undefined;
   };
 
   return (

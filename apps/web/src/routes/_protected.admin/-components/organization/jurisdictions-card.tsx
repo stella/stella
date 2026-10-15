@@ -83,7 +83,7 @@ export const OrganizationJurisdictionsCard = () => {
                 // Settling as a Result lets the transition resolve, and React
                 // reverts `optimisticSelected` to the server value.
                 await Result.tryPromise({
-                  try: () => updateMutation.mutateAsync(next),
+                  try: async () => await updateMutation.mutateAsync(next),
                   catch: (error) => error,
                 });
                 if (selectionGenerationRef.current === generation) {

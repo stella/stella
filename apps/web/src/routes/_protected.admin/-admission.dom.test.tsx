@@ -5,6 +5,8 @@ import path from "node:path";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/admin" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -66,7 +68,7 @@ const adminPaths = [
           path.join(import.meta.dirname, file),
           "utf-8",
         );
-        const declaration = source.match(/createFileRoute\(\s*"([^"]+)"/u);
+        const declaration = /createFileRoute\(\s*"([^"]+)"/u.exec(source);
         const routePath = declaration?.at(1);
         return routePath === undefined
           ? []
@@ -78,7 +80,7 @@ const CALLER = { userId: "admin-admission-user", organizationId: "org-a" };
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("organization admin admission", () => {

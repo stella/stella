@@ -1,13 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
-
 import messages from "@/i18n/langs/en.json" with { type: "json" };
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
 const originalFetch = globalThis.fetch;
-const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -19,8 +18,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await act(async () => await sleep(50));
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (isOwner = true, afterSuccess?: () => Promise<void>) => {

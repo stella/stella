@@ -187,12 +187,10 @@ function SettingsLayout() {
                     </MenuItem>
                   );
                 })}
-                {section.id === "account" && (
-                  <MenuItem onClick={openShortcuts}>
-                    <KeyboardIcon className="size-4" />
-                    {t("navigation.shortcutsDialog.title")}
-                  </MenuItem>
-                )}
+                <MenuItem onClick={openShortcuts}>
+                  <KeyboardIcon className="size-4" />
+                  {t("navigation.shortcutsDialog.title")}
+                </MenuItem>
               </MenuGroup>
             ))}
           </MenuPopup>
@@ -227,16 +225,14 @@ function SettingsLayout() {
                     </Link>
                   );
                 })}
-                {section.id === "account" ? (
-                  <button
-                    className={NAV_ITEM_CLASS}
-                    onClick={openShortcuts}
-                    type="button"
-                  >
-                    <KeyboardIcon className="size-4" />
-                    <span>{t("navigation.shortcutsDialog.title")}</span>
-                  </button>
-                ) : null}
+                <button
+                  className={NAV_ITEM_CLASS}
+                  onClick={openShortcuts}
+                  type="button"
+                >
+                  <KeyboardIcon className="size-4" />
+                  <span>{t("navigation.shortcutsDialog.title")}</span>
+                </button>
               </div>
             ))}
           </nav>

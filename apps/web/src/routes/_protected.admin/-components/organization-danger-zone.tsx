@@ -70,6 +70,9 @@ export const OrganizationDangerZone = ({
   };
   const refusalCode = outcome.status === "refused" ? outcome.code : undefined;
   const refusalMessage = (() => {
+    if (refusalCode === undefined) {
+      return t("errors.actionFailed");
+    }
     switch (refusalCode) {
       case SUBSCRIPTION_RENEWS_CODE:
         return t("admin.deleteRefusedSubscription");

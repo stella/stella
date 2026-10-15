@@ -330,7 +330,7 @@ export const AnonymizationDenyListCard = () => {
       { canonical, label: pendingLabel },
     ]);
     const saved = await Result.tryPromise({
-      try: () => updateMutation.mutateAsync({ entries: next }),
+      try: async () => await updateMutation.mutateAsync({ entries: next }),
       catch: (error) => error,
     });
     if (Result.isError(saved)) {
