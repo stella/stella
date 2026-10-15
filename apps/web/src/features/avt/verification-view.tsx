@@ -208,7 +208,10 @@ export const VerificationView = ({
 
   // One claim mark, wherever the pane draws it: over the reader's text, or
   // on its own in a passage.
-  const renderClaim = (claim: VerificationClaim, children: React.ReactNode) => {
+  const renderClaim = (
+    claim: VerificationClaim,
+    children: React.ReactNode,
+  ): React.ReactElement => {
     const { dim, highlight } = spanPresentation({
       filterActive: filter !== "all",
       matches: matches(claim, filter),
@@ -466,7 +469,7 @@ type ReadingDocumentProps = {
   renderClaim: (
     claim: VerificationClaim,
     children: React.ReactNode,
-  ) => React.ReactNode;
+  ) => React.ReactElement;
 };
 
 /** The stored text in the shared reader, or the claims' own passages. */

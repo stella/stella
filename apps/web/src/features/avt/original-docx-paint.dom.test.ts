@@ -46,18 +46,26 @@ const marks = [
 
 describe("resolveHighlightApi", () => {
   test("needs both the Highlight constructor and the CSS registry", () => {
-    const registry = new Map<string, unknown>();
-    const highlights = Object.assign(registry, {
-      highlightsFromPoint: () => [],
-    }) as unknown as HighlightRegistry;
-    class FakeHighlight {
-      priority = 0;
-      readonly ranges: readonly Range[];
-      constructor(...ranges: Range[]) {
-        this.ranges = ranges;
+    // happy-dom has neither half of the API: both are stood in by doubles
+    // that implement the DOM interfaces.
+    class FakeHighlightRegistry
+      extends Map<string, Highlight>
+      implements HighlightRegistry
+    {
+      highlightsFromPoint(): HighlightsFromPointResult[] {
+        return [];
       }
     }
-    const Highlight = FakeHighlight as unknown as typeof globalThis.Highlight;
+    class FakeHighlight extends Set<AbstractRange> implements Highlight {
+      priority = 0;
+      type: HighlightType = "highlight";
+      constructor(...ranges: AbstractRange[]) {
+        super(ranges);
+      }
+    }
+    const registry = new FakeHighlightRegistry();
+    const highlights: HighlightRegistry = registry;
+    const Highlight: typeof globalThis.Highlight = FakeHighlight;
 
     expect(resolveHighlightApi({})).toBeNull();
     expect(resolveHighlightApi({ CSS: { highlights } })).toBeNull();
