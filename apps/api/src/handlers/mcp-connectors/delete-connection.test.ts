@@ -27,6 +27,22 @@ const loadedConnection: LoadedMcpConnection = {
   staticTokenIv: Buffer.from("iv"),
 };
 
+/** The credentials the DELETE statement returned for the removed row. */
+const deletedRow = {
+  userConnectionId: connectionId,
+  connectorId,
+  responseDisposition: "normal",
+  accessTokenEncrypted: Buffer.from("deleted-access"),
+  accessTokenIv: Buffer.from("iv"),
+  refreshTokenEncrypted: null,
+  refreshTokenIv: null,
+  staticTokenEncrypted: Buffer.from("static"),
+  staticTokenIv: Buffer.from("iv"),
+  expiresAt: null,
+  oauthResourceUrl: null,
+  oauthAuthorizationServerUrl: null,
+};
+
 const setup = ({
   deletedRows,
   loaded = loadedConnection,
@@ -38,10 +54,12 @@ const setup = ({
 }) => {
   const events: string[] = [];
   const revocations: unknown[] = [];
+  const revokedFrom: unknown[] = [];
   const handler = createDeleteMcpConnectionHandler({
-    loadMcpConnectionById: async () => {
-      events.push("load");
-      return await Promise.resolve(loaded);
+    revocableMcpConnectionFromDeleted: async ({ deleted }) => {
+      events.push("resolve");
+      revokedFrom.push(deleted);
+      return await Promise.resolve(Result.ok(loaded));
     },
     revokeMcpConnectionTokens: async (input) => {
       events.push("revoke");
@@ -74,13 +92,13 @@ const setup = ({
     ),
     route: "/v1/mcp/connections/:connectionId",
   });
-  return { context, events, handler, revocations };
+  return { context, events, handler, revocations, revokedFrom };
 };
 
 describe("disconnect with upstream revocation", () => {
   test("revokes the deleted connection's tokens after the local delete", async () => {
     const fixture = setup({
-      deletedRows: [{ id: connectionId, connectorId }],
+      deletedRows: [deletedRow],
       revoke: async () =>
         await Promise.resolve({
           type: "attempted",
@@ -93,8 +111,11 @@ describe("disconnect with upstream revocation", () => {
       id: connectionId,
     });
     await Promise.resolve();
+    await Promise.resolve();
 
-    expect(fixture.events).toEqual(["load", "delete", "audit", "revoke"]);
+    expect(fixture.events).toEqual(["delete", "audit", "resolve", "revoke"]);
+    // Revocation is built from exactly the credentials the delete removed.
+    expect(fixture.revokedFrom).toEqual([deletedRow]);
     expect(fixture.revocations).toEqual([loadedConnection]);
   });
 
@@ -104,7 +125,7 @@ describe("disconnect with upstream revocation", () => {
       async () => await new Promise<never>(() => {}),
     ] satisfies DeleteMcpConnectionDependencies["revokeMcpConnectionTokens"][]) {
       const fixture = setup({
-        deletedRows: [{ id: connectionId, connectorId }],
+        deletedRows: [deletedRow],
         revoke,
       });
 
@@ -126,7 +147,7 @@ describe("disconnect with upstream revocation", () => {
     expect(missing.revocations).toEqual([]);
 
     const unloaded = setup({
-      deletedRows: [{ id: connectionId, connectorId }],
+      deletedRows: [deletedRow],
       loaded: null,
       revoke: async () =>
         await Promise.reject(new Error("must not revoke without credentials")),
