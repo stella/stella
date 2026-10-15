@@ -9,6 +9,7 @@ import { createBackfillRuntime } from "./backfill-runtime";
 import {
   convertLegacyChatContent,
   LegacyChatContentError,
+  LOSSY_JSON_NUMBER,
 } from "./chat-content-v3-legacy";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import type {
@@ -205,7 +206,7 @@ export const backfillChatContentV3Batch = async ({
         case "lossy":
           // Writing would round a number the driver parsed as a double.
           receipt.outcome = "failed";
-          receipt.reason = "lossy-json-number";
+          receipt.reason = LOSSY_JSON_NUMBER;
           break;
         case "changed":
           // Preserve a concurrent writer's content instead of replacing a newer value.

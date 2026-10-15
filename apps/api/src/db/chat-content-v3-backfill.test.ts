@@ -18,6 +18,7 @@ import goldenFixtures from "./__fixtures__/chat-content-v3-legacy-goldens.json" 
 import {
   convertLegacyChatContent,
   LegacyChatContentError,
+  LOSSY_JSON_NUMBER,
 } from "./chat-content-v3-legacy";
 
 describe("frozen legacy conversion preserves pre-cutover persisted output", () => {
@@ -125,6 +126,44 @@ test("v1 canonical tool-call golden retains its name and exact raw arguments", (
       },
     ]),
   ).toBe(true);
+});
+
+test("v2 tool arguments convert only when every number survives parsing exactly", () => {
+  const convert = (argumentsText: string) =>
+    Result.try({
+      try: () =>
+        convertLegacyChatContent({
+          version: 2,
+          data: [
+            {
+              type: "tool-call",
+              id: "call_count",
+              name: "list_templates",
+              state: "input-complete",
+              arguments: argumentsText,
+            },
+          ],
+        }),
+      catch: (error) => error,
+    });
+  for (const exact of [
+    '{"count":2e3,"ratio":1.50,"offset":-0}',
+    '{"count":9007199254740991}',
+  ]) {
+    expect(convert(exact).isOk()).toBe(true);
+  }
+  for (const lossy of [
+    '{"count":12345678901234567890}',
+    '{"ratio":0.12345678901234567890123}',
+    '{"count":1e400}',
+  ]) {
+    const result = convert(lossy);
+    if (result.isOk()) {
+      return panic(`Lossy arguments converted: ${lossy}`);
+    }
+    expect(result.error).toBeInstanceOf(LegacyChatContentError);
+    expect(result.error).toMatchObject({ reason: LOSSY_JSON_NUMBER });
+  }
 });
 
 test("v1 canonical tool calls preserve name state and raw argument bytes across reload", () => {

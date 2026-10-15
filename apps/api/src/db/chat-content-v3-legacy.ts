@@ -21,11 +21,13 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { isPersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
+export const LOSSY_JSON_NUMBER = "lossy-json-number";
+
 export class LegacyChatContentError extends TaggedError(
   "LegacyChatContentError",
 )<{
   message: string;
-  reason: "invalid-legacy-part";
+  reason: "invalid-legacy-part" | typeof LOSSY_JSON_NUMBER;
 }> {}
 
 const invalidLegacyPart = (
@@ -160,6 +162,25 @@ const normalizeLegacyMessagePartsToTanStack = (
   return { metadata, parts: normalized };
 };
 
+const DECIMAL_LITERAL = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/u;
+
+// One spelling per decimal value: "2e3", "2000" and "2000.0" all map to "2e3".
+// A non-decimal spelling ("Infinity" from an overflowing literal) maps to itself.
+const decimalIdentity = (literal: string) => {
+  const match = DECIMAL_LITERAL.exec(literal);
+  if (match === null) {
+    return literal;
+  }
+  const [, sign = "", whole = "", fraction = "", exponent = "0"] = match;
+  let digits = `${whole}${fraction}`.replace(/^0+/u, "");
+  let scale = Number(exponent) - fraction.length;
+  while (digits.endsWith("0")) {
+    digits = digits.slice(0, -1);
+    scale += 1;
+  }
+  return digits === "" ? "0" : `${sign}${digits}e${scale}`;
+};
+
 const normalizeLegacyPersistedToolInputs = (
   parts: readonly ChatPart[],
 ): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
@@ -174,9 +195,31 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
     return part;
   }
 
-  const parsed = Result.try((): unknown => JSON.parse(part.arguments));
+  let lossy = false;
+  const parsed = Result.try((): unknown =>
+    JSON.parse(
+      part.arguments,
+      (_key, value: unknown, context?: { source?: string }) => {
+        if (
+          typeof value === "number" &&
+          (context?.source === undefined ||
+            decimalIdentity(context.source) !== decimalIdentity(String(value)))
+        ) {
+          lossy = true;
+        }
+        return value;
+      },
+    ),
+  );
   if (Result.isError(parsed)) {
     return part;
+  }
+  if (lossy) {
+    // The parsed input would replace the exact argument text with rounded doubles.
+    throw new LegacyChatContentError({
+      message: `Stored legacy tool call ${part.id} has a number beyond double precision`,
+      reason: LOSSY_JSON_NUMBER,
+    });
   }
   const input =
     parsed.value !== null && typeof parsed.value === "object"
@@ -547,11 +590,13 @@ export const convertLegacyChatContent = (
           ? { metadata: normalized.metadata }
           : {}),
       }),
-    catch: () =>
-      new LegacyChatContentError({
-        message: "Stored legacy chat parts cannot be proved as v3",
-        reason: "invalid-legacy-part",
-      }),
+    catch: (error) =>
+      error instanceof LegacyChatContentError
+        ? error
+        : new LegacyChatContentError({
+            message: "Stored legacy chat parts cannot be proved as v3",
+            reason: "invalid-legacy-part",
+          }),
   });
   if (proved.isErr()) {
     throw proved.error;
