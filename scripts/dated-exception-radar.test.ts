@@ -12,6 +12,7 @@ import {
   radarBody,
   radarFiles,
   radarGroups,
+  radarReuse,
   radarWriteNeeded,
   validateRadarRemoval,
 } from "./dated-exception-radar";
@@ -240,8 +241,8 @@ test("unchanged removal reuses the proposal until its eligibility changes", asyn
     request,
   };
   expect(await existingRadarProposal(input)).toEqual({
-    number: 8,
-    headSha: sha,
+    state: "current",
+    proposal: { number: 8, headSha: sha },
   });
   expect(
     await existingRadarProposal({
@@ -271,7 +272,71 @@ test("extension refresh preserves owner changes", async () => {
       },
     ],
   });
-  expect(existing).toEqual({ number: 9, headSha: "b".repeat(40) });
+  expect(existing).toEqual({
+    state: "owner",
+    proposal: { number: 9, headSha: "b".repeat(40) },
+  });
+});
+
+test("a green probe never replaces an owner-edited extension request", async () => {
+  const grouped = group();
+  const first = grouped.entries.at(0);
+  if (!first) {
+    throw new Error("Fixture entry missing");
+  }
+  const ordinary = {
+    ...grouped,
+    entries: [{ ...first, kind: "dependency-audit" as const }],
+  };
+  expect(radarAction(ordinary, "red", now).kind).toBe("extension");
+  const ownerBody = radarBody(ordinary, "extension", now).replace(
+    `owner-reason: ${OWNER_REASON_REQUIRED}`,
+    "owner-reason: Concrete owner decision",
+  );
+  const requested: string[] = [];
+  const request = async (args: readonly string[]) => {
+    requested.push(args.join(" "));
+    return [
+      {
+        number: 11,
+        body: ownerBody,
+        head: { sha: "d".repeat(40) },
+        base: { sha: "c".repeat(40) },
+      },
+    ];
+  };
+  const green = radarAction(ordinary, "green", now);
+  expect(green).toEqual({ kind: "removal", arm: true });
+  const existing = await existingRadarProposal({
+    key: ordinary.key,
+    kind: green.kind,
+    body: radarBody(ordinary, green.kind, now),
+    baseSha: "a".repeat(40),
+    files: { "bunfig.toml": "removed" },
+    request,
+  });
+  expect(existing).toEqual({
+    state: "owner",
+    proposal: { number: 11, headSha: "d".repeat(40) },
+  });
+  expect(requested).toHaveLength(1);
+  const armed: number[] = [];
+  await publishRadar({
+    groups: [ordinary],
+    statuses: new Map([[ordinary.key, "green"]]),
+    now,
+    publish: async (_group, kind) => {
+      const reuse = radarReuse(existing, kind);
+      if (reuse.publish) {
+        throw new Error("Owner request must not be republished");
+      }
+      return reuse.proposal;
+    },
+    arm: async ({ number }) => {
+      armed.push(number);
+    },
+  });
+  expect(armed).toEqual([]);
 });
 
 test("failed probes replace an existing removal with an owner extension request", async () => {

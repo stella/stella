@@ -343,6 +343,11 @@ type ExistingRadarOptions = {
   files: Readonly<Record<string, string>>;
   request: typeof githubRequest;
 };
+// `owner` is an open extension request: it belongs to its owner whatever the
+// radar would publish now, so it is never replaced, refreshed or armed.
+export type ExistingRadarProposal =
+  | { state: "owner"; proposal: PublishedRemoval }
+  | { state: "current"; proposal: PublishedRemoval };
 export const existingRadarProposal = async ({
   key,
   kind,
@@ -350,7 +355,7 @@ export const existingRadarProposal = async ({
   baseSha,
   files,
   request,
-}: ExistingRadarOptions): Promise<PublishedRemoval | undefined> => {
+}: ExistingRadarOptions): Promise<ExistingRadarProposal | undefined> => {
   const pulls = v.parse(
     v.array(
       v.object({
@@ -371,16 +376,18 @@ export const existingRadarProposal = async ({
   if (!pull) {
     return undefined;
   }
-  // Extension proposals belong to their owner after creation; scheduled refreshes
-  // must never overwrite a human's reason or proposed source deadline.
+  const proposal = { number: pull.number, headSha: pull.head.sha };
+  // Extension proposals belong to their owner after creation; no later run,
+  // including a green probe that selects removal, may overwrite a human's
+  // reason or proposed source deadline.
+  if (
+    pull.body.includes("<!-- dated-exception-radar:1 -->") &&
+    /^dated-exception-action: extension$/mu.test(pull.body) &&
+    !/^dated-exception-action: removal$/mu.test(pull.body)
+  ) {
+    return { state: "owner", proposal };
+  }
   if (kind === "extension") {
-    if (
-      pull.body.includes("<!-- dated-exception-radar:1 -->") &&
-      /^dated-exception-action: extension$/mu.test(pull.body) &&
-      !/^dated-exception-action: removal$/mu.test(pull.body)
-    ) {
-      return { number: pull.number, headSha: pull.head.sha };
-    }
     return undefined;
   }
   if (pull.base.sha !== baseSha || pull.body !== body) {
@@ -419,7 +426,28 @@ export const existingRadarProposal = async ({
       return undefined;
     }
   }
-  return { number: pull.number, headSha: pull.head.sha };
+  return { state: "current", proposal };
+};
+
+// What a run does with the open proposal on the reserved branch: reuse the
+// radar's current one, leave an owner's request untouched (never armed), or
+// publish a fresh one.
+export const radarReuse = (
+  existing: ExistingRadarProposal | undefined,
+  kind: "removal" | "extension",
+):
+  | { publish: true }
+  | { publish: false; proposal: PublishedRemoval | undefined } => {
+  if (existing === undefined) {
+    return { publish: true };
+  }
+  if (existing.state === "owner") {
+    return {
+      publish: false,
+      proposal: kind === "extension" ? existing.proposal : undefined,
+    };
+  }
+  return { publish: false, proposal: existing.proposal };
 };
 
 const gitSha = () => {
@@ -554,8 +582,9 @@ const main = async () => {
         files: changes.files,
         request: githubRequest,
       });
-      if (existing) {
-        return existing;
+      const reuse = radarReuse(existing, kind);
+      if (!reuse.publish) {
+        return reuse.proposal;
       }
       return publishRemoval({
         branch: `chore/dated-waiver-${group.key}`,
