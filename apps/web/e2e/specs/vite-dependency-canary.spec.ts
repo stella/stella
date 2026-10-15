@@ -28,12 +28,14 @@ test.describe("Vite dependency optimizer canary", () => {
     workspace = await createTestWorkspace(request, "vite-canary");
   });
 
-  test.afterEach(async ({ page, request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id, { page });
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
