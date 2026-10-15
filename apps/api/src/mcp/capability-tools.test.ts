@@ -519,6 +519,11 @@ describe("list verification access grants across MCP tools", () => {
           limit: () => query,
         });
       },
+      // Row locks (the sample loader's matter lock) read no rows here.
+      execute: async () => {
+        resourceLookups += 1;
+        return [];
+      },
       insert: () => ({ values: async () => [] }),
       update: () => {
         mutations += 1;
@@ -538,6 +543,14 @@ describe("list verification access grants across MCP tools", () => {
       scopedDb: database.scopedDb,
       safeDb: database.safeDb,
       workspaceIds: [matterId],
+      // The sample loader stores a document, so it needs the documents scope.
+      grantedScopes: [
+        "stella:read",
+        "stella:billing_write",
+        "stella:knowledge_write",
+        "stella:matters_write",
+        "stella:documents_write",
+      ],
     });
     context.organizationId = toSafeId<"organization">(organizationId);
     context.userId = toSafeId<"user">(userId);

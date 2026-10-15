@@ -9,8 +9,12 @@ import {
 } from "@stll/api-contract/entity-options";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
-import { abortTransaction, safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import {
+  abortableTx,
+  abortTransaction,
+  safeDbFromScoped,
+} from "@/api/db/safe-db";
 import {
   entities,
   legalListFactDetails,
@@ -164,12 +168,18 @@ const readLockedSample = async (
   return { listId: list.id, ...list.sampleCase };
 };
 
+/** A refusal thrown to abort the read answers with its own status. */
+const sampleReadError = (error: HandlerError | SafeDbError) =>
+  DocumentWriteRefusedError.is(error.cause)
+    ? documentWriteRefusalHandlerError(error.cause)
+    : error;
+
 const readSampleReceipt = async (
   scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
   fileProperty: SampleFileProperty,
 ) => {
-  const result = await safeDbFromScoped(scopedDb)(async (tx) => {
+  const result = await abortableTx(safeDbFromScoped(scopedDb), async (tx) => {
     await lockSampleWorkspace(tx, workspaceId);
     await withAggregateLock({
       tx,
@@ -178,11 +188,7 @@ const readSampleReceipt = async (
     });
     return await readLockedSample(tx, workspaceId, fileProperty);
   });
-  return result.mapError((error) =>
-    DocumentWriteRefusedError.is(error.cause)
-      ? documentWriteRefusalHandlerError(error.cause)
-      : error,
-  );
+  return result.mapError(sampleReadError);
 };
 
 type InsertSampleOptions = {
@@ -353,14 +359,26 @@ export const loadSampleCase = async ({
   recordAuditEvent,
   filePropertyName,
   createDocument = createEntityFromBuffer,
-}: LoadSampleCaseOptions) =>
-  await Result.gen(async function* () {
-    const existing = yield* Result.await(
-      readSampleReceipt(scopedDb, workspaceId, {
+}: LoadSampleCaseOptions) => {
+  // Preflight takes the sample fence in this body so the route's declared
+  // aggregate is visibly held; the retry read below repeats the same order.
+  const preflight = await abortableTx(
+    safeDbFromScoped(scopedDb),
+    async (tx) => {
+      await lockSampleWorkspace(tx, workspaceId);
+      await withAggregateLock({
+        tx,
+        aggregate: "sampleCase",
+        id: { workspaceId },
+      });
+      return await readLockedSample(tx, workspaceId, {
         name: filePropertyName,
         recordAuditEvent,
-      }),
-    );
+      });
+    },
+  );
+  return await Result.gen(async function* () {
+    const existing = yield* preflight.mapError(sampleReadError);
     if (existing !== undefined) {
       return Result.ok(existing);
     }
@@ -443,6 +461,7 @@ export const loadSampleCase = async ({
       fileFieldId: document.fieldId,
     });
   });
+};
 
 type BufferError = Extract<
   CreateEntityFromBufferResult,
