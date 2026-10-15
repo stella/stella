@@ -15,6 +15,7 @@ import {
   p,
   pUuid,
   safeOrganizationId,
+  safeUuid,
   timestamptz,
   user,
 } from "./common";
@@ -46,7 +47,7 @@ export const outboundActions = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     /** Chat the assistant prepared the action in. */
-    chatThreadId: pUuid<"chatThread">("chat_thread_id")
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id")
       .notNull()
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     kind: p
