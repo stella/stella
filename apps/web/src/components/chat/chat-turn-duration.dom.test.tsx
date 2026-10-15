@@ -9,6 +9,8 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
 const { act, cleanup, render } = await import("@testing-library/react");
@@ -30,7 +32,7 @@ afterEach(() => {
   setSystemTime();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("keeps the duration label in the first render of a new reading", () => {

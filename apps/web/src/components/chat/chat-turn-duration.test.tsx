@@ -49,21 +49,26 @@ describe("assistant turn duration", () => {
 
   for (const recording of [connectionDrop, stoppedToolInput]) {
     test(`renders recorded timing after ${recording.scenario}`, () => {
-      const assistantMessages = recording.steps
-        .flatMap(({ exchanges }) =>
-          exchanges.flatMap(({ page }) => page.messages),
-        )
-        .filter(({ role }) => role === "assistant");
-      expect(assistantMessages.length).toBeGreaterThan(0);
-      for (const { metadata } of assistantMessages) {
-        const timing = metadata?.turnTiming;
-        expect(timing?.status).toBe("finished");
-        if (timing?.status === "finished") {
-          expect(
-            renderDuration({ ...timing, status: timing.status }),
-          ).toContain("Worked for 0s");
+      let renderedMessages = 0;
+      for (const { exchanges } of recording.steps) {
+        for (const { page } of exchanges) {
+          for (const { role, metadata } of page.messages) {
+            if (role !== "assistant") {
+              continue;
+            }
+            const timing = metadata?.turnTiming;
+            expect(timing?.status).toBe("finished");
+            if (timing?.status !== "finished") {
+              continue;
+            }
+            expect(
+              renderDuration({ ...timing, status: timing.status }),
+            ).toContain("Worked for 0s");
+            renderedMessages += 1;
+          }
         }
       }
+      expect(renderedMessages).toBeGreaterThan(0);
     });
   }
 
