@@ -3,6 +3,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 
 const { act, cleanup, fireEvent, render, renderHook } =
@@ -33,7 +35,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const DepthChoice = () => {

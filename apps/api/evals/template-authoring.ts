@@ -98,6 +98,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -264,8 +265,9 @@ const blockXml = (block: AuthoredBlock): string =>
 // content types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -275,7 +277,8 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',

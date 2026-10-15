@@ -13,13 +13,17 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   desktopEditSessions,
+  entities,
+  entityVersions,
   properties,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  authorizeDesktopEditSessionWithDb,
   hashDesktopEditSessionToken,
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
@@ -44,8 +48,14 @@ let ids: TestIds;
 const formerRequester = mintAuthProviderId<"user">();
 /** Creates a session, then loses the matter membership it depended on. */
 const revokedCreator = mintAuthProviderId<"user">();
-
 const createdUsers = [formerRequester, revokedCreator];
+
+/** A matter without a client, reached through membership only. */
+const personalMatter = {
+  workspaceId: createSafeId<"workspace">(),
+  entityId: createSafeId<"entity">(),
+  entityVersionId: createSafeId<"entityVersion">(),
+};
 
 type SeededSession = {
   id: SafeId<"desktopEditSession">;
@@ -61,7 +71,9 @@ let sessions: Record<
   | "revoked"
   | "expired"
   | "closed"
-  | "foreign",
+  | "foreign"
+  | "ownerOnClientMatter"
+  | "ownerOnPersonalMatter",
   SeededSession
 >;
 
@@ -172,6 +184,25 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  await testDb.insert(workspaces).values({
+    id: personalMatter.workspaceId,
+    organizationId: ids.orgA,
+    clientId: null,
+    name: "Personal matter",
+    reference: `REF-${personalMatter.workspaceId}`,
+    status: "active",
+  });
+  await testDb.insert(entities).values({
+    id: personalMatter.entityId,
+    workspaceId: personalMatter.workspaceId,
+    kind: "document",
+    name: "personal-matter-document",
+  });
+  await testDb.insert(entityVersions).values({
+    id: personalMatter.entityVersionId,
+    workspaceId: personalMatter.workspaceId,
+    entityId: personalMatter.entityId,
+  });
   await testDb.insert(workspaceMembers).values({
     id: createSafeId<"workspaceMember">(),
     workspaceId: ids.wsA1,
@@ -214,6 +245,19 @@ beforeAll(async () => {
       organizationId: ids.orgB,
       workspaceId: ids.wsB1,
     }),
+    // userAdmin owns orgA and holds no matter membership row.
+    ownerOnClientMatter: await seedSession({
+      createdBy: ids.userAdmin,
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+    }),
+    ownerOnPersonalMatter: await seedSession({
+      createdBy: ids.userAdmin,
+      ...personalMatter,
+      organizationId: ids.orgA,
+    }),
   };
 
   // The requester leaves after asking; the creator loses the matter.
@@ -234,6 +278,9 @@ afterAll(async () => {
       .delete(desktopEditSessions)
       .where(eq(desktopEditSessions.id, session.id));
   }
+  await testDb
+    .delete(workspaces)
+    .where(eq(workspaces.id, personalMatter.workspaceId));
   for (const userId of createdUsers) {
     await testDb.delete(user).where(eq(user.id, userId));
   }
@@ -273,6 +320,28 @@ describe("desktop edit session event state", () => {
     expect(state).toBeNull();
   });
 
+  test("follows the creator's matter access for an owner without a matter membership", async () => {
+    const onClientMatter = await sessionScope(
+      sessions.ownerOnClientMatter,
+      async (tx) =>
+        await readDesktopEditSessionEventState(
+          tx,
+          sessions.ownerOnClientMatter.id,
+        ),
+    );
+    const onPersonalMatter = await sessionScope(
+      sessions.ownerOnPersonalMatter,
+      async (tx) =>
+        await readDesktopEditSessionEventState(
+          tx,
+          sessions.ownerOnPersonalMatter.id,
+        ),
+    );
+
+    expect(onClientMatter).not.toBeNull();
+    expect(onPersonalMatter).toBeNull();
+  });
+
   test("cannot reach a session outside the scope's organization", async () => {
     const foreign = sessions.foreign;
     const state = await sessionScope(
@@ -281,6 +350,28 @@ describe("desktop edit session event state", () => {
     );
 
     expect(state).toBeNull();
+  });
+});
+
+describe("desktop edit session authorization", () => {
+  test("authorizes an owner without a matter membership on a client matter", async () => {
+    const session = sessions.ownerOnClientMatter;
+    const result = await authorizeDesktopEditSessionWithDb(
+      { sessionId: session.id, sessionToken: session.token },
+      asTestRaw<Transaction>(testDb),
+    );
+
+    expect(result.status).toBe("authorized");
+  });
+
+  test("refuses an owner without a matter membership on a matter without a client", async () => {
+    const session = sessions.ownerOnPersonalMatter;
+    const result = await authorizeDesktopEditSessionWithDb(
+      { sessionId: session.id, sessionToken: session.token },
+      asTestRaw<Transaction>(testDb),
+    );
+
+    expect(result.status).toBe("permission-revoked");
   });
 });
 
