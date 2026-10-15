@@ -444,7 +444,7 @@ export const ActivityDayReview = ({
         hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
-        onCopy={() =>
+        onCopy={async () =>
           // Resolves once the copy lands; a failed copy is reported by the
           // command runner and leaves the button unconfirmed.
           new Promise<boolean>((resolve) => {

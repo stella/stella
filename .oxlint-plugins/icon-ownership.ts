@@ -32,14 +32,14 @@ export const parseIconEntries = (source: string): IconEntry[] => {
         .map((comment) => OWNED_BY.exec(comment)?.groups)
         .find((groups) => groups !== undefined);
       entries.push({
-        name: match.groups["name"] ?? "",
-        glyph: match.groups["glyph"] ?? "",
+        name: match.groups.name ?? "",
+        glyph: match.groups.glyph ?? "",
         owner:
           owned === undefined
             ? null
             : {
-                component: owned["component"] ?? "",
-                path: owned["owner"] ?? "",
+                component: owned.component ?? "",
+                path: owned.owner ?? "",
               },
       });
       comments = [];
