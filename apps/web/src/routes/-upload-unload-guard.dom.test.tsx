@@ -5,6 +5,7 @@ import {
   resetActiveUploadsForTests,
   retainActiveUpload,
 } from "@/lib/files/active-uploads";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, render } = await import("@testing-library/react");
@@ -29,7 +30,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("an in-flight upload is unsaved work until the batch releases", async () => {
