@@ -395,6 +395,15 @@ const resume = async ({
   const statuses: { sha: string; state: string }[] = [];
   const events: string[] = [];
   const pulls = pages.flat();
+  const listWorkflowRuns = async ({ head_sha }: { head_sha: string }) => {
+    const pull = pulls.find((candidate) => candidate.head === head_sha);
+    const run = pull?.run ?? {
+      id: (pull?.number ?? 0) * 10,
+      status: "completed",
+      conclusion: "cancelled",
+    };
+    return { data: { workflow_runs: [run] } };
+  };
   let failure: unknown;
   await resumeScript
     .runInNewContext({
@@ -404,7 +413,13 @@ const resume = async ({
       },
       core: { info: () => {} },
       github: {
-        paginate: async () => [],
+        paginate: async (
+          method: unknown,
+          { status }: { status?: string } = {},
+        ) =>
+          method === listWorkflowRuns
+            ? inFlight.filter((run) => run.status === status)
+            : [],
         graphql: async (
           _query: string,
           { after }: { after: string | null },
@@ -466,32 +481,7 @@ const resume = async ({
                 workflow_runs: [],
               },
             }),
-            listWorkflowRuns: async ({
-              head_sha,
-              status,
-            }: {
-              head_sha?: string;
-              status?: string;
-            }) => {
-              if (status !== undefined) {
-                return {
-                  data: {
-                    workflow_runs: inFlight.filter(
-                      (run) => run.status === status,
-                    ),
-                  },
-                };
-              }
-              const pull = pulls.find(
-                (candidate) => candidate.head === head_sha,
-              );
-              const run = pull?.run ?? {
-                id: (pull?.number ?? 0) * 10,
-                status: "completed",
-                conclusion: "cancelled",
-              };
-              return { data: { workflow_runs: [run] } };
-            },
+            listWorkflowRuns,
           },
           repos: {
             createCommitStatus: async ({
@@ -554,6 +544,21 @@ test.each(["in_progress", "queued"])(
     expect(result.statuses).toEqual([]);
   },
 );
+
+test("a resumed run beyond the first page of runs still holds back a resume", async () => {
+  const result = await resume({
+    waiting: true,
+    inFlight: [
+      ...Array.from({ length: 100 }, () => ({
+        status: "in_progress",
+        run_attempt: 1,
+      })),
+      { status: "in_progress", run_attempt: 2 },
+    ],
+    pages: [deferred(2)],
+  });
+  expect(result.reruns).toEqual([]);
+});
 
 test("first-attempt pull request runs never hold back a resume", async () => {
   const result = await resume({

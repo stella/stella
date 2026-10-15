@@ -1,0 +1,103 @@
+import { expect, test } from "bun:test";
+
+import {
+  RELIEF_DESCRIPTION,
+  YIELD_CONTEXT,
+  reliefCancel,
+} from "./relief-cancel-pr-runs";
+
+type Run = {
+  id: number;
+  event: string;
+  path: string;
+  status: string;
+  head_sha: string;
+  html_url: string;
+  head_repository: { full_name: string } | null;
+};
+
+const prRun = (id: number, overrides: Partial<Run> = {}): Run => ({
+  id,
+  event: "pull_request",
+  path: ".github/workflows/ci.yml",
+  status: "in_progress",
+  head_sha: `head-${id}`,
+  html_url: `https://github.com/stella/stella/actions/runs/${id}`,
+  head_repository: { full_name: "stella/stella" },
+  ...overrides,
+});
+
+const fake = (runs: Run[], { refuseCancel = false } = {}) => {
+  const calls: string[] = [];
+  const statuses: { sha: string; state: string; description: string }[] = [];
+  const request = async (args: readonly string[], input?: unknown) => {
+    const [endpoint] = args;
+    calls.push(endpoint ?? "");
+    const status = endpoint?.match(/statuses\/(.+)$/u);
+    if (status) {
+      const body = input as {
+        state: string;
+        context: string;
+        description: string;
+      };
+      expect(body.context).toBe(YIELD_CONTEXT);
+      statuses.push({
+        sha: status[1] ?? "",
+        state: body.state,
+        description: body.description,
+      });
+      return null;
+    }
+    if (endpoint?.endsWith("/cancel")) {
+      if (refuseCancel) {
+        throw new Error("cancel refused");
+      }
+      return null;
+    }
+    const id = Number(endpoint?.split("/").at(-1));
+    return runs.find((run) => run.id === id);
+  };
+  return { request, calls, statuses };
+};
+
+test("a relief cancellation records the deferral before cancelling", async () => {
+  const { request, calls, statuses } = fake([prRun(7)]);
+  expect(await reliefCancel([7], request)).toEqual([
+    { runId: 7, outcome: "deferred", headSha: "head-7" },
+  ]);
+  expect(statuses).toEqual([
+    { sha: "head-7", state: "pending", description: RELIEF_DESCRIPTION },
+  ]);
+  expect(calls.indexOf("repos/stella/stella/statuses/head-7")).toBeLessThan(
+    calls.indexOf("repos/stella/stella/actions/runs/7/cancel"),
+  );
+});
+
+test("a refused cancellation clears the deferral record", async () => {
+  const { request, statuses } = fake([prRun(8)], { refuseCancel: true });
+  expect(await reliefCancel([8], request)).toEqual([
+    { runId: 8, outcome: "skipped", reason: "cancel refused" },
+  ]);
+  expect(statuses.map(({ state }) => state)).toEqual(["pending", "success"]);
+});
+
+test.each([
+  ["merge_group", { event: "merge_group" }],
+  ["schedule", { event: "schedule" }],
+  ["another workflow", { path: ".github/workflows/codeql.yml" }],
+  ["a fork", { head_repository: { full_name: "fork/stella" } }],
+] as const)("a %s run is never touched", async (_label, overrides) => {
+  const { request, calls, statuses } = fake([prRun(9, overrides)]);
+  const [outcome] = await reliefCancel([9], request);
+  expect(outcome?.outcome).toBe("skipped");
+  expect(statuses).toEqual([]);
+  expect(calls.some((call) => call.endsWith("/cancel"))).toBe(false);
+});
+
+test("a completed run is left alone", async () => {
+  const { request, statuses } = fake([prRun(10, { status: "completed" })]);
+  expect(await reliefCancel([10], request)).toEqual([
+    { runId: 10, outcome: "skipped", reason: "already completed" },
+  ]);
+  expect(statuses).toEqual([]);
+});

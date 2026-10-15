@@ -148,16 +148,18 @@ jobs:
             // oldest deferral goes first, so every head still resumes in turn.
             const resumedRunInFlight = async () => {
               for (const status of ["in_progress", "queued"]) {
-                const { data } = await github.rest.actions.listWorkflowRuns({
+                const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
                   ...repo, workflow_id: "ci.yml", event: "pull_request", status, per_page: 100,
                 });
-                if (data.workflow_runs.some((run) => run.run_attempt > 1)) return true;
+                if (runs.some((run) => run.run_attempt > 1)) return true;
               }
               return false;
             };
             const busy = await waiting();
             // Open pull requests whose head carries a pending yield status are the
             // durable record of deferred work, however long the queue stayed busy.
+            // Runs cancelled for runner relief carry the same record
+            // (scripts/relief-cancel-pr-runs.ts), so they resume here too.
             const deferredPulls = [];
             let after = null;
             do {
