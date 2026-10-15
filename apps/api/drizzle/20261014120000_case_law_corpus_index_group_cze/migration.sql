@@ -44,9 +44,10 @@ $function$;--> statement-breakpoint
 
 -- The group contract an enrollment may record gains `provision_keys_v1`. The
 -- registry holds a handful of rows, so the replacement validates at once.
--- stella-migration-safety: reviewed drop-constraint - Recreates the same check in this statement with one more allowed value, so every existing row stays valid and no write sees the table unconstrained; running API tasks never write provision_keys_v1, and a rollback restores the narrower check once no row records it.
+-- stella-migration-safety: reviewed drop-constraint - Recreates the same check in the next statement of this transaction with one more allowed value, so every existing row stays valid and no write sees the table unconstrained; running API tasks never write provision_keys_v1, and a rollback restores the narrower check once no row records it.
 ALTER TABLE "corpus_index_group_enrollments"
-  DROP CONSTRAINT IF EXISTS "corpus_index_group_enrollments_contract_values",
+  DROP CONSTRAINT IF EXISTS "corpus_index_group_enrollments_contract_values";--> statement-breakpoint
+ALTER TABLE "corpus_index_group_enrollments"
   ADD CONSTRAINT "corpus_index_group_enrollments_contract_values"
     CHECK ("contract_version" IN ('base','court_partition_v1','provision_keys_v1'))
     NOT VALID;--> statement-breakpoint

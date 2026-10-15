@@ -130,7 +130,7 @@ export const checkIndexesHoldDocuments = async (
   );
   const evidence: IndexEvidence[] = [];
   for (const indexId of indexIds) {
-    // db-await-in-loop: sequential, so the first refusal is the one an operator acts on
+    // Sequential, so the first refusal is the one an operator acts on.
     const counted = await client.search({
       observer: "unobserved",
       indexId,
