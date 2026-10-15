@@ -155,6 +155,45 @@ const hasFileTestAttribute = (code: string): boolean => {
   return false;
 };
 
+const itemBodyStart = (code: string, start: number): number | undefined => {
+  const closing: string[] = [];
+  for (let cursor = start; cursor < code.length; cursor += 1) {
+    const token = code.charAt(cursor);
+    if (
+      closing.length === 0 &&
+      (token === "{" || token === ";" || token === "}")
+    ) {
+      return token === "{" ? cursor : undefined;
+    }
+    switch (token) {
+      case "(":
+        closing.push(")");
+        break;
+      case "[":
+        closing.push("]");
+        break;
+      case "<":
+        // Braced const expressions may contain comparison operators.
+        if (!closing.includes("}")) {
+          closing.push(">");
+        }
+        break;
+      case "{":
+        closing.push("}");
+        break;
+      default:
+        // Return arrows do not close generic arguments containing function types.
+        if (
+          token === closing.at(-1) &&
+          !(token === ">" && code[cursor - 1] === "-")
+        ) {
+          closing.pop();
+        }
+    }
+  }
+  return undefined;
+};
+
 const testSpans = (code: string, integrationTest: boolean): Span[] => {
   if (integrationTest || hasFileTestAttribute(code)) {
     return [{ start: 0, end: code.length }];
@@ -165,11 +204,10 @@ const testSpans = (code: string, integrationTest: boolean): Span[] => {
     /#\s*\[\s*(?:cfg\s*\(\s*test\s*\)|(?:tokio\s*::\s*)?test(?:\s*\([^\]]*\))?)\s*\]/gu;
   for (const match of code.matchAll(attribute)) {
     const after = match.index + match[0].length;
-    const headerEnd = /[;{}]/u.exec(code.slice(after));
-    if (headerEnd === null || headerEnd[0] !== "{") {
+    const open = itemBodyStart(code, after);
+    if (open === undefined) {
       continue;
     }
-    const open = after + headerEnd.index;
     if (!/\b(?:fn|mod)\s+[A-Za-z_]\w*/u.test(code.slice(after, open))) {
       continue;
     }

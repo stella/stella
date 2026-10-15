@@ -487,3 +487,45 @@ test("whole-file inner test scope discovers an isolated crate and propagates to 
     rmSync(repoRoot, { recursive: true, force: true });
   }
 });
+
+test.each([
+  ["array return", "fn helper() -> [u8; 1]", "[0]"],
+  ["nested array return", "fn helper() -> [[u8; 1]; 2]", "[[0], [0]]"],
+  ["function type argument", "fn helper() -> Option<fn() -> [u8; 1]>", "None"],
+  ["braced array length", "fn helper() -> [u8; { (1 < 2) as usize }]", "[0]"],
+  [
+    "generic array return",
+    "fn helper() -> Result<[u8; 1], &'static str>",
+    "Ok([0])",
+  ],
+  [
+    "array parameter and return",
+    "fn helper(value: [u8; 1]) -> [u8; 1]",
+    "value",
+  ],
+])(
+  "counts test helper bodies after a %s header",
+  (_name, signature, result) => {
+    const source = `#[cfg(test)] ${signature} {
+  thread::sleep(duration);
+  ${result}
+}
+fn production() { Instant::now(); }`;
+    expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual(
+      [{ line: 2, kind: "sleep", escaped: false }],
+    );
+  },
+);
+
+test("masked string and character delimiters cannot truncate an array-returning test helper", () => {
+  const source = `#[cfg(test)] fn helper() -> [u8; ";}".len()] {
+  let brace = '}';
+  let example = "thread::sleep(duration); };";
+  thread::sleep(duration);
+  [0; 2]
+}
+fn production() { SystemTime::now(); }`;
+  expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual([
+    { line: 4, kind: "sleep", escaped: false },
+  ]);
+});
