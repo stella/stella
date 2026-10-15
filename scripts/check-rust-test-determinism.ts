@@ -16,12 +16,17 @@ import {
   validateTestBaselineFiles,
 } from "./check-test-state-baseline.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
-import { isRecord } from "./oxlint-config-scopes.ts";
+import { isRecord, matches } from "./oxlint-config-scopes.ts";
 import {
   findRustExternalModules,
   scanRustTestDeterminism,
   type RustTestDeterminismHit,
 } from "./rust-test-determinism-scan.ts";
+
+export const RUST_TEST_DISCOVERY_INPUTS = {
+  sources: "**/*.rs",
+  manifests: "**/Cargo.toml",
+} as const;
 
 const BASELINE_REL = BASELINE_PATHS.rustTestDeterminism;
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -40,7 +45,7 @@ export const discoverRustTestFiles = (
   const targetRoots = new Set<string>();
   const integrationRoots = new Set<string>();
   const crates = trackedFiles
-    .filter((file) => file === "Cargo.toml" || file.endsWith("/Cargo.toml"))
+    .filter((file) => matches(RUST_TEST_DISCOVERY_INPUTS.manifests, file))
     .flatMap((file) => {
       const manifest: unknown = Bun.TOML.parse(
         readFileSync(path.join(repoRoot, file), "utf-8"),
@@ -67,7 +72,7 @@ export const discoverRustTestFiles = (
     })
     .toSorted((a, b) => b.length - a.length);
   const sources = trackedFiles
-    .filter((file) => file.endsWith(".rs"))
+    .filter((file) => matches(RUST_TEST_DISCOVERY_INPUTS.sources, file))
     .flatMap((file) => {
       const crate = crates.find(
         (directory) => directory === "." || file.startsWith(`${directory}/`),

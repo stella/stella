@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   discoverRustTestFiles,
   evaluateRustTestBaseline,
+  RUST_TEST_DISCOVERY_INPUTS,
 } from "./check-rust-test-determinism.ts";
 import { parseTestBaseline } from "./check-test-state-baseline.ts";
 import { planCheck, PLUGIN_FIXTURE_INPUTS } from "./code-check-affected.ts";
@@ -406,6 +407,26 @@ test.each([
       return;
     }
     expect(planned.rootChecks).toContain("plugin-fixtures");
+  }
+});
+
+test.each([
+  "lib.rs",
+  "crates/new-engine/src/lib.rs",
+  "Cargo.toml",
+  "crates/new-engine/Cargo.toml",
+  "scripts/rust-test-determinism-baseline.json",
+])("baseline runner cache inputs cover changed or deleted %s", (file) => {
+  expect(
+    PLUGIN_FIXTURE_INPUTS.some((input) =>
+      new Bun.Glob(input.replace("$TURBO_ROOT$/", "")).match(file),
+    ),
+  ).toBe(true);
+});
+
+test("discovery and runner cache inputs share the Rust file enumeration", () => {
+  for (const pattern of Object.values(RUST_TEST_DISCOVERY_INPUTS)) {
+    expect(PLUGIN_FIXTURE_INPUTS).toContain(`$TURBO_ROOT$/${pattern}`);
   }
 });
 
