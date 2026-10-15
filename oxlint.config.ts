@@ -1617,6 +1617,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -1641,6 +1642,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -2508,6 +2510,21 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Zip entry writes belong to writeZipEntry in @stll/docx-utils, which
+      // UTF-8 encodes text in one pass; JSZip's own string encoding splits
+      // surrogate pairs at its 16 KiB piece boundaries.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-string-zip-entry.fixture.ts",
+      ],
+      excludeFiles: ["packages/docx-utils/src/zip-entry.ts"],
+      rules: {
+        "no-string-zip-entry/no-string-zip-entry": "error",
       },
     },
     {
@@ -5159,6 +5176,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      rules: {
+        "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },
     },
     {

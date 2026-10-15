@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 Object.assign(import.meta.env, { VITE_API_URL: "https://api.example.test" });
@@ -24,7 +25,7 @@ const { ChatMatterPicker } = await import("./chat-matter-picker");
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ORGANIZATION_ID = "org-matter-picker";

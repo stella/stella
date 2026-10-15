@@ -6,6 +6,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { DISABLED_NAVIGATION_FEATURES } from "@/lib/workspaces/queries.test-fixtures";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -121,7 +122,7 @@ afterAll(async () => {
   await testing.act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ANSWER = "Which clauses should the playbook cover?";

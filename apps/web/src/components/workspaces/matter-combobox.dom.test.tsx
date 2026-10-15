@@ -11,6 +11,7 @@ import {
 import type { WebApiRoutes } from "@/lib/eden-client";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/", width: 1280 });
 // A hung test fails instead of holding the run. Assertions compare strings
@@ -109,7 +110,7 @@ afterEach(() => {
   clients.length = 0;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const openCombobox = (

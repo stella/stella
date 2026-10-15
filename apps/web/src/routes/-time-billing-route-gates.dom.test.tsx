@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { SMOKE_ROUTE_DEFS } from "../../e2e/helpers/smoke-route-defs";
 import { listTimeBillingRoutes } from "../../e2e/helpers/time-billing-routes";
 
@@ -71,7 +73,7 @@ const redirectDestination = (routePath: string) => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const flowsEnabled of [false, true]) {

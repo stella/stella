@@ -13,6 +13,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // Wide enough that rows are not in their narrow layout.
 GlobalRegistrator.register({
@@ -251,7 +252,7 @@ afterAll(async () => {
   await testing.act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const createClient = () => {
