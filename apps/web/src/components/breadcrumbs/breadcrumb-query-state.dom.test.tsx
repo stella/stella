@@ -7,6 +7,7 @@ import { parseTimeZoneId } from "@stll/time";
 
 import type { ChatThreadFetched } from "@/features/chat/queries";
 import type { OrganizationSettings } from "@/queries/organization-settings";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
@@ -62,7 +63,7 @@ afterEach(() => {
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   await sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const groupedKey = groupedChatThreadsOptions({

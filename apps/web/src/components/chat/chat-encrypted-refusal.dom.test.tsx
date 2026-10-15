@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
 
 // A DOM for this file only; everything that touches it loads afterwards.
@@ -23,7 +25,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 /** The chat request the API refused, as the chat transport surfaces it. */
