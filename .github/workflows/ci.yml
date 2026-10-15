@@ -38,6 +38,10 @@ on:
       sha:
         type: string
         default: ""
+      task_cache_producer:
+        description: Validated main ancestry from the scheduled caller.
+        type: string
+        default: read-only
     secrets:
       DOCKERHUB_USERNAME:
         required: false
@@ -67,8 +71,10 @@ concurrency:
 permissions: {}
 
 env:
-  # Only main populates the shared cache; PR and queue runs restore it.
-  TURBO_CACHE: ${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
+  # Successful tasks from trusted runs publish shared results. Scheduled main
+  # producers supply validated ancestry and match the immutable event SHA.
+  # PRs may reuse local results within a job; shared storage stays read-only.
+  TURBO_CACHE: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && inputs.task_cache_producer == 'validated-main' && inputs.heavy_only == true && inputs.sha == github.sha)) && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
@@ -2078,6 +2084,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -2365,6 +2374,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -2934,6 +2946,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -4308,6 +4323,15 @@ jobs:
           STELLA_VERIFY: check
         run: bun test scripts/typecheck-cache.test.ts
 
+      - name: Task result cache contract
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+          STELLA_VERIFY: check
+        id: static_check_120
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_120 != 'true') }}
+        run: bun test scripts/task-result-cache.test.ts
+
       - name: Test CI check partition
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -4630,6 +4654,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -5028,6 +5055,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -5146,6 +5176,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -5287,6 +5320,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install

@@ -268,15 +268,15 @@ var lt = (e) =>
             o && "message" in o && typeof o.message == "string"
               ? o.message
               : void 0,
-          R = o && "cause" in o ? o.cause : void 0;
+          C = o && "cause" in o ? o.cause : void 0;
         if (
-          (super(d, R === void 0 ? void 0 : { cause: R }),
+          (super(d, C === void 0 ? void 0 : { cause: C }),
           o && Object.assign(this, o),
           Object.setPrototypeOf(this, new.target.prototype),
           (this.name = e),
-          R instanceof Error && R.stack)
+          C instanceof Error && C.stack)
         ) {
-          let et = R.stack.replace(
+          let et = C.stack.replace(
             /\n/g,
             `
   `,
@@ -331,7 +331,7 @@ var On = class extends w("UnhandledException") {
       super({ message: r, cause: e.cause });
     }
   },
-  Cn = class extends w("ResultDeserializationError") {
+  Rn = class extends w("ResultDeserializationError") {
     constructor(e) {
       super({
         message: e.issues
@@ -342,7 +342,7 @@ var On = class extends w("UnhandledException") {
       });
     }
   },
-  Rn = class extends w("ResultSerializationError") {
+  Cn = class extends w("ResultSerializationError") {
     constructor(e) {
       super({
         message: "Failed to serialize Result payload",
@@ -459,16 +459,16 @@ var A = {
       .toLocaleLowerCase("und")
       .replace(/[\p{P}\p{Z}\s]+/gu, "")
       .trim(),
-  Ct = u.check(
+  Rt = u.check(
     (e) => /\S/u.test(G(e)),
     "Identifier values must contain visible content",
   ),
-  Rt = u.check(
+  Ct = u.check(
     (e) => Ot(e).length > 0,
     "Structured identifier values must contain searchable content",
   );
-var Oe = u.pipe(u.string(), u.maxLength(ft), Ct),
-  Y = u.pipe(Oe, Rt),
+var Oe = u.pipe(u.string(), u.maxLength(ft), Rt),
+  Y = u.pipe(Oe, Ct),
   X = u.strictObject({ type: u.literal(A.REPORTER_CITATION), value: Y }),
   K = u.variant("type", [
     u.strictObject({ type: u.literal(A.CASE_NUMBER), value: Oe }),
@@ -476,10 +476,10 @@ var Oe = u.pipe(u.string(), u.maxLength(ft), Ct),
     u.strictObject({ type: u.literal(A.NEUTRAL_CITATION), value: Y }),
     X,
   ]);
-var Ce = ["filter_read", "filter_dropped", "many_required_terms"];
+var Re = ["filter_read", "filter_dropped", "many_required_terms"];
 import * as T from "valibot";
 import * as y from "valibot";
-var Re = "chatProjection",
+var Ce = "chatProjection",
   xt = new WeakMap(),
   Nt = new WeakMap(),
   v = (e) => {
@@ -490,8 +490,8 @@ var Re = "chatProjection",
     return (Nt.set(r, e), r);
   };
 var h = () =>
-    y.pipe(y.string(), y.metadata({ [Re]: { role: "passthroughId" } })),
-  _ = () => y.pipe(y.string(), y.metadata({ [Re]: { role: "publicUrl" } }));
+    y.pipe(y.string(), y.metadata({ [Ce]: { role: "passthroughId" } })),
+  _ = () => y.pipe(y.string(), y.metadata({ [Ce]: { role: "publicUrl" } }));
 var z = T.union([
   v(T.strictObject({ type: T.literal(Te.type) })),
   v(T.strictObject({ type: T.literal(H.type), reason: T.literal(H.reason) })),
@@ -571,7 +571,7 @@ var L = s.strictObject({
             paginationOutcome: s.optional(z),
             warnings: s.array(
               s.strictObject({
-                code: s.picklist([...me, ...Ce]),
+                code: s.picklist([...me, ...Re]),
                 message: s.string(),
                 hint: s.string(),
               }),
@@ -1228,7 +1228,7 @@ var _n = {
     ),
     nextCursor: c.nullable(h()),
   });
-var C = V.options[1].pipe[0],
+var R = V.options[1].pipe[0],
   mn = p.object(p.pick(V.options[0].pipe[0], ["message", "hint"]).entries),
   Qe = [
     "decisionId",
@@ -1243,11 +1243,11 @@ var C = V.options[1].pipe[0],
   ki = p.union([
     mn,
     p.object({
-      ...p.pick(C, ["nextCursor", "nextStep", "headnotes"]).entries,
+      ...p.pick(R, ["nextCursor", "nextStep", "headnotes"]).entries,
       results: p.array(
         p.union([
           p.object(
-            p.pick(C.entries.results.item.options[0].pipe[0], [
+            p.pick(R.entries.results.item.options[0].pipe[0], [
               ...Qe,
               "snippet",
               "headnote",
@@ -1255,7 +1255,7 @@ var C = V.options[1].pipe[0],
             ]).entries,
           ),
           p.object(
-            p.pick(C.entries.results.item.options[1].pipe[0], [
+            p.pick(R.entries.results.item.options[1].pipe[0], [
               ...Qe,
               "excerpt",
               "headnote",
@@ -1269,11 +1269,11 @@ var C = V.options[1].pipe[0],
           court: p.array(
             p.object({
               tierLabel:
-                C.entries.facets.wrapped.entries.court.item.entries.tierLabel,
+                R.entries.facets.wrapped.entries.court.item.entries.tierLabel,
               courts: p.array(
                 p.object(
                   p.pick(
-                    C.entries.facets.wrapped.entries.court.item.entries.courts
+                    R.entries.facets.wrapped.entries.court.item.entries.courts
                       .item,
                     ["value"],
                   ).entries,
@@ -1287,7 +1287,7 @@ var C = V.options[1].pipe[0],
         p.object({
           warnings: p.array(
             p.object(
-              p.pick(C.entries.searches.item.entries.warnings.item, [
+              p.pick(R.entries.searches.item.entries.warnings.item, [
                 "message",
                 "hint",
               ]).entries,

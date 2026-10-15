@@ -379,20 +379,32 @@ type DeferredPull = {
   fork?: boolean;
   run?: { id: number; status: string; conclusion: string | null };
 };
+const LIFECYCLE = ["requested", "waiting", "pending", "queued", "in_progress"];
 const resume = async ({
   waiting = false,
   pages,
   rerunFailure = false,
+  inFlight = [],
 }: {
   waiting?: boolean;
   pages: DeferredPull[][];
   rerunFailure?: boolean;
+  inFlight?: { status: string; run_attempt: number; advances?: boolean }[];
 }) => {
   const reruns: number[] = [];
   const routes: string[] = [];
   const statuses: { sha: string; state: string }[] = [];
   const events: string[] = [];
   const pulls = pages.flat();
+  const listWorkflowRuns = async ({ head_sha }: { head_sha: string }) => {
+    const pull = pulls.find((candidate) => candidate.head === head_sha);
+    const run = pull?.run ?? {
+      id: (pull?.number ?? 0) * 10,
+      status: "completed",
+      conclusion: "cancelled",
+    };
+    return { data: { workflow_runs: [run] } };
+  };
   let failure: unknown;
   await resumeScript
     .runInNewContext({
@@ -402,7 +414,23 @@ const resume = async ({
       },
       core: { info: () => {} },
       github: {
-        paginate: async () => [],
+        paginate: async (
+          method: unknown,
+          { status }: { status?: string } = {},
+        ) => {
+          if (method !== listWorkflowRuns) {
+            return [];
+          }
+          const page = inFlight.filter((run) => run.status === status);
+          // A run that advances moves one lifecycle state after every read.
+          for (const run of inFlight) {
+            const next = LIFECYCLE[LIFECYCLE.indexOf(run.status) + 1];
+            if (run.advances && next !== undefined) {
+              run.status = next;
+            }
+          }
+          return page.map((run) => ({ ...run }));
+        },
         graphql: async (
           _query: string,
           { after }: { after: string | null },
@@ -464,17 +492,7 @@ const resume = async ({
                 workflow_runs: [],
               },
             }),
-            listWorkflowRuns: async ({ head_sha }: { head_sha: string }) => {
-              const pull = pulls.find(
-                (candidate) => candidate.head === head_sha,
-              );
-              const run = pull?.run ?? {
-                id: (pull?.number ?? 0) * 10,
-                status: "completed",
-                conclusion: "cancelled",
-              };
-              return { data: { workflow_runs: [run] } };
-            },
+            listWorkflowRuns,
           },
           repos: {
             createCommitStatus: async ({
@@ -509,26 +527,80 @@ test("while the merge queue waits, only the oldest deferred head resumes each ti
     pages: [
       [
         { number: 1, head: "head-1", deferredMinutesAgo: 5 },
-        { number: 2, head: "head-2", deferredMinutesAgo: 20 },
-        { number: 3, head: "head-3", deferredMinutesAgo: 10 },
+        { number: 2, head: "head-2", deferredMinutesAgo: 45 },
+        { number: 3, head: "head-3", deferredMinutesAgo: 31 },
       ],
     ],
   });
   expect(result.reruns).toEqual([20]);
 });
 
-test("a head deferred for half an hour resumes even while the merge queue waits", async () => {
+test.each(["in_progress", "queued", "pending", "waiting", "requested"])(
+  "while the merge queue waits, nothing resumes until the resumed run (%s) finishes",
+  async (status) => {
+    const result = await resume({
+      waiting: true,
+      inFlight: [
+        { status, run_attempt: 2 },
+        { status: "in_progress", run_attempt: 1 },
+      ],
+      pages: [
+        [
+          { number: 1, head: "head-1", deferredMinutesAgo: 90 },
+          { number: 2, head: "head-2", deferredMinutesAgo: 60 },
+        ],
+      ],
+    });
+    expect(result.reruns).toEqual([]);
+    expect(result.statuses).toEqual([]);
+  },
+);
+
+test.each(LIFECYCLE)(
+  "a resumed run that starts %s and changes state between reads still holds back a resume",
+  async (status) => {
+    const result = await resume({
+      waiting: true,
+      inFlight: [{ status, run_attempt: 2, advances: true }],
+      pages: [deferred(2)],
+    });
+    expect(result.reruns).toEqual([]);
+  },
+);
+
+test("a resumed run beyond the first page of runs still holds back a resume", async () => {
   const result = await resume({
     waiting: true,
-    pages: [
-      [
-        { number: 1, head: "head-1", deferredMinutesAgo: 5 },
-        { number: 2, head: "head-2", deferredMinutesAgo: 31 },
-        { number: 3, head: "head-3", deferredMinutesAgo: 45 },
-      ],
+    inFlight: [
+      ...Array.from({ length: 100 }, () => ({
+        status: "in_progress",
+        run_attempt: 1,
+      })),
+      { status: "in_progress", run_attempt: 2 },
     ],
+    pages: [deferred(2)],
   });
-  expect(result.reruns).toEqual([30, 20]);
+  expect(result.reruns).toEqual([]);
+});
+
+test("first-attempt pull request runs never hold back a resume", async () => {
+  const result = await resume({
+    waiting: true,
+    inFlight: [
+      { status: "in_progress", run_attempt: 1 },
+      { status: "queued", run_attempt: 1 },
+    ],
+    pages: [deferred(3)],
+  });
+  expect(result.reruns).toEqual([10]);
+});
+
+test("a cleared queue resumes a few at a time even with a resumed run in flight", async () => {
+  const result = await resume({
+    inFlight: [{ status: "in_progress", run_attempt: 2 }],
+    pages: [deferred(6)],
+  });
+  expect(result.reruns).toEqual([10, 20, 30, 40]);
 });
 
 test("a cleared queue resumes deferred runs a few at a time and marks them", async () => {
