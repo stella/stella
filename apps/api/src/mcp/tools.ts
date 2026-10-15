@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { rethrowResponseConformanceError } from "@/api/lib/response-conformance-error";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -675,6 +676,7 @@ const internalErrorResult = ({
   toolName: string;
   error: unknown;
 }): CallToolResult => {
+  rethrowResponseConformanceError(error);
   const contractViolation =
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause

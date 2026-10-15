@@ -21,11 +21,11 @@ import {
   defineValibotMcpTool,
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
+import { schemaComparisonArbitrary } from "@/api/tests/helpers/wire-json-schema";
 import {
   compileWireSchema,
   createWireSchemaValidator,
-  schemaComparisonArbitrary,
-} from "@/api/tests/helpers/wire-json-schema";
+} from "@/api/tests/helpers/wire-json-schema-validator";
 
 const LITERALS = ["a", "b", "c", 1, 2, true] as const;
 const DISCRIMINATORS = ["x", "y", "z"] as const;

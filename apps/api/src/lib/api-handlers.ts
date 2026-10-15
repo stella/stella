@@ -104,6 +104,8 @@ import {
   type OrganizationResourceSetUpdates,
   type ResourceSetRealtime,
 } from "@/api/lib/resource-set-realtime";
+import { rethrowResponseConformanceError } from "@/api/lib/response-conformance-error";
+import { observeHandlerResponses } from "@/api/lib/response-conformance-observer";
 import {
   projectPublicErrorBody,
   PUBLIC_ERROR_TEXT_BYTES,
@@ -494,12 +496,24 @@ const recordSafeHandler = <
       accountAccess: AccountAccess;
       body?: unknown;
       description?: string;
+      response?: unknown;
     };
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
+  const originalHandler = definition.handler;
+  definition.handler = observeHandlerResponses(
+    originalHandler,
+    definition.config,
+  );
+  if (definition.handler !== originalHandler) {
+    const publicRegistration = safePublicHandlers.get(originalHandler);
+    if (publicRegistration !== undefined) {
+      safePublicHandlers.set(definition.handler, publicRegistration);
+    }
+  }
   recordWriteContract(definition.handler, definition.config);
   safeHandlerAccountAccess.set(
     definition.handler,
@@ -944,6 +958,7 @@ const runSafeHandlerInDeliveryScope = async <
     }
 
     const error = result.error;
+    rethrowResponseConformanceError(error);
 
     const handlerError =
       publicReadTimeoutError(error) ??
@@ -1008,6 +1023,7 @@ const runSafeHandlerInDeliveryScope = async <
       message: "Internal server error",
     });
   } catch (error) {
+    rethrowResponseConformanceError(error);
     // A typed HandlerError thrown synchronously (or escaping the
     // Result.gen pipeline) must still surface as its own status,
     // not a generic 500. Without this branch a deeper handler

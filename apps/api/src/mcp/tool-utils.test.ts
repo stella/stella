@@ -9,6 +9,7 @@ import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { setMcpResponseConformanceObserver } from "@/api/mcp/response-conformance-observer";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
@@ -318,27 +319,33 @@ describe("serializeToolResult", () => {
   });
 
   test("derives the one text block from the validated structured object", () => {
-    // Handler key order and an undeclared key differ from the contract; the
-    // text still says exactly what structuredContent says.
-    const contract = defineMcpToolOutput(
-      v.object({ entityId: v.string(), nextStep: v.string() }),
-    );
-    const result = serializeToolResult(
-      untypedToolDataResult({
-        nextStep: "Choose a file.",
-        undeclared: true,
-        entityId: "doc_1",
-      }),
-      contract,
-    );
+    // Exercise production recovery from deliberately malformed output.
+    const restoreConformance = setMcpResponseConformanceObserver(undefined);
+    try {
+      // Handler key order and an undeclared key differ from the contract; the
+      // text still says exactly what structuredContent says.
+      const contract = defineMcpToolOutput(
+        v.object({ entityId: v.string(), nextStep: v.string() }),
+      );
+      const result = serializeToolResult(
+        untypedToolDataResult({
+          nextStep: "Choose a file.",
+          undeclared: true,
+          entityId: "doc_1",
+        }),
+        contract,
+      );
 
-    expect(result.structuredContent).toEqual({
-      entityId: "doc_1",
-      nextStep: "Choose a file.",
-    });
-    expect(result.content).toEqual([
-      { type: "text", text: JSON.stringify(result.structuredContent) },
-    ]);
+      expect(result.structuredContent).toEqual({
+        entityId: "doc_1",
+        nextStep: "Choose a file.",
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: JSON.stringify(result.structuredContent) },
+      ]);
+    } finally {
+      restoreConformance();
+    }
   });
 
   test("has no prose side channel beside the result data", () => {
@@ -375,16 +382,22 @@ describe("serializeToolResult", () => {
   });
 
   test("fails closed when projected content violates the advertised schema", () => {
-    const contract = defineMcpToolOutput(
-      v.strictObject({ entityId: v.string() }),
-    );
+    // Exercise production recovery from deliberately malformed output.
+    const restoreConformance = setMcpResponseConformanceObserver(undefined);
+    try {
+      const contract = defineMcpToolOutput(
+        v.strictObject({ entityId: v.string() }),
+      );
 
-    expect(() =>
-      serializeToolResult(
-        { status: "success", data: { entityId: 42 } },
-        contract,
-      ),
-    ).toThrow("MCP tool output violated its advertised contract");
+      expect(() =>
+        serializeToolResult(
+          { status: "success", data: { entityId: 42 } },
+          contract,
+        ),
+      ).toThrow("MCP tool output violated its advertised contract");
+    } finally {
+      restoreConformance();
+    }
   });
 
   describe("undeclared output keys", () => {
@@ -428,83 +441,95 @@ describe("serializeToolResult", () => {
     );
 
     test("are stripped at every depth, the result returned and the defect logged", () => {
-      const result = serializeToolResult(
-        untypedToolDataResult({
+      // Exercise production recovery from deliberately malformed output.
+      const restoreConformance = setMcpResponseConformanceObserver(undefined);
+      try {
+        const result = serializeToolResult(
+          untypedToolDataResult({
+            entityId: "doc_1",
+            hits: [
+              {
+                match: { kind: "exact", score: 1, rawScore: "privileged-1" },
+                title: "A",
+              },
+              {
+                match: { distance: 2, kind: "fuzzy" },
+                snippetHtml: "privileged-2",
+                title: "B",
+              },
+            ],
+            internalCursor: "privileged-3",
+          }),
+          contract,
+          "search_test",
+        );
+
+        const expected = {
           entityId: "doc_1",
           hits: [
-            {
-              match: { kind: "exact", score: 1, rawScore: "privileged-1" },
-              title: "A",
-            },
-            {
-              match: { distance: 2, kind: "fuzzy" },
-              snippetHtml: "privileged-2",
-              title: "B",
-            },
+            { match: { kind: "exact", score: 1 }, title: "A" },
+            { match: { distance: 2, kind: "fuzzy" }, title: "B" },
           ],
-          internalCursor: "privileged-3",
-        }),
-        contract,
-        "search_test",
-      );
-
-      const expected = {
-        entityId: "doc_1",
-        hits: [
-          { match: { kind: "exact", score: 1 }, title: "A" },
-          { match: { distance: 2, kind: "fuzzy" }, title: "B" },
-        ],
-      };
-      expect(result.isError).toBeUndefined();
-      expect(result.structuredContent).toEqual(expected);
-      expect(result.content).toEqual([
-        { type: "text", text: JSON.stringify(result.structuredContent) },
-      ]);
-      expect(degradeLogs()).toEqual([
-        {
-          defect: "undeclared_fields",
-          paths: "hits[].match.rawScore, hits[].snippetHtml, internalCursor",
-          source: "mcp",
-          tool: "search_test",
-        },
-      ]);
-      expect(
-        analytics.exceptions().map((event) => event.properties),
-      ).toMatchObject([
-        {
-          defect: "undeclared_fields",
-          "error.class": "ToolOutputContractDegradedError",
-          toolName: "search_test",
-        },
-      ]);
-      expect(JSON.stringify([analytics.events, logs.records])).not.toContain(
-        "privileged",
-      );
+        };
+        expect(result.isError).toBeUndefined();
+        expect(result.structuredContent).toEqual(expected);
+        expect(result.content).toEqual([
+          { type: "text", text: JSON.stringify(result.structuredContent) },
+        ]);
+        expect(degradeLogs()).toEqual([
+          {
+            defect: "undeclared_fields",
+            paths: "hits[].match.rawScore, hits[].snippetHtml, internalCursor",
+            source: "mcp",
+            tool: "search_test",
+          },
+        ]);
+        expect(
+          analytics.exceptions().map((event) => event.properties),
+        ).toMatchObject([
+          {
+            defect: "undeclared_fields",
+            "error.class": "ToolOutputContractDegradedError",
+            toolName: "search_test",
+          },
+        ]);
+        expect(JSON.stringify([analytics.events, logs.records])).not.toContain(
+          "privileged",
+        );
+      } finally {
+        restoreConformance();
+      }
     });
 
     test("never excuse a missing or invalid declared field", () => {
-      for (const data of [
-        // Missing declared field.
-        { hits: [] },
-        // Invalid declared field.
-        { entityId: 42, hits: [] },
-        // Invalid declared field inside a union branch, beside an extra key.
-        {
-          entityId: "doc_1",
-          hits: [{ match: { kind: "exact", score: "1" }, title: "A", x: 1 }],
-        },
-        // An extra key beside a missing one.
-        { extra: true, hits: [] },
-      ]) {
-        expect(() =>
-          serializeToolResult(
-            untypedToolDataResult(data),
-            contract,
-            "search_test",
-          ),
-        ).toThrow("MCP tool output violated its advertised contract");
+      // Exercise production recovery from deliberately malformed output.
+      const restoreConformance = setMcpResponseConformanceObserver(undefined);
+      try {
+        for (const data of [
+          // Missing declared field.
+          { hits: [] },
+          // Invalid declared field.
+          { entityId: 42, hits: [] },
+          // Invalid declared field inside a union branch, beside an extra key.
+          {
+            entityId: "doc_1",
+            hits: [{ match: { kind: "exact", score: "1" }, title: "A", x: 1 }],
+          },
+          // An extra key beside a missing one.
+          { extra: true, hits: [] },
+        ]) {
+          expect(() =>
+            serializeToolResult(
+              untypedToolDataResult(data),
+              contract,
+              "search_test",
+            ),
+          ).toThrow("MCP tool output violated its advertised contract");
+        }
+        expect(degradeLogs()).toEqual([]);
+      } finally {
+        restoreConformance();
       }
-      expect(degradeLogs()).toEqual([]);
     });
 
     test("a contract-clean output reports nothing", () => {

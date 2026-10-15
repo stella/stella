@@ -43,11 +43,11 @@ import {
   deriveUncompactedMcpOutputSchema,
 } from "@/api/mcp/valibot-tool-definition";
 import { selectableOperations } from "@/api/mcp/write-tool-authority";
+import { schemaComparisonArbitrary } from "@/api/tests/helpers/wire-json-schema";
 import {
   compileWireSchema,
   createWireSchemaValidator,
-  schemaComparisonArbitrary,
-} from "@/api/tests/helpers/wire-json-schema";
+} from "@/api/tests/helpers/wire-json-schema-validator";
 
 import {
   baselineAudiences,

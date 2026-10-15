@@ -50,6 +50,7 @@ import {
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
 import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
+import { observeMcpResponseConformance } from "@/api/mcp/response-conformance-observer";
 import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
@@ -527,6 +528,12 @@ const successStructuredContent = (
     const paths = parsed.error.issues.map(
       (issue) => v.getDotPath(issue) ?? "(root)",
     );
+    observeMcpResponseConformance({
+      toolName: toolName ?? "(unknown)",
+      schema: outputContract.outputSchema,
+      result: projected,
+      issuePaths: paths,
+    });
     return panic(
       "MCP tool output violated its advertised contract",
       new McpOutputContractError({
@@ -535,6 +542,12 @@ const successStructuredContent = (
     );
   }
   const { output, undeclaredPaths } = parsed.value;
+  observeMcpResponseConformance({
+    toolName: toolName ?? "(unknown)",
+    schema: outputContract.outputSchema,
+    result: output,
+    issuePaths: undeclaredPaths,
+  });
   if (undeclaredPaths.length > 0) {
     reportToolOutputDegrade({
       defect: "undeclared_fields",

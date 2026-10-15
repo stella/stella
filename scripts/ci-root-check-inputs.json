@@ -100,7 +100,17 @@
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
     "exactMirror route guard": ["**"],
-    "MCP coverage guard": ["@stll/api", "@stll/cli"],
+    "MCP coverage guard": [
+      "@stll/api",
+      "@stll/cli",
+      "apps/api/response-conformance-census.json",
+      "apps/api/response-conformance-baseline.json",
+      "apps/api/src/**",
+      "apps/api/scripts/**",
+      "packages/**",
+      "scripts/baseline-paths.ts",
+      "scripts/baseline-shrink.ts"
+    ],
     "MCP surface baseline self-test": ["**"],
     "Offline catalogue pinned-content policy": ["**"],
     "Catalogue pinned-content check": ["**"],

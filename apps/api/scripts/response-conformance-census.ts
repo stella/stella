@@ -83,10 +83,7 @@ export const generateResponseConformanceCensus = async () => {
       id,
       owner: "stella" as const,
       schema: isConformanceRecord(hooks) ? hooks["response"] : undefined,
-      schemaSource:
-        endpoint === undefined
-          ? `${id}#hooks.response`
-          : `${endpoint}#config.response`,
+      schemaSource: `${id}#hooks.response`,
       ...(endpoint === undefined ? {} : { handlerEndpoint: endpoint }),
       httpTests: [...(httpTests.get(id) ?? [])].toSorted(),
       handlerTests:

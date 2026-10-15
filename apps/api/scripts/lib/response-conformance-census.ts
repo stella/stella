@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -24,7 +22,7 @@ export const serializeConformanceDeclaration = (value: unknown): string => {
         .toSorted(([left], [right]) => compareCodeUnit(left, right)),
     );
   });
-  return serialized ?? panic("Response declaration is not serializable");
+  return serialized;
 };
 
 export const conformanceDeclarationHash = (value: unknown): string =>
@@ -87,10 +85,12 @@ export const buildResponseConformanceCensus = (
     version: 1,
     testEvidence:
       "statically resolved invocations; not proof of completed execution",
-    executionEvidence: "not-collected",
+    runtimeExecutionEvidence: "not-collected",
     counts: {
       routesTotal: routes.length,
-      routesExercisedByTests: 0,
+      routesExercisedByTests: routes.filter(
+        (row) => row.httpTests.length > 0 || row.handlerTests.length > 0,
+      ).length,
       routesWithoutExecutionEvidence: routes.length,
       routesWithDeclaredSchema: routes.filter(
         (row) => row.response.type === "declared",

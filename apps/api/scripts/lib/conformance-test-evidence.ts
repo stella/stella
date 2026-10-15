@@ -138,7 +138,10 @@ const collectSourceEvidence = (
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       const clause = node.importClause;
-      if (clause === undefined || clause.isTypeOnly) {
+      if (
+        clause === undefined ||
+        clause.phaseModifier === ts.SyntaxKind.TypeKeyword
+      ) {
         return;
       }
       const owner = modulePath(file, node.moduleSpecifier.text);
