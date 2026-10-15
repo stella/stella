@@ -323,6 +323,50 @@ export const spreadOptions = () => useMutation({ mutationFn: resourceMutation({
   assertInvalidCannotBeBaselined(findings);
 });
 
+test("only the executed mutationFn can satisfy the mutation contract", () => {
+  const rawRequest = `const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input } }) };\nconst renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });`;
+  const fixture = (body: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `\nimport { resourceMutation } from "@/lib/workspace-realtime";\nimport { useMutation } from "@tanstack/react-query";\n${rawRequest}\n${body}\n`,
+    },
+  ];
+  const invalidBodies = [
+    `export const discarded = () => useMutation({ mutationFn: renameEntityRequest, onSuccess: () => resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest }) });`,
+    `const wrapped = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });\nexport const overridden = () => useMutation({ ...{ mutationFn: wrapped }, mutationFn: renameEntityRequest });`,
+    `const options = { mutationFn: resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest }) };\nconst alias = options;\nalias.mutationFn = renameEntityRequest;\nexport const mutatedAlias = () => useMutation(options);`,
+    `const options = { mutationFn: resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest }) };\nlet alias = options;\nalias.mutationFn = renameEntityRequest;\nexport const mutatedLetAlias = () => useMutation(options);`,
+  ];
+  for (const body of invalidBodies) {
+    const findings = violations(fixture(body));
+    expect(
+      findings.some(
+        ({ file, disposition }) =>
+          file === "apps/web/src/features.ts" &&
+          disposition === "invalid-declaration",
+      ),
+    ).toBe(true);
+    assertInvalidCannotBeBaselined(findings);
+  }
+
+  const unwrapped = violations(
+    fixture(
+      `const wrapped = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });\nexport const spreadFunction = () => useMutation({ ...wrapped });`,
+    ),
+  );
+  expect(
+    unwrapped.filter(({ file }) => file === "apps/web/src/features.ts"),
+  ).toHaveLength(1);
+
+  const covered = violations(
+    fixture(
+      `const wrapped = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });\nconst options = { mutationFn: wrapped };\nexport const covered = () => useMutation({ mutationFn: wrapped });\nexport const coveredSpread = () => useMutation({ ...options, onSuccess: () => {} });`,
+    ),
+  );
+  expect(covered).toEqual([]);
+});
+
 test("initial baseline seeding records a reason for each current site", () => {
   const disposition: "legacy" | "invalid-declaration" = "legacy";
   const finding = {

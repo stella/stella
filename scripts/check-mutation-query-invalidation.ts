@@ -629,6 +629,242 @@ const mutationContractError = (
   return undefined;
 };
 
+type MutationOptionsShape = {
+  properties: readonly (readonly [string, ts.Expression])[];
+};
+
+type MutationOptionsShapeArgs = {
+  module: ModuleIndex;
+  expression: ts.Expression;
+  reference?: ts.Node;
+  seen?: Set<Binding>;
+};
+
+const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
+  const aliases = new Set([binding]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const candidate of module.bindings) {
+      if (aliases.has(candidate) || !candidate.value) {
+        continue;
+      }
+      const value = unwrap(candidate.value);
+      const source = ts.isIdentifier(value)
+        ? localBinding(module, value.text, candidate.scope)
+        : undefined;
+      if (source && aliases.has(source)) {
+        aliases.add(candidate);
+        changed = true;
+      }
+    }
+  }
+  const refersToAlias = (expression: ts.Expression, reference: ts.Node) => {
+    const value = unwrap(expression);
+    if (!ts.isIdentifier(value)) {
+      return false;
+    }
+    const resolved = localBinding(module, value.text, reference);
+    return resolved !== undefined && aliases.has(resolved);
+  };
+  let mutated = false;
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      (ts.isPropertyAccessExpression(node.left) ||
+        ts.isElementAccessExpression(node.left)) &&
+      ts.isIdentifier(node.left.expression) &&
+      refersToAlias(node.left.expression, node.left)
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      ts.isDeleteExpression(node) &&
+      (ts.isPropertyAccessExpression(node.expression) ||
+        ts.isElementAccessExpression(node.expression)) &&
+      ts.isIdentifier(node.expression.expression) &&
+      refersToAlias(node.expression.expression, node.expression)
+    ) {
+      mutated = true;
+      return;
+    }
+    const firstArgument = ts.isCallExpression(node)
+      ? node.arguments.at(0)
+      : undefined;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.expression.getText() === "Object" &&
+      ["assign", "defineProperty", "setPrototypeOf"].includes(
+        node.expression.name.text,
+      ) &&
+      firstArgument !== undefined &&
+      refersToAlias(firstArgument, node)
+    ) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(module.source);
+  return mutated;
+};
+
+const mutationOptionsShape = ({
+  module,
+  expression,
+  reference = expression,
+  seen = new Set<Binding>(),
+}: MutationOptionsShapeArgs): MutationOptionsShape | undefined => {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) {
+    const binding = localBinding(module, value.text, reference);
+    if (
+      !binding?.value ||
+      binding.mutable ||
+      seen.has(binding) ||
+      hasBindingPropertyMutation(module, binding)
+    ) {
+      return undefined;
+    }
+    const next = new Set(seen);
+    next.add(binding);
+    return mutationOptionsShape({
+      module,
+      expression: binding.value,
+      reference: binding.scope,
+      seen: next,
+    });
+  }
+  if (!ts.isObjectLiteralExpression(value)) {
+    return undefined;
+  }
+  const properties: (readonly [string, ts.Expression])[] = [];
+  for (const property of value.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = mutationOptionsShape({
+        module,
+        expression: property.expression,
+        reference: property,
+        seen: new Set(seen),
+      });
+      if (!spread) {
+        return undefined;
+      }
+      properties.push(...spread.properties);
+      continue;
+    }
+    if (ts.isPropertyAssignment(property)) {
+      const key = propertyName(property.name);
+      if (!key) {
+        return undefined;
+      }
+      properties.push([key, property.initializer]);
+      continue;
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      properties.push([property.name.text, property.name]);
+      continue;
+    }
+    return undefined;
+  }
+  return { properties };
+};
+
+const resolvedMutationHelper = (
+  module: ModuleIndex,
+  expression: ts.Expression,
+): ts.CallExpression | undefined => {
+  const resolved = resolveLocal(module, expression, expression);
+  return resolved &&
+    ts.isCallExpression(resolved) &&
+    canonicalCall(module, resolved, MUTATION_HELPER)
+    ? resolved
+    : undefined;
+};
+
+type MutationExecutionResult =
+  | { status: "valid" }
+  | { status: "invalid"; reason: string }
+  | { status: "unwrapped" };
+
+type MutationExecutionArgs = {
+  module: ModuleIndex;
+  call: ts.CallExpression;
+  entry: MutationQueryCensus["mutations"][number];
+  contracts: ReadonlyMap<string, MutationContract>;
+};
+
+const inspectMutationExecution = ({
+  module,
+  call,
+  entry,
+  contracts,
+}: MutationExecutionArgs): MutationExecutionResult => {
+  const options = call.arguments.at(0);
+  const shape = options
+    ? mutationOptionsShape({ module, expression: options, reference: call })
+    : undefined;
+  const orderedMutationFunctions =
+    shape?.properties.filter(([key]) => key === "mutationFn") ?? [];
+  const finalMutationFunction = orderedMutationFunctions.at(-1)?.[1];
+  const helperCalls = new Set<ts.CallExpression>();
+  for (const [, expression] of orderedMutationFunctions) {
+    const helper = resolvedMutationHelper(module, expression);
+    if (helper) {
+      helperCalls.add(helper);
+    }
+  }
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      canonicalCall(module, node, MUTATION_HELPER)
+    ) {
+      helperCalls.add(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(call);
+  const selectedHelper = finalMutationFunction
+    ? resolvedMutationHelper(module, finalMutationFunction)
+    : undefined;
+  if (selectedHelper) {
+    helperCalls.add(selectedHelper);
+  }
+  if (helperCalls.size > 0 || selectedHelper !== undefined) {
+    if (!selectedHelper || helperCalls.size !== 1) {
+      return {
+        status: "invalid",
+        reason:
+          "resourceMutation must be the effective mutationFn and cannot be discarded or overridden.",
+      };
+    }
+    const error = mutationContractError(selectedHelper, entry, contracts);
+    return error === undefined
+      ? { status: "valid" }
+      : { status: "invalid", reason: error };
+  }
+
+  const observedWrites = new Set(
+    entry.writes.map(({ method, route }) => `${method.toUpperCase()} ${route}`),
+  );
+  if (
+    [...contracts.values()].some(({ writes }) =>
+      writes.some((write) => observedWrites.has(write)),
+    )
+  ) {
+    return {
+      status: "invalid",
+      reason:
+        "A mutation on a registered resource route must execute resourceMutation as its mutationFn.",
+    };
+  }
+  return { status: "unwrapped" };
+};
+
 const findCall = (
   module: ModuleIndex,
   location: { line: number; column: number },
@@ -1231,30 +1467,25 @@ export const inspectMutationQueryInvalidation = (
       validMutationIds.add(entry.id);
       continue;
     }
-    const helperCalls: ts.CallExpression[] = [];
-    const visit = (node: ts.Node) => {
-      if (
-        ts.isCallExpression(node) &&
-        canonicalCall(module, node, MUTATION_HELPER)
-      ) {
-        helperCalls.push(node);
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(call);
-    if (helperCalls.length > 0) {
-      const helperCall = helperCalls.at(0);
-      const error =
-        helperCalls.length === 1 && helperCall !== undefined
-          ? mutationContractError(helperCall, entry, contracts)
-          : "Mutation must use exactly one canonical resourceMutation call.";
-      if (error === undefined) {
+    const execution = inspectMutationExecution({
+      module,
+      call,
+      entry,
+      contracts,
+    });
+    switch (execution.status) {
+      case "valid":
         validMutationIds.add(entry.id);
-      } else {
+        break;
+      case "invalid":
         invalidMutationIds.add(entry.id);
-        invalidMutationReasons.set(entry.id, error);
-      }
-      continue;
+        invalidMutationReasons.set(entry.id, execution.reason);
+        break;
+      case "unwrapped":
+        break;
+      default:
+        execution satisfies never;
+        return panic("Unknown mutation execution status");
     }
   }
 
