@@ -24,15 +24,16 @@ export const hasCurrentTimerMatterAccess = async ({
 }): Promise<boolean> => {
   await lockWorkspaceLifecycle(tx, workspaceId);
   const scope = { tx, organizationId, userId, mode: "share" } as const;
+  // Member grants and removal take the matter before its membership rows.
+  await lockMatterAccessWorkspaceRows({
+    ...scope,
+    workspaceIds: [workspaceId],
+  });
   const member = await lockMemberAccessRow(scope);
   if (member === undefined) {
     return false;
   }
   await lockMatterAccessAssignments({ ...scope, workspaceIds: [workspaceId] });
-  await lockMatterAccessWorkspaceRows({
-    ...scope,
-    workspaceIds: [workspaceId],
-  });
   const rows = await tx
     .select({ id: workspaces.id })
     .from(workspaces)

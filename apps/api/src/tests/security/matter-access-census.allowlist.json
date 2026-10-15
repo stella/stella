@@ -121,5 +121,11 @@
       "syncWorkspaceSearchActivity#rootDb": 1,
       "writeWorkspaceProjections": 2
     }
+  },
+  "apps/api/src/lib/workspace-deletion.ts::names-matter-role-rule": {
+    "reason": "The role condition only preserves the assignment-row lock scope for client-matter deletion. A later statement decides matter access with the database rule.",
+    "sites": {
+      "actorCanAccessWorkspace": 1
+    }
   }
 }

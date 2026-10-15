@@ -2015,7 +2015,7 @@ type MemberAccessRowLockOptions = {
   mode: "share" | "update";
 };
 
-/** Acquire the member before matter memberships and matter rows. */
+/** Lock the member within the caller's lifecycle or access-hold sequence. */
 export const lockMemberAccessRow = async ({
   tx,
   organizationId,
@@ -2041,7 +2041,7 @@ type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   where?: SQL;
 };
 
-/** Call after locking the member; assignments precede matter rows. */
+/** Lock assignments after the caller's member and optional matter prefix. */
 export const lockMatterAccessAssignments = async ({
   tx,
   organizationId,
@@ -2076,7 +2076,7 @@ type MatterAccessWorkspaceRowsLockOptions = Omit<
 >;
 
 /**
- * Lock after assignments, in stable matter order. A narrowing predicate can
+ * Lock in stable matter order. A narrowing predicate can
  * select the unassigned matters whose reach depends on their row. Decide
  * access in a later statement, using only identities covered by held locks.
  */

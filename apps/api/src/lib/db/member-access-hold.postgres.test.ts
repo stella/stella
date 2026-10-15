@@ -1,11 +1,13 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { workspaceMembers, workspaces } from "@/api/db/schema";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createSafeId } from "@/api/lib/branded-types";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
@@ -69,7 +71,7 @@ const seedMember = async (db: GatedTestDb) => {
     await db.delete(user).where(eq(user.id, userId));
     await db.delete(user).where(eq(user.id, ownerId));
   };
-  return { cleanUp, memberId, organizationId, userId, workspaceId };
+  return { cleanUp, memberId, organizationId, ownerId, userId, workspaceId };
 };
 
 type Seeded = Awaited<ReturnType<typeof seedMember>>;
@@ -243,6 +245,109 @@ if (!databaseUrl || !runPostgresTests) {
         });
       },
     );
+
+    test("an assigned admin timer and a member grant serialize on the client matter", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: grantDb } = openClient({
+          max: 1,
+          connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+        });
+        const { db: timerDb } = openClient({
+          max: 1,
+          connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+        });
+        const seeded = await seedMember(grantDb);
+        const clientId = createSafeId<"contact">();
+        const matterLocked = Promise.withResolvers<undefined>();
+        const timerStarted = Promise.withResolvers<number>();
+        await grantDb.insert(contacts).values({
+          id: clientId,
+          organizationId: seeded.organizationId,
+          type: "person",
+          displayName: "Timer grant client",
+        });
+        await grantDb
+          .update(member)
+          .set({ role: "admin" })
+          .where(eq(member.id, seeded.memberId));
+        await grantDb
+          .update(workspaces)
+          .set({ clientId })
+          .where(eq(workspaces.id, seeded.workspaceId));
+        // The actor is already assigned; the grant targets a different member.
+        expect(
+          await grantDb
+            .select({ userId: workspaceMembers.userId })
+            .from(workspaceMembers)
+            .where(eq(workspaceMembers.workspaceId, seeded.workspaceId)),
+        ).toEqual([{ userId: seeded.userId }]);
+        const safeDb = safeDbFromScoped(
+          async (fn) =>
+            await grantDb.transaction(async (tx) => {
+              // Pause the real handler at its existing matter-lock prefix.
+              await tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(eq(workspaces.id, seeded.workspaceId))
+                .for("update");
+              matterLocked.resolve(undefined);
+              const timerPid = await timerStarted.promise;
+              let blocked = false;
+              for (
+                let attempt = 0;
+                attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
+                attempt += 1
+              ) {
+                const rows = await tx.execute<{ blocked: boolean }>(sql`
+                SELECT pg_backend_pid() = ANY(pg_blocking_pids(${timerPid}::integer)) AS blocked
+              `);
+                blocked = rows.at(0)?.blocked === true;
+                if (!blocked) {
+                  await Bun.sleep(10);
+                }
+              }
+              expect(blocked).toBe(true);
+              return await fn(asTestRaw<Transaction>(tx));
+            }),
+        );
+        const granting = Result.gen(() =>
+          addWorkspaceMemberHandler({
+            safeDb,
+            organizationId: seeded.organizationId,
+            workspaceId: seeded.workspaceId,
+            body: { userId: seeded.ownerId },
+            recordAuditEvent: async () => await Promise.resolve(),
+          }),
+        );
+        const timing = (async () => {
+          await matterLocked.promise;
+          return await timerDb.transaction(async (tx) => {
+            const rows = await tx.execute<{ pid: number }>(
+              sql`SELECT pg_backend_pid() AS pid`,
+            );
+            timerStarted.resolve(rows.at(0)?.pid ?? panic("Missing timer pid"));
+            return await hasCurrentTimerMatterAccess({ tx, ...seeded });
+          });
+        })();
+        try {
+          const [granted, accessible] = await Promise.all([granting, timing]);
+          expect(granted.unwrap().userId).toBe(seeded.ownerId);
+          expect(accessible).toBe(true);
+          const assignments = await grantDb
+            .select({ userId: workspaceMembers.userId })
+            .from(workspaceMembers)
+            .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+          expect(assignments.map((row) => row.userId).toSorted()).toEqual(
+            [seeded.userId, seeded.ownerId].toSorted(),
+          );
+        } finally {
+          matterLocked.resolve(undefined);
+          timerStarted.resolve(-1);
+          await Promise.allSettled([granting, timing]);
+          await seeded.cleanUp();
+        }
+      });
+    }, 15_000);
 
     test("a removal committed first is reported by the hold", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
