@@ -2903,7 +2903,7 @@
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
         },
         "reference": {
           "type": "string",
@@ -5399,6 +5399,10 @@
           "minimum": 1,
           "maximum": 6,
           "description": "Zero-padding width"
+        },
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",

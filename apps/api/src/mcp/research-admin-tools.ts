@@ -742,6 +742,14 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.description("Zero-padding width"),
         ),
       ),
+      matter_numbering_enabled: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Show the matter number beside the matter name in titles",
+          ),
+        ),
+      ),
       prompt_caching_enabled: v.optional(
         v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
       ),
@@ -1015,6 +1023,9 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
         ...(input.matter_number_padding === undefined
           ? {}
           : { matterNumberPadding: input.matter_number_padding }),
+        ...(input.matter_numbering_enabled === undefined
+          ? {}
+          : { matterNumberingEnabled: input.matter_numbering_enabled }),
         ...(input.prompt_caching_enabled === undefined
           ? {}
           : { promptCachingEnabled: input.prompt_caching_enabled }),

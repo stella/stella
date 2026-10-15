@@ -4340,6 +4340,8 @@
         "yearMonthSequential": "Rok-miesiąc / kolejny (2026-02/001)",
         "yearSequential": "Rok / kolejny (2026/001)"
       },
+      "showInTitle": "Pokaż numer obok nazwy sprawy",
+      "showInTitleDescription": "Gdy wyłączone, tytuł jest dokładnie wpisaną nazwą.",
       "title": "Numeracja spraw",
       "tokenHelp": "Dostępne tokeny: '{'SEQ'}' (sekwencja), '{'YYYY'}' (rok), '{'YY'}' (rok 2-cyfrowy), '{'MM'}' (miesiąc)"
     },
@@ -4973,17 +4975,22 @@
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
     "provisionDetailsFor": "Szczegóły: {provision}",
+    "provisionEffectiveFrom": "obowiązuje od {date}",
     "provisionHistoryEarliest": "Najstarsza dostępna wersja.",
     "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
     "provisionHistoryLoadOlder": "Wczytaj starsze wersje, aby je porównać.",
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
+    "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
+    "showCitedPartOnly": "Pokaż tylko cytowaną część",
+    "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
@@ -4999,7 +5006,6 @@
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
     "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
@@ -5673,7 +5679,7 @@
       "title": "Kopiuj do sprawy"
     },
     "create": {
-      "ownerTypeToggle": "Typ sprawy",
+      "matterName": "Nazwa sprawy",
       "personalDescription": "Sprawy osobiste są prywatne i nie wymagają klienta. Możesz je później awansować, aby udostępnić zespołowi."
     },
     "createNewWorkspace": "Utwórz nową sprawę",
@@ -6125,15 +6131,12 @@
       "upcomingTasks": "Nadchodząca agenda",
       "uploaded": "przesłał(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobista"
-    },
     "parties": {
       "addParty": "Dodaj stronę",
       "changeClient": "Zmień klienta",
       "client": "Klient",
       "noClient": "Brak przypisanego klienta",
+      "noClientOptional": "Bez klienta (opcjonalnie)",
       "noParties": "Do tej sprawy nie dodano żadnych stron.",
       "partyRoles": {
         "co_counsel": "Współpełnomocnik",
