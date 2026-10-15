@@ -41,6 +41,8 @@ export type LoadedExternalMcpTools = {
 export type StellaMcpToolSource = MCPToolSource;
 
 export type LoadedExternalMcpConnector = {
+  /** Installed connector the tools come from; stored tool grants key on it. */
+  connectorId: SafeId<"mcpConnector">;
   description: string;
   displayName: string;
   slug: string;
@@ -304,6 +306,7 @@ const loadConnectorTools = async ({
       return {
         client,
         connector: {
+          connectorId: row.connectorId,
           description: row.description,
           displayName: row.displayName,
           slug: row.slug,

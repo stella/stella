@@ -23,6 +23,7 @@
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
     "./chat-secret": "./src/chat-secret.ts",
+    "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./visual-theme": "./src/visual-theme.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",
     "./visual-bridge-policy": "./src/visual-bridge-policy.ts",

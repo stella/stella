@@ -40,6 +40,7 @@ export type SafeIdType =
   | "chatTurn"
   | "chatThreadCompaction"
   | "chatThread"
+  | "chatToolGrant"
   | "fileChatThread"
   | "templateChatThread"
   | "templateDeletionCleanupRequest"
