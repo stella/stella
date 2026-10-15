@@ -1,134 +1,77 @@
 import { Result } from "better-result";
-import { readFileSync } from "node:fs";
-import nodePath from "node:path";
-import * as v from "valibot";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 
-import { sha256 } from "./ci-job-classification/classification-values";
 import {
-  createCandidateMetadataReader,
-  PUBLIC_METADATA,
+  generateClassification,
+  readClassificationInputs,
+} from "./ci-job-classification/generate";
+import {
+  REFRESH_COMMAND,
   verifyPublicMetadata,
 } from "./ci-job-classification/public-metadata";
-import {
-  GIT_ORIGIN,
-  sameMetadataOrigin,
-} from "./ci-job-classification/references";
+import { sameMetadataOrigin } from "./ci-job-classification/references";
 import { AdmissionError } from "./ci-job-classification/yaml";
 
-const CANDIDATE = "candidate";
-const SNAPSHOT = v.strictObject({
-  origin: GIT_ORIGIN,
-  documents: v.record(v.string(), v.string()),
-});
-const SNAPSHOTS = v.record(v.string(), SNAPSHOT);
-
-// Supplier metadata is captured at immutable revisions. Updating a caller's
-// reference requires a reviewed snapshot and complete callee classifications.
-export const checkJobClassification = (root: string) =>
+type CheckOptions = { root: string; mode: "check" | "write" };
+export const checkJobClassification = ({ root, mode }: CheckOptions) =>
   Result.try({
     try: () => {
-      const manifest = v.parse(
-        PUBLIC_METADATA,
-        JSON.parse(
-          readFileSync(
-            nodePath.resolve(root, ".github/ci-job-classification.json"),
-            "utf-8",
-          ),
-        ),
-      );
-      if (manifest.repository !== CANDIDATE) {
+      const inputs = readClassificationInputs(root);
+      if (inputs.manifest.repository !== "candidate") {
         throw new AdmissionError({
           message:
             "Classification root does not identify the candidate repository",
         });
       }
-      const snapshots = v.parse(
-        SNAPSHOTS,
-        JSON.parse(
-          readFileSync(
-            nodePath.resolve(
-              root,
-              ".github/ci-job-classification-sources.json",
-            ),
-            "utf-8",
-          ),
-        ),
-      );
-      const candidate = createCandidateMetadataReader(
-        { [CANDIDATE]: { directory: root, revision: "0".repeat(40) } },
-        CANDIDATE,
-      );
-      const declaredSnapshots = new Set<string>();
-      for (const node of manifest.nodes) {
-        if (node.type !== "metadata") {
-          continue;
-        }
-        if (node.repository === CANDIDATE) {
-          if (node.origin.type !== "checkout") {
-            throw new AdmissionError({
-              message: "Candidate metadata must use checkout origin",
-            });
-          }
-          continue;
-        }
-        const snapshot = snapshots[node.repository];
-        if (!snapshot) {
-          throw new AdmissionError({
-            message: "Declared callee snapshot is missing",
-          });
-        }
-        const text = snapshot.documents[node.path];
-        declaredSnapshots.add(`${node.repository}:${node.path}`);
-        if (text === undefined || sha256(text) !== node.digest) {
-          throw new AdmissionError({
-            message: "Declared callee snapshot changed",
-          });
-        }
+      for (const node of inputs.manifest.nodes) {
         if (
+          node.type === "metadata" &&
+          node.repository === "candidate" &&
+          node.origin.type !== "checkout"
+        ) {
+          throw new AdmissionError({
+            message: "Candidate metadata must use checkout origin",
+          });
+        }
+      }
+      const generated = generateClassification(inputs);
+      if (generated.isErr()) {
+        throw generated.error;
+      }
+      for (const node of generated.value.nodes) {
+        if (node.type !== "metadata" || node.repository === "candidate") {
+          continue;
+        }
+        const snapshot = inputs.snapshots[node.repository];
+        if (
+          !snapshot ||
           !sameMetadataOrigin({ caller: node.origin, target: snapshot.origin })
         ) {
           throw new AdmissionError({
-            message: "Callee snapshot origin differs from its metadata",
+            message: `Callee snapshot origin differs: ${node.path}`,
           });
         }
       }
-      const snapshotPaths = Object.entries(snapshots).flatMap(
-        ([repository, snapshot]) =>
-          Object.keys(snapshot.documents).map(
-            (path) => `${repository}:${path}`,
-          ),
-      );
-      if (
-        snapshotPaths.length !== declaredSnapshots.size ||
-        snapshotPaths.some((path) => !declaredSnapshots.has(path))
-      ) {
-        throw new AdmissionError({
-          message:
-            "Callee snapshot declarations do not match the reachable metadata",
-        });
+      if (mode === "write") {
+        writeFileSync(
+          path.resolve(root, ".github/ci-job-classification.json"),
+          `${JSON.stringify(generated.value, null, 2)}\n`,
+        );
+      } else {
+        const checked = verifyPublicMetadata(inputs);
+        if (checked.isErr()) {
+          throw checked.error;
+        }
+        if (
+          JSON.stringify(inputs.manifest) !== JSON.stringify(generated.value)
+        ) {
+          throw new AdmissionError({
+            message: `Generated classification metadata changed. Run ${REFRESH_COMMAND}`,
+          });
+        }
       }
-      const result = verifyPublicMetadata({
-        manifest,
-        reader: {
-          workflows: candidate.workflows,
-          read: (repository, path) => {
-            if (repository === CANDIDATE) {
-              return candidate.read(repository, path);
-            }
-            const text = snapshots[repository]?.documents[path];
-            if (text === undefined) {
-              throw new AdmissionError({
-                message: "Reachable callee metadata is unavailable",
-              });
-            }
-            return text;
-          },
-        },
-      });
-      if (result.isErr()) {
-        throw result.error;
-      }
-      return result.value;
+      return generated.value.workflows.length;
     },
     catch: (cause) =>
       new AdmissionError({
@@ -140,13 +83,15 @@ export const checkJobClassification = (root: string) =>
   });
 
 if (import.meta.main) {
-  const result = checkJobClassification(
-    nodePath.resolve(Bun.argv.at(2) ?? "."),
-  );
+  const args = Bun.argv.slice(2);
+  const result = checkJobClassification({
+    root: path.resolve(args.find((arg) => arg !== "--write") ?? "."),
+    mode: args.includes("--write") ? "write" : "check",
+  });
   if (result.isErr()) {
     process.stderr.write(`${result.error.message}\n`);
     process.exitCode = 1;
   } else {
-    process.stdout.write(`${JSON.stringify(result.value)}\n`);
+    process.stdout.write(`Classified ${result.value} workflows\n`);
   }
 }

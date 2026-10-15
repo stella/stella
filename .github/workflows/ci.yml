@@ -2427,9 +2427,11 @@ jobs:
             .github/workflows
             .github/actions
             .github/ci-job-classification.json
+            .github/ci-job-classification-decisions.json
             .github/ci-job-classification-sources.json
             scripts/check-ci-job-classification.ts
             scripts/ci-job-classification
+            packages/collation/src/collation.ts
             packages/sha256/src/node.ts
             packages/sha256/src/types.ts
 

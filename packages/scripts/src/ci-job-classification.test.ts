@@ -15,6 +15,10 @@ import {
   sha256,
 } from "../../../scripts/ci-job-classification/classification-values";
 import {
+  generateClassification,
+  readClassificationInputs,
+} from "../../../scripts/ci-job-classification/generate";
+import {
   PUBLIC_METADATA,
   createCandidateMetadataReader,
   verifyPublicMetadata,
@@ -23,10 +27,7 @@ import type {
   PublicMetadata,
   MetadataReader,
 } from "../../../scripts/ci-job-classification/public-metadata";
-import {
-  GIT_ORIGIN,
-  parseRemoteReference,
-} from "../../../scripts/ci-job-classification/references";
+import { parseRemoteReference } from "../../../scripts/ci-job-classification/references";
 import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";
 import {
   AdmissionError,
@@ -39,52 +40,10 @@ const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
 
 test("committed classifications cover the repository and its pinned metadata callees", () => {
-  const manifest = v.parse(
-    PUBLIC_METADATA,
-    JSON.parse(
-      readFileSync(
-        path.join(repositoryRoot, ".github/ci-job-classification.json"),
-        "utf-8",
-      ),
-    ),
-  );
-  const snapshots = v.parse(
-    v.record(
-      v.string(),
-      v.object({
-        origin: GIT_ORIGIN,
-        documents: v.record(v.string(), v.string()),
-      }),
-    ),
-    JSON.parse(
-      readFileSync(
-        path.join(repositoryRoot, ".github/ci-job-classification-sources.json"),
-        "utf-8",
-      ),
-    ),
-  );
-  const result = verifyPublicMetadata({
-    manifest,
-    reader: {
-      workflows: () => [
-        ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
-          cwd: repositoryRoot,
-        }),
-      ],
-      read: (repository, file) => {
-        if (repository === "candidate") {
-          return readFileSync(path.join(repositoryRoot, file), "utf-8");
-        }
-        const text = snapshots[repository]?.documents[file];
-        if (text === undefined) {
-          throw new AdmissionError({
-            message: "Pinned metadata fixture missing",
-          });
-        }
-        return text;
-      },
-    },
-  });
+  const { manifest, decisions, reader } =
+    readClassificationInputs(repositoryRoot);
+  expect(fixtureDecisions(manifest)).toEqual(decisions);
+  const result = verifyPublicMetadata({ manifest, reader });
   expect(result.isOk()).toBe(true);
   if (result.isErr()) {
     throw result.error;
@@ -214,7 +173,7 @@ const fixture = () => {
       repository,
       origin,
       path: file,
-      digest: sha256(text),
+      digest: parsed.value.digest,
       references,
       edges,
       jobs: Object.entries(parsed.value.jobs).map(([jobId, job]) => ({
@@ -372,7 +331,7 @@ const reboundReference = ({
       if (node.id === "root") {
         return {
           ...node,
-          digest: sha256(workflow),
+          digest: parsed.value.digest,
           jobs: node.jobs.map((job) => {
             const definition = parsed.value.jobs[job.id];
             if (!definition) {
@@ -586,7 +545,7 @@ test("a callee cannot hide new jobs, changes or missing classifications", () => 
     "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:.github/workflows/reusable.yml",
     "jobs: {hidden: {steps: [{run: 'publish'}]}}",
   );
-  failure(verifyPublicMetadata(f), "metadata digest changed");
+  failure(verifyPublicMetadata(f), "Unclassified or removed jobs");
 });
 test("same-repository aliases cannot redirect source-relative action metadata", () => {
   const f = fixture();
@@ -627,7 +586,7 @@ test("local metadata and parallel leaves must have explicit complete edges", () 
       manifest: f.manifest,
       reader: { ...f.reader, workflows: () => [] },
     }),
-    "workflow classification totality",
+    "Unclassified workflows",
   );
   failure(
     verifyPublicMetadata({
@@ -733,5 +692,149 @@ test("candidate reader always observes HEAD even when config names an older revi
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const fixtureDecisions = (manifest: PublicMetadata) =>
+  Object.fromEntries(
+    manifest.nodes.flatMap((node) =>
+      node.type === "metadata"
+        ? node.jobs.map((job) => [
+            `${node.repository}:${node.path}/${job.id}`,
+            { kind: job.kind, qualifier: job.qualifier },
+          ])
+        : [],
+    ),
+  );
+
+test("classification ignores unrelated workflow and composite action edits", () => {
+  const f = fixture();
+  for (const [key, text] of f.documents) {
+    const changed = `# editorial comment\n${text.replace("    steps:", "    timeout-minutes: 12\n    name: Renamed job\n    steps:").replace("run: 'bun script.ts'", "name: Renamed step, run: 'bun other.ts'")}`;
+    expect(changed).not.toBe(text);
+    f.documents.set(key, changed);
+  }
+  const result = verifyPublicMetadata(f);
+  if (result.isErr()) {
+    throw result.error;
+  }
+  expect(result.isOk()).toBe(true);
+});
+
+for (const change of [
+  "    permissions: {contents: write}\n",
+  `    env: {TOKEN: '${githubExpression("secrets.RELEASE_TOKEN")}'}\n`,
+  "    environment: production\n",
+  "    runs-on: ubuntu-latest\n",
+]) {
+  test(`classification shape changes require review and refresh: ${change.trim()}`, () => {
+    const f = fixture();
+    const key = "candidate:.github/workflows/ci.yml";
+    const original = f.reader.read("candidate", ".github/workflows/ci.yml");
+    const changed = original.replace(
+      "  caller:\n",
+      () => `  caller:\n${change}`,
+    );
+    expect(changed).not.toBe(original);
+    f.documents.set(key, changed);
+    failure(verifyPublicMetadata(f), ".github/workflows/ci.yml/caller");
+    failure(
+      verifyPublicMetadata(f),
+      "bun scripts/check-ci-job-classification.ts --write",
+    );
+  });
+}
+
+test("new jobs remain unclassified even when refreshing generated metadata", () => {
+  const f = fixture();
+  f.documents.set(
+    "candidate:.github/workflows/ci.yml",
+    `${f.reader.read("candidate", ".github/workflows/ci.yml")}  added:\n    steps: []\n`,
+  );
+  const result = generateClassification({
+    ...f,
+    decisions: fixtureDecisions(f.manifest),
+    localActionPath: (directory) => `${directory}/action.yml`,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain(
+      "Unclassified jobs: candidate:.github/workflows/ci.yml/added",
+    );
+    expect(result.error.message).toContain(
+      "bun scripts/check-ci-job-classification.ts --write",
+    );
+  }
+});
+
+test("classification generation reaches a fixed point and preserves human decisions", () => {
+  const f = fixture();
+  const decisions = fixtureDecisions(f.manifest);
+  const options = {
+    ...f,
+    decisions,
+    localActionPath: (directory: string) => `${directory}/action.yml`,
+  };
+  const first = generateClassification(options);
+  if (first.isErr()) {
+    throw first.error;
+  }
+  const second = generateClassification({ ...options, manifest: first.value });
+  if (second.isErr()) {
+    throw second.error;
+  }
+  expect(JSON.stringify(second.value)).toBe(JSON.stringify(first.value));
+  expect(fixtureDecisions(second.value)).toEqual(decisions);
+});
+
+test("real ci.yml classification is stable across comments, timeouts, step names and cache keys", () => {
+  const original = readFileSync(
+    path.join(repositoryRoot, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const baseline = parseDocument(original);
+  if (baseline.isErr()) {
+    throw baseline.error;
+  }
+  const edits = [
+    `# unrelated comment\n${original}`,
+    original.replace(/timeout-minutes: \d+/u, "timeout-minutes: 123"),
+    original.replace(/- name: [^\n]+/u, "- name: Renamed step"),
+    original.replace(/key: [^\n]+/u, "key: unrelated-cache-key"),
+  ];
+  for (const edited of edits) {
+    expect(edited).not.toBe(original);
+    const parsed = parseDocument(edited);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    expect(parsed.value.digest).toBe(baseline.value.digest);
+  }
+});
+
+test("workflow permission defaults and publication gates enter classification digests", () => {
+  for (const [before, after] of [
+    [
+      "permissions: {contents: read}\njobs: {check: {steps: []}}",
+      "permissions: {contents: write}\njobs: {check: {steps: []}}",
+    ],
+    [
+      "jobs: {publish: {steps: [{run: 'bun publish', if: 'false'}]}}",
+      "jobs: {publish: {steps: [{run: 'bun publish', if: 'true'}]}}",
+    ],
+    [
+      "jobs: {check: {secrets: inherit, uses: './child.yml'}}",
+      "jobs: {check: {secrets: {}, uses: './child.yml'}}",
+    ],
+  ]) {
+    const original = parseDocument(before);
+    const changed = parseDocument(after);
+    if (original.isErr()) {
+      throw original.error;
+    }
+    if (changed.isErr()) {
+      throw changed.error;
+    }
+    expect(changed.value.digest).not.toBe(original.value.digest);
   }
 });

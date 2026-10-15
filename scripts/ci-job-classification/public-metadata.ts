@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { CLASSIFICATIONS, sha256 } from "./classification-values";
+import { CLASSIFICATIONS } from "./classification-values";
 import {
   createGitProvider,
   resolveGitHead,
@@ -16,6 +16,9 @@ import {
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
+
+export const REFRESH_COMMAND =
+  "bun scripts/check-ci-job-classification.ts --write";
 
 const TEXT = v.pipe(
   v.string(),
@@ -175,7 +178,9 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           metadata.workflows.map((workflow) => workflow.path).toSorted(),
         )
       ) {
-        reject("workflow classification totality mismatch");
+        reject(
+          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then run ${REFRESH_COMMAND}`,
+        );
       }
       const nodes = new Map(metadata.nodes.map((node) => [node.id, node]));
       const visited = new Set<string>();
@@ -198,9 +203,6 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         if (node.type === "metadata") {
           safePath(node.path);
           const text = reader.read(node.repository, node.path);
-          if (sha256(text) !== node.digest) {
-            reject(`metadata digest changed: ${id}`);
-          }
           const parsed = parseDocument(text);
           if (parsed.isErr()) {
             throw parsed.error;
@@ -213,14 +215,30 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             JSON.stringify(Object.keys(parsed.value.jobs).toSorted()) !==
             JSON.stringify(node.jobs.map((job) => job.id).toSorted())
           ) {
-            reject(`callee job classification totality mismatch: ${id}`);
+            reject(
+              `Unclassified or removed jobs: ${node.path}: ${Object.keys(
+                parsed.value.jobs,
+              )
+                .filter((job) => !node.jobs.some((entry) => entry.id === job))
+                .join(", ")}. Classify new jobs, then run ${REFRESH_COMMAND}`,
+            );
+          }
+          const changedJobs = node.jobs.filter(
+            (job) => parsed.value.jobs[job.id]?.digest !== job.digest,
+          );
+          if (changedJobs.length) {
+            reject(
+              `Classification-relevant shape changed: ${changedJobs.map((job) => `${node.path}/${job.id}`).join(", ")}. Re-review kind and qualifier, then run ${REFRESH_COMMAND}`,
+            );
           }
           for (const job of node.jobs) {
-            if (parsed.value.jobs[job.id]?.digest !== job.digest) {
-              reject(`callee job digest changed: ${id}/${job.id}`);
-            }
             classifications[job.kind] += 1;
             jobCount += 1;
+          }
+          if (parsed.value.digest !== node.digest) {
+            reject(
+              `Classification-relevant metadata changed: ${node.path} (jobs: ${node.jobs.map((job) => job.id).join(", ")}). Re-review classifications, then run ${REFRESH_COMMAND}`,
+            );
           }
           const references = new Set(
             [

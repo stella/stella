@@ -15,12 +15,12 @@ const JOB = v.strictObject({
   steps: v.array(STEP),
 });
 const DOCUMENT = v.strictObject({
+  digest: v.string(),
   jobs: v.record(v.string(), JOB),
   steps: v.array(STEP),
 });
 
-// Validate duplicate keys and the bounded alias DAG before safe_load; raw
-// source digests separately retain scalar spellings and anchor declarations.
+// Validate duplicate keys and bound alias expansion before projecting classification metadata.
 const PARSER = String.raw`
 require 'psych'
 require 'json'
@@ -110,6 +110,51 @@ def steps(value)
     {'uses'=>s['uses'],'run'=>s['run']}
   end
 end
+# Shell text is opaque; only its secret references and publish/deploy gates enter
+# the classification. Ordinary commands, names, timeouts and caches are excluded.
+def secret_refs(value)
+  case value
+  when Hash
+    value.values.flat_map { |v| secret_refs(v) }.uniq.sort
+  when Array
+    value.flat_map { |v| secret_refs(v) }.uniq.sort
+  when String
+    value.scan(/secrets(?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]+\])?/).uniq.sort
+  else
+    []
+  end
+end
+def step_shapes(value)
+  value.flat_map do |s|
+    next step_shapes(s['parallel']) if s.key?('parallel')
+    shape = {'uses'=>s['uses'], 'secrets'=>secret_refs(s)}
+    if s.key?('uses') || s.fetch('run', '').match?(/publish|deploy|release|push/i)
+      shape['if'] = s['if']
+    end
+    shape unless shape.values.all? { |v| v.nil? || v == [] }
+  end.compact
+end
+def job_shape(job, workflow)
+  runner = job['runs-on']
+  matrix = job.dig('strategy', 'matrix')
+  runner_matrix = {}
+  if matrix.is_a?(Hash)
+    JSON.generate(runner).scan(/matrix\.([A-Za-z_][A-Za-z0-9_-]*)/).flatten.each do |key|
+      runner_matrix[key] = matrix[key]
+      runner_matrix['include'] = matrix['include'] if matrix.key?('include')
+    end
+  end
+  {
+    'permissions'=>job.fetch('permissions', workflow['permissions']),
+    'secrets'=>job['secrets'], 'secret_refs'=>secret_refs([workflow['env'], job]),
+    'environment'=>job['environment'], 'uses'=>job['uses'], 'if'=>job['if'],
+    'runs-on'=>runner, 'runner-matrix'=>runner_matrix,
+    'steps'=>step_shapes(job.fetch('steps', []))
+  }
+end
+def digest(value)
+  Digest::SHA256.hexdigest(JSON.generate(canon(value)))
+end
 text = STDIN.read
 raise 'YAML source byte limit exceeded' if text.bytesize > MAX_SOURCE_BYTES
 tree = Psych.parse_stream(text)
@@ -129,7 +174,7 @@ if data.key?('jobs')
       raise 'job uses must be string' unless j['uses'].is_a?(String)
       ss << {'uses'=>j['uses'],'run'=>nil}
     end
-    jobs[id] = {'digest'=>Digest::SHA256.hexdigest(JSON.generate(canon(j))),'reusableWorkflow'=>j['uses'],'steps'=>ss}
+    jobs[id] = {'digest'=>digest(job_shape(j, data)),'reusableWorkflow'=>j['uses'],'steps'=>ss}
   end
 end
 ss = []
@@ -143,7 +188,8 @@ if data.key?('runs')
     ss = [{'uses'=>nil,'run'=>JSON.generate(canon(r))}]
   end
 end
-STDOUT.write(JSON.generate({'jobs'=>jobs,'steps'=>ss}))
+shape = {'jobs'=>jobs.transform_values { |j| j['digest'] }, 'steps'=>step_shapes(data.dig('runs', 'steps') || []), 'using'=>data.dig('runs', 'using')}
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'steps'=>ss}))
 `;
 
 export const parseDocument = (text: string) =>
