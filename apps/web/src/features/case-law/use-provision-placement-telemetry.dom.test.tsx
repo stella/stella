@@ -71,8 +71,18 @@ test("a decision's gaps are one counted event per reason, never an exception", (
 
   expect(errors).toEqual([]);
   expect(gaps).toEqual([
-    { count: 30, reason: "work-unresolved", surface: "full-reader" },
-    { count: 10, reason: "span-overlap", surface: "full-reader" },
+    {
+      count: 30,
+      kind: "expected",
+      reason: "work-unresolved",
+      surface: "full-reader",
+    },
+    {
+      count: 10,
+      kind: "defect",
+      reason: "span-overlap",
+      surface: "full-reader",
+    },
   ]);
 });
 
@@ -126,9 +136,24 @@ test("rows that settle later add only themselves", () => {
   );
 
   expect(gaps).toEqual([
-    { count: 1, reason: "statute-not-loaded", surface: "inspector" },
-    { count: 1, reason: "no-version-in-force", surface: "inspector" },
-    { count: 1, reason: "statute-not-loaded", surface: "inspector" },
+    {
+      count: 1,
+      kind: "expected",
+      reason: "statute-not-loaded",
+      surface: "inspector",
+    },
+    {
+      count: 1,
+      kind: "expected",
+      reason: "no-version-in-force",
+      surface: "inspector",
+    },
+    {
+      count: 1,
+      kind: "expected",
+      reason: "statute-not-loaded",
+      surface: "inspector",
+    },
   ]);
 });
 

@@ -705,13 +705,19 @@ describe("PostHog browser analytics adapter", () => {
 
     analytics.captureProvisionPlacementGaps({
       surface: "full-reader",
+      kind: "expected",
       reason: "work-unresolved",
       count: 3,
     });
 
     expect(captureMock).toHaveBeenCalledWith(
       WEB_ANALYTICS_EVENTS.provisionPlacementGaps,
-      { surface: "full-reader", reason: "work-unresolved", count: 3 },
+      {
+        surface: "full-reader",
+        kind: "expected",
+        reason: "work-unresolved",
+        count: 3,
+      },
     );
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });

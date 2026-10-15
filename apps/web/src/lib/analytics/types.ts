@@ -1,5 +1,8 @@
 import type { FeedbackArea, FeedbackKind } from "@stll/api-contract/feedback";
-import type { ProvisionPlacementFailureReason } from "@stll/api-contract/provision-placement";
+import type {
+  ProvisionPlacementFailureKind,
+  ProvisionPlacementFailureReason,
+} from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 
@@ -89,6 +92,7 @@ export type ErrorCaptureContext =
 // outcome (corpus coverage or linker drift), not an exception.
 type ProvisionPlacementGapsProperties = {
   surface: string;
+  kind: ProvisionPlacementFailureKind;
   reason: ProvisionPlacementFailureReason;
   count: number;
 };

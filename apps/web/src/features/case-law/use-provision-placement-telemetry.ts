@@ -1,3 +1,4 @@
+import { PROVISION_PLACEMENT_FAILURE_KIND } from "@stll/api-contract/provision-placement";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
@@ -49,7 +50,12 @@ export const useProvisionPlacementTelemetry = ({
       fresh.set(reason, (fresh.get(reason) ?? 0) + 1);
     }
     for (const [reason, count] of fresh) {
-      analytics.captureProvisionPlacementGaps({ count, reason, surface });
+      analytics.captureProvisionPlacementGaps({
+        count,
+        kind: PROVISION_PLACEMENT_FAILURE_KIND[reason],
+        reason,
+        surface,
+      });
     }
   }, [analytics, decisionId, failures, surface]);
 };
