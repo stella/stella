@@ -2,6 +2,10 @@ import Elysia from "elysia";
 
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
+import createClaimComment from "@/api/handlers/lists/verifications/claim-comments/create";
+import deleteClaimComment from "@/api/handlers/lists/verifications/claim-comments/delete";
+import listClaimComments from "@/api/handlers/lists/verifications/claim-comments/list";
+import updateClaimComment from "@/api/handlers/lists/verifications/claim-comments/update";
 import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
 import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
 import createVerification from "@/api/handlers/lists/verifications/create";
@@ -34,6 +38,25 @@ export const createListVerificationRoutes = (
     .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
       body: createBulkClaimReviews.config.body,
       permissions: createBulkClaimReviews.config.permissions,
+    })
+    .get("/claim-comments", listClaimComments.handler, {
+      params: listClaimComments.config.params,
+      permissions: listClaimComments.config.permissions,
+      query: listClaimComments.config.query,
+    })
+    .post("/claim-comments", createClaimComment.handler, {
+      body: createClaimComment.config.body,
+      params: createClaimComment.config.params,
+      permissions: createClaimComment.config.permissions,
+    })
+    .patch("/claim-comments/:annotationId", updateClaimComment.handler, {
+      body: updateClaimComment.config.body,
+      params: updateClaimComment.config.params,
+      permissions: updateClaimComment.config.permissions,
+    })
+    .delete("/claim-comments/:annotationId", deleteClaimComment.handler, {
+      params: deleteClaimComment.config.params,
+      permissions: deleteClaimComment.config.permissions,
     })
     .post("/verifications", createVerification.handler, {
       body: createVerification.config.body,

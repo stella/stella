@@ -13,11 +13,12 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Building2Icon, LockIcon, Trash2Icon } from "@stll/ui/icons";
+import { Building2Icon, LockIcon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -30,7 +31,6 @@ import {
   placeGutterNotes,
   UNMEASURED_NOTE_HEIGHT_PX,
 } from "./margin-notes.logic";
-import { getCategoryVar } from "./types";
 
 const capitalize = (s: string): string =>
   s.charAt(0).toUpperCase() + s.slice(1);
@@ -38,7 +38,8 @@ const capitalize = (s: string): string =>
 type AnalysisMarginItemBase = {
   id: string;
   heading?: string | undefined;
-  category: string;
+  /** The CSS custom property the note's stripe and leader are drawn in. */
+  accentVar: string;
   depth: number;
   startAnchorId: string;
 };
@@ -67,6 +68,8 @@ export type CommentMarginItem = {
   mine: boolean;
   visibility: "private" | "shared";
   onDelete: () => void;
+  /** Rewrites the comment's words; absent where a comment is not editable. */
+  onEdit?: ((body: string) => void) | undefined;
   onToggleVisibility: () => void;
 };
 
@@ -75,6 +78,9 @@ export type ComposerMarginItem = {
   kind: "composer";
   id: string;
   startAnchorId: string;
+  /** The words and audience the composer opens with, when editing. */
+  initialBody?: string | undefined;
+  initialVisibility?: "private" | "shared" | undefined;
   onCancel: () => void;
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
@@ -326,7 +332,7 @@ const GutterNotes = ({
         const color =
           item.kind === "comment"
             ? "var(--option-sky)"
-            : `var(${getCategoryVar(item.category)})`;
+            : `var(${item.accentVar})`;
         return (
           <div
             className="pointer-events-none absolute end-0 opacity-90"
@@ -466,7 +472,7 @@ const analysisNoteStyle = ({
   placement,
   presence,
 }: AnalysisNoteStyleOptions) => {
-  const cssVar = getCategoryVar(item.category);
+  const cssVar = item.accentVar;
   // Reverse hover speaks through the colour stripe alone — the words stay
   // readable in every state. Dimmed washes the stripe out; highlighted goes
   // full colour, doubled by an inset glow.
@@ -613,8 +619,10 @@ const ComposerNote = ({
 }) => {
   const t = useTranslations();
   const position = notePlacementPresentation(placement);
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "shared">("private");
+  const [body, setBody] = useState(item.initialBody ?? "");
+  const [visibility, setVisibility] = useState<"private" | "shared">(
+    item.initialVisibility ?? "private",
+  );
   const shared = visibility === "shared";
   const visibilityLabel = shared
     ? t("legalReader.annotations.visibilityShared")
@@ -717,8 +725,39 @@ const CommentNote = ({
   presence,
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
+  const [editing, setEditing] = useState(false);
   const shared = item.visibility === "shared";
   const position = notePlacementPresentation(placement);
+  // A comment the server has not stored yet has no id to change or remove it
+  // by; its controls appear once the create answers.
+  const controllable = item.mine && !isPendingAnnotationId(item.id);
+  const onEdit = controllable ? item.onEdit : undefined;
+
+  if (editing && onEdit !== undefined) {
+    return (
+      <ComposerNote
+        item={{
+          id: item.id,
+          kind: "composer",
+          startAnchorId: item.startAnchorId,
+          initialBody: item.text,
+          initialVisibility: item.visibility,
+          onCancel: () => setEditing(false),
+          onSubmit: (body, visibility) => {
+            if (body !== item.text) {
+              onEdit(body);
+            }
+            if (visibility !== item.visibility) {
+              item.onToggleVisibility();
+            }
+            setEditing(false);
+          },
+        }}
+        measureRef={measureRef}
+        placement={placement}
+      />
+    );
+  }
 
   const stripe =
     presence === "dimmed"
@@ -777,7 +816,7 @@ const CommentNote = ({
           {item.text}
         </button>
       )}
-      {item.mine && (
+      {controllable && (
         <div
           className={cn(
             "mt-1 flex items-center gap-1 transition-opacity",
@@ -814,6 +853,21 @@ const CommentNote = ({
               <Building2Icon className="size-3" />
             )}
           </Tooltip>
+          {onEdit !== undefined && (
+            <Tooltip
+              content={t("common.edit")}
+              render={
+                <button
+                  aria-label={t("common.edit")}
+                  className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
+                  onClick={() => setEditing(true)}
+                  type="button"
+                />
+              }
+            >
+              <PenIcon className="size-3" />
+            </Tooltip>
+          )}
           <Tooltip
             content={t("common.delete")}
             render={

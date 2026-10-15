@@ -10,10 +10,11 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { cleanup, isInaccessible, render, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { MarginNotes } =
-  await import("@/features/case-law/components/case-viewer/analysis/margin-notes");
+const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
 const { clickOpensVisitorOffer, READER_ASIDE_RESIZE_SLOT } =
   await import("@/features/case-law/components/case-viewer/decision-workspace.logic");
+const { getCategoryVar } =
+  await import("@/features/case-law/components/case-viewer/analysis/types");
 const { default: messages } = await import("@/i18n/langs/en.json");
 
 afterEach(() => {
@@ -36,7 +37,7 @@ const renderVisitorColumn = () =>
         <MarginNotes
           items={[
             {
-              category: "facts",
+              accentVar: getCategoryVar("facts"),
               depth: 0,
               heading: EXAMPLE_HEADING,
               id: "example:facts",

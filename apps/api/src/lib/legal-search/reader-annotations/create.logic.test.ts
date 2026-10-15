@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { storedAnnotationMatchesRequest } from "@/api/handlers/legal-reader/annotations/create.logic";
-import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { storedAnnotationMatchesRequest } from "@/api/lib/legal-search/reader-annotations/create.logic";
+import type { CreateAnnotationBody } from "@/api/lib/legal-search/reader-annotations/schema";
 
 const targetId = "019b0121-9dd7-7000-8000-000000000001";
 const requestId = toSafeId<"legalReaderAnnotation">(

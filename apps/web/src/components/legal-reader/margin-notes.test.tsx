@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import messages from "@/i18n/langs/en.json";
 
 const renderInline = (items: MarginItem[]): string =>
@@ -15,7 +15,7 @@ const renderInline = (items: MarginItem[]): string =>
   );
 
 const analysisNote: MarginItem = {
-  category: "reasoning",
+  accentVar: "--option-violet",
   depth: 0,
   id: "note-1",
   kind: "annotation",
@@ -48,5 +48,20 @@ describe("notes drawn in the text's own flow", () => {
 
     expect(markup).toContain(messages.common.delete);
     expect(markup).not.toContain("opacity-0");
+  });
+
+  // Every reader's optimistic comment carries a pending id until the server
+  // stores it; there is nothing yet to change or delete it by.
+  test("a reader's own comment not yet stored offers no controls", () => {
+    const markup = renderInline([
+      {
+        ...ownComment,
+        id: "pending:1:0",
+        onEdit: () => undefined,
+      },
+    ]);
+
+    expect(markup).toContain("My own words.");
+    expect(markup).not.toContain("<button");
   });
 });
