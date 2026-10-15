@@ -374,6 +374,7 @@ type DeferredPull = {
   number: number;
   head: string;
   yieldState?: string;
+  deferredMinutesAgo?: number;
   draft?: boolean;
   fork?: boolean;
   run?: { id: number; status: string; conclusion: string | null };
@@ -426,7 +427,13 @@ const resume = async ({
                       {
                         commit: {
                           status: {
-                            context: { state: pull.yieldState ?? "PENDING" },
+                            context: {
+                              state: pull.yieldState ?? "PENDING",
+                              createdAt: new Date(
+                                Date.now() -
+                                  (pull.deferredMinutesAgo ?? 1) * 60 * 1000,
+                              ).toISOString(),
+                            },
                           },
                         },
                       },
@@ -496,9 +503,32 @@ const deferred = (count: number, from = 1): DeferredPull[] =>
     head: `head-${from + index}`,
   }));
 
-test("deferred runs stay deferred while the merge queue has waiting work", async () => {
-  const result = await resume({ waiting: true, pages: [deferred(2)] });
-  expect(result.reruns).toEqual([]);
+test("while the merge queue waits, only the oldest deferred head resumes each tick", async () => {
+  const result = await resume({
+    waiting: true,
+    pages: [
+      [
+        { number: 1, head: "head-1", deferredMinutesAgo: 5 },
+        { number: 2, head: "head-2", deferredMinutesAgo: 20 },
+        { number: 3, head: "head-3", deferredMinutesAgo: 10 },
+      ],
+    ],
+  });
+  expect(result.reruns).toEqual([20]);
+});
+
+test("a head deferred for half an hour resumes even while the merge queue waits", async () => {
+  const result = await resume({
+    waiting: true,
+    pages: [
+      [
+        { number: 1, head: "head-1", deferredMinutesAgo: 5 },
+        { number: 2, head: "head-2", deferredMinutesAgo: 31 },
+        { number: 3, head: "head-3", deferredMinutesAgo: 45 },
+      ],
+    ],
+  });
+  expect(result.reruns).toEqual([30, 20]);
 });
 
 test("a cleared queue resumes deferred runs a few at a time and marks them", async () => {
