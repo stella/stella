@@ -480,10 +480,14 @@ export const LIMITS = {
    *  process's largest allocations and share the task with the converter, so
    *  they run one at a time. */
   fileDerivativeWorkerConcurrency: 1,
-  /** Process RSS at or above which the derivative worker defers a job instead
-   *  of starting it. Sized against a 2 GiB task that also hosts the converter
-   *  (hard-limited to 1 GiB), leaving headroom for request traffic. */
-  fileDerivativeDeferRssBytes: 1280 * 1024 * 1024,
+  /** Fraction of the process's enforced memory limit (its cgroup limit, read
+   *  once at startup) at or above which the derivative worker defers a job
+   *  instead of starting it. Relative, so it follows the task size; the rest
+   *  is headroom for request traffic and the conversion itself. */
+  fileDerivativeDeferMemoryFraction: 0.7,
+  /** The defer threshold (process RSS) where no memory limit is readable or
+   *  the process is unlimited. */
+  fileDerivativeDeferRssFallbackBytes: 1280 * 1024 * 1024,
   /** How long after the operating system's last memory-pressure signal the
    *  derivative worker keeps deferring jobs. */
   fileDerivativeMemoryPressureHoldMs: 60_000,
