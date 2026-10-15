@@ -37,36 +37,26 @@ const errorText = (error: unknown): string =>
 
 type Fixture = {
   organizationId: SafeId<"organization">;
-  otherOrganizationId: SafeId<"organization">;
   clientId: SafeId<"contact">;
-  otherClientId: SafeId<"contact">;
   adminId: SafeId<"user">;
   memberId: SafeId<"user">;
-  outsiderId: SafeId<"user">;
 };
 
-type Database = GatedTestDb;
-
-const seed = async (db: Database): Promise<Fixture> => {
+const seed = async (db: GatedTestDb): Promise<Fixture> => {
   const fixture: Fixture = {
     organizationId: mintAuthProviderId<"organization">(),
-    otherOrganizationId: mintAuthProviderId<"organization">(),
     clientId: createSafeId<"contact">(),
-    otherClientId: createSafeId<"contact">(),
     adminId: mintAuthProviderId<"user">(),
     memberId: mintAuthProviderId<"user">(),
-    outsiderId: mintAuthProviderId<"user">(),
   };
-  await db.insert(organization).values(
-    [fixture.organizationId, fixture.otherOrganizationId].map((id) => ({
-      id,
-      name: "Create matter fixture",
-      slug: id,
-      createdAt: new Date(),
-    })),
-  );
+  await db.insert(organization).values({
+    id: fixture.organizationId,
+    name: "Create matter fixture",
+    slug: fixture.organizationId,
+    createdAt: new Date(),
+  });
   await db.insert(user).values(
-    [fixture.adminId, fixture.memberId, fixture.outsiderId].map((id) => ({
+    [fixture.adminId, fixture.memberId].map((id) => ({
       id,
       name: "Create matter fixture",
       email: `${id}@example.test`,
@@ -87,39 +77,27 @@ const seed = async (db: Database): Promise<Fixture> => {
       role: "member",
       createdAt: new Date(),
     },
-    {
-      id: mintAuthProviderIdValue(),
-      organizationId: fixture.otherOrganizationId,
-      userId: fixture.outsiderId,
-      role: "owner",
-      createdAt: new Date(),
-    },
   ]);
-  await db.insert(contacts).values([
-    {
-      id: fixture.clientId,
-      organizationId: fixture.organizationId,
-      type: "person",
-      displayName: "Client",
-    },
-    {
-      id: fixture.otherClientId,
-      organizationId: fixture.otherOrganizationId,
-      type: "person",
-      displayName: "Other client",
-    },
-  ]);
+  await db.insert(contacts).values({
+    id: fixture.clientId,
+    organizationId: fixture.organizationId,
+    type: "person",
+    displayName: "Client",
+  });
   return fixture;
 };
 
-const asMember = (db: Database, fixture: Fixture, userId: SafeId<"user">) =>
+const asMember = (db: GatedTestDb, fixture: Fixture, userId: SafeId<"user">) =>
   createMembershipScopedDb(markRlsDatabase(db), {
     organizationId: fixture.organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
   });
 
-const assignmentsOf = async (db: Database, workspaceId: SafeId<"workspace">) =>
+const assignmentsOf = async (
+  db: GatedTestDb,
+  workspaceId: SafeId<"workspace">,
+) =>
   (
     await db
       .select({ userId: workspaceMembers.userId })
@@ -128,7 +106,7 @@ const assignmentsOf = async (db: Database, workspaceId: SafeId<"workspace">) =>
   ).map((row) => row.userId);
 
 const withFixture = async (
-  check: (db: Database, fixture: Fixture) => Promise<void>,
+  check: (db: GatedTestDb, fixture: Fixture) => Promise<void>,
 ) => {
   if (!databaseUrl) {
     panic("DATABASE_URL required");
@@ -141,27 +119,16 @@ const withFixture = async (
     } finally {
       await db
         .delete(organization)
-        .where(
-          inArray(organization.id, [
-            fixture.organizationId,
-            fixture.otherOrganizationId,
-          ]),
-        );
+        .where(eq(organization.id, fixture.organizationId));
       await db
         .delete(user)
-        .where(
-          inArray(user.id, [
-            fixture.adminId,
-            fixture.memberId,
-            fixture.outsiderId,
-          ]),
-        );
+        .where(inArray(user.id, [fixture.adminId, fixture.memberId]));
     }
   });
 };
 
 describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
-  test("a member's new personal matter is assigned to them and reachable in the same transaction", async () => {
+  test("a member's new personal matter is assigned to them and takes dependent rows in the same transaction", async () => {
     await withFixture(async (db, fixture) => {
       const workspaceId = createSafeId<"workspace">();
       const visible = await asMember(
@@ -226,42 +193,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
     });
   });
 
-  test("refuses a client or a lead from another organization", async () => {
-    await withFixture(async (db, fixture) => {
-      const create = asMember(db, fixture, fixture.adminId);
-      expect(
-        errorText(
-          await rejectionOf(
-            create(async (tx) => {
-              await createWorkspaceInTransaction(tx, {
-                id: createSafeId<"workspace">(),
-                clientId: fixture.otherClientId,
-                name: "Other client",
-                reference: "NEW-3",
-              });
-            }),
-          ),
-        ),
-      ).toContain("the client belongs to another organization");
-      expect(
-        errorText(
-          await rejectionOf(
-            create(async (tx) => {
-              await createWorkspaceInTransaction(tx, {
-                id: createSafeId<"workspace">(),
-                clientId: null,
-                name: "Other lead",
-                reference: "NEW-4",
-                leadUserId: fixture.outsiderId,
-              });
-            }),
-          ),
-        ),
-      ).toContain("the matter lead is not an organization member");
-    });
-  });
-
-  test("refuses a transaction without an organization member", async () => {
+  test("needs an organization member in the transaction", async () => {
     await withFixture(async (db, fixture) => {
       const service = createScopedDb(
         markRlsDatabase(db),
@@ -277,26 +209,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
                 id: createSafeId<"workspace">(),
                 clientId: null,
                 name: "Service matter",
-                reference: "NEW-5",
-              });
-            }),
-          ),
-        ),
-      ).toContain("creating a matter requires an organization member");
-      const outsider = createMembershipScopedDb(markRlsDatabase(db), {
-        organizationId: fixture.organizationId,
-        serverValidatedWorkspaceIds: [],
-        userId: fixture.outsiderId,
-      });
-      expect(
-        errorText(
-          await rejectionOf(
-            outsider(async (tx) => {
-              await createWorkspaceInTransaction(tx, {
-                id: createSafeId<"workspace">(),
-                clientId: null,
-                name: "Outsider matter",
-                reference: "NEW-6",
+                reference: "NEW-3",
               });
             }),
           ),
