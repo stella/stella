@@ -1222,6 +1222,20 @@ type Messages = {
         "webSearch": "Turn on web search to use this skill";
       };
     };
+    "connectConnector": {
+      "checkAction": "Check connection";
+      "connected": "Connected";
+      "declined": "Not connected";
+      "description": "The assistant asks to connect {connector} to use its tools in this conversation.";
+      "error": "Could not start connecting. Try again.";
+      "notConnected": "Not connected yet. Finish signing in, then check again.";
+      "notNow": "Not now";
+      "openTools": "Open tools";
+      "scopes": "Requested access: {scopes}";
+      "title": "Connect a connector";
+      "tokenRequired": "{connector} needs an access token. Add it on the tools page, then check the connection.";
+      "waiting": "Finish signing in in the window that opened.";
+    };
     "contextMeter": {
       "attachments": "Attached documents";
       "autoCompact": "At 100% stella automatically summarizes older messages to free space.";
@@ -1506,6 +1520,7 @@ type Messages = {
       "business_registry_lookup": "Searching business registry";
       "compare_versions": "Comparing versions";
       "configure_template_fields": "Configure template fields";
+      "connect_connector": "Asking to connect a connector";
       "counterparty_check": "Checking counterparty";
       "create-document": "Preparing document";
       "create_matter_document": "Creating document";

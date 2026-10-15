@@ -13,6 +13,10 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -984,6 +988,31 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  // Same two steps as private input: the server confirms the connection and
+  // returns the receipt, then the chat continues with it.
+  const handleConnectConnector = useCallback(
+    async (
+      toolCallId: string,
+      decision: ConnectConnectorDecision,
+    ): Promise<ConnectConnectorOutput> =>
+      unwrapEden(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .connectors({ toolCallId })
+          .post({ decision }),
+      ),
+    [conversationId],
+  );
+  const continueConnectConnector = useCallback(
+    async (toolCallId: string, receipt: ConnectConnectorOutput) => {
+      await addToolResult({
+        tool: "connect_connector",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
   const resolveSecretTarget = useCallback(
     async (
       connectorSlug: string,
@@ -1710,6 +1739,8 @@ export const useChatSession = ({
     handleAskUserSubmit,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,

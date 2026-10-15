@@ -1219,6 +1219,20 @@
         "webSearch": "Pro tuto dovednost zapněte vyhledávání na webu"
       }
     },
+    "connectConnector": {
+      "checkAction": "Ověřit připojení",
+      "connected": "Připojeno",
+      "declined": "Nepřipojeno",
+      "description": "Asistent žádá o připojení konektoru {connector}, aby v této konverzaci mohl používat jeho nástroje.",
+      "error": "Připojení se nepodařilo zahájit. Zkuste to znovu.",
+      "notConnected": "Zatím nepřipojeno. Dokončete přihlášení a pak připojení ověřte znovu.",
+      "notNow": "Teď ne",
+      "openTools": "Otevřít nástroje",
+      "scopes": "Požadovaný přístup: {scopes}",
+      "title": "Připojit konektor",
+      "tokenRequired": "Konektor {connector} vyžaduje přístupový token. Přidejte ho na stránce nástrojů a pak ověřte připojení.",
+      "waiting": "Dokončete přihlášení v okně, které se otevřelo."
+    },
     "contextMeter": {
       "attachments": "Připojené dokumenty",
       "autoCompact": "Při 100 % stella automaticky shrne starší zprávy, aby uvolnila místo.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
+      "connect_connector": "Žádost o připojení konektoru",
       "counterparty_check": "Prověřování protistrany",
       "create-document": "Připravuji dokument",
       "create_matter_document": "Vytvářím dokument",

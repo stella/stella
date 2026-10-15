@@ -1219,6 +1219,20 @@
         "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
       }
     },
+    "connectConnector": {
+      "checkAction": "Sprawdź połączenie",
+      "connected": "Połączono",
+      "declined": "Nie połączono",
+      "description": "Asystent prosi o połączenie łącznika {connector}, aby korzystać z jego narzędzi w tej rozmowie.",
+      "error": "Nie udało się rozpocząć łączenia. Spróbuj ponownie.",
+      "notConnected": "Jeszcze nie połączono. Dokończ logowanie i sprawdź połączenie ponownie.",
+      "notNow": "Nie teraz",
+      "openTools": "Otwórz narzędzia",
+      "scopes": "Żądany dostęp: {scopes}",
+      "title": "Połącz łącznik",
+      "tokenRequired": "Łącznik {connector} wymaga tokenu dostępu. Dodaj go na stronie narzędzi, a następnie sprawdź połączenie.",
+      "waiting": "Dokończ logowanie w otwartym oknie."
+    },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
       "autoCompact": "Przy 100% stella automatycznie podsumowuje starsze wiadomości, aby zwolnić miejsce.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Wyszukiwanie w rejestrze przedsiębiorstw",
       "compare_versions": "Porównywanie wersji",
       "configure_template_fields": "Skonfiguruj pola szablonu",
+      "connect_connector": "Prośba o połączenie łącznika",
       "counterparty_check": "Weryfikacja kontrahenta",
       "create-document": "Przygotowywanie dokumentu",
       "create_matter_document": "Tworzenie dokumentu",

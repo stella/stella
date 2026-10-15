@@ -1219,6 +1219,20 @@
         "webSearch": "Norėdami naudoti šį įgūdį, įjunkite paiešką internete"
       }
     },
+    "connectConnector": {
+      "checkAction": "Patikrinti ryšį",
+      "connected": "Prijungta",
+      "declined": "Neprijungta",
+      "description": "Asistentas prašo prijungti jungtį {connector}, kad šiame pokalbyje galėtų naudoti jos įrankius.",
+      "error": "Nepavyko pradėti jungimo. Bandykite dar kartą.",
+      "notConnected": "Dar neprijungta. Užbaikite prisijungimą ir patikrinkite dar kartą.",
+      "notNow": "Ne dabar",
+      "openTools": "Atidaryti įrankius",
+      "scopes": "Prašoma prieiga: {scopes}",
+      "title": "Prijungti jungtį",
+      "tokenRequired": "Jungčiai {connector} reikia prieigos rakto. Pridėkite jį įrankių puslapyje, tada patikrinkite ryšį.",
+      "waiting": "Užbaikite prisijungimą atsidariusiame lange."
+    },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",
       "autoCompact": "Pasiekus 100%, stella automatiškai apibendrina senesnes žinutes, kad atlaisvintų vietos.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Ieškoma įmonių registre",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
+      "connect_connector": "Prašoma prijungti jungtį",
       "counterparty_check": "Tikrinama priešinga šalis",
       "create-document": "Ruošiamas dokumentas",
       "create_matter_document": "Kuriamas dokumentas",

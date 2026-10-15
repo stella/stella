@@ -1219,6 +1219,20 @@
         "webSearch": "A készség használatához kapcsolja be a webes keresést"
       }
     },
+    "connectConnector": {
+      "checkAction": "Kapcsolat ellenőrzése",
+      "connected": "Csatlakoztatva",
+      "declined": "Nincs csatlakoztatva",
+      "description": "Az asszisztens a(z) {connector} csatlakoztatását kéri, hogy ebben a beszélgetésben használhassa az eszközeit.",
+      "error": "Nem sikerült elindítani a csatlakoztatást. Próbáld újra.",
+      "notConnected": "Még nincs csatlakoztatva. Fejezd be a bejelentkezést, majd ellenőrizd újra.",
+      "notNow": "Most nem",
+      "openTools": "Eszközök megnyitása",
+      "scopes": "Kért hozzáférés: {scopes}",
+      "title": "Csatlakozó csatlakoztatása",
+      "tokenRequired": "A(z) {connector} hozzáférési tokent igényel. Add hozzá az eszközök oldalán, majd ellenőrizd a kapcsolatot.",
+      "waiting": "Fejezd be a bejelentkezést a megnyílt ablakban."
+    },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
       "autoCompact": "100%-nál a stella automatikusan összefoglalja a korábbi üzeneteket, hogy helyet szabadítson fel.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
+      "connect_connector": "Csatlakozó csatlakoztatásának kérése",
       "counterparty_check": "Szerződő fél ellenőrzése",
       "create-document": "Dokumentum előkészítése",
       "create_matter_document": "Dokumentum létrehozása",

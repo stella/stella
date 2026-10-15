@@ -1219,6 +1219,20 @@
         "webSearch": "Activa la búsqueda web para usar esta habilidad"
       }
     },
+    "connectConnector": {
+      "checkAction": "Comprobar conexión",
+      "connected": "Conectado",
+      "declined": "No conectado",
+      "description": "El asistente solicita conectar {connector} para usar sus herramientas en esta conversación.",
+      "error": "No se pudo iniciar la conexión. Inténtalo de nuevo.",
+      "notConnected": "Aún no está conectado. Termina de iniciar sesión y vuelve a comprobarlo.",
+      "notNow": "Ahora no",
+      "openTools": "Abrir herramientas",
+      "scopes": "Acceso solicitado: {scopes}",
+      "title": "Conectar un conector",
+      "tokenRequired": "{connector} necesita un token de acceso. Añádelo en la página de herramientas y luego comprueba la conexión.",
+      "waiting": "Termina de iniciar sesión en la ventana que se abrió."
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Buscando en el registro de empresas",
       "compare_versions": "Comparando versiones",
       "configure_template_fields": "Configurar campos de la plantilla",
+      "connect_connector": "Solicitando conectar un conector",
       "counterparty_check": "Verificando la contraparte",
       "create-document": "Preparando documento",
       "create_matter_document": "Creando documento",

@@ -1219,6 +1219,20 @@
         "webSearch": "Lai izmantotu šo prasmi, ieslēdziet meklēšanu tīmeklī"
       }
     },
+    "connectConnector": {
+      "checkAction": "Pārbaudīt savienojumu",
+      "connected": "Pievienots",
+      "declined": "Nav pievienots",
+      "description": "Asistents lūdz pievienot savienotāju {connector}, lai šajā sarunā izmantotu tā rīkus.",
+      "error": "Neizdevās sākt pievienošanu. Mēģiniet vēlreiz.",
+      "notConnected": "Vēl nav pievienots. Pabeidziet pierakstīšanos un pārbaudiet vēlreiz.",
+      "notNow": "Ne tagad",
+      "openTools": "Atvērt rīkus",
+      "scopes": "Pieprasītā piekļuve: {scopes}",
+      "title": "Pievienot savienotāju",
+      "tokenRequired": "Savienotājam {connector} nepieciešams piekļuves tokens. Pievienojiet to rīku lapā un pēc tam pārbaudiet savienojumu.",
+      "waiting": "Pabeidziet pierakstīšanos atvērtajā logā."
+    },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
       "autoCompact": "Sasniedzot 100%, stella automātiski apkopo vecākos ziņojumus, lai atbrīvotu vietu.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Meklēšana uzņēmumu reģistrā",
       "compare_versions": "Versiju salīdzināšana",
       "configure_template_fields": "Konfigurēt veidnes laukus",
+      "connect_connector": "Lūdz pievienot savienotāju",
       "counterparty_check": "Pretpuses pārbaude",
       "create-document": "Dokumenta sagatavošana",
       "create_matter_document": "Dokumenta izveide",

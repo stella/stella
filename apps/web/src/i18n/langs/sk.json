@@ -1219,6 +1219,20 @@
         "webSearch": "Na túto zručnosť zapnite vyhľadávanie na webe"
       }
     },
+    "connectConnector": {
+      "checkAction": "Overiť pripojenie",
+      "connected": "Pripojené",
+      "declined": "Nepripojené",
+      "description": "Asistent žiada o pripojenie konektora {connector}, aby v tejto konverzácii mohol používať jeho nástroje.",
+      "error": "Pripojenie sa nepodarilo spustiť. Skúste to znova.",
+      "notConnected": "Zatiaľ nepripojené. Dokončite prihlásenie a potom pripojenie overte znova.",
+      "notNow": "Teraz nie",
+      "openTools": "Otvoriť nástroje",
+      "scopes": "Požadovaný prístup: {scopes}",
+      "title": "Pripojiť konektor",
+      "tokenRequired": "Konektor {connector} vyžaduje prístupový token. Pridajte ho na stránke nástrojov a potom overte pripojenie.",
+      "waiting": "Dokončite prihlásenie v okne, ktoré sa otvorilo."
+    },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
       "autoCompact": "Pri 100 % stella automaticky zhrnie staršie správy, aby uvoľnila miesto.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
+      "connect_connector": "Žiadosť o pripojenie konektora",
       "counterparty_check": "Preverovanie protistrany",
       "create-document": "Pripravujem dokument",
       "create_matter_document": "Vytváram dokument",

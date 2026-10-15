@@ -1219,6 +1219,20 @@
         "webSearch": "Selle oskuse kasutamiseks lülitage veebiotsing sisse"
       }
     },
+    "connectConnector": {
+      "checkAction": "Kontrolli ühendust",
+      "connected": "Ühendatud",
+      "declined": "Pole ühendatud",
+      "description": "Assistent palub ühendada konnektori {connector}, et kasutada selles vestluses selle tööriistu.",
+      "error": "Ühendamist ei õnnestunud alustada. Proovi uuesti.",
+      "notConnected": "Veel pole ühendatud. Lõpeta sisselogimine ja kontrolli uuesti.",
+      "notNow": "Mitte praegu",
+      "openTools": "Ava tööriistad",
+      "scopes": "Taotletud juurdepääs: {scopes}",
+      "title": "Konnektori ühendamine",
+      "tokenRequired": "Konnektor {connector} vajab juurdepääsutõendit. Lisa see tööriistade lehel ja kontrolli seejärel ühendust.",
+      "waiting": "Lõpeta sisselogimine avanenud aknas."
+    },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
       "autoCompact": "100% juures teeb stella vanematest sõnumitest automaatselt kokkuvõtte, et ruumi vabastada.",
@@ -1503,6 +1517,7 @@
       "business_registry_lookup": "Äriregistrist otsimine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
+      "connect_connector": "Konnektori ühendamise palve",
       "counterparty_check": "Vastaspoole kontrollimine",
       "create-document": "Dokumendi ettevalmistamine",
       "create_matter_document": "Dokumendi loomine",

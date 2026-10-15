@@ -94,6 +94,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
 } from "@/components/chat/chat-user-actions";
+import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -1608,6 +1609,16 @@ const isRequestSecretToolCallPart = (
 ): part is RequestSecretToolCallPart =>
   part.type === "tool-call" && part.name === "request_secret";
 
+type ConnectConnectorToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "connect_connector" }
+>;
+
+const isConnectConnectorToolCallPart = (
+  part: ChatPart,
+): part is ConnectConnectorToolCallPart =>
+  part.type === "tool-call" && part.name === "connect_connector";
+
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
     return `ui-resource:${part.toolCallId}`;
@@ -1914,6 +1925,16 @@ const AssistantMessageParts = ({
     if (isRequestSecretToolCallPart(part)) {
       return (
         <RequestSecretCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
+    if (isConnectConnectorToolCallPart(part)) {
+      return (
+        <ConnectConnectorCard
           isAwaitingUser={isAwaitingUser}
           key={part.id}
           part={part}
