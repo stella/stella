@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
   contacts,
   properties,
@@ -141,7 +142,17 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
           reference: "NEW-1",
         });
         // A dependent row passes the row policies through the access rule
-        // alone; the transaction never names the matter in its pinned ids.
+        // alone: unpin the new matter so pinned ids cannot authorize it.
+        await tx.execute(
+          sql`SELECT set_config(
+            ${SETTING_WORKSPACE_IDS},
+            array_remove(
+              current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
+              ${workspaceId}
+            )::text,
+            true
+          )`,
+        );
         await tx.insert(properties).values({
           workspaceId,
           name: "Files",
