@@ -998,13 +998,96 @@ describe("TanStack AI structured output generation", () => {
     });
 
     expect(options).toEqual({
-      maxCompletionTokens: 1000,
+      // The model reasons by default, so its reasoning is reserved on top of
+      // the reply's allowance.
+      maxCompletionTokens: 1000 + 8192,
       serviceTier: "flex",
       temperature: 0,
     });
     expect(options).not.toHaveProperty("maxOutputTokens");
     expect(options).not.toHaveProperty("promptCacheKey");
     expect(options).not.toHaveProperty("sessionId");
+  });
+
+  describe("a short reply's allowance on a reasoning model", () => {
+    // Gemini, OpenAI and OpenRouter count reasoning inside the one output
+    // ceiling. A fast-role Gemini runs at its lowest level, `LOW`, which by
+    // itself outspends a 200-token reply: without the reservation the run
+    // stops at the ceiling before the answer starts.
+    const SHORT_REPLY = 200;
+    const ceilingFor = (
+      provider: "google" | "openai" | "openrouter",
+      modelId: string,
+    ) => {
+      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+      const model = {
+        adapter: {},
+        keySource: "byok",
+        modelId,
+        modelOptions: tanStackModelOptionsForRole({
+          modelId,
+          organizationId: null,
+          provider,
+          role: "fast",
+        }),
+        provider,
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      } as ResolvedTanStackTextModel;
+      const options: Record<string, unknown> = mergeGenerationOptions({
+        caching: noCaching,
+        maxOutputTokens: SHORT_REPLY,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      });
+      return (
+        options["maxOutputTokens"] ??
+        options["maxCompletionTokens"] ??
+        options["max_output_tokens"]
+      );
+    };
+
+    test("Gemini reserves its thinking level on top of the reply", () => {
+      expect(ceilingFor("google", "gemini-3.8-flash")).toBe(SHORT_REPLY + 4096);
+    });
+
+    test("OpenRouter reserves the reasoning effort it sends", () => {
+      expect(ceilingFor("openrouter", "google/gemini-3.8-flash")).toBe(
+        SHORT_REPLY + 4096,
+      );
+    });
+
+    test("a model the catalog does not list keeps the reply's allowance", () => {
+      expect(ceilingFor("google", "stella-no-such-model")).toBe(SHORT_REPLY);
+    });
+
+    test("the reservation never lifts a request past the model's limit", () => {
+      const limit = getOutputTokenLimit("gemini-3.8-flash") ?? 0;
+      expect(limit).toBeGreaterThan(0);
+      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+      const model = {
+        adapter: {},
+        keySource: "byok",
+        modelId: "gemini-3.8-flash",
+        modelOptions: tanStackModelOptionsForRole({
+          modelId: "gemini-3.8-flash",
+          organizationId: null,
+          provider: "google",
+          role: "fast",
+        }),
+        provider: "google",
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      } as ResolvedTanStackTextModel;
+      expect(
+        mergeGenerationOptions({
+          caching: noCaching,
+          maxOutputTokens: limit,
+          model,
+          serviceTier: "standard",
+          temperature: undefined,
+        }),
+      ).toMatchObject({ maxOutputTokens: limit });
+    });
   });
 
   test("forwards deferred service tiers to Gemini requests", () => {
