@@ -1611,6 +1611,10 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
       {
+        path: "apps/web/src/features/avt/use-load-sample-case.ts",
+        role: "primary",
+      },
+      {
         path: "apps/web/src/features/chat/chat-fetch.ts",
         role: "primary",
       },

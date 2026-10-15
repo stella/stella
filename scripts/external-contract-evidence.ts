@@ -773,10 +773,9 @@ const resolveLiteralAsset = ({
     ? [path.resolve(path.dirname(importer), specifier)]
     : [];
   const pathsBase =
-    options.baseUrl ??
-    (typeof options["pathsBasePath"] === "string"
+    typeof options["pathsBasePath"] === "string"
       ? options["pathsBasePath"]
-      : repositoryRoot);
+      : repositoryRoot;
   for (const [pattern, replacements] of Object.entries(options.paths ?? {})) {
     const star = pattern.indexOf("*");
     const matches =

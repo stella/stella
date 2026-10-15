@@ -1623,10 +1623,13 @@ test("generated data inputs compare blob identities despite identical decoded te
   const read = (bytes: Uint8Array) =>
     Object.assign((file: string) => files.get(file), {
       files: [...files.keys()],
-      blobId: (file: string) =>
-        file === "input.bin"
-          ? sha256Hex(bytes)
-          : sha256Hex(files.get(file) ?? ""),
+      blobId: (file: string) => {
+        const text = files.get(file);
+        if (text === undefined) {
+          return undefined;
+        }
+        return sha256Hex(file === "input.bin" ? bytes : text);
+      },
     });
   const options = {
     root: "/fixture",
