@@ -13,6 +13,7 @@ import {
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { createPressurePause } from "@/api/lib/memory-pressure";
 import type { MemoryPressureCause } from "@/api/lib/memory-pressure";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -141,13 +142,45 @@ describe("file derivative worker", () => {
     workspaceId: "workspace",
   };
 
-  const harness = (cause: MemoryPressureCause) => {
+  /**
+   * A worker reduced to its consumption contract: it takes waiting jobs one
+   * at a time until paused, and resumes when told to. The gate, the pause
+   * controller and the processor are the production ones.
+   */
+  const harness = (initialCause: MemoryPressureCause, waiting: number) => {
+    let cause = initialCause;
+    let paused = false;
+    let pendingRecheck: (() => void) | null = null;
+    const transitions: string[] = [];
     const ran: string[] = [];
     const delayed: { timestamp: number; token?: string }[] = [];
+    const queue = Array.from({ length: waiting }, (_, index) =>
+      index % 2 === 0 ? "generate-pdf" : "generate-thumbnail",
+    );
     const now = Date.parse("2030-01-01T00:00:00.000Z");
+    const gate = { read: () => ({ cause, rssBytes: 1 }) };
+    const pausing = createPressurePause({
+      gate,
+      pause: () => {
+        paused = true;
+      },
+      resume: () => {
+        paused = false;
+      },
+      recheckMs: LIMITS.fileDerivativeDeferDelayMs,
+      onClose: () => transitions.push("closed"),
+      onOpen: () => transitions.push("opened"),
+      setTimer: (run) => {
+        pendingRecheck = run;
+        return () => {
+          pendingRecheck = null;
+        };
+      },
+    });
     const handle = createFileDerivativeProcessor({
-      memory: { read: () => ({ cause, rssBytes: 1 }) },
+      memory: gate,
       now: () => now,
+      pausing,
       processPdf: async () => {
         ran.push("pdf");
       },
@@ -155,48 +188,99 @@ describe("file derivative worker", () => {
         ran.push("thumbnail");
       },
     });
-    const job = (name: string) => ({
-      data: jobData,
-      name,
-      token: "worker-claim",
-      moveToDelayed: async (timestamp: number, token?: string) => {
-        delayed.push(
-          token === undefined ? { timestamp } : { timestamp, token },
-        );
+    const claimed: string[] = [];
+    // `paused` is flipped by the pause controller from inside `handle`.
+    const isPaused = () => paused;
+    const drain = async () => {
+      while (!isPaused()) {
+        const name = queue.shift();
+        if (name === undefined) {
+          return;
+        }
+        claimed.push(name);
+        // A deferred job leaves the queue for its delay; BullMQ re-offers it later.
+        await handle({
+          data: jobData,
+          name,
+          token: "worker-claim",
+          moveToDelayed: async (timestamp: number, token?: string) => {
+            delayed.push(
+              token === undefined ? { timestamp } : { timestamp, token },
+            );
+          },
+        }).catch((error: unknown) => {
+          if (!(error instanceof DelayedError)) {
+            throw error;
+          }
+        });
+      }
+    };
+    return {
+      claimed,
+      delayed,
+      drain,
+      isPaused,
+      now,
+      ran,
+      recheck: () => {
+        const run = pendingRecheck;
+        pendingRecheck = null;
+        run?.();
       },
-    });
-    return { delayed, handle, job, now, ran };
+      setCause: (next: MemoryPressureCause) => {
+        cause = next;
+      },
+      transitions,
+    };
   };
 
   test.each(["signal", "rss"] as const)(
-    "under memory pressure (%s) a job is deferred before any work, keeping its attempts",
+    "under memory pressure (%s) one job is deferred, keeping its attempts, and the worker pauses",
     async (cause) => {
-      const { delayed, handle, job, now, ran } = harness(cause);
+      const run = harness(cause, 20);
 
-      const rejection = await handle(job("generate-pdf")).then(
-        () => null,
-        (error: unknown) => error,
-      );
+      await run.drain();
 
-      // DelayedError is how BullMQ moves a job back without failing it.
-      expect(rejection).toBeInstanceOf(DelayedError);
-      expect(ran).toEqual([]);
-      expect(delayed).toEqual([
+      expect(run.claimed).toHaveLength(1);
+      expect(run.ran).toEqual([]);
+      expect(run.delayed).toEqual([
         {
-          timestamp: now + LIMITS.fileDerivativeDeferDelayMs,
+          timestamp: run.now + LIMITS.fileDerivativeDeferDelayMs,
           token: "worker-claim",
         },
       ]);
+      expect(run.isPaused()).toBe(true);
+      expect(run.transitions).toEqual(["closed"]);
     },
   );
 
-  test("without pressure a job runs its derivative", async () => {
-    const { delayed, handle, job, ran } = harness(null);
+  test("stays paused while the gate stays closed, then resumes once it opens", async () => {
+    const run = harness("rss", 5);
+    await run.drain();
 
-    await handle(job("generate-pdf"));
-    await handle(job("generate-thumbnail"));
+    run.recheck();
+    run.recheck();
+    expect(run.isPaused()).toBe(true);
+    expect(run.claimed).toHaveLength(1);
 
-    expect(ran).toEqual(["pdf", "thumbnail"]);
-    expect(delayed).toEqual([]);
+    run.setCause(null);
+    run.recheck();
+    expect(run.isPaused()).toBe(false);
+    await run.drain();
+
+    expect(run.ran).toEqual(["thumbnail", "pdf", "thumbnail", "pdf"]);
+    // One log per transition, however many jobs and rechecks there were.
+    expect(run.transitions).toEqual(["closed", "opened"]);
+  });
+
+  test("without pressure every job runs its derivative", async () => {
+    const run = harness(null, 2);
+
+    await run.drain();
+
+    expect(run.ran).toEqual(["pdf", "thumbnail"]);
+    expect(run.delayed).toEqual([]);
+    expect(run.isPaused()).toBe(false);
+    expect(run.transitions).toEqual([]);
   });
 });

@@ -67,8 +67,14 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { createMemoryPressureGate } from "@/api/lib/memory-pressure";
-import type { MemoryPressureGate } from "@/api/lib/memory-pressure";
+import {
+  createMemoryPressureGate,
+  createPressurePause,
+} from "@/api/lib/memory-pressure";
+import type {
+  MemoryPressureGate,
+  PressurePause,
+} from "@/api/lib/memory-pressure";
 import { logger } from "@/api/lib/observability/logger";
 import {
   derivativeDeferRssBytes,
@@ -378,10 +384,31 @@ export const initFileDerivativeWorker = () => {
   });
   process.on("memoryPressure", memory.record);
 
+  // Bound late: the controller pauses the worker that runs the processor.
+  let pauseTarget: { pause: () => void; resume: () => void } | null = null;
+  const pausing = createPressurePause({
+    gate: memory,
+    pause: () => pauseTarget?.pause(),
+    resume: () => pauseTarget?.resume(),
+    recheckMs: LIMITS.fileDerivativeDeferDelayMs,
+    onClose: (reading) => {
+      logger.warn("file_derivative.paused", {
+        "memory.pressure_cause": reading.cause ?? "",
+        "memory.rss_bytes": reading.rssBytes,
+      });
+    },
+    onOpen: (reading) => {
+      logger.info("file_derivative.resumed", {
+        "memory.rss_bytes": reading.rssBytes,
+      });
+    },
+  });
+
   const worker = new BullMqWorker<FileDerivativeJobData>(
     QUEUE_NAME,
     createFileDerivativeProcessor({
       memory,
+      pausing,
       processPdf: processPdfDerivativeJob,
       processThumbnail: processImageThumbnailJob,
     }),
@@ -390,6 +417,21 @@ export const initFileDerivativeWorker = () => {
       concurrency: FILE_DERIVATIVE_WORKER_CONCURRENCY,
     },
   );
+
+  pauseTarget = {
+    // Local pause without waiting: it is called from inside the processor,
+    // which must still finish the job in hand.
+    pause: () => {
+      worker.pause(true).catch((error: unknown) => {
+        captureError(error, { source: "file-derivative-pause" });
+      });
+    },
+    resume: () => {
+      worker.resume().catch((error: unknown) => {
+        captureError(error, { source: "file-derivative-resume" });
+      });
+    },
+  };
 
   worker.on("failed", (job, error) => {
     const exhausted =
@@ -447,6 +489,7 @@ export const initFileDerivativeWorker = () => {
     queues: [QUEUE_NAME] as const,
     close: async () => {
       process.off("memoryPressure", memory.record);
+      pausing.stop();
       await worker.close();
     },
   };
@@ -461,30 +504,29 @@ type FileDerivativeProcessorJob = {
 
 /**
  * The derivative worker's job handler. Before a job does any work it reads
- * the memory gate; under pressure the job goes back to the queue delayed,
- * which BullMQ does without consuming an attempt, so a busy process only
- * postpones previews and never fails them.
+ * the memory gate. Under pressure only the job in hand goes back to the
+ * queue delayed (BullMQ does this without consuming an attempt), and the
+ * worker stops taking jobs until the gate reopens, so a backlog is not
+ * claimed and re-delayed job by job. Previews are postponed, never failed.
  */
 export const createFileDerivativeProcessor =
   ({
     memory,
     now = () => Temporal.Now.instant().epochMilliseconds,
+    pausing,
     processPdf,
     processThumbnail,
   }: {
     memory: Pick<MemoryPressureGate, "read">;
     now?: () => number;
+    pausing: Pick<PressurePause, "closed">;
     processPdf: (data: FileDerivativeJobData) => Promise<void>;
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
     const pressure = memory.read();
     if (pressure.cause !== null) {
-      logger.warn("file_derivative.deferred", {
-        "memory.pressure_cause": pressure.cause,
-        job: job.name,
-        "memory.rss_bytes": pressure.rssBytes,
-      });
+      pausing.closed(pressure);
       await job.moveToDelayed(
         now() + LIMITS.fileDerivativeDeferDelayMs,
         job.token,
