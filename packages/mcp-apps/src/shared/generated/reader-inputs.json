@@ -62,6 +62,7 @@
     "packages/mcp-apps/src/shared/locale.ts",
     "packages/text-normalize/src/ascii-fold-table.ts",
     "packages/text-normalize/src/ascii-fold.ts",
+    "packages/text-normalize/src/diacritics.ts",
     "packages/text-normalize/src/index.ts",
     "packages/text-normalize/src/spaced-letters.ts",
     "packages/text-normalize/src/unicode.ts",
