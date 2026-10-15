@@ -55,6 +55,10 @@ if (!databaseUrl || !runPostgresTests) {
           committedBy.push("runner-2");
         };
 
+        // Settled in `finally` too, so a failed wait never deletes rows or
+        // closes clients under a runner that is still writing.
+        let firstRunner: ReturnType<typeof runSchedulerOnce> | undefined;
+
         try {
           await firstDb.insert(schedulerJobs).values({
             description: "lease handoff",
@@ -64,7 +68,7 @@ if (!databaseUrl || !runPostgresTests) {
             task: TASK,
           });
 
-          const firstRunner = runSchedulerOnce({
+          firstRunner = runSchedulerOnce({
             db: firstDb,
             heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
             leaseMs: LEASE_MS,
@@ -132,6 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(job?.lastSuccessAt).toBeInstanceOf(Date);
         } finally {
           releaseFirstTask.resolve();
+          await Promise.allSettled([firstRunner]);
           await secondDb
             .delete(schedulerJobRuns)
             .where(eq(schedulerJobRuns.jobId, jobId));

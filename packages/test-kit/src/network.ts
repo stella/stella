@@ -131,8 +131,11 @@ const PROXY_ENVIRONMENT_KEYS = [
 ] as const;
 
 // 303, and 301/302 after a POST, continue as a GET without the body.
+// The fetch standard rewrites to a bodyless GET only for these; a GET or HEAD
+// that meets a 303 keeps its method and headers.
 const dropsBody = (status: number, method: string) =>
-  status === 303 || ((status === 301 || status === 302) && method === "POST");
+  (status === 303 && method !== "GET" && method !== "HEAD") ||
+  ((status === 301 || status === 302) && method === "POST");
 
 const deleteHeaders = (headers: Headers, names: readonly string[]) => {
   for (const name of names) {
@@ -199,7 +202,7 @@ const guardedFetch =
         deleteHeaders(headers, CREDENTIAL_HEADERS);
       }
       if (dropsBody(response.status, method)) {
-        method = method === "HEAD" ? "HEAD" : "GET";
+        method = "GET";
         body = undefined;
         replayable = true; // no body left to resend
         deleteHeaders(headers, REQUEST_BODY_HEADERS);

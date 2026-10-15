@@ -295,6 +295,20 @@ describe("network guard", () => {
         });
       });
 
+      test("a GET or HEAD meeting a 303 keeps its method and headers", async () => {
+        for (const method of ["GET", "HEAD"]) {
+          await withFake(redirectOnce(303), async (calls) => {
+            await fetch("http://127.0.0.1:1/", {
+              headers: { "content-language": "cs" },
+              method,
+            });
+            expect(calls[1]?.init?.method).toBe(method);
+            const redirected = new Headers(calls[1]?.init?.headers);
+            expect(redirected.get("content-language")).toBe("cs");
+          });
+        }
+      });
+
       test("a 307 cannot resend a streamed body", async () => {
         await withFake(redirectOnce(307), async (calls) => {
           const error = await rejectionOf(
