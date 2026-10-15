@@ -21,6 +21,7 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
 import {
   dynamicToolNamespacePrefix,
@@ -33,7 +34,7 @@ import {
  * approval-gated built-in tools and installed connectors, once per scope, so
  * the `always` grants plus one conversation's grants stay far below it.
  */
-export const CHAT_TOOL_GRANTS_MAX = 500;
+const CHAT_TOOL_GRANTS_MAX = 500;
 
 export type StoredChatToolGrant = {
   id: SafeId<"chatToolGrant">;
@@ -58,32 +59,39 @@ export const loadChatToolGrants = async ({
   userId: SafeId<"user">;
 }) =>
   await safeDb(async (tx): Promise<StoredChatToolGrant[]> => {
-    const rows = await tx
-      .select({
-        id: chatToolGrants.id,
-        scope: chatToolGrants.scope,
-        chatThreadId: chatToolGrants.chatThreadId,
-        toolName: chatToolGrants.toolName,
-        mcpConnectorId: chatToolGrants.mcpConnectorId,
-        mcpConnectorSlug: mcpConnectors.slug,
-      })
-      .from(chatToolGrants)
-      .leftJoin(
-        mcpConnectors,
-        eq(mcpConnectors.id, chatToolGrants.mcpConnectorId),
-      )
-      .where(
-        and(
-          eq(chatToolGrants.organizationId, organizationId),
-          eq(chatToolGrants.userId, userId),
-          or(
-            eq(chatToolGrants.scope, "always"),
-            eq(chatToolGrants.chatThreadId, chatThreadId),
+    const read = await readBounded(
+      tx
+        .select({
+          id: chatToolGrants.id,
+          scope: chatToolGrants.scope,
+          chatThreadId: chatToolGrants.chatThreadId,
+          toolName: chatToolGrants.toolName,
+          mcpConnectorId: chatToolGrants.mcpConnectorId,
+          mcpConnectorSlug: mcpConnectors.slug,
+        })
+        .from(chatToolGrants)
+        .leftJoin(
+          mcpConnectors,
+          eq(mcpConnectors.id, chatToolGrants.mcpConnectorId),
+        )
+        .where(
+          and(
+            eq(chatToolGrants.organizationId, organizationId),
+            eq(chatToolGrants.userId, userId),
+            or(
+              eq(chatToolGrants.scope, "always"),
+              eq(chatToolGrants.chatThreadId, chatThreadId),
+            ),
           ),
         ),
-      )
-      .limit(CHAT_TOOL_GRANTS_MAX);
-    return rows.map(({ mcpConnectorSlug, ...grant }) => ({
+      CHAT_TOOL_GRANTS_MAX,
+    );
+    if (read.type === "overflow") {
+      return panic(
+        "Stored chat tool grants exceed their per-conversation bound",
+      );
+    }
+    return read.rows.map(({ mcpConnectorSlug, ...grant }) => ({
       ...grant,
       mcpConnectorToolNamespace:
         mcpConnectorSlug === null
@@ -291,23 +299,29 @@ export const resolveStoredGrantSubject = async ({
   if (!isExternalMcpToolName(toolName)) {
     return { type: "tool", toolName };
   }
-  const connectors = await tx
-    .select({ id: mcpConnectors.id, slug: mcpConnectors.slug })
-    .from(mcpUserConnections)
-    .innerJoin(
-      mcpConnectors,
-      eq(mcpConnectors.id, mcpUserConnections.connectorId),
-    )
-    .where(
-      and(
-        eq(mcpUserConnections.organizationId, organizationId),
-        eq(mcpUserConnections.userId, userId),
-        eq(mcpUserConnections.enabled, true),
+  const connectors = await readBounded(
+    tx
+      .select({ id: mcpConnectors.id, slug: mcpConnectors.slug })
+      .from(mcpUserConnections)
+      .innerJoin(
+        mcpConnectors,
+        eq(mcpConnectors.id, mcpUserConnections.connectorId),
+      )
+      .where(
+        and(
+          eq(mcpUserConnections.organizationId, organizationId),
+          eq(mcpUserConnections.userId, userId),
+          eq(mcpUserConnections.enabled, true),
+        ),
       ),
-    )
-    .limit(LIMITS.mcpGatewayConnectorsMax);
+    LIMITS.mcpGatewayConnectorsMax,
+  );
+  // A truncated list could name the wrong owner, so no grant is resolved.
+  if (connectors.type === "overflow") {
+    return null;
+  }
   const connectorId = resolveExternalMcpGrantConnectorId({
-    connectors,
+    connectors: connectors.rows,
     toolName,
   });
   return connectorId === null ? null : { type: "mcp-connector", connectorId };

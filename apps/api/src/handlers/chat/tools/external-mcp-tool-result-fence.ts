@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+
+import { reraiseChatToolFailure } from "@/api/handlers/chat/tools/tool-failure";
 import {
   neutralizePromptText,
   sanitizeForPrompt,
@@ -151,7 +154,7 @@ const isLocalControlFlowError = (error: unknown): boolean =>
   (error.name === "AbortError" ||
     typeof Reflect.get(error, "_tag") === "string");
 
-export const fenceExternalMcpToolError = (
+const fenceExternalMcpToolError = (
   provenance: ExternalMcpToolProvenance,
   error: Error,
 ): Error =>
@@ -169,16 +172,21 @@ export const fenceExternalMcpToolExecute =
     execute: ToolExecute<TArgs>,
   ): ((...args: TArgs) => Promise<unknown>) =>
   async (...args: TArgs): Promise<unknown> => {
-    try {
-      const result: unknown = await execute(...args);
-      return fenceExternalMcpToolResult(provenance, result);
-    } catch (error) {
-      if (isLocalControlFlowError(error)) {
-        throw error;
-      }
-      throw fenceExternalMcpToolError(
+    const settled = await Result.tryPromise({
+      try: async (): Promise<unknown> => await execute(...args),
+      catch: (error: unknown) => error,
+    });
+    if (Result.isOk(settled)) {
+      return fenceExternalMcpToolResult(provenance, settled.value);
+    }
+    const error = settled.error;
+    if (isLocalControlFlowError(error)) {
+      return reraiseChatToolFailure(error);
+    }
+    return reraiseChatToolFailure(
+      fenceExternalMcpToolError(
         provenance,
         error instanceof Error ? error : new Error(String(error)),
-      );
-    }
+      ),
+    );
   };

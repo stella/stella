@@ -138,7 +138,10 @@ describe("external MCP tool result fence", () => {
     expect(message).toContain('connector "registry", tool "lookup"');
     expect(countOccurrences(message, UNTRUSTED_CONTENT_CLOSE)).toBe(1);
 
-    const timeout = new TimeoutError({ message: "timed out" });
+    const timeout = new TimeoutError({
+      message: "timed out",
+      label: "external-mcp-lookup",
+    });
     const typed = normalizedLookup(() => {
       throw timeout;
     });

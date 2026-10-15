@@ -26,7 +26,7 @@ CREATE INDEX "chat_tool_grants_chat_thread_idx" ON "chat_tool_grants" ("chat_thr
 CREATE INDEX "chat_tool_grants_mcp_connector_idx" ON "chat_tool_grants" ("mcp_connector_id");--> statement-breakpoint
 ALTER TABLE "chat_tool_grants" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "chat_tool_grants" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
-GRANT SELECT, INSERT, DELETE ON TABLE "chat_tool_grants" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "chat_tool_grants" TO stella;--> statement-breakpoint
 CREATE POLICY "chat_tool_grant_owner" ON "chat_tool_grants" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_tool_grants'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_tool_grants'::regclass));--> statement-breakpoint
 CREATE POLICY "chat_tool_grant_select" ON "chat_tool_grants" AS PERMISSIVE FOR SELECT TO "stella" USING ((
   organization_id =
@@ -54,4 +54,5 @@ CREATE POLICY "chat_tool_grant_delete" ON "chat_tool_grants" AS PERMISSIVE FOR D
   (SELECT current_setting(
     'app.user_id', true
   ))
-));
+));--> statement-breakpoint
+CREATE POLICY "chat_tool_grant_no_update" ON "chat_tool_grants" AS RESTRICTIVE FOR UPDATE TO "stella" USING (false);

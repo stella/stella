@@ -1672,6 +1672,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
+  [chatToolGrants.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

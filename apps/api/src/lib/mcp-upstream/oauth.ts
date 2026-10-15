@@ -267,8 +267,15 @@ export type RegisteredOAuthClient = {
 type McpFetchJsonInit = {
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
+  maxBytes?: number | undefined;
   method?: string | undefined;
 };
+
+/**
+ * Passed as the schema of a call whose answer carries no data: an RFC 7009
+ * revocation succeeds on any 2xx status, and its body is never read.
+ */
+const RESPONSE_BODY_IGNORED = v.unknown();
 
 const fetchJson = async <T>({
   init,
@@ -292,7 +299,7 @@ const fetchJson = async <T>({
       const response = await dependencies.safeOutboundFetchBytes({
         body: init?.body,
         headers,
-        maxBytes: OAUTH_FETCH_MAX_BYTES,
+        maxBytes: init?.maxBytes ?? OAUTH_FETCH_MAX_BYTES,
         method: init?.method,
         permit: dependencies.permit,
         timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
@@ -316,6 +323,9 @@ const fetchJson = async <T>({
         });
       }
 
+      if (schema === RESPONSE_BODY_IGNORED) {
+        return v.parse(schema, undefined);
+      }
       return v.parse(
         schema,
         JSON.parse(new TextDecoder().decode(response.value.body)),
@@ -880,15 +890,15 @@ export const revokeOAuthToken = async ({
     body.set("client_secret", clientSecret);
   }
 
-  dependencies.signal?.throwIfAborted();
-  const response = await dependencies.safeOutboundFetchBytes({
-    body,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    maxBytes: OAUTH_REVOCATION_MAX_BYTES,
-    method: "POST",
-    permit,
-    signal: dependencies.signal,
-    timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
+  const response = await fetchJson({
+    dependencies: { ...dependencies, permit },
+    init: {
+      body,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      maxBytes: OAUTH_REVOCATION_MAX_BYTES,
+      method: "POST",
+    },
+    schema: RESPONSE_BODY_IGNORED,
     url: endpoint,
   });
   if (Result.isError(response)) {
@@ -897,14 +907,6 @@ export const revokeOAuthToken = async ({
         status: 502,
         message: "MCP token revocation request failed",
         cause: response.error,
-      }),
-    );
-  }
-  if (!response.value.ok) {
-    return Result.err(
-      new HandlerError({
-        status: 502,
-        message: `MCP token revocation returned HTTP ${response.value.status}`,
       }),
     );
   }

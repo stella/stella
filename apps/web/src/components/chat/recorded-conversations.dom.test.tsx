@@ -1114,6 +1114,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "check-stored-grant": OUTSIDE_THE_CONVERSATION,
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),

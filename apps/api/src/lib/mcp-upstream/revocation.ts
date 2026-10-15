@@ -138,14 +138,18 @@ export const revokeMcpConnectionTokens = async ({
           revocable,
         }),
     );
-    if (Result.isOk(result) && Result.isOk(result.value)) {
-      revoked.push(revocable.tokenTypeHint);
+    if (Result.isError(result)) {
+      failed.push({ tokenType: revocable.tokenTypeHint, error: result.error });
       return;
     }
-    failed.push({
-      tokenType: revocable.tokenTypeHint,
-      error: Result.isError(result) ? result.error : result.value.error,
-    });
+    if (Result.isError(result.value)) {
+      failed.push({
+        tokenType: revocable.tokenTypeHint,
+        error: result.value.error,
+      });
+      return;
+    }
+    revoked.push(revocable.tokenTypeHint);
   };
 
   if (connection.refreshTokenEncrypted && connection.refreshTokenIv) {

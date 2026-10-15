@@ -130,9 +130,10 @@ describe("upstream token revocation on disconnect", () => {
     expect(
       fixture.revokeCalls.map((call) => ({
         clientId: call.clientId,
-        clientSecret: call.clientSecret,
+        clientSecret:
+          call.clientSecret === null ? null : String(call.clientSecret),
         endpoint: call.endpoint.toString(),
-        token: call.revocable.token,
+        token: String(call.revocable.token),
         tokenTypeHint: call.revocable.tokenTypeHint,
       })),
     ).toEqual([

@@ -10,6 +10,7 @@ import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
@@ -113,6 +114,7 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const READ_FRESH = "read fresh at each use, never cached";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
@@ -290,6 +292,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     },
   },
   "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/tool-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["tool-grants"].get'],
+    files: ["features/chat/chat-tool-grants.ts"],
+    keys: () => [
+      chatToolGrantsOptions({
+        activeOrganizationId: ORG,
+        threadId: "thread",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],

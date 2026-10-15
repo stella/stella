@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { mcpUserConnections } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -17,6 +17,8 @@ import {
 } from "@/api/lib/mcp-upstream/connections";
 import { revokeMcpConnectionTokens } from "@/api/lib/mcp-upstream/revocation";
 import type { McpTokenRevocationOutcome } from "@/api/lib/mcp-upstream/revocation";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 const routeParams = t.Object({
   connectionId: tSafeId("mcpUserConnection"),
@@ -31,27 +33,29 @@ const config = {
   params: routeParams,
 } satisfies HandlerConfig;
 
-const reportRevocationOutcome =
-  (connectorSlug: string) =>
-  (outcome: McpTokenRevocationOutcome): void => {
-    if (outcome.type === "discovery_failed") {
-      captureError(outcome.error, {
-        source: "mcp-connection-revocation",
-        connectorSlug,
-      });
-      return;
-    }
-    if (outcome.type !== "attempted") {
-      return;
-    }
-    for (const failure of outcome.failed) {
-      captureError(failure.error, {
-        source: "mcp-connection-revocation",
-        connectorSlug,
-        tokenType: failure.tokenType,
-      });
-    }
-  };
+const REVOCATION_FAILED = failureSink({
+  event: "mcp_upstream.token_revocation_failed",
+  expected: [],
+});
+
+const reportRevocationOutcome = (outcome: McpTokenRevocationOutcome): void => {
+  if (outcome.type === "discovery_failed") {
+    observeFailure(outcome.error, {
+      sink: REVOCATION_FAILED,
+      ctx: { source: "mcp-connection-revocation", phase: "discovery" },
+    });
+    return;
+  }
+  if (outcome.type !== "attempted") {
+    return;
+  }
+  for (const failure of outcome.failed) {
+    observeFailure(failure.error, {
+      sink: REVOCATION_FAILED,
+      ctx: { source: "mcp-connection-revocation", phase: failure.tokenType },
+    });
+  }
+};
 
 export type DeleteMcpConnectionDependencies = {
   revocableMcpConnectionFromDeleted: typeof revocableMcpConnectionFromDeleted;
@@ -125,8 +129,9 @@ export const createDeleteMcpConnectionHandler = (
           safeDb,
         });
         if (Result.isError(resolved)) {
-          captureError(resolved.error, {
-            source: "mcp-connection-revocation",
+          observeFailure(resolved.error, {
+            sink: REVOCATION_FAILED,
+            ctx: { source: "mcp-connection-revocation", phase: "resolve" },
           });
           return;
         }
@@ -134,7 +139,7 @@ export const createDeleteMcpConnectionHandler = (
         if (revocable === null) {
           return;
         }
-        reportRevocationOutcome(revocable.slug)(
+        reportRevocationOutcome(
           await dependencies.revokeMcpConnectionTokens({
             connection: revocable,
             organizationId: session.activeOrganizationId,

@@ -24,7 +24,9 @@ import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operation
 export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
   | typeof AUDIT_RESOURCE_TYPE.CHAT_MESSAGE
-  | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE;
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT;
 
 export type NonChatAuditResourceType = Exclude<
   AuditResourceType,
@@ -64,6 +66,9 @@ const CHAT_CHANGE_FIELDS = {
     CHAT_MESSAGE_CHANGE_FIELDS,
   ),
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: new Set<string>(),
+  // Tool executions and grants describe themselves in `metadata` only.
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
 
 type AuditDiff = { old: unknown; new: unknown };
@@ -84,6 +89,8 @@ export type ChatAuditChanges = {
     Record<(typeof CHAT_MESSAGE_CHANGE_FIELDS)[number], AuditDiff>
   >;
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: Record<string, never>;
 };
 
 const isChatResourceType = (
