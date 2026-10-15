@@ -3,8 +3,9 @@ import { Result } from "better-result";
 
 import {
   findFileAnonymizationMatches,
-  normalizeWhitespaceWithOffsets,
+  prepareFileAnonymizationText,
 } from "@/lib/anonymize/file-anonymization-matches.logic";
+import type { PreparedAnonymizationText } from "@/lib/anonymize/file-anonymization-matches.logic";
 import { ClientOperationError } from "@/lib/errors/client";
 import { buildPageSearchText, mergePDFSearchBoxes } from "@/lib/pdf/pdf-search";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
@@ -93,14 +94,33 @@ const locateRange = (
   return Result.ok(glyphs);
 };
 
+// Every term of one export reads the same extraction: normalize and fold it
+// once instead of once per term.
+const preparedTexts = new WeakMap<
+  PdfAnonymizationText,
+  { text: string; prepared: PreparedAnonymizationText }
+>();
+
+const preparedText = (extraction: PdfAnonymizationText) => {
+  const cached = preparedTexts.get(extraction);
+  if (cached?.text === extraction.text) {
+    return cached.prepared;
+  }
+  const prepared = prepareFileAnonymizationText(extraction.text);
+  preparedTexts.set(extraction, { text: extraction.text, prepared });
+  return prepared;
+};
+
 /** Every occurrence of `term`, matched the way detection matches it. */
 export const locateAnonymizationTerm = (
   extraction: PdfAnonymizationText,
   term: string,
 ) => {
-  const normalized = normalizeWhitespaceWithOffsets(extraction.text);
   const located: LocatedAnonymizationMatch[] = [];
-  for (const { start, end } of findFileAnonymizationMatches(normalized, term)) {
+  for (const { start, end } of findFileAnonymizationMatches(
+    preparedText(extraction),
+    term,
+  )) {
     const glyphs = locateRange(extraction, start, end);
     if (glyphs.isErr()) {
       return glyphs;
