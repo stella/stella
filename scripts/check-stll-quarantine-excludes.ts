@@ -26,12 +26,12 @@
  * Run: `bun scripts/check-stll-quarantine-excludes.ts`
  */
 
-import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
+  ExpiryScopeError,
   expiryBlocksFiles,
   expiryWarning,
   readExpiryCheckScope,
@@ -510,7 +510,9 @@ const readBasePackageManifests = (
     { cwd: REPO_ROOT },
   );
   if (listed.exitCode !== 0) {
-    return panic("Cannot enumerate base manifests for expiry ownership");
+    throw new ExpiryScopeError(
+      "Cannot enumerate base manifests for expiry ownership",
+    );
   }
   const files = listed.stdout
     .toString()
@@ -527,7 +529,9 @@ const readBasePackageManifests = (
         { cwd: REPO_ROOT },
       );
       if (contents.exitCode !== 0) {
-        return panic("Cannot read base manifest for expiry ownership");
+        throw new ExpiryScopeError(
+          "Cannot read base manifest for expiry ownership",
+        );
       }
       return [file, contents.stdout.toString()];
     }),

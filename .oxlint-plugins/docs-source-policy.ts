@@ -288,7 +288,7 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {
-  if (!isStaticRecord(value) || value.reason !== NO_LLMS_TXT_REASON) {
+  if (!isStaticRecord(value) || value["reason"] !== NO_LLMS_TXT_REASON) {
     return null;
   }
   const { checkedAt, dependency, explanation, expiresAt } = value;
@@ -316,7 +316,7 @@ const fixturePolicy = (
   if (!isStaticRecord(value)) {
     return null;
   }
-  const dependencies = staticStrings(value.dependencies);
+  const dependencies = staticStrings(value["dependencies"]);
   const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
   if (
     dependencies === null ||
