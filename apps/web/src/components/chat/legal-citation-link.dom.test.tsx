@@ -670,6 +670,35 @@ for (const interactive of [false, true]) {
   });
 }
 
+test("a long external source title stays inside its truncated tray chip", async () => {
+  const title = "Publisher".repeat(12);
+  const href = "https://publisher.example.test/long-title";
+  const view = await renderChat(
+    <SourceChips
+      messageId="long-external"
+      parts={[
+        {
+          type: "tool-call",
+          name: "execute_typescript",
+          id: "long-external-source",
+          state: "complete",
+          arguments: "{}",
+          output: { url: href, title },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => {
+    const chip = view.getByRole("link", { name: title });
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(chip.className).toContain("rounded-md");
+    expect(chip.className).toContain("border");
+    const label = chip.querySelector(".truncate");
+    expect(label?.className).toContain("max-w-[20ch]");
+    expect(label?.textContent).toBe(title);
+  });
+});
+
 test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";

@@ -227,7 +227,8 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <ChatDecisionCitation {...decisionProps} decisionId={decisionId} />
     );
   }
-  if (citation.type === "external") {
+  // The sources tray keeps its chip shell and title truncation below.
+  if (citation.type === "external" && props.appearance !== "tray") {
     return citation.url === null ? (
       <span>{props.children}</span>
     ) : (
