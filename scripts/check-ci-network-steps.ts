@@ -608,6 +608,8 @@ export const networkViolations = (
         const fetches = runFetches(repo, run, {
           actionDir: dir,
           label: file,
+          // Composite actions have no defaults; only the step can set it.
+          cwd: workingDirectory({}, {}, rawStep),
           declared,
         });
         summary.fetches.push(...fetches);

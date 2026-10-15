@@ -400,6 +400,32 @@ runs:
       `${WORKFLOW}: build: Install tool: curl (.github/actions/tool/install.sh) needs a step timeout-minutes`,
     ]);
   });
+
+  test("a composite step working-directory resolves relative scripts", () => {
+    const report = check({
+      ".github/actions/tool/action.yml": `name: Tool
+runs:
+  using: composite
+  steps:
+    - name: Install
+      shell: bash
+      working-directory: apps/web
+      run: bash ./scripts/install-tool.sh
+`,
+      "apps/web/scripts/install-tool.sh":
+        "curl -fsSL https://example.com/tool -o tool\n",
+      [WORKFLOW]: workflow(`      - name: Install tool
+        uses: ./.github/actions/tool
+`),
+    });
+
+    expect(report.errors.toSorted()).toEqual(
+      [
+        ".github/actions/tool/action.yml: Install: route curl (apps/web/scripts/install-tool.sh) through scripts/retry.sh",
+        `${WORKFLOW}: build: Install tool: curl (apps/web/scripts/install-tool.sh) needs a step timeout-minutes`,
+      ].toSorted(),
+    );
+  });
 });
 
 describe("allowlist", () => {
