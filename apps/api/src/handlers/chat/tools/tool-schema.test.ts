@@ -99,6 +99,7 @@ import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -332,13 +333,13 @@ const buildFullCoverageChatTools = (
     recordAuditEvent: noopAuditRecorder,
     workspaceStatusById: new Map([[workspaceId, "active"]]),
     resolveMemorySourceWorkspaceIds: () => [],
-    skillMetadata: [
+    skillMetadata: offeredSkillCatalog([
       {
         description: editableActiveSkillContext.description,
         name: editableActiveSkillContext.toolName,
         version: editableActiveSkillContext.version,
       },
-    ],
+    ]),
   });
 };
 
@@ -801,13 +802,13 @@ describe("chat tool schemas", () => {
       createSkillTools({
         organizationId,
         safeDb: unusedSafeDb,
-        skills: [
+        skills: offeredSkillCatalog([
           {
             description: "Run a custom legal workflow.",
             name: "custom-legal-workflow",
             version: "1.0",
           },
-        ],
+        ]),
         userId,
       }),
     ).not.toThrow();
@@ -817,7 +818,7 @@ describe("chat tool schemas", () => {
     const tools = createSkillTools({
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [],
+      skills: offeredSkillCatalog([]),
       userId,
     });
 
@@ -829,13 +830,13 @@ describe("chat tool schemas", () => {
     const tools = createSkillTools({
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [
+      skills: offeredSkillCatalog([
         {
           description: "Private matter-specific workflow.",
           name: "acme-closing-strategy",
           version: "1.0",
         },
-      ],
+      ]),
       userId,
     });
 
@@ -1144,13 +1145,13 @@ describe("chat tool schemas", () => {
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     const createResource = tools["create-current-skill-resource"];
@@ -1207,13 +1208,13 @@ describe("chat tool schemas", () => {
       },
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     expect(tools).toHaveProperty("create-current-skill-resource");

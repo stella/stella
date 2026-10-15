@@ -2078,6 +2078,7 @@
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
     "website": "Web",
+    "whenToUse": "Kedy použiť",
     "workflow": "Pracovný postup",
     "workflows": "Pracovné postupy",
     "zoomIn": "Priblížiť",
@@ -3652,6 +3653,10 @@
       "importTitle": "Importovať zručnosť",
       "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností}}",
       "invalidPath": "Cesta smie obsahovať iba malé písmená, číslice, bodky, spojovníky alebo podčiarkovníky",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
+      "invocationManual": "Iba na vyžiadanie",
+      "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
       "license": "Licencia: {license}",
       "newFile": "Nový súbor",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4342,6 +4347,8 @@
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
       },
+      "showInTitle": "Zobraziť číslo vedľa názvu spisu",
+      "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
       "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
@@ -5558,7 +5565,6 @@
     "viewVersion": "Zobraziť",
     "whenNotToUse": "Kedy nepoužívať",
     "whenNotToUsePlaceholder": "Kedy sa tomuto vzoru vyhnúť?",
-    "whenToUse": "Kedy použiť",
     "whenToUsePlaceholder": "Kedy sa má tento vzor použiť? (pomáha AI s výberom vzoru)"
   },
   "timesheets": {
@@ -5679,7 +5685,7 @@
       "title": "Kopírovať do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Názov spisu",
       "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
@@ -6131,15 +6137,12 @@
       "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobný"
-    },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "noClient": "Žiadny klient nepriradený",
+      "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
         "co_counsel": "Spolupracujúci advokát",

@@ -248,6 +248,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Reviewed citation labels: read by ingestion, written by the operator
   // script on the owner connection, never read through the request role.
   "case_law_citation_reviews",
+  "case_law_citation_doctrine_reviews",
   // Legislation work-change queue: written only by triggers on
   // legislation_documents, as the legislation writer.
   "legislation_work_changes",

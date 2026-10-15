@@ -2078,6 +2078,7 @@
     "versionLabel": "Wersja {version}",
     "viewSource": "Zobacz źródło",
     "website": "Witryna",
+    "whenToUse": "Kiedy używać",
     "workflow": "Przepływ pracy",
     "workflows": "Przepływy pracy",
     "zoomIn": "Powiększ",
@@ -3652,6 +3653,10 @@
       "importTitle": "Importuj umiejętność",
       "importedSkills": "{count, plural, one {Zaimportowano # umiejętność} few {Zaimportowano # umiejętności} many {Zaimportowano # umiejętności} other {Zaimportowano # umiejętności}}",
       "invalidPath": "Ścieżka może zawierać tylko małe litery, cyfry, kropki, łączniki i podkreślenia",
+      "invocationAuto": "Automatycznie",
+      "invocationAutoHelp": "AI może sama użyć tej umiejętności, gdy pasuje do prośby.",
+      "invocationManual": "Tylko na żądanie",
+      "invocationManualHelp": "Używana tylko wtedy, gdy wywołasz ją przez / lub dodasz do wiadomości.",
       "license": "Licencja: {license}",
       "newFile": "Nowy plik",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4342,6 +4347,8 @@
         "yearMonthSequential": "Rok-miesiąc / kolejny (2026-02/001)",
         "yearSequential": "Rok / kolejny (2026/001)"
       },
+      "showInTitle": "Pokaż numer obok nazwy sprawy",
+      "showInTitleDescription": "Gdy wyłączone, tytuł jest dokładnie wpisaną nazwą.",
       "title": "Numeracja spraw",
       "tokenHelp": "Dostępne tokeny: '{'SEQ'}' (sekwencja), '{'YYYY'}' (rok), '{'YY'}' (rok 2-cyfrowy), '{'MM'}' (miesiąc)"
     },
@@ -5558,7 +5565,6 @@
     "viewVersion": "Podgląd",
     "whenNotToUse": "Kiedy nie używać",
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
-    "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
   },
   "timesheets": {
@@ -5679,7 +5685,7 @@
       "title": "Kopiuj do sprawy"
     },
     "create": {
-      "ownerTypeToggle": "Typ sprawy",
+      "matterName": "Nazwa sprawy",
       "personalDescription": "Sprawy osobiste są prywatne i nie wymagają klienta. Możesz je później awansować, aby udostępnić zespołowi."
     },
     "createNewWorkspace": "Utwórz nową sprawę",
@@ -6131,15 +6137,12 @@
       "upcomingTasks": "Nadchodząca agenda",
       "uploaded": "przesłał(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobista"
-    },
     "parties": {
       "addParty": "Dodaj stronę",
       "changeClient": "Zmień klienta",
       "client": "Klient",
       "noClient": "Brak przypisanego klienta",
+      "noClientOptional": "Bez klienta (opcjonalnie)",
       "noParties": "Do tej sprawy nie dodano żadnych stron.",
       "partyRoles": {
         "co_counsel": "Współpełnomocnik",

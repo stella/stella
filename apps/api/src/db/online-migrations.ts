@@ -80,6 +80,15 @@ type OnlineIndex = RequiredMigrationIndex & {
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   CASE_LAW_COVERAGE_INDEX,
+  // Reviewed doctrine per cited decision: few rows carry a finding.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
+    definitionBody:
+      "ON public.case_law_citations USING btree (cited_decision_id) WHERE ((doctrinal_treatment)::text = ANY ((ARRAY['distinguishes'::character varying, 'limits'::character varying])::text[]))",
+    isUnique: false,
+    name: "case_law_citations_doctrine_cited_idx",
+    tableName: "case_law_citations",
+  },
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "session_originConsentId_idx" ON public."session" USING btree ("origin_consent_id")',

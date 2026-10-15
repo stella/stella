@@ -1,7 +1,11 @@
 import { CancelledError } from "@tanstack/react-query";
 import { isTaggedError, panic } from "better-result";
 import { posthog } from "posthog-js";
-import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
+import type {
+  CaptureResult,
+  ResetOptions,
+  SupportedWebVitalsMetrics,
+} from "posthog-js";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
 import {
@@ -678,6 +682,12 @@ const devErrorContext = (
   }
 };
 
+// The anonymous side of a page load's `$identify` when the load holds no
+// anonymous activity worth linking: the same value on every load of the same
+// user, so it joins that person once and never adds another distinct id.
+export const signedInAnonymousId = (userId: string): string =>
+  `signed-in:${userId}`;
+
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
@@ -785,18 +795,38 @@ export const createPostHogAnalytics = ({
   registerBuildProperties();
 
   // Persistence is off, so every page load starts with a fresh anonymous
-  // distinct id. `identify()` would merge that id into the person on every
-  // load until the person hits PostHog's distinct-id limit; bootstrapping the
-  // known user id switches identity without a merge. Anonymous activity before
-  // sign-in stays unlinked, which `person_profiles: "identified_only"` already
-  // implies.
-  const resetIdentity = (userId: string | null) => {
-    posthog.reset(
-      userId === null
-        ? undefined
-        : { bootstrap: { distinctID: userId, isIdentifiedID: true } },
-    );
+  // distinct id. Identity binds through one `$identify` per load, which is what
+  // marks the person identified and lets analytics count signed-in users. The
+  // anonymous side of that `$identify` is chosen so the person's distinct ids
+  // stay bounded:
+  // - after the app saw a signed-out visitor in this load (an in-app sign-in),
+  //   the load's own anonymous id, so the pages visited before signing in join
+  //   the person; this happens once per sign-in, not per page load;
+  // - otherwise (a page load that already holds a session, another user's
+  //   identity), an anonymous id derived from the user id, which joins the
+  //   person once and is a no-op on every later load.
+  let signedOutVisitorSeen = false;
+
+  const resetIdentity = (options?: ResetOptions) => {
+    posthog.reset(options);
     registerBuildProperties();
+  };
+
+  const bindIdentity = (userId: string) => {
+    if (posthog._isIdentified() || !signedOutVisitorSeen) {
+      resetIdentity({
+        bootstrap: {
+          distinctID: signedInAnonymousId(userId),
+          isIdentifiedID: false,
+        },
+      });
+    }
+    signedOutVisitorSeen = false;
+    // The stable user id is the whole identity. Profile attributes such as
+    // name and email already live server-side keyed by this id, so
+    // duplicating them into PostHog person properties adds no analytical
+    // value and only widens the person-property surface.
+    posthog.identify(userId);
   };
 
   const analytics: Analytics = {
@@ -880,21 +910,18 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      // The stable user id is the whole identity. Profile attributes such as
-      // name and email already live server-side keyed by this id, so
-      // duplicating them into PostHog person properties adds no analytical
-      // value and only widens the person-property surface.
-      resetIdentity(user.id);
+      bindIdentity(user.id);
       // Group properties (name, practice jurisdictions) are set server-side
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
     reset: ({ onlyIfIdentified } = {}) => {
+      signedOutVisitorSeen = true;
       if (onlyIfIdentified && !posthog._isIdentified()) {
         return;
       }
 
-      resetIdentity(null);
+      resetIdentity();
     },
   };
 

@@ -2078,6 +2078,7 @@
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
     "website": "Sitio web",
+    "whenToUse": "Cuándo usar",
     "workflow": "Flujo de trabajo",
     "workflows": "Flujos de trabajo",
     "zoomIn": "Acercar",
@@ -3652,6 +3653,10 @@
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades}}",
       "invalidPath": "La ruta solo puede usar letras minúsculas, dígitos, puntos, guiones o guiones bajos",
+      "invocationAuto": "Automáticamente",
+      "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
+      "invocationManual": "Solo cuando se invoque",
+      "invocationManualHelp": "Solo se usa cuando la invocas con / o la añades a tu mensaje.",
       "license": "Licencia: {license}",
       "newFile": "Nuevo archivo",
       "newFileFilenamePlaceholder": "notas.md",
@@ -4342,6 +4347,8 @@
         "yearMonthSequential": "Año-Mes / Secuencial (2026-02/001)",
         "yearSequential": "Año / Secuencial (2026/001)"
       },
+      "showInTitle": "Mostrar el número junto al nombre del asunto",
+      "showInTitleDescription": "Si está desactivado, el título es exactamente el nombre que escribió.",
       "title": "Numeración de asuntos",
       "tokenHelp": "Tokens disponibles: '{'SEQ'}' (secuencia), '{'YYYY'}' (año), '{'YY'}' (año de 2 dígitos), '{'MM'}' (mes)"
     },
@@ -5558,7 +5565,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Cuándo no usar",
     "whenNotToUsePlaceholder": "¿Cuándo debe evitarse esta plantilla?",
-    "whenToUse": "Cuándo usar",
     "whenToUsePlaceholder": "¿Cuándo debe usarse esta plantilla? (guía la selección de plantillas por la IA)"
   },
   "timesheets": {
@@ -5679,7 +5685,7 @@
       "title": "Copiar a asunto"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de asunto",
+      "matterName": "Nombre del asunto",
       "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
     },
     "createNewWorkspace": "Crear nuevo asunto",
@@ -6131,15 +6137,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "subió"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Personal"
-    },
     "parties": {
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
       "client": "Cliente",
       "noClient": "Sin cliente asignado",
+      "noClientOptional": "Sin cliente (opcional)",
       "noParties": "No se han añadido partes a este asunto.",
       "partyRoles": {
         "co_counsel": "Co-abogado",

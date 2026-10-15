@@ -1,4 +1,6 @@
 import {
+  ProtocolError,
+  ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
   isLegacyRequest,
@@ -76,6 +78,10 @@ import {
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
+import {
+  getSkillPrompt,
+  listSkillPrompts,
+} from "@/api/mcp/gateway/skill-prompts";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
@@ -1005,7 +1011,7 @@ export const createMcpHttpRequestHandler = ({
     const server = new Server(
       { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
       {
-        capabilities: { resources: {}, tools: {} },
+        capabilities: { prompts: {}, resources: {}, tools: {} },
         instructions: getMcpInstructions(mode, context),
       },
     );
@@ -1037,6 +1043,32 @@ export const createMcpHttpRequestHandler = ({
       async (resourceRequest) =>
         await readMcpResource(resourceRequest.params.uri, mode, context),
     );
+
+    // Prompts are the skills that run only when the user invokes them: a
+    // client offers a prompt for the user to start, never to the model.
+    server.setRequestHandler("prompts/list", async () => ({
+      prompts: await listSkillPrompts({
+        context,
+        mode,
+        scopes: session.scopes,
+      }),
+    }));
+
+    server.setRequestHandler("prompts/get", async (promptRequest) => {
+      const prompt = await getSkillPrompt({
+        args: promptRequest.params.arguments,
+        context,
+        mode,
+        name: promptRequest.params.name,
+      });
+      if (Result.isError(prompt)) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          prompt.error.message,
+        );
+      }
+      return prompt.value;
+    });
 
     server.setRequestHandler(
       "tools/call",

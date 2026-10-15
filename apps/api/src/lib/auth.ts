@@ -121,13 +121,14 @@ import {
   HANDOFF_ACCESS_DETAIL,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import {
-  createWebHandoffService,
+  type createWebHandoffService,
   webHandoffFailure,
 } from "@/api/lib/auth/mcp-web-handoff";
 import {
   createMcpWebHandoffPlugin,
   MCP_HANDOFF_REDEEM_PATH,
 } from "@/api/lib/auth/mcp-web-handoff-plugin";
+import { getWebHandoffService } from "@/api/lib/auth/mcp-web-handoff-service";
 import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
@@ -1062,15 +1063,6 @@ const WEB_HANDOFF_MINT_FAILURE_SINK = failureSink({
   event: "mcp_web_handoff.mint_failed",
   expected: [],
 });
-let webHandoffService: ReturnType<typeof createWebHandoffService> | undefined;
-const getWebHandoffService = () =>
-  (webHandoffService ??= createWebHandoffService({
-    db: rootDb,
-    budget: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
-    enabled: () => env.MCP_WEB_HANDOFF_MINT_ENABLED,
-    textEnabled: () => env.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
-  }));
-
 type WebHandoffMintArgs = Parameters<
   ReturnType<typeof createWebHandoffService>["mint"]
 >;
@@ -3005,15 +2997,20 @@ type AuthWorkspaceAccessOptions = {
   } | null;
   loadWorkspace: (
     workspaceId: SafeId<"workspace">,
+    ownerDb: MemberAuthorizationDb,
   ) => Promise<AccessibleWorkspace | null>;
   onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => void;
 };
 
-const createAuthWorkspaceAccess = ({
-  initialAccess,
-  loadWorkspace,
-  onAuthorizedWorkspace,
-}: AuthWorkspaceAccessOptions) => {
+/** `ownerDb` is the owner connection, handed to `loadWorkspace` for target lookups. */
+const createAuthWorkspaceAccess = (
+  {
+    initialAccess,
+    loadWorkspace,
+    onAuthorizedWorkspace,
+  }: AuthWorkspaceAccessOptions,
+  ownerDb: MemberAuthorizationDb,
+) => {
   const accessPromises = new Map<
     SafeId<"workspace">,
     Promise<AccessibleWorkspace | null>
@@ -3029,7 +3026,7 @@ const createAuthWorkspaceAccess = ({
   ): Promise<AccessibleWorkspace | null> => {
     let access = accessPromises.get(workspaceId);
     if (!access) {
-      access = loadWorkspace(workspaceId);
+      access = loadWorkspace(workspaceId, ownerDb);
       accessPromises.set(workspaceId, access);
     }
     const workspace = await access;
@@ -3186,29 +3183,38 @@ const resolveValidateAuth = async ({
     return await activeWorkspaceIdsPromise;
   };
 
-  const getWorkspaceAccess = createAuthWorkspaceAccess({
-    initialAccess: initialWorkspaceId
-      ? { workspaceId: initialWorkspaceId, workspace: authorization.workspace }
-      : null,
-    loadWorkspace: async (workspaceId: SafeId<"workspace">) => {
-      if (accessibleWorkspacesPromise) {
-        const items = await accessibleWorkspacesPromise;
-        return items.find((item) => item.id === workspaceId) ?? null;
-      }
-      const targetAuthorization = await resolveMemberAuthorization(
-        { organizationId: activeOrganizationId, userId, workspaceId },
-        rootDb,
-      );
-      return targetAuthorization?.workspace?.id === workspaceId
-        ? targetAuthorization.workspace
-        : null;
+  const getWorkspaceAccess = createAuthWorkspaceAccess(
+    {
+      initialAccess: initialWorkspaceId
+        ? {
+            workspaceId: initialWorkspaceId,
+            workspace: authorization.workspace,
+          }
+        : null,
+      loadWorkspace: async (
+        workspaceId: SafeId<"workspace">,
+        ownerDb: MemberAuthorizationDb,
+      ) => {
+        if (accessibleWorkspacesPromise) {
+          const items = await accessibleWorkspacesPromise;
+          return items.find((item) => item.id === workspaceId) ?? null;
+        }
+        const targetAuthorization = await resolveMemberAuthorization(
+          { organizationId: activeOrganizationId, userId, workspaceId },
+          ownerDb,
+        );
+        return targetAuthorization?.workspace?.id === workspaceId
+          ? targetAuthorization.workspace
+          : null;
+      },
+      onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => {
+        // Keep only proved targets available to later transactions in this request.
+        validatedWorkspaceIdSet.add(workspaceId);
+        pinServerValidatedWorkspaceId(workspaceId);
+      },
     },
-    onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => {
-      // Keep only proved targets available to later transactions in this request.
-      validatedWorkspaceIdSet.add(workspaceId);
-      pinServerValidatedWorkspaceId(workspaceId);
-    },
-  });
+    rootDb,
+  );
 
   const recorderBindings = {
     organizationId: activeOrganizationId,

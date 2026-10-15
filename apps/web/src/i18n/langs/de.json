@@ -2078,6 +2078,7 @@
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
     "website": "Webseite",
+    "whenToUse": "Wann verwenden",
     "workflow": "Arbeitsablauf",
     "workflows": "Workflows",
     "zoomIn": "Vergrößern",
@@ -3652,6 +3653,10 @@
       "importTitle": "Skill importieren",
       "importedSkills": "{count, plural, one {# Skill importiert} other {# Skills importiert}}",
       "invalidPath": "Der Pfad darf nur Kleinbuchstaben, Ziffern, Punkte, Bindestriche oder Unterstriche enthalten",
+      "invocationAuto": "Automatisch",
+      "invocationAutoHelp": "Die KI kann diesen Skill selbstständig verwenden, wenn er zur Anfrage passt.",
+      "invocationManual": "Nur auf Abruf",
+      "invocationManualHelp": "Wird nur verwendet, wenn Sie ihn mit / aufrufen oder Ihrer Nachricht hinzufügen.",
       "license": "Lizenz: {license}",
       "newFile": "Neue Datei",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4342,6 +4347,8 @@
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
       },
+      "showInTitle": "Nummer neben dem Namen der Akte anzeigen",
+      "showInTitleDescription": "Wenn dies aus ist, ist der Titel genau der eingegebene Name.",
       "title": "Aktennummerierung",
       "tokenHelp": "Verfügbare Platzhalter: '{'SEQ'}' (Laufnummer), '{'YYYY'}' (Jahr), '{'YY'}' (zweistelliges Jahr), '{'MM'}' (Monat)"
     },
@@ -5558,7 +5565,6 @@
     "viewVersion": "Anzeigen",
     "whenNotToUse": "Wann nicht verwenden",
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
-    "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
   },
   "timesheets": {
@@ -5679,7 +5685,7 @@
       "title": "In Akte kopieren"
     },
     "create": {
-      "ownerTypeToggle": "Aktentyp",
+      "matterName": "Name der Akte",
       "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
     },
     "createNewWorkspace": "Neue Akte erstellen",
@@ -6131,15 +6137,12 @@
       "upcomingTasks": "Anstehende Agenda",
       "uploaded": "hochgeladen"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Persönlich"
-    },
     "parties": {
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
       "noClient": "Kein Klient zugeordnet",
+      "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
       "partyRoles": {
         "co_counsel": "Mitanwalt",
