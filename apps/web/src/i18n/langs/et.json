@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella kontrollib veel, kas seda DOCX-i saab turvaliselt muuta. Proovige uuesti, kui dokument on laadimise lõpetanud.",
     "checkingDocxEditTitle": "Dokumendi kontrollimine",
     "chooseEvidence": "Valige fail, et lisada nummerdatud tõendiviide.",
+    "collaborationSnapshotRecovered": "Salvestatud koostöökoopiat ei saanud uuesti avada. Ruum taastati viimati salvestatud dokumendist; salvestamata muudatused võisid kaduma minna.",
     "comment": "Kommenteeri",
     "comments": {
       "addPlaceholder": "Lisa kommentaar…",
@@ -4337,6 +4338,8 @@
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
       },
+      "showInTitle": "Kuva number toimiku nime kõrval",
+      "showInTitleDescription": "Kui see on väljas, on pealkiri täpselt sisestatud nimi.",
       "title": "Toimikute nummerdamine",
       "tokenHelp": "Saadaolevad märgendid: '{'SEQ'}' (järjekorranumber), '{'YYYY'}' (aasta), '{'YY'}' (2-kohaline aasta), '{'MM'}' (kuu)"
     },
@@ -4970,17 +4973,22 @@
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
     "provisionDetailsFor": "{provision} üksikasjad",
+    "provisionEffectiveFrom": "kehtib alates {date}",
     "provisionHistoryEarliest": "Varaseim teadaolev redaktsioon.",
     "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
     "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
     "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
+    "showCitedPartOnly": "Näita ainult viidatud osa",
+    "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
@@ -4996,7 +5004,6 @@
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
     "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Sõnastus kehtib alates {date}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
@@ -5670,7 +5677,7 @@
       "title": "Kopeeri toimikusse"
     },
     "create": {
-      "ownerTypeToggle": "Toimiku tüüp",
+      "matterName": "Toimiku nimi",
       "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
     },
     "createNewWorkspace": "Loo uus toimik",
@@ -6122,15 +6129,12 @@
       "upcomingTasks": "Tulevane agenda",
       "uploaded": "laadis üles"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Isiklik"
-    },
     "parties": {
       "addParty": "Lisa osapool",
       "changeClient": "Muuda klienti",
       "client": "Klient",
       "noClient": "Klienti pole määratud",
+      "noClientOptional": "Klient puudub (valikuline)",
       "noParties": "Sellele toimikule pole osapooli lisatud.",
       "partyRoles": {
         "co_counsel": "Kaasadvokaat",

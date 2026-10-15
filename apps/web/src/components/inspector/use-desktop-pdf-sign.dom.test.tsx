@@ -5,6 +5,8 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 const fetchBoundary = spyOn(globalThis, "fetch");
 const { act, cleanup, fireEvent, renderHook, screen, waitFor } =
@@ -30,7 +32,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type SessionPayload = {

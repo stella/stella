@@ -113,6 +113,8 @@ const databaseFailover = createSafePublicHandler(config, async function* () {
 
 const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
 
+// Use registered CRUD patterns so these fixture handlers also cross the
+// production classification boundary. Their responses remain test-owned.
 const buildApp = () =>
   new Elysia()
     .onRequest(({ request }) => {
@@ -120,17 +122,17 @@ const buildApp = () =>
     })
     .onError((context) => answerRequestError(context))
     .onAfterHandle(async (context) => await completeRequest(context))
-    .get("/rls", rlsDenied.handler)
-    .get("/upstream", upstreamDown.handler)
-    .get("/failover", databaseFailover.handler)
-    .get("/direct-502", () => status(502, { message: "Bad gateway" }))
-    .get("/throws", () => {
+    .get("/v1/contacts/", rlsDenied.handler)
+    .get("/v1/notifications/", upstreamDown.handler)
+    .get("/v1/signals/", databaseFailover.handler)
+    .get("/v1/signals/count", () => status(502, { message: "Bad gateway" }))
+    .get("/v1/contacts/search", () => {
       throw pgFailover();
     })
-    .post("/typed-body", () => "ok", {
+    .post("/v1/signals/requests", () => "ok", {
       body: t.Object({ name: t.String() }),
     })
-    .get("/typed-response", () => driftedBody(), {
+    .get("/v1/auth/capabilities", () => driftedBody(), {
       response: t.Object({ ok: t.String() }),
     });
 
@@ -173,7 +175,7 @@ const ungraded = {
 const CASES: readonly LifecycleCase[] = [
   {
     name: "an RLS denial is answered 400 and graded a defect",
-    request: get("/rls"),
+    request: get("/v1/contacts/"),
     status: 400,
     body: '{"code":"access_denied","message":"Access denied"}',
     records: [
@@ -185,7 +187,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "an unavailable upstream is answered 502 and graded transient",
-    request: get("/upstream"),
+    request: get("/v1/notifications/"),
     status: 502,
     body: '{"code":"upstream_unavailable","message":"The registry is not answering right now."}',
     records: [
@@ -201,7 +203,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "a database failover is answered 500 and graded transient",
-    request: get("/failover"),
+    request: get("/v1/signals/"),
     status: 500,
     body: '{"code":"internal_server_error","message":"Internal server error"}',
     records: [
@@ -221,7 +223,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "a 502 a handler returned itself is counted as unobserved",
-    request: get("/direct-502"),
+    request: get("/v1/signals/count"),
     status: 502,
     body: '{"message":"Bad gateway"}',
     records: [
@@ -232,7 +234,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "a failover thrown past the safe handler reaches the error hook",
-    request: get("/throws"),
+    request: get("/v1/contacts/search"),
     status: 500,
     body: '{"message":"Internal server error"}',
     records: [
@@ -247,7 +249,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "a rejected body is the caller's",
-    request: post("/typed-body", JSON.stringify({ name: 42 })),
+    request: post("/v1/signals/requests", JSON.stringify({ name: 42 })),
     status: 422,
     body: '{"message":"Invalid request"}',
     records: [
@@ -258,7 +260,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "an unparseable body is the caller's",
-    request: post("/typed-body", "{"),
+    request: post("/v1/signals/requests", "{"),
     status: 400,
     body: '{"message":"Malformed request"}',
     records: [
@@ -278,7 +280,7 @@ const CASES: readonly LifecycleCase[] = [
   },
   {
     name: "a response that breaks its own schema is the handler's",
-    request: get("/typed-response"),
+    request: get("/v1/auth/capabilities"),
     status: 500,
     body: '{"message":"Internal server error"}',
     // The completion hook runs before the response schema is checked, so the
@@ -499,14 +501,14 @@ describe("the request lifecycle", () => {
       logs.records.length = 0;
       metricLines.length = 0;
       const method = mode === "read" ? "GET" : "POST";
-      const request = new Request("http://localhost/action", {
+      const request = new Request("http://localhost/v1/mcp/connections", {
         method,
         ...(mode === "request_refusal" ? { body: "body" } : {}),
       });
       const app = new Elysia()
         .onRequest(({ request: received }) => initRequestContext(received))
         .onAfterHandle(async (context) => await completeRequest(context))
-        .all("/action", () => ({ value: "é".repeat(300) }));
+        .all("/v1/mcp/connections", () => ({ value: "é".repeat(300) }));
       const response = await withFinalResponseCompletion(request, async () =>
         runTenantHttpAction(request, {
           enabled: true,
@@ -589,9 +591,9 @@ describe("the request lifecycle", () => {
 
   test("the aggregate counts each observation under the channel it used", async () => {
     const app = buildApp();
-    await app.handle(get("/rls")());
-    await app.handle(get("/upstream")());
-    await app.handle(get("/direct-502")());
+    await app.handle(get("/v1/contacts/")());
+    await app.handle(get("/v1/notifications/")());
+    await app.handle(get("/v1/signals/count")());
     logs.records.length = 0;
 
     flushFailureObservations();
@@ -625,7 +627,7 @@ describe("the request lifecycle", () => {
       flush: async () => await Promise.resolve(),
     });
     try {
-      const response = await buildApp().handle(get("/failover")());
+      const response = await buildApp().handle(get("/v1/signals/")());
 
       expect(response.status).toBe(500);
       expect(await response.text()).toBe(
@@ -691,7 +693,7 @@ describe("the request lifecycle", () => {
       },
     });
 
-    await flushAnalytics("/rls");
+    await flushAnalytics("/v1/contacts/");
 
     expect(analytics.events).toEqual([]);
     expect(
