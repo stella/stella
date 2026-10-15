@@ -589,7 +589,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(outcome.isErr()).toBe(true);
           if (outcome.isErr()) {
             expect(getPgErrorCode(outcome.error)).toBe(PG_ERROR.QUERY_CANCELED);
-            expect(outcome.error).toMatchObject({
+            expect(outcome.error.cause).toMatchObject({
               message: "canceling statement due to user request",
             });
           }
