@@ -107,6 +107,9 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "bot-refresh-auto-merge.yml/arm": "pr-fast",
+    "autofix-generated-conflicts.yml/dispatch": "main",
+    "generated-conflicts-resolve.yml/resolve": "main",
+    "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
@@ -157,6 +160,7 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -173,10 +177,6 @@
     "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
-    "audit-image.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false
@@ -194,6 +194,10 @@
       "cancelInProgress": true
     },
     "publish-npm.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "autofix-generated-conflicts.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

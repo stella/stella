@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   buildEso9Table,
   buildFlexibeeXml,
@@ -191,7 +192,7 @@ const documentsFile = async (
   const zip = new JSZip();
   const taken = new Set<string>();
   for (const file of files) {
-    zip.file(uniqueEntryName(file.fileName, taken), file.content);
+    writeZipEntry(zip, uniqueEntryName(file.fileName, taken), file.content);
   }
   return {
     body: await zip.generateAsync({

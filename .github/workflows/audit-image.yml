@@ -5,26 +5,18 @@ defaults:
     shell: bash
 
 on:
+  # A pull request builds the image only when it changes the image definition.
+  # Dependency and toolchain drift is caught by the nightly build of main, or
+  # on demand: the build takes up to 45 minutes of a shared runner.
   pull_request:
     paths:
       - .github/workflows/audit-image.yml
       - .dockerignore
       - .gitmodules
       - docker/audit/**
-      - bun.lock
-      - "**/bun.lock"
-      - package.json
-      - "**/package.json"
-      - Cargo.lock
-      - "**/Cargo.lock"
-      - Cargo.toml
-      - "**/Cargo.toml"
-      - rust-toolchain*
-      - "**/rust-toolchain*"
-  # The image builds the whole repository, so every merge to main builds it;
-  # pull requests build it only when its dependency or toolchain inputs change.
-  push:
-    branches: [main]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
