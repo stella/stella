@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
-  CorrespondenceContactMatch,
+  CorrespondenceDataBoxContactMatches,
   CorrespondenceDataBoxContacts,
 } from "@stll/api-contract/correspondence";
 import type {
@@ -37,7 +38,7 @@ const Party = ({
   contacts,
 }: {
   party: DataBoxParty;
-  contacts: CorrespondenceContactMatch[];
+  contacts: CorrespondenceDataBoxContactMatches;
 }) => {
   const t = useTranslations();
   return (
@@ -46,7 +47,7 @@ const Party = ({
       <bdi className="text-muted-foreground font-mono text-xs" dir="ltr">
         {party.boxId}
       </bdi>
-      {contacts.map((contact) => (
+      {contacts.matches.map((contact) => (
         <Link
           className="text-xs underline-offset-2 hover:underline"
           key={contact.contactId}
@@ -58,6 +59,11 @@ const Party = ({
           </bdi>
         </Link>
       ))}
+      {contacts.hasMore && (
+        <span className="text-muted-foreground text-xs">
+          {t("correspondence.dataBox.moreContacts")}
+        </span>
+      )}
     </span>
   );
 };
@@ -85,6 +91,9 @@ export const DataBoxEnvelope = ({
     envelope.status === "accepted_by_login"
       ? ACCEPTANCE_LABEL_KEYS[envelope.status]
       : null;
+  if (contacts === null) {
+    return panic("Data-box correspondence is missing contact matches");
+  }
   const senderReferences = references(envelope.sender);
   const recipientReferences = references(envelope.recipient);
 
@@ -103,13 +112,10 @@ export const DataBoxEnvelope = ({
         )}
       </h2>
       <Field label={t("emailViewer.from")}>
-        <Party contacts={contacts?.sender ?? []} party={envelope.sender} />
+        <Party contacts={contacts.sender} party={envelope.sender} />
       </Field>
       <Field label={t("correspondence.dataBox.recipient")}>
-        <Party
-          contacts={contacts?.recipient ?? []}
-          party={envelope.recipient}
-        />
+        <Party contacts={contacts.recipient} party={envelope.recipient} />
         {envelope.toHands && (
           <span className="text-muted-foreground mt-1 block text-xs">
             <bdi dir="auto">

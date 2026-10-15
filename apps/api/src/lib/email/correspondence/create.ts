@@ -18,16 +18,24 @@ import {
   correspondence,
   correspondenceAttachments,
   correspondenceFilers,
+  organizationSettings,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  deriveDataBoxDirectionBasis,
+  DIRECTION_BY_BASIS,
+} from "@/api/lib/data-box/direction";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
 } from "@/api/lib/email/correspondence/access";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+
+const EMPTY_BOX_IDS: readonly string[] = [];
 
 type PreparedCorrespondenceAttachment = {
   entityId: SafeId<"entity">;
@@ -224,6 +232,16 @@ export const createCorrespondence = async ({
   }
 
   const transaction = await abortableTx(safeDb, async (tx) => {
+    if (parsed.channel === "data_box") {
+      // Acquire before matter/member locks; settings mutations take the same
+      // fence exclusively, including when there is no settings row yet.
+      await withAggregateLock({
+        tx,
+        aggregate: "dataBoxDirection",
+        id: { organizationId },
+        mode: "shared",
+      });
+    }
     const access = await assertCorrespondenceAccess({
       tx,
       filer,
@@ -234,17 +252,34 @@ export const createCorrespondence = async ({
       return access;
     }
 
+    let direction = parsed.direction;
+    let dataBox = parsed.dataBox;
+    if (parsed.channel === "data_box") {
+      const [settings] = await tx
+        .select({ dataBoxIds: organizationSettings.dataBoxIds })
+        .from(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId))
+        .limit(1);
+      const directionBasis = deriveDataBoxDirectionBasis({
+        senderBoxId: parsed.dataBox.sender.boxId,
+        recipientBoxId: parsed.dataBox.recipient.boxId,
+        organizationBoxIds:
+          settings === undefined ? EMPTY_BOX_IDS : settings.dataBoxIds,
+      });
+      direction = DIRECTION_BY_BASIS[directionBasis];
+      dataBox = { ...parsed.dataBox, directionBasis };
+    }
     const dedupKey = correspondenceDedupKey(parsed);
     const inserted = await tx
       .insert(correspondence)
       .values({
         organizationId,
         workspaceId,
-        direction: parsed.direction,
+        direction,
         channel: parsed.channel,
         ...provenanceColumns(parsed),
         messageId: parsed.messageId,
-        dataBox: parsed.dataBox,
+        dataBox,
         contentHash: parsed.contentHash,
         dedupKey,
         from: parsed.from,

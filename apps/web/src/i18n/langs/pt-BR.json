@@ -2388,6 +2388,7 @@
       "delivery": "Entrega",
       "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
+      "moreContacts": "Há mais contatos associados a esta caixa de dados.",
       "openFile": "Abrir arquivo .zfo",
       "personalDelivery": "Em mãos ao destinatário",
       "recipient": "Destinatário",

@@ -3,7 +3,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
   CORRESPONDENCE_MAX_ATTACHMENTS,
-  type CorrespondenceContactMatch,
+  type CorrespondenceDataBoxContactMatches,
   type CorrespondenceDataBoxContacts,
 } from "@stll/api-contract/correspondence";
 import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
@@ -20,6 +20,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
   readCorrespondenceChannel,
   readCorrespondenceProvenance,
@@ -100,18 +101,25 @@ const matchDataBoxContacts = async ({
   tx,
   organizationId,
   boxId,
-}: MatchDataBoxContactsOptions): Promise<CorrespondenceContactMatch[]> =>
-  await tx
-    .select({ contactId: contacts.id, displayName: contacts.displayName })
-    .from(contacts)
-    .where(
-      and(
-        eq(contacts.organizationId, organizationId),
-        sql`(${contacts.metadata} -> 'dataBoxes') @> ${JSON.stringify([{ id: boxId }])}::text::jsonb`,
-      ),
-    )
-    .orderBy(asc(contacts.displayName), asc(contacts.id))
-    .limit(MAX_CONTACT_MATCHES_PER_BOX);
+}: MatchDataBoxContactsOptions): Promise<CorrespondenceDataBoxContactMatches> => {
+  const page = await readCursorPage(
+    tx
+      .select({ contactId: contacts.id, displayName: contacts.displayName })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          sql`(${contacts.metadata} -> 'dataBoxes') @> ${JSON.stringify([{ id: boxId }])}::text::jsonb`,
+        ),
+      )
+      .orderBy(asc(contacts.displayName), asc(contacts.id)),
+    {
+      limit: MAX_CONTACT_MATCHES_PER_BOX,
+      cursorForItem: ({ contactId }) => contactId,
+    },
+  );
+  return { matches: page.items, hasMore: page.nextCursor !== null };
+};
 
 type ReadDataBoxContactsOptions = Omit<MatchDataBoxContactsOptions, "boxId"> & {
   envelope: DataBoxEnvelope;

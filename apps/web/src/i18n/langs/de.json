@@ -2388,6 +2388,7 @@
       "delivery": "Zustellung",
       "directionUnknown": "Richtung unbekannt",
       "messageId": "Nachrichten-ID",
+      "moreContacts": "Weitere Kontakte stimmen mit diesem Datenpostfach überein.",
       "openFile": ".zfo-Datei öffnen",
       "personalDelivery": "Zu eigenen Händen",
       "recipient": "Empfänger",

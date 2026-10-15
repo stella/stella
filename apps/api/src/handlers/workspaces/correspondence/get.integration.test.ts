@@ -236,14 +236,40 @@ describe("data-box correspondence reads", () => {
           sourceEntityId,
         },
         dataBoxContacts: {
-          sender: [
-            {
-              contactId: senderContactId,
-              displayName: "Okresní soud v Testově",
-            },
-          ],
-          recipient: [],
+          sender: {
+            matches: [
+              {
+                contactId: senderContactId,
+                displayName: "Okresní soud v Testově",
+              },
+            ],
+            hasMore: false,
+          },
+          recipient: { matches: [], hasMore: false },
         },
+      });
+
+      await tx.insert(contacts).values(
+        Array.from({ length: 5 }, (_, index) => ({
+          id: createSafeId<"contact">(),
+          organizationId: ids.orgA,
+          type: "organization" as const,
+          displayName: `Additional court contact ${index + 1}`,
+          organizationName: `Additional court contact ${index + 1}`,
+          metadata: dataBoxes("abc2def"),
+        })),
+      );
+      const preview = await getCorrespondence.handler(
+        asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
+          ...context,
+          params: { correspondenceId },
+        }),
+      );
+      expect(preview.dataBoxContacts?.sender.matches).toHaveLength(5);
+      expect(preview.dataBoxContacts?.sender.hasMore).toBe(true);
+      expect(preview.dataBoxContacts?.recipient).toEqual({
+        matches: [],
+        hasMore: false,
       });
 
       const list = await listCorrespondence.handler(

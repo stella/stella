@@ -2388,6 +2388,7 @@
       "delivery": "Remise",
       "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
+      "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
       "openFile": "Ouvrir le fichier .zfo",
       "personalDelivery": "En main propre",
       "recipient": "Destinataire",

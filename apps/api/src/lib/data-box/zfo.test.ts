@@ -19,7 +19,10 @@ import {
 
 const encode = (text: string) => new TextEncoder().encode(text);
 
-const failureReason = (bytes: Uint8Array, limits = DATA_BOX_MESSAGE_LIMITS) => {
+const failureReason = (
+  bytes: Uint8Array,
+  limits: Parameters<typeof parseDataBoxMessage>[1] = DATA_BOX_MESSAGE_LIMITS,
+) => {
   const parsed = parseDataBoxMessage(bytes, limits);
   return parsed.isErr() ? parsed.error.reason : null;
 };
@@ -236,13 +239,16 @@ describe("parseDataBoxMessage refusals", () => {
     expect(failureReason(await sealContent(encode(xml)))).toBe("invalid_file");
   });
 
-  test("never throws on arbitrary or corrupted bytes", async () => {
+  test("data-box message parse refuses arbitrary bytes", async () => {
     await assertProperty(
       "data-box message parse refuses arbitrary bytes",
       fc.property(fc.uint8Array({ maxLength: 2048 }), (bytes) => {
         expect(parseDataBoxMessage(bytes).isErr()).toBe(true);
       }),
     );
+  });
+
+  test("data-box message parse survives a corrupted byte", async () => {
     const valid = await zfoFile();
     await assertProperty(
       "data-box message parse survives a corrupted byte",

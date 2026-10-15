@@ -2391,6 +2391,7 @@ type Messages = {
       "delivery": "Delivery terms";
       "directionUnknown": "Direction unknown";
       "messageId": "Message ID";
+      "moreContacts": "More contacts match this data box.";
       "openFile": "Open .zfo file";
       "personalDelivery": "To the addressee in person";
       "recipient": "Recipient";

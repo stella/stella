@@ -207,10 +207,16 @@ export type CorrespondenceContactMatch = {
   displayName: string;
 };
 
+/** A bounded contact preview; hasMore reports matches omitted from the preview. */
+export type CorrespondenceDataBoxContactMatches = {
+  matches: CorrespondenceContactMatch[];
+  hasMore: boolean;
+};
+
 /** Read-only matches of the envelope's box IDs to the organization's contacts. */
 export type CorrespondenceDataBoxContacts = {
-  sender: CorrespondenceContactMatch[];
-  recipient: CorrespondenceContactMatch[];
+  sender: CorrespondenceDataBoxContactMatches;
+  recipient: CorrespondenceDataBoxContactMatches;
 };
 
 export type CorrespondenceDetailResponse = {

@@ -2388,6 +2388,7 @@
       "delivery": "Kättetoimetamine",
       "directionUnknown": "Suund teadmata",
       "messageId": "Sõnumi ID",
+      "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
       "openFile": "Ava .zfo-fail",
       "personalDelivery": "Isiklikult adressaadile",
       "recipient": "Adressaat",

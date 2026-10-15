@@ -14,6 +14,7 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -175,6 +176,61 @@ const directionOf = async (tx: Tx, id: SafeId<"correspondence">) => {
 };
 
 describe("organization data boxes", () => {
+  test("filing derives direction from current settings instead of the parsed snapshot", async () => {
+    await runInRollback(async (tx) => {
+      const sourceEntityId = createSafeId<"entity">();
+      await tx.insert(entities).values({
+        id: sourceEntityId,
+        workspaceId: ids.wsA1,
+        name: "message.zfo",
+        createdBy: ids.userA1,
+      });
+      const context = contextFor(tx);
+      await addOrganizationDataBox.handler(
+        asTestRaw<Parameters<typeof addOrganizationDataBox.handler>[0]>({
+          ...context,
+          body: { boxId: FIRM_BOX },
+        }),
+      );
+      const filed = await createCorrespondence({
+        safeDb: context.safeDb,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        filer: { type: "user", userId: ids.userA1 },
+        parsed: {
+          source: "upload",
+          sourceEntityId,
+          originalSignature: { status: "unverified" },
+          channel: "data_box",
+          dataBox: envelope,
+          direction: "in",
+          messageId: envelope.messageId,
+          contentHash: "b".repeat(64),
+          from: { address: FIRM_BOX, name: null },
+          to: [{ address: COURT_BOX, name: null }],
+          cc: [],
+          subject: "Odpor",
+          sentAt: null,
+          receivedAt: envelope.deliveredAt,
+          inReplyTo: null,
+          references: [],
+          bodyText: "",
+          bodyHtml: null,
+        },
+        attachments: [],
+        recordAuditEvent: context.recordAuditEvent,
+      });
+      expect(filed.type).toBe("ok");
+      if (filed.type !== "ok") {
+        throw new TypeError("Expected filed data-box message");
+      }
+      expect(await directionOf(tx, filed.id)).toEqual({
+        direction: "out",
+        basis: "organization_sender",
+      });
+    });
+  });
+
   test("only organization administrators may change them", () => {
     expect(addOrganizationDataBox.config.permissions).toEqual({
       organizationSettings: ["update"],

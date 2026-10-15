@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/email/inbound/upload.ts",
+  "delta": 1,
+  "reason": "Scan the bounded message files sequentially to cap scanner memory and stop on rejection before any writes. This loop performs scans, not database operations."
+}

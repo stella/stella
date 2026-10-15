@@ -2388,6 +2388,7 @@
       "delivery": "Piegāde",
       "directionUnknown": "Virziens nezināms",
       "messageId": "Ziņas ID",
+      "moreContacts": "Ar šo datu pastkasti ir saistītas vēl citas kontaktpersonas.",
       "openFile": "Atvērt .zfo failu",
       "personalDelivery": "Personīgi adresātam",
       "recipient": "Adresāts",

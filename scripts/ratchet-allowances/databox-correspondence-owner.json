@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The data-box slice owns bounded ZFO parsing, direction derivation, and organization box settings shared by upload ingestion and settings handlers."
+}

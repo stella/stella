@@ -87,6 +87,7 @@ export const OrganizationDataBoxesCard = () => {
     <Frame>
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
+          <QueryViewFeedback view={view} />
           <p className="text-muted-foreground text-sm">
             {t("settings.organization.dataBoxes.description")}
           </p>

@@ -113,7 +113,7 @@ const signingTime = (signerInfo: pkijs.SignerInfo | undefined) => {
   const attribute = signerInfo?.signedAttrs?.attributes.find(
     ({ type }) => type === SIGNING_TIME_OID,
   );
-  const value = attribute?.values.at(0);
+  const value: unknown = attribute?.values.at(0);
   if (
     value instanceof asn1js.UTCTime ||
     value instanceof asn1js.GeneralizedTime
@@ -126,7 +126,7 @@ const signingTime = (signerInfo: pkijs.SignerInfo | undefined) => {
 
 const readSeal = (signedData: pkijs.SignedData): DataBoxSeal => {
   const signerInfo = signedData.signerInfos.at(0);
-  const sid = signerInfo?.sid;
+  const sid: unknown = signerInfo?.sid;
   const serialNumber =
     sid instanceof pkijs.IssuerAndSerialNumber
       ? Buffer.from(sid.serialNumber.valueBlock.valueHexView).toString("hex")
