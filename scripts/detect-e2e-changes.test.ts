@@ -1393,11 +1393,7 @@ describe("detect-e2e-changes", () => {
         spec,
       ).toBe(true);
     }
-    const result = contractRecord(
-      contractRecord(Bun.YAML.parse(`job:\n${workflowJob("ci-result")}`))[
-        "job"
-      ],
-    );
+    const result = contractRecord(parsedJobs(workflow)["ci-result"]);
     expect(result["needs"]).toContain("e2e-landing");
   });
 
