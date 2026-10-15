@@ -1,7 +1,4 @@
-import { panic, Result } from "better-result";
-import { Elysia } from "elysia";
-import type { InternalRoute } from "elysia";
-import { encodePath, getLoosePath } from "elysia/utils";
+import { Result } from "better-result";
 
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
@@ -11,130 +8,40 @@ import {
   getActionSizePolicy,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
+import { createRouteRegistryMatcher } from "@/api/lib/route-registry-matcher";
 
 import type { DocumentDecoration } from "./tenant-action-detail";
 
 export const TENANT_ACTION_DETAIL =
   "x-stella-tenant-action" satisfies keyof DocumentDecoration;
 
-type TenantActionClassifierOptions = {
-  routes: readonly InternalRoute[];
-  staticRoutes: Readonly<Record<string, Readonly<Record<string, number>>>>;
-  strictPath: boolean | undefined;
-  aot: boolean | undefined;
-};
+type TenantActionClassifierOptions = Parameters<
+  typeof createRouteRegistryMatcher
+>[0];
 
-export const createTenantActionClassifier = ({
-  routes,
-  staticRoutes,
-  strictPath,
-  aot,
-}: TenantActionClassifierOptions) => {
-  // The registry and static map hold metadata; matching never dispatches handlers.
-  const configuration = {
-    aot: false,
-    ...(strictPath === undefined ? {} : { strictPath }),
-  };
-  const registry = new Elysia(configuration);
-  const matchRoute = registry.router.dynamic.find.bind(registry.router.dynamic);
-  const routeType = (route: InternalRoute) => {
-    // Elysia exposes hooks as any; narrow its metadata at this boundary.
-    const hooks: unknown = route.hooks;
-    if (typeof hooks !== "object" || hooks === null || !("detail" in hooks)) {
-      return "exempt";
-    }
-    const { detail } = hooks;
-    return typeof detail === "object" &&
-      detail !== null &&
-      TENANT_ACTION_DETAIL in detail &&
-      detail[TENANT_ACTION_DETAIL] === true
-      ? "tenant"
-      : "exempt";
-  };
-  const staticMetadata = new Map<
-    string,
-    Record<string, ReturnType<typeof routeType>>
-  >();
-  let hasDynamicWebSocket = false;
-  for (const route of routes) {
-    if (
-      aot !== false &&
-      staticRoutes[route.path]?.[route.method] !== undefined
-    ) {
-      continue;
-    }
-    if (route.method === "WS") {
-      hasDynamicWebSocket = true;
-    }
-    registry.route(route.method, route.path, { type: routeType(route) });
-  }
-  if (aot !== false) {
-    // AOT's first static path group owns its encoded/loose aliases, including
-    // method misses. Derive the same aliases with the framework's utilities.
-    for (const [path, indices] of Object.entries(staticRoutes)) {
-      const methods: Record<string, ReturnType<typeof routeType>> = {};
-      for (const [method, index] of Object.entries(indices)) {
-        const route = routes.at(index);
-        if (route === undefined) {
-          panic("Static tenant route index is missing from route history");
-        }
-        methods[method] = routeType(route);
+export const createTenantActionClassifier = (
+  options: TenantActionClassifierOptions,
+) => {
+  const matchRoute = createRouteRegistryMatcher(options);
+  // Snapshot declarations at construction, as the route classifier always did.
+  const tenantRoutes = new Set(
+    options.routes.filter((route) => {
+      const hooks: unknown = route.hooks;
+      if (typeof hooks !== "object" || hooks === null || !("detail" in hooks)) {
+        return false;
       }
-      const aliases =
-        strictPath === true
-          ? [path, encodePath(path)]
-          : [path, getLoosePath(path), encodePath(path)];
-      for (const alias of aliases) {
-        if (!staticMetadata.has(alias)) {
-          staticMetadata.set(alias, methods);
-        }
-      }
-    }
-  }
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null;
-  type MatchedRoute = ReturnType<typeof registry.router.dynamic.find>;
-  const metadata = (match: MatchedRoute) => {
-    if (match === null) {
-      return undefined;
-    }
-    const { handle } = match.store;
-    if (
-      !isRecord(handle) ||
-      (handle["type"] !== "tenant" && handle["type"] !== "exempt")
-    ) {
-      return panic("Tenant route registry lost its derived metadata");
-    }
-    return handle["type"];
-  };
+      const { detail } = hooks;
+      return (
+        typeof detail === "object" &&
+        detail !== null &&
+        TENANT_ACTION_DETAIL in detail &&
+        detail[TENANT_ACTION_DETAIL] === true
+      );
+    }),
+  );
   return (request: Request): boolean => {
-    const path = new URL(request.url).pathname;
-    const upgrade =
-      request.method === "GET" &&
-      (aot === false
-        ? request.headers.get("upgrade")?.toLowerCase()
-        : request.headers.get("upgrade")) === "websocket";
-    if (aot !== false) {
-      const methods = staticMetadata.get(path);
-      if (methods !== undefined) {
-        const selected =
-          (upgrade ? methods["WS"] : undefined) ??
-          methods[request.method] ??
-          methods["ALL"];
-        if (selected !== undefined) {
-          return selected === "tenant";
-        }
-      }
-    }
-    const method =
-      upgrade && hasDynamicWebSocket && aot !== false ? "WS" : request.method;
-    const selected =
-      metadata(matchRoute(method, path)) ??
-      (aot === false && upgrade
-        ? metadata(matchRoute("WS", path))
-        : undefined) ??
-      metadata(matchRoute("ALL", path));
-    return selected === "tenant";
+    const route = matchRoute(request);
+    return route !== undefined && tenantRoutes.has(route);
   };
 };
 
