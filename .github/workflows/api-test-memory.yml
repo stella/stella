@@ -23,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
-      API_TEST_SHARD: ${{ matrix.shard }}/2
+      API_TEST_SHARD: ${{ matrix.shard }}/3
       API_TEST_LANES: "1"
     steps:
       - name: Checkout

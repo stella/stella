@@ -29,13 +29,20 @@ import { API_TEST_SHARD_IDS, isApiTestShardId } from "./api-test-shard-plan";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKSPACE_ROOTS = ["apps", "packages"] as const;
 
-export const TEST_SHARD_IDS = ["api-1", "api-2", "rest", "web"] as const;
+export const TEST_SHARD_IDS = [
+  "api-1",
+  "api-2",
+  "api-3",
+  "rest",
+  "web",
+] as const;
 export type TestShardId = (typeof TEST_SHARD_IDS)[number];
 
 // Rest and web keep separate verdicts while sharing one runner.
 export const TEST_JOB_SHARDS = {
   "api-1": ["api-1"],
   "api-2": ["api-2"],
+  "api-3": ["api-3"],
   "rest-web": ["rest", "web"],
 } as const satisfies Record<string, readonly TestShardId[]>;
 
@@ -48,6 +55,7 @@ export const TEST_JOB_SHARDS = {
 export const TEST_SHARD_PACKAGES = {
   "api-1": ["@stll/api"],
   "api-2": ["@stll/api"],
+  "api-3": ["@stll/api"],
   rest: null,
   web: ["@stll/web"],
 } as const satisfies Record<TestShardId, readonly string[] | null>;

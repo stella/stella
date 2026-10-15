@@ -1,4 +1,4 @@
-export const API_TEST_SHARD_IDS = ["api-1", "api-2"] as const;
+export const API_TEST_SHARD_IDS = ["api-1", "api-2", "api-3"] as const;
 
 type FullTestJobShard = (typeof API_TEST_SHARD_IDS)[number] | "rest-web";
 

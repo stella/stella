@@ -1373,8 +1373,8 @@ jobs:
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             {
-              echo 'ci_tests_matrix={"shard":["api-1","api-2","rest-web"]}'
-              echo 'api_test_shards=2'
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}'
+              echo 'api_test_shards=3'
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           fi
@@ -4588,10 +4588,11 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
-    # Two API shards keep each runner busy instead of waiting for a free hosted
-    # slot; a merged shard pair measured p95 18.6 min and p99 27.4 min, so the
-    # budget sits above the worst observed pair (30.9 min) rather than at it.
-    timeout-minutes: 35
+    # Three API shards each run a third of the suite. Derived from the merged
+    # shard pair measurements (p95 18.6, p99 27.4, worst 30.9 min) scaled by
+    # 2/3, one shard is about p95 12.4, p99 18.3, worst 20.6 min; 25 min keeps
+    # about 20% headroom over that worst case rather than sitting at it.
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: write
