@@ -1615,9 +1615,9 @@ for (const colorScheme of ["light", "dark"] as const) {
     ).toBeFocused();
     const rail = page.locator(".clipboard-groups-rail");
     expect(
-      await rail.evaluate(
-        (element) => element.scrollWidth > element.clientWidth,
-      ),
+      await rail
+        .locator("[data-clipboard-groups-scroller]")
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
     ).toBe(true);
     const chips = rail.locator("button");
     expect(await chips.count()).toBeGreaterThanOrEqual(3);
@@ -1629,7 +1629,9 @@ for (const colorScheme of ["light", "dark"] as const) {
       const marker = await chip.evaluate((element) => {
         const style = getComputedStyle(element);
         const bounds = element.getBoundingClientRect();
-        const parentRail = element.closest("nav");
+        const parentRail =
+          element.closest("[data-clipboard-groups-scroller]") ??
+          element.closest("nav");
         if (!parentRail) {
           throw new TypeError("Chip has no rail");
         }
@@ -1738,3 +1740,58 @@ test("dismissing and reopening starts a new selection session without a copy", a
   });
   expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
 });
+
+for (const language of ["en", "ar"] as const) {
+  for (const colorScheme of ["light", "dark"] as const) {
+    test(`scrolled collection chips never paint under the create control (${language}, ${colorScheme})`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme });
+      await installNativeBoundary(page, {
+        language,
+        groups: [
+          ...SNAPSHOT.groups,
+          ...Array.from({ length: 9 }, (_, index) => ({
+            color: DEFAULT_CLIPBOARD_GROUP_COLOR,
+            id: `overflow-group-${index}`,
+            name: `Collection ${index + 1}`,
+          })),
+        ],
+      });
+      await page.goto("/");
+      await expect(
+        page.locator("[data-clipboard-card-trigger]").first(),
+      ).toBeFocused();
+      const rail = page.locator(".clipboard-groups-rail");
+      const create = rail.locator("button").nth(1);
+      const before = await create.boundingBox();
+      await rail.locator("[data-group-chip]").last().focus();
+      await expect(create).toBeVisible();
+      const overlaps = await rail.evaluate((element) => {
+        const createControl = element.querySelectorAll("button").item(1);
+        const createBounds = createControl.getBoundingClientRect();
+        return Array.from(element.querySelectorAll("[data-group-chip]")).map(
+          (chip) => {
+            const viewport =
+              chip.closest("[data-clipboard-groups-scroller]") ?? element;
+            const bounds = chip.getBoundingClientRect();
+            const clip = viewport.getBoundingClientRect();
+            const left = Math.max(bounds.left, clip.left);
+            const right = Math.min(bounds.right, clip.right);
+            return Math.max(
+              0,
+              Math.min(right, createBounds.right) -
+                Math.max(left, createBounds.left),
+            );
+          },
+        );
+      });
+      for (const overlap of overlaps) {
+        expect(overlap).toBe(0);
+      }
+      expect(await create.boundingBox()).toEqual(before);
+      await create.click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+    });
+  }
+}

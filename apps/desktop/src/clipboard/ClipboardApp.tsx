@@ -2903,7 +2903,7 @@ const ClipboardApp = () => {
                   inert={searchSource === "registry"}
                   aria-label={t("groups")}
                   className={cn(
-                    "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
+                    "clipboard-groups-rail border-border flex min-w-0 items-center gap-1 border-s ps-2",
                     searchSource === "registry" && "hidden",
                   )}
                   onFocusCapture={({ target }) => {
@@ -2915,7 +2915,6 @@ const ClipboardApp = () => {
                       });
                     }
                   }}
-                  onWheel={handleRailWheel}
                 >
                   <Button
                     aria-pressed={activeGroupId === null}
@@ -2932,7 +2931,7 @@ const ClipboardApp = () => {
                   </Button>
                   <Button
                     aria-label={t("createGroup")}
-                    className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
+                    className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
                     onClick={() =>
                       setDialog({
@@ -2948,96 +2947,105 @@ const ClipboardApp = () => {
                   >
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
-                  {snapshot.groups.map((group, groupIndex) => {
-                    const groupStyle: ClipboardGroupStyle = {
-                      "--clipboard-group-accent": group.color,
-                    };
-                    return (
-                      <ContextMenu
-                        actions={[
-                          {
-                            icon: <PencilIcon aria-hidden="true" />,
-                            label: t("editGroup"),
-                            onClick: () =>
-                              setDialog({
-                                color: group.color,
-                                groupId: group.id,
-                                name: group.name,
-                                type: "editGroup",
-                              }),
-                          },
-                          {
-                            disabled: groupIndex === 0,
-                            icon: (
-                              <ArrowLeftIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupEarlier"),
-                            onClick: () => moveGroup(group.id, groupIndex - 1),
-                            separatorBefore: true,
-                          },
-                          {
-                            disabled: groupIndex === snapshot.groups.length - 1,
-                            icon: (
-                              <ArrowRightIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupLater"),
-                            onClick: () => moveGroup(group.id, groupIndex + 1),
-                          },
-                          {
-                            icon: <Trash2Icon aria-hidden="true" />,
-                            label: t("deleteGroup"),
-                            onClick: () =>
-                              setDialog({
-                                groupId: group.id,
-                                groupName: group.name,
-                                mode: "keepClips",
-                                type: "deleteGroup",
-                              }),
-                            separatorBefore: true,
-                            variant: "destructive",
-                          },
-                        ]}
-                        key={group.id}
-                      >
-                        <Button
-                          aria-pressed={activeGroupId === group.id}
-                          className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
-                          data-clipboard-group-id={group.id}
-                          data-dragging={
-                            dragState.type === "reordering" &&
-                            dragState.groupId === group.id
-                              ? ""
-                              : undefined
-                          }
-                          data-drop-target={
-                            isDropTarget(group.id) ? "" : undefined
-                          }
-                          data-group-chip=""
-                          onClick={() => {
-                            setSelectedGroupId(group.id);
-                            setSelectedIndex(0);
-                          }}
-                          style={groupStyle}
-                          variant="ghost"
+                  <div
+                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    data-clipboard-groups-scroller=""
+                    onWheel={handleRailWheel}
+                  >
+                    {snapshot.groups.map((group, groupIndex) => {
+                      const groupStyle: ClipboardGroupStyle = {
+                        "--clipboard-group-accent": group.color,
+                      };
+                      return (
+                        <ContextMenu
+                          actions={[
+                            {
+                              icon: <PencilIcon aria-hidden="true" />,
+                              label: t("editGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  color: group.color,
+                                  groupId: group.id,
+                                  name: group.name,
+                                  type: "editGroup",
+                                }),
+                            },
+                            {
+                              disabled: groupIndex === 0,
+                              icon: (
+                                <ArrowLeftIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupEarlier"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex - 1),
+                              separatorBefore: true,
+                            },
+                            {
+                              disabled:
+                                groupIndex === snapshot.groups.length - 1,
+                              icon: (
+                                <ArrowRightIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupLater"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex + 1),
+                            },
+                            {
+                              icon: <Trash2Icon aria-hidden="true" />,
+                              label: t("deleteGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                  mode: "keepClips",
+                                  type: "deleteGroup",
+                                }),
+                              separatorBefore: true,
+                              variant: "destructive",
+                            },
+                          ]}
+                          key={group.id}
                         >
-                          <span
-                            aria-hidden="true"
-                            className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                          />
-                          {group.name}
-                          <InlineDropIndicator
-                            position={reorderPosition(group.id)}
-                          />
-                        </Button>
-                      </ContextMenu>
-                    );
-                  })}
+                          <Button
+                            aria-pressed={activeGroupId === group.id}
+                            className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
+                            data-clipboard-group-id={group.id}
+                            data-dragging={
+                              dragState.type === "reordering" &&
+                              dragState.groupId === group.id
+                                ? ""
+                                : undefined
+                            }
+                            data-drop-target={
+                              isDropTarget(group.id) ? "" : undefined
+                            }
+                            data-group-chip=""
+                            onClick={() => {
+                              setSelectedGroupId(group.id);
+                              setSelectedIndex(0);
+                            }}
+                            style={groupStyle}
+                            variant="ghost"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                            />
+                            {group.name}
+                            <InlineDropIndicator
+                              position={reorderPosition(group.id)}
+                            />
+                          </Button>
+                        </ContextMenu>
+                      );
+                    })}
+                  </div>
                 </nav>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
