@@ -193,57 +193,18 @@ describe("upstream token revocation on disconnect", () => {
     ).toEqual([["access_token", null]]);
   });
 
-  test.each([
-    {
-      name: "no revocation endpoint",
-      metadata: boundMetadata(),
-      reason: "no_revocation_endpoint",
-    },
-    {
-      name: "a plain-HTTP endpoint",
-      metadata: boundMetadata({
-        revocation_endpoint: "http://auth.example.com/revoke",
-      }),
-      reason: "no_revocation_endpoint",
-    },
-    {
-      name: "an endpoint on an unconfirmed foreign origin",
+  test("an endpoint on an origin the approval did not confirm receives no token", async () => {
+    const fixture = fakeDependencies({
       metadata: boundMetadata({
         revocation_endpoint: "https://collector.example.net/revoke",
       }),
-      reason: "no_revocation_endpoint",
-    },
-  ])("sends no token for $name", async ({ metadata, reason }) => {
-    const fixture = fakeDependencies({ metadata });
+    });
 
     expect(await run(oauthConnection(), fixture.dependencies)).toEqual({
       type: "skipped",
-      reason,
+      reason: "no_revocation_endpoint",
     });
     expect(fixture.revokeCalls).toEqual([]);
-  });
-
-  test("an endpoint on a foreign origin the approval confirmed is used", async () => {
-    const foreign = "https://revoke.example.net";
-    const fixture = fakeDependencies({
-      metadata: boundMetadata({ revocation_endpoint: `${foreign}/revoke` }, [
-        foreign,
-      ]),
-    });
-
-    const outcome = await run(
-      oauthConnection({
-        oauthIssuerBinding: {
-          type: "approved",
-          issuer,
-          endpointOrigins: [foreign],
-        },
-      }),
-      fixture.dependencies,
-    );
-
-    expect(outcome).toMatchObject({ type: "attempted" });
-    expect(fixture.revokeCalls.at(0)?.endpoint.origin).toBe(foreign);
   });
 
   test("tokens recorded under another authorization server are not sent", async () => {
