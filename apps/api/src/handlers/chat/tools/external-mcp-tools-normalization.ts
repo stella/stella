@@ -1,5 +1,6 @@
 import type { SchemaInput } from "@tanstack/ai";
 
+import { fenceExternalMcpToolExecute } from "@/api/handlers/chat/tools/external-mcp-tool-result-fence";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -60,20 +61,32 @@ const isExternalSchema = (
  * The chat-side tool, or `null` when a schema is neither an object nor absent:
  * the chat loop cannot carry such a schema, so the tool is not offered.
  */
-const projectExternalMcpTool = (
-  tool: ExternalMcpTool,
-  exposedToolName: string,
-  nullUnionStrategy: NullUnionStrategy,
-): ChatTool | null => {
-  const { inputSchema, outputSchema } = tool;
+const projectExternalMcpTool = ({
+  connectorSlug,
+  exposedToolName,
+  nullUnionStrategy,
+  tool,
+}: {
+  connectorSlug: string;
+  exposedToolName: string;
+  nullUnionStrategy: NullUnionStrategy;
+  tool: ExternalMcpTool;
+}): ChatTool | null => {
+  const { execute, inputSchema, outputSchema } = tool;
   if (!isExternalSchema(inputSchema) || !isExternalSchema(outputSchema)) {
     // Telemetry only, and no tool name: external MCP metadata is user-configured.
     logger.warn("Skipped external MCP tool with a non-object schema");
     return null;
   }
 
+  // Results from a third-party server reach the model fenced as untrusted
+  // data with their provenance, on the same object the live source executes.
+  const provenance = { connectorSlug, toolName: tool.name };
   return {
     ...tool,
+    ...(execute
+      ? { execute: fenceExternalMcpToolExecute(provenance, execute) }
+      : {}),
     name: exposedToolName,
     lazy: true,
     inputSchema: toChatToolSchema(inputSchema, nullUnionStrategy),
@@ -113,11 +126,12 @@ export const normalizeExternalMcpToolsForChat = ({
       connectorSlug,
       toolName: rawToolName,
     });
-    const chatTool = projectExternalMcpTool(
-      toolDefinition,
+    const chatTool = projectExternalMcpTool({
+      connectorSlug,
       exposedToolName,
       nullUnionStrategy,
-    );
+      tool: toolDefinition,
+    });
     if (chatTool === null) {
       continue;
     }

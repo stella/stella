@@ -17,6 +17,7 @@
     "./limits": "./src/limits.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
+    "./untrusted-content-fence": "./src/untrusted-content-fence.ts",
     "./audit-log": "./src/audit-log.ts",
     "./verification-run-caps": "./src/verification-run-caps.ts",
     "./action-admission": "./src/action-admission.ts",
