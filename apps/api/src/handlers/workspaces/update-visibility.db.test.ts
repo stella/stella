@@ -356,14 +356,24 @@ describe("changing a matter's lead", () => {
 describe("keeping a steward when a lead leaves", () => {
   // Assignment removal, organization offboarding and account deletion clear
   // the departing lead and then restore the steward through this one call.
+  // The caller's recorder carries the actor (the removing member, the
+  // offboarding run or the account-deletion run); the repair supplies the
+  // events it records.
   const restore = async (
     workspaceId: SafeId<"workspace">,
     departingUserId: SafeId<"user">,
-  ) =>
+  ): Promise<AuditEvent[]> => {
+    const events: AuditEvent[] = [];
+    const recordAuditEvent: AuditRecorder = (_tx, event) => {
+      events.push(...(Array.isArray(event) ? event : [event]));
+    };
     await restoreMatterStewards(asTestRaw<Transaction>(testDb), {
       workspaceIds: [workspaceId],
       departingUserId,
+      recordAuditEvent,
     });
+    return events;
+  };
 
   test("the earliest remaining assigned internal member becomes lead; the departing user is never chosen", async () => {
     const workspaceId = await createMatter({
@@ -372,10 +382,19 @@ describe("keeping a steward when a lead leaves", () => {
     });
 
     // The departing lead's rows may still exist when the repair runs.
-    await restore(workspaceId, ids.userA1);
+    const events = await restore(workspaceId, ids.userA1);
 
     expect(await readLead(workspaceId)).toBe(ids.userA2);
     expect(await readVisibility(workspaceId)).toBe("assigned_only");
+    expect(events).toEqual([
+      {
+        action: "update",
+        resourceType: "workspace",
+        resourceId: workspaceId,
+        changes: { leadUserId: { old: null, new: ids.userA2 } },
+        metadata: { cause: "matter_steward_restored" },
+      },
+    ]);
   });
 
   test("with nobody left to lead, the matter reopens to owners and admins plus assigned members", async () => {
@@ -384,10 +403,24 @@ describe("keeping a steward when a lead leaves", () => {
       members: [ids.userA1],
     });
 
-    await restore(workspaceId, ids.userA1);
+    const events = await restore(workspaceId, ids.userA1);
 
     expect(await readLead(workspaceId)).toBeNull();
     expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
+    expect(events).toEqual([
+      {
+        action: "update",
+        resourceType: "workspace",
+        resourceId: workspaceId,
+        changes: {
+          visibility: { old: "assigned_only", new: "admins_and_assigned" },
+        },
+        metadata: {
+          cause: "matter_steward_restored",
+          visibilityChange: "widened",
+        },
+      },
+    ]);
   });
 
   test("a matter whose lead stays usable is left alone", async () => {
@@ -396,10 +429,11 @@ describe("keeping a steward when a lead leaves", () => {
       members: [ids.userA1, ids.userA2],
     });
 
-    await restore(workspaceId, ids.userA2);
+    const events = await restore(workspaceId, ids.userA2);
 
     expect(await readLead(workspaceId)).toBe(ids.userA1);
     expect(await readVisibility(workspaceId)).toBe("assigned_only");
+    expect(events).toEqual([]);
   });
 
   test("a member who leads an assigned-only matter is found before their role turns external", async () => {
