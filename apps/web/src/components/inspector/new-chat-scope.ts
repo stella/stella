@@ -2,7 +2,9 @@
  * Which matter a NEW chat is about.
  *
  * Only the route the user is on when they ask for the chat decides it: the
- * matter in the URL, or none for a global chat. An open chat tab never does.
+ * matter in the URL (`useRouteWorkspaceId`), or none for a global chat. An
+ * open tab never does, and neither does the inspector's display matter,
+ * which prefers the active tab's.
  * Chat tabs persist across navigation, so a tab's matter is where the user
  * was, and copying it scoped a "new" chat in matter A to matter B.
  *

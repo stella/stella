@@ -74,6 +74,7 @@ import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { dockNewChatArgs } from "@/components/inspector/new-chat-scope";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import {
   AIUnavailableDialogTrigger,
   useAIKeyGate,
@@ -120,8 +121,6 @@ type ChatTabPanelProps = {
   tab: ChatTab;
   onClose: () => void;
   onLabelContextMenu: (event: MouseEvent<HTMLElement>) => void;
-  /** The matter in the URL, or undefined off a matter route. */
-  routeWorkspaceId: string | undefined;
 };
 
 const chatTabThreadRef = (tab: ChatTab): ChatThreadRef =>
@@ -137,7 +136,6 @@ export const ChatTabPanel = ({
   tab,
   onClose,
   onLabelContextMenu,
-  routeWorkspaceId,
 }: ChatTabPanelProps) => {
   // The inspector pane mounts under a workspace route, but the
   // *thread* itself can be either workspace-scoped (chat lives
@@ -454,6 +452,7 @@ export const ChatTabPanel = ({
 
   // New-chat lives in the composer's status row (the dock), not the
   // pane header: opens a fresh tab scoped to the route's matter.
+  const routeWorkspaceId = useRouteWorkspaceId();
   const startNewThread = () => {
     openChat(
       dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),

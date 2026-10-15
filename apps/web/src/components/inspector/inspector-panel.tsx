@@ -489,7 +489,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             onOpenChat={openChat}
             onSetMinimized={setMinimized}
             tabs={tabs}
-            workspaceId={workspaceId}
           />
         </div>
 
@@ -516,7 +515,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             <ChatTabPanel
               onClose={() => handleCloseTab(activeTab.id)}
               onLabelContextMenu={ribbonContextMenu.openAt}
-              routeWorkspaceId={workspaceId}
               tab={activeTab}
             />
           </Suspense>
