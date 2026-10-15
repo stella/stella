@@ -68,6 +68,31 @@ CREATE TRIGGER remove_data_box_correspondence_source
 AFTER DELETE ON "correspondence_sources" FOR EACH ROW
 EXECUTE FUNCTION public.remove_data_box_correspondence_source();--> statement-breakpoint
 
+-- A new file version may carry another message. Detach its old association
+-- before the source-pointer uniqueness check, including INSERT ... ON CONFLICT
+-- when the target message is already filed. Source removal applies the same
+-- surviving-copy/last-copy protocol; an insertion failure rolls it all back.
+CREATE FUNCTION public.transition_data_box_correspondence_source() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+BEGIN
+  IF NEW.channel = 'data_box' THEN
+    DELETE FROM public.correspondence_sources s
+    USING public.correspondence c
+    WHERE s.workspace_id = NEW.workspace_id
+      AND s.organization_id = NEW.organization_id
+      AND s.entity_id = NEW.source_entity_id
+      AND c.id = s.correspondence_id
+      AND c.workspace_id = s.workspace_id
+      AND c.organization_id = s.organization_id
+      AND c.message_id IS DISTINCT FROM NEW.message_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+CREATE TRIGGER transition_data_box_correspondence_source
+BEFORE INSERT ON "correspondence" FOR EACH ROW
+EXECUTE FUNCTION public.transition_data_box_correspondence_source();--> statement-breakpoint
+
 -- Run before the entity FK checks: unlink this copy, transition its record,
 -- then permit deletion. Email uploads retain their one-file lifetime. All
 -- entity deletion paths, including folder/workspace cascades, use this protocol.
