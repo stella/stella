@@ -1,6 +1,7 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
+import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -278,7 +279,10 @@ export const getGatewayMcpToolDefinition = async ({
   }
 
   const skill = await resolveSkillTool({ context, mode, toolName });
-  return skill === null ? undefined : skillToolDefinition(skill);
+  // A `manual` skill is served as a prompt, never as a tool.
+  return skill === null || !modelMayStartUninvoked(skill)
+    ? undefined
+    : skillToolDefinition(skill);
 };
 
 /**
@@ -505,7 +509,8 @@ const clampTitle = (raw: string, maxUnits: number): string => {
   return clamped.trimEnd();
 };
 
-const toDynamicToolTitle = (raw: string): string =>
+/** A gateway-served name's display title (tools and skill prompts). */
+export const toDynamicToolTitle = (raw: string): string =>
   clampTitle(raw, DYNAMIC_TOOL_TITLE_MAX_CHARS);
 
 // `<connector display name>: <upstream tool name>`, preferring the tool name:

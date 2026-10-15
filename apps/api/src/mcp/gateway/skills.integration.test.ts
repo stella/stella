@@ -12,6 +12,11 @@ import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
+  getSkillPrompt,
+  listSkillPrompts,
+  UnknownSkillPromptError,
+} from "@/api/mcp/gateway/skill-prompts";
+import {
   loadVisibleSkillTools,
   readSkillTool,
   resolveSkillTool,
@@ -103,7 +108,11 @@ const createRecordingContext = (userId: SafeId<"user">) => {
     returnedRows.flatMap((row) =>
       typeof row["body"] === "string" ? [row["body"]] : [],
     );
-  return { bodiesRead, context };
+  const resourceContentsRead = () =>
+    returnedRows.flatMap((row) =>
+      typeof row["content"] === "string" ? [row["content"]] : [],
+    );
+  return { bodiesRead, context, resourceContentsRead };
 };
 
 describe("MCP skill tools against the database", () => {
@@ -318,5 +327,187 @@ describe("MCP skill tools against the database", () => {
         skill: resolved,
       }),
     ).toBeNull();
+  });
+
+  test("a manual skill is a prompt with its instructions and files, and never a tool", async () => {
+    const slug = `manual-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill({
+      body: `body of ${slug}`,
+      slug,
+      userId: ids.userA1,
+    });
+    await testDb
+      .update(agentSkills)
+      .set({ invocation: "manual" })
+      .where(eq(agentSkills.id, skillId));
+    await testDb.insert(agentSkillResources).values({
+      id: testId(),
+      organizationId: ids.orgA,
+      skillId,
+      path: "references/checklist.md",
+      content: "1. Parties\n2. Term",
+      sizeBytes: 19,
+    });
+    const recording = createRecordingContext(ids.userA1);
+    const context = asTestRaw<McpRequestContext>({
+      ...recording.context,
+      grantedScopes: ["stella:skills"],
+    });
+    const name = namespaceSkillToolName(slug);
+
+    const tools = await loadVisibleSkillTools({
+      context,
+      mode: "default",
+      scopes: ["stella:skills"],
+    });
+    expect(tools.map((tool) => tool.exposedName)).not.toContain(name);
+
+    const prompts = await listSkillPrompts({
+      context,
+      mode: "default",
+      scopes: ["stella:skills"],
+    });
+    expect(prompts.map((prompt) => prompt.name)).toContain(name);
+    expect(
+      await listSkillPrompts({ context, mode: "default", scopes: [] }),
+    ).toEqual([]);
+
+    const prompt = (
+      await getSkillPrompt({
+        args: { request: "Check the lease." },
+        context,
+        mode: "default",
+        name,
+      })
+    ).unwrap();
+    const [instructions, resource] = prompt.messages;
+    expect(instructions?.content).toMatchObject({ type: "text" });
+    expect(
+      instructions?.content.type === "text" ? instructions.content.text : "",
+    ).toContain(`body of ${slug}`);
+    expect(
+      instructions?.content.type === "text" ? instructions.content.text : "",
+    ).toContain("Check the lease.");
+    expect(resource?.content).toMatchObject({
+      resource: { text: "1. Parties\n2. Term" },
+      type: "resource",
+    });
+
+    const called = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: name,
+    });
+    expect(called).toMatchObject({
+      result: { error: { code: "unknown_tool" }, status: "error" },
+      type: "internal",
+    });
+
+    const audited = await testDb
+      .select({ metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, skillId));
+    expect(audited.map(({ metadata }) => metadata)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: null, surface: "mcp" }),
+        expect.objectContaining({
+          path: "references/checklist.md",
+          surface: "mcp",
+        }),
+      ]),
+    );
+  });
+
+  test.each([60_000, 60_001])(
+    "a prompt audits reads and stops after exhausting its budget (%i characters)",
+    async (contentLength) => {
+      const slug = `manual-budget-${Bun.randomUUIDv7()}`;
+      const skillId = await insertSkill({
+        body: "Follow the attached instructions.",
+        slug,
+        userId: ids.userA1,
+      });
+      await testDb
+        .update(agentSkills)
+        .set({ invocation: "manual" })
+        .where(eq(agentSkills.id, skillId));
+      const budgetContent = "x".repeat(contentLength);
+      await testDb.insert(agentSkillResources).values([
+        {
+          id: testId<"agentSkillResource">(),
+          organizationId: ids.orgA,
+          skillId,
+          path: "references/a.md",
+          content: budgetContent,
+          sizeBytes: budgetContent.length,
+        },
+        {
+          id: testId<"agentSkillResource">(),
+          organizationId: ids.orgA,
+          skillId,
+          path: "references/b.md",
+          content: "Must stay unread.",
+          sizeBytes: 17,
+        },
+      ]);
+      const recording = createRecordingContext(ids.userA1);
+      const prompt = (
+        await getSkillPrompt({
+          args: undefined,
+          context: asTestRaw<McpRequestContext>({
+            ...recording.context,
+            grantedScopes: ["stella:skills"],
+          }),
+          mode: "default",
+          name: namespaceSkillToolName(slug),
+        })
+      ).unwrap();
+      const budgetExhausted = contentLength === 60_000;
+      expect(recording.resourceContentsRead()).toEqual(
+        budgetExhausted
+          ? [budgetContent]
+          : [budgetContent, "Must stay unread."],
+      );
+      const audited = await testDb
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, skillId));
+      expect(audited).toHaveLength(budgetExhausted ? 2 : 3);
+      expect(audited.map(({ metadata }) => metadata?.["path"])).toEqual(
+        expect.arrayContaining(
+          budgetExhausted
+            ? [null, "references/a.md"]
+            : [null, "references/a.md", "references/b.md"],
+        ),
+      );
+      expect(prompt.messages).toHaveLength(2);
+      expect(prompt.messages.at(0)?.content).toMatchObject({
+        text: expect.stringContaining(
+          budgetExhausted ? "references/b.md" : "references/a.md",
+        ),
+        type: "text",
+      });
+    },
+  );
+
+  test("an unknown prompt name returns a typed error", async () => {
+    const { context } = createRecordingContext(ids.userA1);
+    const result = await getSkillPrompt({
+      args: undefined,
+      context: asTestRaw<McpRequestContext>({
+        ...context,
+        grantedScopes: ["stella:skills"],
+      }),
+      mode: "default",
+      name: "skill__does_not_exist",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(UnknownSkillPromptError);
+      expect(result.error.message).toBe(
+        "Unknown prompt: skill__does_not_exist",
+      );
+    }
   });
 });

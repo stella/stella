@@ -36,6 +36,7 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
   availability: { status: "available" },
   id: toSafeId<"agentSkill">("skill_alpha"),
   name: "alpha",
+  invocation: "auto",
   exposedName: "skill__alpha",
   source: "installed",
 });
