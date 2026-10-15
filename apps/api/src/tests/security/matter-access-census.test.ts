@@ -153,7 +153,7 @@ describe("matter access census self-test", () => {
         file: "apps/api/src/lib/example-reader.ts",
         signal: "owner-connection-workspace-set",
         screened: false,
-        sites: { readTitles: 1 },
+        sites: { readTitles: 1, "readTitles#rootDb": 1 },
       },
     ]);
     expect(evaluateMatterAccessCensus(findings, {}).violations).toEqual([
@@ -172,10 +172,11 @@ describe("matter access census self-test", () => {
       evaluateMatterAccessCensus(findings, {
         "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set": {
           reason: "One reviewed projection reader.",
-          sites: { readTitles: 1 },
+          sites: { readTitles: 1, "readTitles#rootDb": 1 },
         },
       }).violations,
     ).toEqual([
+      "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set @ readMore#rootDb: 1 sites, allowed 0",
       "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set @ readMore: 1 sites, allowed 0",
     ]);
   });
@@ -254,7 +255,74 @@ describe("matter access census self-test", () => {
         screened: false,
         sites: { table: 1 },
       },
+      {
+        file: "apps/api/src/lib/example-rule.ts",
+        signal: "names-matter-role-rule",
+        screened: false,
+        sites: { reaches: 1 },
+      },
     ]);
+  });
+
+  test("renaming the matters table or the connection does not hide a reader", () => {
+    const findings = classifyMatterAccessModule(
+      "apps/api/src/lib/example-reader.ts",
+      `
+      import { inArray } from "drizzle-orm";
+      import { rootDb as owner } from "@/api/db/root";
+      import { workspaces as matters } from "@/api/db/schema";
+      const db = owner;
+      export const readMatters = async (ids: string[]) =>
+        await db.select().from(matters).where(inArray(matters.id, ids));
+    `,
+    );
+    expect(findings.map(({ signal, sites }) => [signal, sites])).toEqual([
+      [
+        "owner-connection-workspace-set",
+        { readMatters: 1, "db#rootDb": 1, "readMatters#rootDb": 1 },
+      ],
+    ]);
+  });
+
+  test("a reviewed reader that swaps its scoped transaction for the owner connection fails", () => {
+    const reader = (connection: string) => `
+      import { inArray } from "drizzle-orm";
+      import { rootDb } from "@/api/db/root";
+      import { entities } from "@/api/db/schema";
+      export const readIndex = async (ids: string[]) =>
+        await rootDb.select().from(entities).where(inArray(entities.workspaceId, ids));
+      export const readScoped = async (tx: Tx, ids: string[]) =>
+        await search(ids, ${connection});
+    `;
+    const file = "apps/api/src/lib/example-reader.ts";
+    const allowed = classifyMatterAccessModule(file, reader("tx"));
+    const reviewed = {
+      [`${file}::owner-connection-workspace-set`]: {
+        reason: "One reviewed index reader.",
+        sites: allowed[0]?.sites ?? {},
+      },
+    };
+    expect(evaluateMatterAccessCensus(allowed, reviewed).violations).toEqual(
+      [],
+    );
+    expect(
+      evaluateMatterAccessCensus(
+        classifyMatterAccessModule(file, reader("rootDb")),
+        reviewed,
+      ).violations,
+    ).toEqual([
+      `${file}::owner-connection-workspace-set @ readScoped#rootDb: 1 sites, allowed 0`,
+    ]);
+  });
+
+  test("the shared app-side write check is enumerated as a copy of the rule", () => {
+    const file = "apps/api/src/lib/entities/workspace-entity-write-access.ts";
+    expect(
+      classifyMatterAccessModule(
+        file,
+        readFileSync(path.join(repoRoot, file), "utf-8"),
+      ).map(({ signal }) => signal),
+    ).toContain("names-matter-role-rule");
   });
 
   test("an allowlist entry whose finding is gone is reported as stale", () => {

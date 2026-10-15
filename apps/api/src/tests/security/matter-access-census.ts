@@ -20,7 +20,17 @@ import ts from "typescript";
  *   matter-id set: `inArray(<table>.workspaceId | workspaces.id, …)` under any
  *   local or namespaced name, SQL `workspace_id = ANY(` / `IN` (literal or
  *   with an interpolated matter column), or an `accessibleWorkspaceIds` /
- *   `activeWorkspaceIds` binding.
+ *   `activeWorkspaceIds` binding. Its sites also pin every use of the owner
+ *   connection per symbol (`<symbol>#rootDb`), so a reviewed reader that
+ *   swaps its scoped transaction for `rootDb` fails the census.
+ * - `names-matter-role-rule`: it names the organization-role reach of the
+ *   rule (`CLIENT_MATTER_ADMIN_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`) or an
+ *   app-side check built on it (`canWriteWorkspaceEntities`). The rule belongs
+ *   in the database; every app copy is enumerated.
+ *
+ * Names resolve through renamed imports and plain local aliases
+ * (`const matters = workspaces`), so renaming a table, the connection or a
+ * rule does not hide a site.
  *
  * Deny by default: no module meets a signal on its own except the owner module
  * for `reads-authorization-view`. Matter reads belong in a row-policy-scoped
@@ -42,6 +52,7 @@ export const MATTER_ACCESS_SIGNALS = [
   "reads-authorization-view",
   "derives-matter-access",
   "owner-connection-workspace-set",
+  "names-matter-role-rule",
 ] as const;
 
 export type MatterAccessSignal = (typeof MATTER_ACCESS_SIGNALS)[number];
@@ -81,16 +92,29 @@ const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any\s*\(|in\b)/giu;
  */
 const SQL_SET_AFTER_COLUMN = /^\s*(?:=\s*any\s*\(|in\b)/iu;
 
+/** Local name -> original name, for renamed imports and local aliases. */
+type Aliases = Map<string, string>;
+
+const resolveName = (name: string, aliases: Aliases) =>
+  aliases.get(name) ?? name;
+
+/** The table an expression names: `workspaces`, an alias, or `schema.x`. */
+const tableName = (node: ts.Expression, aliases: Aliases) => {
+  if (ts.isIdentifier(node)) {
+    return resolveName(node.text, aliases);
+  }
+  return ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
+};
+
 /**
  * A column that holds a matter id: any `<table>.workspaceId`, or the
- * matters table's own `workspaces.id`.
+ * matters table's own `workspaces.id` under any name.
  */
-const isMatterIdColumn = (column: ts.Expression): boolean =>
+const isMatterIdColumn = (column: ts.Expression, aliases: Aliases): boolean =>
   ts.isPropertyAccessExpression(column) &&
   (column.name.text === "workspaceId" ||
     (column.name.text === "id" &&
-      ts.isIdentifier(column.expression) &&
-      column.expression.text === "workspaces"));
+      tableName(column.expression, aliases) === "workspaces"));
 
 const literalText = (node: ts.Node): string | undefined => {
   if (
@@ -163,19 +187,18 @@ type Facts = {
   view: SiteCounter;
   membership: SiteCounter;
   workspaceSet: SiteCounter;
+  rootDbUse: SiteCounter;
+  roleRule: SiteCounter;
 };
 
 /** Local names that refer to drizzle's `inArray`, direct or namespaced. */
 type InArrayNames = { direct: Set<string>; namespaces: Set<string> };
 
-/** Local name -> imported name for every renamed value import. */
-type ImportedNames = Map<string, string>;
-
 const recordImport = (
   node: ts.ImportDeclaration,
   facts: Facts,
   inArray: InArrayNames,
-  imported: ImportedNames,
+  aliases: Aliases,
 ) => {
   if (
     !ts.isStringLiteral(node.moduleSpecifier) ||
@@ -196,7 +219,7 @@ const recordImport = (
   } else {
     for (const element of bindings.elements) {
       if (!element.isTypeOnly && element.propertyName !== undefined) {
-        imported.set(element.name.text, element.propertyName.text);
+        aliases.set(element.name.text, element.propertyName.text);
       }
     }
   }
@@ -242,10 +265,10 @@ const isInArrayCall = (
 const recordIdentifier = (
   node: ts.Identifier,
   facts: Facts,
-  imported: ImportedNames,
+  aliases: Aliases,
 ) => {
-  // A renamed import is a use of the original name.
-  const name = imported.get(node.text) ?? node.text;
+  // A renamed import or local alias is a use of the original name.
+  const name = resolveName(node.text, aliases);
   if (VIEW_IDENTIFIERS.has(name)) {
     facts.view.add(node);
   }
@@ -254,6 +277,10 @@ const recordIdentifier = (
   }
   if (ROLE_RULE_IDENTIFIERS.has(name)) {
     facts.namesRoleRule = true;
+    facts.roleRule.add(node);
+  }
+  if (name === "rootDb") {
+    facts.rootDbUse.add(node);
   }
   if (name === "clientId") {
     facts.namesClientId = true;
@@ -275,6 +302,27 @@ const recordLiteral = (node: ts.Node, text: string, facts: Facts) => {
   }
 };
 
+/**
+ * `const matters = workspaces`: later uses of `matters` mean `workspaces`.
+ * The declared name itself is not a use.
+ */
+const isLocalAliasName = (node: ts.Identifier) =>
+  ts.isVariableDeclaration(node.parent) &&
+  node.parent.name === node &&
+  node.parent.initializer !== undefined &&
+  ts.isIdentifier(node.parent.initializer);
+
+const recordLocalAlias = (node: ts.Node, aliases: Aliases) => {
+  if (
+    ts.isVariableDeclaration(node) &&
+    ts.isIdentifier(node.name) &&
+    node.initializer !== undefined &&
+    ts.isIdentifier(node.initializer)
+  ) {
+    aliases.set(node.name.text, resolveName(node.initializer.text, aliases));
+  }
+};
+
 const readFacts = (file: string, source: string): Facts => {
   const sourceFile = ts.createSourceFile(
     file,
@@ -290,17 +338,20 @@ const readFacts = (file: string, source: string): Facts => {
     view: siteCounter(),
     membership: siteCounter(),
     workspaceSet: siteCounter(),
+    rootDbUse: siteCounter(),
+    roleRule: siteCounter(),
   };
   const inArray: InArrayNames = { direct: new Set(), namespaces: new Set() };
-  const imported: ImportedNames = new Map();
+  const aliases: Aliases = new Map();
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
-      recordImport(node, facts, inArray, imported);
+      recordImport(node, facts, inArray, aliases);
       return;
     }
-    if (ts.isIdentifier(node)) {
-      recordIdentifier(node, facts, imported);
+    recordLocalAlias(node, aliases);
+    if (ts.isIdentifier(node) && !isLocalAliasName(node)) {
+      recordIdentifier(node, facts, aliases);
     }
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -312,7 +363,7 @@ const readFacts = (file: string, source: string): Facts => {
     }
     if (isInArrayCall(node, inArray)) {
       const [column] = node.arguments;
-      if (column !== undefined && isMatterIdColumn(column)) {
+      if (column !== undefined && isMatterIdColumn(column, aliases)) {
         facts.workspaceSet.add(node);
       }
     }
@@ -320,7 +371,7 @@ const readFacts = (file: string, source: string): Facts => {
     // column opening a set predicate.
     if (
       ts.isTemplateSpan(node) &&
-      isMatterIdColumn(node.expression) &&
+      isMatterIdColumn(node.expression, aliases) &&
       SQL_SET_AFTER_COLUMN.test(node.literal.text)
     ) {
       facts.workspaceSet.add(node);
@@ -337,7 +388,7 @@ const readFacts = (file: string, source: string): Facts => {
 
 // Cheap prefilter so only candidate files are parsed.
 const CANDIDATE =
-  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|@\/api\/db\/root/u;
+  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|@\/api\/db\/root|CLIENT_MATTER_ADMIN_ROLES|WORKSPACE_ACCESS_BY_ROLE|canWriteWorkspaceEntities/u;
 
 const hasSites = (sites: MatterAccessSites) => Object.keys(sites).length > 0;
 
@@ -371,11 +422,25 @@ export const classifyMatterAccessModule = (
     });
   }
   if (facts.importsRootDbValue && hasSites(facts.workspaceSet.sites)) {
+    const connectionSites = Object.entries(facts.rootDbUse.sites).map(
+      ([symbol, count]) => [`${symbol}#rootDb`, count] as const,
+    );
     findings.push({
       file,
       signal: "owner-connection-workspace-set",
       screened: false,
-      sites: facts.workspaceSet.sites,
+      sites: {
+        ...facts.workspaceSet.sites,
+        ...Object.fromEntries(connectionSites),
+      },
+    });
+  }
+  if (hasSites(facts.roleRule.sites)) {
+    findings.push({
+      file,
+      signal: "names-matter-role-rule",
+      screened: false,
+      sites: facts.roleRule.sites,
     });
   }
   return findings;
