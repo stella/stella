@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { collectConformanceTestEvidence } from "./conformance-test-evidence";
-import { buildResponseConformanceCensus } from "./response-conformance-census";
+import {
+  buildResponseConformanceCensus,
+  responseConformanceCensusMatches,
+} from "./response-conformance-census";
 import type { ConformanceSurface } from "./response-conformance-census";
 
 const unresolved = { handler: 0, http: 0, mcp: 0 };
@@ -60,4 +63,21 @@ test("an imported endpoint without an invocation gives the census no handler cre
   );
   expect(census.counts.routesExercisedByTests).toBe(0);
   expect(census.counts.routesWithHandlerTestCalls).toBe(0);
+});
+
+test("census freshness ignores formatting and key order but detects content drift", () => {
+  const current = {
+    counts: { routesTotal: 1 },
+    surfaces: [{ id: "GET /items", httpTests: ["items.test.ts"] }],
+  };
+  const formatted: unknown = JSON.parse(
+    '{"surfaces":[{"httpTests":["items.test.ts"],"id":"GET /items"}],"counts":{"routesTotal":1}}',
+  );
+  expect(responseConformanceCensusMatches(formatted, current)).toBe(true);
+  expect(
+    responseConformanceCensusMatches(formatted, {
+      ...current,
+      counts: { routesTotal: 2 },
+    }),
+  ).toBe(false);
 });

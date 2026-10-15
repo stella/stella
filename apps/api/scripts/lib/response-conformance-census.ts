@@ -25,6 +25,14 @@ export const serializeConformanceDeclaration = (value: unknown): string => {
   return serialized;
 };
 
+/** Formatting and object-key order do not change a generated JSON census. */
+export const responseConformanceCensusMatches = (
+  committed: unknown,
+  current: unknown,
+): boolean =>
+  serializeConformanceDeclaration(committed) ===
+  serializeConformanceDeclaration(current);
+
 export const conformanceDeclarationHash = (value: unknown): string =>
   sha256Hex(serializeConformanceDeclaration(value));
 

@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { BASELINE_PATHS } from "../../../scripts/baseline-paths";
 import { shrinkViolations } from "../../../scripts/baseline-shrink";
+import { responseConformanceCensusMatches } from "./lib/response-conformance-census";
 
 const ROOT = path.resolve(import.meta.dir, "../../..");
 const CENSUS = "apps/api/response-conformance-census.json";
@@ -119,8 +120,10 @@ export const responseConformanceGuardSelfTest = () => {
 };
 
 const readFreshDebtComparison = (census: unknown) => {
-  const committed = readFileSync(path.join(ROOT, CENSUS), "utf-8");
-  if (committed !== `${JSON.stringify(census, null, 2)}\n`) {
+  const committed: unknown = JSON.parse(
+    readFileSync(path.join(ROOT, CENSUS), "utf-8"),
+  );
+  if (!responseConformanceCensusMatches(committed, census)) {
     panic(
       "Response conformance census is stale; run response-conformance-census.ts --write",
     );
@@ -172,8 +175,6 @@ if (import.meta.main) {
         `${JSON.stringify(result.current, null, 2)}\n`,
       );
     }
-    // Registry imports own pools and timers; the standalone guard owns no server.
-    process.exit(0);
   }
   // Registry imports own pools and timers; this command does not start a server.
   process.exit(0);

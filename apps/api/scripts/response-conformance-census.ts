@@ -11,6 +11,7 @@ import { discoverSafeHandlers, REPO_ROOT } from "./lib/enumerate-safe-handlers";
 import {
   buildResponseConformanceCensus,
   isConformanceRecord,
+  responseConformanceCensusMatches,
 } from "./lib/response-conformance-census";
 
 export const RESPONSE_CONFORMANCE_CENSUS =
@@ -120,7 +121,10 @@ if (import.meta.main) {
     writeFileSync(target, serialized);
   } else if (
     !existsSync(target) ||
-    readFileSync(target, "utf-8") !== serialized
+    !responseConformanceCensusMatches(
+      JSON.parse(readFileSync(target, "utf-8")),
+      census,
+    )
   ) {
     panic("Response conformance census is stale; run its --write command");
   }
