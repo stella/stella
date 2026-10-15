@@ -111,3 +111,21 @@ export const activeAuthorizedWorkspaceQuery = (
  */
 export const authorizedWorkspaceIdSubquery = (): SQL =>
   sql`SELECT aw.authorized_workspace_id FROM ${stellaAuthorizedWorkspaces} aw`;
+
+type MemberScope = {
+  organizationId: SQL | SafeId<"organization">;
+  userId: SQL | string;
+};
+
+/**
+ * Whether one organization member reaches a matter, asked of the database
+ * rule (`stella_workspace_access`) instead of computed in app code. Unlike
+ * the reads above it names the member explicitly, so it also answers for a
+ * credential's user or a member being offboarded. Select it as a column next
+ * to the rows the caller already reads.
+ */
+export const memberReachesMatterSql = (
+  { organizationId, userId }: MemberScope,
+  workspaceId: SQL | SafeId<"workspace">,
+): SQL<boolean> =>
+  sql<boolean>`public.stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;
