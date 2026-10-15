@@ -63,7 +63,9 @@ const guardedFetch =
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
-    if (init !== undefined && "unix" in init) {
+    const unix: unknown =
+      init === undefined ? undefined : Reflect.get(init, "unix");
+    if (typeof unix === "string" && unix.length > 0) {
       return await original(input, init); // a Unix socket stays on this machine
     }
     const request =
@@ -83,18 +85,13 @@ const guardedFetch =
     }
     let method = request.method;
     const headers = new Headers(request.headers);
-    let body = request.body === null ? null : await request.arrayBuffer();
+    // The first hop sends the caller's body as is, so a streamed upload keeps
+    // streaming. A copy is kept only for a 307/308 that must send it again.
+    let replay = request.body === null ? undefined : request.clone();
+    let hop = new Request(request, { redirect: "manual" });
     for (let hops = 0; ; hops += 1) {
       // oxlint-disable-next-line no-await-in-loop -- each hop depends on the previous response.
-      const response = await original(
-        new Request(url.href, {
-          body,
-          headers,
-          method,
-          redirect: "manual",
-          signal: request.signal,
-        }),
-      );
+      const response = await original(hop);
       const location = response.headers.get("location");
       if (!REDIRECT_STATUSES.has(response.status) || location === null) {
         return response;
@@ -120,11 +117,20 @@ const guardedFetch =
           method === "POST")
       ) {
         method = method === "HEAD" ? "HEAD" : "GET";
-        body = null;
+        replay = undefined;
         headers.delete("content-type");
         headers.delete("content-length");
       }
+      const source = replay;
+      replay = source?.clone();
       url = next;
+      hop = new Request(url.href, {
+        body: source?.body ?? null,
+        headers,
+        method,
+        redirect: "manual",
+        signal: request.signal,
+      });
     }
   };
 

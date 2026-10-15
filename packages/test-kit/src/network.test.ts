@@ -130,6 +130,38 @@ describe("network guard", () => {
       expect(await switched.text()).toBe("GET ");
     });
 
+    test("a streamed upload is not buffered before the request starts", async () => {
+      uninstall = installNetworkGuard();
+      using server = Bun.serve({
+        // Answers on the first chunk, while the upload is still open.
+        fetch: async (request) => {
+          const reader = request.body?.getReader();
+          const first = await reader?.read();
+          return new Response(new TextDecoder().decode(first?.value));
+        },
+        port: 0,
+      });
+      const upload = new TransformStream<Uint8Array, Uint8Array>();
+      const writer = upload.writable.getWriter();
+      const responding = fetch(`http://127.0.0.1:${server.port}/`, {
+        body: upload.readable,
+        method: "POST",
+      });
+      await writer.write(new TextEncoder().encode("first"));
+      const response = await responding;
+      expect(await response.text()).toBe("first");
+      await writer.close();
+    });
+
+    test("an undefined unix option is not a Unix socket", async () => {
+      uninstall = installNetworkGuard();
+      // Built at run time: the typed init does not admit an undefined unix.
+      const init: RequestInit = {};
+      Reflect.set(init, "unix", undefined);
+      const error = await rejectionOf(fetch("http://example.com/", init));
+      expect(error).toBeInstanceOf(NetworkAccessError);
+    });
+
     test("manual redirects are left to the caller", async () => {
       uninstall = installNetworkGuard();
       using server = serve();

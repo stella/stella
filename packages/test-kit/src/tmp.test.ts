@@ -4,7 +4,12 @@ import { readFile, writeFile } from "node:fs/promises";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createTestTmpDir, useTestTmpDir, withTestTmpDir } from "./tmp.ts";
+import {
+  createTestTmpDir,
+  createTestTmpDirSlot,
+  useTestTmpDir,
+  withTestTmpDir,
+} from "./tmp.ts";
 
 describe("test temp dirs", () => {
   test("each directory is fresh and removed when its scope ends", async () => {
@@ -43,6 +48,24 @@ describe("test temp dirs", () => {
     expect(String(await rejectionOf(createTestTmpDir("../up")))).toContain(
       "kebab-case",
     );
+  });
+});
+
+describe("temp dir slot", () => {
+  test("an overlapping open is refused and keeps the running test's directory", async () => {
+    const slot = createTestTmpDirSlot("kit-slot");
+    await slot.open();
+    const running = slot.current().path;
+    expect(String(await rejectionOf(slot.open()))).toContain(
+      "one test at a time",
+    );
+    // The refused test's teardown runs first and must leave the directory.
+    await slot.close();
+    expect(existsSync(running)).toBe(true);
+    expect(slot.current().path).toBe(running);
+    await slot.close();
+    expect(existsSync(running)).toBe(false);
+    expect(() => slot.current()).toThrow("only while a test runs");
   });
 });
 

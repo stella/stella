@@ -63,20 +63,59 @@ export const withTestTmpDir = async <T>(
   return await body(dir);
 };
 
+export type TestTmpDirSlot = {
+  open: () => Promise<void>;
+  close: () => Promise<void>;
+  current: () => TestTmpDir;
+};
+
+/**
+ * One directory at a time. Hooks have no per-test identity, so a second
+ * `open` before `close` (tests running concurrently) is refused rather than
+ * letting two tests share or delete each other's directory.
+ */
+export const createTestTmpDirSlot = (prefix?: string): TestTmpDirSlot => {
+  let state: "closed" | "opening" | { dir: TestTmpDir } = "closed";
+  // A refused open is still followed by its test's close; that close must not
+  // remove the directory the running test is using.
+  let refused = 0;
+  return {
+    open: async () => {
+      if (state !== "closed") {
+        refused += 1;
+        panic(
+          "useTestTmpDir serves one test at a time; concurrent tests use withTestTmpDir",
+        );
+      }
+      state = "opening";
+      state = { dir: await createTestTmpDir(prefix) };
+    },
+    close: async () => {
+      if (refused > 0) {
+        refused -= 1;
+        return;
+      }
+      const open = state;
+      state = "closed";
+      if (typeof open === "object") {
+        await open.dir.remove();
+      }
+    },
+    current: () =>
+      typeof state === "object"
+        ? state.dir
+        : panic("The test temp dir exists only while a test runs"),
+  };
+};
+
 /**
  * Registers a fresh directory for every test in the calling file or describe
- * block. Read it inside a test through the returned accessor.
+ * block. Read it inside a test through the returned accessor. Serial tests
+ * only; a concurrent test uses `withTestTmpDir`.
  */
 export const useTestTmpDir = (prefix?: string): (() => TestTmpDir) => {
-  let current: TestTmpDir | undefined;
-  beforeEach(async () => {
-    current = await createTestTmpDir(prefix);
-  });
-  afterEach(async () => {
-    const dir = current;
-    current = undefined;
-    await dir?.remove();
-  });
-  return () =>
-    current ?? panic("The test temp dir exists only while a test runs");
+  const slot = createTestTmpDirSlot(prefix);
+  beforeEach(slot.open);
+  afterEach(slot.close);
+  return slot.current;
 };
