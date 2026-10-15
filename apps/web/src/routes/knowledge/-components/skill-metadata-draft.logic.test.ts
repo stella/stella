@@ -38,13 +38,9 @@ const edits: SkillMetadataDraft = {
   name: "Typed name",
 };
 
-const FIELDS = [
-  "command",
-  "description",
-  "enabled",
-  "invocation",
-  "name",
-] as const;
+const FIELDS = Object.keys(edits).filter(
+  (field): field is keyof SkillMetadataDraft => Object.hasOwn(edits, field),
+);
 
 // Every combination of edited fields.
 const editedFieldSets: (typeof FIELDS)[number][][] = [[]];

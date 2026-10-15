@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
+import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -382,7 +383,7 @@ describe("MCP gateway skill tools", () => {
       scopes: ["stella:skills", "stella:documents_write", "stella:templates"],
     });
 
-    expect(withoutTemplates).toEqual([]);
+    expect(withoutTemplates).toEqual(noModelOfferedSkills<ResolvedSkillTool>());
     expect(withTemplates.map((tool) => tool.name)).toEqual(["fill-a-template"]);
   });
 

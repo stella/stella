@@ -427,7 +427,7 @@ describe("MCP skill tools against the database", () => {
       const budgetContent = "x".repeat(contentLength);
       await testDb.insert(agentSkillResources).values([
         {
-          id: testId(),
+          id: testId<"agentSkillResource">(),
           organizationId: ids.orgA,
           skillId,
           path: "references/a.md",
@@ -435,7 +435,7 @@ describe("MCP skill tools against the database", () => {
           sizeBytes: budgetContent.length,
         },
         {
-          id: testId(),
+          id: testId<"agentSkillResource">(),
           organizationId: ids.orgA,
           skillId,
           path: "references/b.md",
@@ -465,12 +465,13 @@ describe("MCP skill tools against the database", () => {
         .select({ metadata: auditLogs.metadata })
         .from(auditLogs)
         .where(eq(auditLogs.resourceId, skillId));
-      expect(
-        audited.map(({ metadata }) => metadata?.["path"]).toSorted(),
-      ).toEqual(
-        budgetExhausted
-          ? [null, "references/a.md"].toSorted()
-          : [null, "references/a.md", "references/b.md"].toSorted(),
+      expect(audited).toHaveLength(budgetExhausted ? 2 : 3);
+      expect(audited.map(({ metadata }) => metadata?.["path"])).toEqual(
+        expect.arrayContaining(
+          budgetExhausted
+            ? [null, "references/a.md"]
+            : [null, "references/a.md", "references/b.md"],
+        ),
       );
       expect(prompt.messages).toHaveLength(2);
       expect(prompt.messages.at(0)?.content).toMatchObject({
