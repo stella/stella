@@ -23,7 +23,7 @@ import ts from "typescript";
  *   with an interpolated matter column), or an `accessibleWorkspaceIds` /
  *   `activeWorkspaceIds` binding. Its sites also pin every use of the owner
  *   connection per symbol (`<symbol>#rootDb`), so a reviewed reader that
- *   swaps its scoped transaction for `rootDb` fails the census.
+ *   starts using `rootDb` in a symbol needs its entry updated.
  * - `names-matter-role-rule`: it names the organization-role reach of the
  *   rule (`CLIENT_MATTER_ADMIN_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`) or an
  *   app-side check built on it (`canWriteWorkspaceEntities`). The rule belongs
@@ -31,12 +31,12 @@ import ts from "typescript";
  *
  * Names resolve through renamed imports and plain local aliases
  * (`const matters = workspaces`), so renaming a table, the connection or a
- * rule does not hide a site. A matter column also counts when wrapped
+ * rule keeps the site in the census. A matter column also counts when wrapped
  * (sql`${column}`) or handed to a function the module declares itself.
  *
- * Limits: the census reads one module's syntax. Code written to evade it
- * (a re-export through another module, dynamic import, computed property
- * names) is out of its reach; review and the database rule cover that.
+ * Scope: the census reads one module's syntax; references that cross modules
+ * (a re-export, a dynamic import, computed property names) are left to
+ * review and to the database rule.
  *
  * Deny by default: no module meets a signal on its own except the owner module
  * for `reads-authorization-view`. Matter reads belong in a row-policy-scoped
@@ -313,7 +313,7 @@ const recordImport = (
 /**
  * A call whose callee resolves to `inArray`: the import under any name, a
  * local alias of it, or `<anything>.inArray`. Over-matching a same-named
- * helper only adds a finding; it never hides one.
+ * helper only adds a finding.
  */
 const isInArrayCall = (
   node: ts.Node,
@@ -347,8 +347,8 @@ const localFunctionNames = (sourceFile: ts.SourceFile) => {
 /**
  * A set predicate on a matter-id column: `inArray` under any name, or a
  * function the module declares itself that receives the column (a local
- * predicate helper hides the `inArray` behind a parameter). Over-matching a
- * local helper only adds a finding; it never hides one.
+ * predicate helper takes the column as a parameter). Over-matching a local
+ * helper only adds a finding.
  */
 const isMatterSetPredicate = (
   node: ts.Node,

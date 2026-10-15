@@ -264,7 +264,7 @@ describe("matter access census self-test", () => {
     ]);
   });
 
-  test("renaming the matters table or the connection does not hide a reader", () => {
+  test("a renamed matters table or connection is still a census member", () => {
     const findings = classifyMatterAccessModule(
       "apps/api/src/lib/example-reader.ts",
       `
@@ -284,7 +284,7 @@ describe("matter access census self-test", () => {
     ]);
   });
 
-  test("a reviewed reader that swaps its scoped transaction for the owner connection fails", () => {
+  test("a reviewed module that starts using the owner connection in another symbol needs its entry updated", () => {
     const reader = (connection: string) => `
       import { inArray } from "drizzle-orm";
       import { rootDb } from "@/api/db/root";
