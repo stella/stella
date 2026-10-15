@@ -13,7 +13,7 @@ const previous = {
   description: "Reviews an agreement against the checklist.",
   enabled: false,
   id: SKILL_ID,
-  invocation: "auto",
+  invocation: "auto" as const,
   name: "check-against-rules",
 };
 
@@ -24,7 +24,7 @@ const next = {
   description: "Checks clauses against the house rules.",
   enabled: true,
   id: SKILL_ID,
-  invocation: "manual",
+  invocation: "manual" as const,
   name: "Clause review",
 };
 
