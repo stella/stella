@@ -4511,9 +4511,12 @@ jobs:
         run: bun test scripts/typecheck-cache.test.ts
 
       - name: Task result cache contract
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
           STELLA_VERIFY: check
+        id: static_check_120
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_120 != 'true') }}
         run: bun test scripts/task-result-cache.test.ts
 
       - name: Test CI check partition
