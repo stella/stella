@@ -275,7 +275,10 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
-    operations: { sample_case_loaded: VERIFICATION_AUDIT_DETAILS },
+    operations: {
+      sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
+      sample_case_released: VERIFICATION_AUDIT_DETAILS,
+    },
   },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
     default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },

@@ -431,6 +431,81 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
     });
   }, 120_000);
 
+  const assertFreshSample = async (
+    fixture: SampleFixture,
+    stale: Awaited<ReturnType<typeof loadSampleCase>>,
+  ) => {
+    if (stale.isErr()) {
+      throw stale.error;
+    }
+    const fresh = await loadSampleCase(fixture.second);
+    if (fresh.isErr()) {
+      throw fresh.error;
+    }
+    expect(fresh.value.listId).not.toBe(stale.value.listId);
+    const document = await fixture.db.query.entities.findFirst({
+      where: {
+        id: { eq: fresh.value.documentEntityId },
+        workspaceId: { eq: fixture.first.workspaceId },
+      },
+      with: { currentVersion: { with: { fields: true } } },
+    });
+    expect(document?.currentVersion?.fields.map(({ id }) => id)).toContain(
+      fresh.value.fileFieldId,
+    );
+    const facts = await fixture.db
+      .select({ name: entities.name })
+      .from(legalListItems)
+      .innerJoin(entities, eq(entities.id, legalListItems.entityId))
+      .where(eq(legalListItems.listId, fresh.value.listId));
+    expect(facts.map(({ name }) => name).toSorted()).toEqual(
+      SAMPLE_FACTS.map(({ statement }) => statement).toSorted(),
+    );
+    const released = await fixture.db.query.legalLists.findFirst({
+      where: { id: { eq: stale.value.listId } },
+    });
+    expect(released?.sampleCase).toBeNull();
+    const replay = await loadSampleCase({
+      ...fixture.first,
+      createDocument: async () => panic("Replay must not create a document"),
+    });
+    if (replay.isErr()) {
+      throw replay.error;
+    }
+    expect(replay.value).toEqual(fresh.value);
+  };
+
+  test("a deleted sample document releases the receipt and the next load is complete", async () => {
+    await withSampleFixture(async (fixture) => {
+      const stale = await loadSampleCase(fixture.first);
+      if (stale.isErr()) {
+        throw stale.error;
+      }
+      await fixture.db
+        .delete(entities)
+        .where(eq(entities.id, stale.value.documentEntityId));
+      await assertFreshSample(fixture, stale);
+    });
+  }, 120_000);
+
+  test("deleted sample facts release the receipt and the next load is complete", async () => {
+    await withSampleFixture(async (fixture) => {
+      const stale = await loadSampleCase(fixture.first);
+      if (stale.isErr()) {
+        throw stale.error;
+      }
+      await fixture.db
+        .delete(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, fixture.first.workspaceId),
+            eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
+          ),
+        );
+      await assertFreshSample(fixture, stale);
+    });
+  }, 120_000);
+
   test("a failed detail transaction leaves no sample or document and a retry succeeds", async () => {
     await withSampleFixture(async (fixture) => {
       const recordAuditEvent: typeof fixture.first.recordAuditEvent = async (

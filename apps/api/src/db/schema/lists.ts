@@ -144,6 +144,8 @@ const ENTITY_PRIORITY_SQL_VALUES = ENTITY_PRIORITIES.map((priority) =>
 export type LegalListSampleCase = {
   documentEntityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
+  /** The sample facts; the receipt is stale once any is no longer an item. */
+  factEntityIds: SafeId<"entity">[];
 };
 
 export const legalLists = p.pgTable(

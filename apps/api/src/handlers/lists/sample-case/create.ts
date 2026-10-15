@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, eq, isNotNull, TransactionRollbackError } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  TransactionRollbackError,
+} from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -17,10 +25,13 @@ import {
 } from "@/api/db/safe-db";
 import {
   entities,
+  entityVersions,
+  fields,
   legalListFactDetails,
   legalListItems,
   legalLists,
 } from "@/api/db/schema";
+import type { LegalListSampleCase } from "@/api/db/schema";
 import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -90,7 +101,9 @@ const config = {
     `with ${SAMPLE_FACTS.length} facts and their evidential details, plus a DOCX witness statement. ` +
     "The list, facts and document are committed together. Repeating this call " +
     "returns the same listId, documentEntityId and fileFieldId without changing " +
-    "the sample, even after renaming it. Requires access to list verification. " +
+    "the sample, even after renaming it. Once its document or a sample fact " +
+    "is deleted, the call loads a fresh complete sample with new IDs. " +
+    "Requires access to list verification. " +
     "Use lists.verifications.create with listId, entityId=documentEntityId " +
     "and fileFieldId to check the statement.",
   permissions: { view: ["create"], entity: ["create"] },
@@ -136,12 +149,76 @@ const lockSampleWorkspace = async (
   }
 };
 
-/** The stored sample, read under the workspace lock and the sample fence. */
-const readLockedSample = async (
+type SampleReceiptRow = {
+  id: SafeId<"legalList">;
+  sampleCase: LegalListSampleCase;
+};
+
+/**
+ * Whether every row the receipt names is still live: the statement's file
+ * field on a retained version of the document, and each sample fact still an
+ * item of the sample list. Users delete these through the ordinary entity
+ * paths, which cascade away the rows but cannot see the JSON receipt.
+ */
+const isSampleIntact = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-  fileProperty: SampleFileProperty | undefined,
+  { id: listId, sampleCase }: SampleReceiptRow,
 ) => {
+  const documentFields = await tx.$count(
+    fields,
+    and(
+      eq(fields.workspaceId, workspaceId),
+      eq(fields.id, sampleCase.fileFieldId),
+      exists(
+        tx
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.workspaceId, workspaceId),
+              eq(entityVersions.id, fields.entityVersionId),
+              eq(entityVersions.entityId, sampleCase.documentEntityId),
+              isNull(entityVersions.deletedAt),
+            ),
+          ),
+      ),
+    ),
+  );
+  if (documentFields !== 1) {
+    return false;
+  }
+  const liveFacts = await tx.$count(
+    legalListItems,
+    and(
+      eq(legalListItems.workspaceId, workspaceId),
+      eq(legalListItems.listId, listId),
+      inArray(legalListItems.entityId, sampleCase.factEntityIds),
+    ),
+  );
+  return liveFacts === sampleCase.factEntityIds.length;
+};
+
+type LockedSampleOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
+  /** Created here, under the lock, when the matter has no sample yet. */
+  filePropertyName: string | undefined;
+};
+
+/**
+ * The stored sample, read under the workspace lock and the sample fence. A
+ * receipt whose document or facts were deleted is released, so the caller
+ * loads a fresh, complete sample; what remains of the old one stays the
+ * user's ordinary list and document.
+ */
+const readLockedSample = async ({
+  tx,
+  workspaceId,
+  recordAuditEvent,
+  filePropertyName,
+}: LockedSampleOptions): Promise<SampleCaseResult | undefined> => {
   const list = (
     await tx
       .select({ id: legalLists.id, sampleCase: legalLists.sampleCase })
@@ -154,18 +231,48 @@ const readLockedSample = async (
       )
       .limit(1)
   ).at(0);
-  if (list === undefined) {
-    // A matter without a file property gets one here, under the same lock,
-    // so the statement can be stored and concurrent loads add only one.
-    if (fileProperty !== undefined) {
-      await ensureFileProperty({ tx, workspaceId, ...fileProperty });
+  if (list !== undefined) {
+    if (list.sampleCase === null) {
+      return panic("A sample list must carry its receipt");
     }
-    return undefined;
+    const receipt = { id: list.id, sampleCase: list.sampleCase };
+    if (await isSampleIntact(tx, workspaceId, receipt)) {
+      return {
+        listId: list.id,
+        documentEntityId: list.sampleCase.documentEntityId,
+        fileFieldId: list.sampleCase.fileFieldId,
+      };
+    }
+    await tx
+      .update(legalLists)
+      .set({ sampleCase: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(legalLists.workspaceId, workspaceId),
+          eq(legalLists.id, list.id),
+        ),
+      );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST,
+      resourceId: list.id,
+      metadata: {
+        operation: "sample_case_released",
+        documentEntityId: list.sampleCase.documentEntityId,
+      },
+    });
   }
-  if (list.sampleCase === null) {
-    return panic("A sample list must carry its receipt");
+  // A matter without a file property gets one here, under the same lock,
+  // so the statement can be stored and concurrent loads add only one.
+  if (filePropertyName !== undefined) {
+    await ensureFileProperty({
+      tx,
+      workspaceId,
+      name: filePropertyName,
+      recordAuditEvent,
+    });
   }
-  return { listId: list.id, ...list.sampleCase };
+  return undefined;
 };
 
 /** A refusal thrown to abort the read answers with its own status. */
@@ -186,7 +293,12 @@ const readSampleReceipt = async (
       aggregate: "sampleCase",
       id: { workspaceId },
     });
-    return await readLockedSample(tx, workspaceId, fileProperty);
+    return await readLockedSample({
+      tx,
+      workspaceId,
+      recordAuditEvent: fileProperty.recordAuditEvent,
+      filePropertyName: fileProperty.name,
+    });
   });
   return result.mapError(sampleReadError);
 };
@@ -233,16 +345,6 @@ const insertSample = async ({
       }),
     );
   }
-  await tx.insert(legalLists).values({
-    id: listId,
-    workspaceId,
-    name: SAMPLE_LIST_NAME,
-    createdBy: userId,
-    sampleCase: {
-      documentEntityId: document.entityId,
-      fileFieldId: document.fieldId,
-    },
-  });
   const resolveName = await createSiblingNamePlan({
     tx,
     workspaceId,
@@ -258,6 +360,17 @@ const insertSample = async ({
     }).name,
     position: String(position).padStart(2, "0"),
   }));
+  await tx.insert(legalLists).values({
+    id: listId,
+    workspaceId,
+    name: SAMPLE_LIST_NAME,
+    createdBy: userId,
+    sampleCase: {
+      documentEntityId: document.entityId,
+      fileFieldId: document.fieldId,
+      factEntityIds: facts.map((fact) => fact.entityId),
+    },
+  });
   await insertEntityBatch({
     tx,
     stampOrigin: "issued",
@@ -371,9 +484,11 @@ export const loadSampleCase = async ({
         aggregate: "sampleCase",
         id: { workspaceId },
       });
-      return await readLockedSample(tx, workspaceId, {
-        name: filePropertyName,
+      return await readLockedSample({
+        tx,
+        workspaceId,
         recordAuditEvent,
+        filePropertyName,
       });
     },
   );
@@ -407,7 +522,12 @@ export const loadSampleCase = async ({
               aggregate: "sampleCase",
               id: { workspaceId },
             });
-            const winner = await readLockedSample(tx, workspaceId, undefined);
+            const winner = await readLockedSample({
+              tx,
+              workspaceId,
+              recordAuditEvent,
+              filePropertyName: undefined,
+            });
             if (winner !== undefined) {
               concurrent.receipt = winner;
               // The canonical writer reclaims the losing file and rolls back its
