@@ -130,7 +130,7 @@ services:
 
   quickwit09:
     profiles: [quickwit09]
-    image: quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd
+    image: quickwit/quickwit:0.9.1@sha256:3e0f079eb57dd5563f36a457e9a7a2963ff882316d6c77e3180ac3c59767a68f
     command: run
     environment:
       QW_CLUSTER_ID: stella-local-q09
