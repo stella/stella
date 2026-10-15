@@ -1,21 +1,12 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  isNotNull,
-  isNull,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
-
-import { TASK_STATUS } from "@stll/api-contract";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
+import {
+  dueFromToday,
+  openAgendaTask,
+} from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -51,7 +42,7 @@ const UNPROJECTED_PREVIEW_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
   "workspaceId", // Already supplied by the authorized route.
   "kind", // Each query fixes the kind; the response groups identify it.
-  "listItemType", // Task-list presentation is not part of a deadline highlight.
+  "listItemType", // Only filters agenda rows; never returned.
   "parentId", // Folder hierarchy belongs to document navigation.
   "displayName", // The highlight uses the same name as search results.
   "createdBy", // Actor profiles are not included in compact highlights.
@@ -118,16 +109,9 @@ export const readSearchPreviewHandler = async ({
           .where(
             and(
               eq(entities.workspaceId, workspaceId),
-              eq(entities.kind, "task"),
+              openAgendaTask(entities),
               isNotNull(entities.dueDate),
-              gte(entities.dueDate, sql`CURRENT_DATE`),
-              or(
-                isNull(entities.status),
-                notInArray(entities.status, [
-                  TASK_STATUS.DONE,
-                  TASK_STATUS.CANCELLED,
-                ]),
-              ),
+              dueFromToday(entities),
             ),
           )
           .orderBy(asc(entities.dueDate), asc(entities.id))

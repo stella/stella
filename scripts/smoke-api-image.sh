@@ -26,6 +26,7 @@ image_id=$(docker image inspect --format '{{.Id}}' "$image_ref")
 run_id="stella-startup-$(openssl rand -hex 8)"
 network="$run_id-net"
 postgres="$run_id-postgres"
+legacy_postgres="$run_id-legacy-postgres"
 redis="$run_id-redis"
 api="$run_id-api"
 probe="$run_id-probe"
@@ -34,7 +35,7 @@ network_created=false
 cleanup() {
   status=$?
   trap - EXIT INT TERM
-  for name in "$probe" "$api" "$redis" "$postgres"; do
+  for name in "$probe" "$api" "$redis" "$postgres" "$legacy_postgres"; do
     if [[ "$(docker inspect --format '{{ index .Config.Labels "stella.release-smoke.owner" }}' "$name" 2>/dev/null || true)" == "$run_id" ]]; then
       if [[ "$status" != 0 ]]; then
         docker logs --tail 30 "$name" 2>&1 || true
@@ -82,12 +83,22 @@ docker create --name "$postgres" --network "$network" --network-alias smoke-post
 docker cp "$repo/docker/postgres/server.conf" "$postgres:/etc/postgresql/server.conf"
 docker cp "$repo/docker/postgres/prod-parity.conf" "$postgres:/etc/postgresql/prod-parity.conf"
 docker start "$postgres" >/dev/null
+# The upgrade fixture retains initdb's superuser and existing application objects.
+docker create --name "$legacy_postgres" --network "$network" \
+  --network-alias smoke-legacy-postgres.railway.internal \
+  --tmpfs /var/lib/postgresql:rw,size=1g --label "$owner_label=$run_id" \
+  --env POSTGRES_USER=postgres --env POSTGRES_PASSWORD=smoke-only --env POSTGRES_DB=stella \
+  "$postgres_image" postgres -c config_file=/etc/postgresql/server.conf >/dev/null
+docker cp "$repo/docker/postgres/server.conf" "$legacy_postgres:/etc/postgresql/server.conf"
+docker cp "$repo/docker/postgres/prod-parity.conf" "$legacy_postgres:/etc/postgresql/prod-parity.conf"
+docker start "$legacy_postgres" >/dev/null
 docker run --detach --name "$redis" --network "container:$postgres" \
   --label "$owner_label=$run_id" \
   "$redis_image" >/dev/null
 ready=false
 for ((attempt=0; attempt<60; attempt++)); do
   if docker exec "$postgres" pg_isready -h 127.0.0.1 -U postgres -d stella >/dev/null 2>&1 \
+    && docker exec "$legacy_postgres" pg_isready -h 127.0.0.1 -U postgres -d stella >/dev/null 2>&1 \
     && [[ "$(docker exec "$redis" redis-cli ping 2>/dev/null || true)" == PONG ]]; then
     ready=true
     break
@@ -96,8 +107,9 @@ for ((attempt=0; attempt<60; attempt++)); do
 done
 [[ "$ready" == true ]] || { echo 'Disposable database/cache did not become ready.' >&2; exit 1; }
 
+database_owner=postgres
 psql_smoke() {
-  docker exec -i "$postgres" psql -U postgres -d stella -v ON_ERROR_STOP=1 "$@"
+  docker exec -i "$postgres" psql -U "$database_owner" -d stella -v ON_ERROR_STOP=1 "$@"
 }
 run_probe() {
   docker run --rm --name "$probe" --label "$owner_label=$run_id" --network "$network" "$@"
@@ -105,15 +117,84 @@ run_probe() {
 migrate() {
   # Non-RDS database: online index builds must not wait on EBS metrics or a
   # wall-clock busy window.
-  run_probe --env DATABASE_URL=postgres://postgres:smoke-only@smoke-postgres:5432/stella \
+  local database_url=${1:-postgres://$database_owner:smoke-only@smoke-postgres:5432/stella}
+  run_probe --env "DATABASE_URL=$database_url" \
     --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
 printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
+api_env=(
+  --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars
+  --env BETTER_AUTH_URL=http://localhost:3001
+  --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+  --env EMAIL_PROVIDER=smtp --env FRONTEND_URL=http://localhost:3000
+  --env GOOGLE_GENERATIVE_AI_API_KEY=release-smoke
+  --env GOTENBERG_PASSWORD=smoke --env GOTENBERG_URL=http://127.0.0.1:3000 --env GOTENBERG_USERNAME=smoke
+  --env POSTHOG_HOST=http://127.0.0.1:9999 --env POSTHOG_KEY=phc_
+  --env REDIS_URL=redis://127.0.0.1:6379
+  --env S3_BUCKET=stella-smoke --env S3_ENDPOINT=http://127.0.0.1:9000 --env S3_REGION=us-east-1
+  --env SMTP_HOST=127.0.0.1 --env SMTP_PORT=1025
+  --env TRANSACTIONAL_EMAIL_FROM=noreply@example.invalid --env USE_MOCK_AI=false
+)
 bash "$repo/scripts/configure-test-postgres.sh" "$postgres" postgres
 migrate
 echo 'PASS: fresh database migrations'
+legacy_database_url=postgres://postgres:smoke-only@smoke-legacy-postgres.railway.internal:5432/stella
+psql_legacy() {
+  docker exec -i "$legacy_postgres" psql -U postgres -d stella -v ON_ERROR_STOP=1 "$@"
+}
+# Force host password authentication ahead of initdb's loopback trust entries.
+# Rewrite as the server user: init.sql later rewrites the same file from SQL.
+docker exec -i --user postgres "$legacy_postgres" sh -se <<'SH'
+hba="$PGDATA/pg_hba.conf"
+{ printf 'host all all 0.0.0.0/0 md5\nhost all all ::/0 md5\n'; cat "$hba"; } > "$hba.password-smoke"
+mv "$hba.password-smoke" "$hba"
+SH
+psql_legacy <<'SQL'
+SELECT pg_reload_conf();
+SET password_encryption = 'md5';
+ALTER ROLE postgres PASSWORD 'smoke-only';
+SQL
+[[ "$(psql_legacy -tAc "SELECT starts_with(rolpassword, 'md5') FROM pg_authid WHERE rolname = current_user")" == t ]]
+# A wrong password must fail; otherwise a trust entry would make the regression vacuous.
+if docker exec --env PGPASSWORD=wrong-smoke-password "$legacy_postgres" \
+  psql -X -h 127.0.0.1 -U postgres -d stella -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+  echo 'FAIL: database host connection did not require a password' >&2
+  exit 1
+fi
+# Apply the deployed migration bundle while the upgrade fixture is a superuser.
+migrate "$legacy_database_url"
+privileged_exit=0
+privileged_output=$(docker run --rm --name "$probe" --label "$owner_label=$run_id" \
+  --network "container:$postgres" "${api_env[@]}" \
+  --env "DATABASE_URL=$legacy_database_url" \
+  "$image_id" timeout 30 /app/server 2>&1) || privileged_exit=$?
+if [[ "$privileged_exit" == 0 || "$privileged_exit" == 124 \
+  || "$privileged_output" != *'Database login requires NOSUPERUSER NOBYPASSRLS role attributes.'* ]]; then
+  printf 'FAIL: privileged database login did not fail startup\n%s\n' "$privileged_output" >&2
+  exit 1
+fi
+echo 'PASS: privileged database login refuses API startup'
+# The Railway guide uses this bundled SQL on an existing database, then switches its URL.
+docker cp "$repo/docker/postgres/init.sql" "$legacy_postgres:/docker-entrypoint-initdb.d/init.sql"
+docker exec "$legacy_postgres" psql -X -h /var/run/postgresql -U postgres -d stella \
+  -v ON_ERROR_STOP=1 -v owner=postgres -v renamed_owner=stella_owner \
+  -f /docker-entrypoint-initdb.d/init.sql
+[[ "$(docker exec --env PGPASSWORD=smoke-only "$legacy_postgres" \
+  psql -X -h 127.0.0.1 -U stella_owner -d stella -v ON_ERROR_STOP=1 \
+  -tAc 'SELECT current_user')" == stella_owner ]]
+[[ "$(docker exec --user postgres "$legacy_postgres" \
+  psql -X -U stella_maintenance -d stella -v ON_ERROR_STOP=1 -qtAc \
+  "SET ROLE stella_bootstrap; SELECT starts_with(rolpassword, 'SCRAM-SHA-256$') FROM pg_authid WHERE rolname = 'stella_owner'")" == t ]]
+echo 'PASS: MD5 owner cutover retains password-authenticated access'
+[[ "$(docker exec "$legacy_postgres" psql -U stella_owner -d stella -tAc \
+  'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')" == 'f|f' ]]
+[[ "$(docker exec "$legacy_postgres" psql -U stella_owner -d stella -tAc \
+  "SELECT pg_has_role(current_user, 'stella_public_sanctions_reader', 'SET')")" == t ]]
+legacy_database_url=postgres://stella_owner:smoke-only@smoke-legacy-postgres.railway.internal:5432/stella
+migrate "$legacy_database_url"
+echo 'PASS: migrated database owner cutover'
 psql_smoke -c 'CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2' >/dev/null
 [[ "$(psql_smoke -tAc 'SELECT count(*) FROM drizzle.__migration_history_smoke_backup')" == 2 ]]
 [[ "$(psql_smoke -tAc "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = (SELECT min(id) FROM drizzle.__migration_history_smoke_backup) AND migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")" == 1 ]]
@@ -143,18 +224,7 @@ migrate
 echo 'PASS: stale bundle refused with pending SQL and restored history accepted'
 
 docker run --detach --name "$api" --label "$owner_label=$run_id" --network "container:$postgres" \
-  --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars \
-  --env BETTER_AUTH_URL=http://localhost:3001 \
-  --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)" \
-  --env DATABASE_URL=postgres://postgres:smoke-only@127.0.0.1:5432/stella \
-  --env EMAIL_PROVIDER=smtp --env FRONTEND_URL=http://localhost:3000 \
-  --env GOOGLE_GENERATIVE_AI_API_KEY=release-smoke \
-  --env GOTENBERG_PASSWORD=smoke --env GOTENBERG_URL=http://127.0.0.1:3000 --env GOTENBERG_USERNAME=smoke \
-  --env POSTHOG_HOST=http://127.0.0.1:9999 --env POSTHOG_KEY=phc_ \
-  --env REDIS_URL=redis://127.0.0.1:6379 \
-  --env S3_BUCKET=stella-smoke --env S3_ENDPOINT=http://127.0.0.1:9000 --env S3_REGION=us-east-1 \
-  --env SMTP_HOST=127.0.0.1 --env SMTP_PORT=1025 \
-  --env TRANSACTIONAL_EMAIL_FROM=noreply@example.invalid --env USE_MOCK_AI=false \
+  "${api_env[@]}" --env "DATABASE_URL=$legacy_database_url" \
   "$image_id" >/dev/null
 ready=false
 for ((attempt=0; attempt<60; attempt++)); do
@@ -174,6 +244,8 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 echo 'PASS: API /live and scheduler.started'
+docker exec "$api" bun -e 'const r = await fetch("http://127.0.0.1:3001/health"); process.exit(r.status === 200 ? 0 : 1)'
+echo 'PASS: API /health after database owner cutover'
 
 output=$(run_probe "$image_id" timeout 20 /app/collab 2>&1 || true)
 if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \

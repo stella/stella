@@ -1,11 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, RefObject } from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
@@ -112,11 +108,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
   mcpConnectorsOptions,
-  skillsOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
@@ -690,9 +686,10 @@ export const ComposerSkillsMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  const skillsQuery = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId, userId),
+  const skillsQuery = useSkillsPages({
     enabled,
+    organizationId: activeOrganizationId,
+    userId,
   });
   const skillsView = useQueryView(skillsQuery, {
     isEmpty: (data) =>

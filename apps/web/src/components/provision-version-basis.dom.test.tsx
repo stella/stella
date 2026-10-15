@@ -14,8 +14,9 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/" });
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -51,7 +52,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const decisionId = toSafeId<"caseLawDecision">(
@@ -307,8 +308,10 @@ for (const [locale, messages] of [
       if (href === null) {
         panic("Missing decision reader link");
       }
-      const target = new URL(href);
-      expect(`${target.origin}${target.pathname}`).toBe(readerUrl);
+      expect(href).toStartWith("/");
+      const target = new URL(href, window.location.href);
+      expect(target.origin).toBe(window.location.origin);
+      expect(target.pathname).toBe(new URL(readerUrl).pathname);
       expect(target.searchParams.get("q")).toBe(decision.sentenceText);
       expect(chip.textContent).not.toContain(label);
       const citingBasis = ui.getByText(

@@ -1,0 +1,106 @@
+name: Resolve generated-only conflicts
+
+defaults:
+  run:
+    shell: bash
+
+# When main moves, a same-repository pull request can start to conflict only
+# in generated outputs. This run only lists such pull requests and dispatches
+# one resolve run per pull request on that pull request's own branch
+# (generated-conflicts-resolve.yml), so branch code never runs in a
+# default-branch context and no two pull requests share a run or an artifact
+# namespace. generated-conflicts-publish.yml pushes the validated result.
+# scripts/generated-conflicts.ts holds the rules.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  dispatch:
+    if: github.repository == 'stella/stella'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Starting the per-branch resolve runs.
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      # API calls only; nothing from a pull request runs here.
+      - name: Dispatch one resolve run per conflicting pull request
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+            const query = `query($owner: String!, $repo: String!, $cursor: String) {
+              repository(owner: $owner, name: $repo) {
+                pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes { number mergeable isCrossRepository headRefName headRefOid updatedAt author { login } }
+                }
+              }
+            }`;
+            const list = async () => {
+              const nodes = [];
+              let cursor = null;
+              do {
+                const page = await github.graphql(query, { owner, repo, cursor });
+                const pulls = page.repository.pullRequests;
+                nodes.push(...pulls.nodes);
+                cursor = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
+              } while (cursor);
+              return nodes;
+            };
+            // Mergeability is computed lazily after main moves; the first
+            // listing starts it, and a short wait lets it settle.
+            let nodes = await list();
+            for (let attempt = 0; attempt < 3 && nodes.some(pull => pull.mergeable === 'UNKNOWN'); attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 20_000));
+              nodes = await list();
+            }
+            const eligible = nodes.filter(pull => pull.mergeable === 'CONFLICTING'
+              && !pull.isCrossRepository
+              && pull.author?.login !== 'dependabot[bot]'
+              && /^[A-Za-z0-9._/-]+$/u.test(pull.headRefName)
+              && !pull.headRefName.includes('..') && !pull.headRefName.startsWith('-')
+              && pull.headRefName !== 'main'
+              && /^[0-9a-f]{40}$/u.test(pull.headRefOid));
+            // A head that already had a resolve run usually conflicts in
+            // source files, which a newer main does not clear. Heads not yet
+            // planned go first, then the most recently updated, so a few stale
+            // pull requests never take every slot from new generated-only
+            // conflicts. Planned heads still get a slot when one is free.
+            const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'generated-conflicts-resolve.yml',
+              event: 'workflow_dispatch', per_page: 100,
+            });
+            const planned = new Set(runs.map(run => run.head_sha));
+            const updated = pull => Date.parse(pull.updatedAt) || 0;
+            const pulls = eligible
+              .sort((a, b) => Number(planned.has(a.headRefOid)) - Number(planned.has(b.headRefOid))
+                || updated(b) - updated(a))
+              .slice(0, 8);
+            for (const pull of pulls) {
+              try {
+                // `ref` is the pull request's branch: the run, its caches and
+                // its artifacts belong to that branch alone.
+                await github.rest.actions.createWorkflowDispatch({
+                  owner, repo,
+                  workflow_id: 'generated-conflicts-resolve.yml',
+                  ref: pull.headRefName,
+                  inputs: { head: pull.headRefOid, main: branch.commit.sha },
+                });
+              } catch (error) {
+                // A branch that predates the resolve workflow cannot run it.
+                core.notice(`#${pull.number}: not dispatched (${error.status ?? error.message})`);
+              }
+            }

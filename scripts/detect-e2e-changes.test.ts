@@ -14,6 +14,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { rootCheckGate } from "./ci-root-check-gate";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -398,6 +400,10 @@ describe("detect-e2e-changes", () => {
       ".github/actions/setup-production-e2e/action.yml",
       ".github/actions/build-e2e-web/action.yml",
       ".github/actions/setup-playwright/action.yml",
+      // Every E2E job installs through these files.
+      ".github/actions/ci-install/action.yml",
+      "scripts/ci-install.ts",
+      "scripts/ci-install-store.ts",
     ]) {
       expect(detects("core", [file])).toBe("true");
       expect(detects("landing", [file])).toBe("true");
@@ -803,7 +809,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    expectPullRequestAndMergeGroup(releaseTypecheck);
+    // Release compiles gate merge groups (and heavy runs), never pull requests.
+    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );
@@ -856,7 +864,9 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
-    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardCondition = requiredExpression(
+      withoutStaticReuseCondition(driftGuard)["if"],
+    );
     const driftGuardRun = requiredExpression(driftGuard["run"]);
     expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -873,7 +883,42 @@ describe("detect-e2e-changes", () => {
     expect(driftGuardCondition).toMatch(
       /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
-    expect(driftGuardCondition).not.toContain("||");
+    expect(driftGuardCondition).toBe(
+      githubExpression(
+        `!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && ${rootCheckGate({ job: "ci-checks-rest", name: "Model catalog snapshot drift check" })}`,
+      ),
+    );
+  });
+
+  test("every root-check selection clause is the owner-generated required operand", () => {
+    const gatedSteps = Object.entries(ciContract.jobs).flatMap(
+      ([job, value]) =>
+        value.steps === undefined
+          ? []
+          : workflowJobSteps(ciWorkflow, job)
+              .filter(
+                (step) =>
+                  typeof step["if"] === "string" &&
+                  step["if"].includes("needs.ci-plan.outputs.root_checks"),
+              )
+              .map((step) => ({ job, step })),
+    );
+    expect(gatedSteps.length).toBeGreaterThan(0);
+    for (const { job, step } of gatedSteps) {
+      const condition = requiredExpression(
+        withoutStaticReuseCondition(step)["if"],
+      );
+      const gate = rootCheckGate({
+        job,
+        name: requiredExpression(step["name"]),
+      });
+      const operands = condition.split(` && ${gate}`);
+      expect(operands).toHaveLength(2);
+      expect(operands.at(1)).toBe(" }}");
+      const prerequisites = requiredExpression(operands.at(0));
+      expect(prerequisites).not.toContain("needs.ci-plan.outputs.root_checks");
+      expect(prerequisites).not.toContain("||");
+    }
   });
 
   test("checks shipped product screenshots on planned releases", () => {
