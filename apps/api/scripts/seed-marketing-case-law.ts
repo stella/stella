@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { decisionAnalysisSchema } from "@stll/legal-ast/analysis";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import scenes from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 import {
   caseLawDecisions,
@@ -31,7 +32,6 @@ import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import scenes from "./__fixtures__/marketing-case-law.json";
 import { seedId } from "./seed-utils";
 
 const RECORDED_AT = new Date("2026-01-15T09:00:00Z");

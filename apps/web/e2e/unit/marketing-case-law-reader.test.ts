@@ -4,8 +4,8 @@ import {
   extractCaseLawDecisionIdFromIdRouteParam,
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
+import scenarios from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
-import scenarios from "../../../api/scripts/__fixtures__/marketing-case-law.json" with { type: "json" };
 import {
   getMarketingDecisionPaths,
   MarketingDecisionPathError,

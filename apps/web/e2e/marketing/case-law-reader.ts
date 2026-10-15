@@ -5,8 +5,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
-
-import scenarios from "../../../api/scripts/__fixtures__/marketing-case-law.json" with { type: "json" };
+import scenarios from "@stll/playwright-tools/marketing-case-law.json" with { type: "json" };
 
 export class MarketingDecisionPathError extends TaggedError(
   "MarketingDecisionPathError",

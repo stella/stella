@@ -187,6 +187,7 @@
         "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
         "@playwright/test": "^1.63.0",
         "@standard-schema/spec": "^1.1.0",
+        "@stll/playwright-tools": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/d3-scale": "catalog:",
