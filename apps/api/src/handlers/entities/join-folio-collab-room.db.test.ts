@@ -712,22 +712,26 @@ describe("folio collaboration room seed generation CAS", () => {
           snapshotSha256Hex: legacyHex(snapshot),
         };
         expect(
-          await acknowledgeFolioCollabSeed({
-            ...receipt,
-            value: {
-              ...authorization.value,
-              generation: joined.generation - 1,
-            },
-          }),
+          (
+            await acknowledgeFolioCollabSeed({
+              ...receipt,
+              value: {
+                ...authorization.value,
+                generation: joined.generation - 1,
+              },
+            })
+          ).unwrap(),
         ).toEqual({ status: "seed-changed" });
         expect(
-          await acknowledgeFolioCollabSeed({
-            ...receipt,
-            value: { ...authorization.value, userId: ids.userA2 },
-          }),
+          (
+            await acknowledgeFolioCollabSeed({
+              ...receipt,
+              value: { ...authorization.value, userId: ids.userA2 },
+            })
+          ).unwrap(),
         ).toEqual({ status: "seed-changed" });
         if (receiptOrder === "before-store") {
-          expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+          expect((await acknowledgeFolioCollabSeed(receipt)).unwrap()).toEqual({
             status: "acknowledged",
           });
           expect(await join()).toMatchObject({ code: 409 });
@@ -745,18 +749,20 @@ describe("folio collaboration room seed generation CAS", () => {
         ).toMatchObject({ status: "stored", snapshotRevision: 1 });
         if (receiptOrder === "after-store") {
           expect(await join()).toMatchObject({ code: 409 });
-          expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+          expect((await acknowledgeFolioCollabSeed(receipt)).unwrap()).toEqual({
             status: "acknowledged",
           });
         }
-        expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+        expect((await acknowledgeFolioCollabSeed(receipt)).unwrap()).toEqual({
           status: "acknowledged",
         });
         expect(
-          await acknowledgeFolioCollabSeed({
-            ...receipt,
-            snapshotSha256Hex: "0".repeat(64),
-          }),
+          (
+            await acknowledgeFolioCollabSeed({
+              ...receipt,
+              snapshotSha256Hex: "0".repeat(64),
+            })
+          ).unwrap(),
         ).toEqual({ status: "seed-changed" });
         expect(await join()).toMatchObject({
           roomId,
@@ -850,10 +856,12 @@ test("edits in the first durable snapshot remain unsaved after the pristine seed
       seededAt: null,
     });
     expect(
-      await acknowledgeFolioCollabSeed({
-        value,
-        snapshotSha256Hex: legacyHex(deployedSnapshot("clean")),
-      }),
+      (
+        await acknowledgeFolioCollabSeed({
+          value,
+          snapshotSha256Hex: legacyHex(deployedSnapshot("clean")),
+        })
+      ).unwrap(),
     ).toEqual({ status: "acknowledged" });
     expect(
       (await loadFolioCollabSnapshot(value)).unwrap()?.snapshot,

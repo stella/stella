@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { acknowledgeFolioCollabSeed } from "@/api/lib/folio-collab-rooms";
 import {
@@ -35,10 +36,12 @@ const acknowledgeSeed = createSafeTokenHandler(
         new HandlerError({ status: 422, message: receipt.message }),
       );
     }
-    const acknowledged = await acknowledgeFolioCollabSeed({
-      value: room,
-      snapshotSha256Hex: receipt.value.snapshotSha256Hex,
-    });
+    const acknowledged = yield* Result.await(
+      acknowledgeFolioCollabSeed({
+        value: room,
+        snapshotSha256Hex: receipt.value.snapshotSha256Hex,
+      }),
+    );
     switch (acknowledged.status) {
       case "access-revoked":
         return Result.err(
@@ -63,5 +66,10 @@ const acknowledgeSeed = createSafeTokenHandler(
     }
   },
 );
+
+declareAggregateMutation(acknowledgeSeed.handler, {
+  type: "aggregate",
+  aggregates: ["workspace", "folioCollabRoom"],
+});
 
 export default acknowledgeSeed;

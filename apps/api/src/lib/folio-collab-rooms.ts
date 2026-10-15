@@ -11,6 +11,7 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -1339,9 +1340,9 @@ export const acknowledgeFolioCollabSeed = async ({
   value,
 }: AcknowledgeFolioCollabSeedOptions) => {
   if (!value.canEdit) {
-    return { status: "access-revoked" } as const;
+    return Result.ok({ status: "access-revoked" } as const);
   }
-  return await value.scopedDb(async (tx) => {
+  return await abortableTx(safeDbFromScoped(value.scopedDb), async (tx) => {
     await withAggregateLock({
       aggregate: "workspace",
       id: { id: value.workspaceId, organizationId: value.organizationId },
