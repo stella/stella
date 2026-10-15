@@ -75,19 +75,19 @@ import {
 } from "@/api/lib/legal-search/corpus-index-promotion-gates";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
-export class CaseLawServingFlipUndeclaredError extends TaggedError(
+class CaseLawServingFlipUndeclaredError extends TaggedError(
   "CaseLawServingFlipUndeclaredError",
 )<{ message: string; generation: string; jurisdiction: string }> {}
 
-export class CaseLawServingFlipNoServingGenerationError extends TaggedError(
+class CaseLawServingFlipNoServingGenerationError extends TaggedError(
   "CaseLawServingFlipNoServingGenerationError",
 )<{ message: string }> {}
 
-export class CaseLawServingFlipNotBuildingError extends TaggedError(
+class CaseLawServingFlipNotBuildingError extends TaggedError(
   "CaseLawServingFlipNotBuildingError",
 )<{ message: string; generation: string }> {}
 
-export class CaseLawServingFlipClusterMismatchError extends TaggedError(
+class CaseLawServingFlipClusterMismatchError extends TaggedError(
   "CaseLawServingFlipClusterMismatchError",
 )<{
   message: string;
@@ -95,11 +95,11 @@ export class CaseLawServingFlipClusterMismatchError extends TaggedError(
   buildingCluster: QuickwitCluster;
 }> {}
 
-export class CaseLawServingFlipNotAttestedError extends TaggedError(
+class CaseLawServingFlipNotAttestedError extends TaggedError(
   "CaseLawServingFlipNotAttestedError",
 )<{ message: string; indexIds: string[] }> {}
 
-export class CaseLawServingFlipIncompleteError extends TaggedError(
+class CaseLawServingFlipIncompleteError extends TaggedError(
   "CaseLawServingFlipIncompleteError",
 )<{ message: string; jurisdiction: string }> {}
 
@@ -132,7 +132,7 @@ export type CaseLawServingFlipOptions = {
   mode: "dry_run" | "apply";
 };
 
-export type CaseLawServingFlipEvidence = {
+type CaseLawServingFlipEvidence = {
   revision: number;
   convergence: CorpusIndexProjectionConvergenceStatus;
   documents: { indexId: string; documents: number }[];

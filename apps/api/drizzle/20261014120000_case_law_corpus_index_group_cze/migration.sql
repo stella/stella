@@ -50,6 +50,14 @@ ALTER TABLE "corpus_index_group_enrollments"
   ADD CONSTRAINT "corpus_index_group_enrollments_contract_values"
     CHECK ("contract_version" IN ('base','court_partition_v1','provision_keys_v1'))
     NOT VALID;--> statement-breakpoint
+
+-- Release the schema lock before validation scans the existing rows.
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;--> statement-breakpoint
+
+-- squawk-ignore constraint-missing-not-valid -- Added NOT VALID in the committed transaction above; validation holds no earlier schema lock.
 ALTER TABLE "corpus_index_group_enrollments"
   VALIDATE CONSTRAINT "corpus_index_group_enrollments_contract_values";--> statement-breakpoint
 

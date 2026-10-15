@@ -29,15 +29,15 @@ import type { CorpusIndexProjectionConvergenceStatus } from "@/api/lib/legal-sea
 import { CORPUS_PROJECTION_DELETE_MAX_REVISIONS } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 
-export class CorpusGenerationIndexMissingError extends TaggedError(
+class CorpusGenerationIndexMissingError extends TaggedError(
   "CorpusGenerationIndexMissingError",
 )<{ message: string; indexId: string }> {}
 
-export class CorpusGenerationIndexEmptyError extends TaggedError(
+class CorpusGenerationIndexEmptyError extends TaggedError(
   "CorpusGenerationIndexEmptyError",
 )<{ message: string; indexId: string }> {}
 
-export class CorpusGenerationIndexUnreadableError extends TaggedError(
+class CorpusGenerationIndexUnreadableError extends TaggedError(
   "CorpusGenerationIndexUnreadableError",
 )<{ message: string; indexId: string; cause: unknown }> {}
 

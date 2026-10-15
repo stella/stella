@@ -230,7 +230,7 @@ export const caseLawIndexGroupCountriesAt = (
 };
 
 /** Whether documents of an index group carry the `provision_keys` field. */
-export const caseLawIndexGroupHasProvisionKeys = (group: string): boolean =>
+const caseLawIndexGroupHasProvisionKeys = (group: string): boolean =>
   isCaseLawIndexGroup(group) &&
   CASE_LAW_INDEX_GROUP_CONTRACT_OF[group] === "provision_keys_v1";
 
@@ -249,19 +249,6 @@ export const caseLawJurisdictionHasProvisionKeys = (
     isRehomedJurisdiction(upper) &&
     caseLawIndexGroupHasProvisionKeys(CASE_LAW_INDEX_GROUP_REHOMES[upper].group)
   );
-};
-
-/**
- * The generation order a rehome starts at for a jurisdiction, or null when
- * the jurisdiction was never rehomed.
- */
-export const caseLawJurisdictionRehomeGeneration = (
-  jurisdiction: string,
-): number | null => {
-  const upper = jurisdiction.toUpperCase();
-  return isCaseLawJurisdictionKey(upper) && isRehomedJurisdiction(upper)
-    ? CASE_LAW_INDEX_GROUP_REHOMES[upper].fromGeneration
-    : null;
 };
 
 /**

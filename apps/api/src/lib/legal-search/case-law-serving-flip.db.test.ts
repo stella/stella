@@ -484,7 +484,11 @@ test("the flipping transaction holds the attestations it checked until the point
   const writes: string[] = [];
   const loggingDb = drizzle({
     client,
-    logger: { logQuery: (query) => writes.push(query) },
+    logger: {
+      logQuery: (query) => {
+        writes.push(query);
+      },
+    },
   });
   const flipped = await flipCaseLawJurisdictionServing(
     {
