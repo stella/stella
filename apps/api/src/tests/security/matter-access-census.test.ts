@@ -352,6 +352,40 @@ describe("matter access census self-test", () => {
     ]);
   });
 
+  test("an extracted matter column and a relative owner-connection import are still found", () => {
+    for (const [imports, prelude, column] of [
+      [
+        `import { rootDb } from "../db/root";`,
+        "const matterColumn = entities.workspaceId;",
+        "matterColumn",
+      ],
+      [
+        `import { rootDb } from "../db/root.ts";`,
+        "const { workspaceId } = entities;",
+        "workspaceId",
+      ],
+      [
+        `import * as root from "../db/root"; const rootDb = root.rootDb;`,
+        "const { id: matterId } = workspaces;",
+        "matterId",
+      ],
+    ] as const) {
+      const findings = classifyMatterAccessModule(
+        "apps/api/src/lib/example-reader.ts",
+        `import { inArray } from "drizzle-orm";
+        ${imports}
+        import { entities, workspaces } from "@/api/db/schema";
+        ${prelude}
+        export const read = async (ids: string[]) =>
+          await rootDb.select().from(entities).where(inArray(${column}, ids));`,
+      );
+      expect(
+        findings.map(({ signal, sites }) => [signal, sites["read"]]),
+        `${imports} ${prelude}`,
+      ).toEqual([["owner-connection-workspace-set", 1]]);
+    }
+  });
+
   test("the shared app-side write check is enumerated as a copy of the rule", () => {
     const file = "apps/api/src/lib/entities/workspace-entity-write-access.ts";
     expect(

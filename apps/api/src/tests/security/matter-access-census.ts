@@ -1,3 +1,4 @@
+import path from "node:path";
 import ts from "typescript";
 
 /**
@@ -125,15 +126,40 @@ const tableName = (node: ts.Expression, aliases: Aliases) => {
   return ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
 };
 
+/** Alias target recorded for a local that holds a matter-id column. */
+const MATTER_ID_COLUMN = "<matter-id column>";
+
 /**
- * A column that holds a matter id: any `<table>.workspaceId`, or the
- * matters table's own `workspaces.id` under any name.
+ * A column that holds a matter id: any `<table>.workspaceId`, the matters
+ * table's own `workspaces.id` under any name, or a local holding either.
  */
 const isMatterIdColumn = (column: ts.Expression, aliases: Aliases): boolean =>
-  ts.isPropertyAccessExpression(column) &&
-  (column.name.text === "workspaceId" ||
-    (column.name.text === "id" &&
-      tableName(column.expression, aliases) === "workspaces"));
+  (ts.isIdentifier(column) &&
+    resolveName(column.text, aliases) === MATTER_ID_COLUMN) ||
+  (ts.isPropertyAccessExpression(column) &&
+    (column.name.text === "workspaceId" ||
+      (column.name.text === "id" &&
+        tableName(column.expression, aliases) === "workspaces")));
+
+const OWNER_CONNECTION_MODULE = "apps/api/src/db/root";
+
+/** Whether an import specifier, alias or relative, names the root module. */
+const resolveSpecifier = (specifier: string, file: string) => {
+  if (specifier.startsWith("@/api/")) {
+    return `apps/api/src/${specifier.slice("@/api/".length)}`;
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix.join(path.posix.dirname(file), specifier);
+  }
+  return specifier;
+};
+
+const isOwnerConnectionModule = (specifier: string, file: string) => {
+  const resolved = resolveSpecifier(specifier, file);
+  return (
+    resolved.replace(/(?:\/index)?(?:\.ts)?$/u, "") === OWNER_CONNECTION_MODULE
+  );
+};
 
 const literalText = (node: ts.Node): string | undefined => {
   if (
@@ -214,6 +240,7 @@ const recordImport = (
   node: ts.ImportDeclaration,
   facts: Facts,
   aliases: Aliases,
+  file: string,
 ) => {
   if (
     !ts.isStringLiteral(node.moduleSpecifier) ||
@@ -221,14 +248,17 @@ const recordImport = (
   ) {
     return;
   }
-  const specifier = node.moduleSpecifier.text;
+  const fromOwnerConnection = isOwnerConnectionModule(
+    node.moduleSpecifier.text,
+    file,
+  );
   const bindings = node.importClause?.namedBindings;
   if (bindings === undefined) {
     return;
   }
   if (ts.isNamespaceImport(bindings)) {
     // `root.rootDb` reaches the owner connection without naming it here.
-    if (specifier === "@/api/db/root") {
+    if (fromOwnerConnection) {
       facts.importsRootDbValue = true;
     }
   } else {
@@ -239,7 +269,7 @@ const recordImport = (
     }
   }
   if (
-    specifier === "@/api/db/root" &&
+    fromOwnerConnection &&
     ts.isNamedImports(bindings) &&
     bindings.elements.some(
       (element) =>
@@ -325,7 +355,9 @@ const recordLocalAlias = (node: ts.Node, aliases: Aliases) => {
     return;
   }
   if (ts.isIdentifier(node.name)) {
-    const target = aliasTarget(node.initializer, aliases);
+    const target = isMatterIdColumn(node.initializer, aliases)
+      ? MATTER_ID_COLUMN
+      : aliasTarget(node.initializer, aliases);
     if (target !== undefined) {
       aliases.set(node.name.text, target);
     }
@@ -334,10 +366,18 @@ const recordLocalAlias = (node: ts.Node, aliases: Aliases) => {
   if (!ts.isObjectBindingPattern(node.name)) {
     return;
   }
+  const table = tableName(node.initializer, aliases);
   for (const element of node.name.elements) {
     const key = element.propertyName ?? element.name;
     if (ts.isIdentifier(element.name) && ts.isIdentifier(key)) {
-      aliases.set(element.name.text, resolveName(key.text, aliases));
+      // `const { workspaceId } = entities`, `const { id } = workspaces`.
+      const holdsMatterId =
+        key.text === "workspaceId" ||
+        (key.text === "id" && table === "workspaces");
+      aliases.set(
+        element.name.text,
+        holdsMatterId ? MATTER_ID_COLUMN : resolveName(key.text, aliases),
+      );
     }
   }
 };
@@ -364,7 +404,7 @@ const readFacts = (file: string, source: string): Facts => {
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
-      recordImport(node, facts, aliases);
+      recordImport(node, facts, aliases, file);
       return;
     }
     recordLocalAlias(node, aliases);
@@ -406,7 +446,7 @@ const readFacts = (file: string, source: string): Facts => {
 
 // Cheap prefilter so only candidate files are parsed.
 const CANDIDATE =
-  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|@\/api\/db\/root|CLIENT_MATTER_ADMIN_ROLES|WORKSPACE_ACCESS_BY_ROLE|canWriteWorkspaceEntities/u;
+  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|db\/root\b|CLIENT_MATTER_ADMIN_ROLES|WORKSPACE_ACCESS_BY_ROLE|canWriteWorkspaceEntities/u;
 
 const hasSites = (sites: MatterAccessSites) => Object.keys(sites).length > 0;
 
