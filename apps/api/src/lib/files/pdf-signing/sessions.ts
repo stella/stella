@@ -320,13 +320,19 @@ export const redeemPdfSigningHandoff = async (
     }
 
     const access = lockedCreatorAccess(tx, session);
-    const [roles, memberships] = await Promise.all([
+    const [roles, memberships, matters] = await Promise.all([
       access.role,
       access.membership,
+      tx
+        .select({ clientId: workspaces.clientId })
+        .from(workspaces)
+        .where(eq(workspaces.id, session.workspaceId))
+        .limit(1),
     ]);
     if (
       !canWriteWorkspaceEntities({
         organizationRole: roles.at(0)?.role ?? null,
+        workspaceClientId: matters.at(0)?.clientId ?? null,
         workspaceMemberId: memberships.at(0)?.id ?? null,
       })
     ) {
@@ -470,6 +476,7 @@ export const authorizePdfSigningSession = async (
           signingTime: pdfSigningSessions.signingTime,
           stamp: pdfSigningSessions.stamp,
           tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
+          workspaceClientId: workspaces.clientId,
           workspaceId: pdfSigningSessions.workspaceId,
           workspaceMemberId: workspaceMembers.id,
         })
@@ -533,6 +540,7 @@ export const authorizePdfSigningSession = async (
   if (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
+      workspaceClientId: session.workspaceClientId,
       workspaceMemberId: session.workspaceMemberId,
     })
   ) {

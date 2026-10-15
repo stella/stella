@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -252,7 +254,8 @@ Follow the checklist.`,
 
   test("imports a zip around files it cannot keep and lists each one with the reason", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/SKILL.md",
       `---
 name: mixed-pack
@@ -261,15 +264,20 @@ description: A pack with files the importer does not keep.
 
 Use \`assets/logo.png\` and the references.`,
     );
-    zip.file("skill/references/guide.md", "# Guide");
+    writeZipEntry(zip, "skill/references/guide.md", "# Guide");
     // Latin-1 "Müller": a supported path whose bytes are not UTF-8 text.
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/references/latin1.txt",
       new Uint8Array([0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72]),
     );
-    zip.file("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
-    zip.file("skill/notes/todo.md", "Not a resource folder");
-    zip.file("README.md", "Outside the skill folder");
+    writeZipEntry(
+      zip,
+      "skill/assets/logo.png",
+      new Uint8Array([0x89, 0x50, 0xff, 0xfe]),
+    );
+    writeZipEntry(zip, "skill/notes/todo.md", "Not a resource folder");
+    writeZipEntry(zip, "README.md", "Outside the skill folder");
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     const result = await parseUpload(
@@ -294,7 +302,11 @@ Use \`assets/logo.png\` and the references.`,
 
   test("a SKILL.md that is not UTF-8 text still fails the import", async () => {
     const zip = new JSZip();
-    zip.file("SKILL.md", new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]));
+    writeZipEntry(
+      zip,
+      "SKILL.md",
+      new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]),
+    );
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     const result = await parseUpload(
@@ -306,7 +318,8 @@ Use \`assets/logo.png\` and the references.`,
 
   test("parses zipped skill folders with read-only resources", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/SKILL.md",
       `---
 name: nda-review
@@ -315,9 +328,9 @@ description: Review NDAs.
 
 Use the references.`,
     );
-    zip.file("skill/references/checklist.md", "# Checklist");
-    zip.file("skill/assets/example.txt", "Example");
-    zip.file("skill/private/ignore.md", "Ignored");
+    writeZipEntry(zip, "skill/references/checklist.md", "# Checklist");
+    writeZipEntry(zip, "skill/assets/example.txt", "Example");
+    writeZipEntry(zip, "skill/private/ignore.md", "Ignored");
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
     const result = await parseUpload(
@@ -361,15 +374,16 @@ description: Verify canonical package hashing.
 
 Instructions.`;
     const combined = new JSZip();
-    combined.file("skill/SKILL.md", source);
-    combined.file(
+    writeZipEntry(combined, "skill/SKILL.md", source);
+    writeZipEntry(
+      combined,
       "skill/references/a.md",
       "prefix\0references/b.md\0malicious",
     );
     const split = new JSZip();
-    split.file("skill/SKILL.md", source);
-    split.file("skill/references/a.md", "prefix");
-    split.file("skill/references/b.md", "malicious");
+    writeZipEntry(split, "skill/SKILL.md", source);
+    writeZipEntry(split, "skill/references/a.md", "prefix");
+    writeZipEntry(split, "skill/references/b.md", "malicious");
 
     const [combinedBuffer, splitBuffer] = await Promise.all([
       combined.generateAsync({ type: "arraybuffer" }),
@@ -580,7 +594,8 @@ Instructions.`,
 
   test("rejects zip uploads with too many files", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/SKILL.md",
       `---
 name: crowded-skill
@@ -590,7 +605,7 @@ description: Too many files.
 Instructions.`,
     );
     for (let index = 0; index < LIMITS.agentSkillArchiveFilesMax; index++) {
-      zip.file(`skill/references/${index}.md`, "Reference");
+      writeZipEntry(zip, `skill/references/${index}.md`, "Reference");
     }
     const buffer = await zip.generateAsync({ type: "arraybuffer" });
 
@@ -603,7 +618,8 @@ Instructions.`,
 
   test("rejects zip uploads with excessive uncompressed content", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/SKILL.md",
       `---
 name: huge-skill
@@ -612,7 +628,8 @@ description: Huge uncompressed content.
 
 Instructions.`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/references/huge.md",
       "x".repeat(LIMITS.agentSkillArchiveUncompressedMaxBytes + 1),
     );
@@ -814,7 +831,8 @@ Instructions.`,
 
   test("detects zip package URLs before query strings", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "skill/SKILL.md",
       `---
 name: signed-zip

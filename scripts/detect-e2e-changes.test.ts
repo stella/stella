@@ -809,7 +809,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    expectPullRequestAndMergeGroup(releaseTypecheck);
+    // Release compiles gate merge groups (and heavy runs), never pull requests.
+    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );

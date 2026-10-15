@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -331,7 +333,8 @@ const makeValidDocxBytes = async (
   const body = paragraphs
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
     .join("");
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
@@ -348,7 +351,8 @@ const makeValidDocxBase64 = async (
  *  scan rejects. */
 const makeAttachedTemplateDocxBase64 = async (): Promise<string> => {
   const zip = await JSZip.loadAsync(await makeValidDocxBytes());
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -411,7 +415,8 @@ const makeDocxFile = async (paragraphs: string[]): Promise<ScannedFile> => {
     .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
     .join("");
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
   );
@@ -3517,9 +3522,11 @@ describe("MCP template tools", () => {
     // well-formed base64 but decodes to bytes that are no longer a readable
     // archive.
     const truncated = Buffer.from(
-      await new JSZip()
-        .file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`)
-        .generateAsync({ type: "uint8array" }),
+      await writeZipEntry(
+        new JSZip(),
+        "word/document.xml",
+        `<w:document xmlns:w="${W_NS}"/>`,
+      ).generateAsync({ type: "uint8array" }),
     ).subarray(0, 24);
 
     const result = await handleMcpToolCall({
@@ -3544,9 +3551,11 @@ describe("MCP template tools", () => {
 
   test("create_template hints per failure: a readable archive missing the main part is not an encoding problem", async () => {
     const withoutDocumentXml = Buffer.from(
-      await new JSZip()
-        .file("word/styles.xml", "<styles/>")
-        .generateAsync({ type: "uint8array" }),
+      await writeZipEntry(
+        new JSZip(),
+        "word/styles.xml",
+        "<styles/>",
+      ).generateAsync({ type: "uint8array" }),
     );
 
     const result = await handleMcpToolCall({
@@ -3566,9 +3575,9 @@ describe("MCP template tools", () => {
 
   test("create_template hints per failure: an archive past the unpack bounds is not an encoding problem", async () => {
     const zip = new JSZip();
-    zip.file("word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
+    writeZipEntry(zip, "word/document.xml", `<w:document xmlns:w="${W_NS}"/>`);
     for (let index = 0; index < DOCX_MAX_ENTRIES; index += 1) {
-      zip.file(`word/media/${String(index)}.bin`, "x");
+      writeZipEntry(zip, `word/media/${String(index)}.bin`, "x");
     }
     // Thousands of entries outgrow the inline base64 frame, so this archive
     // arrives the way a large template does: as a host file reference.
@@ -3593,12 +3602,11 @@ describe("MCP template tools", () => {
 
   test("create_template hints per failure: unparseable document XML is not an encoding problem", async () => {
     const malformed = Buffer.from(
-      await new JSZip()
-        .file(
-          "word/document.xml",
-          `<w:document xmlns:w="${W_NS}"><w:body><w:p></w:document>`,
-        )
-        .generateAsync({ type: "uint8array" }),
+      await writeZipEntry(
+        new JSZip(),
+        "word/document.xml",
+        `<w:document xmlns:w="${W_NS}"><w:body><w:p></w:document>`,
+      ).generateAsync({ type: "uint8array" }),
     );
 
     const result = await handleMcpToolCall({
