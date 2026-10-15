@@ -317,7 +317,12 @@ test("capture landing product screenshots", async ({
         ).toHaveCount(0);
         const citations = inspectorChat.locator("[data-decision-citation]");
         await expect(citations).toHaveCount(2);
-        await expect(citations.first()).toContainText(scenario.caseNumber);
+        // Compact inline cards show the court's short form; the full case
+        // number is their accessible name.
+        await expect(citations.first()).toHaveAttribute(
+          "aria-label",
+          expect.stringContaining(scenario.caseNumber),
+        );
         await inspectorChat
           .locator('[data-slot="scroll-area-viewport"]')
           .evaluate((element) => {

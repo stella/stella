@@ -117,6 +117,9 @@ const seedCorpusAnalyses = async () => {
       const underline =
         ast.blocks.find((block) => block.anchorId === scene.underlineAnchor) ??
         panic(`Marketing underline anchor is missing: ${scene.caseNumber}`);
+      const lastBlock =
+        ast.blocks.at(-1) ??
+        panic(`Marketing decision has no blocks: ${scene.caseNumber}`);
       const systemPrompt = getSystemPrompt(decision.language);
       if (Result.isError(systemPrompt)) {
         panic(
@@ -149,6 +152,17 @@ const seedCorpusAnalyses = async () => {
                 textSnippet: highlight.plainText.slice(0, 240),
               },
             ],
+            children: [],
+          },
+          {
+            // The reader draws its outline only for two or more headings, so
+            // the shot needs the decision's closing section as a second one.
+            id: `marketing-outcome-${decision.id}`,
+            label: "Outcome",
+            category: "outcome",
+            startAnchorId: lastBlock.anchorId,
+            endAnchorId: lastBlock.anchorId,
+            annotations: [],
             children: [],
           },
         ],
