@@ -15,6 +15,7 @@ const NON_PLUGIN_MODULES = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
+  "icon-ownership.ts",
   "module-id.ts",
   "physical-properties.ts",
   "restricted-import.ts",

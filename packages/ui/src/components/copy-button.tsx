@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
-import { CheckIcon, CopyIcon } from "../icons";
+import { CheckIcon, CopyToClipboardIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
@@ -23,6 +23,8 @@ type CopyButtonProps = Omit<
   /** Renders the glyph alone, with the labels as its accessible name. */
   iconOnly?: boolean;
   iconClassName?: string;
+  /** Classes for the visible label, e.g. to hide it on narrow screens. */
+  labelClassName?: string;
 };
 
 /**
@@ -36,6 +38,7 @@ export const CopyButton = ({
   copiedLabel,
   iconOnly = false,
   iconClassName = "size-3.5",
+  labelClassName,
   className,
   ...buttonProps
 }: CopyButtonProps) => {
@@ -73,13 +76,15 @@ export const CopyButton = ({
       }}
     >
       <span aria-hidden="true" className="grid place-items-center">
-        <CopyIcon className={cn(SWAP_CLASS, shown(false), iconClassName)} />
+        <CopyToClipboardIcon
+          className={cn(SWAP_CLASS, shown(false), iconClassName)}
+        />
         <CheckIcon className={cn(SWAP_CLASS, shown(true), iconClassName)} />
       </span>
       {!iconOnly && (
         // Both labels share one grid cell, so the button keeps the wider
         // label's width and nothing beside it shifts.
-        <span className="grid">
+        <span className={cn("grid", labelClassName)}>
           <span
             aria-hidden={copied}
             className={cn(SWAP_CLASS, copied ? "opacity-0" : "opacity-100")}
