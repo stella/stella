@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
-import { desktopCardState } from "@/features/desktop/desktop-connection-card.logic";
+import {
+  desktopCardState,
+  offersDesktopInstall,
+} from "@/features/desktop/desktop-connection-card.logic";
 
 const desktop = {
   version: "1.4.0",
@@ -32,7 +35,7 @@ describe("desktop connection card", () => {
         challengeWaiting: false,
         presence: { type: "current", desktop },
       }),
-    ).toEqual({ type: "connected", version: "1.4.0" });
+    ).toEqual({ type: "connected", version: "1.4.0", onThisComputer: false });
     expect(
       desktopCardState({
         challengeWaiting: false,
@@ -51,5 +54,21 @@ describe("desktop connection card", () => {
         type: "missing",
       });
     }
+  });
+
+  test("a link on another computer still offers install and connect here", () => {
+    const card = desktopCardState({
+      challengeWaiting: false,
+      presence: { type: "current", desktop },
+    });
+    expect(offersDesktopInstall(card)).toBe(true);
+    expect(
+      offersDesktopInstall({
+        type: "connected",
+        version: "",
+        onThisComputer: true,
+      }),
+    ).toBe(false);
+    expect(offersDesktopInstall({ type: "approve" })).toBe(false);
   });
 });

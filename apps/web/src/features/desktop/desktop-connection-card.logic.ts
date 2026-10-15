@@ -8,7 +8,7 @@ import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
  * app itself started.
  */
 export type DesktopCardState =
-  | { type: "connected"; version: string }
+  | { type: "connected"; version: string; onThisComputer: boolean }
   | { type: "outdated"; version: string }
   | { type: "approve" }
   | { type: "missing" };
@@ -23,11 +23,27 @@ export const desktopCardState = ({
   if (challengeWaiting) {
     return { type: "approve" };
   }
+  // The record is per account, not per computer: an app linked elsewhere
+  // does not mean this computer has one.
   if (presence?.type === "current") {
-    return { type: "connected", version: presence.desktop.version };
+    return {
+      type: "connected",
+      version: presence.desktop.version,
+      onThisComputer: false,
+    };
   }
   if (presence?.type === "outdated") {
     return { type: "outdated", version: presence.desktop.version };
   }
   return { type: "missing" };
 };
+
+/**
+ * Install and connect stay on offer until this computer itself holds the
+ * link: a link on another computer, an outdated app or none at all still
+ * leaves this one to set up.
+ */
+export const offersDesktopInstall = (card: DesktopCardState): boolean =>
+  card.type === "missing" ||
+  card.type === "outdated" ||
+  (card.type === "connected" && !card.onThisComputer);

@@ -16,7 +16,10 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
-import { desktopCardState } from "@/features/desktop/desktop-connection-card.logic";
+import {
+  desktopCardState,
+  offersDesktopInstall,
+} from "@/features/desktop/desktop-connection-card.logic";
 import type { DesktopCardState } from "@/features/desktop/desktop-connection-card.logic";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
@@ -68,7 +71,7 @@ export const DesktopConnectionCard = () => {
 
   const card =
     connection.status === "connected"
-      ? ({ type: "connected", version: "" } as const)
+      ? ({ type: "connected", version: "", onThisComputer: true } as const)
       : desktopCardState({
           challengeWaiting,
           presence,
@@ -143,7 +146,8 @@ export const DesktopConnectionCard = () => {
                 {t("common.approve")}
               </Button>
             ) : null}
-            {card.type === "missing" ? (
+            {card.type === "missing" ||
+            (card.type === "connected" && !card.onThisComputer) ? (
               <Button
                 loading={connection.status === "connecting"}
                 onClick={onConnect}
@@ -154,7 +158,7 @@ export const DesktopConnectionCard = () => {
             ) : null}
           </div>
         </div>
-        {card.type === "missing" || card.type === "outdated" ? (
+        {offersDesktopInstall(card) ? (
           <div className="mt-4 border-t pt-4">
             <DesktopDownloadButtons platform={platform} />
           </div>
