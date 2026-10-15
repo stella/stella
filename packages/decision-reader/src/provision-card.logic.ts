@@ -1,4 +1,5 @@
 import { blocksNestedUnder } from "@stll/legal-ast/provision-preview";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
   CitedProvisionTarget,
@@ -11,7 +12,10 @@ type ProvisionInVersionKey = {
 };
 
 const comparable = (text: string): string =>
-  text.normalize("NFC").toLocaleLowerCase().replaceAll(/\s+/gu, " ").trim();
+  normalizeUnicode(text, "NFC")
+    .toLocaleLowerCase()
+    .replaceAll(/\s+/gu, " ")
+    .trim();
 
 type ProvisionTrailInput = {
   /** The card's own name for the provision: the citation as written. */

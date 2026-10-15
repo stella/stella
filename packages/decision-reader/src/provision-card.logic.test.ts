@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   fullProvisionOutcome,
   informativeProvisionTrail,
@@ -49,7 +51,7 @@ describe("informative provision trail", () => {
   });
 
   test("compares composed and decomposed diacritics alike", () => {
-    const decomposed = "Hlava šestá".normalize("NFD");
+    const decomposed = normalizeUnicode("Hlava šestá", "NFD");
     expect(decomposed).not.toBe("Hlava šestá");
     expect(
       informativeProvisionTrail({
