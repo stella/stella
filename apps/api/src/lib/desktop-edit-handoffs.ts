@@ -179,14 +179,17 @@ export const markDesktopEditHandoffOpened = async ({
 export const readDesktopEditHandoffAccess = async ({
   createdBy,
   workspaceId,
+  db = rootDb,
 }: {
   createdBy: string;
   workspaceId: SafeId<"workspace">;
+  db?: Pick<typeof rootDb, "select">;
 }) => {
-  const rows = await rootDb
+  const rows = await db
     .select({
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
     })
     .from(workspaces)
@@ -215,6 +218,7 @@ export const readDesktopEditHandoffAccess = async ({
   return {
     canWriteWorkspaceEntities: canWriteWorkspaceEntities({
       organizationRole: access.organizationRole,
+      workspaceClientId: access.workspaceClientId,
       workspaceMemberId: access.workspaceMemberId,
     }),
     organizationId: access.organizationId,

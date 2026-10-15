@@ -25,6 +25,12 @@ type CollabLogEvent =
       roomId: string;
     }
   | {
+      event: "snapshot_refused_rematerialization";
+      generation: number;
+      level: "warn";
+      roomId: string;
+    }
+  | {
       event: "awareness_identity_conflict";
       generation: number;
       level: "error";
