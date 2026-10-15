@@ -744,6 +744,7 @@ exit 0
             "autofix-local.sh",
             "prepare-typecheck-base.sh",
             "gh-retry.sh",
+            "retry.sh",
           ]) {
             copyFileSync(
               path.join(root, "scripts", file),
