@@ -95,6 +95,8 @@ jobs:
       # and the pull_request runs recorded for it.
       pull-requests: read
       actions: write
+      # The merge-queue yield marks a deferred head pending until it resumes.
+      statuses: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
@@ -199,6 +201,71 @@ jobs:
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
       desktop_windows_dry_run_required: ${{ steps.changed-files.outputs.desktop_windows_dry_run_required }}
     steps:
+      # When the merge queue has work waiting, a pull request run defers
+      # itself so the queue lands first; the merge-queue steward re-runs it.
+      # A head defers at most once: a re-run (the steward's resume or a manual
+      # one) never yields and clears a deferral that is still pending.
+      - name: Yield to the merge queue
+        if: >-
+          github.event_name == 'pull_request'
+          && !github.event.pull_request.head.repo.fork
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            // Dependabot-triggered runs get a read-only token: they cannot
+            // write the status or cancel, so they never defer.
+            if (context.actor === "dependabot[bot]") return;
+            const repo = context.repo;
+            const sha = context.payload.pull_request.head.sha;
+            if (Number(process.env.GITHUB_RUN_ATTEMPT ?? "1") > 1) {
+              const { data } = await github.rest.repos.listCommitStatusesForRef({
+                ...repo, ref: sha, per_page: 100,
+              });
+              const latest = data.find((status) => status.context === "ci/merge-queue-yield");
+              if (latest?.state === "pending") {
+                await github.rest.repos.createCommitStatus({
+                  ...repo,
+                  sha,
+                  state: "success",
+                  context: "ci/merge-queue-yield",
+                  description: "Resumed",
+                });
+              }
+              return;
+            }
+            const waiting = async () => {
+              for (const status of ["queued", "waiting", "pending", "requested"]) {
+                const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                  ...repo, event: "merge_group", status, per_page: 1,
+                });
+                if (data.total_count > 0) return true;
+              }
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                ...repo, event: "merge_group", status: "in_progress", per_page: 20,
+              });
+              for (const run of data.workflow_runs) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  ...repo, run_id: run.id, filter: "latest", per_page: 100,
+                });
+                if (jobs.some((job) => job.status === "queued" || job.status === "waiting")) return true;
+              }
+              return false;
+            };
+            if (!(await waiting())) return;
+            await github.rest.repos.createCommitStatus({
+              ...repo,
+              sha,
+              state: "pending",
+              context: "ci/merge-queue-yield",
+              description: "Deferred while the merge queue runs; resumes automatically",
+              target_url: `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${context.runId}`,
+            });
+            core.notice("Merge queue has waiting work; this pull request run defers until it clears.");
+            await github.rest.actions.cancelWorkflowRun({ ...repo, run_id: context.runId });
+            // Hold the step until the cancellation lands so nothing after it starts.
+            await new Promise((resolve) => setTimeout(resolve, 60_000));
+
       - name: Resolve PR coverage pilot
         id: pilot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
