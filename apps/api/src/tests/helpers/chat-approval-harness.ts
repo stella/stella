@@ -104,6 +104,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
+import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -184,7 +185,6 @@ const CHAT_ROUTE_PATH = "/v1/chat";
 const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
-const MAX_BARRIER_POLLS = 2000;
 /** The checks a hand-built send answers for: the stored thread's, the
  *  requests the provider was handed, and the run's independence from its
  *  request. */
@@ -322,6 +322,18 @@ export const createApprovalHarness = ({
       ? await operation()
       : await profile.measure(phase, operation);
   const userId = user?.id ?? ids.userA1;
+  const turnSettlementListeners = new Set<{
+    threadId: string;
+    notify: () => void;
+  }>();
+  const turnSettlementFailures = new Map<string, unknown>();
+  const notifyTurnSettlement = (threadId: string) => {
+    for (const listener of turnSettlementListeners) {
+      if (listener.threadId === threadId) {
+        listener.notify();
+      }
+    }
+  };
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
@@ -404,32 +416,36 @@ export const createApprovalHarness = ({
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
-    streamResponse:
-      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
-        ? streamChat
-        : async (props) =>
-            await streamChat({
-              ...props,
-              ...(beforeTurnSettles === undefined
-                ? {}
-                : {
-                    onFinish: async (event) => {
-                      await beforeTurnSettles({
-                        outcome: event.outcome,
-                        threadId: props.threadId,
-                      });
-                      return await props.onFinish(event);
-                    },
-                  }),
-              thirdPartyBoundary:
-                boundaryAnonymizer !== undefined &&
-                props.thirdPartyBoundary.type === "anonymized"
-                  ? {
-                      ...props.thirdPartyBoundary,
-                      anonymizeFields: boundaryAnonymizer,
-                    }
-                  : props.thirdPartyBoundary,
-            }),
+    streamResponse: async (props) => {
+      // The run owns every terminal path, including checkpoint restoration and
+      // failures that produce no onFinish event. Its notification only wakes
+      // the persisted-row oracle; it does not replace that oracle.
+      void props.run.settled.then(
+        () => notifyTurnSettlement(props.threadId),
+        (error: unknown) => {
+          turnSettlementFailures.set(props.threadId, error);
+          notifyTurnSettlement(props.threadId);
+        },
+      );
+      return await streamChat({
+        ...props,
+        onFinish: async (event) => {
+          await beforeTurnSettles?.({
+            outcome: event.outcome,
+            threadId: props.threadId,
+          });
+          return await props.onFinish(event);
+        },
+        thirdPartyBoundary:
+          boundaryAnonymizer !== undefined &&
+          props.thirdPartyBoundary.type === "anonymized"
+            ? {
+                ...props.thirdPartyBoundary,
+                anonymizeFields: boundaryAnonymizer,
+              }
+            : props.thirdPartyBoundary,
+      });
+    },
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */
@@ -529,6 +545,7 @@ export const createApprovalHarness = ({
         panic("Send contexts come from this harness's contextFromBody");
       const result = await sendMessageOf(body.threadId).handler(ctx);
       requestOf(ctx).tearDown();
+      notifyTurnSettlement(body.threadId);
       return result;
     });
 
@@ -620,31 +637,54 @@ export const createApprovalHarness = ({
 
   /**
    * Barrier: resolves once no turn on `threadId` is still accepted or
-   * running, polled on the turn rows rather than on a clock. A turn that
+   * running. Completion notifications wake a fresh persisted-state read;
+   * the notification itself is never evidence that the row settled. A turn that
    * never gets there is the `chat.persisted.turn-settles` finding.
    */
   const awaitSettledTurns = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> =>
     await measure("settlement", async () => {
-      let live: { id: string; status: string }[] = [];
-      for (let poll = 0; poll < MAX_BARRIER_POLLS; poll += 1) {
-        live = await testDb
-          .select({ id: chatTurns.id, status: chatTurns.status })
-          .from(chatTurns)
-          .where(
-            and(
-              eq(chatTurns.threadId, threadId),
-              inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
-            ),
-          );
-        if (live.length === 0) {
-          return [];
+      const deadline = performance.now() + API_TEST_TIMEOUT_MS;
+      while (true) {
+        // Subscribe before reading: settlement can finish during the query.
+        const changed = Promise.withResolvers();
+        const listener = { threadId, notify: () => changed.resolve(undefined) };
+        turnSettlementListeners.add(listener);
+        const timeout = setTimeout(
+          listener.notify,
+          Math.max(0, deadline - performance.now()),
+        );
+        try {
+          profile?.recordCounter("turnBarrierReads");
+          const live = await testDb
+            .select({ id: chatTurns.id, status: chatTurns.status })
+            .from(chatTurns)
+            .where(
+              and(
+                eq(chatTurns.threadId, threadId),
+                inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
+              ),
+            );
+          if (turnSettlementFailures.has(threadId)) {
+            return panic(
+              "The chat turn run failed to release its ownership",
+              turnSettlementFailures.get(threadId),
+            );
+          }
+          if (live.length === 0) {
+            return [];
+          }
+          if (performance.now() >= deadline) {
+            return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
+          }
+          profile?.recordCounter("turnBarrierWaits");
+          await changed.promise;
+        } finally {
+          clearTimeout(timeout);
+          turnSettlementListeners.delete(listener);
         }
-        // Yield to the work settling the turn before looking again.
-        await Bun.sleep(1);
       }
-      return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
     });
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
@@ -934,6 +974,12 @@ export const createApprovalHarness = ({
    *  stop. */
   const stoppingThreads = new Set<string>();
   let inFlight = 0;
+  const inFlightListeners = new Set<() => void>();
+  const notifyInFlight = () => {
+    for (const listener of inFlightListeners) {
+      listener();
+    }
+  };
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
@@ -951,6 +997,9 @@ export const createApprovalHarness = ({
         signal: new AbortController().signal,
       }),
     );
+    for (const listener of turnSettlementListeners) {
+      listener.notify();
+    }
   };
 
   /**
@@ -1336,6 +1385,7 @@ export const createApprovalHarness = ({
         stoppingThreads.add(cancel["threadId"]);
       }
       inFlight += 1;
+      notifyInFlight();
       try {
         const answer = await postCancelTurn({
           threadId: cancel["threadId"],
@@ -1347,6 +1397,8 @@ export const createApprovalHarness = ({
         return answer;
       } finally {
         inFlight -= 1;
+        notifyInFlight();
+        notifyTurnSettlement(cancel["threadId"]);
       }
     }
     if (url.pathname !== CHAT_ROUTE_PATH || init?.method !== "POST") {
@@ -1357,6 +1409,7 @@ export const createApprovalHarness = ({
       return panic("The web chat client posted a non-JSON body");
     }
     inFlight += 1;
+    notifyInFlight();
     let done: Promise<void> = Promise.resolve();
     try {
       const parsed: unknown = JSON.parse(raw);
@@ -1366,6 +1419,7 @@ export const createApprovalHarness = ({
     } finally {
       void done.finally(() => {
         inFlight -= 1;
+        notifyInFlight();
       });
     }
   };
@@ -1385,6 +1439,12 @@ export const createApprovalHarness = ({
         context,
         profile,
         inFlight: () => inFlight,
+        subscribeInFlight: (listener) => {
+          inFlightListeners.add(listener);
+          return () => {
+            inFlightListeners.delete(listener);
+          };
+        },
         page: await reloadPage(threadId),
         reload: async () => await reloadPage(threadId),
         threadId,
@@ -1593,6 +1653,12 @@ export const createApprovalHarness = ({
         } finally {
           globalThis.fetch = originalFetch;
           provider.restore();
+        }
+        if (turnSettlementFailures.size > 0) {
+          panic(
+            "A chat turn run failed to release its ownership",
+            turnSettlementFailures.values().next().value,
+          );
         }
         const rootPoolConnections = rootPoolConnectionCount();
         if (rootPoolConnections !== rootPoolConnectionsAtStart) {

@@ -721,7 +721,7 @@ export const readDocumentIdentitySources = (root: string) => {
   const sources = new Map<string, string>();
   for (const scope of [
     "apps/web/src",
-    "apps/api/src/mcp/apps",
+    "packages/mcp-apps/src",
     "packages/ui/src",
     "packages/decision-reader/src",
   ]) {

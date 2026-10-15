@@ -17,6 +17,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
+import { replaceCachedFileName } from "@/lib/files/queries";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
@@ -228,6 +229,13 @@ export const useRenameEntity = (
       });
       if (reconciled.isErr()) {
         analytics.captureError(reconciled.error);
+      }
+      if (data.file) {
+        replaceCachedFileName(queryClient, {
+          fieldId: data.file.fieldId,
+          fileName: data.file.fileName,
+          workspaceId,
+        });
       }
       context.release();
       // Refetches repair caches independently of the committed mutation's settlement.

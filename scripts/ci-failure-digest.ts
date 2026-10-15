@@ -39,6 +39,7 @@ const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
 export type FailureKind =
+  | "infra"
   | "test"
   | "typecheck"
   | "lint"
@@ -118,7 +119,11 @@ const shortPath = (value: string): string =>
   repositoryPath(value) ??
   value.replaceAll("\\", "/").replace(WORKSPACE_PREFIX, "");
 
-type LogLine = { readonly text: string; readonly scope: string };
+type LogLine = {
+  readonly text: string;
+  readonly scope: string;
+  readonly annotation?: "error" | "continuation";
+};
 
 /**
  * Every pattern sees at most this many characters of a line, so one
@@ -139,6 +144,29 @@ const logLine = (raw: string): LogLine => {
     ? { text: text.slice(turbo[0].length), scope: turbo[1] ?? turbo[2] ?? "" }
     : { text, scope: "" };
 };
+
+const logLines = (rawLines: readonly string[]): LogLine[] =>
+  rawLines.flatMap((raw) => {
+    const line = logLine(raw);
+    if (!line.text.startsWith("::error")) {
+      return [line];
+    }
+    const end = line.text.indexOf("::", 2);
+    if (end === -1) {
+      return [line];
+    }
+    // Decode only command data, after its header and before line parsing.
+    const message = line.text
+      .slice(end + 2)
+      .replaceAll("%0A", "\n")
+      .replaceAll("%0D", "\r")
+      .replaceAll("%25", "%");
+    return message.split("\n").map((text, index) => ({
+      text,
+      scope: line.scope,
+      annotation: index === 0 ? ("error" as const) : ("continuation" as const),
+    }));
+  });
 
 // ---------------------------------------------------------------------------
 // Failure extraction
@@ -316,7 +344,7 @@ const cleanDetail = (lines: readonly string[]): string[] =>
 
 /** Failing bun and Playwright tests, in log order and deduplicated. */
 export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
-  const lines = rawLines.map(logLine);
+  const lines = logLines(rawLines);
   const failures: TestFailure[] = [];
   // Turbo interleaves packages, so each scope keeps its own pending block.
   const pending = new Map<string, string[]>();
@@ -393,7 +421,16 @@ export const testFailures = (rawLines: readonly string[]): TestFailure[] => {
   for (const failure of failures) {
     const key = `${failure.scope}\u0000${failure.name}`;
     const known = best.get(key);
-    if (known === undefined || known.detail.length < failure.detail.length) {
+    const hasError = failure.detail.some((text) => ERROR_HEADLINE.test(text));
+    const knownHasError = known?.detail.some((text) =>
+      ERROR_HEADLINE.test(text),
+    );
+    if (
+      known === undefined ||
+      (hasError && !knownHasError) ||
+      (hasError === knownHasError &&
+        known.detail.length < failure.detail.length)
+    ) {
       best.set(key, failure);
     }
   }
@@ -416,16 +453,24 @@ const headline = (failure: TestFailure): string => {
     failure.detail.find((text) => ERROR_HEADLINE.test(text))?.trim() ??
     failure.detail.at(0)?.trim() ??
     "";
+  const index = failure.detail.findIndex((text) => text.trim() === error);
+  const continuation = failure.detail.at(index + 1)?.trim();
+  const reason =
+    error.endsWith(":") && continuation ? `${error} ${continuation}` : error;
   const added = failure.detail.find((text) => DIFF_ADDED.test(text));
-  return added === undefined ? error : `${error} | ${added.slice(1).trim()}`;
+  return added === undefined ? reason : `${reason} | ${added.slice(1).trim()}`;
 };
 
 const testFailureLine = (failure: TestFailure): FailureLine => {
   const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
   const reason = headline(failure);
+  const title = `${prefix}(fail) ${failure.name}${where(failure)}`;
+  const message = `${title}${reason === "" ? "" : ` -- ${reason}`}`;
   return {
     message: truncate(
-      `${prefix}(fail) ${failure.name}${where(failure)}${reason === "" ? "" : ` -- ${reason}`}`,
+      message.length > MAX_LINE_WIDTH && reason !== ""
+        ? `${prefix}(fail) ${reason} -- ${failure.name}${where(failure)}`
+        : message,
     ),
     ...located(failure.file, failure.line?.toString()),
   };
@@ -499,6 +544,15 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   });
 
 const ERROR_COMMAND = "##[error]";
+// Typed infrastructure annotations: installer stalls and signals, and an E2E
+// stack whose image pulls were rate limited.
+const INSTALL_INFRA_FAILURE =
+  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
+const GENERIC_PROCESS_EXIT =
+  /^(?:Error:\s*)?Process completed with exit code \d+\.?$/u;
+// The installer prints this status after its typed signal/stall annotation.
+const INSTALL_SIGNAL_EXIT =
+  /^Install finished; exit [1-9]\d*; signal SIG(?:KILL|TERM|INT)(?:;.*)?$/u;
 
 // scripts/retry.sh: per-attempt lines and the final summary command. The
 // summary restates the wrapped command; the cause is the output above it.
@@ -529,13 +583,13 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
   const window = lines
     .filter(({ text }) => !isNoise(text))
     .slice(-TAIL_WINDOW)
-    .map(({ text, scope }) => {
-      if (!text.startsWith(ERROR_COMMAND)) {
+    .map(({ text, scope, annotation }) => {
+      if (!text.startsWith(ERROR_COMMAND) && annotation !== "error") {
         return { text, scope, command: false };
       }
       // An error command anchors only with its own message: an empty one
       // (a runtime echoing a stack) or a retry summary does not.
-      const message = text.slice(ERROR_COMMAND.length);
+      const message = withoutErrorCommand(text);
       const anchors =
         message.trim() !== "" &&
         !isStackFrame(message) &&
@@ -604,20 +658,130 @@ export const failureLines = (
   rawLines: readonly string[],
   limit = MAX_LINES_PER_STEP,
 ): FailureLine[] => {
-  const lines = rawLines
-    .map(logLine)
-    .filter(({ text }) => !EXIT_MARKER.test(text));
+  const lines = logLines(rawLines).filter(
+    ({ text }) => !EXIT_MARKER.test(text),
+  );
+  const installFailures = dedupe(
+    lines.flatMap(({ text }) => {
+      const message = withoutErrorCommand(text);
+      return INSTALL_INFRA_FAILURE.test(message)
+        ? [{ message: truncate(message) }]
+        : [];
+    }),
+  );
   const extractors = [
-    () => testFailures(rawLines).map(testFailureLine),
+    () =>
+      testFailures(rawLines).flatMap((failure) => {
+        const index = failure.detail.findIndex((text) =>
+          ERROR_HEADLINE.test(text),
+        );
+        const error = failure.detail.at(index);
+        const detail =
+          index !== -1 && error?.trimEnd().endsWith(":")
+            ? failure.detail.slice(index + 2, index + MAX_LINES_PER_STEP)
+            : [];
+        return [
+          testFailureLine(failure),
+          ...detail.map((message) => ({
+            message: truncate(message),
+            ...located(failure.file, failure.line?.toString()),
+          })),
+        ];
+      }),
     () => tscLines(lines),
     () => oxlintLines(lines),
-    () => genericLines(lines),
+    () => {
+      const markers = lines.flatMap(({ text, scope, annotation }, index) => {
+        const trimmed = text.trimStart();
+        if (
+          annotation === "continuation" ||
+          (annotation !== "error" &&
+            !/^(?:error:|::error(?: |::)|##\[error\])/iu.test(trimmed)) ||
+          isRetrySummary(trimmed)
+        ) {
+          return [];
+        }
+        const message = withoutErrorCommand(trimmed);
+        if (
+          (message === "" && annotation !== "error") ||
+          isStackFrame(message) ||
+          /^error: script ".*" exited with code \d+$/u.test(message)
+        ) {
+          return [];
+        }
+        const block = [{ text: message, scope }];
+        if (annotation === "error") {
+          for (const next of lines.slice(
+            index + 1,
+            index + MAX_LINES_PER_STEP,
+          )) {
+            if (next.annotation !== "continuation") {
+              break;
+            }
+            block.push(next);
+          }
+        }
+        return block.flatMap(({ text: detail, scope: detailScope }) => {
+          if (detail.trim() === "" || isStackFrame(detail)) {
+            return [];
+          }
+          const location = findLocation(detail);
+          return [
+            {
+              message: truncate(
+                `${detailScope === "" ? "" : `${detailScope}: `}${detail}`,
+              ),
+              ...(location === undefined
+                ? {}
+                : located(location.path, location.line)),
+            },
+          ];
+        });
+      });
+      const generic = genericLines(lines);
+      const window = lines.slice(-TAIL_WINDOW);
+      const terminal = window.findLastIndex(({ text, annotation }) => {
+        const message = withoutErrorCommand(text);
+        return (
+          annotation !== "continuation" &&
+          !isRetrySummary(message) &&
+          !/^error: script ".*" exited with code \d+$/u.test(message) &&
+          !isStackFrame(message) &&
+          (annotation === "error" || ANCHOR.test(message))
+        );
+      });
+      if (terminal !== -1 && (markers.length > 0 || generic.length === 0)) {
+        return [
+          ...closingLines(window.slice(terminal)),
+          ...generic,
+          ...markers,
+        ];
+      }
+      if (generic.length > 0) {
+        return [...generic, ...markers];
+      }
+      return markers.length === 0 ? [] : [...markers, ...closingLines(lines)];
+    },
     () => closingLines(lines),
   ];
   for (const extract of extractors) {
     const found = dedupe(extract());
     if (found.length > 0) {
-      return found.slice(0, limit);
+      if (installFailures.length === 0) {
+        return found.slice(0, limit);
+      }
+      // Specific compiler/test extraction must retain the installer evidence too.
+      // Reserve room for both, keeping code evidence first if the limit is small.
+      const independent = found.filter(
+        ({ message }) =>
+          !INSTALL_INFRA_FAILURE.test(message) &&
+          !GENERIC_PROCESS_EXIT.test(message) &&
+          !INSTALL_SIGNAL_EXIT.test(message),
+      );
+      return dedupe([
+        ...independent.slice(0, Math.max(1, limit - installFailures.length)),
+        ...installFailures,
+      ]).slice(0, limit);
     }
   }
   return [];
@@ -629,6 +793,21 @@ export const classify = (
 ): FailureKind => {
   const name = step.toLowerCase();
   const text = lines.map(({ message }) => message).join("\n");
+  const substantive = lines
+    .flatMap(({ message }) => message.split(/\r?\n/u))
+    .map((message) => withoutErrorCommand(message).trim())
+    .filter(
+      (message) =>
+        message !== "" &&
+        !GENERIC_PROCESS_EXIT.test(message) &&
+        !INSTALL_SIGNAL_EXIT.test(message),
+    );
+  if (
+    substantive.length > 0 &&
+    substantive.every((message) => INSTALL_INFRA_FAILURE.test(message))
+  ) {
+    return "infra";
+  }
   if (/ratchet/u.test(name) || /\bratchet\b/iu.test(text)) {
     return "ratchet";
   }

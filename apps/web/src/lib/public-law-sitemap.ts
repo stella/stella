@@ -40,7 +40,10 @@ import {
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
-import { createPublicCrawlRules } from "@/public-crawl-policy";
+import {
+  createPublicCrawlRules,
+  isPublicLawPathIndexable,
+} from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -318,13 +321,15 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point, and the coverage page is what the corpus
-  // says about itself. The results screen is not listed: an unfiltered request
-  // redirects to the home, and every decision has its own entry in the
-  // per-country sitemaps.
-  const entries = (["/law", "/law/coverage"] as const).map((path) =>
-    createPublicLawCanonicalUrl(path),
-  );
+  // The home is the entry point. The coverage page is not listed: it renders
+  // its figures client-side, so a crawler sees only the pending shape, and
+  // robots.txt does not allow it. The results screen is not listed either: an
+  // unfiltered request redirects to the home, and every decision has its own
+  // entry in the per-country sitemaps. A candidate is listed only when the
+  // crawl policy that builds robots.txt allows it.
+  const entries = (["/law"] as const)
+    .filter((path) => isPublicLawPathIndexable(path, true))
+    .map((path) => createPublicLawCanonicalUrl(path));
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

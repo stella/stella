@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { AnchorFactsPanel } from "@/features/avt/anchor-facts-panel";
 import { DocumentVerifications } from "@/features/avt/document-verifications";
 import { EvidenceListEmptyState } from "@/features/avt/evidence-list-empty-state";
+import { LoadSampleCaseButton } from "@/features/avt/load-sample-case-button";
 import { VerificationDetail } from "@/features/avt/verification-detail";
 import { usePermissions } from "@/hooks/use-permissions";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -67,8 +68,9 @@ export const AvtView = ({
 
   if (lists.length === 0) {
     return (
-      <div className="flex flex-col gap-4 p-4">
+      <div className="flex flex-col items-start gap-4 p-4">
         <EvidenceListEmptyState workspaceId={workspaceId} />
+        <LoadSampleCaseButton view={view} workspaceId={workspaceId} />
       </div>
     );
   }
@@ -77,9 +79,12 @@ export const AvtView = ({
     <div className="flex flex-col gap-4 p-4">
       <EvidenceListPicker view={view} workspaceId={workspaceId} />
       {listId === null ? (
-        <p className="text-muted-foreground text-sm">
-          {t("avt.view.pickList")}
-        </p>
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-muted-foreground text-sm">
+            {t("avt.view.pickList")}
+          </p>
+          <LoadSampleCaseButton view={view} workspaceId={workspaceId} />
+        </div>
       ) : (
         <Tabs defaultValue="documents">
           <TabsList>
