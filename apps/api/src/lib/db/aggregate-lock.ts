@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -20,13 +21,14 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
   fields,
   pdfSigningSessions,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -2004,4 +2006,108 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+type MemberAccessRowLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  mode: "share" | "update";
+};
+
+/** Acquire the member before matter memberships and matter rows. */
+export const lockMemberAccessRow = async ({
+  tx,
+  organizationId,
+  userId,
+  mode,
+}: MemberAccessRowLockOptions) =>
+  (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for(mode)
+  ).at(0);
+
+type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+/** Call after locking the member; assignments precede matter rows. */
+export const lockMatterAccessAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceIds,
+  mode,
+}: MatterAccessRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        inArray(workspaceMembers.workspaceId, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    )
+    .orderBy(workspaceMembers.workspaceId, workspaceMembers.id)
+    .limit(workspaceIds.length)
+    .for(mode, { of: workspaceMembers });
+};
+
+type MatterAccessWorkspaceRowsLockOptions = Omit<
+  MatterAccessRowsLockOptions,
+  "userId"
+> & {
+  where?: SQL;
+};
+
+/**
+ * Lock after assignments, in stable matter order. A narrowing predicate can
+ * select the unassigned matters whose reach depends on their row. Decide
+ * access in a later statement, using only identities covered by held locks.
+ */
+export const lockMatterAccessWorkspaceRows = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessWorkspaceRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaces.id)
+    .limit(workspaceIds.length)
+    .for(mode);
+};
+
+/** Shares the lifecycle fence used by matter deletion and timer writes. */
+export const lockWorkspaceLifecycle = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
 };

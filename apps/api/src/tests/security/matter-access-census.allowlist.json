@@ -72,20 +72,6 @@
       "resolveValidateAuth.orgSettings#rootDb": 1
     }
   },
-  "apps/api/src/lib/db/member-access-hold.ts::derives-matter-access": {
-    "reason": "The access hold decides reach while it share-locks the member, assignment and matter rows; it moves onto the database access function when those locks move to the aggregate lock owner. The matter access property test compares its answer with the database rule.",
-    "sites": {
-      "holdMemberAccessOnTx.assigned": 4,
-      "holdMemberAccessOnTx.assigned.of": 1,
-      "holdMemberAccessOnTx.assigned.workspaceId": 1
-    }
-  },
-  "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
-    "reason": "The access hold decides reach while it share-locks the member, assignment and matter rows; it moves onto the database access function when those locks move to the aggregate lock owner. The matter access property test compares its answer with the database rule.",
-    "sites": {
-      "holdMemberAccessOnTx.reachesClientMatters": 1
-    }
-  },
   "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
     "reason": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
     "sites": {
@@ -128,31 +114,6 @@
       "rebuildSupplementalSearchIndex#rootDb": 1,
       "syncWorkspaceSearchActivity#rootDb": 1,
       "writeWorkspaceProjections": 2
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": {
-    "reason": "The timer check decides reach in the same statement that share-locks the matter, member and assignment rows; it moves onto the database access function when those locks move to the aggregate lock owner. The matter access property test compares its answer with the database rule.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::names-matter-role-rule": {
-    "reason": "The timer check decides reach in the same statement that share-locks the matter, member and assignment rows; it moves onto the database access function when those locks move to the aggregate lock owner. The matter access property test compares its answer with the database rule.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/workspace-deletion.ts::derives-matter-access": {
-    "reason": "Matter deletion decides the actor reach while it holds the matter and assignment row locks; it moves onto the database access function when those locks move to the aggregate lock owner.",
-    "sites": {
-      "actorCanAccessWorkspace.workspaceMemberRows": 3,
-      "actorCanAccessWorkspace.workspaceMemberRows.id": 1
-    }
-  },
-  "apps/api/src/lib/workspace-deletion.ts::names-matter-role-rule": {
-    "reason": "Matter deletion decides the actor reach while it holds the matter and assignment row locks; it moves onto the database access function when those locks move to the aggregate lock owner.",
-    "sites": {
-      "actorCanAccessWorkspace": 1
     }
   }
 }

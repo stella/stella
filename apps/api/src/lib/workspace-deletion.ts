@@ -1,20 +1,20 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
-
-import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import {
-  documentProcessingRuns,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockMatterAccessAssignments,
+  lockMatterAccessWorkspaceRows,
+  lockMemberAccessRow,
+  lockWorkspaceLifecycle,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -22,6 +22,7 @@ import type { MemberRole } from "@/api/lib/member-roles";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -67,18 +68,12 @@ const lockAuthorizedActorRole = async ({
   organizationId: SafeId<"organization">;
   tx: Transaction;
 }): Promise<MemberRole | null> => {
-  const memberRows = await tx
-    .select({ role: member.role })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        eq(member.userId, actorUserId),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const actor = memberRows.at(0);
+  const actor = await lockMemberAccessRow({
+    tx,
+    organizationId,
+    userId: actorUserId,
+    mode: "update",
+  });
   if (
     !actor ||
     !isMemberRole(actor.role) ||
@@ -91,38 +86,6 @@ const lockAuthorizedActorRole = async ({
     return null;
   }
   return actor.role;
-};
-
-const actorCanAccessWorkspace = async ({
-  actorRole,
-  actorUserId,
-  tx,
-  workspace,
-}: {
-  actorRole: MemberRole;
-  actorUserId: SafeId<"user">;
-  tx: Transaction;
-  workspace: { clientId: string | null; id: SafeId<"workspace"> };
-}): Promise<boolean> => {
-  if (
-    workspace.clientId !== null &&
-    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
-  ) {
-    return true;
-  }
-
-  const workspaceMemberRows = await tx
-    .select({ id: workspaceMembers.id })
-    .from(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, workspace.id),
-        eq(workspaceMembers.userId, actorUserId),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  return workspaceMemberRows.length === 1;
 };
 
 /**
@@ -148,7 +111,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
     attempt = 0,
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
-      return await database.transaction(async (tx) => {
+      return await withAggregateTransaction(database, async (tx) => {
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -158,13 +121,23 @@ export const executeAuthorizedWorkspaceDeletion = async (
           return { status: "not-authorized" } as const;
         }
 
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
+        await lockWorkspaceLifecycle(tx, workspaceId);
+        const matterLocks = {
+          tx,
+          organizationId,
+          userId: actorUserId,
+          workspaceIds: [workspaceId],
+          mode: "update",
+        } as const;
+        await lockMatterAccessAssignments(matterLocks);
+        await lockMatterAccessWorkspaceRows(matterLocks);
         const workspaceRows = await tx
           .select({
             billingReference: workspaces.billingReference,
-            clientId: workspaces.clientId,
+            hasAccess: memberReachesMatterSql(
+              { organizationId, userId: actorUserId },
+              workspaces.id,
+            ),
             color: workspaces.color,
             id: workspaces.id,
             name: workspaces.name,
@@ -178,20 +151,13 @@ export const executeAuthorizedWorkspaceDeletion = async (
               eq(workspaces.organizationId, organizationId),
             ),
           )
-          .limit(1)
-          .for("update");
+          .limit(1);
         const workspace = workspaceRows.at(0);
         if (!workspace) {
           return { status: "not-found" } as const;
         }
 
-        const authorized = await actorCanAccessWorkspace({
-          actorRole,
-          actorUserId,
-          tx,
-          workspace,
-        });
-        if (!authorized) {
+        if (!workspace.hasAccess) {
           return { status: "not-authorized" } as const;
         }
         if (workspace.status !== "active") {

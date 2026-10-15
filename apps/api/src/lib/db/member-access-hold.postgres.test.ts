@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -8,6 +9,7 @@ import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import {
   withGatedTestClients,
   type GatedTestDb,
@@ -80,6 +82,20 @@ const REMOVALS = {
     await db
       .delete(workspaceMembers)
       .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+  },
+} as const;
+
+const ACCESS_READERS = {
+  timer: async (tx: Transaction, seeded: Seeded) =>
+    await hasCurrentTimerMatterAccess({ tx, ...seeded }),
+  hold: async (tx: Transaction, seeded: Seeded) => {
+    const hold = await holdMemberAccessOnTx(tx, {
+      ...seeded,
+      workspaceIds: [seeded.workspaceId],
+    });
+    return (
+      hold.type === "held" && hold.workspaceIds.includes(seeded.workspaceId)
+    );
   },
 } as const;
 
@@ -160,6 +176,68 @@ if (!databaseUrl || !runPostgresTests) {
             expect(removed).toBe(true);
           } finally {
             release.resolve(undefined);
+            await seeded.cleanUp();
+          }
+        });
+      },
+    );
+
+    test.each(Object.entries(ACCESS_READERS))(
+      "%s observes an assignment removal committed during its member lock wait",
+      async (_reader, readAccess) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: writerDb } = openClient({ max: 1 });
+          const { db: readerDb } = openClient({ max: 1 });
+          const { db: observerDb } = openClient({ max: 1 });
+          const seeded = await seedMember(observerDb);
+          const locked = Promise.withResolvers<number>();
+          const release = Promise.withResolvers<undefined>();
+          const writing = writerDb.transaction(async (tx) => {
+            // An UPDATE holds the member while assignment removal shares its commit.
+            await tx
+              .update(member)
+              .set({ role: "member" })
+              .where(eq(member.id, seeded.memberId));
+            const rows = await tx.execute<{ pid: number }>(
+              sql`SELECT pg_backend_pid() AS pid`,
+            );
+            locked.resolve(rows.at(0)?.pid ?? panic("Missing writer pid"));
+            await release.promise;
+            await tx
+              .delete(workspaceMembers)
+              .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+          });
+          let reading: Promise<boolean> | undefined;
+          try {
+            const writerPid = await locked.promise;
+            reading = readerDb.transaction(
+              async (tx) => await readAccess(tx, seeded),
+            );
+            let blocked = false;
+            for (
+              let attempt = 0;
+              attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
+              attempt += 1
+            ) {
+              const rows = await observerDb.execute<{ blocked: boolean }>(sql`
+                SELECT EXISTS (
+                  SELECT 1 FROM pg_stat_activity
+                  WHERE ${writerPid} = ANY(pg_blocking_pids(pid))
+                ) AS blocked
+              `);
+              blocked = rows.at(0)?.blocked === true;
+              if (!blocked) {
+                await Bun.sleep(10);
+              }
+            }
+            expect(blocked).toBe(true);
+            release.resolve(undefined);
+            await writing;
+            expect(await reading).toBe(false);
+          } finally {
+            release.resolve(undefined);
+            await writing;
+            await reading;
             await seeded.cleanUp();
           }
         });
