@@ -84,14 +84,27 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
 
 // A developer tool: name the server's refusal instead of a generic failure,
 // so a new gate in front of a step is visible at once.
-const refusedStep = (
+function refusedStep(
   code: DevQuickStartErrorCode,
   error: ToAPIErrorProps,
-): never => {
+): never {
   throw new DevQuickStartError({
     code,
     message: `${ERROR_MESSAGES[code]} (${String(error.status)}: ${toAPIError(error).message})`,
   });
+}
+
+// A new quick-start account has not seen the professional-use statement, and
+// the API refuses its signed-in requests until it is accepted. Record it the
+// way the professional-use page does; this also covers accounts created
+// before this step existed and accounts that signed in through two-factor.
+const acceptProfessionalUse = async () => {
+  const accepted = await api.me["professional-use"].post({
+    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+  });
+  if (accepted.error) {
+    refusedStep(DEV_QUICK_START_ERROR.professionalUse, accepted.error);
+  }
 };
 
 const AUTHENTICATION_OUTCOME = {
@@ -124,20 +137,12 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
     return AUTHENTICATION_OUTCOME.twoFactorRequired;
   }
 
-  // A new quick-start account has not seen the professional-use statement,
-  // and the API refuses its signed-in requests until it is accepted. Record
-  // it here as the sign-up page does, before any signed-in step runs.
-  const accepted = await api.me["professional-use"].post({
-    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
-  });
-  if (accepted.error) {
-    refusedStep(DEV_QUICK_START_ERROR.professionalUse, accepted.error);
-  }
-
   return AUTHENTICATION_OUTCOME.authenticated;
 };
 
 const createOrganization = async (identity: DevQuickStartIdentity) => {
+  // Runs after both sign-in paths, before the first signed-in API request.
+  await acceptProfessionalUse();
   const resolved = await resolveDevQuickStartOrganization({
     identity,
     listOrganizations: async () => {
@@ -236,7 +241,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       analytics.captureError(result.error);
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
@@ -353,7 +358,7 @@ export const DevQuickStartContinuation = ({
       analytics.captureError(result.error);
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
