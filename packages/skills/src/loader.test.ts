@@ -37,6 +37,7 @@ Follow the process.`);
     expect(parsed.metadata).toEqual({
       compatibility: "Works with SKILL.md-compatible agents",
       description: "Use when reviewing imported skills: validate metadata.",
+      invocation: "auto",
       license: "Apache-2.0",
       metadata: {
         author: "stella",
@@ -237,11 +238,56 @@ Body.`);
     expect(parsed.metadata).toEqual({
       compatibility: null,
       description: "Valid description.",
+      invocation: "auto",
       license: null,
       metadata: {},
       name: "unknown-field",
       version: null,
     });
+  });
+
+  test("reads the invocation from metadata or the portable flag, and refuses a bad one", () => {
+    const invocationOf = (frontmatter: string) =>
+      parseSkillFile(
+        `---\nname: invoked\ndescription: Valid description.\n${frontmatter}\n---\n\nBody.`,
+      );
+
+    for (const [frontmatter, expected] of [
+      ["", "auto"],
+      ["metadata:\n  stella-invocation: manual", "manual"],
+      ["metadata:\n  stella-invocation: AUTO", "auto"],
+      ["disable-model-invocation: true", "manual"],
+      ["disable-model-invocation: false", "auto"],
+      // YAML 1.1 spellings other Agent Skills hosts accept.
+      ["disable-model-invocation: yes", "manual"],
+      ["disable-model-invocation: On", "manual"],
+      ["disable-model-invocation: no", "auto"],
+      [
+        "disable-model-invocation: true\nmetadata:\n  stella-invocation: manual",
+        "manual",
+      ],
+    ] as const) {
+      const parsed = invocationOf(frontmatter);
+      expect(parsed.isOk() && parsed.value.metadata.invocation).toBe(expected);
+    }
+
+    // The key moves to `invocation`; it never stays in `metadata`, so the
+    // package validator does not see an unknown `stella-` key.
+    const moved = invocationOf(
+      "metadata:\n  author: stella\n  stella-invocation: manual",
+    );
+    expect(moved.isOk() && moved.value.metadata.metadata).toEqual({
+      author: "stella",
+    });
+
+    for (const frontmatter of [
+      "metadata:\n  stella-invocation: sometimes",
+      "disable-model-invocation: maybe",
+      "disable-model-invocation: 1",
+      "disable-model-invocation: true\nmetadata:\n  stella-invocation: auto",
+    ]) {
+      expect(invocationOf(frontmatter).isErr()).toBe(true);
+    }
   });
 
   test("rejects malformed YAML and non-mapping documents", () => {

@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 
-import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
+import {
+  QUICKWIT_V09_BUILD_VERSION,
+  QUICKWIT_V09_RUNTIME,
+} from "@/api/lib/legal-search/corpus-index-engine-version";
 
 import { serviceVolumeMountViolations } from "./check-railway-template-draft";
 import images from "./ci-service-images.json" with { type: "json" };
@@ -296,7 +299,7 @@ describe("local compose services", () => {
 });
 
 describe("local Quickwit generation", () => {
-  test("pins the engine the manifest declares, on its own metastore", async () => {
+  test("pins a runtime that reads the manifest's generations, on its own metastore", async () => {
     const services = await readComposeServices();
     const rustfsSetup = recordField(services, "rustfs-setup");
     const q09 = recordField(services, "quickwit09");
@@ -309,7 +312,12 @@ describe("local Quickwit generation", () => {
       Object.keys(services).filter((name) => name.startsWith("quickwit")),
     ).toEqual(["quickwit09-postgres-setup", "quickwit09"]);
     expect(stringField(q09, "image")).toStartWith(
-      `quickwit/quickwit:${QUICKWIT_V09_BINARY_VERSION}@sha256:`,
+      `quickwit/quickwit:${QUICKWIT_V09_RUNTIME.version}@sha256:`,
+    );
+    // A patch release of the line that built the generations reads their splits.
+    const line = (version: string) => version.split(".").slice(0, 2).join(".");
+    expect(line(QUICKWIT_V09_RUNTIME.version)).toBe(
+      line(QUICKWIT_V09_BUILD_VERSION),
     );
     expect(stringField(q09Environment, "QW_METASTORE_URI")).toBe(
       "postgres://postgres:postgres@postgres:5432/stella_quickwit_09",

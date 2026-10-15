@@ -2074,6 +2074,7 @@
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
     "website": "Sitio web",
+    "whenToUse": "Cuándo usar",
     "workflow": "Flujo de trabajo",
     "workflows": "Flujos de trabajo",
     "zoomIn": "Acercar",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades}}",
       "invalidPath": "La ruta solo puede usar letras minúsculas, dígitos, puntos, guiones o guiones bajos",
+      "invocationAuto": "Automáticamente",
+      "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
+      "invocationManual": "Solo cuando se invoque",
+      "invocationManualHelp": "Solo se usa cuando la invocas con / o la añades a tu mensaje.",
       "license": "Licencia: {license}",
       "newFile": "Nuevo archivo",
       "newFileFilenamePlaceholder": "notas.md",
@@ -4338,6 +4343,8 @@
         "yearMonthSequential": "Año-Mes / Secuencial (2026-02/001)",
         "yearSequential": "Año / Secuencial (2026/001)"
       },
+      "showInTitle": "Mostrar el número junto al nombre del asunto",
+      "showInTitleDescription": "Si está desactivado, el título es exactamente el nombre que escribió.",
       "title": "Numeración de asuntos",
       "tokenHelp": "Tokens disponibles: '{'SEQ'}' (secuencia), '{'YYYY'}' (año), '{'YY'}' (año de 2 dígitos), '{'MM'}' (mes)"
     },
@@ -4971,17 +4978,22 @@
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
     "provisionDetailsFor": "Detalles de {provision}",
+    "provisionEffectiveFrom": "en vigor desde el {date}",
     "provisionHistoryEarliest": "Versión más antigua disponible.",
     "provisionHistoryEmpty": "No consta ninguna versión de este precepto.",
     "provisionHistoryLoadOlder": "Cargue versiones anteriores para compararlas.",
     "provisionHistoryUnavailable": "No se ha podido cargar el historial de este precepto.",
+    "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texto no disponible para esta versión",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar solo la parte citada",
+    "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
@@ -4997,7 +5009,6 @@
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}",
     "versionAppliedInDecision": "Versión aplicada en la resolución <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redacción vigente desde {date}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {
@@ -5550,7 +5561,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Cuándo no usar",
     "whenNotToUsePlaceholder": "¿Cuándo debe evitarse esta plantilla?",
-    "whenToUse": "Cuándo usar",
     "whenToUsePlaceholder": "¿Cuándo debe usarse esta plantilla? (guía la selección de plantillas por la IA)"
   },
   "timesheets": {
@@ -5671,7 +5681,7 @@
       "title": "Copiar a asunto"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de asunto",
+      "matterName": "Nombre del asunto",
       "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
     },
     "createNewWorkspace": "Crear nuevo asunto",
@@ -6123,15 +6133,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "subió"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Personal"
-    },
     "parties": {
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
       "client": "Cliente",
       "noClient": "Sin cliente asignado",
+      "noClientOptional": "Sin cliente (opcional)",
       "noParties": "No se han añadido partes a este asunto.",
       "partyRoles": {
         "co_counsel": "Co-abogado",

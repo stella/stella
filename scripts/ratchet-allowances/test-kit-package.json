@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 4,
+  "reason": "New @stll/test-kit package manifest: better-result and drizzle-orm (catalog versions already used across the repo) for its runtime, bun-types for its typecheck, and @electric-sql/pglite (already an apps/api dev dependency) to run the database-clock offsets on a real Postgres engine."
+}
