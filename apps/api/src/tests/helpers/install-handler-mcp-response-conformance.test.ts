@@ -16,6 +16,7 @@ import {
   rethrowResponseConformanceFailure,
   setResponseConformanceRequestModels,
 } from "./response-conformance-request-errors";
+import { captureResponseConformanceViolations } from "./response-conformance-sink";
 
 let restore: (() => void) | undefined;
 afterEach(() => {
@@ -75,40 +76,57 @@ describe("installed handler and MCP conformance observers", () => {
   });
 
   test("preserves conformance failures through Result and request error conversion", async () => {
-    restore = installHandlerMcpResponseConformance();
-    const request = new Request("http://localhost/fixture");
-    const handler = observeHandlerResponses(async () => ({ count: "wrong" }), {
-      response: t.Object({ count: t.Number() }),
-    });
-    const observed = await Result.tryPromise(
-      async () =>
-        await Reflect.apply(handler, undefined, [
-          { request, route: "/fixture" },
-        ]),
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        restore = installHandlerMcpResponseConformance();
+        const request = new Request("http://localhost/fixture");
+        const handler = observeHandlerResponses(
+          async () => ({ count: "wrong" }),
+          {
+            response: t.Object({ count: t.Number() }),
+          },
+        );
+        const observed = await Result.tryPromise(
+          async () =>
+            await Reflect.apply(handler, undefined, [
+              { request, route: "/fixture" },
+            ]),
+        );
+        expect(Result.isError(observed)).toBe(true);
+        if (Result.isError(observed)) {
+          expect(() => rethrowResponseConformanceError(observed.error)).toThrow(
+            ResponseConformanceError,
+          );
+        }
+        expect(() => rethrowResponseConformanceFailure(request)).toThrow(
+          ResponseConformanceError,
+        );
+      },
     );
-    expect(Result.isError(observed)).toBe(true);
-    if (Result.isError(observed)) {
-      expect(() => rethrowResponseConformanceError(observed.error)).toThrow(
-        ResponseConformanceError,
-      );
-    }
-    expect(() => rethrowResponseConformanceFailure(request)).toThrow(
-      ResponseConformanceError,
-    );
+    expect(violations).toMatchObject([
+      { route: "/fixture", status: 200, issuePath: "/count" },
+    ]);
   });
 
   test("validates status wrappers from direct handlers", async () => {
-    restore = installHandlerMcpResponseConformance();
-    const handler = observeHandlerResponses(
-      async () => status(201, { count: 1 }),
-      {
-        response: { 200: t.Object({ count: t.Number() }) },
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        restore = installHandlerMcpResponseConformance();
+        const handler = observeHandlerResponses(
+          async () => status(201, { count: 1 }),
+          {
+            response: { 200: t.Object({ count: t.Number() }) },
+          },
+        );
+        expect(await rejectionOf(handler())).toMatchObject({
+          status: 201,
+          issuePath: "(status)",
+        });
       },
     );
-    expect(await rejectionOf(handler())).toMatchObject({
-      status: 201,
-      issuePath: "(status)",
-    });
+    expect(violations).toMatchObject([
+      { route: "(direct handler)", status: 201, issuePath: "(status)" },
+    ]);
   });
 
   test("validates statuses without requiring protocol-forbidden handler bodies", async () => {
@@ -130,73 +148,95 @@ describe("installed handler and MCP conformance observers", () => {
   });
 
   test("uses pre-request models while unresolved direct requests fail closed", async () => {
-    restore = installHandlerMcpResponseConformance();
-    const handler = observeHandlerResponses(async () => ({ count: 1 }), {
-      response: { 200: "Output" },
-    });
-    const unresolved = new Request("http://localhost/unresolved");
-    expect(
-      await rejectionOf(
-        Reflect.apply(handler, undefined, [{ request: unresolved }]),
-      ),
-    ).toMatchObject({ issuePath: "(schema)" });
-    const resolved = new Request("http://localhost/resolved");
-    setResponseConformanceRequestModels(resolved, {
-      Output: t.Object({ count: t.Number() }),
-    });
-    expect(
-      await Reflect.apply(handler, undefined, [{ request: resolved }]),
-    ).toEqual({ count: 1 });
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        restore = installHandlerMcpResponseConformance();
+        const handler = observeHandlerResponses(async () => ({ count: 1 }), {
+          response: { 200: "Output" },
+        });
+        const unresolved = new Request("http://localhost/unresolved");
+        expect(
+          await rejectionOf(
+            Reflect.apply(handler, undefined, [{ request: unresolved }]),
+          ),
+        ).toMatchObject({ issuePath: "(schema)" });
+        const resolved = new Request("http://localhost/resolved");
+        setResponseConformanceRequestModels(resolved, {
+          Output: t.Object({ count: t.Number() }),
+        });
+        expect(
+          await Reflect.apply(handler, undefined, [{ request: resolved }]),
+        ).toEqual({ count: 1 });
+      },
+    );
+    expect(violations).toMatchObject([
+      { route: "(direct handler)", status: 200, issuePath: "(schema)" },
+    ]);
   });
 
-  test("labels MCP serialization failures as body defects", () => {
-    restore = installHandlerMcpResponseConformance();
-    const cyclic: Record<string, unknown> = {};
-    cyclic["self"] = cyclic;
-    for (const result of [undefined, 1n, cyclic]) {
-      expect(() =>
+  test("labels MCP serialization failures as body defects", async () => {
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        restore = installHandlerMcpResponseConformance();
+        const cyclic: Record<string, unknown> = {};
+        cyclic["self"] = cyclic;
+        for (const result of [undefined, 1n, cyclic]) {
+          expect(() =>
+            observeMcpResponseConformance({
+              toolName: "fixture",
+              schema: { type: "object" },
+              result,
+              issuePaths: [],
+            }),
+          ).toThrow("at (body)");
+        }
+      },
+    );
+    expect(violations).toMatchObject([
+      { route: "MCP fixture", status: "success", issuePath: "(body)" },
+    ]);
+  });
+
+  test("validates MCP wire values and fails pre-conversion issue paths", async () => {
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        restore = installHandlerMcpResponseConformance();
+        const schema = {
+          type: "object",
+          properties: { timestamp: { type: "string" } },
+          required: ["timestamp"],
+          additionalProperties: false,
+        };
         observeMcpResponseConformance({
           toolName: "fixture",
-          schema: { type: "object" },
-          result,
+          schema,
+          result: {
+            timestamp: new Date("2026-01-01T00:00:00.000Z"),
+            omitted: undefined,
+          },
           issuePaths: [],
-        }),
-      ).toThrow("at (body)");
-    }
-  });
-
-  test("validates MCP wire values and fails pre-conversion issue paths", () => {
-    restore = installHandlerMcpResponseConformance();
-    const schema = {
-      type: "object",
-      properties: { timestamp: { type: "string" } },
-      required: ["timestamp"],
-      additionalProperties: false,
-    };
-    observeMcpResponseConformance({
-      toolName: "fixture",
-      schema,
-      result: {
-        timestamp: new Date("2026-01-01T00:00:00.000Z"),
-        omitted: undefined,
+        });
+        expect(() =>
+          observeMcpResponseConformance({
+            toolName: "fixture",
+            schema,
+            result: {},
+            issuePaths: [],
+          }),
+        ).toThrow(ResponseConformanceError);
+        expect(() =>
+          observeMcpResponseConformance({
+            toolName: "fixture",
+            schema,
+            result: { timestamp: "valid" },
+            issuePaths: ["undeclared"],
+          }),
+        ).toThrow("at undeclared");
       },
-      issuePaths: [],
-    });
-    expect(() =>
-      observeMcpResponseConformance({
-        toolName: "fixture",
-        schema,
-        result: {},
-        issuePaths: [],
-      }),
-    ).toThrow(ResponseConformanceError);
-    expect(() =>
-      observeMcpResponseConformance({
-        toolName: "fixture",
-        schema,
-        result: { timestamp: "valid" },
-        issuePaths: ["undeclared"],
-      }),
-    ).toThrow("at undeclared");
+    );
+    expect(violations).toMatchObject([
+      { route: "MCP fixture", status: "success", issuePath: "(root)" },
+      { route: "MCP fixture", status: "success", issuePath: "undeclared" },
+    ]);
   });
 });

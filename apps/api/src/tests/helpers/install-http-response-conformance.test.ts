@@ -13,6 +13,7 @@ import { ResponseConformanceError } from "@/api/lib/response-conformance-error";
 
 import { installHttpResponseConformance } from "./install-http-response-conformance";
 import { recordResponseConformanceFailure } from "./response-conformance-request-errors";
+import { captureResponseConformanceViolations } from "./response-conformance-sink";
 
 let uninstall: (() => void) | undefined;
 
@@ -36,22 +37,29 @@ describe("central HTTP response conformance", () => {
   });
 
   test("rejects status text accepted by no branch of the declared error union", async () => {
-    uninstall = installHttpResponseConformance();
-    const app = new Elysia().get(
-      "/status",
-      () => new Response("wrong", { status: 404 }),
-      {
-        response: {
-          404: t.Union([
-            t.Object({ message: t.String() }),
-            t.Literal("Not Found"),
-          ]),
-        },
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        uninstall = installHttpResponseConformance();
+        const app = new Elysia().get(
+          "/status",
+          () => new Response("wrong", { status: 404 }),
+          {
+            response: {
+              404: t.Union([
+                t.Object({ message: t.String() }),
+                t.Literal("Not Found"),
+              ]),
+            },
+          },
+        );
+        expect(
+          await rejectionOf(app.handle(new Request("http://localhost/status"))),
+        ).toMatchObject({ route: "GET /status", status: 404 });
       },
     );
-    expect(
-      await rejectionOf(app.handle(new Request("http://localhost/status"))),
-    ).toMatchObject({ route: "GET /status", status: 404 });
+    expect(violations).toMatchObject([
+      { route: "GET /status", status: 404, issuePath: "(root)" },
+    ]);
   });
 
   test("validates named models using the matched parameter route and preserves the body", async () => {
@@ -109,47 +117,72 @@ describe("central HTTP response conformance", () => {
   });
 
   test("rejects a mismatched response produced by framework error conversion", async () => {
-    uninstall = installHttpResponseConformance();
-    const app = new Elysia({ aot: false })
-      .onError(() => "converted")
-      .get("/values/:id", () => Response.json({ value: 1 }), {
-        response: t.Object({ value: t.String() }),
-      });
-    expect(
-      await rejectionOf(app.handle(new Request("http://localhost/values/one"))),
-    ).toMatchObject({
-      route: "GET /values/:id",
-      status: 200,
-      issuePath: "(root)",
-    });
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        uninstall = installHttpResponseConformance();
+        const app = new Elysia({ aot: false })
+          .onError(() => "converted")
+          .get("/values/:id", () => Response.json({ value: 1 }), {
+            response: t.Object({ value: t.String() }),
+          });
+        expect(
+          await rejectionOf(
+            app.handle(new Request("http://localhost/values/one")),
+          ),
+        ).toMatchObject({
+          route: "GET /values/:id",
+          status: 200,
+          issuePath: "(root)",
+        });
+      },
+    );
+    expect(violations).toMatchObject([
+      { route: "GET /values/:id", status: 200, issuePath: "(root)" },
+    ]);
   });
 
   test("rejects a text body under an object response declaration", async () => {
-    uninstall = installHttpResponseConformance();
-    const app = new Elysia().get("/object", () => new Response("wrong"), {
-      response: t.Object({ value: t.String() }),
-    });
-    expect(
-      await rejectionOf(app.handle(new Request("http://localhost/object"))),
-    ).toMatchObject({ route: "GET /object", status: 200 });
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        uninstall = installHttpResponseConformance();
+        const app = new Elysia().get("/object", () => new Response("wrong"), {
+          response: t.Object({ value: t.String() }),
+        });
+        expect(
+          await rejectionOf(app.handle(new Request("http://localhost/object"))),
+        ).toMatchObject({ route: "GET /object", status: 200 });
+      },
+    );
+    expect(violations).toMatchObject([
+      { route: "GET /object", status: 200, issuePath: "(body)" },
+    ]);
   });
 
   test.each(["ok", "wrong"])(
     "validates a finite literal text response: %s",
     async (text) => {
-      uninstall = installHttpResponseConformance();
-      const app = new Elysia().get("/literal", () => new Response(text), {
-        response: t.Literal("ok"),
-      });
-      const pending = app.handle(new Request("http://localhost/literal"));
-      if (text === "ok") {
-        expect(await (await pending).text()).toBe("ok");
-        return;
-      }
-      expect(await rejectionOf(pending)).toMatchObject({
-        route: "GET /literal",
-        status: 200,
-      });
+      const { violations } = await captureResponseConformanceViolations(
+        async () => {
+          uninstall = installHttpResponseConformance();
+          const app = new Elysia().get("/literal", () => new Response(text), {
+            response: t.Literal("ok"),
+          });
+          const pending = app.handle(new Request("http://localhost/literal"));
+          if (text === "ok") {
+            expect(await (await pending).text()).toBe("ok");
+            return;
+          }
+          expect(await rejectionOf(pending)).toMatchObject({
+            route: "GET /literal",
+            status: 200,
+          });
+        },
+      );
+      expect(violations).toMatchObject(
+        text === "ok"
+          ? []
+          : [{ route: "GET /literal", status: 200, issuePath: "(root)" }],
+      );
     },
   );
 
@@ -174,64 +207,81 @@ describe("central HTTP response conformance", () => {
   test.each([200, 201])(
     "SSE status %s is checked without cloning or consuming the stream",
     async (status) => {
-      uninstall = installHttpResponseConformance();
-      const events = "data: first\n\ndata: last\n\n";
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(events));
-          controller.close();
-        },
-      });
-      const original = new Response(stream, {
-        status,
-        headers: { "content-type": "text/event-stream" },
-      });
-      const clone = spyOn(original, "clone");
-      try {
-        const app = new Elysia().get("/events", () => original, {
-          response: {
-            200: t.String({ contentMediaType: "text/event-stream" }),
-          },
-        });
-        const request = app.handle(new Request("http://localhost/events"));
-        if (status === 200) {
-          expect(await (await request).text()).toBe(events);
-        } else {
-          expect(await rejectionOf(request)).toMatchObject({
-            route: "GET /events",
-            status: 201,
-            issuePath: "(status)",
+      const { violations } = await captureResponseConformanceViolations(
+        async () => {
+          uninstall = installHttpResponseConformance();
+          const events = "data: first\n\ndata: last\n\n";
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(events));
+              controller.close();
+            },
           });
-          expect(await original.text()).toBe(events);
-        }
-        expect(clone).not.toHaveBeenCalled();
-      } finally {
-        clone.mockRestore();
-      }
+          const original = new Response(stream, {
+            status,
+            headers: { "content-type": "text/event-stream" },
+          });
+          const clone = spyOn(original, "clone");
+          try {
+            const app = new Elysia().get("/events", () => original, {
+              response: {
+                200: t.String({ contentMediaType: "text/event-stream" }),
+              },
+            });
+            const request = app.handle(new Request("http://localhost/events"));
+            if (status === 200) {
+              expect(await (await request).text()).toBe(events);
+            } else {
+              expect(await rejectionOf(request)).toMatchObject({
+                route: "GET /events",
+                status: 201,
+                issuePath: "(status)",
+              });
+              expect(await original.text()).toBe(events);
+            }
+            expect(clone).not.toHaveBeenCalled();
+          } finally {
+            clone.mockRestore();
+          }
+        },
+      );
+      expect(violations).toMatchObject(
+        status === 200
+          ? []
+          : [{ route: "GET /events", status: 201, issuePath: "(status)" }],
+      );
     },
   );
 
   test("rethrows a request-scoped factory defect after onError converts it", async () => {
-    uninstall = installHttpResponseConformance();
-    const failure = new ResponseConformanceError({
-      message: "Response conformance failed: GET /value status 200 at /value",
-      route: "GET /value",
-      status: 200,
-      issuePath: "/value",
-    });
-    let converted = false;
-    const app = new Elysia({ aot: false })
-      .onError(() => {
-        converted = true;
-        return "converted";
-      })
-      .get("/value", ({ request }) => {
-        recordResponseConformanceFailure(request, failure);
-        throw failure;
-      });
-    expect(
-      await rejectionOf(app.handle(new Request("http://localhost/value"))),
-    ).toBe(failure);
-    expect(converted).toBe(true);
+    const { violations } = await captureResponseConformanceViolations(
+      async () => {
+        uninstall = installHttpResponseConformance();
+        const failure = new ResponseConformanceError({
+          message:
+            "Response conformance failed: GET /value status 200 at /value",
+          route: "GET /value",
+          status: 200,
+          issuePath: "/value",
+        });
+        let converted = false;
+        const app = new Elysia({ aot: false })
+          .onError(() => {
+            converted = true;
+            return "converted";
+          })
+          .get("/value", ({ request }) => {
+            recordResponseConformanceFailure(request, failure);
+            throw failure;
+          });
+        expect(
+          await rejectionOf(app.handle(new Request("http://localhost/value"))),
+        ).toBe(failure);
+        expect(converted).toBe(true);
+      },
+    );
+    expect(violations).toMatchObject([
+      { route: "GET /value", status: 200, issuePath: "/value" },
+    ]);
   });
 });

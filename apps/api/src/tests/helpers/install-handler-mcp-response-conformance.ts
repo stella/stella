@@ -15,6 +15,7 @@ import {
   getResponseConformanceRequestModels,
   recordResponseConformanceFailure,
 } from "./response-conformance-request-errors";
+import { recordResponseConformanceViolation } from "./response-conformance-sink";
 import {
   assertHttpResponseConformance,
   assertResponseConformance,
@@ -31,13 +32,16 @@ const conformanceFailure = (
   route: string,
   status: number | "success",
   issuePath: string,
-) =>
-  new ResponseConformanceError({
+) => {
+  const violation = new ResponseConformanceError({
     route,
     status,
     issuePath,
     message: `Response conformance failed: ${route} status ${status} at ${issuePath}`,
   });
+  recordResponseConformanceViolation(violation);
+  return violation;
+};
 
 /** Installs lightweight observers without importing the server or handler graph. */
 export const installHandlerMcpResponseConformance = (): (() => void) => {
@@ -164,6 +168,7 @@ export const installHandlerMcpResponseConformance = (): (() => void) => {
         });
       });
       if (Result.isError(checked)) {
+        recordResponseConformanceViolation(checked.error);
         if (request instanceof Request) {
           recordResponseConformanceFailure(request, checked.error);
         }

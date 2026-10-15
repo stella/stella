@@ -1,5 +1,7 @@
 import { rethrowResponseConformanceError } from "@/api/lib/response-conformance-error";
 
+import { recordResponseConformanceViolation } from "./response-conformance-sink";
+
 const failures = new WeakMap<Request, unknown>();
 
 /** Keep the defect available after framework error handling converts a thrown response. */
@@ -7,6 +9,7 @@ export const recordResponseConformanceFailure = (
   request: Request,
   error: unknown,
 ): void => {
+  recordResponseConformanceViolation(error);
   failures.set(request, error);
 };
 
