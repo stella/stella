@@ -175,7 +175,12 @@ test("requires a reason for escapes and counts reasoned escapes in the baseline"
     "// kit-allow:",
     "Bun.sleep(1);",
   ].join("\n");
-  expect(await lintSingleRule(rule, source, options)).toEqual([5]);
+  expect(
+    await lintSingleRule(rule, source, {
+      ...options,
+      settings: { testDeterminismBaseline: { "x.test.ts": 2 } },
+    }),
+  ).toEqual([5]);
   expect(
     await lintSingleRule(rule, source, {
       ...options,
@@ -208,6 +213,40 @@ test("accepts the exact budget, reports excess hits, and rejects a stale budget"
   expect(
     await lintSingleRule(rule, "const value = 1;", { ...options, settings }),
   ).toEqual([1]);
+});
+
+test("escapes consume baseline slots regardless of source order", async () => {
+  const plain = "Bun.sleep(1);";
+  const escaped = `${plain} // kit-allow: external clock boundary`;
+  const baselineOptions = {
+    sourcePath: "x.test.ts",
+    settings: { testDeterminismBaseline: { "x.test.ts": 1 } },
+  };
+  expect(
+    await lintSingleRule(rule, `${plain}\n\n${escaped}`, baselineOptions),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule(rule, `${escaped}\n\n${plain}`, baselineOptions),
+  ).toEqual([3]);
+  expect(
+    await lintSingleRule(rule, `${escaped}\n\n${escaped}`, baselineOptions),
+  ).toHaveLength(1);
+  expect(await lintSingleRule(rule, escaped, baselineOptions)).toEqual([]);
+  expect(
+    await lintSingleRule(rule, escaped, {
+      ...baselineOptions,
+      settings: { testDeterminismBaseline: { "x.test.ts": 0 } },
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule(rule, `${escaped}\n\n${plain}`, {
+      ...baselineOptions,
+      settings: {
+        testDeterminismBaseline: { "x.test.ts": 1 },
+        testDeterminismCensus: true,
+      },
+    }),
+  ).toEqual([1, 3]);
 });
 
 test("the registered fixture reaches the rule and a wrong clean fixture fails", async () => {

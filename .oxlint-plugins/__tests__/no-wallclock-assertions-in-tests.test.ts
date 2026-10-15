@@ -221,7 +221,8 @@ describe(RULE, () => {
 
   test("requires a reason for same-line and previous-line escapes", async () => {
     expect(
-      await lint(
+      await lintSingleRule(
+        RULE,
         [
           "const start = performance.now();",
           "// kit-allow: exercising an external clock contract",
@@ -231,6 +232,10 @@ describe(RULE, () => {
           ELAPSED_ASSERTION,
           `${ELAPSED_ASSERTION} // kit-allow:`,
         ].join("\n"),
+        {
+          sourcePath: "x.test.ts",
+          settings: { testDeterminismBaseline: { "x.test.ts": 2 } },
+        },
       ),
     ).toEqual([6, 7]);
   });
@@ -279,6 +284,40 @@ describe(RULE, () => {
         options,
       ),
     ).toEqual([3]);
+  });
+
+  test("escapes consume baseline slots regardless of source order", async () => {
+    const plain = "expect(Date.now() - Date.now()).toBeLessThan(100);";
+    const escaped = `${plain} // kit-allow: external clock boundary`;
+    const options = {
+      sourcePath: "x.test.ts",
+      settings: { testDeterminismBaseline: { "x.test.ts": 1 } },
+    };
+    expect(
+      await lintSingleRule(RULE, `${plain}\n\n${escaped}`, options),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${plain}`, options),
+    ).toEqual([3]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${escaped}`, options),
+    ).toHaveLength(1);
+    expect(await lintSingleRule(RULE, escaped, options)).toEqual([]);
+    expect(
+      await lintSingleRule(RULE, escaped, {
+        ...options,
+        settings: { testDeterminismBaseline: { "x.test.ts": 0 } },
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${plain}`, {
+        ...options,
+        settings: {
+          testDeterminismBaseline: { "x.test.ts": 1 },
+          testDeterminismCensus: true,
+        },
+      }),
+    ).toEqual([1, 3]);
   });
 
   test("the planted fixture fails when its suppression is removed", async () => {

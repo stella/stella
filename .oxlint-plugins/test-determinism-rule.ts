@@ -35,6 +35,7 @@ export const createTestDeterminismRule = ({
     type: "problem" as const,
     messages: {
       nondeterminism: message,
+      escapedSlot: `Escaped occurrences still need a baseline slot. ${message}`,
       stale: `{{file}} now has {{count}} occurrences (baseline {{baseline}}). Shrink ${baselinePath} in this change.`,
     },
   },
@@ -104,10 +105,25 @@ export const createTestDeterminismRule = ({
             data: { file: filename, count: hits.length, baseline },
           });
         }
-        for (const hit of hits.slice(baseline)) {
-          if (!escapedLines.has(hit.loc.start.line)) {
-            context.report({ node: hit, messageId: "nondeterminism" });
-          }
+        const excess = hits.length - baseline;
+        if (excess <= 0) {
+          return;
+        }
+        const unescaped = hits.filter(
+          (hit) => !escapedLines.has(hit.loc.start.line),
+        );
+        const escaped = hits.filter((hit) =>
+          escapedLines.has(hit.loc.start.line),
+        );
+        // Every occurrence needs a slot; explain unescaped excess before documented intent.
+        const candidates = [...unescaped.toReversed(), ...escaped.toReversed()];
+        for (const hit of candidates.slice(0, excess)) {
+          context.report({
+            node: hit,
+            messageId: escapedLines.has(hit.loc.start.line)
+              ? "escapedSlot"
+              : "nondeterminism",
+          });
         }
       },
     };

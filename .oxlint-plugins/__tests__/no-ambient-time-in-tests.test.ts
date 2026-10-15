@@ -158,7 +158,8 @@ describe(RULE, () => {
 
   test("accepts reasoned escapes but requires a nonempty reason", async () => {
     expect(
-      await lint(
+      await lintSingleRule(
+        RULE,
         [
           "Date.now(); // kit-allow: verifying a real-clock boundary",
           "// kit-allow: verifying a real-clock boundary",
@@ -167,6 +168,10 @@ describe(RULE, () => {
           "new Date();",
           "Temporal.Now.instant(); // kit-allow:   ",
         ].join("\n"),
+        {
+          sourcePath: "x.test.ts",
+          settings: { testDeterminismBaseline: { "x.test.ts": 2 } },
+        },
       ),
     ).toEqual([5, 6]);
   });
@@ -186,6 +191,40 @@ describe(RULE, () => {
         options,
       ),
     ).toEqual([]);
+  });
+
+  test("escapes consume baseline slots regardless of source order", async () => {
+    const plain = "Date.now();";
+    const escaped = `${plain} // kit-allow: external clock boundary`;
+    const options = {
+      sourcePath: "x.test.ts",
+      settings: { testDeterminismBaseline: { "x.test.ts": 1 } },
+    };
+    expect(
+      await lintSingleRule(RULE, `${plain}\n\n${escaped}`, options),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${plain}`, options),
+    ).toEqual([3]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${escaped}`, options),
+    ).toHaveLength(1);
+    expect(await lintSingleRule(RULE, escaped, options)).toEqual([]);
+    expect(
+      await lintSingleRule(RULE, escaped, {
+        ...options,
+        settings: { testDeterminismBaseline: { "x.test.ts": 0 } },
+      }),
+    ).toEqual([1]);
+    expect(
+      await lintSingleRule(RULE, `${escaped}\n\n${plain}`, {
+        ...options,
+        settings: {
+          testDeterminismBaseline: { "x.test.ts": 1 },
+          testDeterminismCensus: true,
+        },
+      }),
+    ).toEqual([1, 3]);
   });
 
   test("the planted fixture fails when its suppression is removed", async () => {
