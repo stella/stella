@@ -357,6 +357,7 @@ test("both workflows gate every expensive job and run on detector failure", () =
       expect(job.if).toContain("needs.scope.outputs.required != 'false'");
     }
   }
+  expect(migrations.on.pull_request.paths).toBeUndefined();
   const triggers = v.parse(
     v.looseObject({
       schedule: v.array(v.object({ cron: v.string() })),
@@ -369,32 +370,6 @@ test("both workflows gate every expensive job and run on detector failure", () =
     "*",
     "*",
   ]);
-});
-
-// A shell `case` `*` also matches `/`, which a GitHub path filter writes as
-// `**`; the trigger must list exactly the detector's patterns.
-const detectorPatterns = (scope: string) => {
-  const source = readFileSync(script, "utf-8");
-  const block = new RegExp(
-    String.raw`\n    ${scope}\)\n      case "\$file" in\n([\s\S]*?)\)\n          return 0 ;;`,
-    "u",
-  ).exec(source)?.[1];
-  if (!block) {
-    panic(`Missing detector patterns for ${scope}`);
-  }
-  return block
-    .replaceAll("\\\n", "")
-    .split("|")
-    .map((pattern) => pattern.trim());
-};
-
-test("the migrations PR trigger lists exactly the detector's patterns", () => {
-  const patterns = detectorPatterns("migrations");
-  expect(patterns).toContain(".github/workflows/db-migrations.yml");
-  expect(patterns.every((pattern) => /^[\w./*-]+$/u.test(pattern))).toBe(true);
-  expect(migrations.on.pull_request.paths).toEqual(
-    patterns.map((pattern) => pattern.replaceAll("*", "**")),
-  );
 });
 
 // The PR trigger selects source changes; supplemental data remains covered by
