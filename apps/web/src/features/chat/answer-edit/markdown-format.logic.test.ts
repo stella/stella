@@ -805,50 +805,50 @@ const formattedParagraph = ({
   };
 };
 
-test("every format action preserves document text and inline actions preserve its block tree", () => {
-  const bodies = fc.oneof(
-    fc
-      .string({
-        unit: "grapheme",
-        minLength: GENERATED_MIN_SCALARS,
-        maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+test.each(Object.values(allFormatActions).flat())(
+  "format action %j preserves document text and inline block structure",
+  (action) => {
+    const bodies = fc.oneof(
+      fc
+        .string({
+          unit: "grapheme",
+          minLength: GENERATED_MIN_SCALARS,
+          maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+        })
+        .filter((body) => !/[\r\n]/u.test(body)),
+      fc.constantFrom(
+        "# Notice",
+        "> quote",
+        "- item",
+        "1. one",
+        "[label](https://example.test/)",
+        "[same](https://updated.test/)",
+        "https://example.test/",
+        "é **nested** 😀",
+        "text `code` &amp; more",
+      ),
+    );
+    const paragraphs = fc
+      .record({
+        body: bodies,
+        format: fc.constantFrom(...INLINE_FORMATS),
+        quoteDepth: fc.integer({ min: 0, max: GENERATED_MAX_QUOTE_DEPTH }),
       })
-      .filter((body) => !/[\r\n]/u.test(body)),
-    fc.constantFrom(
-      "# Notice",
-      "> quote",
-      "- item",
-      "1. one",
-      "[label](https://example.test/)",
-      "[same](https://updated.test/)",
-      "https://example.test/",
-      "é **nested** 😀",
-      "text `code` &amp; more",
-    ),
-  );
-  const paragraphs = fc
-    .record({
-      body: bodies,
-      format: fc.constantFrom(...INLINE_FORMATS),
-      quoteDepth: fc.integer({ min: 0, max: GENERATED_MAX_QUOTE_DEPTH }),
-    })
-    .map(formattedParagraph)
-    .filter((value) => value !== undefined);
-  const proposals = new Set<string>();
-  const actions = Object.values(allFormatActions).flat();
-  assertProperty(
-    "every format action preserves document text and inline actions preserve its block tree",
-    fc.property(paragraphs, (paragraph) => {
-      let firstBlock: BlockTree = { type: "paragraph" };
-      for (let level = 0; level < paragraph.quoteDepth; level++) {
-        firstBlock = { type: "blockquote", children: [firstBlock] };
-      }
-      const expectedBlocks = {
-        type: "root",
-        children: [firstBlock, { type: "paragraph" }],
-      };
-      expect(parsedBlockTree(paragraph.tree)).toEqual(expectedBlocks);
-      for (const action of actions) {
+      .map(formattedParagraph)
+      .filter((value) => value !== undefined);
+    let proposed = false;
+    assertProperty(
+      `format action ${JSON.stringify(action)} preserves document text and inline block structure`,
+      fc.property(paragraphs, (paragraph) => {
+        let firstBlock: BlockTree = { type: "paragraph" };
+        for (let level = 0; level < paragraph.quoteDepth; level++) {
+          firstBlock = { type: "blockquote", children: [firstBlock] };
+        }
+        const expectedBlocks = {
+          type: "root",
+          children: [firstBlock, { type: "paragraph" }],
+        };
+        expect(parsedBlockTree(paragraph.tree)).toEqual(expectedBlocks);
         const spans =
           action.format === CHAT_MESSAGE_EDIT_FORMAT.style
             ? [paragraph.paragraphSpan]
@@ -869,7 +869,7 @@ test("every format action preserves document text and inline actions preserve it
               );
               break;
             case "proposal": {
-              proposals.add(JSON.stringify(action));
+              proposed = true;
               const candidate =
                 paragraph.source.slice(0, result.start) +
                 result.replacement +
@@ -907,14 +907,12 @@ test("every format action preserves document text and inline actions preserve it
               result satisfies never;
           }
         }
-      }
-    }),
-    { numRuns: 300 },
-  );
-  expect(proposals).toEqual(
-    new Set(actions.map((action) => JSON.stringify(action))),
-  );
-});
+      }),
+      { numRuns: 300 },
+    );
+    expect(proposed).toBe(true);
+  },
+);
 
 test.each([
   "mailto:viewer@example.test",
