@@ -12,6 +12,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
+import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import {
   withGatedTestClients,
   type GatedTestDb,
@@ -72,6 +73,52 @@ const seedMember = async (db: GatedTestDb) => {
     await db.delete(user).where(eq(user.id, ownerId));
   };
   return { cleanUp, memberId, organizationId, ownerId, userId, workspaceId };
+};
+
+const seedAdminClientMatter = async (
+  db: GatedTestDb,
+  assignment: "assigned" | "unassigned",
+) => {
+  const seeded = await seedMember(db);
+  const clientId = createSafeId<"contact">();
+  await db.insert(contacts).values({
+    id: clientId,
+    organizationId: seeded.organizationId,
+    type: "person",
+    displayName: "Matter lock client",
+  });
+  await db
+    .update(member)
+    .set({ role: "admin" })
+    .where(eq(member.id, seeded.memberId));
+  await db
+    .update(workspaces)
+    .set({ clientId })
+    .where(eq(workspaces.id, seeded.workspaceId));
+  if (assignment === "unassigned") {
+    await db
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+  }
+  return seeded;
+};
+
+const expectTransactionToBlockClient = async (
+  tx: Transaction,
+  waiterPid: number,
+) => {
+  for (let attempt = 0; attempt < BLOCK_OBSERVATION_ATTEMPTS; attempt += 1) {
+    const rows = await tx.execute<{ blocked: boolean }>(sql`
+      SELECT pg_backend_pid() = ANY(pg_blocking_pids(${waiterPid}::integer)) AS blocked
+    `);
+    if (rows.at(0)?.blocked === true) {
+      return;
+    }
+    await Bun.sleep(10);
+  }
+  expect.unreachable(
+    "The contender must wait behind the held transaction before the barrier opens",
+  );
 };
 
 type Seeded = Awaited<ReturnType<typeof seedMember>>;
@@ -256,24 +303,9 @@ if (!databaseUrl || !runPostgresTests) {
           max: 1,
           connection: { lock_timeout: 5000, statement_timeout: 10_000 },
         });
-        const seeded = await seedMember(grantDb);
-        const clientId = createSafeId<"contact">();
+        const seeded = await seedAdminClientMatter(grantDb, "assigned");
         const matterLocked = Promise.withResolvers<undefined>();
         const timerStarted = Promise.withResolvers<number>();
-        await grantDb.insert(contacts).values({
-          id: clientId,
-          organizationId: seeded.organizationId,
-          type: "person",
-          displayName: "Timer grant client",
-        });
-        await grantDb
-          .update(member)
-          .set({ role: "admin" })
-          .where(eq(member.id, seeded.memberId));
-        await grantDb
-          .update(workspaces)
-          .set({ clientId })
-          .where(eq(workspaces.id, seeded.workspaceId));
         // The actor is already assigned; the grant targets a different member.
         expect(
           await grantDb
@@ -292,21 +324,7 @@ if (!databaseUrl || !runPostgresTests) {
                 .for("update");
               matterLocked.resolve(undefined);
               const timerPid = await timerStarted.promise;
-              let blocked = false;
-              for (
-                let attempt = 0;
-                attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-                attempt += 1
-              ) {
-                const rows = await tx.execute<{ blocked: boolean }>(sql`
-                SELECT pg_backend_pid() = ANY(pg_blocking_pids(${timerPid}::integer)) AS blocked
-              `);
-                blocked = rows.at(0)?.blocked === true;
-                if (!blocked) {
-                  await Bun.sleep(10);
-                }
-              }
-              expect(blocked).toBe(true);
+              await expectTransactionToBlockClient(tx, timerPid);
               return await fn(asTestRaw<Transaction>(tx));
             }),
         );
@@ -348,6 +366,92 @@ if (!databaseUrl || !runPostgresTests) {
         }
       });
     }, 15_000);
+
+    test.each(["assigned", "unassigned"] as const)(
+      "matter deletion waits for a member-first hold by an %s client-matter admin",
+      async (assignment) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: holdingDb } = openClient({
+            max: 1,
+            connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+          });
+          const { db: deletionDb } = openClient({
+            max: 1,
+            connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+          });
+          const seeded = await seedAdminClientMatter(holdingDb, assignment);
+          const holdPrefix = Promise.withResolvers<undefined>();
+          const deletionStarted = Promise.withResolvers<number>();
+          let attempts = 0;
+          try {
+            const holding = holdingDb.transaction(async (tx) => {
+              await tx
+                .select({ id: member.id })
+                .from(member)
+                .where(eq(member.id, seeded.memberId))
+                .for("share");
+              holdPrefix.resolve(undefined);
+              const deletionPid = await deletionStarted.promise;
+              await expectTransactionToBlockClient(tx, deletionPid);
+              return await holdMemberAccessOnTx(tx, {
+                organizationId: seeded.organizationId,
+                userId: seeded.userId,
+                workspaceIds: [seeded.workspaceId],
+              });
+            });
+            const deleting = (async () => {
+              await holdPrefix.promise;
+              return await executeAuthorizedWorkspaceDeletion(
+                {
+                  actorUserId: seeded.userId,
+                  organizationId: seeded.organizationId,
+                  workspaceId: seeded.workspaceId,
+                  recordAuditEvent: async () => await Promise.resolve(),
+                },
+                {
+                  database: {
+                    transaction: async (run) =>
+                      await deletionDb.transaction(async (tx) => {
+                        attempts += 1;
+                        const rows = await tx.execute<{ pid: number }>(
+                          sql`SELECT pg_backend_pid() AS pid`,
+                        );
+                        deletionStarted.resolve(
+                          rows.at(0)?.pid ?? panic("Missing deletion pid"),
+                        );
+                        return await run(tx);
+                      }),
+                  },
+                  enqueueCleanup: async () => await Promise.resolve(),
+                },
+              );
+            })();
+            try {
+              const [hold, deletion] = await Promise.all([holding, deleting]);
+              expect(hold).toEqual({
+                type: "held",
+                workspaceIds: [seeded.workspaceId],
+              });
+              expect(deletion.unwrap()).toEqual({ status: "deleted" });
+              expect(attempts).toBe(1);
+              expect(
+                await holdingDb
+                  .select({ id: workspaces.id })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, seeded.workspaceId)),
+              ).toEqual([]);
+            } finally {
+              holdPrefix.resolve(undefined);
+              deletionStarted.resolve(-1);
+              await Promise.allSettled([holding, deleting]);
+            }
+          } finally {
+            await seeded.cleanUp();
+          }
+        });
+      },
+      20_000,
+    );
 
     test("a removal committed first is reported by the hold", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {

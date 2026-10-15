@@ -160,13 +160,6 @@ export const executeAuthorizedWorkspaceDeletion = async (
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
       return await withAggregateTransaction(database, async (tx) => {
-        await lockWorkspaceLifecycle(tx, workspaceId);
-        await lockMatterAccessWorkspaceRows({
-          tx,
-          organizationId,
-          workspaceIds: [workspaceId],
-          mode: "update",
-        });
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -175,6 +168,14 @@ export const executeAuthorizedWorkspaceDeletion = async (
         if (actorRole === null) {
           return { status: "not-authorized" } as const;
         }
+
+        await lockWorkspaceLifecycle(tx, workspaceId);
+        await lockMatterAccessWorkspaceRows({
+          tx,
+          organizationId,
+          workspaceIds: [workspaceId],
+          mode: "update",
+        });
 
         const workspaceRows = await tx
           .select({

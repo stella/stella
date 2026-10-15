@@ -1,12 +1,15 @@
-import { and, eq } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+
+import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessAssignments,
-  lockMatterAccessWorkspaceRows,
-  lockMemberAccessRow,
+  lockTimerMatterAccessRows,
+  TIMER_MATTER_LOCK_SCOPE,
   lockWorkspaceLifecycle,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
@@ -23,18 +26,47 @@ export const hasCurrentTimerMatterAccess = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
   await lockWorkspaceLifecycle(tx, workspaceId);
-  const scope = { tx, organizationId, userId, mode: "share" } as const;
-  // Member grants and removal take the matter before its membership rows.
-  await lockMatterAccessWorkspaceRows({
-    ...scope,
-    workspaceIds: [workspaceId],
+  // This predicate only preserves the timer's original lock scope, including
+  // its client-admin assignment-lock exemption. The later database rule is
+  // the access decision.
+  const rows = sql`CASE
+    WHEN organization_member.role IN (${sql.join(
+      CLIENT_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
+      sql`, `,
+    )}) AND workspace.client_id IS NOT NULL THEN ${TIMER_MATTER_LOCK_SCOPE.client}
+    WHEN EXISTS (
+      SELECT 1 FROM workspace_members AS workspace_member
+      WHERE workspace_member.workspace_id = workspace.id
+        AND workspace_member.user_id = ${userId}
+    ) THEN ${TIMER_MATTER_LOCK_SCOPE.assignment}
+    ELSE NULL
+  END`;
+  const lockScope = await lockTimerMatterAccessRows({
+    tx,
+    organizationId,
+    userId,
+    workspaceId,
+    lockScope: rows,
   });
-  const member = await lockMemberAccessRow(scope);
-  if (member === undefined) {
-    return false;
+  switch (lockScope) {
+    case null:
+      return false;
+    case TIMER_MATTER_LOCK_SCOPE.assignment:
+      await lockMatterAccessAssignments({
+        tx,
+        organizationId,
+        userId,
+        workspaceIds: [workspaceId],
+        mode: "share",
+      });
+      break;
+    case TIMER_MATTER_LOCK_SCOPE.client:
+      break;
+    default:
+      lockScope satisfies never;
+      return panic("Unknown timer matter lock scope");
   }
-  await lockMatterAccessAssignments({ ...scope, workspaceIds: [workspaceId] });
-  const rows = await tx
+  const reachableRows = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(
@@ -46,5 +78,5 @@ export const hasCurrentTimerMatterAccess = async ({
       ),
     )
     .limit(1);
-  return rows.length === 1;
+  return reachableRows.length === 1;
 };
