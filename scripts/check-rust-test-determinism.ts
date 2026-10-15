@@ -169,14 +169,22 @@ export const evaluateRustTestBaseline = ({
         message: `Rust test nondeterminism count ${hits.length} is below baseline ${budget}; shrink ${BASELINE_REL}.`,
       });
     }
-    for (const hit of hits.slice(budget)) {
-      if (hit.escaped) {
-        continue;
-      }
+    const excess = Math.max(0, hits.length - budget);
+    const unescaped = hits.filter((hit) => !hit.escaped);
+    const escaped = hits.filter((hit) => hit.escaped);
+    const unescapedExcess = Math.min(excess, unescaped.length);
+    const escapedExcess = excess - unescapedExcess;
+    const excessHits = [
+      ...unescaped.slice(unescaped.length - unescapedExcess),
+      ...escaped.slice(escaped.length - escapedExcess),
+    ];
+    for (const hit of excessHits) {
       diagnostics.push({
         file,
         line: hit.line,
-        message: `Rust test ${hit.kind}: inject clocks, use channels/barriers, or isolate process-global state; document an intentional boundary with // kit-allow: <reason>.`,
+        message: hit.escaped
+          ? `Rust test ${hit.kind}: Escaped occurrences still need a baseline slot.`
+          : `Rust test ${hit.kind}: inject clocks, use channels/barriers, or isolate process-global state; document an intentional boundary with // kit-allow: <reason>.`,
       });
     }
   }

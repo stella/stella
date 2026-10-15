@@ -226,7 +226,15 @@ test("escaped occurrences consume their per-file baseline budget", () => {
       files: new Map([[FILE, escapedHits]]),
       baselineText: "{}",
     }),
-  ).toEqual([]);
+  ).toEqual([
+    expect.objectContaining({
+      file: FILE,
+      line: 1,
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+  ]);
   expect(
     evaluateRustTestBaseline({
       files: new Map([[FILE, escapedHits]]),
@@ -248,6 +256,130 @@ test("escaped occurrences consume their per-file baseline budget", () => {
       baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
     }),
   ).toEqual([expect.objectContaining({ file: FILE, line: 4 })]);
+});
+
+test.each([
+  ["escaped before plain", [true, false], 4],
+  ["plain before escaped", [false, true], 2],
+] as const)(
+  "reports the plain excess hit with %s",
+  (_name, escapes, expectedLine) => {
+    const source = [
+      "#[test] fn example() {",
+      ...escapes.flatMap((escaped) => [
+        `  Instant::now();${escaped ? " // kit-allow: exercise deadline" : ""}`,
+        "",
+      ]),
+      "}",
+    ].join("\n");
+    const orderedHits = scanRustTestDeterminism({
+      source,
+      integrationTest: false,
+    });
+    expect(orderedHits.map(({ escaped }) => escaped)).toEqual([...escapes]);
+    expect(
+      evaluateRustTestBaseline({
+        files: new Map([[FILE, orderedHits]]),
+        baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        file: FILE,
+        line: expectedLine,
+        message: expect.stringContaining("Rust test clock:"),
+      }),
+    ]);
+  },
+);
+
+test("plain hits use excess slots before escaped hits regardless of source order", () => {
+  const mixedHits = scanRustTestDeterminism({
+    source:
+      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n\n SystemTime::now();\n thread::sleep(duration); // kit-allow: exercise timer\n}",
+    integrationTest: false,
+  });
+  expect(mixedHits.map(({ escaped }) => escaped)).toEqual([true, false, true]);
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, mixedHits]]),
+      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
+    }),
+  ).toEqual([
+    expect.objectContaining({
+      file: FILE,
+      line: 4,
+      message: expect.stringContaining("Rust test clock:"),
+    }),
+    expect.objectContaining({
+      file: FILE,
+      line: 5,
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+  ]);
+});
+
+test("all escaped hits still report exactly their excess count", () => {
+  const escapedHits = scanRustTestDeterminism({
+    source:
+      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n SystemTime::now(); // kit-allow: exercise wall clock\n thread::sleep(duration); // kit-allow: exercise timer\n}",
+    integrationTest: false,
+  });
+  expect(escapedHits.map(({ escaped }) => escaped)).toEqual([true, true, true]);
+  const diagnostics = evaluateRustTestBaseline({
+    files: new Map([[FILE, escapedHits]]),
+    baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
+  });
+  expect(diagnostics).toEqual([
+    expect.objectContaining({
+      file: FILE,
+      line: 3,
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+    expect.objectContaining({
+      file: FILE,
+      line: 4,
+      message: expect.stringContaining(
+        "Escaped occurrences still need a baseline slot",
+      ),
+    }),
+  ]);
+});
+
+test("escaped hits exactly within budget produce no diagnostics", () => {
+  const escapedHits = scanRustTestDeterminism({
+    source:
+      "#[test] fn example() {\n Instant::now(); // kit-allow: exercise deadline\n SystemTime::now(); // kit-allow: exercise wall clock\n}",
+    integrationTest: false,
+  });
+  expect(escapedHits).toHaveLength(2);
+  expect(escapedHits.every(({ escaped }) => escaped)).toBe(true);
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, escapedHits]]),
+      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 2 } }),
+    }),
+  ).toEqual([]);
+});
+
+test("all plain excess hits retain the latest source-line policy", () => {
+  const plainHits = scanRustTestDeterminism({
+    source:
+      "#[test] fn example() {\n Instant::now();\n SystemTime::now();\n thread::sleep(duration);\n}",
+    integrationTest: false,
+  });
+  expect(
+    evaluateRustTestBaseline({
+      files: new Map([[FILE, plainHits]]),
+      baselineText: JSON.stringify({ [FILE]: { ...metadata, count: 1 } }),
+    }),
+  ).toEqual([
+    expect.objectContaining({ file: FILE, line: 3 }),
+    expect.objectContaining({ file: FILE, line: 4 }),
+  ]);
 });
 
 test("enumeration discovers newly added crates and assigns files to their nearest manifest", () => {
