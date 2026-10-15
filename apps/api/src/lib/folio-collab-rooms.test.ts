@@ -61,7 +61,7 @@ const createQueryBuilder = ({
   captureValues = false,
   onLock,
   resolveRows,
-  selectedFields,
+  selectedFields = {},
 }: {
   selectedFields?: SelectedFields;
   captureValues?: boolean;
@@ -71,11 +71,7 @@ const createQueryBuilder = ({
   let lockRead = false;
   let selectedTable: PgTable | undefined;
   const metadataFor = (table: PgTable) =>
-    drizzle
-      .mock()
-      .select(selectedFields ?? {})
-      .from(table)
-      .$dynamic();
+    drizzle.mock().select(selectedFields).from(table).$dynamic();
   let metadata = metadataFor(folioCollabRooms);
   const query = Promise.resolve().then(() => {
     const rows = resolveRows(lockRead);
@@ -134,7 +130,7 @@ const createQueryBuilder = ({
 const createScopedQueryBuilder = ({
   captureValues = false,
   readsRows = true,
-  selectedFields,
+  selectedFields = {},
 }: {
   captureValues?: boolean;
   readsRows?: boolean;
@@ -179,7 +175,7 @@ const scopedTransaction: QueryApi = {
   },
   insert: () =>
     createScopedQueryBuilder({ captureValues: true, readsRows: false }),
-  select: (selectedFields) => createScopedQueryBuilder({ selectedFields }),
+  select: (selectedFields = {}) => createScopedQueryBuilder({ selectedFields }),
   update: () => createScopedQueryBuilder(),
 };
 

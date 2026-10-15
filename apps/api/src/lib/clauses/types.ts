@@ -16,7 +16,7 @@ export type ClauseRun = {
 export const CLAUSE_LIST_KINDS = ["bullet", "ordered"] as const;
 export type ClauseListKind = (typeof CLAUSE_LIST_KINDS)[number];
 
-export type ClauseNumbering = Extract<
+type ClauseNumbering = Extract<
   Extract<
     FolioAIEditOperation,
     { type: "setBlockParagraphProperties" }

@@ -987,16 +987,22 @@ const clauseParagraphArgSchema = v.strictObject({
     ),
   ),
   numbering: v.optional(
-    v.strictObject({
-      kind: v.literal("levelOnly"),
-      ilvl: v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(LIMITS.clauseNumberingLevelMin),
-        v.maxValue(LIMITS.clauseNumberingLevelMax),
-        v.description("0-based list nesting depth for a list item"),
-      ),
-    }),
+    v.pipe(
+      v.strictObject({
+        kind: v.pipe(
+          v.literal("levelOnly"),
+          v.description("Set only the paragraph's list nesting depth"),
+        ),
+        ilvl: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(LIMITS.clauseNumberingLevelMin),
+          v.maxValue(LIMITS.clauseNumberingLevelMax),
+          v.description("0-based list nesting depth for a list item"),
+        ),
+      }),
+      v.description("List nesting depth for the paragraph"),
+    ),
   ),
   is_directive: v.optional(
     v.pipe(

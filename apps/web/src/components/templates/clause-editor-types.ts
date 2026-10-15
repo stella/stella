@@ -9,7 +9,7 @@ export type ClauseRun = {
 
 export type ClauseListKind = "bullet" | "ordered";
 
-export type ClauseNumbering = Extract<
+type ClauseNumbering = Extract<
   Extract<
     FolioAIEditOperation,
     { type: "setBlockParagraphProperties" }

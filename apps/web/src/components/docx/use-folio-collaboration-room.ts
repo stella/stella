@@ -142,23 +142,23 @@ const postFolioCollabJson = async ({
     timeoutMs: COLLAB_FLUSH_TIMEOUT_MS,
   });
   if (!response.ok) {
-    if (response.status === 409) {
-      const parsed = v.safeParse(
-        v.object({ code: v.literal(FOLIO_COLLAB_SEED_PREPARING_CODE) }),
-        await response.json(),
-      );
-      if (parsed.success) {
-        throw new FolioCollaborationSeedPreparingError({
+    const preparing =
+      response.status === 409
+        ? v.safeParse(
+            v.object({ code: v.literal(FOLIO_COLLAB_SEED_PREPARING_CODE) }),
+            await response.json(),
+          )
+        : null;
+    throw preparing?.success
+      ? new FolioCollaborationSeedPreparingError({
           message: "Collaborative editing room is still preparing.",
+        })
+      : new FetchBoundaryError({
+          message: "Collaboration API request failed.",
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
         });
-      }
-    }
-    throw new FetchBoundaryError({
-      message: "Collaboration API request failed.",
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url,
-    });
   }
   const data: unknown = await response.json();
   return data;
@@ -431,19 +431,27 @@ export const useFolioCollaborationRoom = ({
             let reportedFailure = false;
             let retryDelayMs = GENERATION_REJOIN_RETRY_DELAY_MS;
             const waitForRetry = async () => {
-              await sleep(retryDelayMs, {
-                signal: generationRejoinAbortController.signal,
-              }).catch((error: unknown) => {
-                const { signal } = generationRejoinAbortController;
-                if (signal.aborted && Object.is(error, signal.reason)) {
-                  return;
-                }
-                throw error;
+              const waited = await Result.tryPromise({
+                try: async () =>
+                  await sleep(retryDelayMs, {
+                    signal: generationRejoinAbortController.signal,
+                  }),
+                catch: (cause) => cause,
               });
+              if (Result.isError(waited)) {
+                const { signal } = generationRejoinAbortController;
+                if (
+                  !signal.aborted ||
+                  !Object.is(waited.error, signal.reason)
+                ) {
+                  return waited;
+                }
+              }
               retryDelayMs = backoffDelay(1, {
                 baseMs: retryDelayMs,
                 maxMs: GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
               });
+              return Result.ok(undefined);
             };
             const runAttempt = () => {
               const attempt = (async () => {
@@ -476,7 +484,11 @@ export const useFolioCollaborationRoom = ({
                     resolve();
                     return;
                   }
-                  await waitForRetry();
+                  const waited = await waitForRetry();
+                  if (Result.isError(waited)) {
+                    reject(waited.error);
+                    return;
+                  }
                   if (isDisposed()) {
                     resolve();
                   } else {
@@ -698,7 +710,7 @@ export const useFolioCollaborationRoom = ({
             })
               .then((receipt) => {
                 if (!isCurrentReceipt()) {
-                  return;
+                  return undefined;
                 }
                 switch (receipt.status) {
                   case "acknowledged":
@@ -708,23 +720,23 @@ export const useFolioCollaborationRoom = ({
                         ? synchronizedStatus
                         : "connecting",
                     );
-                    return;
+                    return undefined;
                   case "superseded":
-                    return;
+                    return undefined;
                   case "failed":
                     if (
                       receipt.error instanceof FetchBoundaryError &&
                       receipt.error.status === 409
                     ) {
                       startGenerationRejoin();
-                      return;
+                      return undefined;
                     }
                     reportFailure(receipt.error);
                     if (
                       receipt.error instanceof FetchBoundaryError &&
                       receipt.error.status === 403
                     ) {
-                      return;
+                      return undefined;
                     }
                     connectedProvider.disconnect();
                     setState({
@@ -732,7 +744,7 @@ export const useFolioCollaborationRoom = ({
                       room: null,
                       message: getEditOpenFailedMessage(),
                     });
-                    return;
+                    return undefined;
                   default:
                     receipt satisfies never;
                     return panic("Unhandled seed receipt outcome");

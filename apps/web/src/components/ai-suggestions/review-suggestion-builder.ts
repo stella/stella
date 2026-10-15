@@ -13,10 +13,8 @@
 
 import { panic } from "better-result";
 
-import type {
-  FolioAIEditOperation,
-  FolioAIParagraphBlock,
-} from "@stll/folio-react";
+import type { FolioAIParagraphBlock } from "@stll/folio-core";
+import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import { describeOperationSummary } from "@/components/ai-suggestions/review-operation-labels";
 import type { ReviewSuggestionPreview } from "@/components/ai-suggestions/review-store";

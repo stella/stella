@@ -274,7 +274,7 @@ export const DOC_SOURCES = {
     url: "https://wxt.dev/llms.txt",
   },
   Yjs: {
-    dependencies: ["yjs"],
+    dependencies: ["yjs", "y-protocols"],
     url: "https://docs.yjs.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
@@ -387,6 +387,29 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    ...[
+      "prosemirror-commands",
+      "prosemirror-dropcursor",
+      "prosemirror-gapcursor",
+      "prosemirror-history",
+      "prosemirror-inputrules",
+      "prosemirror-keymap",
+      "prosemirror-model",
+      "prosemirror-state",
+      "prosemirror-tables",
+      "prosemirror-transform",
+      "prosemirror-view",
+    ].map(
+      (dependency) =>
+        ({
+          checkedAt: "2026-10-15T00:00:00.000Z",
+          dependency,
+          explanation:
+            "https://prosemirror.net/llms.txt and https://prosemirror.net/docs/llms.txt return 404. Use the official guide and package API reference at https://prosemirror.net/docs/ directly.",
+          expiresAt: "2026-11-14T00:00:00.000Z",
+          reason: "no-llms-txt",
+        }) satisfies NoLlmsTxtExclusion,
+    ),
     {
       checkedAt: "2026-10-13T00:00:00.000Z",
       dependency: "@myriaddreamin/typst-ts-renderer",

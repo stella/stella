@@ -211,7 +211,6 @@
         "fast-check": "catalog:",
         "openai": "6.49.0",
         "pdfjs-dist": "^6.4.299",
-        "yjs": "^13.6.33",
       },
     },
     "apps/collab": {

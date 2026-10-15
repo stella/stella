@@ -877,94 +877,105 @@ export const resetFolioCollabUserState = async (
         workspaceIds: organizationClaims.map((claim) => claim.workspaceId),
       },
       fn: async (scopedTx) => {
-        // audit: skip — recordAccountDeletionAuditEvents emits each reset in this same scoped transaction.
-        await scopedTx
-          .update(folioCollabRooms)
-          .set({
-            generation: sql`${folioCollabRooms.generation} + 1`,
-            seedClaimedAt: null,
-            seedClaimedBy: null,
-            seedState: "empty",
-            seededAt: null,
-            savedSnapshotCut: null,
-            yjsSnapshotRevision: 0,
-            yjsSnapshotFileId: sqlCaseFragment({
-              branches: organizationClaims.map(
-                ({ id }) =>
-                  sql`WHEN ${eq(folioCollabRooms.id, id)} THEN ${createSafeId<"userFile">()}::uuid`,
-              ),
-              fallback: sql`${folioCollabRooms.yjsSnapshotFileId}`,
-            }),
-            yjsSnapshotSizeBytes: null,
-            yjsSnapshotUpdatedAt: null,
-          })
-          .where(
-            and(
-              inArray(
-                folioCollabRooms.id,
-                organizationClaims.map(({ id }) => id),
-              ),
-              inArray(
-                folioCollabRooms.workspaceId,
-                organizationClaims.map((claim) => claim.workspaceId),
-              ),
-              eq(folioCollabRooms.seedClaimedBy, currentUserId),
-              eq(folioCollabRooms.seedState, "claimed"),
-            ),
-          );
-        const retiredSnapshots = organizationClaims.flatMap((claim) =>
-          claim.snapshotUpdatedAt === null
-            ? []
-            : [
-                {
-                  id: createSafeId<"pendingUpload">(),
-                  organizationId,
-                  workspaceId: claim.workspaceId,
-                  objectKey: createFileKey({
-                    fileId: claim.snapshotFileId,
-                    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-                    organizationId,
-                    workspaceId: claim.workspaceId,
-                  }),
-                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
-                  nextAttemptAt: new Date(
-                    Temporal.Now.instant().epochMilliseconds +
-                      BUFFER_INTENT_STALE_MS,
+        await consumeInBatches({
+          items: organizationClaims,
+          batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+          consume: async (claimBatch) => {
+            await scopedTx
+              .update(folioCollabRooms)
+              .set({
+                generation: sql`${folioCollabRooms.generation} + 1`,
+                seedClaimedAt: null,
+                seedClaimedBy: null,
+                seedState: "empty",
+                seededAt: null,
+                savedSnapshotCut: null,
+                yjsSnapshotRevision: 0,
+                yjsSnapshotFileId: sqlCaseFragment({
+                  branches: claimBatch.map(
+                    ({ id }) =>
+                      sql`WHEN ${eq(folioCollabRooms.id, id)} THEN ${createSafeId<"userFile">()}::uuid`,
                   ),
+                  fallback: sql`${folioCollabRooms.yjsSnapshotFileId}`,
+                }),
+                yjsSnapshotSizeBytes: null,
+                yjsSnapshotUpdatedAt: null,
+              })
+              .where(
+                and(
+                  inArray(
+                    folioCollabRooms.id,
+                    claimBatch.map(({ id }) => id),
+                  ),
+                  inArray(
+                    folioCollabRooms.workspaceId,
+                    claimBatch.map((claim) => claim.workspaceId),
+                  ),
+                  eq(folioCollabRooms.seedClaimedBy, currentUserId),
+                  eq(folioCollabRooms.seedState, "claimed"),
+                ),
+              );
+            const retiredSnapshots = claimBatch.flatMap((claim) =>
+              claim.snapshotUpdatedAt === null
+                ? []
+                : [
+                    {
+                      id: createSafeId<"pendingUpload">(),
+                      organizationId,
+                      workspaceId: claim.workspaceId,
+                      objectKey: createFileKey({
+                        fileId: claim.snapshotFileId,
+                        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                        organizationId,
+                        workspaceId: claim.workspaceId,
+                      }),
+                      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+                      nextAttemptAt: new Date(
+                        Temporal.Now.instant().epochMilliseconds +
+                          BUFFER_INTENT_STALE_MS,
+                      ),
+                    },
+                  ],
+            );
+            if (retiredSnapshots.length > 0) {
+              await scopedTx
+                .insert(bufferObjectCleanupIntents)
+                .values(retiredSnapshots);
+            }
+            const recordAuditEvent = createBackgroundAuditRecorder({
+              organizationId,
+              workspaceId: null,
+              userId: brandPersistedUserId(currentUserId),
+              execution: {
+                performer: {
+                  id: "account-deletion",
+                  name: "Account deletion",
+                  type: "service",
                 },
-              ],
-        );
-        if (retiredSnapshots.length > 0) {
-          await consumeInBatches({
-            items: retiredSnapshots,
-            batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-            consume: async (batch) => {
-              // audit: skip — cleanup ownership transfer accompanies the audited room reset.
-              await scopedTx.insert(bufferObjectCleanupIntents).values(batch);
-            },
-          });
-        }
-        await recordAccountDeletionAuditEvents(
-          scopedTx,
-          brandPersistedUserId(currentUserId),
-          organizationClaims.map((claim) => ({
-            organizationId,
-            event: {
-              action: AUDIT_ACTION.UPDATE,
-              changes: {
-                generation: {
-                  old: claim.generation,
-                  new: claim.generation + 1,
-                },
-                seedState: { old: "claimed", new: "empty" },
+                trigger: { source: "account-deletion", type: "system" },
               },
-              metadata: { reason: "seed_claim_released_on_account_deletion" },
-              resourceId: claim.id,
-              resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
-              workspaceId: claim.workspaceId,
-            },
-          })),
-        );
+            });
+            await recordAuditEvent(
+              scopedTx,
+              claimBatch.map((claim) => ({
+                action: AUDIT_ACTION.UPDATE,
+                changes: {
+                  generation: {
+                    old: claim.generation,
+                    new: claim.generation + 1,
+                  },
+                  seedState: { old: "claimed", new: "empty" },
+                },
+                metadata: {
+                  reason: "seed_claim_released_on_account_deletion",
+                },
+                resourceId: claim.id,
+                resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+                workspaceId: claim.workspaceId,
+              })),
+            );
+          },
+        });
       },
     });
   }

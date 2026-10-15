@@ -135,8 +135,6 @@ const canStillEditWorkspace = async ({
 };
 
 type ClaimRoomSeedOptions = {
-  organizationId: SafeId<"organization">;
-  previousSnapshot: { fileId: SafeId<"userFile">; updatedAt: Date | null };
   expectedGeneration: number;
   expectedSeedState: "claimed" | "empty";
   now: Date;
@@ -212,8 +210,6 @@ const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
   expectedSeedState,
   now,
-  organizationId,
-  previousSnapshot,
   roomId,
   tx,
   userId,
@@ -244,26 +240,7 @@ const claimFolioCollabRoomSeed = async ({
     )
     .returning({ generation: folioCollabRooms.generation });
 
-  const claim = claimed.at(0);
-  if (claim && previousSnapshot.updatedAt !== null) {
-    // audit: skip — the enclosing join transaction records the seed takeover.
-    await tx.insert(bufferObjectCleanupIntents).values({
-      id: createSafeId<"pendingUpload">(),
-      nextAttemptAt: new Date(
-        Temporal.Now.instant().epochMilliseconds + BUFFER_INTENT_STALE_MS,
-      ),
-      objectKey: createFileKey({
-        fileId: previousSnapshot.fileId,
-        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        organizationId,
-        workspaceId,
-      }),
-      organizationId,
-      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
-      workspaceId,
-    });
-  }
-  return claim ?? null;
+  return claimed.at(0) ?? null;
 };
 
 const joinFolioCollabRoomHandler = async function* ({
@@ -469,11 +446,6 @@ const joinFolioCollabRoomHandler = async function* ({
           expectedGeneration: room.generation,
           expectedSeedState: room.seedState,
           now,
-          organizationId,
-          previousSnapshot: {
-            fileId: room.yjsSnapshotFileId,
-            updatedAt: room.yjsSnapshotUpdatedAt,
-          },
           roomId: room.id,
           tx,
           userId,
@@ -487,6 +459,24 @@ const joinFolioCollabRoomHandler = async function* ({
               status: 409,
             },
           } as const;
+        }
+
+        if (room.yjsSnapshotUpdatedAt !== null) {
+          await tx.insert(bufferObjectCleanupIntents).values({
+            id: createSafeId<"pendingUpload">(),
+            nextAttemptAt: new Date(
+              Temporal.Now.instant().epochMilliseconds + BUFFER_INTENT_STALE_MS,
+            ),
+            objectKey: createFileKey({
+              fileId: room.yjsSnapshotFileId,
+              mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+              organizationId,
+              workspaceId,
+            }),
+            organizationId,
+            status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+            workspaceId,
+          });
         }
 
         generation = claim.generation;

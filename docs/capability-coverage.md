@@ -697,7 +697,7 @@ mechanics, and similar), not gaps in coverage.
 | public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 18 |
-| session_token_exchange | 20 |
+| session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 20 |
 | url_preview | 2 |

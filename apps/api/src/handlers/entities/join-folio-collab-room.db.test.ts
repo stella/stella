@@ -400,6 +400,9 @@ describe("folio collaboration room seed generation CAS", () => {
           fileName: "outdated.docx",
           mimeType: DOCX_MIME_TYPE,
           sizeBytes: 1,
+          encrypted: false,
+          sha256Hex: "a".repeat(64),
+          pdfFileId: null,
         },
       });
       const oldCheckpointFileId = createSafeId<"userFile">();

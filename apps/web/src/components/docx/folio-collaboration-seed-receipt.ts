@@ -29,23 +29,24 @@ export const completeFolioSeedReceipt = async ({
   signal,
   wait = async (delayMs) => await sleep(delayMs, { signal }),
 }: CompleteFolioSeedReceiptOptions) => {
+  const isSuperseded = () => !isCurrent() || signal.aborted;
   const capturedBytes = Uint8Array.from(snapshotBytes);
   const snapshotSha256Hex = await sha256Hex(capturedBytes);
   for (let attempt = 0; attempt < SEED_RECEIPT_MAX_ATTEMPTS; attempt += 1) {
-    if (!isCurrent() || signal.aborted) {
+    if (isSuperseded()) {
       return { status: "superseded" } as const;
     }
     const receipt = await Result.tryPromise({
       try: async () => {
         await acknowledge(snapshotSha256Hex);
-        if (!isCurrent() || signal.aborted) {
+        if (isSuperseded()) {
           return;
         }
         await flushSnapshot();
       },
       catch: (cause) => cause,
     });
-    if (!isCurrent() || signal.aborted) {
+    if (isSuperseded()) {
       return { status: "superseded" } as const;
     }
     if (Result.isOk(receipt)) {
@@ -70,7 +71,7 @@ export const completeFolioSeedReceipt = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(waited)) {
-      return !isCurrent() || signal.aborted
+      return isSuperseded()
         ? ({ status: "superseded" } as const)
         : ({ status: "failed", error: waited.error } as const);
     }

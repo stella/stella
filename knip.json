@@ -131,8 +131,33 @@
         "astro.config.*",
         "e2e/**/*.ts"
       ],
-      // Tailwind scans workspace-ui through the CSS @source directive.
-      "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
+      "ignoreDependencies": [
+        // Tailwind scans workspace-ui through the CSS @source directive.
+        "@tailwindcss/postcss",
+        "@stll/workspace-ui",
+        // Folio requires host-owned peers loaded by its editor implementation.
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
+    },
+    "apps/playground": {
+      // Folio requires host-owned peers loaded by its editor implementation.
+      "ignoreDependencies": [
+        "prosemirror-commands",
+        "prosemirror-dropcursor",
+        "prosemirror-gapcursor",
+        "prosemirror-inputrules",
+        "prosemirror-keymap",
+        "prosemirror-transform",
+        "y-prosemirror",
+        "y-protocols"
+      ]
     },
     "apps/legal-atlas-runner": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],

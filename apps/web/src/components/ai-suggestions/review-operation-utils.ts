@@ -1,9 +1,7 @@
 import { panic } from "better-result";
 
-import type {
-  FolioAIParagraphBlock,
-  FolioAIEditOperation,
-} from "@stll/folio-react";
+import type { FolioAIParagraphBlock } from "@stll/folio-core";
+import type { FolioAIEditOperation } from "@stll/folio-react";
 
 export type ReviewOperationSnapshotBlock = Pick<
   FolioAIParagraphBlock,

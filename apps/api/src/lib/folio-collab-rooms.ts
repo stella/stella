@@ -1406,29 +1406,38 @@ export const acknowledgeFolioCollabSeed = async ({
       versionId: room.baseVersionId,
       sha256Hex: snapshotSha256Hex,
     };
-    await tx
-      .update(folioCollabRooms)
-      .set({
-        savedSnapshotCut,
-        ...(room.snapshotUpdatedAt === null
-          ? {}
-          : { seedState: "seeded" as const, seededAt: new Date() }),
-      })
-      .where(
-        and(
-          eq(folioCollabRooms.id, value.roomId),
-          eq(folioCollabRooms.workspaceId, value.workspaceId),
-          eq(folioCollabRooms.generation, value.generation),
-        ),
-      );
-    await recordAuditEvent(tx, {
+    const where =
+      and(
+        eq(folioCollabRooms.id, value.roomId),
+        eq(folioCollabRooms.workspaceId, value.workspaceId),
+        eq(folioCollabRooms.generation, value.generation),
+      ) ?? panic("Seed receipt requires a room predicate");
+    const receiptAuditEvent = {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
       resourceId: value.roomId,
       changes: {
         savedSnapshotCut: { old: null, new: savedSnapshotCut },
       },
-    });
+    };
+    if (room.snapshotUpdatedAt === null) {
+      await tx.update(folioCollabRooms).set({ savedSnapshotCut }).where(where);
+      await recordAuditEvent(tx, receiptAuditEvent);
+    } else {
+      await transitionScopedCount({
+        tx,
+        spec: FOLIO_COLLAB_SEED_TRANSITIONS,
+        where,
+        options: {
+          from: ["claimed"],
+          to: "seeded",
+          set: { savedSnapshotCut, seededAt: new Date() },
+        },
+        recordTransitionAuditEvent: async (auditTx) => {
+          await recordAuditEvent(auditTx, receiptAuditEvent);
+        },
+      });
+    }
     return { status: "acknowledged" } as const;
   });
 };
