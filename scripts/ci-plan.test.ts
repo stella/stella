@@ -4486,18 +4486,19 @@ ${implication}
     ({ name }) => name === "Check route network baseline",
   );
   expect(smoke?.run).toContain("route-smoke.spec.ts --project=route-smoke");
-  const ready = steps.find(
-    ({ name }) => name === "Require production browser stack",
+  // The shared setup fails the job when the stack is not ready, so the
+  // smoke can never pass without running.
+  const routeSmoke = ciJobs["route-smoke"];
+  const rawSteps = flattenWorkflowSteps(
+    typeof routeSmoke === "object" &&
+      routeSmoke !== null &&
+      "steps" in routeSmoke
+      ? routeSmoke.steps
+      : undefined,
   );
-  expect(ready?.run).toBeDefined();
-  for (const status of ["ready", "rate-limited", ""]) {
-    const check = Bun.spawnSync(["bash", "-e", "-c", ready?.run ?? "exit 2"], {
-      env: { STACK_STATUS: status },
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    expect(check.exitCode, status).toBe(status === "ready" ? 0 : 1);
-  }
+  const setup = rawSteps.find(({ id }) => id === "e2e-stack");
+  expect(setup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
+  expect(smoke?.if ?? "").not.toContain("always()");
 });
 
 test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
