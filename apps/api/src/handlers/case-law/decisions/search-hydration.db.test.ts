@@ -886,7 +886,7 @@ test("a provision-only list escapes the citing sentence it shows as markup", asy
       jurisdiction: "CZE",
       section: 316,
       subsection: "2",
-      sentenceText: `<img src=x onerror=alert(1)> "a" & 'b'`,
+      sentenceText: `<b>text</b> "a" & 'b'`,
       spanEnd: 2,
       spanStart: 1,
       unit: "section",
@@ -913,7 +913,7 @@ test("a provision-only list escapes the citing sentence it shows as markup", asy
       throw new Error("expected a page");
     }
     expect(listed.hits.at(0)?.headline).toBe(
-      "&lt;img src=x onerror=alert(1)&gt; &quot;a&quot; &amp; &#x27;b&#x27;",
+      "&lt;b&gt;text&lt;/b&gt; &quot;a&quot; &amp; &#x27;b&#x27;",
     );
   } finally {
     if (marked !== undefined) {
