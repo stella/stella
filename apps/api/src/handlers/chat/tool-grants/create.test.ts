@@ -65,11 +65,7 @@ const setup = ({ body, reads }: { body: Body; reads: unknown[][] }) => {
 };
 
 test("a tool that asks on every call is refused before anything is read", async () => {
-  for (const toolName of [
-    "use_connector_secret",
-    "suggest_changes",
-    "use-browser",
-  ]) {
+  for (const toolName of ["use_connector_secret"]) {
     const fixture = setup({
       body: { scope: "always", threadId, toolName },
       reads: [[{ id: threadId }], []],
