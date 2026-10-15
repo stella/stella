@@ -37,7 +37,8 @@ const runSchema = v.object({
 export type ReliefOutcome =
   | { runId: number; outcome: "deferred"; headSha: string }
   | { runId: number; outcome: "skipped"; reason: string }
-  | { runId: number; outcome: "uncertain"; headSha: string };
+  | { runId: number; outcome: "uncertain"; headSha: string }
+  | { runId: number; outcome: "failed" };
 
 type Request = (args: readonly string[], input?: unknown) => Promise<unknown>;
 
@@ -63,62 +64,73 @@ const setYieldStatus = async (
     },
   );
 
+const reliefCancelOne = async (
+  runId: number,
+  request: Request,
+): Promise<ReliefOutcome> => {
+  const run = v.parse(
+    runSchema,
+    await request([`repos/${REPO}/actions/runs/${runId}`]),
+  );
+  if (
+    run.event !== "pull_request" ||
+    run.path !== ".github/workflows/ci.yml" ||
+    run.head_repository?.full_name !== REPO
+  ) {
+    return {
+      runId,
+      outcome: "skipped",
+      reason: "not a same-repository pull request CI run",
+    };
+  }
+  if (run.status === "completed") {
+    return { runId, outcome: "skipped", reason: "already completed" };
+  }
+  // Record the deferral before cancelling: a cancelled run without the
+  // record would never resume.
+  await setYieldStatus(request, run, "pending", RELIEF_DESCRIPTION);
+  try {
+    await request([
+      `repos/${REPO}/actions/runs/${runId}/cancel`,
+      "--method",
+      "POST",
+    ]);
+  } catch {
+    // A failed request does not prove the cancellation was refused: it may
+    // have taken effect before the response was lost. Clear the record only
+    // when the run demonstrably finished without being cancelled; when even
+    // that cannot be read, keep the record and report the run.
+    const after = await request([`repos/${REPO}/actions/runs/${runId}`])
+      .then((value) => v.parse(runSchema, value))
+      .catch(() => undefined);
+    if (after?.status === "completed" && after.conclusion !== "cancelled") {
+      await setYieldStatus(request, run, "success", "Not deferred");
+      return { runId, outcome: "skipped", reason: "cancel refused" };
+    }
+    if (after?.status === "completed") {
+      return { runId, outcome: "deferred", headSha: run.head_sha };
+    }
+    // Still running or unreadable: the steward resumes it only once the run
+    // ends cancelled, so keep the record and report it for a manual check.
+    return { runId, outcome: "uncertain", headSha: run.head_sha };
+  }
+  return { runId, outcome: "deferred", headSha: run.head_sha };
+};
+
+// One run's failure never stops the others, and each outcome is reported as
+// soon as it is known.
 export const reliefCancel = async (
   runIds: readonly number[],
   request: Request,
+  report?: (outcome: ReliefOutcome) => void,
 ): Promise<ReliefOutcome[]> => {
   const outcomes: ReliefOutcome[] = [];
   for (const runId of runIds) {
-    const run = v.parse(
-      runSchema,
-      await request([`repos/${REPO}/actions/runs/${runId}`]),
+    const outcome = await reliefCancelOne(runId, request).catch(
+      (): ReliefOutcome => ({ runId, outcome: "failed" }),
     );
-    if (
-      run.event !== "pull_request" ||
-      run.path !== ".github/workflows/ci.yml" ||
-      run.head_repository?.full_name !== REPO
-    ) {
-      outcomes.push({
-        runId,
-        outcome: "skipped",
-        reason: "not a same-repository pull request CI run",
-      });
-      continue;
-    }
-    if (run.status === "completed") {
-      outcomes.push({ runId, outcome: "skipped", reason: "already completed" });
-      continue;
-    }
-    // Record the deferral before cancelling: a cancelled run without the
-    // record would never resume.
-    await setYieldStatus(request, run, "pending", RELIEF_DESCRIPTION);
-    try {
-      await request([
-        `repos/${REPO}/actions/runs/${runId}/cancel`,
-        "--method",
-        "POST",
-      ]);
-    } catch {
-      // A failed request does not prove the cancellation was refused: it may
-      // have taken effect before the response was lost. Clear the record only
-      // when the run demonstrably finished without being cancelled.
-      const after = v.parse(
-        runSchema,
-        await request([`repos/${REPO}/actions/runs/${runId}`]),
-      );
-      if (after.status === "completed" && after.conclusion !== "cancelled") {
-        await setYieldStatus(request, run, "success", "Not deferred");
-        outcomes.push({ runId, outcome: "skipped", reason: "cancel refused" });
-      } else if (after.status === "completed") {
-        outcomes.push({ runId, outcome: "deferred", headSha: run.head_sha });
-      } else {
-        // Still running: keep the record (the steward resumes it only once the
-        // run ends cancelled) and report it for a manual check.
-        outcomes.push({ runId, outcome: "uncertain", headSha: run.head_sha });
-      }
-      continue;
-    }
-    outcomes.push({ runId, outcome: "deferred", headSha: run.head_sha });
+    report?.(outcome);
+    outcomes.push(outcome);
   }
   return outcomes;
 };
@@ -129,7 +141,14 @@ if (import.meta.main) {
     console.error("Usage: bun scripts/relief-cancel-pr-runs.ts <run-id>...");
     process.exit(2);
   }
-  for (const outcome of await reliefCancel(runIds, githubRequest)) {
+  const outcomes = await reliefCancel(runIds, githubRequest, (outcome) => {
     console.log(JSON.stringify(outcome));
+  });
+  if (
+    outcomes.some(
+      ({ outcome }) => outcome === "failed" || outcome === "uncertain",
+    )
+  ) {
+    process.exitCode = 1;
   }
 }

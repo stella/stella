@@ -33,7 +33,12 @@ const fake = (
   {
     refuseCancel = false,
     afterFailedCancel,
-  }: { refuseCancel?: boolean; afterFailedCancel?: Partial<Run> } = {},
+    unreadableAfterCancel = false,
+  }: {
+    refuseCancel?: boolean;
+    afterFailedCancel?: Partial<Run>;
+    unreadableAfterCancel?: boolean;
+  } = {},
 ) => {
   let cancelFailed = false;
   const calls: string[] = [];
@@ -64,8 +69,14 @@ const fake = (
       return null;
     }
     const id = Number(endpoint?.split("/").at(-1));
+    if (cancelFailed && unreadableAfterCancel) {
+      throw new Error("read failed");
+    }
     const run = runs.find((candidate) => candidate.id === id);
-    return cancelFailed && run ? { ...run, ...afterFailedCancel } : run;
+    if (!run) {
+      throw new Error("run not found");
+    }
+    return cancelFailed ? { ...run, ...afterFailedCancel } : run;
   };
   return { request, calls, statuses };
 };
@@ -114,6 +125,31 @@ test("a run still active after a failed request keeps its record and is reported
     { runId: 12, outcome: "uncertain", headSha: "head-12" },
   ]);
   expect(statuses.map(({ state }) => state)).toEqual(["pending"]);
+});
+
+test("an unreadable run after a failed cancel keeps its record and is reported", async () => {
+  const { request, statuses } = fake([prRun(13)], {
+    refuseCancel: true,
+    unreadableAfterCancel: true,
+  });
+  expect(await reliefCancel([13], request)).toEqual([
+    { runId: 13, outcome: "uncertain", headSha: "head-13" },
+  ]);
+  expect(statuses.map(({ state }) => state)).toEqual(["pending"]);
+});
+
+test("one failing run never stops the others, and outcomes report as they happen", async () => {
+  const { request } = fake([prRun(14), prRun(16)]);
+  const reported: number[] = [];
+  const outcomes = await reliefCancel([14, 15, 16], request, ({ runId }) => {
+    reported.push(runId);
+  });
+  expect(outcomes).toEqual([
+    { runId: 14, outcome: "deferred", headSha: "head-14" },
+    { runId: 15, outcome: "failed" },
+    { runId: 16, outcome: "deferred", headSha: "head-16" },
+  ]);
+  expect(reported).toEqual([14, 15, 16]);
 });
 
 test.each([
