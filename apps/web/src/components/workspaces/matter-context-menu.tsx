@@ -52,6 +52,7 @@ import {
   AddableMemberSelect,
   useAddableMembers,
 } from "@/components/workspaces/addable-member-select";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -494,6 +495,7 @@ const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
+  const submitOnce = useSingleFlight();
   const memberQuery = useAddableMembers(workspaceId);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -502,14 +504,16 @@ const AddMemberDialog = ({
       ? memberQuery.view.items.find((item) => item.value === selectedUserId)
       : undefined;
 
-  const handleSubmit = () => {
+  const addSelectedMember = (settled: () => void) => {
     if (!selectedMember) {
+      settled();
       return;
     }
 
     addMember.mutate(
       { workspaceId, userId: selectedMember.value },
       {
+        onSettled: settled,
         onSuccess: () => {
           stellaToast.add({
             title: t("success.memberAdded"),
@@ -532,6 +536,12 @@ const AddMemberDialog = ({
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleSubmit = () => {
+    detached(
+      submitOnce.runSettled(addSelectedMember),
+      "matter-context-menu.add-member",
     );
   };
 
