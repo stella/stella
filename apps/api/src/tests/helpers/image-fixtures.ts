@@ -186,3 +186,14 @@ export const splitJpeg = async (
     jpeg.subarray(2),
   ]);
 };
+
+/** {@link splitPng} as a lossless WebP. */
+export const splitWebp = async (
+  width: number,
+  height: number,
+): Promise<Uint8Array> => {
+  Bun.Image.backend = "bun";
+  return await new Bun.Image(splitPng(width, height))
+    .webp({ lossless: true })
+    .bytes();
+};

@@ -6,6 +6,9 @@ import { env } from "@/api/env";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
+import type { ImageHeader } from "@/api/lib/files/image-header";
+import { readImageHeader } from "@/api/lib/files/image-header";
+import type { EmbeddableImageMimeType } from "@/api/lib/files/image-pdf";
 import {
   canEmbedInProcess,
   imageToPdf,
@@ -14,9 +17,11 @@ import {
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
+import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export {
   isConvertibleMimeType,
@@ -51,12 +56,42 @@ class ImagePdfError extends TaggedError("ImagePdfError")<{
   cause?: unknown;
 }> {}
 
-type ConvertToPdfError = DerivativeAdmissionError | GotenbergError;
+/**
+ * An image the converter cannot import that could not be turned into a PDF
+ * in-process either. Sending it to the converter instead would fail on every
+ * attempt, so this is the conversion's final answer.
+ */
+export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+type ConvertToPdfError =
+  | DerivativeAdmissionError
+  | GotenbergError
+  | ImageTranscodeError;
 
 const IMAGE_EMBED_FAILED_SINK = failureSink({
   event: "file_conversion.image_embed_failed",
   expected: [],
 });
+
+const IMAGE_TRANSCODE_FAILED_SINK = failureSink({
+  event: "file_conversion.image_transcode_failed",
+  expected: [],
+});
+
+/**
+ * Image types the converter's LibreOffice route has no import filter for:
+ * Gotenberg 8.37 accepts .bmp, .gif, .tif/.tiff, .png and .jpg/.jpeg, but
+ * not .webp. These are re-encoded as PNG in-process and embedded directly.
+ */
+const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
+  "image/webp": null,
+} as const satisfies Record<string, null>;
+
+const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
+  Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
 
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
@@ -88,12 +123,81 @@ const toArrayBuffer = (view: Uint8Array): ArrayBuffer =>
     ? view.buffer
     : view.slice().buffer;
 
+const embedImage = async (
+  bytes: Uint8Array,
+  header: ImageHeader,
+  mimeType: EmbeddableImageMimeType,
+): Promise<Result<ConvertToPdfResult, ImagePdfError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const pdf = await imageToPdf({ bytes, header, mimeType });
+      return { buffer: toArrayBuffer(pdf), sizeBytes: pdf.byteLength };
+    },
+    catch: (cause) =>
+      new ImagePdfError({ message: "Failed to embed image", cause }),
+  });
+
+/**
+ * Re-encode an admitted image the converter cannot import as PNG and embed
+ * that. Admission already bounded the declared pixel count; the decoder
+ * enforces the same budget and the pipeline runs under the derivative
+ * wall-clock ceiling. The PNG carries no EXIF, so its header's orientation
+ * (1) is what the WebP header reader reports for the source too.
+ */
+const transcodeImageToPdf = async (
+  bytes: Uint8Array,
+): Promise<Result<ConvertToPdfResult, ImageTranscodeError>> => {
+  Bun.Image.backend = "bun";
+  const png = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async () =>
+          await new Bun.Image(bytes, {
+            maxPixels: LIMITS.imageDerivativeSourcePixelsMax,
+          })
+            .png()
+            .bytes(),
+        {
+          label: "image-transcode",
+          timeoutMs: LIMITS.imageDerivativeTimeoutMs,
+        },
+      ),
+    catch: (cause) =>
+      new ImageTranscodeError({ message: "Failed to decode image", cause }),
+  });
+  if (Result.isError(png)) {
+    return png;
+  }
+  const header = readImageHeader(png.value, "image/png");
+  if (header === null || !canEmbedInProcess(header)) {
+    return Result.err(
+      new ImageTranscodeError({
+        message: "Transcoded image is not an embeddable PNG",
+      }),
+    );
+  }
+  const embedded = await embedImage(png.value, header, "image/png");
+  if (Result.isError(embedded)) {
+    return Result.err(
+      new ImageTranscodeError({
+        message: "Failed to embed transcoded image",
+        cause: embedded.error,
+      }),
+    );
+  }
+  return Result.ok(embedded.value);
+};
+
 /**
  * Convert a scanned file to PDF. Images are admitted by the pixel count
  * their header declares before anything decodes them. JPEG and PNG whose
  * header shows an encoding the in-process embedder handles become a
- * one-page PDF directly; every other image, an embed that fails anyway, and
- * every other type go to Gotenberg's LibreOffice route.
+ * one-page PDF directly. WebP, which the converter cannot import, is
+ * re-encoded as PNG in-process and embedded; a failure there is observed
+ * and returned as an `ImageTranscodeError`, never sent to the converter.
+ * Every other image (BMP, GIF, TIFF, and JPEG/PNG encodings the embedder
+ * does not handle), an embed that fails anyway, and every other type go to
+ * Gotenberg's LibreOffice route.
  */
 export const convertToPdf = async (
   file: ScannedFile,
@@ -107,19 +211,23 @@ export const convertToPdf = async (
   }
 
   const { header } = admission;
+  if (header !== null && isInProcessOnlyImageMimeType(mimeType)) {
+    const transcoded = await transcodeImageToPdf(bytes);
+    if (Result.isError(transcoded)) {
+      observeFailure(transcoded.error, {
+        sink: IMAGE_TRANSCODE_FAILED_SINK,
+        ctx: { operation: "image-transcode-to-pdf" },
+      });
+    }
+    return transcoded;
+  }
+
   if (
     header !== null &&
     isEmbeddableImageMimeType(mimeType) &&
     canEmbedInProcess(header)
   ) {
-    const embedded = await Result.tryPromise({
-      try: async () => {
-        const pdf = await imageToPdf({ bytes, header, mimeType });
-        return { buffer: toArrayBuffer(pdf), sizeBytes: pdf.byteLength };
-      },
-      catch: (cause) =>
-        new ImagePdfError({ message: "Failed to embed image", cause }),
-    });
+    const embedded = await embedImage(bytes, header, mimeType);
     // An embed failure never reaches the caller (it falls back below), so
     // only the value crosses into the caller-facing error type.
     if (Result.isOk(embedded)) {

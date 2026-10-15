@@ -7,6 +7,7 @@ import {
 } from "@/api/lib/files/derivative-admission";
 import {
   convertToPdf,
+  ImageTranscodeError,
   isConvertibleMimeType,
   isNativelyRenderableMimeType,
   pdfDerivativeStateForFile,
@@ -23,6 +24,7 @@ import {
   declaredSizePng,
   splitJpeg,
   splitPng,
+  splitWebp,
   withJpegComponents,
 } from "@/api/tests/helpers/image-fixtures";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -296,5 +298,57 @@ describe("image encodings the in-process embedder cannot take", () => {
     expect(urls).toHaveLength(1);
     expect(urls[0]).toEndWith(LIBREOFFICE_ROUTE);
     expect(Result.isOk(result)).toBe(true);
+  });
+});
+
+const TRANSCODE_FAILED_EVENT = "file_conversion.image_transcode_failed";
+
+describe("image types the converter cannot import", () => {
+  test("a WebP becomes a PDF in-process, never through the converter", async () => {
+    const webp = await splitWebp(64, 32);
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () => await convertToPdf(fileOf(webp, "image/webp")),
+    );
+
+    expect(urls).toEqual([]);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      const head = new TextDecoder().decode(
+        new Uint8Array(result.value.buffer, 0, PDF_MAGIC.length),
+      );
+      expect(head).toBe(PDF_MAGIC);
+      expect(result.value.sizeBytes).toBe(result.value.buffer.byteLength);
+    }
+  });
+
+  test("a corrupt WebP is a typed, observed error and never reaches the converter", async () => {
+    // A readable header over a garbage bitstream: admission passes and the
+    // decoder refuses it. VP8L dimensions end at byte 25.
+    const corrupt = (await splitWebp(64, 32)).fill(0xff, 25);
+    const events: string[] = [];
+    const record = (event: string) => {
+      events.push(event);
+    };
+    const warn = spyOn(logger, "warn").mockImplementation(record);
+    const error = spyOn(logger, "error").mockImplementation(record);
+    try {
+      const { result, urls } = await withConverterFetch(
+        () => new Response("unexpected", { status: 500 }),
+        async () => await convertToPdf(fileOf(corrupt, "image/webp")),
+      );
+
+      expect(urls).toEqual([]);
+      expect(
+        events.filter((event) => event === TRANSCODE_FAILED_EVENT),
+      ).toEqual([TRANSCODE_FAILED_EVENT]);
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(ImageTranscodeError);
+      }
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });
