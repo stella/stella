@@ -6,6 +6,7 @@ import { mcpUserConnections } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -24,11 +25,16 @@ const config = {
 
 const deleteMcpConnection = createSafeRootHandler(
   config,
-  async function* ({ params: requestParams, safeDb, session, user }) {
+  async function* ({
+    params: requestParams,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     const deleted = yield* Result.await(
-      safeDb((tx) =>
-        // audit: skip — per-user MCP connection removal; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .delete(mcpUserConnections)
           .where(
             and(
@@ -40,8 +46,22 @@ const deleteMcpConnection = createSafeRootHandler(
               eq(mcpUserConnections.userId, user.id),
             ),
           )
-          .returning({ id: mcpUserConnections.id }),
-      ),
+          .returning({
+            id: mcpUserConnections.id,
+            connectorId: mcpUserConnections.connectorId,
+          });
+        const row = rows.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+            resourceId: row.id,
+            workspaceId: null,
+            metadata: { connectorId: row.connectorId },
+          });
+        }
+        return rows;
+      }),
     );
 
     const connection = deleted.at(0);
@@ -51,7 +71,7 @@ const deleteMcpConnection = createSafeRootHandler(
       );
     }
 
-    return Result.ok(connection);
+    return Result.ok({ id: connection.id });
   },
 );
 

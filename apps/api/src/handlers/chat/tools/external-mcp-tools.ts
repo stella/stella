@@ -5,6 +5,11 @@ import { Result } from "better-result";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
+import type {
+  ChatToolExecutionAuditContext,
+  ExternalMcpToolIdentity,
+} from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import {
   getExternalMcpToolDefinitionsForConnector,
   selectAllowedExternalMcpToolDefinitions,
@@ -22,6 +27,7 @@ import {
   MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -62,6 +68,7 @@ const defaultExternalMcpDiscoveryDependencies = {
 } satisfies ExternalMcpDiscoveryDependencies;
 
 export const loadExternalMcpToolsForUser = async ({
+  executionAudit,
   nullUnionStrategy,
   organizationId,
   permit,
@@ -69,6 +76,11 @@ export const loadExternalMcpToolsForUser = async ({
   userId,
   dependencies = defaultExternalMcpDiscoveryDependencies,
 }: {
+  /**
+   * Records one audit row per tool execution. The live MCP source and the
+   * returned tool map share the audited objects, so either path is covered.
+   */
+  executionAudit?: ChatToolExecutionAuditContext | undefined;
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   permit: ThirdPartyOutboundPermit;
@@ -97,6 +109,7 @@ export const loadExternalMcpToolsForUser = async ({
     limit: LIMITS.mcpGatewayConnectorsMax,
     operation: async (row) =>
       await loadConnectorTools({
+        executionAudit,
         nullUnionStrategy,
         organizationId,
         permit,
@@ -250,6 +263,7 @@ type LoadedExternalMcpConnectorResult = {
 };
 
 const loadConnectorTools = async ({
+  executionAudit,
   nullUnionStrategy,
   organizationId,
   permit,
@@ -258,6 +272,7 @@ const loadConnectorTools = async ({
   userId,
   dependencies,
 }: {
+  executionAudit: ChatToolExecutionAuditContext | undefined;
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   permit: ThirdPartyOutboundPermit;
@@ -312,7 +327,17 @@ const loadConnectorTools = async ({
           slug: row.slug,
           toolNames: normalized.toolNames,
         },
-        tools: normalized.tools,
+        tools:
+          executionAudit === undefined
+            ? normalized.tools
+            : auditChatToolExecutions({
+                audit: executionAudit,
+                externalMcpTools: externalMcpToolIdentities({
+                  connectorSlug: row.slug,
+                  toolNames: normalized.toolNames,
+                }),
+                tools: normalized.tools,
+              }),
       };
     })();
 
@@ -361,6 +386,20 @@ const loadConnectorTools = async ({
     return null;
   }
 };
+
+const externalMcpToolIdentities = ({
+  connectorSlug,
+  toolNames,
+}: {
+  connectorSlug: string;
+  toolNames: readonly string[];
+}): Map<string, ExternalMcpToolIdentity> =>
+  new Map(
+    toolNames.map((upstreamToolName) => [
+      namespaceMcpToolName({ connectorSlug, toolName: upstreamToolName }),
+      { connectorSlug, upstreamToolName },
+    ]),
+  );
 
 const closeAbandonedClient = async ({
   client,
