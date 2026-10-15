@@ -423,6 +423,57 @@ describe("independent doctrinal reviews", () => {
     ).toEqual(review);
   });
 
+  test("the review write holds the citing decision rows a redaction would update", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 9823/2026",
+      cited: "sp. zn. 29 Cdo 9823/2015",
+      rawHash: "doctrine-locked",
+    });
+    reviewedDecisions.push(labelled.citingDecisionId);
+    const statements: string[] = [];
+    const logging = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+      logger: {
+        logQuery: (query) => {
+          statements.push(query);
+        },
+      },
+    });
+    const outcome = await applyReviewedCitationLabels({
+      transact: async (run) =>
+        await logging.transaction(async (tx) => await run(tx)),
+      input: [
+        {
+          kind: "doctrine",
+          citationId: labelled.id,
+          doctrinalTreatment: "limits",
+          evidenceQuote: "does not apply",
+          passage: "The earlier ruling does not apply to these facts.",
+          reviewRef: "doctrine-locked",
+          origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+        },
+      ],
+      resultsPath: resultsPath(),
+      domain: DOCTRINE_LABEL_DOMAIN,
+    });
+    if (outcome.isErr()) {
+      throw outcome.error;
+    }
+    expect(outcome.value).toMatchObject({ summary: { applied: 1 } });
+    // Both lookups that admit the citing decision lock it until the review
+    // is written: a redaction updating the row waits for the write, then
+    // erases the review, or commits first and the entry is refused.
+    expect(
+      statements.some(
+        (statement) =>
+          statement.includes("case_law_decisions") &&
+          statement.includes("redacted_at IS NULL") &&
+          /FOR SHARE/u.test(statement),
+      ),
+    ).toBe(true);
+  });
+
   test("a review applied after its decision was redacted is refused and stores no quote", async () => {
     const labelled = await ingestRuleLabelled({
       caseNumber: "30 Cdo 9822/2026",

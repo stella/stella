@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/case-law/citation-storage-bounds";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import type { ConstantMap } from "@/api/lib/constant-map";
+import { lockUnredactedCitingDecisions } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -409,7 +410,8 @@ const citationIdsOf = (entries: readonly ParsedEntry[]): string[] => [
 ];
 
 // A redacted decision answers neither lookup: a review prepared before the
-// redaction would otherwise store its erased wording again as evidence.
+// redaction would otherwise store its erased wording again as evidence. The
+// decisions a write admits are then held by lockUnredactedCitingDecisions.
 const citationIdentitiesStatement = (ids: readonly string[]): SQL => sql`
   SELECT c.id::text AS id,
          c.citing_decision_id::text AS citing_decision_id,
@@ -432,21 +434,6 @@ const decisionIdsOf = (entries: readonly ParsedEntry[]): string[] => [
     ),
   ),
 ];
-
-const existingDecisionsStatement = (ids: readonly string[]): SQL => sql`
-  SELECT id::text AS id
-    FROM case_law_decisions
-   WHERE redacted_at IS NULL
-     AND id IN (${sql.join(
-       ids.map((id) => sql`${id}::uuid`),
-       sql`, `,
-     )})
-`;
-
-const decisionIdRowSchema = v.object({ id: v.string() });
-
-const parseDecisionIds = (rows: readonly unknown[]): Set<string> =>
-  new Set(rows.map((row) => v.parse(decisionIdRowSchema, row).id));
 
 const citationIdentityRowSchema = v.object({
   id: v.string(),
@@ -967,14 +954,30 @@ const decideReviewedLabels = async ({
         ),
   );
   const decisionIds = decisionIdsOf(parsed.entries);
-  const existingDecisions = parseDecisionIds(
-    decisionIds.length === 0
-      ? []
-      : executedRows(await tx.execute(existingDecisionsStatement(decisionIds))),
+  // Every citing decision an entry names, directly or through its citation,
+  // is held until the reviews are written; a redacted one is not admitted.
+  const admitted = await lockUnredactedCitingDecisions({
+    tx,
+    decisionIds: [
+      ...new Set([
+        ...decisionIds,
+        ...[...identities.values()].map(
+          ({ citingDecisionId }) => citingDecisionId,
+        ),
+      ]),
+    ],
+  });
+  const admittedIdentities = new Map(
+    [...identities].filter(([, { citingDecisionId }]) =>
+      admitted.has(citingDecisionId),
+    ),
+  );
+  const existingDecisions = new Set(
+    decisionIds.filter((decisionId) => admitted.has(decisionId)),
   );
   const resolved = resolveReviewedCitationLabels(
     parsed.entries,
-    identities,
+    admittedIdentities,
     existingDecisions,
   );
   const settled = settleDuplicateLabels(resolved.labels);
