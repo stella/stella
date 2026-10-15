@@ -2554,6 +2554,10 @@
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "validationInvalid": "Pole zawiera wartość, której nie można zapisać.",
+      "validationRequired": "Wymagane pole jest puste.",
+      "validationTooLong": "Za długie: użyj najwyżej {limit, number} znaków.",
+      "validationTooShort": "Za krótkie: użyj co najmniej {limit, number} znaków.",
       "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
       "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
