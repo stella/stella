@@ -36,6 +36,11 @@ const scopes = [
     false,
   ],
   [
+    "cfg(test) impl",
+    (body: string) => `#[cfg(test)] impl Helper { fn helper() { ${body} } }`,
+    false,
+  ],
+  [
     "test function",
     (body: string) => `#[test] fn example() { ${body} }`,
     false,
@@ -637,5 +642,34 @@ test.each([
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
     }
+  },
+);
+
+test.each([
+  "impl<T> Helper<T>",
+  "impl Trait for Helper",
+  "unsafe impl Send for Helper",
+  "default impl Trait for Helper",
+  "#[allow(dead_code)] impl<'a, T> Trait for Helper<'a, T> where T: Clone",
+])("test scope covers associated helpers in %s", (header) => {
+  const source = `#[cfg(test)] ${header} {
+  fn helper() { thread::sleep(duration); }
+}
+impl Production { fn helper() { Instant::now(); } }`;
+  expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual([
+    { line: 2, kind: "sleep", escaped: false },
+  ]);
+});
+
+test.each(["", "#[cfg(not(test))]"])(
+  "production impl helpers stay outside test scope: %s",
+  (attribute) => {
+    const source = `${attribute} impl Production {
+  fn helper() { thread::sleep(duration); }
+}
+#[test] fn example() { Instant::now(); }`;
+    expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual(
+      [{ line: 4, kind: "clock", escaped: false }],
+    );
   },
 );

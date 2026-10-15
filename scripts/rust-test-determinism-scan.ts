@@ -208,7 +208,9 @@ const testSpans = (code: string, integrationTest: boolean): Span[] => {
     if (open === undefined) {
       continue;
     }
-    if (!/\b(?:fn|mod)\s+[A-Za-z_]\w*/u.test(code.slice(after, open))) {
+    if (
+      !/\b(?:(?:fn|mod)\s+[A-Za-z_]\w*|impl\b)/u.test(code.slice(after, open))
+    ) {
       continue;
     }
     const close = braces.get(open);
