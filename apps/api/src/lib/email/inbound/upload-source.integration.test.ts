@@ -1,24 +1,36 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
 
 import {
   correspondence,
+  correspondenceAttachments,
+  correspondenceSources,
+  workspaceMembers,
   entities,
   entityVersions,
   fields,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { FIXTURE_MESSAGE, zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
   emlFile,
   GOLDEN_MESSAGE,
 } from "@/api/lib/email/inbound/email-file.test-fixture";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   fileUploadedMail,
   retireUploadedMailSource,
 } from "@/api/lib/email/inbound/upload";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
+import { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -34,6 +46,341 @@ beforeAll(async () => {
   ids = fixture.ids;
 });
 afterAll(releaseRlsFixture);
+
+type FilingOptions = Parameters<typeof fileUploadedMail>[0];
+
+const terminalCases = [
+  { name: "invalid content", reason: "invalid_content", invalidContent: true },
+  {
+    name: "retirement unavailable",
+    reason: "no_sender",
+    text: "Subject: Draft\r\n\r\nBody",
+    unavailable: true,
+  },
+  { name: "superseded attempt", reason: "source_changed", superseded: true },
+  { name: "deleted source", reason: "source_missing", deleted: true },
+  {
+    name: "non-correspondence",
+    reason: "not_email",
+    mimeType: "application/pdf",
+  },
+  {
+    name: "missing uploader",
+    reason: "no_uploader",
+    change: "remove_uploader",
+  },
+  {
+    name: "removed matter access",
+    reason: "no_matter_access",
+    change: "remove_access",
+  },
+  {
+    name: "delivered attachment",
+    reason: "correspondence_attachment",
+    change: "attach",
+  },
+  {
+    name: "malformed RFC 5322",
+    reason: "malformed_message",
+    text: "From: a@example.com\r\nFrom: b@example.com\r\n\r\nBody",
+  },
+  {
+    name: "malformed Outlook",
+    reason: "malformed_message",
+    mimeType: MSG_MIME_TYPE,
+    text: "not a compound file",
+  },
+  {
+    name: "malformed data-box",
+    reason: "data_box_not_signed_data",
+    mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    text: "not a CMS file",
+  },
+  {
+    name: "missing sender",
+    reason: "no_sender",
+    text: "Subject: Draft\r\n\r\nBody",
+  },
+  { name: "oversized email", reason: "message_too_large", oversized: true },
+  {
+    name: "rejected attachment",
+    reason: "attachment_rejected",
+    mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    rejection: true,
+  },
+] as const;
+
+test.each(terminalCases)(
+  "a replacement ending in $name reconciles only its source generation",
+  async (scenario) => {
+    const entityId = createSafeId<"entity">();
+    const scope = { organizationId: ids.orgA, workspaceId: ids.wsA1, entityId };
+    const scopedDbForUploader: NonNullable<
+      FilingOptions["scopedDbForUploader"]
+    > = ({ userId }) => createScopedDb(testDb, [ids.wsA1], ids.orgA, userId);
+    const scopedDbForSource: NonNullable<
+      FilingOptions["scopedDbForSource"]
+    > = () => createScopedDb(testDb, [ids.wsA1], ids.orgA, null);
+    await testDb.insert(entities).values({
+      id: entityId,
+      workspaceId: ids.wsA1,
+      name: "Versioned correspondence",
+      createdBy: ids.userA1,
+    });
+    const addVersion = async (versionNumber: number, mimeType: string) => {
+      const versionId = createSafeId<"entityVersion">();
+      const fileId = `source-${versionId}`;
+      await testDb.insert(entityVersions).values({
+        id: versionId,
+        workspaceId: ids.wsA1,
+        entityId,
+        versionNumber,
+        createdBy: versionNumber === 1 ? ids.userA1 : ids.userAdmin,
+      });
+      await testDb.insert(fields).values({
+        id: createSafeId<"field">(),
+        workspaceId: ids.wsA1,
+        entityVersionId: versionId,
+        propertyId: ids.filePropertyA1,
+        content: {
+          type: "file",
+          id: fileId,
+          mimeType,
+          fileName: "letter",
+          sizeBytes: 128,
+          pdfFileId: null,
+          sha256Hex: "a".repeat(64),
+          encrypted: false,
+          version: 1,
+        },
+      });
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: versionId })
+        .where(eq(entities.id, entityId));
+      return fileId;
+    };
+    const initialFileId = await addVersion(1, EML_MIME_TYPE);
+    const initial = await fileUploadedMail({
+      database: testDb,
+      scope,
+      sourceFileId: initialFileId,
+      mimeType: EML_MIME_TYPE,
+      bytes: emlFile(GOLDEN_MESSAGE),
+      scopedDbForUploader,
+      scopedDbForSource,
+    });
+    expect(initial.isOk() && initial.value.status).toBe("filed");
+    if (initial.isErr() || initial.value.status === "skipped") {
+      throw new Error(
+        "The initial file must establish correspondence before replacement",
+      );
+    }
+    const oldId = initial.value.correspondenceId;
+    const mimeType = "mimeType" in scenario ? scenario.mimeType : EML_MIME_TYPE;
+    const change = "change" in scenario ? scenario.change : undefined;
+    if (change === "remove_access") {
+      await testDb
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, ids.memberA1wsA1));
+    }
+    const currentFileId = await addVersion(2, mimeType);
+    if (change === "remove_uploader") {
+      await testDb
+        .update(entities)
+        .set({ createdBy: null })
+        .where(eq(entities.id, entityId));
+    }
+    if (change === "attach") {
+      const deliveredFileId = createSafeId<"entity">();
+      await testDb.insert(entities).values({
+        id: deliveredFileId,
+        workspaceId: ids.wsA1,
+        name: "Other correspondence",
+        createdBy: ids.userA1,
+      });
+      const delivered = await fileUploadedMail({
+        database: testDb,
+        scope: { ...scope, entityId: deliveredFileId },
+        mimeType: EML_MIME_TYPE,
+        bytes: emlFile(GOLDEN_MESSAGE),
+        scopedDbForUploader,
+        scopedDbForSource,
+      });
+      if (delivered.isErr() || delivered.value.status === "skipped") {
+        throw new Error("Expected owning correspondence");
+      }
+      await testDb.insert(correspondenceAttachments).values({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        correspondenceId: delivered.value.correspondenceId,
+        entityId,
+        ordinal: 0,
+        filename: "letter.eml",
+        mediaType: EML_MIME_TYPE,
+        byteSize: 1,
+        scanVerdict: "clean",
+      });
+    }
+    const rejectingScan: NonNullable<
+      FilingOptions["scanAttachment"]
+    > = async () => {
+      const rejection = fileSecurityRejection({
+        verdict: "reject",
+        findings: [
+          { rule: "test-rule", severity: "reject", message: "rejected" },
+        ],
+      });
+      if (rejection === null) {
+        throw new Error("Expected security rejection");
+      }
+      return Result.err(
+        new FileScanRejectedError({
+          message: rejection.message,
+          rejection,
+          inspectionFailures: [],
+        }),
+      );
+    };
+    const replacementBytes = async () => {
+      if ("text" in scenario) {
+        return new TextEncoder().encode(scenario.text).buffer;
+      }
+      if ("oversized" in scenario) {
+        return new Uint8Array(INBOUND_MAIL_LIMITS.rawBytes + 1).buffer;
+      }
+      if ("rejection" in scenario) {
+        return new Uint8Array(await zfoFile(FIXTURE_MESSAGE)).buffer;
+      }
+      return emlFile({ ...GOLDEN_MESSAGE, subject: "Replacement message" });
+    };
+    const bytes = await replacementBytes();
+    if ("deleted" in scenario) {
+      await testDb.delete(entities).where(eq(entities.id, entityId));
+    }
+    const verifyOriginal: NonNullable<
+      FilingOptions["verifyOriginal"]
+    > = async () => {
+      const newestVersionId = createSafeId<"entityVersion">();
+      await testDb.insert(entityVersions).values({
+        id: newestVersionId,
+        entityId,
+        workspaceId: ids.wsA1,
+        versionNumber: 3,
+        createdBy: ids.userAdmin,
+      });
+      await testDb.insert(fields).values({
+        id: createSafeId<"field">(),
+        workspaceId: ids.wsA1,
+        entityVersionId: newestVersionId,
+        propertyId: ids.filePropertyA1,
+        content: {
+          type: "file",
+          id: currentFileId,
+          mimeType,
+          fileName: "letter",
+          sizeBytes: 128,
+          pdfFileId: null,
+          sha256Hex: "b".repeat(64),
+          encrypted: false,
+          version: 1,
+        },
+      });
+      await testDb
+        .update(entities)
+        .set({ currentVersionId: newestVersionId })
+        .where(eq(entities.id, entityId));
+      const newest = await fileUploadedMail({
+        database: testDb,
+        scope,
+        sourceFileId: currentFileId,
+        mimeType,
+        bytes: emlFile({ ...GOLDEN_MESSAGE, subject: "Newest message" }),
+        scopedDbForUploader,
+        scopedDbForSource,
+      });
+      expect(newest.isOk() && newest.value.status).toBe("filed");
+      return Result.ok({ status: "unverified" });
+    };
+    try {
+      for (const attempt of "superseded" in scenario ? [1] : [1, 2]) {
+        const outcome = await fileUploadedMail({
+          database: testDb,
+          scope,
+          sourceFileId: currentFileId,
+          mimeType,
+          bytes,
+          scopedDbForUploader,
+          scopedDbForSource,
+          scanAttachment: rejectingScan,
+          ...("invalidContent" in scenario
+            ? {
+                createRecord: async () => ({
+                  type: "invalid_content" as const,
+                }),
+              }
+            : {}),
+          ...("superseded" in scenario ? { verifyOriginal } : {}),
+          ...("unavailable" in scenario && attempt === 1
+            ? {
+                scopedDbForSource: () => async () => {
+                  throw new Error("Retirement database unavailable");
+                },
+              }
+            : {}),
+        });
+        if ("unavailable" in scenario && attempt === 1) {
+          expect(outcome.isErr()).toBe(true);
+          expect(
+            await testDb
+              .select({ id: correspondence.id })
+              .from(correspondence)
+              .where(eq(correspondence.id, oldId)),
+          ).toHaveLength(1);
+          continue;
+        }
+        expect({ attempt, outcome: outcome.isOk() && outcome.value }).toEqual({
+          attempt,
+          outcome: { status: "skipped", reason: scenario.reason },
+        });
+        expect(
+          await testDb
+            .select({ id: correspondence.id })
+            .from(correspondence)
+            .where(eq(correspondence.id, oldId)),
+        ).toEqual([]);
+        expect(
+          await testDb
+            .select({ id: correspondenceSources.entityId })
+            .from(correspondenceSources)
+            .where(eq(correspondenceSources.entityId, entityId)),
+        ).toHaveLength("superseded" in scenario ? 1 : 0);
+        if ("superseded" in scenario) {
+          expect(
+            await testDb
+              .select({ subject: correspondence.subject })
+              .from(correspondence)
+              .where(eq(correspondence.sourceEntityId, entityId)),
+          ).toEqual([{ subject: "Newest message" }]);
+        }
+        expect(
+          await testDb
+            .select({ id: entities.id })
+            .from(entities)
+            .where(eq(entities.id, entityId)),
+        ).toHaveLength("deleted" in scenario ? 0 : 1);
+      }
+    } finally {
+      if (change === "remove_access") {
+        await testDb.insert(workspaceMembers).values({
+          id: ids.memberA1wsA1,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+        });
+      }
+    }
+  },
+);
 
 test("only the current immutable file generation may file or retire uploaded correspondence", async () => {
   const entityId = createSafeId<"entity">();

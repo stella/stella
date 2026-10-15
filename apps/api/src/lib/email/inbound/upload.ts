@@ -98,8 +98,8 @@ type UploadedMailOutcome =
   | { status: "skipped"; reason: UploadedMailSkipReason };
 
 /**
- * The database could not be reached or a statement failed. Nothing was
- * committed for the file, so the same input can be filed again later.
+ * Filing or completion failed. Retry the same source generation; any already
+ * committed record and attachment ordinals are resumed idempotently.
  */
 export class UploadedMailUnavailableError extends TaggedError(
   "UploadedMailUnavailableError",
@@ -140,6 +140,7 @@ type FileUploadedMailOptions = {
   verifyOriginal?: typeof verifyOriginalSignature;
   createDocument?: typeof createEntityFromBuffer;
   scanAttachment?: typeof scanUpload;
+  createRecord?: typeof createCorrespondence;
 };
 
 const scopedDbForUploaderDefault = ({
@@ -241,13 +242,33 @@ export const retireUploadedMailSource = async ({
   if (file.currentVersionId !== null && !file.sourceMatches) {
     return skipped("source_changed");
   }
+  return await retireUploadedMailVersion({
+    scope,
+    expectedSourceVersionId: file.currentVersionId,
+    scopedDbForSource,
+  });
+};
+
+type RetireUploadedMailVersionOptions = {
+  scope: UploadedMailScope;
+  expectedSourceVersionId: SafeId<"entityVersion"> | null;
+  scopedDbForSource: NonNullable<FileUploadedMailOptions["scopedDbForSource"]>;
+};
+
+const retireUploadedMailVersion = async ({
+  scope,
+  expectedSourceVersionId,
+  scopedDbForSource,
+}: RetireUploadedMailVersionOptions): Promise<
+  Result<UploadedMailOutcome, UploadedMailUnavailableError>
+> => {
   const actor = TENANT_SYSTEM_ACTOR.uploadedMail;
   const retired = await retireCorrespondenceSource({
     safeDb: safeDbFromScoped(scopedDbForSource(scope)),
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
     sourceEntityId: scope.entityId,
-    expectedSourceVersionId: file.currentVersionId,
+    expectedSourceVersionId,
     recordAuditEvent: createBackgroundAuditRecorder({
       organizationId: scope.organizationId,
       workspaceId: scope.workspaceId,
@@ -364,9 +385,6 @@ type UploadedFiling = {
   receivedAt: string;
   recordAuditEvent: AuditRecorder;
   expectedSourceVersionId: SafeId<"entityVersion"> | null;
-  retireRejected: (
-    reason: UploadedMailSkipReason,
-  ) => Promise<Result<UploadedMailOutcome, UploadedMailUnavailableError>>;
 };
 
 type DataBoxCorrespondenceOptions = {
@@ -427,6 +445,7 @@ type FileUploadedDataBoxMessageOptions = {
   filing: UploadedFiling;
   createDocument: typeof createEntityFromBuffer;
   scanAttachment: typeof scanUpload;
+  createRecord: typeof createCorrespondence;
 };
 
 /**
@@ -439,13 +458,14 @@ const fileUploadedDataBoxMessage = async ({
   filing,
   createDocument,
   scanAttachment,
+  createRecord,
 }: FileUploadedDataBoxMessageOptions): Promise<
   Result<UploadedMailOutcome, UploadedMailUnavailableError>
 > => {
   const { bytes, scope, userId, scopedDb, recordAuditEvent } = filing;
   const parsed = parseDataBoxMessage(new Uint8Array(bytes));
   if (parsed.isErr()) {
-    return await filing.retireRejected(`data_box_${parsed.error.reason}`);
+    return skipped(`data_box_${parsed.error.reason}`);
   }
   const scannedFiles = [];
   for (const file of parsed.value.files) {
@@ -458,12 +478,12 @@ const fileUploadedDataBoxMessage = async ({
     if (scanned.isErr()) {
       observeScanFailures(scanned.error);
       return FileScanRejectedError.is(scanned.error)
-        ? await filing.retireRejected("attachment_rejected")
+        ? skipped("attachment_rejected")
         : Result.err(unavailable(scanned.error));
     }
     scannedFiles.push(scanned.value);
   }
-  const created = await createCorrespondence({
+  const created = await createRecord({
     safeDb: safeDbFromScoped(scopedDb),
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
@@ -513,58 +533,23 @@ const fileUploadedDataBoxMessage = async ({
  * the file; the record links the file instead of storing them again, and
  * replays converge on the file's one record.
  */
-export const fileUploadedMail = async ({
+const attemptUploadedMail = async ({
   bytes,
   mimeType,
-  sourceFileId,
   scope,
-  database,
   scopedDbForUploader = scopedDbForUploaderDefault,
-  scopedDbForSource = scopedDbForSourceDefault,
+  file,
   verifyOriginal = verifyOriginalSignature,
   createDocument = createEntityFromBuffer,
   scanAttachment = scanUpload,
-}: FileUploadedMailOptions): Promise<
-  Result<UploadedMailOutcome, UploadedMailUnavailableError>
-> => {
+  createRecord = createCorrespondence,
+}: FileUploadedMailOptions & {
+  file: Awaited<ReturnType<typeof readUploader>>;
+}): Promise<Result<UploadedMailOutcome, UploadedMailUnavailableError>> => {
   if (!isUploadedMailMimeType(mimeType)) {
-    return await retireUploadedMailSource({
-      database,
-      scope,
-      ...(sourceFileId === undefined ? {} : { sourceFileId }),
-      scopedDbForSource,
-    });
+    return skipped("not_email");
   }
-  const retireRejected = async (reason: UploadedMailSkipReason) => {
-    const retired = await retireUploadedMailSource({
-      database,
-      scope,
-      ...(sourceFileId === undefined ? {} : { sourceFileId }),
-      scopedDbForSource,
-    });
-    if (
-      retired.isErr() ||
-      (retired.value.status === "skipped" &&
-        retired.value.reason === "source_changed")
-    ) {
-      return retired;
-    }
-    return skipped(reason);
-  };
   const format = UPLOADED_MAIL_FORMATS[mimeType];
-  const read = await Result.tryPromise({
-    try: async () =>
-      await readUploader({
-        database,
-        scope,
-        ...(sourceFileId === undefined ? {} : { sourceFileId }),
-      }),
-    catch: unavailable,
-  });
-  if (read.isErr()) {
-    return read;
-  }
-  const file = read.value;
   if (file === null) {
     return skipped("source_missing");
   }
@@ -572,7 +557,7 @@ export const fileUploadedMail = async ({
     return skipped("source_changed");
   }
   if (file.createdBy === null || file.uploaderEmail === null) {
-    return await retireRejected("no_uploader");
+    return skipped("no_uploader");
   }
   const userId = brandPersistedUserId(file.createdBy);
   const scopedDb = scopedDbForUploader({
@@ -613,21 +598,21 @@ export const fileUploadedMail = async ({
         receivedAt: file.createdAt.toISOString(),
         recordAuditEvent,
         expectedSourceVersionId: file.currentVersionId,
-        retireRejected,
       },
       createDocument,
       scanAttachment,
+      createRecord,
     });
   }
   const parsed = await parseEmailFile({ bytes, format });
   if (parsed.isErr()) {
-    return await retireRejected(PARSE_DROP_REASON[parsed.error.reason]);
+    return skipped(PARSE_DROP_REASON[parsed.error.reason]);
   }
   const { from } = parsed.value;
   if (from === null) {
-    return await retireRejected("no_sender");
+    return skipped("no_sender");
   }
-  const created = await createCorrespondence({
+  const created = await createRecord({
     safeDb: safeDbFromScoped(scopedDb),
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
@@ -651,4 +636,43 @@ export const fileUploadedMail = async ({
     recordAuditEvent,
   });
   return filingOutcome(created);
+};
+
+/** Every terminal non-filing result reconciles the attempted source generation. */
+export const fileUploadedMail = async (
+  options: FileUploadedMailOptions,
+): Promise<Result<UploadedMailOutcome, UploadedMailUnavailableError>> => {
+  const read = await Result.tryPromise({
+    try: async () => await readUploader(options),
+    catch: unavailable,
+  });
+  if (read.isErr()) {
+    return read;
+  }
+  const file = read.value;
+  const outcome = await attemptUploadedMail({ ...options, file });
+  if (outcome.isErr() || outcome.value.status !== "skipped") {
+    return outcome;
+  }
+  // Missing or stale jobs must never detach the current generation. All other
+  // refusals, including access denial, retire under the captured version token.
+  if (
+    file === null ||
+    (file.currentVersionId !== null && !file.sourceMatches)
+  ) {
+    return outcome;
+  }
+  const retired = await retireUploadedMailVersion({
+    scope: options.scope,
+    expectedSourceVersionId: file.currentVersionId,
+    scopedDbForSource: options.scopedDbForSource ?? scopedDbForSourceDefault,
+  });
+  if (
+    retired.isErr() ||
+    (retired.value.status === "skipped" &&
+      retired.value.reason === "source_changed")
+  ) {
+    return retired;
+  }
+  return outcome;
 };

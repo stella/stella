@@ -116,6 +116,15 @@ correspondence. The job rereads the stored object; a
 permanent refusal is a logged skip, an unavailable database retries with
 backoff, and only an exhausted job or a failed hand-off is captured.
 
+The public filing boundary reconciles every terminal skip through the system
+source-retirement protocol, including access denial, parse refusals and files
+that are no longer correspondence. Cleanup uses the version captured before
+the filing attempt, so even a refusal that races a replacement cannot retire
+the newer version. Missing or initially stale sources leave current records
+alone. A cleanup failure remains retryable; it cannot acknowledge a refusal.
+Retryable filing errors also remain errors, preserving any record already
+created while attachment completion retries.
+
 - `parseEmailFile` reads the file as one message under the inbound limits: the
   same normalization as delivered mail, with an adapter for Outlook's MAPI
   properties. A forward inside the file is not extracted.
