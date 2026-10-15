@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestClock, deferred } from "@stll/test-kit";
 
 import type { Transaction } from "@/api/db/root";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -519,42 +520,57 @@ if (!databaseUrl || !runPostgres) {
                 activeCallbacks -= 1;
               }
             });
-        const started = performance.now();
-        expect(
-          await rejectionOf(
-            withInterleaving({
-              databaseUrl,
-              timeoutMs: 500,
-              a: {
-                transaction: transaction("a"),
-                steps: [
-                  {
-                    name: "stall",
-                    run: async (_tx, signal) => {
-                      const cancelled = Promise.withResolvers<undefined>();
-                      signal.addEventListener(
-                        "abort",
-                        () => cancelled.resolve(undefined),
-                        { once: true },
-                      );
-                      await cancelled.promise;
-                      await Bun.sleep(50);
-                      cancelledStepSettled = true;
-                      signal.throwIfAborted();
-                    },
+        const clock = createTestClock();
+        const stepStarted = deferred();
+        const releaseCancellation = deferred();
+        const timedOut = rejectionOf(
+          withInterleaving({
+            clock,
+            databaseUrl,
+            timeoutMs: 500,
+            a: {
+              transaction: transaction("a"),
+              steps: [
+                {
+                  name: "stall",
+                  run: async (_tx, signal) => {
+                    const cancelled = Promise.withResolvers<undefined>();
+                    signal.addEventListener(
+                      "abort",
+                      () => cancelled.resolve(undefined),
+                      { once: true },
+                    );
+                    stepStarted.resolve();
+                    await cancelled.promise;
+                    await releaseCancellation.promise;
+                    cancelledStepSettled = true;
+                    signal.throwIfAborted();
                   },
-                ],
-              },
-              b: { transaction: transaction("b"), steps: [] },
-              reset: async () => {},
-              readState: async () => null,
-              invariant: () => panic("Stalled schedule must not complete"),
-            }),
-          ),
-        ).toBeInstanceOf(InterleavingTimeout);
+                },
+              ],
+            },
+            b: { transaction: transaction("b"), steps: [] },
+            reset: async () => {},
+            readState: async () => null,
+            invariant: () => panic("Stalled schedule must not complete"),
+          }),
+        ).then((error) => {
+          expect(cancelledStepSettled).toBe(true);
+          expect(activeCallbacks).toBe(0);
+          return error;
+        });
+        try {
+          await stepStarted.promise;
+          await clock.advance(500);
+          expect(cancelledStepSettled).toBe(false);
+          expect(activeCallbacks).toBeGreaterThan(0);
+        } finally {
+          releaseCancellation.resolve();
+        }
+        expect(await timedOut).toBeInstanceOf(InterleavingTimeout);
         expect(cancelledStepSettled).toBe(true);
         expect(activeCallbacks).toBe(0);
-        expect(performance.now() - started).toBeLessThan(2000);
+        expect(clock.pendingSleepers()).toBe(0);
         for (const { db } of Object.values(connections)) {
           expect(
             (await db.execute(sql`SELECT 1 AS value`)).at(0)?.["value"],

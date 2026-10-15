@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { type Clock, systemClock } from "@stll/test-kit";
 
 import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -48,6 +49,7 @@ type InterleavingOptions<State> = {
   readState: () => Promise<State>;
   invariant: (result: InterleavingResult<State>) => void | Promise<void>;
   timeoutMs?: number;
+  clock?: Clock;
 };
 
 /** Commit is a scheduled boundary: locks remain held after the last query. */
@@ -96,6 +98,7 @@ export const withInterleaving = async <State>({
   readState,
   invariant,
   timeoutMs = 5000,
+  clock = systemClock,
 }: InterleavingOptions<State>): Promise<InterleavingResult<State>[]> => {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     panic("Interleaving requires a positive finite deadline");
@@ -146,13 +149,25 @@ export const withInterleaving = async <State>({
         const stepPids = new Set<number>();
         const stepTasks: Promise<unknown>[] = [];
         const timeout = Promise.withResolvers<never>();
-        const timer = setTimeout(() => {
-          const error = new InterleavingTimeout({
-            message: "Interleaving exceeded its deadline",
-          });
-          controller.abort(error);
-          timeout.reject(error);
-        }, timeoutMs);
+        const stopDeadline = new AbortController();
+        const timer = clock
+          .sleep(timeoutMs, { signal: stopDeadline.signal })
+          .then(
+            () => {
+              const error = new InterleavingTimeout({
+                message: "Interleaving exceeded its deadline",
+              });
+              controller.abort(error);
+              timeout.reject(error);
+              return undefined;
+            },
+            (error: unknown) => {
+              if (error !== stopDeadline.signal.reason) {
+                timeout.reject(error);
+              }
+              return undefined;
+            },
+          );
         const bounded = async <T>(work: PromiseLike<T>) =>
           Promise.race([work, timeout.promise]);
         let stopped = false;
@@ -241,9 +256,9 @@ export const withInterleaving = async <State>({
           }
           completed.add(`${actor}.commit`);
         });
-        const deadline = performance.now() + timeoutMs;
+        const deadline = clock.monotonic() + timeoutMs;
         const checkDeadline = () => {
-          if (performance.now() >= deadline) {
+          if (clock.monotonic() >= deadline) {
             throw new InterleavingTimeout({
               message: "Interleaving exceeded its deadline",
             });
@@ -339,7 +354,8 @@ export const withInterleaving = async <State>({
               },
             );
           } finally {
-            clearTimeout(timer);
+            stopDeadline.abort();
+            await timer;
           }
         }
       },

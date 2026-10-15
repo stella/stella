@@ -14,6 +14,10 @@ import {
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
+import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
@@ -38,12 +42,14 @@ import {
 } from "@/api/tests/helpers/oauth-grant";
 
 beforeAll(async () => {
-  await initAgentAuthTestDb();
+  await initAgentAuthTestDb({ logger: queryCountLogger });
 });
 
 afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
+
+const REGISTRATION_QUERY_BUDGET = 13;
 
 /**
  * Better Auth buckets the registration rate limit per client address
@@ -54,19 +60,23 @@ afterAll(async () => {
 let registrationsIssued = 0;
 const registerClient = async (body: Record<string, unknown>) => {
   registrationsIssued += 1;
-  const startedAt = performance.now();
-  const response = await getAuth().handler(
-    new Request(getAuthEndpointUrl("oauth2/register"), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
-      },
-      body: JSON.stringify(body),
-    }),
-  );
-  expect(performance.now() - startedAt).toBeLessThan(10_000);
-  return response;
+  return await runWithQueryCounter(async (counter) => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("oauth2/register"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          [AUTH_CLIENT_ADDRESS_HEADER]: `198.51.100.${String(registrationsIssued)}`,
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+    if (response.ok) {
+      expect(counter.count).toBeGreaterThan(0);
+    }
+    expect(counter.count).toBeLessThanOrEqual(REGISTRATION_QUERY_BUDGET);
+    return response;
+  });
 };
 
 const registrationResponseSchema = v.looseObject({

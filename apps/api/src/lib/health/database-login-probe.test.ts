@@ -285,11 +285,13 @@ const backendMessage = (type: string, body: Uint8Array): Uint8Array => {
  */
 const stallingServer = () => {
   const queryReceived = Promise.withResolvers<undefined>();
+  const stalledConnectionClosed = Promise.withResolvers<undefined>();
   let started = false;
   const server = Bun.listen({
     hostname: "127.0.0.1",
     port: 0,
     socket: {
+      close: () => stalledConnectionClosed.resolve(undefined),
       data: (socket, data) => {
         const view = new DataView(data.buffer, data.byteOffset, data.length);
         if (data.length === 8 && view.getInt32(4) === SSL_REQUEST_CODE) {
@@ -306,12 +308,16 @@ const stallingServer = () => {
       },
     },
   });
-  return { server, queryReceived: queryReceived.promise };
+  return {
+    server,
+    queryReceived: queryReceived.promise,
+    stalledConnectionClosed: stalledConnectionClosed.promise,
+  };
 };
 
 describe("the dedicated login client", () => {
   test("closing it ends a query the server never answers", async () => {
-    const { server, queryReceived } = stallingServer();
+    const { server, queryReceived, stalledConnectionClosed } = stallingServer();
     try {
       const client = openFreshLoginClient(
         `postgres://app:unused@127.0.0.1:${String(server.port)}/app`,
@@ -322,11 +328,10 @@ describe("the dedicated login client", () => {
       );
       await queryReceived;
 
-      const closing = performance.now();
       await client.close();
       const outcome = await query;
+      await stalledConnectionClosed;
 
-      expect(performance.now() - closing).toBeLessThan(1000);
       expect(outcome).toMatchObject({ code: "ERR_POSTGRES_CONNECTION_CLOSED" });
     } finally {
       server.stop(true);

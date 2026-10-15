@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_ERROR_CODE,
@@ -524,21 +524,75 @@ describe("stopping a command", () => {
 
   test("a stop after the click reports an unknown outcome at once", async () => {
     const { emit, handlers } = installFakeChrome();
+    const stop = new AbortController();
+    let dispatched = 0;
     handlers["action"] = () => {
       // The click starts a navigation that never finishes.
+      dispatched += 1;
       emit(CONTROLLED_TAB_ID, { status: "loading" });
+      stop.abort();
       return [{ frameId: 0, result: { ok: true } }];
     };
-    const stop = new AbortController();
-    setTimeout(() => stop.abort(), 50);
-    const started = Date.now();
-
     const result = await run(click(), { signal: stop.signal });
     expect(result).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
     expect(JSON.stringify(result)).toContain("stopped");
-    expect(Date.now() - started).toBeLessThan(2000);
+    expect(dispatched).toBe(1);
+  });
+
+  test("a stop interrupts navigation already waiting after the click", async () => {
+    const { chrome, emit, handlers } = installFakeChrome();
+    const stop = new AbortController();
+    const navigationWaiter = Promise.withResolvers<undefined>();
+    let dispatched = 0;
+    let readLoadingTab = false;
+    handlers["action"] = () => {
+      dispatched += 1;
+      emit(CONTROLLED_TAB_ID, { status: "loading" });
+      return [{ frameId: 0, result: { ok: true } }];
+    };
+    const getTab = chrome.tabs.get;
+    const reading = spyOn(chrome.tabs, "get").mockImplementation(
+      async (tabId) => {
+        const tab = await getTab(tabId);
+        if (dispatched > 0 && tab.status === "loading") {
+          readLoadingTab = true;
+        }
+        return tab;
+      },
+    );
+    const addListener = stop.signal.addEventListener.bind(stop.signal);
+    const listening = spyOn(stop.signal, "addEventListener").mockImplementation(
+      (...args: Parameters<typeof addListener>) => {
+        addListener(...args);
+        // The initial navigation-start race precedes this loading-tab read.
+        if (args[0] === "abort" && readLoadingTab) {
+          navigationWaiter.resolve(undefined);
+        }
+      },
+    );
+    try {
+      const pending = run(click(), { signal: stop.signal });
+      expect(
+        await Promise.race([
+          navigationWaiter.promise.then(() => true),
+          pending.then(() => false),
+        ]),
+      ).toBe(true);
+      expect(dispatched).toBe(1);
+      expect(stop.signal.aborted).toBe(false);
+      stop.abort();
+      const result = await pending;
+      expect(result).toMatchObject({
+        code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+      });
+      expect(JSON.stringify(result)).toContain("stopped");
+    } finally {
+      stop.abort();
+      listening.mockRestore();
+      reading.mockRestore();
+    }
   });
 });
 

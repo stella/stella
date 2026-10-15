@@ -801,7 +801,7 @@ describe("validateAst on deeply nested markup", () => {
 });
 
 describe("validateAst scaling", () => {
-  test("a flat many-paragraph document validates in linear-ish time", () => {
+  test("a flat many-paragraph document validates within a linear work budget", () => {
     const count = 6000;
     const paragraphs = Array.from(
       { length: count },
@@ -816,14 +816,24 @@ describe("validateAst scaling", () => {
       plainText: `Paragraf ${index} sądu okręgowego w sprawie.`,
     }));
 
-    const start = performance.now();
     const result = validateAst(html, blocks);
-    const elapsed = performance.now() - start;
 
     expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
       [],
     );
-    expect(elapsed).toBeLessThan(20_000);
+    const sourceCharacters = blocks.reduce(
+      (total, block) => total + block.plainText.length,
+      0,
+    );
+    expect(result.stats.work.textComputations).toBeGreaterThanOrEqual(count);
+    expect(result.stats.work.textComputations).toBeLessThanOrEqual(count + 1);
+    expect(result.stats.work.textCharacters).toBeGreaterThanOrEqual(
+      sourceCharacters,
+    );
+    expect(result.stats.work.textCharacters).toBeLessThanOrEqual(
+      sourceCharacters * 3,
+    );
+    expect(result.stats.work.ancestorChecks).toBe(count);
   });
 
   /**

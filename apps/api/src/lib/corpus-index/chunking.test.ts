@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -188,14 +189,36 @@ describe("chunkLegislationDocument preserves and bounds legislation", () => {
     expectLegislationBudget(chunks.map(({ text }) => text));
   });
 
-  test("streams dense fallback boundaries across a large source", () => {
+  test("streams dense fallback boundaries within a linear byte-measurement work budget", () => {
     const source = "x\n\n".repeat(4 * 1024 * 1024);
-    const startedAt = performance.now();
-    const chunks = legislationChunks(source);
-    const elapsedMs = performance.now() - startedAt;
+    // Each chunk's binary search examines at most 21 bounded windows; boundary
+    // measurements must advance through disjoint spans instead of rereading prefixes.
+    const maxMeasuredCodeUnits = source.length * 32;
+    const byteLength = Buffer.byteLength;
+    let measuredCodeUnits = 0;
+    const measurements = spyOn(Buffer, "byteLength");
+    measurements.mockImplementation((value, encoding) => {
+      // Millions of boundaries need counters, not retained mock call arguments.
+      measurements.mockClear();
+      if (typeof value === "string") {
+        measuredCodeUnits += value.length;
+      }
+      if (measuredCodeUnits > maxMeasuredCodeUnits) {
+        panic("Chunking exceeded its byte-measurement work budget");
+      }
+      return byteLength(value, encoding);
+    });
+    const chunks = (() => {
+      try {
+        return legislationChunks(source);
+      } finally {
+        measurements.mockRestore();
+      }
+    })();
     const texts = chunks.map(({ text }) => text);
 
-    expect(elapsedMs).toBeLessThan(20_000);
+    expect(measuredCodeUnits).toBeGreaterThanOrEqual(source.length);
+    expect(measuredCodeUnits).toBeLessThanOrEqual(maxMeasuredCodeUnits);
     expect(texts.join("")).toBe(source);
     expect(chunks.length).toBeGreaterThan(8);
     expectLegislationBudget(texts);

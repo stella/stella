@@ -1,6 +1,6 @@
 import { Panic, UnhandledException } from "better-result";
 import { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { classifyFailure } from "@stll/errors";
 
@@ -320,15 +320,33 @@ describe("failure evidence reads frames", () => {
       message,
       [`Error: ${message}`, at("/app/apps/api/src/big.ts:5:6")].join("\n"),
     );
-    const started = performance.now();
-
-    const frame = readEvidence(error).nodes[0]?.frame;
+    const originalSplit = String.prototype.split;
+    const splitBytes: number[] = [];
+    const splitting = spyOn(String.prototype, "split").mockImplementation(
+      function (this: string, separator, limit) {
+        splitBytes.push(new TextEncoder().encode(this).byteLength);
+        const split = originalSplit.bind(this);
+        if (typeof separator === "string" || separator instanceof RegExp) {
+          return split(separator, limit);
+        }
+        return split(separator, limit);
+      },
+    );
+    let evidence: ReturnType<typeof readEvidence>;
+    try {
+      evidence = readEvidence(error);
+    } finally {
+      splitting.mockRestore();
+    }
+    const frame = evidence.nodes[0]?.frame;
 
     expect(frame).toEqual({
       kind: "recognized",
       location: "/app/apps/api/src/big.ts:5:6",
     });
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(splitBytes).toHaveLength(1);
+    expect(Math.max(...splitBytes)).toBeLessThanOrEqual(8 * 1024);
+    expect(new TextEncoder().encode(message).byteLength).toBe(1024 * 1024);
   });
 
   test("frames past the line bound are not searched", () => {
