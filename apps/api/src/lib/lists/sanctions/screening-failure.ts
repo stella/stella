@@ -12,7 +12,10 @@ import {
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
+import {
+  emitFailureMetric,
+  emitSanctionsScreeningWorkMetric,
+} from "@/api/lib/observability/request-metrics";
 
 const SANCTIONS_MATCHER_FAILURE_CAUSES = [
   "closed",
@@ -164,4 +167,29 @@ export const reportSanctionsMatcherFailure = ({
     stage,
     phase: reason,
   });
+};
+
+// Above this share a list is close to refusing common names with work-limit.
+export const SANCTIONS_WORK_PRESSURE = 0.7;
+
+/** Every completed screening reports its budget share; high shares warn. */
+export const reportSanctionsScreeningWork = ({
+  source,
+  spent,
+  limit,
+}: {
+  source: SanctionsSource;
+  spent: number;
+  limit: number;
+}): void => {
+  const share = spent / limit;
+  emitSanctionsScreeningWorkMetric({ source, percent: share * 100 });
+  if (share > SANCTIONS_WORK_PRESSURE) {
+    logger.warn("sanctions.screening_work_pressure", {
+      feature: "sanctions.screening",
+      source,
+      spent,
+      limit,
+    });
+  }
 };

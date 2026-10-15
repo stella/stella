@@ -442,7 +442,7 @@ export const createPublicSanctionsScreening = ({
               reportFailure(failure);
             }
           },
-          matcher: async ({ db, source, edition, query, limit }) => {
+          matcher: async ({ db, source, edition, query, limit, onWork }) => {
             if (isSanctionsMatcherCancelled(session.signal)) {
               return Result.err({
                 code: "load-failed",
@@ -463,6 +463,7 @@ export const createPublicSanctionsScreening = ({
             });
             switch (reply.status) {
               case "screened":
+                onWork(reply.work);
                 return Result.ok(reply.result);
               case "work-limit":
                 return Result.err({ code: "work-limit" } as const);

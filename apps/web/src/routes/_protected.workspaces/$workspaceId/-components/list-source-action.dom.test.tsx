@@ -49,7 +49,8 @@ const { workspaceFilesOptions } =
 const { legalListKeys, legalListSourcesOptions } =
   await import("@/lib/workspaces/queries/legal-lists");
 const { ListSourceAction } = await import("./list-source-action");
-const { ListItemSources } = await import("./list-item-sources");
+const { ListItemSources } =
+  await import("@/components/workspaces/list-item-sources");
 const { PDF_MIME, DOCX_MIME } = await import("@/lib/consts");
 const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
@@ -83,6 +84,7 @@ const settings = {
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
   matterNumberPadding: 3,
+  matterNumberingEnabled: false,
   practiceJurisdictions: [],
   promptCachingEnabled: true,
   managedAIResidency: "eu",

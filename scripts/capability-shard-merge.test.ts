@@ -309,6 +309,11 @@ process.exit(0);`,
     }
   },
   // Keep a bounded budget for the real handler graph, without cold-importing
-  // it in a new process for each regeneration and drift check.
+  // it in a new process for each regeneration and drift check. Measured
+  // locally: about 29 s in total; the cold first export takes about 8 s and
+  // each later export 1.1 to 1.9 s, because repeated exports reuse parsed
+  // sources and formatted shards. Before that reuse, the same run took 39 to
+  // 101 s depending on machine load, with 2 to 10 s per export. The budget
+  // stays at more than 6 times the measured run.
   180_000,
 );
