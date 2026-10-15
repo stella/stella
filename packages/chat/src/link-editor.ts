@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import type { EditorView } from "@tiptap/pm/view";
 import { panic } from "better-result";
 
 import { CHAT_LINK_ATTRIBUTES, CHAT_LINK_CLASS_NAME } from "./link";
@@ -41,6 +42,38 @@ const decorateChatLinks = (doc: ProseMirrorNode) => {
 };
 
 /** View-only links: saved drafts and submitted HTML retain the original bytes. */
+const composerLinkAt = (
+  view: EditorView,
+  event: MouseEvent,
+): HTMLAnchorElement | null => {
+  if (!(event.target instanceof Element)) {
+    return null;
+  }
+  const anchor = event.target.closest("a[data-chat-composer-link]");
+  return anchor instanceof HTMLAnchorElement && view.dom.contains(anchor)
+    ? anchor
+    : null;
+};
+
+// The composer is editable: a plain click only places the caret (the anchor
+// never navigates the page), while a modifier or middle click opens the link.
+const handleComposerLinkClick = (
+  view: EditorView,
+  event: MouseEvent,
+  opens: boolean,
+): boolean => {
+  const anchor = composerLinkAt(view, event);
+  if (anchor === null) {
+    return false;
+  }
+  event.preventDefault();
+  if (!opens) {
+    return false;
+  }
+  window.open(anchor.href, CHAT_LINK_ATTRIBUTES.target, "noopener,noreferrer");
+  return true;
+};
+
 export const ChatComposerLinks = Extension.create({
   name: "stllChatComposerLinks",
   addProseMirrorPlugins() {
@@ -109,25 +142,14 @@ export const ChatComposerLinks = Extension.create({
               });
               return false;
             },
-            click: (view, event) => {
-              if (!(event.target instanceof Element)) {
-                return false;
-              }
-              const anchor = event.target.closest("a[data-chat-composer-link]");
-              if (
-                !(anchor instanceof HTMLAnchorElement) ||
-                !view.dom.contains(anchor)
-              ) {
-                return false;
-              }
-              event.preventDefault();
-              window.open(
-                anchor.href,
-                CHAT_LINK_ATTRIBUTES.target,
-                "noopener,noreferrer",
-              );
-              return true;
-            },
+            click: (view, event) =>
+              handleComposerLinkClick(
+                view,
+                event,
+                event.metaKey || event.ctrlKey,
+              ),
+            auxclick: (view, event) =>
+              handleComposerLinkClick(view, event, event.button === 1),
           },
         },
       }),

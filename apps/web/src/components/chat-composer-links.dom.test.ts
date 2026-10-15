@@ -145,19 +145,38 @@ test("link detection spans formatting boundaries but not hard breaks", () => {
   );
 });
 
-test("composer anchors open immediately with opener isolation", () => {
+test("a plain click on a composer link edits text instead of opening it", () => {
   const editor = createEditor("www.stll.app");
   const open = spyOn(window, "open").mockReturnValue(null);
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   editor.view.dom
     .querySelector("a[data-chat-composer-link]")
-    ?.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
+    ?.dispatchEvent(click);
+  expect(open).not.toHaveBeenCalled();
+  // The anchor never navigates the page; ProseMirror keeps the caret.
+  expect(click.defaultPrevented).toBe(true);
+  open.mockRestore();
+});
+
+test("modifier and middle clicks open composer links with opener isolation", () => {
+  const editor = createEditor("www.stll.app");
+  const open = spyOn(window, "open").mockReturnValue(null);
+  const anchor = editor.view.dom.querySelector("a[data-chat-composer-link]");
+  for (const event of [
+    new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
+    new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true }),
+    new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }),
+  ]) {
+    anchor?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  }
+  expect(open).toHaveBeenCalledTimes(3);
   expect(open).toHaveBeenCalledWith(
     "https://www.stll.app/",
     "_blank",
     "noopener,noreferrer",
   );
+  open.mockRestore();
 });
 
 test("composer links stop at reference atoms without losing adjacent links", () => {
