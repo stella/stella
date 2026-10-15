@@ -127,6 +127,33 @@ test("deleted and integration-test files remain explicit unsupported cases", () 
   });
 });
 
+test("changed binary tests require an explicit Cargo binary target", () => {
+  withFixture((root) => {
+    write(
+      root,
+      "Cargo.toml",
+      '[package]\nname = "fixture"\nversion = "0.1.0"\n',
+    );
+    write(root, "src/bin/worker.rs", "#[test]\nfn works() {}\n");
+    write(root, "src/bin/worker/tasks.rs", "#[test]\nfn works() {}\n");
+    expect(
+      selectRustTargets(root, ["src/bin/worker.rs", "src/bin/worker/tasks.rs"]),
+    ).toEqual({
+      targets: [],
+      unsupported: [
+        {
+          file: "src/bin/worker.rs",
+          reason: "Rust binary tests need an explicit Cargo binary target",
+        },
+        {
+          file: "src/bin/worker/tasks.rs",
+          reason: "Rust binary tests need an explicit Cargo binary target",
+        },
+      ],
+    });
+  });
+});
+
 test("non-Rust changes avoid Cargo manifest discovery", () => {
   expect(selectRustTargets("/missing/repository", ["README.md"])).toEqual({
     targets: [],

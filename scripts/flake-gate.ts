@@ -14,6 +14,7 @@ import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
+import { terminateFlakeProcessTree } from "./flake-gate-process";
 import { selectRustTargets } from "./flake-gate-rust";
 
 export const REPEATS = 20;
@@ -99,7 +100,7 @@ export const selectTargets = ({
       manifestSchema,
       JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf-8")),
     );
-    let script = "test";
+    let script = manifest.scripts["test:bun"] ? "test:bun" : "test";
     let env: Record<string, string> = {};
     if (file.startsWith("apps/api/")) {
       const relative = file.slice("apps/api/".length);
@@ -238,15 +239,28 @@ const annotation = (value: string) =>
     .replaceAll(":", "%3A");
 
 type RunOptions = { target: Target; seed: number; timeoutMs: number };
-const outputTail = async (stream: ReadableStream<Uint8Array>) => {
+const outputTail = async (
+  reader: Pick<ReadableStreamDefaultReader<Uint8Array>, "read">,
+) => {
   const decoder = new TextDecoder();
   let tail = "";
-  for await (const chunk of stream) {
-    tail = (tail + decoder.decode(chunk, { stream: true })).slice(-65_536);
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      break;
+    }
+    tail = (tail + decoder.decode(chunk.value, { stream: true })).slice(
+      -65_536,
+    );
   }
   return tail + decoder.decode();
 };
 export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
+  if (process.platform === "win32") {
+    throw new FlakeGateError({
+      message: "Flake gate process deadlines require POSIX",
+    });
+  }
   // Native --rerun-each repeats cases in place. Fresh invocations reset shared setup
   // and shuffle the whole file for each trial; fixed seeds reproduce each order.
   const args =
@@ -259,31 +273,62 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
-    detached: process.platform !== "win32",
+    detached: true,
   });
-  const timer = setTimeout(
-    () => {
-      if (process.platform === "win32") {
-        child.kill("SIGKILL");
-      } else {
-        const killed = Result.try(() => process.kill(-child.pid, "SIGKILL"));
-        if (killed.isErr()) {
-          console.warn(
-            `::warning::Failed to terminate timed-out process group ${child.pid}`,
-          );
+  const stdoutReader = child.stdout.getReader();
+  const stderrReader = child.stderr.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let terminationFailure: string | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(
+      () => {
+        const terminated = Result.try(() =>
+          terminateFlakeProcessTree(child.pid),
+        );
+        if (terminated.isErr()) {
+          terminationFailure = terminated.error.message;
         }
-      }
-    },
-    Math.max(1, Math.floor(timeoutMs)),
-  );
-  const captured = await Result.tryPromise(async () =>
+        resolve("timeout");
+      },
+      Math.max(1, Math.floor(timeoutMs)),
+    );
+  });
+  const completed = Result.tryPromise(async () =>
     Promise.all([
       child.exited,
-      outputTail(child.stdout),
-      outputTail(child.stderr),
+      outputTail(stdoutReader),
+      outputTail(stderrReader),
     ]),
   );
+  const captured = await Promise.race([completed, deadline]);
   clearTimeout(timer);
+  if (captured === "timeout") {
+    // EOF confirms detached descendants have released their resources.
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    const drained = await Promise.race([
+      completed,
+      new Promise<"undrained">((resolve) => {
+        cleanupTimer = setTimeout(() => resolve("undrained"), 1000);
+      }),
+    ]);
+    clearTimeout(cleanupTimer);
+    const cancelled = await Result.tryPromise(async () =>
+      Promise.all([stdoutReader.cancel(), stderrReader.cancel()]),
+    );
+    if (cancelled.isErr()) {
+      throw cancelled.error;
+    }
+    if (terminationFailure) {
+      throw new FlakeGateError({ message: terminationFailure });
+    }
+    if (drained === "undrained") {
+      throw new FlakeGateError({
+        message:
+          "Timed-out runner descendants retained output pipes after cleanup",
+      });
+    }
+    return { passed: false, status: 124, ranTests: false };
+  }
   if (captured.isErr()) {
     throw captured.error;
   }
@@ -338,6 +383,13 @@ export const executeGate = async ({
     const before = now();
     const outcome = await attempt({ target, seed: 1, timeoutMs: remaining() });
     const durationMs = Math.max(1, now() - before);
+    if (target.runner === "rust" && outcome.status === 0 && !outcome.ranTests) {
+      report.skipped.push({
+        file: target.file,
+        reason: "not gated (no runnable tests for this Cargo target)",
+      });
+      continue;
+    }
     measured.push({ file: target.file, durationMs });
     report.results.push({
       file: target.file,

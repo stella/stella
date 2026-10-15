@@ -158,6 +158,7 @@
     "ci.yml/dependency-malware": "pr-fast",
     "ci.yml/dated-waiver-expiry": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
+    "flake-gate.yml/report": "pr-opt-in",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",

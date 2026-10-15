@@ -103,6 +103,13 @@ export const selectRustTargets = (
       continue;
     }
     const relative = repoRelativePath(owner.cwd, absolute);
+    if (relative.startsWith("src/bin/")) {
+      unsupported.push({
+        file: changedFile,
+        reason: "Rust binary tests need an explicit Cargo binary target",
+      });
+      continue;
+    }
     if (!relative.startsWith("src/")) {
       unsupported.push({
         file: changedFile,

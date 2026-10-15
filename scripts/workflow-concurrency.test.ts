@@ -543,24 +543,29 @@ type ConcurrencyContext = {
   ref: string;
   run_id: number;
   event: {
+    action?: string;
     pull_request?: { number: number; head: { sha: string } };
     label?: { name: string };
   };
 };
-const groupFor = async (file: string, github: ConcurrencyContext) => {
+const concurrencyValueFor = async (
+  file: string,
+  key: "group" | "cancel-in-progress",
+  github: ConcurrencyContext,
+) => {
   const workflow: unknown = Bun.YAML.parse(
     await Bun.file(new URL(file, WORKFLOWS_URL)).text(),
   );
   if (!isRecord(workflow) || !isRecord(workflow["concurrency"])) {
     throw new Error("Missing concurrency");
   }
-  const group = workflow["concurrency"]["group"];
-  if (typeof group !== "string") {
-    throw new TypeError("Missing group");
+  const value = workflow["concurrency"][key];
+  if (typeof value !== "string") {
+    return value;
   }
   // These group expressions use the same short-circuit/string operations
   // as JavaScript. Execute the actual file, rather than a copied key.
-  return group.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
+  return value.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
     String(
       new Script(expression).runInNewContext({
         github,
@@ -573,6 +578,8 @@ const groupFor = async (file: string, github: ConcurrencyContext) => {
     ),
   );
 };
+const groupFor = async (file: string, github: ConcurrencyContext) =>
+  concurrencyValueFor(file, "group", github);
 const recording = {
   workflow: "Record network baseline",
   event_name: "pull_request",
@@ -620,6 +627,38 @@ test("unrelated labels cannot supersede baseline recording requests", async () =
   expect(await groupFor(file, unrelated)).not.toBe(group);
   expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
     await groupFor(file, unrelated),
+  );
+});
+
+test("unrelated flake-gate labels use an isolated non-cancelling group", async () => {
+  const file = "flake-gate.yml";
+  const requested = {
+    ...recording,
+    workflow: "Changed-test flake report",
+    event: {
+      ...recording.event,
+      action: "labeled",
+      label: { name: "flake-gate" },
+    },
+  };
+  const reportGroup = await groupFor(file, requested);
+  expect(
+    await groupFor(file, {
+      ...requested,
+      event: { ...requested.event, action: "synchronize" },
+    }),
+  ).toBe(reportGroup);
+
+  const unrelated = {
+    ...requested,
+    event: { ...requested.event, label: { name: "documentation" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(reportGroup);
+  expect(await concurrencyValueFor(file, "cancel-in-progress", unrelated)).toBe(
+    "false",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", requested)).toBe(
+    "true",
   );
 });
 

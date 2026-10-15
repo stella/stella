@@ -228,6 +228,81 @@ type CheckJobEventPolicyOptions = {
   planOutputs: Record<string, string>;
 };
 
+type CheckFlakeGatePolicyOptions = {
+  key: string;
+  condition: string;
+  triggers: Record<string, unknown>;
+};
+
+const checkFlakeGatePrOptIn = ({
+  key,
+  condition,
+  triggers,
+}: CheckFlakeGatePolicyOptions) => {
+  const problems: string[] = [];
+  if (
+    !Object.hasOwn(triggers, "pull_request") ||
+    !Object.hasOwn(triggers, "workflow_call") ||
+    !Object.hasOwn(triggers, "workflow_dispatch")
+  ) {
+    problems.push(
+      `${key}: flake gate must support PR, reusable, and manual events`,
+    );
+  }
+  const prEvents = [
+    { action: "opened", labels: [], run: false },
+    { action: "opened", labels: ["flake-gate"], run: true },
+    { action: "synchronize", labels: [], run: false },
+    { action: "synchronize", labels: ["flake-gate"], run: true },
+    {
+      action: "labeled",
+      label: "flake-gate",
+      labels: ["flake-gate"],
+      run: true,
+    },
+    {
+      action: "labeled",
+      label: "other",
+      labels: ["flake-gate", "other"],
+      run: false,
+    },
+    {
+      action: "labeled",
+      label: "other",
+      labels: ["other"],
+      run: false,
+    },
+  ];
+  for (const { action, label = "", labels, run } of prEvents) {
+    if (
+      evaluate(condition, {
+        values: {
+          "github.event_name": "pull_request",
+          "github.event.action": action,
+          "github.event.label.name": label,
+          "github.event.pull_request.labels.*.name": labels,
+        },
+      }) !== run
+    ) {
+      problems.push(
+        `${key}: PR report must require flake-gate and ignore unrelated label events`,
+      );
+      break;
+    }
+  }
+  for (const event of ["workflow_call", "workflow_dispatch"]) {
+    if (
+      evaluate(condition, {
+        values: { "github.event_name": event },
+      }) !== true
+    ) {
+      problems.push(`${key}: non-PR report events must remain enabled`);
+      break;
+    }
+  }
+  return problems;
+};
+
 type PostgresPrSwitchOptions = {
   key: string;
   condition: string;
@@ -335,6 +410,9 @@ const checkJobEventPolicy = ({
         );
       }
       return problems;
+    }
+    if (key === "flake-gate.yml/report") {
+      return checkFlakeGatePrOptIn({ key, condition, triggers });
     }
     if (
       key !== "ci.yml/fix-tests-on-base" ||

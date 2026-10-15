@@ -421,6 +421,43 @@ test("advisory fix evidence is an explicit label opt-in rather than an automatic
   ).toEqual([]);
 });
 
+test("flake gate label events neither run nor cancel for unrelated labels", () => {
+  const flakeGate = v.parse(
+    workflowSchema,
+    structuredClone(workflows["flake-gate.yml"]),
+  );
+  const report = flakeGate.jobs["report"];
+  if (report === undefined || typeof report.if !== "string") {
+    panic("Missing flake-gate report guard fixture");
+  }
+  const flakePolicy = {
+    jobs: { "flake-gate.yml/report": "pr-opt-in" },
+  };
+  expect(
+    checkCiEventPolicies({
+      workflows: { "flake-gate.yml": flakeGate },
+      policy: flakePolicy,
+    }),
+  ).toEqual([]);
+
+  const original = report.if;
+  for (const condition of [
+    "github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'flake-gate'",
+    "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'flake-gate')",
+  ]) {
+    report.if = condition;
+    expect(report.if).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { "flake-gate.yml": flakeGate },
+        policy: flakePolicy,
+      }),
+    ).toContain(
+      "flake-gate.yml/report: PR report must require flake-gate and ignore unrelated label events",
+    );
+  }
+});
+
 test("the actual reusable CI main group is distinct from its caller and coalesces", () => {
   expect(
     checkCiEventPolicies({

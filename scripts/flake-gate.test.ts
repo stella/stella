@@ -147,6 +147,63 @@ test("fixture text", () => {});
   });
 });
 
+test("mixed runtime packages select their Bun-only command", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/mixed/package.json",
+      JSON.stringify({
+        scripts: {
+          test: "bun run test:bun && cargo test",
+          "test:bun": "bun test",
+        },
+      }),
+    );
+    write(
+      root,
+      "packages/mixed/unit.test.ts",
+      'import {test} from "bun:test"; test("unit", () => {});',
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/mixed/unit.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected Bun-only target");
+    }
+    expect(target.command).toContain("test:bun");
+    expect((await runOnce({ target, seed: 1, timeoutMs: 10_000 })).passed).toBe(
+      true,
+    );
+  });
+});
+
+test("Cargo target exclusions are reported once as not gated", async () => {
+  const target = {
+    ...targetFor("/fixture", "src/windows/tests.rs"),
+    runner: "rust",
+  } as const;
+  let calls = 0;
+  const report = await executeGate({
+    targets: [target],
+    skipped: [],
+    run: async () => {
+      calls += 1;
+      return { passed: false, status: 0, ranTests: false };
+    },
+  });
+  expect(calls).toBe(1);
+  expect(report.results).toEqual([]);
+  expect(report.skipped).toEqual([
+    {
+      file: target.file,
+      reason: "not gated (no runnable tests for this Cargo target)",
+    },
+  ]);
+  expect(reportExitCode(report, true)).toBe(0);
+});
+
 test("allocation never exceeds remaining cost and reduces the slowest files first", () => {
   const measured = [1, 17, 1000, 70_000].map((durationMs) => ({
     file: String(durationMs),
@@ -327,6 +384,54 @@ test("an exhausted subprocess deadline terminates a hanging test", async () => {
     });
     expect(result.passed).toBe(false);
     expect(result.status).not.toBe(0);
+  });
+});
+
+test("owning runner deadlines release sockets held by detached test descendants", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/runner/package.json",
+      JSON.stringify({ scripts: { test: "bun runner.ts" } }),
+    );
+    write(
+      root,
+      "packages/runner/runner.ts",
+      `const child = Bun.spawn([process.execPath, "test", "--timeout=3000", "./hang.test.ts"], { detached: true, stdout: "inherit", stderr: "inherit" });
+await child.exited;
+`,
+    );
+    write(
+      root,
+      "packages/runner/hang.test.ts",
+      `import {afterAll,test} from "bun:test";
+import {writeFileSync} from "node:fs";
+const server = Bun.serve({hostname: "127.0.0.1", port: 0, fetch: () => new Response("fixture")});
+writeFileSync("port.txt", String(server.port));
+afterAll(() => server.stop(true));
+test("pending", async () => await new Promise(() => {}));
+`,
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/runner/hang.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected owning runner fixture");
+    }
+    const result = await runOnce({ target, seed: 1, timeoutMs: 500 });
+    expect(result.status).toBe(124);
+    const port = Number(
+      await Bun.file(path.join(root, "packages/runner/port.txt")).text(),
+    );
+    expect(Number.isSafeInteger(port) && port > 0).toBe(true);
+    const rebound = Bun.serve({
+      hostname: "127.0.0.1",
+      port,
+      fetch: () => new Response("released"),
+    });
+    await rebound.stop(true);
   });
 });
 
