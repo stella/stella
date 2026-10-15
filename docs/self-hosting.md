@@ -350,7 +350,9 @@ organization foreign key removes its receipts when the organization is deleted. 
 parent message is deleted during a batch, its row receives a `deleted-concurrently`
 outcome with the fixed reason `parent-deleted`; message and revision repair both
 continue without referencing a deleted parent through a foreign key. Existing
-converted receipts retain their original conversion provenance.
+converted receipts retain their original conversion provenance. A row holding a
+number beyond double precision is never rewritten with a rounded value: it fails
+with the reason `lossy-json-number`.
 
 From a source checkout, preview the repair without writes:
 

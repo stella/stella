@@ -73,7 +73,8 @@ export const backfillChatContentV3Batch = async ({
     connection: tx,
     // Fence organization deletion until its receipts commit; message deletion
     // remains free to proceed and is recorded by the receipt join.
-    query: `SELECT target.id, target.${messageId} AS message_id, target.content, thread.organization_id
+    query: `SELECT target.id, target.${messageId} AS message_id, target.content,
+       md5(target.content::text) AS content_hash, thread.organization_id
      FROM ${table} AS target
      ${source === "revision" ? "JOIN chat_messages AS message ON message.id = target.message_id" : ""}
      JOIN chat_threads AS thread ON thread.id = ${source === "revision" ? "message" : "target"}.thread_id
@@ -92,6 +93,7 @@ export const backfillChatContentV3Batch = async ({
       !isRecord(row) ||
       typeof row["id"] !== "string" ||
       typeof row["message_id"] !== "string" ||
+      typeof row["content_hash"] !== "string" ||
       typeof row["organization_id"] !== "string"
     ) {
       return panic("Invalid chat backfill row identity");
@@ -139,6 +141,7 @@ export const backfillChatContentV3Batch = async ({
       id: last,
       content: converted.value,
       previous_content: content,
+      previous_hash: row["content_hash"],
     });
     receipts.push({
       row_id: last,
@@ -150,26 +153,68 @@ export const backfillChatContentV3Batch = async ({
     });
   }
   if (updates.length > 0) {
-    const updated = await tx.query(
-      `UPDATE ${table} AS target SET content = patch.content
-       FROM jsonb_to_recordset($1::text::jsonb) AS patch(id uuid, content jsonb, previous_content jsonb)
-       WHERE target.id = patch.id AND target.content = patch.previous_content
-       RETURNING target.id`,
+    // The hash proves the row is unchanged since the read; jsonb equality with
+    // the parsed copy proves the JavaScript round trip kept every number exact.
+    const written = await tx.query(
+      `WITH patch AS (
+         SELECT * FROM jsonb_to_recordset($1::text::jsonb)
+         AS patch(id uuid, content jsonb, previous_content jsonb, previous_hash text)
+       ), updated AS (
+         UPDATE ${table} AS target SET content = patch.content
+         FROM patch
+         WHERE target.id = patch.id
+           AND md5(target.content::text) = patch.previous_hash
+           AND target.content = patch.previous_content
+         RETURNING target.id
+       )
+       SELECT patch.id,
+         CASE
+           WHEN updated.id IS NOT NULL THEN 'updated'
+           WHEN md5(target.content::text) = patch.previous_hash THEN 'lossy'
+           ELSE 'changed'
+         END AS result
+       FROM patch
+       LEFT JOIN updated ON updated.id = patch.id
+       LEFT JOIN ${table} AS target ON target.id = patch.id`,
       [JSON.stringify(updates)],
     );
-    const updatedIds = new Set(
-      updated.map((row) => {
-        if (!isRecord(row) || typeof row["id"] !== "string") {
-          return panic("Invalid chat backfill update identity");
+    const results = new Map(
+      written.map((row) => {
+        if (
+          !isRecord(row) ||
+          typeof row["id"] !== "string" ||
+          (row["result"] !== "updated" &&
+            row["result"] !== "lossy" &&
+            row["result"] !== "changed")
+        ) {
+          return panic("Invalid chat backfill update result");
         }
-        return row["id"];
+        return [row["id"], row["result"]] as const;
       }),
     );
-    // Preserve a concurrent writer's content instead of replacing a newer value.
     for (const receipt of receipts) {
-      if (receipt.outcome === "converted" && !updatedIds.has(receipt.row_id)) {
-        receipt.outcome = "skipped";
-        receipt.reason = "concurrent-change";
+      if (receipt.outcome !== "converted") {
+        continue;
+      }
+      const result =
+        results.get(receipt.row_id) ??
+        panic("Chat backfill update result missing for a converted row");
+      switch (result) {
+        case "updated":
+          break;
+        case "lossy":
+          // Writing would round a number the driver parsed as a double.
+          receipt.outcome = "failed";
+          receipt.reason = "lossy-json-number";
+          break;
+        case "changed":
+          // Preserve a concurrent writer's content instead of replacing a newer value.
+          receipt.outcome = "skipped";
+          receipt.reason = "concurrent-change";
+          break;
+        default:
+          result satisfies never;
+          panic("Unhandled chat backfill update result");
       }
     }
   }
@@ -315,22 +360,20 @@ export const createChatContentV3Repair = (
         });
       }
       // Validation proves existing rows; NOT VALID already fenced new writes.
-      await connection.execute("BEGIN");
-      const validated = await Result.tryPromise(async () => {
-        await connection.execute("SET LOCAL lock_timeout = '1s'");
-        await connection.execute("SET LOCAL statement_timeout = '5min'");
-        await connection.execute(
-          `ALTER TABLE public.${table} VALIDATE CONSTRAINT ${table}_content_v3_check`,
-        );
-      });
+      // The scan inherits the repair session's unbounded statement budget: its
+      // SHARE UPDATE EXCLUSIVE lock blocks neither reads nor writes.
+      const validated = await Result.tryPromise(
+        async () =>
+          await connection.execute(
+            `ALTER TABLE public.${table} VALIDATE CONSTRAINT ${table}_content_v3_check`,
+          ),
+      );
       if (validated.isErr()) {
-        await connection.execute("ROLLBACK");
         throw new ChatContentV3UpgradeError({
           message: "Chat v3 constraint validation failed; rerun db:migrate",
           cause: validated.error,
         });
       }
-      await connection.execute("COMMIT");
     }
   },
 });

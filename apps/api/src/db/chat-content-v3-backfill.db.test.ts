@@ -343,6 +343,46 @@ test("a clean content census requires validated database write guards before com
   });
 });
 
+test("a number beyond double precision fails the row instead of reporting a concurrent change or rounding it", async () => {
+  await withFixture(async (connection) => {
+    const exact = "12345678901234567890";
+    await connection.execute(
+      "INSERT INTO chat_messages (id, thread_id, user_id, role, content) VALUES ($1, $2, 'chat-content-test-user', 'assistant', $3::text::jsonb)",
+      [
+        MESSAGE_1,
+        THREAD,
+        `{"version":2,"data":[{"id":"call-count","name":"list_templates","type":"tool-call","input":{},"state":"complete","output":{"count":${exact}},"arguments":"{}"}]}`,
+      ],
+    );
+    await insertMessage(connection, MESSAGE_2, V1);
+    expect(await rejectionOf(repair().repair(connection))).toMatchObject({
+      message: expect.stringContaining("Non-v3 chat content remains"),
+    });
+    expect(
+      await connection.query(
+        "SELECT content::text LIKE $1 AS kept FROM chat_messages WHERE id = $2",
+        [`%${exact}%`, MESSAGE_1],
+      ),
+    ).toEqual([{ kept: true }]);
+    expect(await receipts(connection)).toContainEqual({
+      source: "message",
+      row_id: MESSAGE_1,
+      message_id: MESSAGE_1,
+      from_version: 2,
+      outcome: "failed",
+      reason: "lossy-json-number",
+    });
+    expect(await receipts(connection)).toContainEqual({
+      source: "message",
+      row_id: MESSAGE_2,
+      message_id: MESSAGE_2,
+      from_version: 1,
+      outcome: "converted",
+      reason: "normalized-and-proved-v3",
+    });
+  });
+});
+
 test("invalid legacy rows receive durable failures while later rows convert and deployment refuses completion", async () => {
   await withFixture(async (connection) => {
     const invalid = { version: 2, data: [{ type: "text", content: 12 }] };
