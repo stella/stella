@@ -14,6 +14,9 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 
+import connectionDrop from "./__fixtures__/recorded-conversations/connection-drop.gen.json";
+import stoppedToolInput from "./__fixtures__/recorded-conversations/stop-mid-tool-input.gen.json";
+
 const START = "2026-01-01T00:00:00.000Z";
 const NOW = new Date("2026-01-01T00:02:14.000Z");
 
@@ -39,6 +42,31 @@ const renderDuration = (
 };
 
 describe("assistant turn duration", () => {
+  test("omits labels when timing is unavailable", () => {
+    expect(renderDuration(null)).toBe("");
+    expect(renderDuration(undefined)).toBe("");
+  });
+
+  for (const recording of [connectionDrop, stoppedToolInput]) {
+    test(`renders recorded timing after ${recording.scenario}`, () => {
+      const assistantMessages = recording.steps
+        .flatMap(({ exchanges }) =>
+          exchanges.flatMap(({ page }) => page.messages),
+        )
+        .filter(({ role }) => role === "assistant");
+      expect(assistantMessages.length).toBeGreaterThan(0);
+      for (const { metadata } of assistantMessages) {
+        const timing = metadata?.turnTiming;
+        expect(timing?.status).toBe("finished");
+        if (timing?.status === "finished") {
+          expect(
+            renderDuration({ ...timing, status: timing.status }),
+          ).toContain("Worked for 0s");
+        }
+      }
+    });
+  }
+
   test("renders the same label while running and after reload", () => {
     const running = renderDuration({
       status: "running",

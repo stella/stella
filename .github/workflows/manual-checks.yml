@@ -21,6 +21,7 @@ on:
           - test-files
           - verify-affected
           - install-cache-benchmark
+          - store-cache-save-benchmark
       target:
         description: Package name or space-separated test paths
         type: string
@@ -38,7 +39,7 @@ env:
 
 jobs:
   check:
-    if: inputs.check != 'install-cache-benchmark'
+    if: inputs.check != 'install-cache-benchmark' && inputs.check != 'store-cache-save-benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -174,7 +175,8 @@ jobs:
         id: install
         uses: $/.github/actions/ci-install
         with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
+          cache-write: ${{ matrix.global-store == '1' && 'save' || 'restore' }}
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
       - name: Report measured phases
         if: always()
         env:
@@ -204,7 +206,7 @@ jobs:
           retention-days: 7
 
   install-cache-linux:
-    if: inputs.check == 'install-cache-benchmark'
+    if: inputs.check == 'install-cache-benchmark' || inputs.check == 'store-cache-save-benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -223,6 +225,13 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+      - name: Register isolated cache save measurement
+        if: inputs.check == 'store-cache-save-benchmark'
+        continue-on-error: true
+        uses: $/.github/actions/ci-store-save
+        with:
+          key: install-store-measurement-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
       - name: Report measured phases
         if: always()
         env:

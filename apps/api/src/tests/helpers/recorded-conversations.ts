@@ -380,11 +380,29 @@ return { id: document.entityId, name: document.name };`;
     };
   };
 
-  /** A tool call that has started streaming in the live view. */
-  const holdsToolCall = (messages: readonly UIMessage[]) =>
-    messages.some(({ parts }) =>
-      parts.some(({ type }) => type === "tool-call"),
-    );
+  /**
+   * The live view holds the tool call as far as the scripted model streams
+   * it before going quiet at `point`: its arguments (`before-tool-end`), or
+   * its arguments and end (`after-tool-end`). Waiting for exactly that last
+   * event, not for the call to start, keeps what the page saw before a stop
+   * or a dropped connection the same on every run.
+   */
+  const holdsToolCallUntil =
+    (point: "after-tool-end" | "before-tool-end") =>
+    (messages: readonly UIMessage[]) =>
+      messages.some(({ parts }) =>
+        parts.some((part) => {
+          if (part.type !== "tool-call") {
+            return false;
+          }
+          if (point === "before-tool-end") {
+            return part.arguments !== "";
+          }
+          return (
+            part.state !== "awaiting-input" && part.state !== "input-streaming"
+          );
+        }),
+      );
 
   /** A model call that goes quiet at `quietAt` while its tool call streams. */
   const quietTurn = (
@@ -645,7 +663,7 @@ return { id: document.entityId, name: document.name };`;
             await recorder.client.startUserMessage(
               messageId,
               "Check the register",
-              holdsToolCall,
+              holdsToolCallUntil("before-tool-end"),
             ),
           { midStream: true },
         );
@@ -685,7 +703,11 @@ return { id: document.entityId, name: document.name };`;
       recorder,
       { messageId, text, type: "send" },
       async () => {
-        await recorder.client.startUserMessage(messageId, text, holdsToolCall);
+        await recorder.client.startUserMessage(
+          messageId,
+          text,
+          holdsToolCallUntil(quietAt),
+        );
       },
       { midStream: true },
     );

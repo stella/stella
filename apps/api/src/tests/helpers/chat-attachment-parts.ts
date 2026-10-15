@@ -1,6 +1,8 @@
 import type { ContentPart } from "@tanstack/ai";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { toDataUrl } from "@/api/lib/data-url";
 
 // Attachment parts as the web composer sends them
@@ -32,13 +34,15 @@ const PDF_TEXT = [
 
 const docxBytes = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
 <w:body><w:p><w:r><w:t>The draft.</w:t></w:r></w:p></w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

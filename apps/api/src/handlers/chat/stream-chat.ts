@@ -908,7 +908,7 @@ export const streamChat = async ({
         type: EventType.TEXT_MESSAGE_END,
         messageId: terminalEvent.responseMessage.id,
         metadata: { turnOutcome: terminalEvent.outcome },
-      };
+      } as const satisfies PublicStreamChunk;
       finalChunks.splice(0, finalChunks.length, {
         type: EventType.RUN_FINISHED,
         runId,
@@ -2884,18 +2884,36 @@ const SOURCE_CLEANUP_AFTER_CUT_FAILURE = failureSink({
   expected: [],
 });
 
+type ReadSourceUntilCutArgs = Pick<
+  ProcessServerChatStreamProps,
+  "initialMessages" | "mapMessageId" | "source"
+> & { signal: AbortSignal };
+
 /** A provider that ignores cancellation cannot hold the turn's settlement.
  * @yields Source chunks until the run is cut short.
  */
-const readSourceUntilCut = async function* (
-  source: AsyncIterable<PublicStreamChunk>,
-  signal: AbortSignal,
-): AsyncIterable<Result<PublicStreamChunk, unknown>> {
+const readSourceUntilCut = async function* ({
+  initialMessages,
+  mapMessageId,
+  source,
+  signal,
+}: ReadSourceUntilCutArgs): AsyncIterable<Result<PublicStreamChunk, unknown>> {
   const cancellation = new AIGenerationCancelledError({
     message: "Chat source iteration was cancelled",
   });
   const isRunCut = () => signal.aborted;
-  const iterator = source[Symbol.asyncIterator]();
+  const iterator = ensureAssistantMessageStart({
+    getOrCreateMessageId: () =>
+      mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+    source: keepDeniedApprovalsOnScreen({
+      deniedApprovals: findDeniedApprovals(initialMessages),
+      source: remapOutgoingMessageIds({
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
+        mapMessageId,
+        source,
+      }),
+    }),
+  })[Symbol.asyncIterator]();
   let ended = false;
   try {
     while (true) {
@@ -3047,23 +3065,12 @@ export const processServerChatStream = async function* ({
     terminal,
   });
   try {
-    const normalizedSource = ensureAssistantMessageStart({
-      getOrCreateMessageId: () =>
-        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-      source: keepDeniedApprovalsOnScreen({
-        deniedApprovals: findDeniedApprovals(initialMessages),
-        source: remapOutgoingMessageIds({
-          existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
-          mapMessageId,
-          source,
-        }),
-      }),
-    });
-
-    for await (const sourceRead of readSourceUntilCut(
-      normalizedSource,
-      runSignal,
-    )) {
+    for await (const sourceRead of readSourceUntilCut({
+      initialMessages,
+      mapMessageId,
+      source,
+      signal: runSignal,
+    })) {
       if (Result.isError(sourceRead)) {
         const { error } = sourceRead;
         throw error;
