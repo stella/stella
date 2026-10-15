@@ -7,14 +7,111 @@ import {
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
+  actionlintWorkflowSource,
+  validateLocalActionReferences,
+  validateWorkflowSize,
+  WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = path.join(import.meta.dirname, "__fixtures__/workflow-yaml");
 
+test("archive action lint rewrites are one-to-one and preserve workflow semantics", () => {
+  const source = `jobs:
+  check:
+    steps:
+      - uses: $/.github/actions/ci-install # archive action
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+      - uses: '$/.github/actions/ci-install'
+      - run: echo '$/.github/actions/ci-install'
+`;
+  const normalized = actionlintWorkflowSource({
+    source,
+    root: ROOT,
+    file: "fixture.yml",
+  });
+  expect(normalized).toBe(
+    source.replace("uses: $/", "uses: ./").replace("uses: '$/", "uses: './"),
+  );
+  expect(source.match(/uses: ['"]?\$\//gu)).toHaveLength(2);
+  expect(normalized.match(/uses: ['"]?\.\//gu)).toHaveLength(2);
+  expect(normalized).toContain("run: echo '$/.github/actions/ci-install'");
+});
+
+test("archive normalization preserves scalar spelling, indentation and line endings", () => {
+  for (const quote of ["", "'", '"']) {
+    for (const newline of ["\n", "\r\n"]) {
+      const source = [
+        "jobs:",
+        "  check:",
+        "    steps:",
+        `      - uses: ${quote}$/.github/actions/ci-install${quote} # archive`,
+        "      - name: padding",
+        `        run: echo ${" ".repeat(10_000)}safe`,
+        "",
+      ].join(newline);
+      expect(
+        actionlintWorkflowSource({ source, root: ROOT, file: "fixture.yml" }),
+      ).toBe(
+        source.replace(
+          "$/.github/actions/ci-install",
+          "./.github/actions/ci-install",
+        ),
+      );
+    }
+  }
+});
+
+test("missing archive targets fail both the workflow guard and lint normalization", () => {
+  const source =
+    "jobs:\n  check:\n    steps:\n      - uses: $/.github/actions/absent-archive-target\n";
+  expect(() =>
+    validateLocalActionReferences({
+      value: Bun.YAML.parse(source),
+      root: ROOT,
+      file: "fixture.yml",
+    }),
+  ).toThrow("must have exactly one metadata file");
+  expect(() =>
+    actionlintWorkflowSource({
+      source,
+      root: ROOT,
+      file: "fixture.yml",
+    }),
+  ).toThrow("must have exactly one metadata file");
+});
+
+test("archive normalization rejects ambiguous source rewrites and escaping targets", () => {
+  const flow =
+    "jobs: {check: {steps: [{uses: '$/.github/actions/ci-install'}]}}";
+  expect(() =>
+    actionlintWorkflowSource({ source: flow, root: ROOT, file: "fixture.yml" }),
+  ).toThrow("normalization must be one-to-one");
+  const escaping = "jobs:\n  check:\n    steps:\n      - uses: $/../outside\n";
+  expect(() =>
+    actionlintWorkflowSource({
+      source: escaping,
+      root: ROOT,
+      file: "fixture.yml",
+    }),
+  ).toThrow("invalid local action");
+});
+
 describe("workflow YAML validation", () => {
   test("every repository workflow and action is valid", async () => {
     await checkWorkflowYaml(ROOT);
+  });
+
+  test("a workflow over the size limit is rejected with its byte count", () => {
+    expect(() =>
+      validateWorkflowSize(WORKFLOW_SIZE_LIMIT_BYTES, "ci.yml"),
+    ).not.toThrow();
+    expect(() =>
+      validateWorkflowSize(WORKFLOW_SIZE_LIMIT_BYTES + 1, "ci.yml"),
+    ).toThrow(
+      `ci.yml: ${WORKFLOW_SIZE_LIMIT_BYTES + 1} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit`,
+    );
   });
 
   test("malformed workflow YAML reports its file", async () => {

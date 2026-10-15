@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
+import { ChatRequestError } from "@/features/chat/chat-request-error";
 import { toAPIError } from "@/lib/errors/api";
 import type { APIError } from "@/lib/errors/api";
 
@@ -36,11 +37,41 @@ const chatResponseError = async (response: Response): Promise<APIError> => {
 export const chatFetchClient = Object.assign(
   async (input: RequestInfo | URL, init?: RequestInit) => {
     const { signal, ...requestInit } = init ?? {};
-    const response = await fetchWithTimeout(input, {
-      ...requestInit,
-      ...(signal === null ? {} : { signal }),
-      timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+    const effectiveSignal =
+      signal ?? (input instanceof Request ? input.signal : undefined);
+    const received = await Result.tryPromise({
+      try: async () =>
+        // The timeout helper combines Request and init signals. Normalize an
+        // overriding signal first to preserve fetch's replacement semantics.
+        await fetchWithTimeout(
+          input instanceof Request && signal !== undefined && signal !== null
+            ? new Request(input, { signal })
+            : input,
+          {
+            ...requestInit,
+            ...(signal === null ? {} : { signal }),
+            timeoutMs: CHAT_FETCH_TIMEOUT_MS,
+          },
+        ),
+      catch: (cause) => {
+        if (effectiveSignal?.aborted) {
+          return cause;
+        }
+        const timedOut =
+          cause instanceof DOMException && cause.name === "TimeoutError";
+        return new ChatRequestError({
+          kind: timedOut ? "timed_out" : "connection_failed",
+          message: timedOut
+            ? "Chat request timed out"
+            : "Chat connection failed",
+          cause,
+        });
+      },
     });
+    if (received.isErr()) {
+      throw received.error;
+    }
+    const response = received.value;
     if (!response.ok) {
       throw await chatResponseError(response);
     }

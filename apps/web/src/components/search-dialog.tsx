@@ -83,6 +83,7 @@ import {
 } from "@/components/search-dialog-results";
 import {
   canUseAskAIShortcut,
+  caseLawFacetCountMessage,
   createDialogCloseActionQueue,
   getCaseLawHitRoute,
   getChatHitRoute,
@@ -2184,11 +2185,24 @@ const SearchFacetsBody = ({
       if (!isAvailableSearchKind(bucket.value, publicLawPreviewEnabled)) {
         return [];
       }
+      // Case law stays out of the main list until its group opens, so a
+      // bare number beside a few matter rows reads as a miscount.
+      const caseLawCount =
+        bucket.value === "case-law"
+          ? caseLawFacetCountMessage(bucket.count)
+          : null;
       return [
         {
           value: bucket.value,
           count: bucket.count,
           label: t(KIND_TRANSLATION_KEYS[bucket.value]),
+          ...(caseLawCount
+            ? {
+                countLabel: t(caseLawCount.key, {
+                  count: caseLawCount.count,
+                }),
+              }
+            : {}),
         },
       ];
     }),

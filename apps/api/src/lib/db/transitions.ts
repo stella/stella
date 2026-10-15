@@ -115,7 +115,7 @@ export const defineScopedTransitions = <
   }
   const stateValues = state.enumValues;
   const tableConfig = getTableConfig(table);
-  const uniqueIdentityCovered = [
+  const constraintIdentityCovered = [
     ...tableConfig.primaryKeys,
     ...tableConfig.uniqueConstraints,
   ].some(
@@ -125,11 +125,23 @@ export const defineScopedTransitions = <
         keyColumns.some((candidate) => candidate?.name === column.name),
       ),
   );
+  const indexIdentityCovered = tableConfig.indexes.some(
+    ({ config }) =>
+      config.unique &&
+      config.where === undefined &&
+      config.columns.length === keyColumns.length &&
+      config.columns.every(
+        (column) =>
+          "name" in column &&
+          keyColumns.some((candidate) => candidate?.name === column.name),
+      ),
+  );
   if (
     new Set(keyNames).size !== keyNames.length ||
     keyColumns.some((column) => column === undefined || !column.notNull) ||
     (!(scope.length === 0 && (keyColumn.primary || keyColumn.isUnique)) &&
-      !uniqueIdentityCovered)
+      !constraintIdentityCovered &&
+      !indexIdentityCovered)
   ) {
     panic(
       "A scoped transition identity must cover exactly one non-null primary or unique key",

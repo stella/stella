@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
 } from "@/api/lib/observability/request-context";
@@ -67,7 +68,9 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
 const getRouteName = (route: string | undefined): string =>
-  route ?? "unmatched";
+  (route === undefined || route.includes("*")
+    ? (getMountedRequestRoute() ?? route)
+    : route) ?? "unmatched";
 
 const buildRequestLogDetails = ({
   durationMs,
@@ -89,7 +92,7 @@ const buildRequestLogDetails = ({
   const details = {
     durationMs: Math.round(durationMs),
     method: request.method,
-    route,
+    route: getRouteName(route),
     statusCode,
   };
 
@@ -318,7 +321,8 @@ export const completeRequest = async ({
     // Streaming responses (e.g. POST /v1/chat) settle this hook when the
     // stream object is returned, not when generation ends, so their
     // duration here understates the wall-clock. That is acceptable: the
-    // class is `ai` either way, which is excluded from the CRUD p95 SLO.
+    // declared stream class excludes setup time from the CRUD p95 SLO,
+    // even when no model has started yet.
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({

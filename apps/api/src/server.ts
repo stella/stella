@@ -41,6 +41,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -209,6 +210,7 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
@@ -259,6 +261,16 @@ const startMemoryPressureHandler = () => {
   );
 };
 
+const readProcessMemoryReport = () => {
+  const usage = process.memoryUsage();
+  return {
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    arrayBuffersBytes: usage.arrayBuffers,
+    uploadFinalizeInFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+  };
+};
+
 // One stall on this loop delays every request the task is serving, so it is
 // reported as soon as the loop is free, and its window's delay as a metric.
 const startEventLoopDelayReporting = () => {
@@ -269,7 +281,13 @@ const startEventLoopDelayReporting = () => {
         return;
       }
       reporting = readRootPoolReport()
-        .then((rootPool) => emitEventLoopDelayMetric({ ...delay, rootPool }))
+        .then((rootPool) =>
+          emitEventLoopDelayMetric({
+            ...delay,
+            rootPool,
+            memory: readProcessMemoryReport(),
+          }),
+        )
         .finally(() => {
           reporting = undefined;
         });
@@ -611,7 +629,8 @@ const api = new Elysia()
     new Elysia()
       .use(pdfSigningSessionsRoute)
       .use(desktopPresenceRoute)
-      .use(desktopFeatureAccessRoute),
+      .use(desktopFeatureAccessRoute)
+      .use(desktopTimeEntriesRoute),
   );
 
 export default api;
@@ -783,7 +802,9 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers(env.SCHEDULED_JOBS_MODE);
+  const backgroundWorkers = await initApiBackgroundWorkers(
+    env.SCHEDULED_JOBS_MODE,
+  );
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.

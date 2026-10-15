@@ -3,7 +3,13 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import type { api } from "@/lib/api";
+import type { PublicLawData } from "@/lib/public-law-api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { CaseLawDecisionLocator } from "./case-law-open";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/chat",
@@ -44,6 +50,11 @@ const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
 const { SourceChips } = await import("./source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
 const { LegalCitationLink } = await import("./legal-citation-link");
+const { DecisionMainViewAction } =
+  await import("@/features/case-law/components/decision-main-view-action");
+const { registerMainDecisionReader, mainDecisionReaderStore } =
+  await import("@/components/inspector/main-decision-reader");
+const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
@@ -65,6 +76,7 @@ afterEach(async () => {
     clients.length = 0;
     useExternalSourceStore.setState({ sourcesByUrl: {} });
     useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    mainDecisionReaderStore.setState({ reader: null });
     globalThis.fetch = idleFetch;
   });
 });
@@ -76,7 +88,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderChat = async (
@@ -191,6 +203,138 @@ const fullDecision = {
 } satisfies PublicCaseLawDecision;
 const quotedPassage = "The court preserves the remedy.";
 const decisionReference = "Nejvyšší soud, 26 Cdo 4249/2016, Jan 12, 2017";
+
+const canonicalDecision = {
+  ...fullDecision,
+  ecli: "ECLI:CZ:NS:2017:26.CDO.4249.2016.1",
+  slug: "26-cdo-4249-2016",
+} satisfies PublicCaseLawDecision;
+const canonicalSearchHit = {
+  ...canonicalDecision,
+  decisionId: documentId,
+  identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
+  textWithheldReason: null,
+  keywords: null,
+  anchorId: null,
+  headline: null,
+  citationAuthority: 0,
+  citationCount: 0,
+  matchingPassages: 1,
+} satisfies PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+const routeParams = createCaseLawDecisionRouteParams({
+  ...canonicalDecision,
+  decisionId: documentId,
+});
+const idRouteParams = createCaseLawDecisionRouteParams({
+  ...canonicalDecision,
+  decisionId: documentId,
+  slug: null,
+});
+const decisionLocators = [
+  { name: "decision id", locator: { type: "ref", ref: documentId } },
+  {
+    name: "ECLI",
+    locator: { type: "ref", ref: canonicalDecision.ecli },
+  },
+  {
+    name: "file number",
+    locator: { type: "ref", ref: canonicalDecision.caseNumber },
+  },
+  {
+    name: "encoded file number",
+    locator: {
+      type: "ref",
+      ref: encodeURIComponent(canonicalDecision.caseNumber),
+    },
+  },
+  { name: "slug route", locator: { type: "route", params: routeParams } },
+  { name: "id route", locator: { type: "route", params: idRouteParams } },
+  {
+    name: "language route",
+    locator: { type: "route", params: { ...routeParams, language: "cs" } },
+  },
+  {
+    name: "language id route",
+    locator: { type: "route", params: { ...idRouteParams, language: "cs" } },
+  },
+] as const satisfies readonly {
+  name: string;
+  locator: CaseLawDecisionLocator;
+}[];
+
+for (const { name, locator } of decisionLocators) {
+  for (const anchorId of [undefined, "p-12"]) {
+    test(`a ${name} resolves to the same canonical decision ${anchorId === undefined ? "without a passage" : "at its cited passage"}`, async () => {
+      const requests: Request[] = [];
+      globalThis.fetch = Object.assign(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const request = new Request(input, init);
+          const url = new URL(request.url);
+          requests.push(request);
+          if (url.pathname.endsWith("/case/decisions/search")) {
+            return Response.json({
+              hits: [
+                {
+                  ...canonicalSearchHit,
+                  decisionId: "019dd47e-2d83-7178-8f24-11f2976a01db",
+                  caseNumber: "26 Cdo 999/2016",
+                  ecli: "ECLI:CZ:NS:2017:26.CDO.999.2016.1",
+                },
+                canonicalSearchHit,
+              ],
+            });
+          }
+          if (
+            url.pathname.endsWith(`/case/decisions/${documentId}`) ||
+            url.pathname.endsWith(
+              `/case/decisions/by-slug/${canonicalDecision.slug}`,
+            )
+          ) {
+            return Response.json(canonicalDecision);
+          }
+          throw new TypeError(`Unexpected decision transport: ${url.pathname}`);
+        },
+        { preconnect: () => undefined },
+      );
+      const opened: DecisionTabTarget[] = [];
+      await openCaseLawDecision(
+        locator,
+        (target) => {
+          opened.push(target);
+        },
+        { anchorId },
+      );
+      expect(opened).toEqual([
+        {
+          decisionId: documentId,
+          caseNumber: canonicalDecision.caseNumber,
+          court: canonicalDecision.court,
+          country: canonicalDecision.country,
+          language: canonicalDecision.language,
+          languageAlternates: canonicalDecision.languageAlternates,
+          slug: canonicalDecision.slug,
+          ...(anchorId !== undefined && { anchorId }),
+        },
+      ]);
+      expect(requests).toHaveLength(1);
+      const request = requests.at(0);
+      expect(request).toBeDefined();
+      if (locator.type === "ref" && locator.ref !== documentId) {
+        expect(await request?.json()).toMatchObject({
+          query: decodeURIComponent(locator.ref),
+          limit: 5,
+        });
+      }
+      if (name === "language route") {
+        expect(new URL(request?.url ?? "").searchParams.get("language")).toBe(
+          "cs",
+        );
+      }
+    });
+  }
+}
 
 const citations = [
   { kind: "statute", path: statutePath },
@@ -459,7 +603,9 @@ for (const anchorId of [null, "p-12"]) {
     );
     // Native navigation follows the href, so a cited passage rides in it.
     reader.hash = anchorId ?? "";
-    expect(primary.getAttribute("href")).toBe(reader.href);
+    expect(primary.getAttribute("href")).toBe(
+      `${reader.pathname}${reader.search}${reader.hash}`,
+    );
     expect(primary.textContent).toBe("NS");
     expect(primary.textContent).not.toContain(target.caseNumber);
     fireEvent.focus(primary);
@@ -649,3 +795,62 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
   });
 }
+
+test("maximizing a different decision docks the displaced main reader before navigation", async () => {
+  const side = createCaseDecisionViewTab({
+    decisionId: "019dd47d-f507-7c84-b827-980af11b8981",
+    caseNumber: "SYN 2/2026",
+    country: "CZE",
+    court: "Synthetic Court",
+    language: null,
+    languageAlternates: null,
+    slug: "other-decision",
+  });
+  const store = useInspectorTabsStore.getState();
+  store.openView(side);
+  const openedPassages: string[] = [];
+  registerMainDecisionReader({
+    decisionId: fullDecision.id,
+    openPassage: ({ decisionId }) => {
+      openedPassages.push(decisionId);
+    },
+  });
+  const root = router.createRootRoute({ component: router.Outlet });
+  const decisionRoute = router.createRoute({
+    getParentRoute: () => root,
+    path: "/law/$country/cases/$court/$slug",
+    loader: () => fullDecision,
+    component: () => (
+      <DecisionMainViewAction
+        payload={side.payload}
+        onMoveToMain={() => store.closeTab(side.id)}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({
+      initialEntries: ["/law/cze/cases/synthetic-court/main-decision"],
+    }),
+    routeTree: root.addChildren([decisionRoute]),
+    isServer: false,
+  });
+  await appRouter.load();
+  render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <router.RouterProvider router={appRouter} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    screen.getByRole("link", { name: messages.inspector.swapViews }),
+  );
+  await waitFor(() =>
+    expect(appRouter.state.location.pathname).toEndWith("/other-decision"),
+  );
+  expect(openedPassages).toEqual([]);
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+  expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+    payload: { decisionId: fullDecision.id },
+  });
+});
