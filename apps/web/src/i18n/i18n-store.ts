@@ -187,10 +187,16 @@ setTranslator(
 export const getTranslator = createIsomorphicFn()
   .server(() => {
     const state = currentI18nStore().getState();
-    return createTranslator({
+    const cached = requestTranslators.get(state);
+    if (cached) {
+      return cached;
+    }
+    const translator = createTranslator({
       locale: state.loadedLang,
       messages: state.messages,
     });
+    requestTranslators.set(state, translator);
+    return translator;
   })
   .client(() => getBrowserTranslator());
 
@@ -516,6 +522,10 @@ const browserI18nStore = create<I18nState>()((set, get) => ({
     recomputeFormatterForState(get());
   },
 }));
+
+const requestTranslators = new WeakMap([
+  [browserI18nStore.getInitialState(), getBrowserTranslator()],
+]);
 
 let clientInitialState = browserI18nStore.getInitialState();
 const browserHydrationStore = {

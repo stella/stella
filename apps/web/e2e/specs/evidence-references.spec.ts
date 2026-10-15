@@ -4,7 +4,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  E2E_API_ORIGIN,
   apiDownloadFileField,
   apiGet,
   apiStatus,
@@ -151,15 +150,8 @@ for (const locale of ["cs", "en", "ar"] as const) {
         page,
         label: "evidence-references",
         webUrl: baseURL ?? "http://localhost:3000",
+        locale,
       });
-      const updated = await page.request.post(
-        `${E2E_API_ORIGIN}/api/auth/update-user`,
-        {
-          data: { locale },
-          headers: { Origin: baseURL ?? "http://localhost:3000" },
-        },
-      );
-      expect(updated.ok(), await updated.text()).toBe(true);
       workspace = await createTestWorkspace(
         page.request,
         "evidence-references",

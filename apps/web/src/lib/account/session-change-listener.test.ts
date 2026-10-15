@@ -1,11 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect } from "bun:test";
 
 import {
   PROFESSIONAL_USE_STATEMENT_VERSION,
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
 import { sleep } from "@stll/concurrency/sleep";
+
+import { requestTest as test } from "@/testing/request-test";
 
 // The session the server reports; changed by "another tab".
 let signedIn: string | null = "user-a";

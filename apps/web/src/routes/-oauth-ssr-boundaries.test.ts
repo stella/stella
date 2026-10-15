@@ -9,19 +9,18 @@ import { expect, test } from "bun:test";
 import { Route as AuthRoute } from "@/routes/auth/route";
 import { Route as ConsentRoute } from "@/routes/consent";
 
-const boundaries = [
-  { path: "/auth", ssr: AuthRoute.options.ssr },
-  { path: "/consent", ssr: ConsentRoute.options.ssr },
-];
+test("OAuth routes preserve server presentation and defer fragment-dependent work to the browser", async () => {
+  const boundaries = [
+    { path: "/auth", ssr: AuthRoute.options.ssr },
+    { path: "/consent", ssr: ConsentRoute.options.ssr },
+  ];
 
-for (const { path, ssr } of boundaries) {
-  test(`${path} preserves server presentation while fragment-dependent work waits for the browser`, async () => {
+  for (const { path, ssr } of boundaries) {
     const browserHash = "oauth_query=signed-request";
     const serverUrl = new URL(`http://localhost:3000${path}#${browserHash}`);
     const fragmentReads: string[] = [];
     for (const isServer of [true, false]) {
       const root = createRootRoute({
-        ssr: true,
         beforeLoad: () => ({ renderedLocale: "cs" }),
       });
       const boundary = createRoute({
@@ -49,5 +48,5 @@ for (const { path, ssr } of boundaries) {
       expect(router.state.matches.at(-1)?.context.renderedLocale).toBe("cs");
       expect(fragmentReads).toEqual(isServer ? [] : [browserHash]);
     }
-  });
-}
+  }
+});

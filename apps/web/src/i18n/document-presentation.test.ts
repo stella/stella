@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient } from "@tanstack/react-query";
-import { expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import type { UiLocale } from "@stll/locales";
 
@@ -23,6 +23,15 @@ import {
   loadClientDocumentPresentation,
 } from "./document-presentation";
 import { withRequestI18n } from "./request-i18n.server";
+
+let initialI18nState = useI18nStore.getState();
+beforeEach(() => {
+  initialI18nState = useI18nStore.getState();
+});
+afterEach(async () => {
+  await useI18nStore.getState().loadMessages(initialI18nState.loadedLang);
+  useI18nStore.setState(initialI18nState);
+});
 
 const sessionFor = ({ id, locale }: { id: string; locale: UiLocale }) => ({
   user: {
@@ -136,6 +145,7 @@ test("server presentation uses the profile locale without adding identity to the
         new Request("http://localhost:3000/tools", {
           headers: { "accept-language": "en-US" },
         }),
+        {},
       );
       expect(useI18nStore.getState().loadedLang).toBe("cs");
       expect(queryClient.getQueryCache().getAll()).toEqual([]);

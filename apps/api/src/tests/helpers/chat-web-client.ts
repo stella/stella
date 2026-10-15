@@ -265,7 +265,7 @@ const inWebRequest = async (action: () => Promise<void>) => {
     await action();
     return new Response(null);
   });
-  await handle(new Request(WEB_TEST_API_URL));
+  await handle(new Request(WEB_TEST_API_URL), {});
 };
 
 export type WebChatClient = {

@@ -2,6 +2,8 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import type { UiLocale } from "@stll/locales";
+
 import { E2E_API_ORIGIN } from "./api";
 import { signInWithEmailOtp } from "./sign-in";
 import { expect } from "./test";
@@ -45,12 +47,14 @@ type CreateProfileTestSessionOptions = {
   page: Page;
   label: string;
   webUrl: string;
+  locale?: UiLocale;
 };
 
 export const createProfileTestSession = async ({
   page,
   label,
   webUrl,
+  locale,
 }: CreateProfileTestSessionOptions): Promise<{
   cleanup: () => Promise<void>;
 }> => {
@@ -79,6 +83,13 @@ export const createProfileTestSession = async ({
     );
     expect(organization.ok(), await organization.text()).toBe(true);
     organizationId = stringField(objectValue(await organization.json()), "id");
+
+    if (locale !== undefined) {
+      const updated = await api.post(`${E2E_API_ORIGIN}/api/auth/update-user`, {
+        data: { locale },
+      });
+      expect(updated.ok(), await updated.text()).toBe(true);
+    }
 
     const storageState = await api.storageState();
     await page.context().clearCookies();

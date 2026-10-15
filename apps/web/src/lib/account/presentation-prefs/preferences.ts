@@ -10,7 +10,7 @@ import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
-} from "@stll/ui/inspector/pane-width";
+} from "@stll/ui/pane-width";
 
 import {
   decisionTableLayouts,

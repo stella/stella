@@ -13,6 +13,7 @@ import {
 
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
+import { expect } from "./test";
 
 const {
   decision,
@@ -197,4 +198,20 @@ export const installDockedLegalFixtures = async (page: Page) => {
       await route.fulfill({ json: body });
     },
   );
+};
+
+/** Navigate after the public shell has hydrated, so browser fixtures can answer the read. */
+export const navigatePublicLawFixture = async (page: Page, path: string) => {
+  await page.goto("/law", { waitUntil: "domcontentloaded" });
+  // The server disables Search while identity is unknown. It only becomes
+  // enabled after the shell commits; patched history alone precedes the
+  // router's asynchronous hydration and is unsafe to navigate with.
+  await expect(
+    page
+      .getByRole("button", { name: "Search", exact: true, includeHidden: true })
+      .first(),
+  ).toBeEnabled({ timeout: 30_000 });
+  await page.evaluate((target) => {
+    history.pushState(null, "", target);
+  }, path);
 };

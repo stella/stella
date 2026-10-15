@@ -1,11 +1,12 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock } from "bun:test";
 
 import {
   fetchMemoriesPage,
   fetchWorkspaceNavigationPage,
   updateMemory,
 } from "@/lib/memory-api";
+import { requestTest as test } from "@/testing/request-test";
 
 const originalFetch = globalThis.fetch;
 type FetchHandler = (

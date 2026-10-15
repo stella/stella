@@ -6,6 +6,8 @@ import {
   type NetworkBaseline,
   type RouteNetworkMetrics,
   browserRequestInterval,
+  readResponseBytes,
+  summarizeCapture,
   countsTowardsWaterfall,
   deepestWaterfallSequence,
   diffNetworkBaseline,
@@ -119,6 +121,7 @@ describe("waterfallDepth", () => {
       missingDbQueryCounts: { "GET /v1/new": 1 },
       responseSizes: { "GET /v1/a": 90_000 },
       missingResponseSizeCounts: {},
+      responseBodyReadFailures: {},
     };
     const shallower: RouteNetworkMetrics = {
       requests: ["GET /v1/a"],
@@ -129,6 +132,7 @@ describe("waterfallDepth", () => {
       missingDbQueryCounts: {},
       responseSizes: { "GET /v1/a": 1000 },
       missingResponseSizeCounts: { "GET /v1/a": 1 },
+      responseBodyReadFailures: {},
     };
 
     expect(mergeResampledMetrics(first, shallower)).toEqual({
@@ -140,6 +144,7 @@ describe("waterfallDepth", () => {
       missingDbQueryCounts: { "GET /v1/new": 1 },
       responseSizes: { "GET /v1/a": 90_000 },
       missingResponseSizeCounts: { "GET /v1/a": 1 },
+      responseBodyReadFailures: {},
     });
   });
 
@@ -153,6 +158,7 @@ describe("waterfallDepth", () => {
       missingDbQueryCounts: {},
       responseSizes: {},
       missingResponseSizeCounts: {},
+      responseBodyReadFailures: {},
     };
     const deeper: RouteNetworkMetrics = {
       ...shallow,
@@ -551,6 +557,7 @@ const metrics = (
   missingDbQueryCounts,
   responseSizes,
   missingResponseSizeCounts,
+  responseBodyReadFailures: {},
 });
 
 describe("diffNetworkBaseline", () => {
@@ -895,6 +902,55 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("Response size missing"))).toBe(
       true,
     );
+  });
+
+  test("a failed response body reports its HTTP status and driver error without request URLs", async () => {
+    const record = {
+      method: "GET",
+      pathname: "/v1/contacts",
+      dbQueries: null,
+      dbQueryHeaderMissing: false,
+      responseBytes: null,
+      responseBodyReadFailure: null,
+    };
+    const reason =
+      "Protocol error (Network.getResponseBody): No resource with given identifier found";
+    await readResponseBytes(
+      {
+        status: () => 200,
+        body: async () => {
+          throw new Error(
+            `${reason}: https://api.example.test/v1/contacts?token=private`,
+          );
+        },
+      },
+      record,
+    );
+    const observed = summarizeCapture({ requests: [record], intervals: [] });
+    expect(observed.missingResponseSizeCounts).toEqual({
+      "GET /v1/contacts": 1,
+    });
+    expect(observed.responseBodyReadFailures).toEqual({
+      "GET /v1/contacts": [
+        {
+          status: 200,
+          errorName: "Error",
+          message: `${reason}: <response URL>`,
+        },
+      ],
+    });
+    const resampled = mergeResampledMetrics(
+      observed,
+      metrics(["GET /v1/contacts"], 0),
+    );
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([["/contacts", resampled]]),
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems.at(0)).toContain(`HTTP 200; Error: ${reason}`);
+    expect(problems.at(0)).not.toContain("api.example.test");
+    expect(problems.at(0)).not.toContain("private");
   });
 
   test("a request without a measured size is not a missing response-size count", () => {
