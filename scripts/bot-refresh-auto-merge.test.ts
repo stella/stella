@@ -31,7 +31,11 @@ const fixture = (branch = "chore/provenance-update") => {
     },
     base: { ref: "main", repo: { full_name: "stella/stella" } },
   };
-  const pull = { ...structuredClone(summary), changed_files: 1 };
+  const pull = {
+    ...structuredClone(summary),
+    changed_files: 1,
+    body: "<!-- dated-exception-radar:1 -->\ndated-exception-action: removal",
+  };
   const file = {
     filename:
       branch === "chore/provenance-update"
@@ -47,6 +51,19 @@ const fixture = (branch = "chore/provenance-update") => {
     pulls: [summary],
     latest: structuredClone(pull),
     files: [file],
+    eventName: "workflow_run",
+    inputs: { number: "42", expectedHead: "a".repeat(40) },
+    ciRuns: [
+      {
+        head_sha: "a".repeat(40),
+        head_branch: branch,
+        head_repository: { full_name: "stella/stella" },
+        path: ".github/workflows/ci.yml",
+        run_number: 1,
+        status: "completed",
+        conclusion: "success",
+      },
+    ],
   };
 };
 const select = async (input: ReturnType<typeof fixture>) => {
@@ -56,7 +73,8 @@ const select = async (input: ReturnType<typeof fixture>) => {
   await script.runInNewContext({
     context: {
       repo: { owner: "stella", repo: "stella" },
-      payload: { workflow_run: input.run },
+      eventName: input.eventName,
+      payload: { workflow_run: input.run, inputs: input.inputs },
     },
     core: {
       setOutput: (name: string, value: string) => {
@@ -67,6 +85,9 @@ const select = async (input: ReturnType<typeof fixture>) => {
       paginate: async (route: string, params: Record<string, unknown>) => {
         routes.push(route);
         expect(params["per_page"]).toBe(100);
+        if (route.endsWith("/runs")) {
+          return input.ciRuns;
+        }
         return route.endsWith("/pulls") ? input.pulls : input.files;
       },
       rest: {
@@ -248,14 +269,20 @@ for (const branch of ["chore/provenance-update", "bot/model-catalog-refresh"]) {
   }
 }
 
-test("automatic merging uses only API actions and pins the validated head", () => {
+test("automatic merging uses trusted verification and pins the validated head", () => {
+  expect(step("Checkout trusted removal verifier")["with"]).toEqual({
+    ref: "main",
+    "persist-credentials": false,
+  });
+  expect(step("Checkout trusted removal verifier")["if"]).toBe(
+    "steps.refresh.outputs.dated == 'true'",
+  );
+  expect(step("Verify exact dated exception removal")["run"]).toBe(
+    'bun scripts/dated-exception-radar.ts --validate-removal --number "$PR_NUMBER" --expected-head "$EXPECTED_HEAD"',
+  );
   expect(
-    steps.some(
-      (candidate) =>
-        typeof candidate["uses"] === "string" &&
-        candidate["uses"].includes("checkout"),
-    ),
-  ).toBe(false);
+    steps.indexOf(step("Verify exact dated exception removal")),
+  ).toBeLessThan(steps.indexOf(step("Mint merge token")));
   const token = v.parse(
     v.record(v.string(), v.unknown()),
     step("Mint merge token")["with"],
@@ -279,3 +306,125 @@ test("automatic merging uses only API actions and pins the validated head", () =
   });
   expect(merge["if"]).toBe("steps.refresh.outputs.number != ''");
 });
+
+const datedFixture = () => {
+  const input = fixture(`chore/dated-waiver-${"b".repeat(24)}`);
+  input.eventName = "workflow_dispatch";
+  input.pull.head.sha = input.inputs.expectedHead;
+  input.latest.head.sha = input.inputs.expectedHead;
+  return input;
+};
+
+test("a removal dispatch selects only an exact head with successful CI", async () => {
+  const input = datedFixture();
+  expect((await select(input)).outputs).toEqual({
+    dated: "true",
+    number: "42",
+    head: input.inputs.expectedHead,
+  });
+});
+
+const unsafeDispatches: { name: string; change: (input: Fixture) => void }[] = [
+  {
+    name: "non-numeric number",
+    change: (input) => {
+      input.inputs.number = "invalid";
+    },
+  },
+  {
+    name: "non-sha head",
+    change: (input) => {
+      input.inputs.expectedHead = "main";
+    },
+  },
+  {
+    name: "non-reserved branch",
+    change: (input) => {
+      input.pull.head.ref = "chore/provenance-update";
+    },
+  },
+  {
+    name: "missing marker",
+    change: (input) => {
+      input.pull.body = "dated-exception-action: removal";
+    },
+  },
+  {
+    name: "extension",
+    change: (input) => {
+      input.pull.body =
+        "<!-- dated-exception-radar:1 -->\ndated-exception-action: extension";
+    },
+  },
+  {
+    name: "old CI head",
+    change: (input) => {
+      for (const run of input.ciRuns) {
+        run.head_sha = "old";
+      }
+    },
+  },
+  {
+    name: "failed CI",
+    change: (input) => {
+      for (const run of input.ciRuns) {
+        run.conclusion = "failure";
+      }
+    },
+  },
+  {
+    name: "pending CI",
+    change: (input) => {
+      for (const run of input.ciRuns) {
+        run.status = "in_progress";
+      }
+    },
+  },
+  {
+    name: "fork CI",
+    change: (input) => {
+      for (const run of input.ciRuns) {
+        run.head_repository.full_name = "fork/stella";
+      }
+    },
+  },
+  {
+    name: "other workflow",
+    change: (input) => {
+      for (const run of input.ciRuns) {
+        run.path = ".github/workflows/other.yml";
+      }
+    },
+  },
+  {
+    name: "wrong author",
+    change: (input) => {
+      input.pull.user.login = "other[bot]";
+    },
+  },
+  {
+    name: "stale head",
+    change: (input) => {
+      input.pull.head.sha = "new-head";
+    },
+  },
+  {
+    name: "newer failed CI",
+    change: (input) => {
+      for (const run of [...input.ciRuns]) {
+        input.ciRuns.push({
+          ...run,
+          run_number: run.run_number + 1,
+          conclusion: "failure",
+        });
+      }
+    },
+  },
+];
+for (const { name, change } of unsafeDispatches) {
+  test(`unsafe dated removal dispatch is rejected: ${name}`, async () => {
+    const input = datedFixture();
+    change(input);
+    expect((await select(input)).outputs).toEqual({});
+  });
+}

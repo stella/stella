@@ -5,18 +5,17 @@ defaults:
     shell: bash
 
 on:
-  schedule:
-    - cron: "41 4 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: dated-waiver-healing
+  group: dated-exception-radar
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   heal:
+    name: Propose dated exception maintenance
     if: github.repository == 'stella/stella'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -37,40 +36,20 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
-      # Neither package installation nor probe commands receive a write token.
-      - name: Install dependencies
+      - name: Install dependencies without write credentials
         timeout-minutes: 20
         run: bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
-      # Evidence stays on the runner; failure output is never a public artifact.
-      - name: Probe dated entries
+      - name: Probe exceptions due within three days
         id: probe
-        # The shared probe deadline is shorter than this step, so exhaustion
-        # records failed evidence and leaves time to publish remediation tasks.
         timeout-minutes: 50
-        run: bun scripts/dated-waiver-healing.ts --probe --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
+        run: bun scripts/dated-exception-radar.ts --probe --evidence "$RUNNER_TEMP/dated-exception-radar.json"
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Validate private task configuration
-        timeout-minutes: 1
-        if: steps.probe.outputs.write_needed == 'true'
-        env:
-          FIX_REPOSITORY: ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
-        run: |
-          set -euo pipefail
-          if [[ ! "$FIX_REPOSITORY" =~ ^[A-Za-z0-9_.-]+$ ]]; then
-            echo "::error::Dated waiver task configuration is missing or invalid."
-            exit 1
-          fi
-          if [[ "$FIX_REPOSITORY" == "$GITHUB_REPOSITORY" || "$FIX_REPOSITORY" == "${GITHUB_REPOSITORY#*/}" ]]; then
-            echo "::error::Dated waiver tasks require a separate private repository."
-            exit 1
-          fi
-
-      - name: Mint app token
+      - name: Mint app token on write path
         timeout-minutes: 1
         if: steps.probe.outputs.write_needed == 'true'
         id: app-token
@@ -79,24 +58,26 @@ jobs:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: |
-            ${{ github.event.repository.name }}
-            ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
+          repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
-          permission-issues: write
+          permission-actions: write
 
-      - name: Publish healing results
-        timeout-minutes: 15
+      - name: Publish proposals and request eligible automatic maintenance
         if: steps.probe.outputs.write_needed == 'true'
-        run: bun scripts/dated-waiver-healing.ts --publish --evidence "$RUNNER_TEMP/dated-waiver-evidence.json"
+        timeout-minutes: 15
+        run: bun scripts/dated-exception-radar.ts --publish --evidence "$RUNNER_TEMP/dated-exception-radar.json"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_READ_TOKEN: ${{ github.token }}
-          DATED_WAIVER_FIX_REPO: ${{ github.repository_owner }}/${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
 
-      - name: Remove local evidence
+      - name: Check main expiry after publication
+        if: always() && steps.probe.outcome == 'success'
+        run: |
+          bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-exception-files"
+          bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-exception-files"
+
+      - name: Remove runner evidence
         timeout-minutes: 1
         if: always()
-        run: rm -f "$RUNNER_TEMP/dated-waiver-evidence.json"
+        run: rm -f "$RUNNER_TEMP/dated-exception-radar.json"

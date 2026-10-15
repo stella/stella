@@ -9,7 +9,7 @@ import { workflowCiInstallFlags } from "./workflow-steps";
 const workflow = v.parse(
   v.object({
     on: v.object({
-      schedule: v.array(v.object({ cron: v.string() })),
+      schedule: v.optional(v.array(v.object({ cron: v.string() }))),
       workflow_dispatch: v.unknown(),
     }),
     concurrency: v.object({ "cancel-in-progress": v.boolean() }),
@@ -52,7 +52,7 @@ const requiredStep = (name: string) => {
 };
 
 test("scheduled healing is serialized and cannot write through the workflow token", () => {
-  expect(workflow.on.schedule).toHaveLength(1);
+  expect(workflow.on.schedule).toBeUndefined();
   expect(workflow.concurrency["cancel-in-progress"]).toBe(false);
   expect(workflow.permissions).toEqual({});
   expect(workflow.jobs.heal.permissions).toEqual({
@@ -68,43 +68,44 @@ test("scheduled healing is serialized and cannot write through the workflow toke
 });
 
 test("package and probe execution precede conditional write credential minting", () => {
-  const token = requiredStep("Mint app token");
-  const probe = requiredStep("Probe dated entries");
-  const publish = requiredStep("Publish healing results");
-  const condition = "steps.probe.outputs.write_needed == 'true'";
-  expect(steps.indexOf(requiredStep("Install dependencies"))).toBeLessThan(
-    steps.indexOf(probe),
+  const token = requiredStep("Mint app token on write path");
+  const probe = requiredStep("Probe exceptions due within three days");
+  const publish = requiredStep(
+    "Publish proposals and request eligible automatic maintenance",
   );
+  const condition = "steps.probe.outputs.write_needed == 'true'";
+  expect(
+    steps.indexOf(
+      requiredStep("Install dependencies without write credentials"),
+    ),
+  ).toBeLessThan(steps.indexOf(probe));
   expect(steps.indexOf(probe)).toBeLessThan(steps.indexOf(token));
   expect(probe.env?.["GH_TOKEN"]).toBe(`\${{ github.token }}`);
   expect(token.if).toBe(condition);
   expect(publish.if).toBe(condition);
-  expect(requiredStep("Validate private task configuration").if).toBe(
-    condition,
-  );
   for (const step of steps.slice(0, steps.indexOf(token))) {
     expect(JSON.stringify(step)).not.toContain("app-token.outputs.token");
   }
   expect(token.with).toMatchObject({
     "permission-contents": "write",
     "permission-pull-requests": "write",
-    "permission-issues": "write",
+    "permission-actions": "write",
   });
-  expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
-  expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
   expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 
 test("probe evidence stays local and public output does not expose failed probes", () => {
-  const probe = requiredStep("Probe dated entries");
-  const publish = requiredStep("Publish healing results");
+  const probe = requiredStep("Probe exceptions due within three days");
+  const publish = requiredStep(
+    "Publish proposals and request eligible automatic maintenance",
+  );
   const evidenceArgument =
-    '--evidence "$RUNNER_TEMP/dated-waiver-evidence.json"';
+    '--evidence "$RUNNER_TEMP/dated-exception-radar.json"';
   expect(probe.run).toContain(`--probe ${evidenceArgument}`);
   expect(publish.run).toContain(`--publish ${evidenceArgument}`);
-  expect(requiredStep("Remove local evidence")).toMatchObject({
+  expect(requiredStep("Remove runner evidence")).toMatchObject({
     if: "always()",
-    run: 'rm -f "$RUNNER_TEMP/dated-waiver-evidence.json"',
+    run: 'rm -f "$RUNNER_TEMP/dated-exception-radar.json"',
   });
   for (const step of steps) {
     expect(step.uses ?? "").not.toContain("upload-artifact");
@@ -116,11 +117,13 @@ test("the shared probe deadline preserves a separate publication budget", () => 
   const minuteMs = 60_000;
   const probeMinutes = v.parse(
     v.number(),
-    requiredStep("Probe dated entries")["timeout-minutes"],
+    requiredStep("Probe exceptions due within three days")["timeout-minutes"],
   );
   const publishMinutes = v.parse(
     v.number(),
-    requiredStep("Publish healing results")["timeout-minutes"],
+    requiredStep(
+      "Publish proposals and request eligible automatic maintenance",
+    )["timeout-minutes"],
   );
   expect(PROBE_PHASE_BUDGET_MS).toBeGreaterThan(0);
   expect(PROBE_PHASE_BUDGET_MS).toBeLessThan(probeMinutes * minuteMs);
@@ -135,17 +138,17 @@ test("the shared probe deadline preserves a separate publication budget", () => 
     workflow.jobs.heal["timeout-minutes"] - 2,
   );
   for (const name of [
-    "Install dependencies",
-    "Probe dated entries",
-    "Validate private task configuration",
-    "Mint app token",
-    "Publish healing results",
+    "Install dependencies without write credentials",
+    "Probe exceptions due within three days",
+    "Mint app token on write path",
+    "Publish proposals and request eligible automatic maintenance",
   ]) {
     expect(requiredStep(name)["timeout-minutes"]).toBeGreaterThan(0);
   }
-  expect(requiredStep("Publish healing results").if).toBe(
-    "steps.probe.outputs.write_needed == 'true'",
-  );
+  expect(
+    requiredStep("Publish proposals and request eligible automatic maintenance")
+      .if,
+  ).toBe("steps.probe.outputs.write_needed == 'true'");
 });
 
 test("every healing job has an explicit main event policy", () => {

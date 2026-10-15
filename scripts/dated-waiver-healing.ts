@@ -492,7 +492,7 @@ type ProbeEntryOptions = {
   sha: string;
   budget: ReturnType<typeof createProbeBudget>;
 };
-const probeEntry = async ({
+export const probeEntry = async ({
   entry,
   sha,
   budget,

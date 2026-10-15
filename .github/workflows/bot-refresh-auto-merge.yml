@@ -5,6 +5,16 @@ defaults:
     shell: bash
 
 on:
+  workflow_dispatch:
+    inputs:
+      number:
+        description: Dated exception proposal number
+        required: true
+        type: string
+      expectedHead:
+        description: Exact proposal head
+        required: true
+        type: string
   workflow_run:
     workflows: [CI Checks]
     types: [completed]
@@ -12,33 +22,43 @@ on:
 permissions: {}
 
 concurrency:
-  group: bot-refresh-auto-merge-${{ github.event.workflow_run.head_branch }}
+  group: bot-refresh-auto-merge-${{ github.event.workflow_run.head_branch || inputs.number }}
   cancel-in-progress: false
 
 jobs:
   arm:
     if: >-
       github.repository == 'stella/stella'
-      && github.event.workflow_run.head_repository.full_name == github.repository
+      && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/ci.yml'
       && github.event.workflow_run.event == 'pull_request'
       && github.event.workflow_run.conclusion == 'success'
       && (github.event.workflow_run.head_branch == 'chore/provenance-update'
-      || github.event.workflow_run.head_branch == 'bot/model-catalog-refresh')
+      || github.event.workflow_run.head_branch == 'bot/model-catalog-refresh')))
       && vars.STELLA_MERGE_HOLD == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     permissions:
       pull-requests: read
+      contents: read
+      actions: read
     steps:
-      # workflow_run is privileged: use API calls only; never execute PR code.
+      # Privileged selection uses API calls; never execute proposal code.
       - name: Select generated refresh
         id: refresh
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const { owner, repo } = context.repo;
-            const run = context.payload.workflow_run;
+            let run = context.payload.workflow_run;
+            const dispatch = context.eventName === 'workflow_dispatch';
+            const inputs = context.payload.inputs;
+            if (dispatch) {
+              if (!/^[1-9][0-9]*$/u.test(inputs?.number ?? '')
+                || !/^[a-f0-9]{40}$/u.test(inputs?.expectedHead ?? '')) return;
+              run = { head_sha: inputs.expectedHead };
+            }
             const catalogPaths = new Set([
               '.changeset/model-catalog-refresh.md',
               'packages/ai-catalog/upstream/models.dev.gen.json',
@@ -47,11 +67,11 @@ jobs:
               'packages/ai-catalog/src/capabilities.gen.ts',
             ]);
             const provenancePath = /^provenance\/(?:report\.json|THIRD-PARTY-NOTICES\.repo\.txt|projects\/(?:root|desktop-tauri)\/(?:sbom\.cdx\.json|THIRD-PARTY-NOTICES\.txt))$/u;
-            const pulls = await github.paginate('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+            const pulls = dispatch ? [{ number: Number(inputs.number), head: { sha: run.head_sha } }] : await github.paginate('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
               owner, repo, commit_sha: run.head_sha, per_page: 100,
             });
             const candidates = pulls.filter(pull => pull.head.sha === run.head_sha
-              && pull.head.ref === run.head_branch);
+              && (dispatch || pull.head.ref === run.head_branch));
             if (candidates.length !== 1) return;
             // Commit-associated PR summaries omit changed_files. Read the full PR
             // before validating ownership and the complete generated-file diff.
@@ -62,7 +82,25 @@ jobs:
               || pull.user.type !== 'Bot' || pull.user.login !== 'stella-provenance-updater[bot]'
               || pull.head.repo?.full_name !== `${owner}/${repo}`
               || pull.base.repo.full_name !== `${owner}/${repo}` || pull.base.ref !== 'main'
-              || pull.head.sha !== run.head_sha || pull.head.ref !== run.head_branch) return;
+              || pull.head.sha !== run.head_sha || (!dispatch && pull.head.ref !== run.head_branch)) return;
+            if (dispatch) {
+              if (!/^chore\/dated-waiver-[a-f0-9]{24}$/u.test(pull.head.ref)
+                || !pull.body?.includes('<!-- dated-exception-radar:1 -->')
+                || !/^dated-exception-action: removal$/mu.test(pull.body)) return;
+              const runs = await github.paginate('GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs', {
+                owner, repo, workflow_id: 'ci.yml', head_sha: run.head_sha, event: 'pull_request', per_page: 100,
+              });
+              const latestRun = runs.filter(candidate => candidate.head_sha === run.head_sha
+                && candidate.head_branch === pull.head.ref
+                && candidate.head_repository?.full_name === `${owner}/${repo}`
+                && candidate.path === '.github/workflows/ci.yml')
+                .sort((left, right) => right.run_number - left.run_number)[0];
+              if (!latestRun || latestRun.status !== 'completed' || latestRun.conclusion !== 'success') return;
+              core.setOutput('dated', 'true');
+              core.setOutput('number', String(pull.number));
+              core.setOutput('head', run.head_sha);
+              return;
+            }
             const accepts = pull.head.ref === 'chore/provenance-update'
               ? file => provenancePath.test(file)
               : pull.head.ref === 'bot/model-catalog-refresh'
@@ -76,6 +114,34 @@ jobs:
             if (latest.head.sha !== run.head_sha || latest.state !== 'open' || latest.draft) return;
             core.setOutput('number', String(pull.number));
             core.setOutput('head', run.head_sha);
+
+      # Dated proposals are checked by default-branch code, never proposal code.
+      - name: Checkout trusted removal verifier
+        if: steps.refresh.outputs.dated == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Bun for removal verification
+        if: steps.refresh.outputs.dated == 'true'
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          bun-version-file: package.json
+
+      - name: Install trusted verifier dependencies
+        if: steps.refresh.outputs.dated == 'true'
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Verify exact dated exception removal
+        if: steps.refresh.outputs.dated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.refresh.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.refresh.outputs.head }}
+        run: bun scripts/dated-exception-radar.ts --validate-removal --number "$PR_NUMBER" --expected-head "$EXPECTED_HEAD"
 
       - name: Mint merge token
         if: steps.refresh.outputs.number != ''
