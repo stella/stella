@@ -99,13 +99,13 @@ export const settledWithin = async <T>(
 ): Promise<T> => guard(promise, options);
 
 /** Resolves with the next `type` event on `target`. */
-export const waitForEvent = async <E extends Event = Event>(
+export const waitForEvent = async (
   target: EventTarget,
   type: string,
   options: Partial<HangGuard> = {},
-): Promise<E> => {
-  const { promise, resolve } = Promise.withResolvers<E>();
-  const listener = (event: Event) => resolve(event as E);
+): Promise<Event> => {
+  const { promise, resolve } = Promise.withResolvers<Event>();
+  const listener = (event: Event) => resolve(event);
   target.addEventListener(type, listener, { once: true });
   return guard(promise, {
     description: `a "${type}" event`,
@@ -118,13 +118,14 @@ export const waitForAbort = async (
   signal: AbortSignal,
   options: Partial<HangGuard> = {},
 ): Promise<unknown> => {
-  if (signal.aborted) {
-    return Promise.resolve(signal.reason);
+  if (!signal.aborted) {
+    await waitForEvent(signal, "abort", {
+      description: "the signal to abort",
+      ...options,
+    });
   }
-  return waitForEvent(signal, "abort", {
-    description: "the signal to abort",
-    ...options,
-  }).then(() => signal.reason);
+  const reason: unknown = signal.reason;
+  return reason;
 };
 
 type WaitForOptions = HangGuard & {
@@ -155,7 +156,6 @@ export const waitFor = async <T>(
   const stop = new AbortController();
   const poll = async (): Promise<{ value: T } | typeof SETTLED> => {
     for (;;) {
-      // oxlint-disable-next-line no-await-in-loop -- each probe observes state after the previous wait.
       const value = await probe();
       if (stop.signal.aborted) {
         return SETTLED;
@@ -163,7 +163,6 @@ export const waitFor = async <T>(
       if (value !== undefined) {
         return { value };
       }
-      // oxlint-disable-next-line no-await-in-loop -- the cadence is the point of the loop.
       const woke = await clock.sleep(intervalMs, { signal: stop.signal }).then(
         () => true,
         (error: unknown) => {

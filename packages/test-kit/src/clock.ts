@@ -43,7 +43,7 @@ const abortableTimeout = async (
   { signal }: SleepOptions = {},
 ): Promise<void> => {
   if (signal?.aborted) {
-    return Promise.reject(signal.reason);
+    signal.throwIfAborted();
   }
   const { promise, resolve, reject } = Promise.withResolvers<undefined>();
   const onAbort = () => {
@@ -132,7 +132,6 @@ export const createTestClock = ({
         sleepers.delete(next);
         moveTo(Math.max(mono, next.dueAt));
         next.wake();
-        // oxlint-disable-next-line no-await-in-loop -- each wake must settle before the next sleeper is due.
         await settle();
       }
       moveTo(Math.max(mono, target));
@@ -147,7 +146,7 @@ export const createTestClock = ({
     sleep: async (milliseconds, { signal } = {}) => {
       assertDuration(milliseconds, "sleep");
       if (signal?.aborted) {
-        return Promise.reject(signal.reason);
+        signal.throwIfAborted();
       }
       const { promise, resolve, reject } = Promise.withResolvers<undefined>();
       const onAbort = () => {

@@ -89,7 +89,10 @@ const refuseProxy = (
   }
   return typeof href === "string" && URL.canParse(href)
     ? refuse(new URL(href))
-    : new NetworkAccessError(String(href), "fetch proxy");
+    : new NetworkAccessError(
+        typeof href === "string" ? href : "a proxy that is not a URL",
+        "fetch proxy",
+      );
 };
 
 // 303, and 301/302 after a POST, continue as a GET without the body.
@@ -148,7 +151,6 @@ const guardedFetch =
       if (!REDIRECT_STATUSES.has(response.status) || location === null) {
         return response;
       }
-      // oxlint-disable-next-line no-await-in-loop -- the redirect body is discarded before the next hop.
       await response.body?.cancel();
       if (hops >= MAX_REDIRECTS) {
         return panic(`fetch: more than ${MAX_REDIRECTS} redirects`);
@@ -172,7 +174,6 @@ const guardedFetch =
         );
       }
       url = next;
-      // oxlint-disable-next-line no-await-in-loop -- each hop depends on the previous response.
       response = await original(url.href, {
         ...init,
         body: body ?? null,
@@ -186,8 +187,12 @@ const guardedFetch =
 
 const guardFetch = (refuse: FetchRefusal): (() => void) => {
   const original = globalThis.fetch;
-  Reflect.set(globalThis, "fetch", guardedFetch(original, refuse));
-  return () => Reflect.set(globalThis, "fetch", original);
+  globalThis.fetch = Object.assign(guardedFetch(original, refuse), {
+    preconnect: original.preconnect,
+  });
+  return () => {
+    globalThis.fetch = original;
+  };
 };
 
 type SocketTarget = {
@@ -231,13 +236,15 @@ let installed: (() => void) | undefined;
 
 type Refusal = (args: unknown[]) => NetworkAccessError | undefined;
 
-// Replaces the socket factory `owner[name]` with one that throws, as the
-// platform does for a bad target, before connecting to a refused host.
+// Replaces the socket factory `owner[name]` with one that refuses before
+// connecting, the way the platform reports a bad target: a synchronous
+// factory throws, a promise-returning one (`Bun.connect`) rejects.
 // Returns the function that puts the original back.
 const guardMethod = (
   owner: object,
   name: string,
   refuse: Refusal,
+  failure: "throw" | "reject",
 ): (() => void) => {
   const original: unknown = Reflect.get(owner, name);
   if (typeof original !== "function") {
@@ -245,16 +252,22 @@ const guardMethod = (
   }
   const guarded = function guarded(this: unknown, ...args: unknown[]) {
     const error = refuse(args);
-    if (error !== undefined) {
-      throw error;
+    if (error === undefined) {
+      const result: unknown = Reflect.apply(original, this, args);
+      return result;
     }
-    return Reflect.apply(original, this, args);
+    if (failure === "reject") {
+      return Promise.reject(error);
+    }
+    throw error;
   };
   Reflect.set(owner, name, guarded);
   if (Reflect.get(owner, name) !== guarded) {
     panic(`Could not install the network guard on ${name}`);
   }
-  return () => Reflect.set(owner, name, original);
+  return () => {
+    Reflect.set(owner, name, original);
+  };
 };
 
 /**
@@ -284,11 +297,16 @@ export const installNetworkGuard = ({
   // Socket.prototype.connect, so each entry point is guarded on its own.
   const restores = [
     guardFetch((url) => refusal(url.hostname, "fetch")),
-    guardMethod(net.Socket.prototype, "connect", refuseSocket("node:net")),
-    guardMethod(net, "connect", refuseSocket("node:net")),
-    guardMethod(net, "createConnection", refuseSocket("node:net")),
-    guardMethod(tls, "connect", refuseSocket("node:tls")),
-    guardMethod(Bun, "connect", refuseSocket("Bun.connect")),
+    guardMethod(
+      net.Socket.prototype,
+      "connect",
+      refuseSocket("node:net"),
+      "throw",
+    ),
+    guardMethod(net, "connect", refuseSocket("node:net"), "throw"),
+    guardMethod(net, "createConnection", refuseSocket("node:net"), "throw"),
+    guardMethod(tls, "connect", refuseSocket("node:tls"), "throw"),
+    guardMethod(Bun, "connect", refuseSocket("Bun.connect"), "reject"),
   ];
 
   installed = () => {

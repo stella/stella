@@ -50,7 +50,6 @@ describe("test clock", () => {
     const ticks: number[] = [];
     const loop = async () => {
       for (let tick = 0; tick < 5; tick += 1) {
-        // oxlint-disable-next-line no-await-in-loop -- a periodic loop is what this test drives.
         await clock.sleep(100);
         ticks.push(clock.monotonic());
       }
@@ -93,10 +92,14 @@ describe("test clock", () => {
     expect(clock.now()).toBe(1_000_005);
   });
 
-  test("refuses negative and non-finite durations", () => {
+  test("refuses negative and non-finite durations", async () => {
     const clock = createTestClock();
-    expect(async () => clock.sleep(-1)).toThrow("non-negative");
-    expect(async () => clock.advance(Number.NaN)).toThrow("non-negative");
+    expect(String(await rejectionOf(clock.sleep(-1)))).toContain(
+      "non-negative",
+    );
+    expect(String(await rejectionOf(clock.advance(Number.NaN)))).toContain(
+      "non-negative",
+    );
     expect(() => clock.setTime(Number.POSITIVE_INFINITY)).toThrow("finite");
   });
 

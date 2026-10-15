@@ -11,6 +11,17 @@ import {
 } from "./network.ts";
 
 let uninstall: (() => void) | undefined;
+
+// What a fake fetch was asked for, whichever input form it received.
+const requestedUrl = (input: unknown): string => {
+  if (input instanceof Request) {
+    return input.url;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return typeof input === "string" ? input : "(not a URL)";
+};
 afterEach(() => {
   uninstall?.();
   uninstall = undefined;
@@ -53,7 +64,7 @@ describe("network guard", () => {
   test("fetch to a loopback server still works", async () => {
     uninstall = installNetworkGuard();
     using server = Bun.serve({ fetch: () => new Response("ok"), port: 0 });
-    const response = await fetch(`http://127.0.0.1:${server.port}/`);
+    const response = await fetch(`http://127.0.0.1:${String(server.port)}/`);
     expect(await response.text()).toBe("ok");
   });
 
@@ -62,8 +73,8 @@ describe("network guard", () => {
     const reached: string[] = [];
     // A fake underneath the guard: nothing leaves the process.
     Reflect.set(globalThis, "fetch", async (input: unknown) => {
-      reached.push(input instanceof Request ? input.url : String(input));
-      return Promise.resolve(new Response("ok"));
+      reached.push(requestedUrl(input));
+      return new Response("ok");
     });
     try {
       uninstall = installNetworkGuard({ allowHosts: ["Postgres"] });
@@ -110,7 +121,7 @@ describe("network guard", () => {
       uninstall = installNetworkGuard();
       using server = serve();
       const error = await rejectionOf(
-        fetch(`http://127.0.0.1:${server.port}/away`),
+        fetch(`http://127.0.0.1:${String(server.port)}/away`),
       );
       expect(error).toBeInstanceOf(NetworkAccessError);
       expect(error).toHaveProperty("host", "example.com");
@@ -119,7 +130,7 @@ describe("network guard", () => {
     test("local redirects are followed with their method and body rules", async () => {
       uninstall = installNetworkGuard();
       using server = serve();
-      const base = `http://127.0.0.1:${server.port}`;
+      const base = `http://127.0.0.1:${String(server.port)}`;
       const kept = await fetch(`${base}/hop`, { body: "x", method: "POST" });
       expect(await kept.text()).toBe("POST x");
       expect(kept.url).toBe(`${base}/final`);
@@ -143,7 +154,7 @@ describe("network guard", () => {
       });
       const upload = new TransformStream<Uint8Array, Uint8Array>();
       const writer = upload.writable.getWriter();
-      const responding = fetch(`http://127.0.0.1:${server.port}/`, {
+      const responding = fetch(`http://127.0.0.1:${String(server.port)}/`, {
         body: upload.readable,
         method: "POST",
       });
@@ -168,10 +179,10 @@ describe("network guard", () => {
           async (input: unknown, init?: RequestInit) => {
             const call = {
               init,
-              url: input instanceof Request ? input.url : String(input),
+              url: requestedUrl(input),
             };
             calls.push(call);
-            return Promise.resolve(answer(call, calls.length - 1));
+            return answer(call, calls.length - 1);
           },
         );
         try {
@@ -284,7 +295,6 @@ describe("network guard", () => {
       ]) {
         const init: RequestInit = {};
         Reflect.set(init, "proxy", proxy);
-        // oxlint-disable-next-line no-await-in-loop -- each proxy form is checked in turn.
         const error = await rejectionOf(fetch("http://127.0.0.1:1/", init));
         expect(error).toBeInstanceOf(NetworkAccessError);
         expect(error).toHaveProperty("host", "proxy.example");
@@ -303,9 +313,12 @@ describe("network guard", () => {
     test("manual redirects are left to the caller", async () => {
       uninstall = installNetworkGuard();
       using server = serve();
-      const response = await fetch(`http://127.0.0.1:${server.port}/away`, {
-        redirect: "manual",
-      });
+      const response = await fetch(
+        `http://127.0.0.1:${String(server.port)}/away`,
+        {
+          redirect: "manual",
+        },
+      );
       expect(response.status).toBe(302);
     });
   });
@@ -336,15 +349,16 @@ describe("network guard", () => {
     );
   });
 
-  test("Bun.connect to a remote host throws", () => {
+  test("Bun.connect to a remote host rejects", async () => {
     uninstall = installNetworkGuard();
-    expect(async () =>
+    const error = await rejectionOf(
       Bun.connect({
         hostname: "example.com",
         port: 443,
         socket: { data: () => undefined },
       }),
-    ).toThrow(NetworkAccessError);
+    );
+    expect(error).toBeInstanceOf(NetworkAccessError);
   });
 
   test("uninstall restores the originals and a second install panics", () => {
