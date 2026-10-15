@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -44,7 +45,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type ProvisionsPage = Awaited<
