@@ -1473,7 +1473,9 @@ const main = async () => {
   );
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
-      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
+      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +
+      // maxRSS is in kilobytes on every platform Node and Bun report it for.
+      `peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`,
   );
 };
 
