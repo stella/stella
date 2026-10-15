@@ -596,8 +596,11 @@ export const countRootConnectionShapes = (
 ): number => findRootConnectionShapes(content, file).length;
 
 const ORG_SCOPE_MODULE = /(?:^|\/)db\/org-scope(?:\.[cm]?[jt]sx?)?$/u;
-const hasNodeFlag = (flags: ts.NodeFlags, mask: ts.NodeFlags): boolean =>
-  flags % (mask * 2) >= mask;
+const hasNodeFlag = (flags: ts.NodeFlags, mask: ts.NodeFlags): boolean => {
+  const value: number = flags;
+  const bit: number = mask;
+  return value % (bit * 2) >= bit;
+};
 
 const accessName = (
   access: ts.PropertyAccessExpression | ts.ElementAccessExpression,

@@ -3,7 +3,6 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
-  folioCollabRooms,
   desktopTimeEntryBatches,
   workObligations,
 } from "@/api/db/schema";
@@ -16,7 +15,7 @@ import {
   FLOW_RUN_SCOPED_TRANSITIONS,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
-import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
+import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/folio-collab-transitions";
 import { READER_ANSWER_MESSAGE_TRANSITIONS } from "@/api/lib/db/reader-answer-transitions";
 import type {
   STATUS_COLUMNS,
@@ -79,17 +78,6 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
-
-export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
-  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
-  table: folioCollabRooms,
-  edges: {
-    empty: ["empty", "claimed"],
-    claimed: ["empty", "claimed", "seeded"],
-    seeded: ["empty", "seeded"],
-  },
-  initial: ["empty"],
-});
 
 // Refresh atomically publishes a complete recount; later recounts remain exact.
 const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
