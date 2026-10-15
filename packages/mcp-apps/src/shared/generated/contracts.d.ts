@@ -73,6 +73,25 @@ export declare const APP_PROVISION_HISTORY_SCHEMA: v.GenericSchema<
 
 export type ReaderPage = {
   metadata: {
+    extractionWarnings: Array<{
+      rule:
+        | "rtf-control"
+        | "html-tag"
+        | "xml-marker"
+        | "pdf-object"
+        | "entity"
+        | "digit-run"
+        | "hex-run"
+        | "document-empty"
+        | "ast-missing"
+        | "replacement-character"
+        | "c1-control"
+        | "utf8-read-as-single-byte"
+        | "misdecoded"
+        | "encoding-incomplete";
+      count: number;
+      firstOffsets: number[];
+    }>;
     decisionId: string;
     caseNumber: string;
     caseNumberType: "case-number" | "neutral-citation" | "reporter-citation";
@@ -138,6 +157,25 @@ export type OpenDecision =
   | {
       status: "available";
       metadata: {
+        extractionWarnings: Array<{
+          rule:
+            | "rtf-control"
+            | "html-tag"
+            | "xml-marker"
+            | "pdf-object"
+            | "entity"
+            | "digit-run"
+            | "hex-run"
+            | "document-empty"
+            | "ast-missing"
+            | "replacement-character"
+            | "c1-control"
+            | "utf8-read-as-single-byte"
+            | "misdecoded"
+            | "encoding-incomplete";
+          count: number;
+          firstOffsets: number[];
+        }>;
         decisionId: string;
         caseNumber: string;
         caseNumberType:
@@ -168,6 +206,25 @@ export type OpenDecision =
   | {
       status: "withheld";
       metadata: {
+        extractionWarnings: Array<{
+          rule:
+            | "rtf-control"
+            | "html-tag"
+            | "xml-marker"
+            | "pdf-object"
+            | "entity"
+            | "digit-run"
+            | "hex-run"
+            | "document-empty"
+            | "ast-missing"
+            | "replacement-character"
+            | "c1-control"
+            | "utf8-read-as-single-byte"
+            | "misdecoded"
+            | "encoding-incomplete";
+          count: number;
+          firstOffsets: number[];
+        }>;
         decisionId: string;
         caseNumber: string;
         caseNumberType:
@@ -191,6 +248,25 @@ export type OpenDecision =
   | {
       status: "unavailable";
       metadata: {
+        extractionWarnings: Array<{
+          rule:
+            | "rtf-control"
+            | "html-tag"
+            | "xml-marker"
+            | "pdf-object"
+            | "entity"
+            | "digit-run"
+            | "hex-run"
+            | "document-empty"
+            | "ast-missing"
+            | "replacement-character"
+            | "c1-control"
+            | "utf8-read-as-single-byte"
+            | "misdecoded"
+            | "encoding-incomplete";
+          count: number;
+          firstOffsets: number[];
+        }>;
         decisionId: string;
         caseNumber: string;
         caseNumberType:
