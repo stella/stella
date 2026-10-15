@@ -31,9 +31,7 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 /** The database's message, also when the driver wraps it as the cause. */
 const errorText = (error: unknown): string =>
-  error instanceof Error
-    ? `${error.message} ${errorText(error.cause)}`
-    : String(error ?? "");
+  error instanceof Error ? `${error.message} ${errorText(error.cause)}` : "";
 
 type Fixture = {
   organizationId: SafeId<"organization">;

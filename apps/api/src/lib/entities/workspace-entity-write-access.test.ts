@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { roles } from "@stll/permissions";
 
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
+import { isMemberRole } from "@/api/lib/member-roles";
 
 describe("canWriteWorkspaceEntities", () => {
   test("never writes in a matter the database access rule does not reach", () => {
@@ -14,14 +15,10 @@ describe("canWriteWorkspaceEntities", () => {
   });
 
   test("writes in a reached matter exactly when the role may update entities", () => {
-    for (const organizationRole of Object.keys(roles)) {
+    for (const organizationRole of Object.keys(roles).filter(isMemberRole)) {
       expect(
         canWriteWorkspaceEntities({ organizationRole, reachesMatter: true }),
-      ).toBe(
-        roles[organizationRole as keyof typeof roles].authorize({
-          entity: ["update"],
-        }).success,
-      );
+      ).toBe(roles[organizationRole].authorize({ entity: ["update"] }).success);
     }
     expect(
       canWriteWorkspaceEntities({

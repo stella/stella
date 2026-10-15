@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -18,9 +19,9 @@ type NewWorkspaceRow = {
  * (`stella_create_workspace`). The database takes the organization and the
  * creating member from the transaction settings, checks that the client and
  * the lead belong to that organization, and assigns the creator when the
- * access rule would not reach the new matter otherwise. The matter is then
- * reachable for the rest of the transaction without naming it in the
- * transaction's explicit workspace ids.
+ * access rule would not reach the new matter otherwise. A transaction scoped
+ * to an explicit list of matters sees only that list, so the new matter joins
+ * the list too.
  */
 export const createWorkspaceInTransaction = async (
   tx: Pick<Transaction, "execute">,
@@ -43,6 +44,17 @@ export const createWorkspaceInTransaction = async (
       ${billingReference},
       ${color},
       ${leadUserId}
+    )`,
+  );
+  // The setting is a Postgres array literal: {id1,id2}.
+  await tx.execute(
+    sql`SELECT set_config(
+      ${SETTING_WORKSPACE_IDS},
+      array_append(
+        current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
+        ${id}
+      )::text,
+      true
     )`,
   );
 };
