@@ -1,6 +1,6 @@
 [
   {
-    "count": 3,
+    "count": 4,
     "filepath": ".github/workflows/ci.yml",
     "kind": "syntax-check",
     "message": "step must run script with \"run\" section or run action with \"uses\" section"
