@@ -98,6 +98,7 @@ const ChatThreadDomPage = ({
           activeOrganizationId: organizationId,
           alwaysApprovedTools: session.alwaysApprovedTools,
           conversationApprovedTools: session.conversationApprovedTools,
+          confirmStoredApprovalGrant: session.confirmStoredApprovalGrant,
           handleAllowInConversation: session.handleAllowInConversation,
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,

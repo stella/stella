@@ -1553,6 +1553,7 @@ const FileChatOverlayInner = ({
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
@@ -2510,6 +2511,7 @@ const FileChatOverlayInner = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation:
             handleAllowInConversationWithFolioAgentCommentExecution,
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
