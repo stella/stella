@@ -1,4 +1,5 @@
 // parser-output-unchanged: [us-courtlistener] the US parser reaches this module only through the package entry and calls normalizeUnicode, which this change leaves as it was.
+// parser-output-unchanged: [pl-uokik] the UOKiK adapter reaches this module only through the package entry; no case-law adapter, legal-ast or legal-atlas module calls stripDiacritics or foldToAscii.
 /**
  * Latin-ASCII folding for search keys whose counterpart is a PostgreSQL
  * `unaccent()` index or a Tantivy `ascii_folding` index.
