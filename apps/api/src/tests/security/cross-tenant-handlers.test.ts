@@ -51,6 +51,7 @@ import {
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
@@ -634,6 +635,28 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+// Desktop credential B is user A1 bound to organization B: a successful
+// write lands in matter B1 under organization B and that user, nowhere else.
+const expectDesktopEntryOwnedByB = async (entryId: string) => {
+  const rows = await testDb
+    .select({
+      id: timeEntries.id,
+      workspaceId: timeEntries.workspaceId,
+      organizationId: timeEntries.organizationId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, toSafeId<"timeEntry">(entryId)));
+  expect(rows).toEqual([
+    {
+      id: entryId,
+      workspaceId: ids.wsB1,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+    },
+  ]);
+};
+
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
   {
     name: "desktop registry saved format",
@@ -720,15 +743,30 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
           entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
         }),
       ),
-    runBPositive: async ({ desktopB, ids: testIds }) =>
-      await desktopB(
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
         desktopRequest("/batch", {
           idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
           entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
         }),
-      ),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      const entries = recordField(body, "entries");
+      expect(Array.isArray(entries) ? entries : []).toHaveLength(1);
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        await expectDesktopEntryOwnedByB(String(recordField(entry, "id")));
+      }
+      return body;
+    },
     expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
-    expectPositive: (result) => expect(result).toMatchObject({ status: 200 }),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(recordField(result, "entries")).toEqual([
+        expect.objectContaining({
+          id: expect.any(String),
+          matterId: testIds.wsB1,
+        }),
+      ]),
   },
   {
     name: "desktop batch status",
@@ -757,10 +795,18 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     name: "desktop single create",
     runAAgainstB: async ({ desktopA, ids: testIds }) =>
       await desktopA(desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY)),
-    runBPositive: async ({ desktopB, ids: testIds }) =>
-      await desktopB(desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY)),
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
+        desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      await expectDesktopEntryOwnedByB(String(recordField(body, "id")));
+      return body;
+    },
     expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
-    expectPositive: (result) => expect(result).toMatchObject({ status: 200 }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ id: expect.any(String) }),
   },
 ];
 
