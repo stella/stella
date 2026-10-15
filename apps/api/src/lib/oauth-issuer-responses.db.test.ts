@@ -63,7 +63,10 @@ beforeAll(async () => {
   expect(issuer).toBe(getAuthIssuerUrl());
   expect(metadata.scopes_supported).toContain("offline_access");
   expect(metadata.authorization_response_iss_parameter_supported).toBe(true);
-  browser = await signInHuman("issuer-responses@example.test");
+  // OTP state outlives a database fixture when this file repeats.
+  browser = await signInHuman(
+    `issuer-responses-${Bun.randomUUIDv7()}@example.test`,
+  );
 });
 
 afterAll(async () => {

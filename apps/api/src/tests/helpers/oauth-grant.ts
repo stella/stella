@@ -172,10 +172,16 @@ export const authorizeOAuthClient = async (
     state: Bun.randomUUIDv7(),
   }).toString();
 
+  const address = nextClientAddress();
   const authorized = await readJson(
     await getAuth().handler(
       new Request(authorizeUrl.href, {
-        headers: { accept: "application/json", cookie: browser.cookieHeader() },
+        headers: {
+          accept: "application/json",
+          cookie: browser.cookieHeader(),
+          "x-forwarded-for": address,
+          [AUTH_CLIENT_ADDRESS_HEADER]: address,
+        },
       }),
     ),
     redirectSchema,
@@ -202,6 +208,7 @@ export const consentAndExchange = async ({
     panic(`expected the consent page, got ${consentPage.pathname}`);
   }
   const signedQuery = readSignedQuery(consentPage);
+  const address = nextClientAddress();
   const consented = await readJson(
     await auth.handler(
       new Request(getAuthEndpointUrl("oauth2/consent"), {
@@ -209,6 +216,8 @@ export const consentAndExchange = async ({
         headers: {
           "content-type": "application/json",
           cookie: browser.cookieHeader(),
+          "x-forwarded-for": address,
+          [AUTH_CLIENT_ADDRESS_HEADER]: address,
         },
         body: JSON.stringify({
           accept: true,
