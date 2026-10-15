@@ -266,7 +266,7 @@ describe("response conformance validation", () => {
   });
 
   test.each(["text/plain", "text/event-stream", "application/octet-stream"])(
-    "does not clone or consume %s responses even under an object schema",
+    "rejects undeclared %s representations without cloning their bodies",
     async (contentType) => {
       const response = new Response("stream payload", {
         headers: { "content-type": contentType },
@@ -274,17 +274,212 @@ describe("response conformance validation", () => {
       const clone = spyOn(response, "clone");
       try {
         expect(
-          await assertHttpResponseConformance({
-            route,
-            response,
-            method: "GET",
-            schema: objectSchema,
-          }),
-        ).toBe("valid");
+          await rejectionOf(
+            assertHttpResponseConformance({
+              route,
+              response,
+              method: "GET",
+              schema: objectSchema,
+            }),
+          ),
+        ).toMatchObject({ issuePath: "(content-type)" });
         expect(clone).toHaveBeenCalledTimes(0);
         expect(response.bodyUsed).toBe(false);
         expect(await response.text()).toBe("stream payload");
       } finally {
+        clone.mockRestore();
+      }
+    },
+  );
+
+  test("validates finite literal and string-union text while preserving caller bodies", async () => {
+    for (const schema of [
+      t.Literal("ready"),
+      t.Union([t.Literal("ready"), t.Literal("done")]),
+    ]) {
+      const valid = new Response("ready");
+      expect(
+        await assertHttpResponseConformance({
+          route,
+          response: valid,
+          method: "GET",
+          schema,
+        }),
+      ).toBe("valid");
+      expect(await valid.text()).toBe("ready");
+      const invalid = new Response("wrong");
+      expect(
+        await rejectionOf(
+          assertHttpResponseConformance({
+            route,
+            response: invalid,
+            method: "GET",
+            schema,
+          }),
+        ),
+      ).toBeInstanceOf(ResponseConformanceError);
+      expect(await invalid.text()).toBe("wrong");
+    }
+  });
+
+  test("validates the entire mixed union for textual and JSON representations", async () => {
+    const schema = t.Union([objectSchema, t.Literal("ready")]);
+    const text = new Response("ready");
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: text,
+        method: "GET",
+        schema,
+      }),
+    ).toBe("valid");
+    expect(await text.text()).toBe("ready");
+    const wrongText = new Response("wrong");
+    expect(
+      await rejectionOf(
+        assertHttpResponseConformance({
+          route,
+          response: wrongText,
+          method: "GET",
+          schema,
+        }),
+      ),
+    ).toBeInstanceOf(ResponseConformanceError);
+    expect(await wrongText.text()).toBe("wrong");
+    const json = Response.json({ count: 1 });
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: json,
+        method: "GET",
+        schema,
+      }),
+    ).toBe("valid");
+    expect(await json.json()).toEqual({ count: 1 });
+    const wrongJson = Response.json({ count: "wrong" });
+    expect(
+      await rejectionOf(
+        assertHttpResponseConformance({
+          route,
+          response: wrongJson,
+          method: "GET",
+          schema,
+        }),
+      ),
+    ).toBeInstanceOf(ResponseConformanceError);
+    expect(await wrongJson.json()).toEqual({ count: "wrong" });
+  });
+
+  test("requires JSON for number and boolean contracts", async () => {
+    for (const [schema, text] of [
+      [t.Number(), "42"],
+      [t.Boolean(), "false"],
+    ] as const) {
+      const response = new Response(text);
+      const clone = spyOn(response, "clone");
+      try {
+        expect(
+          await rejectionOf(
+            assertHttpResponseConformance({
+              route,
+              response,
+              method: "GET",
+              schema,
+            }),
+          ),
+        ).toMatchObject({ issuePath: "(content-type)" });
+        expect(clone).toHaveBeenCalledTimes(0);
+        expect(await response.text()).toBe(text);
+      } finally {
+        clone.mockRestore();
+      }
+    }
+  });
+
+  test("exempts declared event streams but rejects an undeclared string stream without cloning", async () => {
+    for (const declared of [true, false]) {
+      const response = new Response("data: ready\n\n", {
+        headers: { "content-type": "text/event-stream" },
+      });
+      const clone = spyOn(response, "clone");
+      try {
+        const schema = declared
+          ? t.String({ contentMediaType: "text/event-stream" })
+          : t.String();
+        const checked = assertHttpResponseConformance({
+          route,
+          response,
+          method: "GET",
+          schema,
+        });
+        if (declared) {
+          expect(await checked).toBe("valid");
+        } else {
+          expect(await rejectionOf(checked)).toMatchObject({
+            issuePath: "(content-type)",
+          });
+        }
+        expect(clone).toHaveBeenCalledTimes(0);
+        expect(await response.text()).toBe("data: ready\n\n");
+      } finally {
+        clone.mockRestore();
+      }
+    }
+  });
+
+  test("recognizes declared generator handlers without cloning their response streams", async () => {
+    const response = new Response("data: ready\n\n", {
+      headers: { "content-type": "text/event-stream" },
+    });
+    const handler = async function* () {
+      yield { count: 1 };
+    };
+    const clone = spyOn(response, "clone");
+    try {
+      expect(
+        await assertHttpResponseConformance({
+          route,
+          response,
+          method: "GET",
+          schema: objectSchema,
+          handler,
+        }),
+      ).toBe("valid");
+      expect(clone).toHaveBeenCalledTimes(0);
+      expect(await response.text()).toBe("data: ready\n\n");
+    } finally {
+      clone.mockRestore();
+    }
+  });
+
+  test.each([true, false])(
+    "cancels its finite text clone after validation success=%s",
+    async (valid) => {
+      const response = new Response(valid ? "ready" : "wrong");
+      const copy = response.clone();
+      if (copy.body === null) {
+        throw new Error("The text clone fixture must have a body");
+      }
+      const clone = spyOn(response, "clone").mockReturnValue(copy);
+      const cancel = spyOn(copy.body, "cancel");
+      try {
+        const checked = assertHttpResponseConformance({
+          route,
+          response,
+          method: "GET",
+          schema: t.Literal("ready"),
+        });
+        if (valid) {
+          expect(await checked).toBe("valid");
+        } else {
+          expect(await rejectionOf(checked)).toBeInstanceOf(
+            ResponseConformanceError,
+          );
+        }
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(await response.text()).toBe(valid ? "ready" : "wrong");
+      } finally {
+        cancel.mockRestore();
         clone.mockRestore();
       }
     },

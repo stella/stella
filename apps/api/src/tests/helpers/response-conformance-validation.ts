@@ -205,6 +205,69 @@ export const assertResponseConformance = async ({
   return "valid";
 };
 
+type ResponseBodyKind = "text" | "json" | "opaque" | "stream" | "unconstrained";
+type ResolveResponseBodyKindOptions = {
+  schema: unknown;
+  identity: ResponseIdentity;
+  references: SchemaReferences;
+  seen?: ReadonlySet<object>;
+};
+
+const resolveResponseBodyKind = ({
+  schema,
+  identity,
+  references,
+  seen = new Set<object>(),
+}: ResolveResponseBodyKindOptions): ResponseBodyKind => {
+  const resolved = resolveSchema(schema, identity, references);
+  if (
+    isRecord(resolved) &&
+    resolved["contentMediaType"] === "text/event-stream"
+  ) {
+    return "stream";
+  }
+  if (!TypeGuard.IsSchema(resolved)) {
+    return "json";
+  }
+  switch (resolved[Kind]) {
+    case "Any":
+    case "Unknown":
+      return "unconstrained";
+    case "File":
+    case "Files":
+    case "Uint8Array":
+    case "ArrayBuffer":
+      return "opaque";
+    case "String":
+      return "text";
+    case "Literal":
+      return typeof resolved["const"] === "string" ? "text" : "json";
+    case "Union": {
+      if (!TypeGuard.IsUnion(resolved) || seen.has(resolved)) {
+        return "json";
+      }
+      const nextSeen = new Set(seen);
+      nextSeen.add(resolved);
+      return resolved.anyOf.some((branch) => {
+        const kind = resolveResponseBodyKind({
+          schema: branch,
+          identity,
+          references: {
+            ...references,
+            references: [...(references.references ?? []), resolved],
+          },
+          seen: nextSeen,
+        });
+        return kind === "text" || kind === "unconstrained";
+      })
+        ? "text"
+        : "json";
+    }
+    default:
+      return "json";
+  }
+};
+
 /** Structural response surface shared by Bun and undici. */
 export type ConformanceHttpResponse = {
   status: number;
@@ -222,9 +285,10 @@ type AssertHttpResponseConformanceOptions = SchemaReferences & {
   method: string;
   schema: unknown;
   status?: number | undefined;
+  handler?: unknown;
 };
 
-/** Borrow the original; only constrained JSON validation owns a cloned branch. */
+/** Borrow the original; constrained finite JSON/text validation owns its cloned branch. */
 export const assertHttpResponseConformance = async ({
   route,
   response,
@@ -233,6 +297,7 @@ export const assertHttpResponseConformance = async ({
   models,
   references,
   status = response.status,
+  handler,
 }: AssertHttpResponseConformanceOptions): Promise<"missing" | "valid"> => {
   const identity = { route, status };
   const resolvedReferences = collectReferences({ models, references });
@@ -257,11 +322,22 @@ export const assertHttpResponseConformance = async ({
   if (method.toUpperCase() === "HEAD" || status === 204 || status === 304) {
     return "valid";
   }
+  const handlerKind = Object.prototype.toString.call(handler);
   if (
-    TypeGuard.IsSchema(bodySchema) &&
-    (bodySchema[Kind] === "Any" ||
-      bodySchema[Kind] === "Unknown" ||
-      bodySchema[Kind] === "File")
+    handlerKind === "[object GeneratorFunction]" ||
+    handlerKind === "[object AsyncGeneratorFunction]"
+  ) {
+    return "valid";
+  }
+  const bodyKind = resolveResponseBodyKind({
+    schema: bodySchema,
+    identity,
+    references: { models, references: resolvedReferences },
+  });
+  if (
+    bodyKind === "opaque" ||
+    bodyKind === "stream" ||
+    bodyKind === "unconstrained"
   ) {
     return "valid";
   }
@@ -274,8 +350,12 @@ export const assertHttpResponseConformance = async ({
   const jsonBody =
     contentType === "application/json" ||
     contentType?.endsWith("+json") === true;
-  if (!jsonBody) {
-    return "valid";
+  const textBody =
+    bodyKind === "text" &&
+    contentType?.startsWith("text/") === true &&
+    contentType !== "text/event-stream";
+  if (!jsonBody && !textBody) {
+    throw failure(identity, "(content-type)");
   }
   const cloned = Result.try(() => response.clone());
   if (Result.isError(cloned)) {
@@ -284,7 +364,7 @@ export const assertHttpResponseConformance = async ({
   const clone = cloned.value;
   try {
     const body = await Result.tryPromise(async () => {
-      const value: unknown = await clone.json();
+      const value: unknown = jsonBody ? await clone.json() : await clone.text();
       return value;
     });
     if (Result.isError(body)) {

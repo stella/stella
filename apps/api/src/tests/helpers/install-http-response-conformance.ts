@@ -85,6 +85,7 @@ export const installHttpResponseConformance = () => {
         method: request.method,
         response,
         schema,
+        handler: route.handler,
         models: getResponseConformanceRequestModels(request),
       });
     },

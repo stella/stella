@@ -83,7 +83,7 @@ export const installHandlerMcpResponseConformance = (): (() => void) => {
   );
 
   const restoreHandler = setResponseConformanceObserver(
-    async ({ config, context, result }) => {
+    async ({ handler, config, context, result }) => {
       const ctx = isRecord(context) ? context : undefined;
       const request = ctx?.["request"];
       const models =
@@ -134,6 +134,7 @@ export const installHandlerMcpResponseConformance = (): (() => void) => {
             route,
             response: value,
             status,
+            handler,
             method,
             schema: config.response,
             models,

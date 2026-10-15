@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import { Elysia, status as httpStatus, t } from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
+  safeHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { ResponseConformanceError } from "@/api/lib/response-conformance-error";
 
@@ -21,6 +22,38 @@ afterEach(() => {
 });
 
 describe("central HTTP response conformance", () => {
+  test("validates canonical status text against the complete error union", async () => {
+    uninstall = installHttpResponseConformance();
+    const app = new Elysia().get("/status", () => httpStatus(404), {
+      response: safeHandlerResponseSchemasWithStatusText(
+        t.Object({ value: t.String() }),
+      ),
+    });
+    const response = await app.handle(new Request("http://localhost/status"));
+    expect(response.status).toBe(404);
+    expect(response.headers.get("content-type")).toContain("text/plain");
+    expect(await response.text()).toBe("Not Found");
+  });
+
+  test("rejects status text accepted by no branch of the declared error union", async () => {
+    uninstall = installHttpResponseConformance();
+    const app = new Elysia().get(
+      "/status",
+      () => new Response("wrong", { status: 404 }),
+      {
+        response: {
+          404: t.Union([
+            t.Object({ message: t.String() }),
+            t.Literal("Not Found"),
+          ]),
+        },
+      },
+    );
+    expect(
+      await rejectionOf(app.handle(new Request("http://localhost/status"))),
+    ).toMatchObject({ route: "GET /status", status: 404 });
+  });
+
   test("validates named models using the matched parameter route and preserves the body", async () => {
     uninstall = installHttpResponseConformance();
     const app = new Elysia({ aot: false })
@@ -91,6 +124,53 @@ describe("central HTTP response conformance", () => {
     });
   });
 
+  test("rejects a text body under an object response declaration", async () => {
+    uninstall = installHttpResponseConformance();
+    const app = new Elysia().get("/object", () => new Response("wrong"), {
+      response: t.Object({ value: t.String() }),
+    });
+    expect(
+      await rejectionOf(app.handle(new Request("http://localhost/object"))),
+    ).toMatchObject({ route: "GET /object", status: 200 });
+  });
+
+  test.each(["ok", "wrong"])(
+    "validates a finite literal text response: %s",
+    async (text) => {
+      uninstall = installHttpResponseConformance();
+      const app = new Elysia().get("/literal", () => new Response(text), {
+        response: t.Literal("ok"),
+      });
+      const pending = app.handle(new Request("http://localhost/literal"));
+      if (text === "ok") {
+        expect(await (await pending).text()).toBe("ok");
+        return;
+      }
+      expect(await rejectionOf(pending)).toMatchObject({
+        route: "GET /literal",
+        status: 200,
+      });
+    },
+  );
+
+  test("recognizes a generator route's declared streaming body", async () => {
+    uninstall = installHttpResponseConformance();
+    const app = new Elysia().get(
+      "/generator",
+      async function* () {
+        yield { value: "one" };
+        yield { value: "two" };
+      },
+      { response: t.Object({ value: t.String() }) },
+    );
+    const response = await app.handle(
+      new Request("http://localhost/generator"),
+    );
+    const body = await response.text();
+    expect(body).toContain("one");
+    expect(body).toContain("two");
+  });
+
   test.each([200, 201])(
     "SSE status %s is checked without cloning or consuming the stream",
     async (status) => {
@@ -109,7 +189,9 @@ describe("central HTTP response conformance", () => {
       const clone = spyOn(original, "clone");
       try {
         const app = new Elysia().get("/events", () => original, {
-          response: { 200: t.Object({ value: t.String() }) },
+          response: {
+            200: t.String({ contentMediaType: "text/event-stream" }),
+          },
         });
         const request = app.handle(new Request("http://localhost/events"));
         if (status === 200) {
