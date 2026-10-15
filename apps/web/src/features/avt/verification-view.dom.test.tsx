@@ -740,7 +740,7 @@ test("the original locates claims in the document Folio loads, and a click on a 
     const box = this.toString().startsWith("Rent")
       ? new DOMRect(100, 80, 120, 16)
       : new DOMRect(100, 40, 120, 16);
-    return Object.assign([box], { item: () => box }) as unknown as DOMRectList;
+    return Object.assign([box], { item: () => box });
   });
   try {
     // The ranges are rebuilt on the frame after the claims are placed.

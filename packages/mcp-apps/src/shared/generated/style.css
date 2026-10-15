@@ -1839,6 +1839,10 @@
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 0px;
   }
+  .border-b-2 {
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 2px;
+  }
   .border-b-\[12px\] {
     border-bottom-style: var(--tw-border-style);
     border-bottom-width: 12px;
@@ -1846,6 +1850,13 @@
   .border-dashed {
     --tw-border-style: dashed;
     border-style: dashed;
+  }
+  .border-dotted {
+    --tw-border-style: dotted;
+    border-style: dotted;
+  }
+  .border-\(--text-mark\) {
+    border-color: var(--text-mark);
   }
   .border-border {
     border-color: var(--border);
@@ -2188,6 +2199,14 @@
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--warning) 15%, transparent);
     }
+  }
+  .bg-\[linear-gradient\(transparent_calc\(50\%-1px\)\,var\(--text-mark\)_calc\(50\%-1px\)\,var\(--text-mark\)_calc\(50\%\+1px\)\,transparent_calc\(50\%\+1px\)\)\] {
+    background-image: linear-gradient(
+      transparent calc(50% - 1px),
+      var(--text-mark) calc(50% - 1px),
+      var(--text-mark) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
   }
   .bg-\[linear-gradient\(var\(--color-card\)\,var\(--color-card\)\)\] {
     background-image: linear-gradient(var(--color-card), var(--color-card));
