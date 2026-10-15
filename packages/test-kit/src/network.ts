@@ -49,6 +49,14 @@ const LOCAL_URL_SCHEMES = new Set(["blob:", "data:", "file:"]);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 20;
 const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
+// The Fetch standard's request-body headers, dropped with the body.
+const REQUEST_BODY_HEADERS = [
+  "content-encoding",
+  "content-language",
+  "content-length",
+  "content-location",
+  "content-type",
+];
 
 type FetchRefusal = (url: URL) => NetworkAccessError | undefined;
 
@@ -188,7 +196,7 @@ const guardedFetch =
         method = method === "HEAD" ? "HEAD" : "GET";
         body = undefined;
         replayable = true; // no body left to resend
-        deleteHeaders(headers, ["content-type", "content-length"]);
+        deleteHeaders(headers, REQUEST_BODY_HEADERS);
       } else if (!replayable) {
         return panic(
           `fetch: a ${response.status} redirect cannot resend a streamed body`,

@@ -273,6 +273,24 @@ describe("network guard", () => {
         );
       });
 
+      test("a dropped body takes its request-body headers with it", async () => {
+        await withFake(redirectOnce(303), async (calls) => {
+          await fetch("http://127.0.0.1:1/", {
+            body: "compressed",
+            headers: {
+              "content-encoding": "gzip",
+              "content-language": "cs",
+              "content-location": "/doc",
+              "content-type": "text/plain",
+              "x-trace": "kept",
+            },
+            method: "POST",
+          });
+          const redirected = new Headers(calls[1]?.init?.headers);
+          expect([...redirected.keys()]).toEqual(["x-trace"]);
+        });
+      });
+
       test("a 307 cannot resend a streamed body", async () => {
         await withFake(redirectOnce(307), async (calls) => {
           const error = await rejectionOf(
