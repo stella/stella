@@ -640,6 +640,17 @@ type MutationOptionsShapeArgs = {
   seen?: Set<Binding>;
 };
 
+const optionsAliasRoot = (expression: ts.Expression) => {
+  let root = unwrap(expression);
+  while (
+    ts.isPropertyAccessExpression(root) ||
+    ts.isElementAccessExpression(root)
+  ) {
+    root = unwrap(root.expression);
+  }
+  return ts.isIdentifier(root) ? root : undefined;
+};
+
 const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
   const aliases = new Set([binding]);
   let changed = true;
@@ -649,9 +660,9 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
       if (aliases.has(candidate) || !candidate.value) {
         continue;
       }
-      const value = unwrap(candidate.value);
-      const source = ts.isIdentifier(value)
-        ? localBinding(module, value.text, candidate.scope)
+      const root = optionsAliasRoot(candidate.value);
+      const source = root
+        ? localBinding(module, root.text, candidate.scope)
         : undefined;
       if (source && aliases.has(source)) {
         aliases.add(candidate);
@@ -660,11 +671,11 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
     }
   }
   const refersToAlias = (expression: ts.Expression, reference: ts.Node) => {
-    const value = unwrap(expression);
-    if (!ts.isIdentifier(value)) {
+    const root = optionsAliasRoot(expression);
+    if (!root) {
       return false;
     }
-    const resolved = localBinding(module, value.text, reference);
+    const resolved = localBinding(module, root.text, reference);
     return resolved !== undefined && aliases.has(resolved);
   };
   let mutated = false;
@@ -675,7 +686,6 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
       (ts.isPropertyAccessExpression(node.left) ||
         ts.isElementAccessExpression(node.left)) &&
-      ts.isIdentifier(node.left.expression) &&
       refersToAlias(node.left.expression, node.left)
     ) {
       mutated = true;
@@ -685,7 +695,6 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
       ts.isDeleteExpression(node) &&
       (ts.isPropertyAccessExpression(node.expression) ||
         ts.isElementAccessExpression(node.expression)) &&
-      ts.isIdentifier(node.expression.expression) &&
       refersToAlias(node.expression.expression, node.expression)
     ) {
       mutated = true;
@@ -713,6 +722,28 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
   return mutated;
 };
 
+type UnchangedOptionsBindingArgs = {
+  module: ModuleIndex;
+  identifier: ts.Identifier;
+  reference: ts.Node;
+};
+
+const unchangedOptionsBinding = ({
+  module,
+  identifier,
+  reference,
+}: UnchangedOptionsBindingArgs) => {
+  const binding = localBinding(module, identifier.text, reference);
+  if (
+    !binding?.value ||
+    binding.mutable ||
+    hasBindingPropertyMutation(module, binding)
+  ) {
+    return undefined;
+  }
+  return { binding, expression: binding.value, reference: binding.scope };
+};
+
 const mutationOptionsShape = ({
   module,
   expression,
@@ -721,21 +752,20 @@ const mutationOptionsShape = ({
 }: MutationOptionsShapeArgs): MutationOptionsShape | undefined => {
   const value = unwrap(expression);
   if (ts.isIdentifier(value)) {
-    const binding = localBinding(module, value.text, reference);
-    if (
-      !binding?.value ||
-      binding.mutable ||
-      seen.has(binding) ||
-      hasBindingPropertyMutation(module, binding)
-    ) {
+    const resolved = unchangedOptionsBinding({
+      module,
+      identifier: value,
+      reference,
+    });
+    if (!resolved || seen.has(resolved.binding)) {
       return undefined;
     }
     const next = new Set(seen);
-    next.add(binding);
+    next.add(resolved.binding);
     return mutationOptionsShape({
       module,
-      expression: binding.value,
-      reference: binding.scope,
+      expression: resolved.expression,
+      reference: resolved.reference,
       seen: next,
     });
   }
@@ -1211,21 +1241,26 @@ const isTaggedReaderValue = ({
 }: TaggedReaderArgs): boolean => {
   const value = unwrap(expression);
   if (ts.isIdentifier(value)) {
-    const resolved = resolveLocal(module, value, reference);
+    const resolved = unchangedOptionsBinding({
+      module,
+      identifier: value,
+      reference,
+    });
     if (!resolved) {
       return false;
     }
-    if (resolved !== value) {
-      return isTaggedReaderValue({
-        module,
-        expression: resolved,
-        reference,
-        names,
-        modules,
-        seen,
-      });
+    const key = `${module.file}:options:${resolved.reference.pos}:${value.text}`;
+    if (seen.has(key)) {
+      return false;
     }
-    return false;
+    return isTaggedReaderValue({
+      module,
+      expression: resolved.expression,
+      reference: resolved.reference,
+      names,
+      modules,
+      seen: new Set(seen).add(key),
+    });
   }
   if (ts.isConditionalExpression(value)) {
     return (

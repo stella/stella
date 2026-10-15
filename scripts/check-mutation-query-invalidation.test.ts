@@ -459,3 +459,39 @@ test("check mode fails for new and stale entries", () => {
     "Stale baseline entry: apps/web/src/a.ts:save:useMutation",
   ]);
 });
+
+test("reader options retain coverage only while every alias is untouched", () => {
+  const fixture = (mutation: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const options = resourceQueryOptions(
+  queryOptions({ queryKey: ["entities"], queryFn: async () => [] }),
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+const alias = options;
+${mutation}
+export const readEntities = () => useQuery(alias);
+`,
+    },
+  ];
+  expect(violations(fixture(""))).toEqual([]);
+  for (const mutation of [
+    "alias.meta = {};",
+    "alias.meta.resourceReads = undefined;",
+    "const metadata = options.meta; delete metadata.resourceReads;",
+    "delete options.meta;",
+    "Object.assign(options, { meta: {} });",
+  ]) {
+    const sources = fixture(mutation);
+    const census = inspectMutationQuerySources(sources);
+    const reader = census.readers.find(({ callee }) => callee === "useQuery");
+    expect(reader).toBeDefined();
+    const findings = inspectMutationQueryInvalidation(census, sources);
+    expect(findings.map(({ id }) => id)).toEqual([`${reader?.id}:reader`]);
+  }
+});
