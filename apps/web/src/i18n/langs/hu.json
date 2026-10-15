@@ -173,6 +173,7 @@
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
+      "inScoring": "Pontozásban",
       "includeInScoring": "Bevonás a pontozásba",
       "interpretationNote": "Értelmezési megjegyzés",
       "interpretationNotePlaceholder": "Ha e bizonyíték jelentése vitatott, írja le, miben. Ha nem, hagyja üresen.",
@@ -2555,6 +2556,10 @@
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
+      "validationInvalid": "Egy mező olyan értéket tartalmaz, amely nem menthető.",
+      "validationRequired": "Egy kötelező mező üres.",
+      "validationTooLong": "Túl hosszú: legfeljebb {limit, number} karakter lehet.",
+      "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
       "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
       "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."

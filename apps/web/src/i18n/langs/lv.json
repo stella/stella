@@ -173,6 +173,7 @@
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
       "heldForReview": "Aizturēts pārskatīšanai",
       "holdOutOfScoring": "Izslēgt no vērtējuma",
+      "inScoring": "Iekļauts vērtējumā",
       "includeInScoring": "Iekļaut vērtējumā",
       "interpretationNote": "Interpretācijas piezīme",
       "interpretationNotePlaceholder": "Ja šī pierādījuma nozīme ir apstrīdēta, aprakstiet, kā. Ja nav, atstājiet lauku tukšu.",
@@ -2555,6 +2556,10 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "validationInvalid": "Laukā ir vērtība, ko nevar saglabāt.",
+      "validationRequired": "Obligātais lauks ir tukšs.",
+      "validationTooLong": "Pārāk garš: izmantojiet ne vairāk kā {limit, number} rakstzīmes.",
+      "validationTooShort": "Pārāk īss: izmantojiet vismaz {limit, number} rakstzīmes.",
       "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
       "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."

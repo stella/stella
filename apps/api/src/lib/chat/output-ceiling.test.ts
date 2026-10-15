@@ -226,7 +226,10 @@ describe("an answer cut at its output ceiling", () => {
       const failures = [];
       for (const keySource of ["byok", "managed"] as const) {
         const result = await generate(keySource, 64);
-        expect(sent.at(0)?.body.max_completion_tokens).toBe(64);
+        // The ceiling sent is the request's, plus any reasoning reservation.
+        expect(sent.at(0)?.body.max_completion_tokens).toBeGreaterThanOrEqual(
+          64,
+        );
         if (Result.isError(result)) {
           expect(result.error.cause).toBeInstanceOf(ModelOutputIncompleteError);
         }

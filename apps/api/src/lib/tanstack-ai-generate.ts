@@ -19,7 +19,10 @@ import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 
-import { getOutputTokenLimit } from "@stll/ai-catalog";
+import {
+  getModelDefaultReasoningEffort,
+  getOutputTokenLimit,
+} from "@stll/ai-catalog";
 import type {
   ModelRole,
   ReasoningEffort,
@@ -1952,6 +1955,74 @@ const anthropicThinkingReservation = (
 };
 
 /**
+ * Reasoning tokens a request reserves on top of the reply's allowance, per
+ * reasoning effort. Gemini (`maxOutputTokens`), OpenAI (`max_output_tokens`)
+ * and OpenRouter (`max_completion_tokens`) count a thinking model's reasoning
+ * inside the one output ceiling and take a level rather than a token budget,
+ * so a short reply's allowance (a title, a handful of search terms) is
+ * otherwise spent on reasoning before the reply starts, and the run stops at
+ * the ceiling with no answer. A reservation is a ceiling, not a spend: usage
+ * bills what the model used.
+ */
+const REASONING_RESERVATION_BY_EFFORT = {
+  none: 0,
+  minimal: 1024,
+  low: 4096,
+  medium: 8192,
+  high: 16_384,
+  xhigh: 32_768,
+  max: 32_768,
+} as const satisfies Record<ReasoningEffort, number>;
+
+const REASONING_EFFORT_BY_GOOGLE_LEVEL = {
+  MINIMAL: "minimal",
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+} as const satisfies Record<string, ReasoningEffort>;
+
+type ReasoningCeilingModel = Extract<
+  ResolvedTanStackTextModel,
+  { provider: "google" | "openai" | "openrouter" }
+>;
+
+/**
+ * The effort a request runs at: the one it sends, else the model's published
+ * default (a reasoning model left without a level still reasons).
+ */
+const requestReasoningEffort = (
+  model: ReasoningCeilingModel,
+): ReasoningEffort => {
+  const fallback = getModelDefaultReasoningEffort(model.modelId) ?? "none";
+  if (model.provider !== "google") {
+    return model.modelOptions.reasoning?.effort ?? fallback;
+  }
+  const level: keyof typeof REASONING_EFFORT_BY_GOOGLE_LEVEL | undefined =
+    model.modelOptions.thinkingConfig?.thinkingLevel;
+  return level === undefined
+    ? fallback
+    : REASONING_EFFORT_BY_GOOGLE_LEVEL[level];
+};
+
+/**
+ * The output ceiling a request sends for a reply sized `maxOutputTokens`: the
+ * allowance plus the reasoning reservation, bounded by the model's catalog
+ * output limit and never below the allowance itself.
+ */
+const reasoningCeiling = (
+  model: ReasoningCeilingModel,
+  maxOutputTokens: number,
+): number => {
+  const reserved =
+    maxOutputTokens +
+    REASONING_RESERVATION_BY_EFFORT[requestReasoningEffort(model)];
+  const limit = getOutputTokenLimit(model.modelId);
+  return limit === undefined
+    ? reserved
+    : Math.max(maxOutputTokens, Math.min(reserved, limit));
+};
+
+/**
  * A chat turn's output allowance for one model call: the model's catalog
  * output limit, less what an Anthropic thinking budget reserves inside the
  * same `max_tokens`, so the request never asks for more than the model can
@@ -2036,7 +2107,12 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { [OUTPUT_CEILING_OPTION.google]: maxOutputTokens }),
+          : {
+              [OUTPUT_CEILING_OPTION.google]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
+            }),
         ...temperatureOverride,
         ...googleServiceTierOptions(serviceTier),
       };
@@ -2080,7 +2156,12 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { [OUTPUT_CEILING_OPTION.openai]: maxOutputTokens }),
+          : {
+              [OUTPUT_CEILING_OPTION.openai]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
+            }),
         ...temperatureOverride,
         ...openAICacheOptions(caching),
         ...openAIServiceTierOptions(serviceTier),
@@ -2090,7 +2171,12 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { [OUTPUT_CEILING_OPTION.openrouter]: maxOutputTokens }),
+          : {
+              [OUTPUT_CEILING_OPTION.openrouter]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
+            }),
         ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),
         ...(conversationMarker === undefined
