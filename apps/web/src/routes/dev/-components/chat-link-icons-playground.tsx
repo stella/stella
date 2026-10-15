@@ -14,7 +14,7 @@ const ASK_USER_INPUT = {
   analysis: "[Review the source](https://example.com/source)",
   questions: [
     {
-      question: "Should I use this source?",
+      question: "Which source should the analysis cite?",
       reason: "The answer determines the next step.",
     },
   ],

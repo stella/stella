@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
@@ -58,6 +59,7 @@ const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
+const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
 const { MessageResponseImpl } =
   await import("@/components/ai-elements/message-response");
 const { useExternalSourceStore } = await import("./external-source-store");
@@ -521,6 +523,39 @@ test("default markdown and clarification analysis share publisher aliases and in
       view.getAllByRole("link", { name: messages.common.source }),
     ).toHaveLength(2);
   });
+});
+
+test("Arabic clarification questions use automatic direction and localized numbering", async () => {
+  const input = {
+    analysis: "Review [the source](https://example.test/source).",
+    questions: [
+      {
+        question: "هل ينبغي متابعة هذا المصدر؟",
+        reason: "يحدد الجواب الخطوة التالية.",
+      },
+    ],
+  } satisfies AskUserInput;
+  const view = await renderChat(
+    <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+      <FormattingProvider locale="ar" timeZone="UTC">
+        <AskUserCard
+          isAwaitingUser
+          onSubmit={() => undefined}
+          part={{
+            type: "tool-call",
+            name: "ask-user",
+            id: "arabic-ask",
+            state: "input-complete",
+            arguments: JSON.stringify(input),
+            input,
+          }}
+        />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  const question = view.container.querySelector("form p");
+  expect(question?.getAttribute("dir")).toBe("auto");
+  expect(question?.textContent).toBe("١. هل ينبغي متابعة هذا المصدر؟");
 });
 
 test("an external primary opens immediately in a new tab without inspector interception", async () => {
