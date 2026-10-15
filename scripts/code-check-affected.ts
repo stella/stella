@@ -127,6 +127,10 @@ export const LINT_ONLY_CACHE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -249,7 +253,12 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
   if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
-  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
+  if (
+    file.endsWith(".rs") ||
+    file === "Cargo.toml" ||
+    file.endsWith("/Cargo.toml") ||
+    PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))
+  ) {
     rootChecks.push(ROOT_CHECKS.pluginFixtures);
   }
   if (invalidatesRootScriptLint(file)) {
