@@ -48,7 +48,9 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { resourceQueryOptions } from "@/lib/workspace-realtime";
 export const fileMetadataQueryOptions = (props: { id: string }) => resourceQueryOptions(
   { queryKey: ["file-metadata", props.id], queryFn: async () => props.id },
-  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: props.workspaceId
+    ? { type: "workspace", workspaceId: props.workspaceId }
+    : { type: "organization" } },
 );
 export const fileMetadataOptions = fileMetadataQueryOptions;
 `,
@@ -255,6 +257,30 @@ export const invalidQuery = () => useQuery(resourceQueryOptions(
   );
   expect(invalidHelper?.disposition).toBe("invalid-declaration");
   assertInvalidCannotBeBaselined(findings);
+});
+
+test("conditional reader scope is accepted only when both branches are valid", () => {
+  const invalidFixture = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+export const invalidQuery = () => resourceQueryOptions(
+  { queryKey: ["invalid"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: isMatter
+    ? { type: "workspace", workspaceId: "workspace" }
+    : { type: "workspace" } },
+);
+`,
+    },
+  ];
+  const findings = violations(invalidFixture);
+  expect(
+    findings.some(({ disposition }) => disposition === "invalid-declaration"),
+  ).toBe(true);
+  expect(violations(validSources)).toEqual([]);
 });
 
 test("mutable helper aliases and caller-selected mutation scopes fail closed", () => {

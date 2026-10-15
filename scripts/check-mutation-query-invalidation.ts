@@ -442,6 +442,11 @@ const isValidScopeObject = (scope: ts.Expression | undefined): boolean => {
     return false;
   }
   const value = unwrap(scope);
+  if (ts.isConditionalExpression(value)) {
+    return (
+      isValidScopeObject(value.whenTrue) && isValidScopeObject(value.whenFalse)
+    );
+  }
   return ts.isObjectLiteralExpression(value) && isScopeObject(value);
 };
 

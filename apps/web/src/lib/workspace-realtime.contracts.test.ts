@@ -9,22 +9,289 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
 import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
+import {
+  inboxCountOptions,
+  inboxKeys,
+  inboxSignalOptions,
+} from "@/lib/inbox/queries";
+import type { ViewLayout } from "@/lib/types";
 import {
   applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
   resourceMutation,
   RESOURCE_MUTATION_CONTRACTS,
 } from "@/lib/workspace-realtime";
+import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  entityViewKeys,
+  entityViewRowsOptions,
+} from "@/lib/workspaces/queries/entity-views";
 
 const WORKSPACE_ID = "workspace-rename";
 const OTHER_WORKSPACE_ID = "workspace-other";
 const FIELD_ID = "field-file";
+const ORGANIZATION_ID = "organization-rename";
+const USER_ID = "user-rename";
+const coverageLayout = {
+  version: 1,
+  type: "table",
+  filters: [],
+  sorts: [],
+  hiddenProperties: [],
+  calculations: [],
+  columnOrder: [],
+  columnPinning: [],
+} as const satisfies ViewLayout;
+
+const previousCensusSchema = v.object({
+  mutations: v.array(
+    v.object({
+      kind: v.string(),
+      writes: v.array(v.object({ method: v.string(), route: v.string() })),
+      cacheEffects: v.array(
+        v.object({
+          operation: v.string(),
+          key: v.nullable(v.object({ factory: v.nullable(v.string()) })),
+        }),
+      ),
+    }),
+  ),
+});
+
+type PreviousInvalidation = {
+  target: QueryKey;
+  readers: { queryKey: QueryKey; meta?: QueryMeta }[];
+};
+
+// Historical factory names are resolved with current production keys and reader metadata.
+const previousInvalidationFor = (factory: string): PreviousInvalidation => {
+  switch (factory) {
+    case "entitiesKeys.all": {
+      const target = entitiesKeys.all(WORKSPACE_ID);
+      return { target, readers: [{ queryKey: target }] };
+    }
+    case "entityViewKeys.all": {
+      const target = entityViewKeys.all(ORGANIZATION_ID, USER_ID);
+      const readers = [
+        entityViewRowsOptions({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+          scope: { type: "matter", matterId: WORKSPACE_ID },
+          layout: coverageLayout,
+          inboxView: SIGNAL_VIEW.OPEN,
+        }),
+        entityViewRowsOptions({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+          scope: { type: "organization" },
+          layout: coverageLayout,
+          inboxView: SIGNAL_VIEW.OPEN,
+        }),
+      ];
+      return {
+        target,
+        readers: readers.map(({ queryKey, meta }) => ({ queryKey, meta })),
+      };
+    }
+    case "inboxKeys.all": {
+      const target = inboxKeys.all(ORGANIZATION_ID, USER_ID);
+      const readers = [
+        inboxCountOptions(ORGANIZATION_ID, USER_ID),
+        inboxSignalOptions(ORGANIZATION_ID, USER_ID, "signal-rename"),
+      ];
+      return {
+        target,
+        readers: readers.map(({ queryKey, meta }) => ({ queryKey, meta })),
+      };
+    }
+    case "fileMetadataByFieldQueryRoot": {
+      const target = fileMetadataByFieldQueryRoot({
+        workspaceId: WORKSPACE_ID,
+        fieldId: FIELD_ID,
+      });
+      const { queryKey, meta } = fileMetadataOptions({
+        workspaceId: WORKSPACE_ID,
+        fieldId: FIELD_ID,
+      });
+      return { target, readers: [{ queryKey, meta }] };
+    }
+    default:
+      throw new TypeError(`No production key resolver for ${factory}`);
+  }
+};
+
+const isQueryKeyPrefix = (prefix: QueryKey, key: QueryKey) =>
+  prefix.length <= key.length &&
+  prefix.every(
+    (part, index) => JSON.stringify(part) === JSON.stringify(key[index]),
+  );
+
+test("each migrated mutation still invalidates every prior cache target", async () => {
+  const root = path.resolve(import.meta.dir, "../../../../");
+  const previousCensus = v.parse(
+    previousCensusSchema,
+    JSON.parse(
+      readFileSync(
+        path.join(root, "scripts/mutation-query-census.json"),
+        "utf-8",
+      ),
+    ),
+  );
+  // This committed census preserves the cache effects from before helper migration.
+  const mutationNames = Object.keys(RESOURCE_MUTATION_CONTRACTS).filter(
+    (name): name is keyof typeof RESOURCE_MUTATION_CONTRACTS =>
+      Object.hasOwn(RESOURCE_MUTATION_CONTRACTS, name),
+  );
+  for (const mutation of mutationNames) {
+    const contract = RESOURCE_MUTATION_CONTRACTS[mutation];
+    const routes = contract.writes.map(
+      ({ method, route }) => `${method.toLowerCase()} ${route}`,
+    );
+    const previousMutations = previousCensus.mutations.filter(
+      ({ kind, writes }) =>
+        kind !== "wrapper" &&
+        writes.some(({ method, route }) =>
+          routes.includes(`${method.toLowerCase()} ${route}`),
+        ),
+    );
+    expect(previousMutations.length).toBeGreaterThan(0);
+    const previousEffects = previousMutations.flatMap(({ cacheEffects }) =>
+      cacheEffects.filter(({ operation }) => operation === "invalidateQueries"),
+    );
+    expect(previousEffects.length).toBeGreaterThan(0);
+    const targets = previousEffects.map(({ key }) => {
+      const factory = key?.factory;
+      if (!factory) {
+        throw new TypeError(
+          "Previous invalidation has no resolvable key factory",
+        );
+      }
+      return previousInvalidationFor(factory);
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    try {
+      for (const { target, readers } of targets) {
+        expect(readers.length).toBeGreaterThan(0);
+        for (const { queryKey, meta } of readers) {
+          expect(isQueryKeyPrefix(target, queryKey)).toBe(true);
+          queryClient.getQueryCache().build(queryClient, {
+            queryKey,
+            ...(meta ? { meta } : {}),
+            queryFn: async () => null,
+          });
+          expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(
+            false,
+          );
+        }
+      }
+      const rename = resourceMutation({
+        mutation,
+        queryClient,
+        mutationFn: async ({ workspaceId }: { workspaceId: string }) => ({
+          workspaceId,
+        }),
+      });
+      await rename({ workspaceId: WORKSPACE_ID });
+      for (const { readers } of targets) {
+        for (const { queryKey } of readers) {
+          expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+        }
+      }
+    } finally {
+      queryClient.clear();
+    }
+  }
+});
+
+test("entity-view and inbox readers register rename dependencies and preserve work-family refresh", async () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const layout = {
+    version: 1,
+    type: "table",
+    filters: [],
+    sorts: [],
+    hiddenProperties: [],
+    calculations: [],
+    columnOrder: [],
+    columnPinning: [],
+  } as const satisfies ViewLayout;
+  const matterView = (matterId: string) =>
+    entityViewRowsOptions({
+      organizationId: "organization",
+      userId: "user",
+      scope: { type: "matter", matterId },
+      layout,
+      inboxView: SIGNAL_VIEW.OPEN,
+    });
+  const readers = [
+    matterView(WORKSPACE_ID),
+    matterView(OTHER_WORKSPACE_ID),
+    entityViewRowsOptions({
+      organizationId: "organization",
+      userId: "user",
+      scope: { type: "organization" },
+      layout,
+      inboxView: SIGNAL_VIEW.OPEN,
+    }),
+    inboxCountOptions("organization", "user"),
+    inboxSignalOptions("organization", "user", "signal"),
+  ];
+  const isolated = fileMetadataOptions({
+    workspaceId: OTHER_WORKSPACE_ID,
+    fieldId: FIELD_ID,
+  });
+  const seed = ({ queryKey, meta }: FileReaderIdentity) =>
+    queryClient.query(
+      queryOptions({
+        queryKey,
+        meta,
+        queryFn: async () => ({ name: "Original" }),
+      }),
+    );
+  try {
+    for (const { meta } of readers) {
+      expect(meta.resourceReads.resources).toContain(RESOURCE_TYPE.ENTITY);
+    }
+    expect(readers.at(0)?.meta.resourceReads.scope).toEqual({
+      type: "workspace",
+      workspaceId: WORKSPACE_ID,
+    });
+    await Promise.all([...readers, isolated].map(seed));
+    for (const { queryKey } of [...readers, isolated]) {
+      expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(false);
+    }
+    const rename = resourceMutation({
+      mutation: "renameEntity",
+      queryClient,
+      mutationFn: async ({ name }: { workspaceId: string; name: string }) => ({
+        name,
+      }),
+    });
+    await rename({ workspaceId: WORKSPACE_ID, name: "Renamed" });
+    // The existing work-family prefix refreshes all its matter and organization projections.
+    for (const { queryKey } of readers) {
+      expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+    }
+    expect(queryClient.getQueryState(isolated.queryKey)?.isInvalidated).toBe(
+      false,
+    );
+  } finally {
+    queryClient.clear();
+  }
+});
 
 const syntaxValue = (node: ts.Node): ts.Node => {
   if (
