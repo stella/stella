@@ -83,6 +83,18 @@ test("a tool that asks on every call is refused before anything is read", async 
   }
 });
 
+test("a name that is neither an approval-gated tool nor a connector tool is refused", async () => {
+  const fixture = setup({
+    body: { scope: "always", threadId, toolName: "read_document" },
+    reads: [[{ id: threadId }]],
+  });
+  expect(await createChatToolGrant.handler(fixture.context)).toMatchObject({
+    code: 409,
+  });
+  expect(fixture.reads()).toBe(0);
+  expect(fixture.inserted).toEqual([]);
+});
+
 test("a grant needs the user's own conversation", async () => {
   const fixture = setup({
     body: { scope: "conversation", threadId, toolName: "web_search" },
