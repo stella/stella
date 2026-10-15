@@ -11,17 +11,23 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- Additive for the rollout: the new columns are nullable and every row the
 -- previous build writes leaves them null, which both new checks accept.
 ALTER TABLE "legal_reader_annotations"
-  ADD COLUMN "workspace_id" uuid,
-  ADD COLUMN "verification_run_id" uuid,
-  ADD COLUMN "verification_claim_id" uuid;--> statement-breakpoint
+  ADD COLUMN IF NOT EXISTS "workspace_id" uuid,
+  ADD COLUMN IF NOT EXISTS "verification_run_id" uuid,
+  ADD COLUMN IF NOT EXISTS "verification_claim_id" uuid;--> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-constraint - replaced in the same transaction by the same check over a superset of target types
 ALTER TABLE "legal_reader_annotations"
-  DROP CONSTRAINT "legal_reader_annotations_target_type_values";--> statement-breakpoint
+  DROP CONSTRAINT IF EXISTS "legal_reader_annotations_target_type_values";--> statement-breakpoint
 
 ALTER TABLE "legal_reader_annotations"
   ADD CONSTRAINT "legal_reader_annotations_target_type_values"
   CHECK ("target_type" IN ('decision', 'statute', 'verification-claim')) NOT VALID;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed drop-constraint - Drops only the
+-- constraint the next statement re-adds, so a retried migration re-enters the
+-- same state; no other constraint and no data is touched.
+ALTER TABLE "legal_reader_annotations"
+  DROP CONSTRAINT IF EXISTS "legal_reader_annotations_verification_claim_shape";--> statement-breakpoint
 
 -- A claim's comment carries its matter, run and claim; nothing else does.
 ALTER TABLE "legal_reader_annotations"
@@ -30,6 +36,12 @@ ALTER TABLE "legal_reader_annotations"
     ("target_type" = 'verification-claim') = ("workspace_id" IS NOT NULL AND "verification_run_id" IS NOT NULL AND "verification_claim_id" IS NOT NULL)
     AND ("verification_claim_id" IS NULL OR "verification_claim_id" = "target_id")
   ) NOT VALID;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed drop-constraint - Drops only the
+-- constraint the next statement re-adds, so a retried migration re-enters the
+-- same state; no other constraint and no data is touched.
+ALTER TABLE "legal_reader_annotations"
+  DROP CONSTRAINT IF EXISTS "legal_reader_annotations_workspace_organization_fk";--> statement-breakpoint
 
 -- The matter is held to the comment's organization, and deleting it deletes
 -- the comments on its claims.
@@ -42,7 +54,7 @@ ALTER TABLE "legal_reader_annotations"
 -- Whether the caller can see a claim: SECURITY INVOKER, so the claim's own
 -- policies (matter access, the verification's feature fence) decide. Positional
 -- parameters, because the claims carry columns of the same names.
-CREATE FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid)
+CREATE OR REPLACE FUNCTION public.legal_reader_annotation_claim_visible(uuid, uuid, uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
@@ -60,7 +72,7 @@ $$;--> statement-breakpoint
 -- the comment, whose cleanup trigger removes it once committed, or has
 -- already removed the claim and the insert is refused: no comment outlives
 -- its claim. VOLATILE because it locks; only the insert check calls it.
-CREATE FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid)
+CREATE OR REPLACE FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid)
 RETURNS boolean
 LANGUAGE sql
 VOLATILE
@@ -161,10 +173,18 @@ ALTER POLICY "author_delete" ON "legal_reader_annotations"
 
 -- The review reset clears every author's notes as the table owner, as it does
 -- for the reader's answers, now that the table forces its policies.
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates, so a retried migration re-enters the same state.
+DROP POLICY IF EXISTS "review_reset_owner_select" ON "legal_reader_annotations";--> statement-breakpoint
+
 CREATE POLICY "review_reset_owner_select" ON "legal_reader_annotations" FOR SELECT TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass)
   AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
 );--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates, so a retried migration re-enters the same state.
+DROP POLICY IF EXISTS "review_reset_owner_delete" ON "legal_reader_annotations";--> statement-breakpoint
+
 CREATE POLICY "review_reset_owner_delete" ON "legal_reader_annotations" FOR DELETE TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass)
   AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
@@ -172,9 +192,17 @@ CREATE POLICY "review_reset_owner_delete" ON "legal_reader_annotations" FOR DELE
 
 -- The claim-cleanup trigger runs as the owner and removes every author's
 -- comments on the claims a statement deleted; nothing else reads as owner.
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates, so a retried migration re-enters the same state.
+DROP POLICY IF EXISTS "claim_cleanup_owner_select" ON "legal_reader_annotations";--> statement-breakpoint
+
 CREATE POLICY "claim_cleanup_owner_select" ON "legal_reader_annotations" FOR SELECT TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND verification_claim_id IS NOT NULL
 );--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-object - Drops only the policy the
+-- next statement re-creates, so a retried migration re-enters the same state.
+DROP POLICY IF EXISTS "claim_cleanup_owner_delete" ON "legal_reader_annotations";--> statement-breakpoint
+
 CREATE POLICY "claim_cleanup_owner_delete" ON "legal_reader_annotations" FOR DELETE TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_reader_annotations'::regclass) AND verification_claim_id IS NOT NULL
 );--> statement-breakpoint
@@ -188,7 +216,7 @@ ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY;--> statement-br
 -- to the fenced claims would enrol reader notes in the entity gate graph), so
 -- one statement-level trigger does what the cascade would.
 -- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked; deletes only reader comments whose claim the firing statement deleted, matched on matter and claim through the partial index
-CREATE FUNCTION "legal_reader_annotations_drop_claim_comments"()
+CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -204,6 +232,10 @@ END;
 $$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"() FROM PUBLIC;--> statement-breakpoint
+
+-- stella-migration-safety: reviewed drop-object - Drops only the trigger the
+-- next statement re-creates, so a retried migration re-enters the same state.
+DROP TRIGGER IF EXISTS "legal_list_claims_drop_reader_comments" ON "legal_list_claims";--> statement-breakpoint
 
 CREATE TRIGGER "legal_list_claims_drop_reader_comments"
 AFTER DELETE ON "legal_list_claims"

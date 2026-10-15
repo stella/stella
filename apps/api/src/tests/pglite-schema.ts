@@ -250,7 +250,7 @@ export const installPgliteSchemaPrerequisites = async (
     await db.execute(
       sql.raw(
         latestMigrationStatementContaining(
-          `CREATE FUNCTION public.${name}(uuid, uuid, uuid)`,
+          `CREATE OR REPLACE FUNCTION public.${name}(uuid, uuid, uuid)`,
         ),
       ),
     );
@@ -493,7 +493,7 @@ export const installPgliteChatRunLogRls = async (
 /** Apply the committed setting omitted by schema push. */
 const READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES = [
   'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
-  'CREATE FUNCTION "legal_reader_annotations_drop_claim_comments"',
+  'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
   'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
   'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
 ] as const;
