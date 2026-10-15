@@ -2927,6 +2927,7 @@
     "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte soubor pro vložení číslovaného odkazu na důkaz.",
+    "collaborationSnapshotRecovered": "Uloženou kopii pro spolupráci se nepodařilo znovu otevřít. Místnost byla obnovena z posledního uloženého dokumentu; neuložené změny mohly být ztraceny.",
     "comment": "Komentář",
     "comments": {
       "addPlaceholder": "Přidat komentář...",

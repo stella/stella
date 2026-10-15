@@ -7,6 +7,7 @@ import {
   otpSearchSchema,
   otpSessionNavigation,
 } from "@/routes/auth/-otp.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { SIGN_IN_MODE } from "./sign-in-mode";
 import type { SignInMode } from "./sign-in-mode";
@@ -37,7 +38,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const capabilities = {
