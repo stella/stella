@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { stripManifest } from "./strip-custom-xml-manifest";
 
 /**
@@ -58,8 +60,9 @@ const buildDocx = async (
   ...parts: readonly CustomXmlPart[]
 ): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", DOCUMENT_XML);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", DOCUMENT_XML);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     contentTypes(
       ...parts
@@ -68,15 +71,17 @@ const buildDocx = async (
     ),
   );
   for (const { index, withProps, xml } of parts) {
-    zip.file(`customXml/item${index}.xml`, xml);
+    writeZipEntry(zip, `customXml/item${index}.xml`, xml);
     if (withProps !== true) {
       continue;
     }
-    zip.file(
+    writeZipEntry(
+      zip,
       `customXml/itemProps${index}.xml`,
       '<?xml version="1.0"?><ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml" ds:itemID="{SLOT}"/>',
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       `customXml/_rels/item${index}.xml.rels`,
       '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps${index}.xml"/>` +
@@ -173,7 +178,8 @@ describe("stripping the legacy custom XML manifest", () => {
     );
     const zip = await JSZip.loadAsync(docx);
     const declared = await zip.file("[Content_Types].xml")!.async("string");
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       declared.replace(
         /<Override PartName="\/customXml\/itemProps2\.xml"(?<rest>[^>]*)\/>/u,

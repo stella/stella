@@ -7,6 +7,8 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
 // Happy DOM has ranges but no CSS Custom Highlight API. Keep its real ranges
@@ -57,7 +59,7 @@ afterEach(() => {
   highlights.clear();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const readerText = {

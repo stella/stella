@@ -13,6 +13,8 @@ import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 // Cards whose wording the decision's list did not carry read it themselves;
@@ -64,7 +66,7 @@ afterEach(async () => {
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   await sleep(0);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const FIRST_CITATION = "§ 31 odst. 4";

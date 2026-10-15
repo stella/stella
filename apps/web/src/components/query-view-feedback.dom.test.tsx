@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register();
 
 const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
@@ -13,7 +15,7 @@ const messages = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderFeedback = (
