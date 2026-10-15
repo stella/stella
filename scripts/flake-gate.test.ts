@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { selectApiTestImpact } from "./api-test-impact";
+import apiManifest from "../apps/api/package.json" with { type: "json" };
+import { parseGatedTestSelection } from "../apps/api/scripts/gated-test-selection";
+import { restrictApiTestFiles } from "../apps/api/scripts/test-file-shards";
+import { partitionRunnerArguments } from "../apps/api/scripts/test-path-filters";
+import webManifest from "../apps/web/package.json" with { type: "json" };
+import { planTestRuns } from "../apps/web/scripts/test-run-plan";
+import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
 import {
   BUDGET_MS,
   executeGate,
@@ -12,6 +18,7 @@ import {
   reportExitCode,
   runOnce,
   selectTargets,
+  trialCommand,
   type Report,
   type Target,
 } from "./flake-gate";
@@ -42,16 +49,7 @@ const targetFor = (root: string, file = "fixture.test.ts"): Target => ({
 
 test("diff selection repeats changed tests only and preserves package runners and service gates", async () => {
   await withFixture((root) => {
-    write(
-      root,
-      "apps/api/package.json",
-      JSON.stringify({
-        scripts: {
-          test: "bun test --preload ./setup-env.ts src",
-          "test:postgres": "bun test --preload ./setup-postgres.ts src",
-        },
-      }),
-    );
+    write(root, "apps/api/package.json", JSON.stringify(apiManifest));
     write(
       root,
       "apps/api/src/unit.test.ts",
@@ -101,9 +99,7 @@ test("diff selection repeats changed tests only and preserves package runners an
     ]);
     expect(selected.targets.at(0)?.command).toEqual([
       process.execPath,
-      "test",
-      "--preload",
-      "./setup-env.ts",
+      "scripts/run-tests.ts",
       "./src/unit.test.ts",
     ]);
     expect(selected.skipped).toEqual(
@@ -119,10 +115,158 @@ test("diff selection repeats changed tests only and preserves package runners an
     const withDb = selectTargets({ ...options, hasDb: true }).targets.find(
       ({ file }) => file.endsWith("db.test.ts"),
     );
-    expect(withDb?.command).toContain("./setup-postgres.ts");
-    expect(withDb?.env).toEqual({ STELLA_RUN_POSTGRES_TESTS: "true" });
+    expect(withDb?.command).toEqual([
+      process.execPath,
+      apiManifest.ciGateTestRunners["test:postgres"].runner,
+      "./src/db.test.ts",
+    ]);
+    expect(withDb?.env).toEqual({
+      STELLA_RUN_POSTGRES_TESTS: "true",
+      CI_POSTGRES_TEST_SELECTION: JSON.stringify({
+        mode: "selected",
+        files: ["src/db.test.ts"],
+      }),
+      CI_POSTGRES_TEST_SHARD: "",
+    });
   });
 });
+
+test("the real API manifest selects unit and Postgres files through their exact owning entries", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const unit = "apps/api/scripts/api-test-command.test.ts";
+  const postgres = "apps/api/src/db/prod-parity.postgres.test.ts";
+  // The regression must reach the compound script and service wrapper from the repository.
+  expect(apiManifest.scripts.test).toContain(
+    "bun --cwd=../../packages/cli run codegen:runtime &&",
+  );
+  expect(apiManifest.scripts.test).toContain("&& bun scripts/run-tests.ts");
+  expect(apiManifest.scripts["test:postgres"]).toBe(
+    `bun ${apiManifest.ciGateTestRunners["test:postgres"].runner}`,
+  );
+  const options = {
+    root,
+    changed: [unit, postgres],
+    hasDb: true,
+    apiImpact: allApiTests,
+  };
+  const selected = selectTargets(options);
+  expect(selected.skipped).toEqual([]);
+  expect(selected.targets.map(({ file }) => file).toSorted()).toEqual(
+    [unit, postgres].toSorted(),
+  );
+  for (const target of selected.targets) {
+    const relative = target.file.slice("apps/api/".length);
+    const isPostgres = target.file === postgres;
+    expect(target.runner).toBe("api");
+    expect(target.cwd).toBe(path.join(root, "apps/api"));
+    expect(target.command).toEqual([
+      process.execPath,
+      isPostgres
+        ? apiManifest.ciGateTestRunners["test:postgres"].runner
+        : "scripts/run-tests.ts",
+      `./${relative}`,
+    ]);
+    const argv = trialCommand(target, 37).slice(2);
+    expect(partitionRunnerArguments(argv)).toEqual({
+      patterns: [`./${relative}`],
+      bunArguments: ["--rerun-each=1", "--randomize", "--seed=37"],
+    });
+    const discovered = [relative, "src/unchanged.test.ts"];
+    if (isPostgres) {
+      expect(
+        parseGatedTestSelection(
+          target.env["CI_POSTGRES_TEST_SELECTION"],
+          discovered,
+        ),
+      ).toEqual({
+        mode: "selected",
+        files: [relative],
+      });
+      expect(target.env["CI_POSTGRES_TEST_SHARD"]).toBe("");
+      expect(
+        target.env[apiManifest.ciGateTestRunners["test:postgres"].gate],
+      ).toBe(apiManifest.ciGateTestRunners["test:postgres"].gateValue);
+    } else {
+      expect(
+        restrictApiTestFiles(discovered, target.env["API_TEST_FILES"]),
+      ).toEqual([relative]);
+      expect(target.env["API_TEST_SHARD"]).toBe("");
+    }
+  }
+  const withoutDb = selectTargets({ ...options, hasDb: false });
+  expect(withoutDb.targets.map(({ file }) => file)).toEqual([unit]);
+  expect(withoutDb.skipped).toEqual([
+    { file: postgres, reason: "not gated (needs DB)" },
+  ]);
+});
+
+test("the web entry retains file scoping and its DOM isolation with seeded trial flags", async () => {
+  await withFixture((root) => {
+    expect(webManifest.scripts.test).toContain("&& bun scripts/run-tests.ts");
+    write(root, "apps/web/package.json", JSON.stringify(webManifest));
+    const file = "apps/web/src/selected.dom.test.tsx";
+    write(root, file, "");
+    const selected = selectTargets({ root, changed: [file], hasDb: false });
+    expect(selected.skipped).toEqual([]);
+    const target = selected.targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected explicit web file target");
+    }
+    expect(target.runner).toBe("web");
+    expect(target.command).toEqual([
+      process.execPath,
+      "scripts/run-tests.ts",
+      "./src/selected.dom.test.tsx",
+    ]);
+    const plan = planTestRuns({
+      argv: trialCommand(target, 43).slice(2),
+      pathKind: () => "file",
+      testFilesIn: () => {
+        throw new TypeError("A selected file must not expand directories");
+      },
+    });
+    expect(plan).toEqual({
+      runs: [
+        {
+          label: "dom",
+          args: [
+            "--isolate",
+            "./src/selected.dom.test.tsx",
+            "--rerun-each=1",
+            "--randomize",
+            "--seed=43",
+          ],
+        },
+      ],
+      missingPaths: [],
+    });
+  });
+});
+
+test.each(["api", "web"] as const)(
+  "%s trials require nonzero Bun test execution",
+  async (runner) => {
+    await withFixture(async (root) => {
+      write(
+        root,
+        "fixture.test.ts",
+        'import {test} from "bun:test"; test("runs", () => {});',
+      );
+      const target = { ...targetFor(root), runner };
+      expect(
+        await runOnce({ target, seed: 11, timeoutMs: 10_000 }),
+      ).toMatchObject({ passed: true, ranTests: true });
+      write(root, "empty.ts", 'console.log("0 pass");');
+      expect(
+        await runOnce({
+          target: { ...target, command: [process.execPath, "empty.ts"] },
+          seed: 11,
+          timeoutMs: 10_000,
+        }),
+      ).toMatchObject({ passed: false, status: 0, ranTests: false });
+    });
+  },
+);
 
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {

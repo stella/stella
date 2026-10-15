@@ -62,7 +62,7 @@ test("rejects unsafe and ambiguous Bun test commands with typed reasons", () => 
   expect(unsupported("bun test --cwd apps/api")).toBe("runner-controlled-flag");
 });
 
-test("every direct app and package test script is parsed against the unsupported-shape census", () => {
+test("the generic parser records unsupported shell shapes independently of dedicated API and web runners", () => {
   const manifests = [
     ...new Bun.Glob("apps/*/package.json").scanSync({ cwd: root }),
     ...new Bun.Glob("packages/*/package.json").scanSync({ cwd: root }),

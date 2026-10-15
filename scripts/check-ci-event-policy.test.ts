@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import * as v from "valibot";
 
 import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
+import { evaluate } from "./github-expression";
 
 const directory = new URL("../.github/workflows/", import.meta.url);
 const workflows = Object.fromEntries(
@@ -19,6 +20,45 @@ const policy = JSON.parse(
     new URL("../.github/ci-event-policy.json", import.meta.url),
     "utf-8",
   ),
+);
+
+test.each([
+  {
+    baseRef: "refs/heads/selected-base",
+    prBase: "pr-base-sha",
+    expected: "refs/heads/selected-base",
+  },
+  { baseRef: "", prBase: "pr-base-sha", expected: "pr-base-sha" },
+  {
+    baseRef: "refs/tags/replay-base",
+    prBase: "",
+    expected: "refs/tags/replay-base",
+  },
+  { baseRef: "", prBase: "", expected: "origin/main" },
+])(
+  "flake report diff uses the requested base before the caller PR base: %j",
+  ({ baseRef, prBase, expected }) => {
+    const workflow = v.parse(workflowSchema, workflows["flake-gate.yml"]);
+    const step = workflow.jobs["report"]?.steps?.find(
+      ({ run }) => run === "bun scripts/flake-gate.ts",
+    );
+    const value = step?.env?.["BASE_SHA"];
+    if (
+      typeof value !== "string" ||
+      !value.startsWith("${{") ||
+      !value.endsWith("}}")
+    ) {
+      panic("Missing flake report base expression");
+    }
+    expect(
+      evaluate(value.slice(3, -2).trim(), {
+        values: {
+          "inputs.base_ref": baseRef,
+          "github.event.pull_request.base.sha": prBase,
+        },
+      }),
+    ).toBe(expected);
+  },
 );
 
 test("compiler parity and seeded probes require dispatch-only policy in every workflow", () => {

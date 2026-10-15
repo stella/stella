@@ -42,7 +42,7 @@ export type Target = {
   cwd: string;
   command: string[];
   env: Record<string, string>;
-  runner: "bun" | "rust";
+  runner: "bun" | "api" | "web" | "rust";
 };
 export type Skipped = { file: string; reason: string };
 type SelectOptions = {
@@ -108,7 +108,7 @@ export const selectTargets = ({
       manifestSchema,
       JSON.parse(readFileSync(path.join(cwd, "package.json"), "utf-8")),
     );
-    let script = manifest.scripts["test:bun"] ? "test:bun" : "test";
+    const script = manifest.scripts["test:bun"] ? "test:bun" : "test";
     let env: Record<string, string> = {};
     if (file.startsWith("apps/api/")) {
       const relative = file.slice("apps/api/".length);
@@ -125,9 +125,45 @@ export const selectTargets = ({
         continue;
       }
       if (gate) {
-        script = gate[0];
-        env = Object.fromEntries([[gate[1].gate, gate[1].gateValue]]);
+        env = {
+          [gate[1].gate]: gate[1].gateValue,
+          CI_POSTGRES_TEST_SELECTION: JSON.stringify({
+            mode: "selected",
+            files: [relative],
+          }),
+          CI_POSTGRES_TEST_SHARD: "",
+        };
+      } else {
+        env = { API_TEST_FILES: relative, API_TEST_SHARD: "" };
       }
+      // CI generates prerequisites once; the API entry retains its own preloads,
+      // batching, service setup, and exact selection instead of parsing shell scripts.
+      targets.push({
+        file,
+        cwd,
+        command: [
+          process.execPath,
+          gate ? gate[1].runner : "scripts/run-tests.ts",
+          `./${relative}`,
+        ],
+        env,
+        runner: "api",
+      });
+      continue;
+    }
+    if (cwd === path.join(repo, "apps/web")) {
+      targets.push({
+        file,
+        cwd,
+        command: [
+          process.execPath,
+          "scripts/run-tests.ts",
+          `./${repoRelativePath(cwd, absolute)}`,
+        ],
+        env,
+        runner: "web",
+      });
+      continue;
     }
     const parsed =
       cwd === repo
@@ -267,6 +303,37 @@ const outputTail = async (
   }
   return tail + decoder.decode();
 };
+export const trialCommand = (target: Target, seed: number) => {
+  switch (target.runner) {
+    case "bun":
+    case "api":
+    case "web":
+      return [
+        ...target.command,
+        "--rerun-each=1",
+        "--randomize",
+        `--seed=${seed}`,
+      ];
+    case "rust":
+      return target.command;
+    default:
+      target.runner satisfies never;
+      return panic("Unknown flake trial runner");
+  }
+};
+const trialRanTests = (runner: Target["runner"], output: string) => {
+  switch (runner) {
+    case "bun":
+    case "api":
+    case "web":
+      return /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
+    case "rust":
+      return /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+    default:
+      runner satisfies never;
+      return panic("Unknown flake trial output");
+  }
+};
 export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
   if (process.platform === "win32") {
     throw new FlakeGateError({
@@ -275,12 +342,8 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
   }
   // Native --rerun-each repeats cases in place. Fresh invocations reset shared setup
   // and shuffle the whole file for each trial; fixed seeds reproduce each order.
-  const args =
-    target.runner === "bun"
-      ? ["--rerun-each=1", "--randomize", `--seed=${seed}`]
-      : [];
   const token = randomUUID();
-  const child = Bun.spawn([...target.command, ...args], {
+  const child = Bun.spawn(trialCommand(target, seed), {
     cwd: target.cwd,
     env: { ...process.env, ...target.env, [FLAKE_GATE_TRIAL_ENV]: token },
     stdin: "ignore",
@@ -345,10 +408,7 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
   }
   const [status, stdout, stderr] = captured.value;
   const output = `${stdout}\n${stderr}`;
-  const ranTests =
-    target.runner === "bun"
-      ? /\b[1-9]\d* (?:pass|fail)\b/u.test(output)
-      : /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+  const ranTests = trialRanTests(target.runner, output);
   return { passed: status === 0 && ranTests, status, ranTests };
 };
 

@@ -81,7 +81,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Generate test prerequisites
-        run: bun run generate
+        run: |
+          bun --cwd=packages/cli run codegen:runtime
+          bun run generate
 
       - name: Configure test Postgres parity
         run: bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
@@ -94,7 +96,7 @@ jobs:
       - name: Report changed-test stability
         continue-on-error: true
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_ref || 'origin/main' }}
+          BASE_SHA: ${{ inputs.base_ref || github.event.pull_request.base.sha || 'origin/main' }}
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun scripts/flake-gate.ts
 
