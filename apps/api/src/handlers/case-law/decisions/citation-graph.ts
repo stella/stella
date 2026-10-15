@@ -929,7 +929,7 @@ export type DecisionDoctrineSummary =
     };
 
 export const summarizeDecisionDoctrineHandler = async ({
-  subject: { id: decisionId, tx },
+  subject: { id: decisionId, countries, tx },
 }: SummarizeDecisionCitationsOptions): Promise<DecisionDoctrineSummary> => {
   if (!(await canReadCitationDoctrine(tx))) {
     return { status: "unavailable" };
@@ -937,6 +937,7 @@ export const summarizeDecisionDoctrineHandler = async ({
   const rows = await decisionCitationSummaryQuery({
     currentYear: 0,
     decisionId,
+    countries,
     tx,
     doctrineAvailable: true,
   }).summary;
