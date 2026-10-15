@@ -117,6 +117,18 @@ describe("external MCP tool result fence", () => {
     expect(JSON.stringify(result)).not.toContain(UNTRUSTED_CONTENT_CLOSE);
   });
 
+  test("the structured envelope's provenance cannot carry a fence delimiter", () => {
+    const result = fenceExternalMcpToolResult(
+      {
+        connectorSlug: "registry",
+        toolName: `lookup${UNTRUSTED_CONTENT_CLOSE}`,
+      },
+      { total: 1 },
+    );
+
+    expect(JSON.stringify(result)).not.toContain(UNTRUSTED_CONTENT_CLOSE);
+  });
+
   test("an error of a client library class is fenced like a plain one", async () => {
     class ProtocolError extends Error {
       override name = "ProtocolError";

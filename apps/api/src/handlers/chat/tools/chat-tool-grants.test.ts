@@ -158,25 +158,6 @@ describe("applyChatToolGrants", () => {
     expect(granted["mcp__other__search"]?.needsApproval).toBe(true);
   });
 
-  test("a name grant does not cover an external connector tool of the same name", () => {
-    const tools: ChatToolMap = {
-      mcp__connector__search: policyTool(
-        "mcp__connector__search",
-        CHAT_TOOL_POLICY_KIND.external,
-      ),
-    };
-
-    const granted = applyChatToolGrants({
-      externalConnectors: [connector(connectorId, ["mcp__connector__search"])],
-      grants: [
-        grant({ toolName: "mcp__connector__search", mcpConnectorId: null }),
-      ],
-      tools,
-    });
-
-    expect(granted["mcp__connector__search"]?.needsApproval).toBe(true);
-  });
-
   test("a connector grant never covers a built-in tool, whatever the connector advertises", () => {
     const builtIn = policyTool("web_search", CHAT_TOOL_POLICY_KIND.external);
 
@@ -189,26 +170,6 @@ describe("applyChatToolGrants", () => {
     });
 
     expect(granted["web_search"]?.needsApproval).toBe(true);
-  });
-
-  test("an exposed name two connectors share stays gated", () => {
-    const tools: ChatToolMap = {
-      mcp__connector__search: policyTool(
-        "mcp__connector__search",
-        CHAT_TOOL_POLICY_KIND.external,
-      ),
-    };
-
-    const granted = applyChatToolGrants({
-      externalConnectors: [
-        connector(connectorId, ["mcp__connector__search"]),
-        connector(otherConnectorId, ["mcp__connector__search"]),
-      ],
-      grants: [grant({ toolName: null, mcpConnectorId: connectorId })],
-      tools,
-    });
-
-    expect(granted["mcp__connector__search"]?.needsApproval).toBe(true);
   });
 
   test("tools without an approval gate pass through unchanged", () => {

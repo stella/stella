@@ -113,8 +113,14 @@ export const fenceExternalMcpToolResult = (
 
   return {
     externalConnectorResult: {
-      connector: provenance.connectorSlug,
-      tool: provenance.toolName,
+      connector: sanitizePromptLine({
+        maxLength: PROVENANCE_VALUE_MAX_LENGTH,
+        text: provenance.connectorSlug,
+      }),
+      tool: sanitizePromptLine({
+        maxLength: PROVENANCE_VALUE_MAX_LENGTH,
+        text: provenance.toolName,
+      }),
       notice: provenanceNotice(provenance),
     },
     structuredContent: neutralizeStructured(result ?? null),
