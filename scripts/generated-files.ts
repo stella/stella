@@ -182,7 +182,7 @@ const GENERATOR_DECLARATIONS = [
       "--check",
     ],
     autofix: false,
-    after: [],
+    after: ["capability-runtime"],
   },
   {
     id: "capability-catalog",

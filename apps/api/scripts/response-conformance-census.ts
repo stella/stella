@@ -103,6 +103,21 @@ export const generateResponseConformanceCensus = async () => {
       .filter((call) => call.mode === row.mode && call.name === row.name)
       .flatMap((call) => call.tests),
   }));
+  const { loadCapabilityCatalog } = await import("../src/mcp/capability-tools");
+  const registryIds = new Set(
+    (await loadCapabilityCatalog()).map(({ id }) => id),
+  );
+  const discoveredIds = new Set(
+    tools.filter(({ kind }) => kind === "capability").map(({ id }) => id),
+  );
+  if (
+    registryIds.size !== discoveredIds.size ||
+    [...registryIds].some((id) => !discoveredIds.has(id))
+  ) {
+    panic(
+      "Response census differs from the capability registry; regenerate the canonical capability catalog and runtime",
+    );
+  }
   return buildResponseConformanceCensus(
     [...routes, ...tools],
     evidence.unresolvedCalls,
