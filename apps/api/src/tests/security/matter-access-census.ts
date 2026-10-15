@@ -54,17 +54,17 @@ export const AUTHORIZED_WORKSPACE_OWNER_MODULE =
 export const AUTHORIZED_WORKSPACE_OWNER_FILE =
   "apps/api/src/lib/workspaces/authorized-workspace-ids.ts";
 
-export const MATTER_ACCESS_SIGNALS = [
+const MATTER_ACCESS_SIGNALS = [
   "reads-authorization-view",
   "derives-matter-access",
   "owner-connection-workspace-set",
   "names-matter-role-rule",
 ] as const;
 
-export type MatterAccessSignal = (typeof MATTER_ACCESS_SIGNALS)[number];
+type MatterAccessSignal = (typeof MATTER_ACCESS_SIGNALS)[number];
 
 /** Occurrences of a signal per enclosing symbol path (`<module>` at top). */
-export type MatterAccessSites = Record<string, number>;
+type MatterAccessSites = Record<string, number>;
 
 export type MatterAccessFinding = {
   file: string;
@@ -222,7 +222,8 @@ const declarationName = (node: ts.Node): string | undefined => {
 /** `outer.inner` names of the declarations enclosing a node. */
 const enclosingSymbol = (node: ts.Node): string => {
   const names: string[] = [];
-  for (let current = node.parent; current !== undefined;) {
+  // The source file's parent is undefined at runtime despite its type.
+  for (let current: ts.Node | undefined = node.parent; current !== undefined;) {
     const name = declarationName(current);
     if (name !== undefined) {
       names.unshift(name);
@@ -566,7 +567,7 @@ export const classifyMatterAccessModule = (
   return findings;
 };
 
-export const allowlistKey = ({
+const allowlistKey = ({
   file,
   signal,
 }: Pick<MatterAccessFinding, "file" | "signal">) => `${file}::${signal}`;
