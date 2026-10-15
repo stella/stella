@@ -561,8 +561,10 @@ describe("staging deploy commit", () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const resolved = `\${{ needs.resolve.outputs.sha }}`;
 
-    // No step reads the dispatch commit, and nothing skips a promotion.
-    expect(workflow).not.toContain("github.sha");
+    // The run title identifies its input; deployment steps use the resolved SHA.
+    expect(workflow.replace(/^run-name:.*\n/mu, "")).not.toContain(
+      "github.sha",
+    );
     expect(workflow).not.toContain("GITHUB_SHA");
     expect(workflow).not.toContain("promoted=false");
     expect(workflow).toContain(

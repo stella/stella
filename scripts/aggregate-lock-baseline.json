@@ -211,7 +211,7 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "47f41949cebdc06d6bdd951dc89fa1163ddfcf3c8b69d5772f3d190ea714e069",
+    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -224,12 +224,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "4b2d3c90e312c34ab2df9bbaf6b997a7462643046fa362d6ba10cb006bfbd0f6",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "4bd82cdc92cf9ce8321f920dcfed517f9382a874ba7e562c2dd3df45362228d6",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -350,12 +344,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "da4775ee52425377bbacf92dc2245c9d30a54bb95c7a6f62e24e030a632435d6",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "e1e59c6a3e27a646023813ca7f64ed7d636b312b60cb80e9b88a4e61e8e00053",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -697,7 +685,7 @@
   },
   {
     "file": "apps/api/src/db/scoped.ts",
-    "fingerprint": "622d70b7ebeee86194653c07da75cae319097fbb3dd38c49e31fcb964764ca60",
+    "fingerprint": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
     "count": 1,
     "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
   },
@@ -2968,12 +2956,6 @@
     "fingerprint": "295fdce639e310a9f995f3909ad781026c32198d02b24b96955634f625ec06a2",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/folio-collab-rooms.ts",
-    "fingerprint": "c94869504d79f2e3062cd497e1911f8b0403bcbe6c0c57abe37229eb73994f2d",
-    "count": 2,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/folio-collab-rooms.ts",

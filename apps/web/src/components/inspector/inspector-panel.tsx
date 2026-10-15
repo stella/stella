@@ -13,6 +13,8 @@ import { useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+
 import { clearAnonymization } from "@/components/inspector/anonymize-pdf";
 import {
   ChatTabPanel,
@@ -57,7 +59,6 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";

@@ -35,6 +35,8 @@ import {
   LandingLayout,
   LandingSection,
 } from "@stll/ui/landing";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -59,7 +61,6 @@ import {
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -101,7 +102,6 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -119,7 +119,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
@@ -562,7 +562,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    chat.startRouteHandoffMessage(message);
+    await chat.startRouteHandoffMessage(message);
 
     await navigate({
       to: "/chat/$threadId",
@@ -602,7 +602,7 @@ function ChatIndex() {
               </Button>
             }
           />
-          <ThreadsSheet />
+          <ChatHistoryLink />
         </ChromeHeaderActions>
       }
       hero={
@@ -789,11 +789,18 @@ function ChatIndex() {
       </LandingSection>
       <LandingSection
         heading={
-          <ThreadsSheet
-            icon={<HistoryIcon className="size-4" />}
-            label={t("chat.landing.recentChats")}
-            triggerVariant="section"
-          />
+          <Tooltip
+            content={t("chat.landing.openChatHistory")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                to="/chat/history"
+              />
+            }
+          >
+            <HistoryIcon className="size-4" />
+            {t("chat.landing.recentChats")}
+          </Tooltip>
         }
       >
         <QueryViewFeedback view={groupedThreadPagesView} />

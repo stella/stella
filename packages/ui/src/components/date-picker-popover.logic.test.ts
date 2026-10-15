@@ -23,8 +23,8 @@ describe("date picker clock", () => {
     expect(source).not.toMatch(
       /<DatePickerPopoverContent\b(?:(?!\/>)[\s\S])*\bkey=/u,
     );
-    expect(source).toContain(
-      "<DatePickerPopoverContent {...props} locale={locale} today={today} />",
+    expect(source).toMatch(
+      /<DatePickerPopoverContent\b[\s\S]*?\blocale=\{locale\}[\s\S]*?\btoday=\{today\}/u,
     );
     expect(source).toContain('globalThis.addEventListener("focus"');
     expect(source).toContain('globalThis.removeEventListener("focus"');

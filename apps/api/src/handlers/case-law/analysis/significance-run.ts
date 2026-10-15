@@ -121,26 +121,33 @@ export const refreshSignificance = async ({
   inFlight.add(key);
 
   const language = current.holding.language;
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "public_corpus",
-    feature: "case-law.analysis.significance",
-    modelRole: "fast",
-    organizationId,
-    orgAIConfig,
-    properties: {
-      decision_id: decisionId,
-      cited_by_count: facts.citedByCount,
-      language,
-      organization_id: organizationId,
-    },
-    sessionId: decisionId,
-    traceId: Bun.randomUUIDv7(),
-  });
 
+  // Built once admission states the tier; absent when admission refused.
+  let aiAnalytics:
+    | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
+    | undefined;
   const written = await admitModelAction(async ({ admission }) => {
+    aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
+      feature: "case-law.analysis.significance",
+      modelRole: "fast",
+      organizationId,
+      orgAIConfig,
+      modelTier: admission.modelTier,
+      properties: {
+        decision_id: decisionId,
+        cited_by_count: facts.citedByCount,
+        language,
+        organization_id: organizationId,
+      },
+      sessionId: decisionId,
+      traceId: Bun.randomUUIDv7(),
+    });
+
     const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
       dataClass: "public_corpus",
       organizationId,
+      modelTier: admission.modelTier,
     });
     const result = await generateTanStackObjectForRole({
       dataClass: "public_corpus",
@@ -203,6 +210,6 @@ export const refreshSignificance = async ({
       source: "case-law-analysis-significance",
       decisionId,
     });
-    aiAnalytics.captureError(written.error);
+    aiAnalytics?.captureError(written.error);
   }
 };

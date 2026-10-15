@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -29,7 +30,12 @@ export type ReachabilityFinding = {
   attempted?: readonly ReachabilityCategory[];
 };
 
-type AnalyzeOptions = { repoRoot: string; files?: readonly string[] };
+type AnalyzeOptions = {
+  repoRoot: string;
+  files?: readonly string[];
+  /** Alternate source provider for equivalence tests. */
+  siblingSource?: (filename: string) => ts.SourceFile | undefined;
+};
 
 export const parseReachabilityBaseline = (
   text: string,
@@ -220,13 +226,18 @@ const existingSource = (
   specifier: string,
 ): string | undefined =>
   candidatePaths(repoRoot, testFile, specifier).find((candidate) => {
-    const relative = path
-      .relative(repoRoot, candidate)
-      .replaceAll(path.sep, "/");
+    const relative = repoRelativePath(repoRoot, candidate);
     return (
       SOURCE_FILE.test(candidate) &&
       !TEST_FILE.test(candidate) &&
-      !TEST_SUPPORT.test(relative) &&
+      // A support module is a subject when its own colocated test exercises it;
+      // importing unrelated fixtures still does not establish reachability.
+      (!TEST_SUPPORT.test(relative) ||
+        candidate.replace(/\.[cm]?[jt]sx?$/u, "") ===
+          path.resolve(
+            repoRoot,
+            testFile.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
+          )) &&
       existsSync(candidate) &&
       statSync(candidate).isFile()
     );
@@ -563,10 +574,17 @@ const namedCategory = ({
   return undefined;
 };
 
-const siblingExportNames = (
-  repoRoot: string,
-  testFile: string,
-): Set<string> => {
+type SiblingExportOptions = {
+  repoRoot: string;
+  testFile: string;
+  sourceFor: (filename: string) => ts.SourceFile | undefined;
+};
+
+const siblingExportNames = ({
+  repoRoot,
+  testFile,
+  sourceFor,
+}: SiblingExportOptions): Set<string> => {
   const stem = testFile.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, "");
   const names = new Set<string>();
   for (const extension of [".ts", ".tsx", ".mts", ".cts"]) {
@@ -574,7 +592,9 @@ const siblingExportNames = (
     if (!statSync(candidate, { throwIfNoEntry: false })?.isFile()) {
       continue;
     }
-    const source = parse(candidate, readFileSync(candidate, "utf-8"));
+    const source =
+      sourceFor(candidate) ??
+      parse(candidate, readFileSync(candidate, "utf-8"));
     for (const statement of source.statements) {
       if (
         !ts.canHaveModifiers(statement) ||
@@ -741,14 +761,27 @@ const importReachability = ({
   };
 };
 
-const localCollisionFindings = (
-  repoRoot: string,
-  file: string,
-  source: ts.SourceFile,
-  reachedSiblingExports: ReadonlySet<string>,
-): ReachabilityFinding[] => {
+type LocalCollisionOptions = {
+  repoRoot: string;
+  file: string;
+  source: ts.SourceFile;
+  reachedSiblingExports: ReadonlySet<string>;
+  sourceFor: (filename: string) => ts.SourceFile | undefined;
+};
+
+const localCollisionFindings = ({
+  repoRoot,
+  file,
+  source,
+  reachedSiblingExports,
+  sourceFor,
+}: LocalCollisionOptions): ReachabilityFinding[] => {
   const findings: ReachabilityFinding[] = [];
-  const siblingNames = siblingExportNames(repoRoot, file);
+  const siblingNames = siblingExportNames({
+    repoRoot,
+    testFile: file,
+    sourceFor,
+  });
   const addCollision = (name: string): void => {
     if (
       siblingNames.has(name) &&
@@ -786,6 +819,7 @@ const localCollisionFindings = (
 export const analyzeTestSubjectReachability = ({
   repoRoot,
   files = trackedTests(repoRoot),
+  siblingSource,
 }: AnalyzeOptions): ReachabilityFinding[] => {
   const findings: ReachabilityFinding[] = [];
   const program = ts.createProgram(
@@ -798,11 +832,15 @@ export const analyzeTestSubjectReachability = ({
     },
   );
   const checker = program.getTypeChecker();
+  // The compiler's resolution-aware index already owns imported siblings.
+  // Keep reuse inside this scan so changed sources/resolution cannot go stale.
+  const sourceFor =
+    siblingSource ?? ((filename: string) => program.getSourceFile(filename));
   for (const file of files) {
     const absolute = path.join(repoRoot, file);
-    const text = readFileSync(absolute, "utf-8");
     const source =
       program.getSourceFile(absolute) ?? panic(`Could not parse ${file}`);
+    const text = source.text;
     const reachableRuntime = runtimeRoots(source, checker);
     const usedSymbols = runtimeSymbols(reachableRuntime, checker);
     const {
@@ -842,7 +880,13 @@ export const analyzeTestSubjectReachability = ({
     }
 
     findings.push(
-      ...localCollisionFindings(repoRoot, file, source, reachedSiblingExports),
+      ...localCollisionFindings({
+        repoRoot,
+        file,
+        source,
+        reachedSiblingExports,
+        sourceFor,
+      }),
     );
   }
   return findings.toSorted((left, right) => {

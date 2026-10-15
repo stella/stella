@@ -1,25 +1,13 @@
 import { Result } from "better-result";
 import path from "node:path";
 
+import { isPathStrictlyInside } from "@stll/portable-path";
+
 const testArtifactPattern =
   /(?:^|\/)(?:fixtures\/|[^/]+\.(?:test|spec)\.(?:[cm]?[jt]sx?|d\.ts)$|[^/]+\.playwright\.[cm]?[jt]sx?$|playwright\.config\.[cm]?[jt]sx?$)/u;
 
 export const isPublishedTestArtifact = (file: string) =>
   testArtifactPattern.test(file);
-
-/**
- * Containment by path segment, not by string prefix: `dist-cache` starts with
- * `dist` but is a different directory.
- */
-const isInsideDirectory = (candidate: string, directory: string): boolean => {
-  const relative = path.relative(directory, path.resolve(candidate));
-  return (
-    relative !== "" &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
-};
 
 /**
  * Whether a Node load failure is the tarball's own defect.
@@ -50,7 +38,8 @@ export const isOwnDistLoadFailure = ({
     target
       ?.split(/["'\s]+/u)
       .some(
-        (token) => path.isAbsolute(token) && isInsideDirectory(token, distDir),
+        (token) =>
+          path.isAbsolute(token) && isPathStrictlyInside(distDir, token),
       ) === true
   );
 };
@@ -70,7 +59,7 @@ export const isExpectedPublishedExportResolution = ({
     return path.resolve(resolved) === path.resolve(packageDir, entry);
   }
 
-  return isInsideDirectory(resolved, path.resolve(packageDir, "dist"));
+  return isPathStrictlyInside(path.resolve(packageDir, "dist"), resolved);
 };
 
 type ResolvePublishedExportOptions = {

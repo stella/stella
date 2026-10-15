@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { canonicalModuleId } from "../../../.oxlint-plugins/module-id";
 
 const packageRoot = path.resolve(import.meta.dirname, "../../decision-reader");
@@ -352,7 +354,7 @@ const removedReaderMutationFile =
   "apps/web/src/features/statutes/components/statute-compare-view.tsx";
 for (const oldPath of removedReaderPaths) {
   const alias = oldPath.replace("apps/web/src/", "@/");
-  const relative = path.relative(
+  const relative = repoRelativePath(
     path.dirname(removedReaderMutationFile),
     oldPath,
   );
@@ -471,7 +473,7 @@ const mcpReaderRequiresSharedPackage = (file: string, source: string) => {
 
 test("MCP decision reader entries use the shared rendering package", () => {
   for (const file of new Bun.Glob(
-    "apps/api/src/mcp/apps/**/*.{ts,tsx}",
+    "packages/mcp-apps/src/**/*.{ts,tsx}",
   ).scanSync({ cwd: repositoryRoot })) {
     if (/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)) {
       continue;
@@ -487,7 +489,7 @@ test("MCP decision reader entries use the shared rendering package", () => {
 });
 
 test("copying the production renderer into an app entry violates source ownership", () => {
-  const entry = "apps/api/src/mcp/apps/decision-reader/app.tsx";
+  const entry = "packages/mcp-apps/src/decision-reader/app.tsx";
   const productionEntry = readFileSync(
     path.join(repositoryRoot, entry),
     "utf-8",
@@ -502,7 +504,7 @@ test("copying the production renderer into an app entry violates source ownershi
 });
 
 test("MCP reader ownership guard distinguishes reader entries from result snippets", () => {
-  const file = "apps/api/src/mcp/apps/decision-reader/app.tsx";
+  const file = "packages/mcp-apps/src/decision-reader/app.tsx";
   expect(
     mcpReaderRequiresSharedPackage(
       file,
@@ -529,7 +531,7 @@ test("MCP reader ownership guard distinguishes reader entries from result snippe
   ).toBe(false);
   expect(
     mcpReaderRequiresSharedPackage(
-      "apps/api/src/mcp/apps/decision-reader/model.ts",
+      "packages/mcp-apps/src/decision-reader/model.ts",
       'import { blockSchema } from "@stll/legal-ast/document-ast"; export const readBlock = (value) => v.parse(blockSchema, value);',
     ),
   ).toBe(false);
@@ -541,19 +543,19 @@ test("MCP reader ownership guard distinguishes reader entries from result snippe
   ).toBe(false);
   expect(
     mcpReaderRequiresSharedPackage(
-      "apps/api/src/mcp/apps/decision-reader/messages.tsx",
+      "packages/mcp-apps/src/decision-reader/messages.tsx",
       'import type { ReaderMessages } from "@stll/decision-reader/reader-adapters"; const messages = { dissentByline: (text) => <bdi>{text}</bdi> };',
     ),
   ).toBe(false);
   expect(
     mcpReaderRequiresSharedPackage(
-      "apps/api/src/mcp/apps/case-law-results/app.tsx",
+      "packages/mcp-apps/src/case-law-results/app.tsx",
       "const App = () => <article>Result snippet</article>;",
     ),
   ).toBe(false);
   expect(
     mcpReaderRequiresSharedPackage(
-      "apps/api/src/mcp/apps/new-app/app.tsx",
+      "packages/mcp-apps/src/new-app/app.tsx",
       "const App = () => <DecisionText />;",
     ),
   ).toBe(true);

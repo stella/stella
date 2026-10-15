@@ -14,7 +14,10 @@ import {
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
+import {
+  ATTACHED_TEMPLATE_SECURITY_RULE,
+  writeZipEntry,
+} from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { pendingUploads } from "@/api/db/schema";
@@ -22,7 +25,9 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -61,7 +66,8 @@ const ATTACHED_TEMPLATE_REJECTION_MESSAGE = `File rejected by security rule ${AT
 
 const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -69,17 +75,20 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
       "</Types>",
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/settings.xml",
     '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<w:attachedTemplate r:id="rId1"/></w:settings>',
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/_rels/settings.xml.rels",
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" ' +
@@ -326,6 +335,109 @@ describe("presigned upload mutation flow", () => {
     expect(
       [...fake.objects.keys()].filter((key) => key.includes(uploadId)),
     ).toEqual([]);
+  });
+
+  test("does not claim an upload while it waits for finalize admission", async () => {
+    const bytes = await makeAttachedTemplateDocx();
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "admission-wait.docx",
+            mimeType: DOCX_MIME,
+            size: bytes.byteLength,
+            sha256Hex: hashSha256Hex(bytes),
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+    const grant = readPresignedUpload(presignResult);
+    const staged = await fetch(grant.url, {
+      method: "PUT",
+      body: bytes,
+      headers: grant.headers,
+    });
+    expect(staged.status).toBe(200);
+
+    // Fill the whole budget so the finalization below has to wait.
+    const holdBudget = await UPLOAD_FINALIZE_ADMISSION.acquire(
+      LIMITS.uploadFinalizeInFlightBytes,
+      0,
+    );
+    if (holdBudget === null) {
+      throw new Error("Expected the idle admission budget to admit the hold.");
+    }
+    let finalizeSettled = false;
+    const finalizing = finalizeUpload
+      .handler(
+        asTestRaw<FinalizeCtx>(
+          createContext({
+            params: { workspaceId: ids.wsA1, uploadId },
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
+      )
+      .finally(() => {
+        finalizeSettled = true;
+      });
+
+    try {
+      await Bun.sleep(200);
+      expect(finalizeSettled).toBe(false);
+      expect(
+        await testDb.query.pendingUploads.findFirst({
+          where: { id: { eq: uploadId } },
+          columns: { claimedAt: true, claimedByRequestId: true, status: true },
+        }),
+      ).toEqual({
+        claimedAt: null,
+        claimedByRequestId: null,
+        status: "pending",
+      });
+    } finally {
+      holdBudget();
+    }
+
+    const finalized = await finalizing;
+    expect(finalized).toMatchObject({ code: 422 });
+    expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
+
+    // The stored result replays at once even while the budget is full.
+    const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
+      LIMITS.uploadFinalizeInFlightBytes,
+      0,
+    );
+    if (holdAgain === null) {
+      throw new Error("Expected the idle admission budget to admit the hold.");
+    }
+    try {
+      const startedAt = performance.now();
+      const replayed = await finalizeUpload.handler(
+        asTestRaw<FinalizeCtx>(
+          createContext({
+            params: { workspaceId: ids.wsA1, uploadId },
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
+      );
+      expect(replayed).toEqual(finalized);
+      expect(performance.now() - startedAt).toBeLessThan(
+        LIMITS.uploadFinalizeAdmissionWaitMs,
+      );
+    } finally {
+      holdAgain();
+    }
   });
 
   test("rejects a rule match deep inside a large document and stores nothing", async () => {

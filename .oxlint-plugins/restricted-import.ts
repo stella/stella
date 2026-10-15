@@ -191,7 +191,7 @@ const RESTRICTED_IMPORT_RULES = {
       messageId: "directMatterGlyph",
       message:
         "Do not import '{{name}}' from 'lucide-react' here. Render " +
-        "<MatterIcon> from '@/components/matter-icon' instead so the " +
+        "<MatterIcon> from '@stll/ui/matter-icon' instead so the " +
         "matter colour is always applied (matter={{ id, color }}, or " +
         'variant="none" / variant="all" for non-matter affordances). ' +
         "The raw glyph is only allowed in matter-icon.tsx.",
@@ -201,7 +201,7 @@ const RESTRICTED_IMPORT_RULES = {
         names: lucideGlyphNames(["Layers", "Layers2"]),
         hit: EXPORT_HIT.binding,
       },
-      owners: ["apps/web/src/components/matter-icon.tsx", ICON_MODULE],
+      owners: ["packages/ui/src/components/matter-icon.tsx", ICON_MODULE],
     },
   ],
   // `<EntityKindIcon>` switches exhaustively over the entity kind. Only the

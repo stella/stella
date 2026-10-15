@@ -25,6 +25,8 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
   "cla.yml",
+  "generated-conflicts-publish.yml",
+  "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",
@@ -457,6 +459,7 @@ describe("workflow_run trust", () => {
         ...WORKFLOW_RUN_WORKFLOWS,
         "network-baseline-request.yml",
         "pr-lint.yml",
+        "release-proof.yml",
       ].toSorted(),
     );
     const problems = workflows.flatMap(({ file, workflow }) =>

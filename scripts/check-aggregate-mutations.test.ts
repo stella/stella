@@ -222,6 +222,23 @@ describe("aggregate mutation route coverage", () => {
     expect(enumerate(sources).at(0)?.declared).toBe(true);
   });
 
+  test("a declaration through a local endpoint factory checks the factory's handler", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+    );
+    const create = (body: string) =>
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; export const createEndpoint = (authorize = defaultAuthorize) => createSafeHandler({}, async () => { ${body} }); const existing = createEndpoint(); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      create('await withAggregateLock({aggregate: "workspace", id, tx});'),
+    );
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set("apps/api/src/handlers/example/create.ts", create(""));
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
   test("a default export declaration does not classify a different named handler", () => {
     const sources = fixture('post("/named", foo.handler)');
     sources.set(

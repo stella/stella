@@ -60,6 +60,7 @@ export const summarizeVersionChange = async ({
     feature,
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });

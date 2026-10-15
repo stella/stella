@@ -1,10 +1,12 @@
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 
-import { recordAuditGroups } from "./db/audit-recording";
+import { createAccountRecorder, recordAuditGroups } from "./db/audit-recording";
 import type {
+  AsyncAuditRecorder,
+  AccountAuditBindings,
+  AccountAuditRecorder,
   AuditExecutionContext,
-  AuditRecorder,
 } from "./db/audit-recording";
 
 export {
@@ -18,6 +20,8 @@ export {
   searchHistoryAuditEvent,
 } from "./db/audit-recording";
 export type {
+  AccountAuditRecorder,
+  AsyncAuditRecorder,
   AuditAction,
   AuditResourceType,
   NonChatAuditResourceType,
@@ -31,8 +35,8 @@ export type {
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
 };
-type AuditMetadata = Record<string, unknown>;
-type AuditRecorderBindings = {
+type OrganizationAuditRecorderBindings = {
+  account?: never;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
@@ -46,10 +50,7 @@ const nullableHeader = (headers: Headers, name: string): string | null => {
   return value && value.length > 0 ? value : null;
 };
 
-const baseRequestMetadata = (
-  request: Request,
-  server: ServerLike | null,
-): AuditMetadata => ({
+const baseRequestMetadata = (request: Request, server: ServerLike | null) => ({
   ipAddress: resolveClientIp(request, server),
   // The raw forwarded-for chain stays in metadata for forensic
   // inspection, even though `ipAddress` only trusts it when the
@@ -58,9 +59,9 @@ const baseRequestMetadata = (
   userAgent: nullableHeader(request.headers, "user-agent"),
 });
 
-export const createAuditRecorder = (
-  bindings: AuditRecorderBindings,
-): AuditRecorder => {
+const createOrganizationAuditRecorder = (
+  bindings: OrganizationAuditRecorderBindings,
+): AsyncAuditRecorder => {
   const requestMetadata = baseRequestMetadata(
     bindings.request,
     bindings.server,
@@ -86,3 +87,27 @@ export const createAuditRecorder = (
     });
   };
 };
+
+type AccountRequestAuditBindings = AccountAuditBindings & {
+  request: Request;
+  server: ServerLike | null;
+};
+
+/** Bind exactly one owning scope from authenticated server context. */
+export function createAuditRecorder(
+  bindings: AccountRequestAuditBindings,
+): AccountAuditRecorder;
+export function createAuditRecorder(
+  bindings: OrganizationAuditRecorderBindings,
+): AsyncAuditRecorder;
+export function createAuditRecorder(
+  bindings: OrganizationAuditRecorderBindings | AccountRequestAuditBindings,
+): AsyncAuditRecorder | AccountAuditRecorder {
+  if (bindings.account !== undefined) {
+    return createAccountRecorder(
+      bindings,
+      baseRequestMetadata(bindings.request, bindings.server),
+    );
+  }
+  return createOrganizationAuditRecorder(bindings);
+}

@@ -4,14 +4,16 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/chat" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DecisionCitationChip } = await import("./decision-citation-chip");
 const messages = (await import("@/i18n/langs/en.json")).default;
+const germanMessages = (await import("@/i18n/langs/de.json")).default;
 
 const decision = {
   decisionId: "00000000-0000-4000-8000-000000000001",
@@ -33,12 +35,13 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (
   presentation: DecisionCitationPresentation = DECISION_CITATION_PRESENTATION.compact,
   originalUrl: string | null = decision.originalUrl,
+  paragraphNumber: number | null = null,
 ) =>
   render(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
@@ -49,6 +52,7 @@ const mount = (
             decision={{ ...decision, originalUrl }}
             passage={passage}
             presentation={presentation}
+            paragraphNumber={paragraphNumber}
           />
         </p>
       </FormattingProvider>
@@ -61,9 +65,7 @@ for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
     const trigger = view.getByRole("button", { name: reference });
     const paragraph = trigger.closest("p");
     expect(paragraph?.firstChild?.textContent).toBe(sentence);
-    expect(trigger.getAttribute("href")).toBe(
-      new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href,
-    );
+    expect(trigger.getAttribute("href")).toBe(decision.readerUrl);
     expect(trigger.dataset["citationPresentation"]).toBe(presentation);
     expect(trigger.textContent).toBe(
       presentation === DECISION_CITATION_PRESENTATION.compact
@@ -75,6 +77,50 @@ for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
     expect(view.queryByText(passage)).toBeNull();
   });
 }
+
+for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
+  test(`${presentation} citation names the court's paragraph number visibly and in its accessible name`, () => {
+    const view = mount(presentation, decision.originalUrl, 8);
+    const trigger = view.getByRole("button", {
+      name: `${reference}, paragraph 8`,
+    });
+    expect(trigger.dataset["citationPresentation"]).toBe(presentation);
+    expect(trigger.textContent).toBe(
+      presentation === DECISION_CITATION_PRESENTATION.compact
+        ? "SYN\u00b6\u00a08"
+        : "SYNSYN 12/2026\u00b6\u00a08",
+    );
+    expect(view.queryByRole("button", { name: reference })).toBeNull();
+  });
+}
+
+test("the popover names the cited paragraph beside the case, and names none when the court printed none", async () => {
+  const numbered = mount(DECISION_CITATION_PRESENTATION.compact, null, 8);
+  fireEvent.focus(
+    numbered.getByRole("button", { name: `${reference}, paragraph 8` }),
+  );
+  expect(await screen.findByText("Paragraph 8")).toBeTruthy();
+  expect(screen.getByText(decision.caseNumber)).toBeTruthy();
+  numbered.unmount();
+
+  const unnumbered = mount(DECISION_CITATION_PRESENTATION.compact, null);
+  fireEvent.focus(unnumbered.getByRole("button", { name: reference }));
+  expect(await screen.findByText(decision.caseNumber)).toBeTruthy();
+  expect(screen.queryByText(/^Paragraph/u)).toBeNull();
+});
+
+test("the paragraph number follows the reader's locale", () => {
+  const view = render(
+    <IntlProvider locale="de" messages={germanMessages} timeZone="UTC">
+      <FormattingProvider locale="de" timeZone="UTC">
+        <DecisionCitationChip decision={decision} paragraphNumber={1234} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  const trigger = view.getByRole("button");
+  expect(trigger.textContent).toBe("SYN\u00b6\u00a01.234");
+  expect(trigger.getAttribute("aria-label")).toEndWith(", Randnummer 1.234");
+});
 
 for (const activation of Object.values(ACTIVATION)) {
   test(`${activation} exposes court, case, date, passage and both decision actions`, async () => {
@@ -96,7 +142,7 @@ for (const activation of Object.values(ACTIVATION)) {
         screen
           .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
-      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+      ).toBe(decision.readerUrl);
       const original = screen.getByRole("link", {
         name: messages.inspector.external.openOriginal,
       });
@@ -146,7 +192,7 @@ test("an unavailable original remains a disabled action alongside the reader act
       screen
         .getByRole("link", { name: messages.common.openInStella })
         .getAttribute("href"),
-    ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+    ).toBe(decision.readerUrl);
   });
 });
 
@@ -172,10 +218,69 @@ for (const protocol of ["javascript", "data"]) {
         screen
           .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
-      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+      ).toBe(decision.readerUrl);
     });
     expect(
       view.container.querySelector('a[href^="javascript:"], a[href^="data:"]'),
     ).toBeNull();
   });
 }
+
+for (const readerUrl of [
+  `${decision.readerUrl}?q=remedy#p-28`,
+  new URL(`${decision.readerUrl}?q=remedy#p-28`, env.VITE_PUBLIC_APP_URL).href,
+  new URL(
+    `${decision.readerUrl}?q=remedy#p-28`,
+    "http://self-hosted.example.test",
+  ).href,
+]) {
+  test(`served reader URL ${readerUrl} stays on this deployment and primary clicks use the in-app opener`, async () => {
+    const opened: string[] = [];
+    const view = render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <DecisionCitationChip
+            decision={{ ...decision, readerUrl }}
+            onOpen={() => {
+              opened.push(decision.decisionId);
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    const trigger = view.getByRole("button", { name: reference });
+    expect(trigger.getAttribute("href")).toBe(
+      `${decision.readerUrl}?q=remedy#p-28`,
+    );
+    fireEvent.focus(trigger);
+    const action = await screen.findByRole("link", {
+      name: messages.common.openInStella,
+    });
+    expect(action.getAttribute("href")).toBe(
+      `${decision.readerUrl}?q=remedy#p-28`,
+    );
+    expect(
+      new URL(action.getAttribute("href") ?? "", window.location.href).origin,
+    ).toBe(window.location.origin);
+    expect(fireEvent.click(action, { ctrlKey: true })).toBe(true);
+    expect(opened).toEqual([]);
+    expect(fireEvent.click(action)).toBe(false);
+    expect(opened).toEqual([decision.decisionId]);
+  });
+}
+
+test("a pointer press keeps the citation preview open after focus has opened it", async () => {
+  const view = mount();
+  const trigger = view.getByRole("button", { name: reference });
+  fireEvent.focus(trigger);
+  await waitFor(() =>
+    expect(trigger.getAttribute("aria-expanded")).toBe("true"),
+  );
+  fireEvent.click(trigger);
+  await waitFor(() =>
+    expect(trigger.getAttribute("aria-expanded")).toBe("true"),
+  );
+  expect(
+    screen.getByRole("link", { name: messages.common.openInStella }),
+  ).toBeTruthy();
+});

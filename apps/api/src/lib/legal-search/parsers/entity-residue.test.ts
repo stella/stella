@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   entityResidueIn,
+  entityResidueMatchesIn,
   entityResiduesInStoredText,
 } from "@/api/lib/legal-search/parsers/entity-residue";
 
@@ -73,4 +74,20 @@ describe("entity residue in stored decision text", () => {
       entityResidueIn("Najvyšší súd Slovenskej republiky"),
     ).toBeUndefined();
   });
+});
+
+test("reference spans remain complete when scans are interleaved", () => {
+  const numeric = `&#${"0".repeat(40)}253;`;
+  const text = `&unknownPublisherCode; ${numeric} &amp;`;
+  const iterator = entityResidueMatchesIn(text);
+  expect(iterator.next().value).toEqual({
+    entity: numeric,
+    index: text.indexOf(numeric),
+  });
+  expect(entityResidueIn("&#XFD;")).toEqual({ entity: "&#XFD;", index: 0 });
+  expect(iterator.next().value).toEqual({
+    entity: "&amp;",
+    index: text.indexOf("&amp;"),
+  });
+  expect(iterator.next().done).toBe(true);
 });
