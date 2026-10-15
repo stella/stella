@@ -50,12 +50,44 @@ const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
 
 type FetchRefusal = (url: URL) => NetworkAccessError | undefined;
 
+// What a hop needs from the caller's request, whichever form it came in.
+const requestParts = (
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+) => {
+  const request = input instanceof Request ? input : undefined;
+  const initBody = init?.body ?? undefined;
+  return {
+    headers: new Headers(init?.headers ?? request?.headers),
+    method: (init?.method ?? request?.method ?? "GET").toUpperCase(),
+    redirect: init?.redirect ?? request?.redirect ?? "follow",
+    // Only a body given in `init` that is not a stream can be sent again.
+    replayable:
+      initBody === undefined
+        ? (request?.body ?? null) === null
+        : !(initBody instanceof ReadableStream),
+  };
+};
+
+// 303, and 301/302 after a POST, continue as a GET without the body.
+const dropsBody = (status: number, method: string) =>
+  status === 303 || ((status === 301 || status === 302) && method === "POST");
+
+const deleteHeaders = (headers: Headers, names: readonly string[]) => {
+  for (const name of names) {
+    headers.delete(name);
+  }
+};
+
 /**
  * `fetch` that checks every hop. A redirect is followed here, one checked
- * request at a time, because the platform would otherwise follow a redirect
- * from an allowed server to any host without asking the guard. The returned
- * response is the last hop's (its `url` is the final URL; `redirected` is
- * false).
+ * hop at a time, because the platform would otherwise follow a redirect from
+ * an allowed server to any host without asking the guard. Each hop goes out
+ * with the caller's own `init` (Bun transport options such as `tls` included)
+ * and `redirect: "manual"`; bodies are never copied. As in the fetch
+ * standard, a 307/308 can resend only a body that is not a stream. The
+ * returned response is the last hop's (its `url` is the final URL;
+ * `redirected` is false).
  */
 const guardedFetch =
   (original: typeof fetch, refuse: FetchRefusal) =>
@@ -68,30 +100,27 @@ const guardedFetch =
     if (typeof unix === "string" && unix.length > 0) {
       return await original(input, init); // a Unix socket stays on this machine
     }
-    const request =
-      input instanceof Request
-        ? new Request(input, init)
-        : new Request(String(input), init);
-    let url = new URL(request.url);
+    const href = input instanceof Request ? input.url : String(input);
+    if (!URL.canParse(href)) {
+      return await original(input, init); // fetch reports the bad URL itself
+    }
+    let url = new URL(href);
     if (LOCAL_URL_SCHEMES.has(url.protocol)) {
-      return await original(request);
+      return await original(input, init);
     }
     const first = refuse(url);
     if (first !== undefined) {
       throw first;
     }
-    if (request.redirect !== "follow") {
-      return await original(request);
+    const parts = requestParts(input, init);
+    if (parts.redirect !== "follow") {
+      return await original(input, init);
     }
-    let method = request.method;
-    const headers = new Headers(request.headers);
-    // The first hop sends the caller's body as is, so a streamed upload keeps
-    // streaming. A copy is kept only for a 307/308 that must send it again.
-    let replay = request.body === null ? undefined : request.clone();
-    let hop = new Request(request, { redirect: "manual" });
+    let { method } = parts;
+    const { headers, replayable } = parts;
+    let body = init?.body;
+    let response = await original(input, { ...init, redirect: "manual" });
     for (let hops = 0; ; hops += 1) {
-      // oxlint-disable-next-line no-await-in-loop -- each hop depends on the previous response.
-      const response = await original(hop);
       const location = response.headers.get("location");
       if (!REDIRECT_STATUSES.has(response.status) || location === null) {
         return response;
@@ -107,29 +136,25 @@ const guardedFetch =
         throw refused;
       }
       if (next.origin !== url.origin) {
-        for (const name of CREDENTIAL_HEADERS) {
-          headers.delete(name);
-        }
+        deleteHeaders(headers, CREDENTIAL_HEADERS);
       }
-      if (
-        response.status === 303 ||
-        ((response.status === 301 || response.status === 302) &&
-          method === "POST")
-      ) {
+      if (dropsBody(response.status, method)) {
         method = method === "HEAD" ? "HEAD" : "GET";
-        replay = undefined;
-        headers.delete("content-type");
-        headers.delete("content-length");
+        body = undefined;
+        deleteHeaders(headers, ["content-type", "content-length"]);
+      } else if (!replayable) {
+        return panic(
+          `fetch: a ${response.status} redirect cannot resend a streamed body`,
+        );
       }
-      const source = replay;
-      replay = source?.clone();
       url = next;
-      hop = new Request(url.href, {
-        body: source?.body ?? null,
+      // oxlint-disable-next-line no-await-in-loop -- each hop depends on the previous response.
+      response = await original(url.href, {
+        ...init,
+        body: body ?? null,
         headers,
         method,
         redirect: "manual",
-        signal: request.signal,
       });
     }
   };

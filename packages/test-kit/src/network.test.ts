@@ -149,8 +149,90 @@ describe("network guard", () => {
       });
       await writer.write(new TextEncoder().encode("first"));
       const response = await responding;
+      // The response arrived while the upload was still open.
       expect(await response.text()).toBe("first");
-      await writer.close();
+      writer.releaseLock();
+    });
+
+    describe("under a recording fake", () => {
+      type Call = { url: string; init: RequestInit | undefined };
+      const withFake = async (
+        answer: (call: Call, index: number) => Response,
+        body: (calls: Call[]) => Promise<void>,
+      ) => {
+        const realFetch = globalThis.fetch;
+        const calls: Call[] = [];
+        Reflect.set(
+          globalThis,
+          "fetch",
+          (input: unknown, init?: RequestInit) => {
+            const call = {
+              init,
+              url: input instanceof Request ? input.url : String(input),
+            };
+            calls.push(call);
+            return Promise.resolve(answer(call, calls.length - 1));
+          },
+        );
+        try {
+          uninstall = installNetworkGuard();
+          await body(calls);
+        } finally {
+          uninstall?.();
+          uninstall = undefined;
+          Reflect.set(globalThis, "fetch", realFetch);
+        }
+      };
+      const redirectOnce = (status: number) => (_call: Call, index: number) =>
+        index === 0
+          ? new Response(null, { headers: { location: "/next" }, status })
+          : new Response("done");
+
+      test("every hop keeps the caller's transport options", async () => {
+        await withFake(redirectOnce(307), async (calls) => {
+          const tlsOptions = { rejectUnauthorized: false };
+          const init = { body: "payload", method: "PUT", tls: tlsOptions };
+          await fetch("https://localhost:8443/start", init);
+          expect(calls.map((call) => call.url)).toEqual([
+            "https://localhost:8443/start",
+            "https://localhost:8443/next",
+          ]);
+          for (const call of calls) {
+            expect(Reflect.get(call.init ?? {}, "tls")).toBe(tlsOptions);
+            expect(call.init?.redirect).toBe("manual");
+          }
+          expect(calls[1]?.init?.body).toBe("payload");
+          expect(calls[1]?.init?.method).toBe("PUT");
+        });
+      });
+
+      test("an upload stream is handed on as is, never copied", async () => {
+        await withFake(
+          () => new Response("ok"),
+          async (calls) => {
+            const upload = new ReadableStream<Uint8Array>();
+            await fetch("http://127.0.0.1:1/", {
+              body: upload,
+              method: "POST",
+            });
+            expect(calls[0]?.init?.body).toBe(upload);
+            expect(upload.locked).toBe(false);
+          },
+        );
+      });
+
+      test("a 307 cannot resend a streamed body", async () => {
+        await withFake(redirectOnce(307), async (calls) => {
+          const error = await rejectionOf(
+            fetch("http://127.0.0.1:1/", {
+              body: new ReadableStream<Uint8Array>(),
+              method: "POST",
+            }),
+          );
+          expect(String(error)).toContain("cannot resend a streamed body");
+          expect(calls).toHaveLength(1);
+        });
+      });
     });
 
     test("an undefined unix option is not a Unix socket", async () => {
