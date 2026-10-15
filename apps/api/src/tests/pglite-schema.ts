@@ -392,7 +392,7 @@ export const installPgliteEntityFeatureGateMaintenance = async (
   }
 };
 
-/** Install data-box source lifecycle routines omitted by declarative schema push. */
+/** Install correspondence lifecycle routines omitted by declarative schema push. */
 export const installPgliteCorrespondenceSources = async (
   db: PgliteSchemaDb,
 ) => {
@@ -408,6 +408,24 @@ export const installPgliteCorrespondenceSources = async (
     ),
   );
   for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+  const maintenance = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261015150300_correspondence_source_maintenance",
+      "migration.sql",
+    ),
+  );
+  // Reinstall this routine's policies from its migration so fixtures exercise
+  // the shipped policy definitions as well as the private role and functions.
+  await db.execute(
+    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence_sources`,
+  );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_maintenance ON public.correspondence`,
+  );
+  for (const statement of maintenance) {
     await db.execute(sql.raw(statement));
   }
 };

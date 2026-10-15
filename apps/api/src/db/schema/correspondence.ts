@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORRESPONDENCE_AUTH_RESULTS,
   CORRESPONDENCE_CHANNELS,
@@ -72,6 +74,26 @@ export const CORRESPONDENCE_REVIEW_RESET_SETTING = {
 // Resolve the owner through the catalog because deployment login names differ.
 const currentUserOwnsCorrespondence = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence'::regclass)`;
 
+const correspondenceSourceMaintenance = p
+  .pgRole("stella_correspondence_source")
+  .existing();
+
+type SourceMaintenanceScopeColumns = {
+  organizationId: SQLWrapper;
+  workspaceId: SQLWrapper;
+  recordId: SQLWrapper;
+};
+
+const sourceMaintenanceScope = ({
+  organizationId,
+  workspaceId,
+  recordId,
+}: SourceMaintenanceScopeColumns) => sql`
+  ${organizationId} = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${recordId} = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
+`;
+
 const offboardingScopeCheck = sql`(
   current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
   or (current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'organization'
@@ -139,6 +161,20 @@ export const correspondence = p.pgTable.withRLS(
   },
   (table) => [
     ...reviewResetOwnerPolicies("correspondence"),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+      withCheck: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+    }),
     ...entityFeatureGateChecks(table),
     p
       .foreignKey({
@@ -245,6 +281,15 @@ export const correspondenceSources = p.pgTable.withRLS(
   },
   (table) => [
     ...reviewResetOwnerPolicies("correspondence_sources"),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "select",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.correspondenceId,
+      }),
+    }),
     ...entityFeatureGateChecks(table),
     p.primaryKey({
       name: "correspondence_sources_pkey",

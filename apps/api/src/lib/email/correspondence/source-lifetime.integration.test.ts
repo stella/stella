@@ -13,7 +13,7 @@ import {
   entities,
   entityVersions,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseDataBoxMessage } from "@/api/lib/data-box/zfo";
@@ -379,6 +379,88 @@ const parsedDataBoxFixture = async ({
     bodyHtml: null,
   } satisfies ParsedCorrespondence;
 };
+
+test("correspondence retains its remaining source across feature visibility changes", async () => {
+  const firstSource = createSafeId<"entity">();
+  const remainingSource = createSafeId<"entity">();
+  const attachmentId = createSafeId<"entity">();
+  await testDb.insert(entities).values([
+    {
+      id: firstSource,
+      workspaceId: ids.wsA1,
+      name: "Primary source",
+      createdBy: ids.userA1,
+    },
+    {
+      id: remainingSource,
+      workspaceId: ids.wsA1,
+      name: "Remaining source",
+      createdBy: ids.userA1,
+    },
+    {
+      id: attachmentId,
+      workspaceId: ids.wsA1,
+      name: "Message attachment",
+      createdBy: ids.userA1,
+    },
+  ]);
+  const parsed = await parsedDataBoxFixture({
+    entityId: firstSource,
+    messageId: "95000000001",
+  });
+  const filed = await fileCopy({
+    workspaceId: ids.wsA1,
+    entityId: firstSource,
+    parsed,
+    attachmentId,
+  });
+  const duplicate = await fileCopy({
+    workspaceId: ids.wsA1,
+    entityId: remainingSource,
+    parsed,
+    attachmentId,
+  });
+  expect(duplicate.id).toBe(filed.id);
+  await testDb
+    .update(entities)
+    .set({ kind: "task", listItemType: "fact" })
+    .where(eq(entities.id, remainingSource));
+  expect(
+    await testDb
+      .select({ gate: correspondenceSources.entityFeatureGate })
+      .from(correspondenceSources)
+      .where(eq(correspondenceSources.entityId, remainingSource)),
+  ).toEqual([{ gate: "legal-lists" }]);
+  await createScopedDb(
+    testDb,
+    [ids.wsA1],
+    ids.orgA,
+    ids.userA1,
+  )(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('app.enabled_features', '[]', true)`,
+    );
+    expect(
+      await tx
+        .select({ id: correspondenceSources.entityId })
+        .from(correspondenceSources)
+        .where(eq(correspondenceSources.correspondenceId, filed.id)),
+    ).toEqual([{ id: firstSource }]);
+    await tx.delete(entities).where(eq(entities.id, firstSource));
+  });
+  expect(
+    await testDb
+      .select({ sourceEntityId: correspondence.sourceEntityId })
+      .from(correspondence)
+      .where(eq(correspondence.id, filed.id)),
+  ).toEqual([{ sourceEntityId: remainingSource }]);
+  expect(
+    await testDb
+      .select({ entityId: correspondenceSources.entityId })
+      .from(correspondenceSources)
+      .where(eq(correspondenceSources.correspondenceId, filed.id)),
+  ).toEqual([{ entityId: remainingSource }]);
+});
 
 const replacementScenarios = [
   {
