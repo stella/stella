@@ -2835,7 +2835,7 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
-// One subprocess proves the workflow hands its changed files to the scope
+// Two subprocesses prove the workflow hands its changed files to the scope
 // script; every case is classified in process, because each subprocess is a
 // cold Bun start that runs for seconds while CI checks run in parallel.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
@@ -2881,6 +2881,8 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   );
   // Ordinary documentation still skips package checks, through the workflow.
   expect(packageChecksPlan(["README.md"])).toBe("false");
+  // A CLI source still requires them through the workflow.
+  expect(packageChecksPlan(["packages/cli/src/cli.ts"])).toBe("true");
   // Every CLI path, alone and on either side of provenance files.
   const provenance = [".provenance.yml", "provenance/attestation.json"];
   for (const cliPath of cliPaths) {
