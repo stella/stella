@@ -14,7 +14,10 @@ import {
   FILE_SECURITY_REMEDIATION,
 } from "@stll/api-contract";
 import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
-import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
+import {
+  ATTACHED_TEMPLATE_SECURITY_RULE,
+  writeZipEntry,
+} from "@stll/docx-utils";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { pendingUploads } from "@/api/db/schema";
@@ -61,7 +64,8 @@ const ATTACHED_TEMPLATE_REJECTION_MESSAGE = `File rejected by security rule ${AT
 
 const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
@@ -69,17 +73,20 @@ const makeAttachedTemplateDocx = async (): Promise<Uint8Array> => {
       '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
       "</Types>",
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/settings.xml",
     '<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<w:attachedTemplate r:id="rId1"/></w:settings>',
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/_rels/settings.xml.rels",
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" ' +
