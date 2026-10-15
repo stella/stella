@@ -1311,6 +1311,21 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/test-kit": {
+      "name": "@stll/test-kit",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/time": "workspace:*",
+        "better-result": "catalog:",
+        "drizzle-orm": "catalog:",
+      },
+      "devDependencies": {
+        "@electric-sql/pglite": "^0.5.8",
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
       "version": "0.2.0",
@@ -3210,6 +3225,8 @@
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
 
     "@stll/template-packs": ["@stll/template-packs@workspace:packages/template-packs"],
+
+    "@stll/test-kit": ["@stll/test-kit@workspace:packages/test-kit"],
 
     "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
 
