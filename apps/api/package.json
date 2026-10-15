@@ -8,7 +8,7 @@
     "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
-    "build": "bun run generate:capability-runtime && bun run generate:mcp-app-contracts && bun --cwd=../../packages/mcp-apps run build && bun run build:visual-sandbox",
+    "build": "bun run generate:capability-runtime && bun run build:visual-sandbox",
     "build:visual-sandbox": "bun scripts/build-visual-sandbox.ts",
     "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
@@ -73,7 +73,7 @@
     "corpus:generation": "bun run --env-file=.env src/scripts/corpus-generation.ts",
     "document-processing-worker": "bun src/scripts/document-processing-worker.ts",
     "dev:errors": "tail -F .dev-logs/errors.jsonl",
-    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts",
+    "generate:capability-runtime": "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
     "generate:mcp-app-contracts": "bun scripts/generate-mcp-app-contracts.ts",
     "generate:typecheck-declarations": "bun ../../packages/scripts/src/api-typecheck-declarations.ts tsconfig.declarations.json",
     "typecheck:src": "bun ../../packages/scripts/src/api-typecheck-config.ts tsconfig.src.json && bun check --no-pretty --all --project=tsconfig.src.json",

@@ -45,10 +45,13 @@ const fixturePath = (probe: string) =>
   `apps/api/src/handlers/billing-codes/${probe}/list.ts`;
 const capabilityId = (probe: string) => `billing-codes.${probe}.list`;
 
-/** Compare bytes of the complete two directories, including their file census. */
-const shardBytes = (checkout: string) =>
+/** Compare complete directories, including their file census. */
+const shardBytes = (
+  checkout: string,
+  directories = [CATALOG_DIRECTORY, DISPATCH_DIRECTORY],
+) =>
   Object.fromEntries(
-    [CATALOG_DIRECTORY, DISPATCH_DIRECTORY].flatMap((directory) =>
+    directories.flatMap((directory) =>
       readdirSync(path.join(checkout, directory))
         .toSorted()
         .map((filename) => {
@@ -196,6 +199,7 @@ process.exit(0);`,
         expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0);
       };
 
+      const expectedDispatch = new Map<string, string>();
       for (const probe of PROBES) {
         await succeed(["git", "switch", "--quiet", "-c", probe, base]);
         const fixture = fixturePath(probe);
@@ -220,13 +224,8 @@ process.exit(0);`,
         );
         expect(generatedDispatch).toContain('featureId: "time-billing"');
         expect(generatedDispatch).toContain('featureAccess: "required"');
-        await succeed([
-          "git",
-          "add",
-          fixture,
-          CATALOG_DIRECTORY,
-          DISPATCH_DIRECTORY,
-        ]);
+        expectedDispatch.set(dispatch, generatedDispatch);
+        await succeed(["git", "add", fixture, CATALOG_DIRECTORY]);
         const staged = await succeed([
           "git",
           "diff",
@@ -234,7 +233,7 @@ process.exit(0);`,
           "--name-only",
         ]);
         expect(staged.split("\n").toSorted()).toEqual(
-          [fixture, catalog, dispatch].toSorted(),
+          [fixture, catalog].toSorted(),
         );
         await succeed([
           "git",
@@ -244,7 +243,7 @@ process.exit(0);`,
           "test: add merge probe",
         ]);
         // Coverage tables belong to a separate layout migration. This proof
-        // isolates the catalog and dispatch artifacts that this PR shards.
+        // isolates the catalog shards and their source handlers.
         await succeed(["git", "restore", "docs/capability-coverage.md"]);
       }
 
@@ -262,9 +261,17 @@ process.exit(0);`,
         throw new TypeError("Missing merged tree");
       }
       await succeed(["git", "read-tree", "--reset", "-u", tree]);
-      const mergedBytes = shardBytes(checkout);
+      const mergedCatalogBytes = shardBytes(checkout, [CATALOG_DIRECTORY]);
       await regenerate();
-      expect(shardBytes(checkout)).toEqual(mergedBytes);
+      expect(shardBytes(checkout, [CATALOG_DIRECTORY])).toEqual(
+        mergedCatalogBytes,
+      );
+      for (const [dispatch, source] of expectedDispatch) {
+        expect(readFileSync(path.join(checkout, dispatch), "utf-8")).toBe(
+          source,
+        );
+      }
+      const mergedBytes = shardBytes(checkout);
       await regenerate();
       expect(shardBytes(checkout)).toEqual(mergedBytes);
       const clean = await generate(true);

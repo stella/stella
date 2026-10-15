@@ -690,4 +690,19 @@ test("API boot entry points prepare capability runtime sources before starting",
   expect(
     docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
   ).toBeLessThan(docker.indexOf("RUN bun build"));
+  const runtime = docker.indexOf(
+    "RUN bun apps/api/scripts/generate-capability-runtime.ts",
+  );
+  const contracts = docker.indexOf(
+    "bun apps/api/scripts/generate-mcp-app-contracts.ts",
+  );
+  const bundles = docker.indexOf(
+    "bun packages/mcp-apps/scripts/build-mcp-apps.ts",
+  );
+  expect(contracts).toBeGreaterThan(runtime);
+  expect(bundles).toBeGreaterThan(contracts);
+  expect(bundles).toBeLessThan(docker.indexOf("RUN bun build"));
+  expect(api.scripts["generate:capability-runtime"]).toContain(
+    "bun ../../scripts/prepare-mcp-apps.ts",
+  );
 });

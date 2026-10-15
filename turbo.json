@@ -105,6 +105,9 @@
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-dispatch.ts",
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/**",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
         "!src/generated/api-routes.gen.ts",
         "!src/routeTree.gen.ts"
       ],
@@ -722,20 +725,74 @@
     // the script, configured below.
     "generate:capability-runtime": {},
     "@stll/api#generate:capability-runtime": {
+      "dependsOn": ["@stll/mcp-apps#build"],
       "inputs": [
-        "scripts/generate-capability-runtime.ts",
-        "src/mcp/generated/capability-dispatch/**",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
-        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
-        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
-        "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
-        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/scripts/generated-files.ts"
+        "$TURBO_DEFAULT$",
+        "!.env*",
+        "!.turbo/**",
+        "!.cache/**",
+        "!**/*.tsbuildinfo",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        "!$TURBO_ROOT$/packages/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/.env*",
+        "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
+        "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts"
       ],
       "outputs": [
         "src/mcp/generated/capability-dispatch.ts",
         "src/mcp/generated/capability-catalog.ts",
-        "src/mcp/generated/capability-feature-bindings.ts"
+        "src/mcp/generated/capability-feature-bindings.ts",
+        "src/mcp/generated/capability-dispatch/**"
+      ]
+    },
+    "@stll/mcp-apps#build": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.oxfmtrc.json",
+        "!.env*",
+        "!.turbo/**",
+        "!.cache/**",
+        "!**/*.tsbuildinfo",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        "!$TURBO_ROOT$/packages/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/.env*",
+        "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/**",
+        "$TURBO_ROOT$/scripts/generated-artifacts.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
+        "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts"
+      ],
+      "outputs": [
+        "src/*/generated/app.html.txt",
+        "src/shared/generated/messages.json",
+        "src/shared/generated/schemas.json",
+        "src/shared/generated/reader-messages.json",
+        "src/shared/generated/reader-inputs.json",
+        "src/shared/generated/contracts.js",
+        "src/shared/generated/contracts.d.ts",
+        "src/shared/generated/style.css",
+        "src/generated/bundles.ts"
       ]
     },
     "@stll/api#build": {
