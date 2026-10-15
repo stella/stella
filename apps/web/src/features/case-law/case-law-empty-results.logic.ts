@@ -62,7 +62,14 @@ export const refineOutcome = ({
 type AutoRewriteInput = {
   /** The search ran as a search (not a browse or an identifier lookup). */
   isTextSearch: boolean;
+  /** The query the rows answer. */
   query: string;
+  /**
+   * What the box holds now. The rewrite runs on the box, so a reader who has
+   * typed on since the search ran is left alone: their new words have not
+   * been searched yet.
+   */
+  typedQuery: string;
   resultCount: number;
   /** The rows on screen answer this query, not an earlier one. */
   rowsAnswerQuery: boolean;
@@ -85,6 +92,7 @@ type AutoRewriteInput = {
 export const shouldAutoRewrite = ({
   isTextSearch,
   query,
+  typedQuery,
   resultCount,
   rowsAnswerQuery,
   rewrittenFrom,
@@ -93,6 +101,7 @@ export const shouldAutoRewrite = ({
 }: AutoRewriteInput): boolean =>
   isTextSearch &&
   rowsAnswerQuery &&
+  typedQuery.trim() === query.trim() &&
   resultCount === 0 &&
   rewrittenFrom === undefined &&
   !rewriteOff &&

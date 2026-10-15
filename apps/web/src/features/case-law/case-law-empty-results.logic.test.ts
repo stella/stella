@@ -37,6 +37,7 @@ describe("rewriting a search by itself", () => {
   const EMPTY_QUESTION = {
     isTextSearch: true,
     query: "kdy je možné pro opilost vyhodit zaměstnance?",
+    typedQuery: "kdy je možné pro opilost vyhodit zaměstnance? ",
     resultCount: 0,
     rowsAnswerQuery: true,
     rewrittenFrom: undefined,
@@ -55,6 +56,7 @@ describe("rewriting a search by itself", () => {
     ["it is already a rewrite", { rewrittenFrom: "the original words" }],
     ["the reader went back to their own words", { rewriteOff: true }],
     ["the reader asked for every word", { strict: true }],
+    ["the reader typed on since the search", { typedQuery: "výpověď" }],
     ["it is not a question", { query: "okamžité zrušení" }],
   ])("not when %s", (_reason, change) => {
     expect(shouldAutoRewrite({ ...EMPTY_QUESTION, ...change })).toBe(false);

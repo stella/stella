@@ -920,6 +920,7 @@ const useCaseLawRewriteFlow = ({
   const autoRewrite = shouldAutoRewrite({
     isTextSearch,
     query: search.q ?? "",
+    typedQuery: query,
     resultCount,
     rowsAnswerQuery,
     rewrittenFrom: search.rewrittenFrom,
