@@ -2925,6 +2925,7 @@
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
     "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
+    "collaborationSnapshotRecovered": "تعذر إعادة فتح نسخة التعاون المخزنة. تمت استعادة الغرفة من آخر مستند محفوظ؛ وربما فُقدت التغييرات التي لم تُحفظ.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",

@@ -2925,6 +2925,7 @@
     "checkingDocxEditDescription": "stella kontrollib veel, kas seda DOCX-i saab turvaliselt muuta. Proovige uuesti, kui dokument on laadimise lõpetanud.",
     "checkingDocxEditTitle": "Dokumendi kontrollimine",
     "chooseEvidence": "Valige fail, et lisada nummerdatud tõendiviide.",
+    "collaborationSnapshotRecovered": "Salvestatud koostöökoopiat ei saanud uuesti avada. Ruum taastati viimati salvestatud dokumendist; salvestamata muudatused võisid kaduma minna.",
     "comment": "Kommenteeri",
     "comments": {
       "addPlaceholder": "Lisa kommentaar…",

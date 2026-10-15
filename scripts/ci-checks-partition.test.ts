@@ -1671,6 +1671,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.has(id), id).toBe(false);
       pending.add(id);
       launched++;
+      // Keep at most two background checks running concurrently.
       expect(pending.size).toBeLessThanOrEqual(2);
       expect(step["continue-on-error"]).toBeUndefined();
       continue;
@@ -1694,7 +1695,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.size).toBe(0);
     }
   }
-  expect(launched).toBe(6);
+  expect(launched).toBe(7);
   expect(pending.size).toBe(0);
 });
 
