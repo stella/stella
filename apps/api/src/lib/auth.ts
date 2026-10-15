@@ -2913,6 +2913,20 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+const readOrganizationWorkspaces = async (
+  scopedDb: AuthScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+  );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3019,17 +3033,10 @@ const resolveValidateAuth = async ({
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb(
-      async (tx) =>
-        await readAuthorizedWorkspaces(tx, {
-          organizationId: activeOrganizationId,
-        }),
-    ).then((outcome) => {
-      if (outcome.isErr()) {
-        const { error } = outcome;
-        throw error;
-      }
-      const items = outcome.value.workspaces;
+    accessibleWorkspacesPromise ??= readOrganizationWorkspaces(
+      scopedDb,
+      activeOrganizationId,
+    ).then((items) => {
       for (const workspace of items) {
         validatedWorkspaceIdSet.add(workspace.id);
       }
