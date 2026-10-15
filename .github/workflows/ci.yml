@@ -4516,7 +4516,15 @@ jobs:
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_100
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_100 != 'true') }}
-        run: bun test scripts/check-pushed-secrets.test.ts scripts/check-staged-secrets.test.ts
+        run: bun test scripts/check-pushed-secrets.test.ts
+
+      - name: Test pre-commit secret scan merges
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_120
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_120 != 'true') }}
+        run: bun test scripts/check-staged-secrets.test.ts
 
       - name: Test merge-base network comparison
         env:

@@ -46,18 +46,21 @@ const token = (): string =>
 
 // The fake scanner reads the staged diff, as the real one does, reports every
 // added line holding the token shape as a JSON finding at its line in the
-// staged file, and logs its arguments. FAKE_GITLEAKS_EXIT makes it fail before scanning;
-// FAKE_GITLEAKS_REPORT=malformed makes it write an unreadable report.
+// staged file, and logs its arguments. A behavior file next to it can make it
+// fail before scanning (`exit`) or write an unreadable report (`malformed`).
 const fakeBin = path.join(root, "fake-bin");
 const argsLog = path.join(root, "args.log");
+const fakeBehavior = path.join(fakeBin, "behavior.json");
+type FakeBehavior = { exit?: number; malformed?: boolean };
 mkdirSync(fakeBin);
 writeFileSync(
   path.join(fakeBin, "gitleaks"),
   `#!/usr/bin/env bun
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(args) + "\\n");
-if (process.env.FAKE_GITLEAKS_EXIT) process.exit(Number(process.env.FAKE_GITLEAKS_EXIT));
+const behavior = JSON.parse(readFileSync(${JSON.stringify(fakeBehavior)}, "utf-8"));
+if (behavior.exit !== undefined) process.exit(behavior.exit);
 const option = (name) => args.find((arg) => arg.startsWith(name + "="))?.slice(name.length + 1);
 const diff = Bun.spawnSync(["git", "diff", "--cached", "-U0", "--no-ext-diff", "--no-color"]);
 if (diff.exitCode !== 0) process.exit(1);
@@ -80,7 +83,7 @@ for (const text of diff.stdout.toString().split("\\n")) {
   }
 }
 const report = option("--report-path");
-if (report) writeFileSync(report, process.env.FAKE_GITLEAKS_REPORT === "malformed" ? "not json" : JSON.stringify(findings));
+if (report) writeFileSync(report, behavior.malformed ? "not json" : JSON.stringify(findings));
 if (findings.length > 0) console.error("WRN leaks found: " + findings.length);
 process.exit(findings.length > 0 ? Number(option("--exit-code") ?? 1) : 0);
 `,
@@ -89,11 +92,8 @@ chmodSync(path.join(fakeBin, "gitleaks"), 0o755);
 
 type Scanner = "fake" | "real";
 
-const scan = (
-  repo: string,
-  scanner: Scanner,
-  env: Record<string, string> = {},
-) => {
+const scan = (repo: string, scanner: Scanner, behavior: FakeBehavior = {}) => {
+  writeFileSync(fakeBehavior, JSON.stringify(behavior));
   const result = Bun.spawnSync([process.execPath, SCRIPT], {
     cwd: repo,
     env: {
@@ -101,7 +101,6 @@ const scan = (
       ...(scanner === "fake"
         ? { PATH: `${fakeBin}:${baseEnv["PATH"] ?? ""}` }
         : {}),
-      ...env,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -211,21 +210,19 @@ describe("staged secret scan fails closed", () => {
 
   test("a plain commit fails when the scanner fails", () => {
     const repo = initRepo();
-    expect(scan(repo, "fake", { FAKE_GITLEAKS_EXIT: "2" }).exitCode).not.toBe(
-      0,
-    );
+    expect(scan(repo, "fake", { exit: 2 }).exitCode).not.toBe(0);
   });
 
   test("a merge fails when the scanner fails", () => {
     const repo = mergingRepo();
-    const result = scan(repo, "fake", { FAKE_GITLEAKS_EXIT: "2" });
+    const result = scan(repo, "fake", { exit: 2 });
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain("secret scanning refused");
   });
 
   test("a merge fails when the report is unreadable", () => {
     const repo = mergingRepo();
-    const result = scan(repo, "fake", { FAKE_GITLEAKS_REPORT: "malformed" });
+    const result = scan(repo, "fake", { malformed: true });
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain("secret scanning refused");
   });
