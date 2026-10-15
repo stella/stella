@@ -22,6 +22,7 @@ type Run = {
   head_sha: string;
   html_url: string;
   head_repository: { full_name: string } | null;
+  pull_requests?: { number: number }[];
 };
 
 const prRun = (id: number, overrides: Partial<Run> = {}): Run => ({
@@ -32,6 +33,7 @@ const prRun = (id: number, overrides: Partial<Run> = {}): Run => ({
   head_sha: `head-${id}`,
   html_url: `https://github.com/stella/stella/actions/runs/${id}`,
   head_repository: { full_name: "stella/stella" },
+  pull_requests: [{ number: id * 100 }],
   ...overrides,
 });
 
@@ -41,7 +43,9 @@ const fake = (
     refuseCancel = false,
     afterFailedCancel,
     unreadableAfterCancel = false,
+    protectedPulls = [],
   }: {
+    protectedPulls?: number[];
     refuseCancel?: boolean;
     afterFailedCancel?: Partial<Run>;
     unreadableAfterCancel?: boolean;
@@ -63,6 +67,13 @@ const fake = (
         description: body.description,
       });
       return null;
+    }
+    const pullRead = endpoint?.match(/pulls\/(\d+)$/u);
+    if (pullRead) {
+      const number = Number(pullRead[1]);
+      return {
+        labels: protectedPulls.includes(number) ? [{ name: "ci-protect" }] : [],
+      };
     }
     if (endpoint?.endsWith("/cancel")) {
       if (refuseCancel) {
@@ -153,6 +164,25 @@ test("one failing run never stops the others, and outcomes report as they happen
     { runId: 16, outcome: "deferred", headSha: "head-16" },
   ]);
   expect(reported).toEqual([14, 15, 16]);
+});
+
+test("a protected pull request's run is never touched", async () => {
+  const { request, calls, statuses } = fake([prRun(17)], {
+    protectedPulls: [1700],
+  });
+  expect(await reliefCancel([17], request)).toEqual([
+    { runId: 17, outcome: "skipped", reason: "protected" },
+  ]);
+  expect(statuses).toEqual([]);
+  expect(calls.some((call) => call.endsWith("/cancel"))).toBe(false);
+});
+
+test("a run without a resolvable pull request is never touched", async () => {
+  const { request, statuses } = fake([prRun(18, { pull_requests: [] })]);
+  expect(await reliefCancel([18], request)).toEqual([
+    { runId: 18, outcome: "skipped", reason: "pull request unresolved" },
+  ]);
+  expect(statuses).toEqual([]);
 });
 
 test.each([

@@ -61,6 +61,7 @@ type CleanupOptions = {
   followingRun?: Run;
   pullState?: string;
   draft?: boolean;
+  labels?: string[];
 };
 const cleanup = async ({
   run,
@@ -73,6 +74,7 @@ const cleanup = async ({
   followingRun,
   pullState = "open",
   draft = false,
+  labels = [],
 }: CleanupOptions) => {
   const cancelled: number[] = [];
   const forced: number[] = [];
@@ -120,7 +122,14 @@ const cleanup = async ({
                 status: metadataStatus,
               });
             }
-            return { data: { state: pullState, draft, head: { sha: head } } };
+            return {
+              data: {
+                state: pullState,
+                draft,
+                head: { sha: head },
+                labels: labels.map((name) => ({ name })),
+              },
+            };
           },
         },
       },
@@ -154,6 +163,23 @@ test.each(["pull_request", "pull_request_target"])(
       pull_requests: [{ number: 12, head: { sha: "old" } }],
     };
     expect((await cleanup({ run })).cancelled).toEqual([1]);
+  },
+);
+
+test.each([
+  ["superseded", { head: "current" }],
+  ["closed", { pullState: "closed" }],
+  ["draft", { draft: true }],
+] as const)(
+  "a %s run of a protected pull request is never cancelled",
+  async (_label, options) => {
+    const run = {
+      ...queued("pull_request"),
+      pull_requests: [{ number: 12, head: { sha: "old" } }],
+    };
+    const result = await cleanup({ run, labels: ["ci-protect"], ...options });
+    expect(result.cancelled).toEqual([]);
+    expect(result.forced).toEqual([]);
   },
 );
 
@@ -681,6 +707,8 @@ type PullRun = {
   fork?: boolean;
   actor?: string;
   jobs: string[];
+  protected?: boolean;
+  noPull?: boolean;
 };
 const defer = async ({
   waiting = true,
@@ -716,6 +744,7 @@ const defer = async ({
             full_name: run.fork ? "fork/test" : "test/test",
           },
           triggering_actor: { login: run.actor ?? "octocat" },
+          pull_requests: run.noPull ? [] : [{ number: run.id }],
         }));
       },
       rest: {
@@ -735,6 +764,15 @@ const defer = async ({
             }
             cancelled.push(run_id);
           },
+        },
+        pulls: {
+          get: async ({ pull_number }: { pull_number: number }) => ({
+            data: {
+              labels: runs.find((run) => run.id === pull_number)?.protected
+                ? [{ name: "ci-protect" }]
+                : [],
+            },
+          }),
         },
         repos: {
           createCommitStatus: async ({
@@ -800,4 +838,31 @@ test("a refused cancellation clears the deferral record", async () => {
     "cancel:1",
     "status:head-1:success",
   ]);
+});
+
+test("a protected or unresolvable pull request is never deferred", async () => {
+  const result = await defer({
+    runs: [
+      { id: 1, head: "head-1", protected: true, jobs: ["queued"] },
+      { id: 2, head: "head-2", noPull: true, jobs: ["queued"] },
+      { id: 3, head: "head-3", jobs: ["queued"] },
+    ],
+  });
+  expect(result.cancelled).toEqual([3]);
+  expect(result.events).toEqual(["status:head-3:pending", "cancel:3"]);
+});
+
+test("every steward step that cancels a run honours the ci-protect label", () => {
+  const cancelling = workflow.jobs.cleanup.steps.filter((step) =>
+    /cancelWorkflowRun|force-cancel/u.test(step.with?.script ?? ""),
+  );
+  expect(cancelling.length).toBeGreaterThan(0);
+  for (const step of cancelling) {
+    expect(step.with?.script, step.name).toContain(
+      'PROTECT_LABEL = "ci-protect"',
+    );
+    expect(step.with?.script, step.name).toMatch(
+      /labels\?\.some\(\(label\) => label\.name === PROTECT_LABEL\)/u,
+    );
+  }
 });

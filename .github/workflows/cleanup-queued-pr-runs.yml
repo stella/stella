@@ -8,7 +8,8 @@ defaults:
 # longer matter (superseded heads, closed or draft pull requests), defers
 # pull request runs whose remaining jobs are all still queued while the merge
 # queue has waiting work, and, once the merge queue has no waiting work,
-# re-runs the pull request runs that deferred to it.
+# re-runs the pull request runs that deferred to it. A pull request labelled
+# ci-protect is never cancelled by any of these steps.
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -32,6 +33,7 @@ jobs:
         with:
           script: |
             const repo = context.repo;
+            const PROTECT_LABEL = "ci-protect";
             const prEvents = new Set(["pull_request", "pull_request_target"]);
             const cutoff = Date.now() - 6 * 60 * 60 * 1000;
             const isNotQueuedRefusal = error => error.status === 409
@@ -64,6 +66,7 @@ jobs:
                   core.warning(`Superseded-head cleanup skipped for ${run.id}: PR metadata unavailable`);
                   return null;
                 }
+                if (current.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
                 if (current.state !== "open") return "pull request closed";
                 if (current.draft) return "draft pull request";
                 if (!current.head?.sha || current.head.sha === recordedHead) return null;
@@ -242,6 +245,7 @@ jobs:
           script: |
             const repo = context.repo;
             const YIELD_CONTEXT = "ci/merge-queue-yield";
+            const PROTECT_LABEL = "ci-protect";
             const waiting = async () => {
               for (const status of ["queued", "waiting", "pending", "requested"]) {
                 const { data } = await github.rest.actions.listWorkflowRunsForRepo({
@@ -277,6 +281,13 @@ jobs:
               if (run.run_attempt > 1) continue;
               if (run.head_repository?.full_name !== `${repo.owner}/${repo.repo}`) continue;
               if (run.triggering_actor?.login === "dependabot[bot]") continue;
+              // A protected pull request is never deferred; one whose pull
+              // request cannot be resolved is left running (fail closed).
+              const pullNumber = run.pull_requests?.[0]?.number;
+              if (!pullNumber) continue;
+              const pull = await github.rest.pulls.get({ ...repo, pull_number: pullNumber })
+                .then(({ data }) => data, () => null);
+              if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) continue;
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 ...repo, run_id: run.id, filter: "latest", per_page: 100,
               });
