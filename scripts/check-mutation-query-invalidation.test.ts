@@ -367,6 +367,53 @@ test("only the executed mutationFn can satisfy the mutation contract", () => {
   expect(covered).toEqual([]);
 });
 
+test("mutation wrappers require empty owned writes and valid nested mutations", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/wrappers.ts",
+      text: `
+import { useMutation } from "@tanstack/react-query";
+import { resourceMutation } from "@/lib/workspace-realtime";
+const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input }, delete: { delete: (input: unknown) => input } }) };
+const renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123", name: "renamed" });
+const useRegisteredRename = () => useMutation({ mutationFn: resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest }) });
+const usePlainWrapper = () => useRegisteredRename();
+const useDifferentRoute = () => { useRegisteredRename(); return api.entities({ workspaceId: "123" }).delete.delete({ entityId: "123" }); };
+const useSameRequest = () => { useRegisteredRename(); return renameEntityRequest(); };
+const useInvalidMiddle = () => { useRegisteredRename(); return renameEntityRequest(); };
+const useOuter = () => useInvalidMiddle();
+export const invokePlain = () => usePlainWrapper();
+export const invokeDifferentRoute = () => useDifferentRoute();
+export const invokeSameRequest = () => useSameRequest();
+export const invokeOuter = () => useOuter();
+`,
+    },
+  ];
+  const census = inspectMutationQuerySources(sources);
+  const findings = violations(sources);
+  const wrapperEntry = (callee: string) =>
+    census.mutations.find(
+      (entry) => entry.kind === "wrapper" && entry.callee === callee,
+    );
+  const plain = wrapperEntry("usePlainWrapper");
+  const differentRoute = wrapperEntry("useDifferentRoute");
+  const sameRequest = wrapperEntry("useSameRequest");
+  const middle = wrapperEntry("useInvalidMiddle");
+  const outer = wrapperEntry("useOuter");
+  expect(plain).toBeDefined();
+  expect(differentRoute?.ownWrites).toHaveLength(1);
+  expect(sameRequest?.ownWrites).toHaveLength(1);
+  expect(middle?.ownWrites).toHaveLength(1);
+  expect(outer?.ownWrites).toHaveLength(1);
+  expect(findings.map(({ id }) => id)).not.toContain(`${plain?.id}:mutation`);
+  for (const entry of [differentRoute, sameRequest, middle, outer]) {
+    expect(entry).toBeDefined();
+    expect(findings.map(({ id }) => id)).toContain(`${entry?.id}:mutation`);
+  }
+  assertInvalidCannotBeBaselined(findings);
+});
+
 test("initial baseline seeding records a reason for each current site", () => {
   const disposition: "legacy" | "invalid-declaration" = "legacy";
   const finding = {

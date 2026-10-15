@@ -202,6 +202,153 @@ test("import aliases and transitive wrappers retain every mutation call and bind
   });
 });
 
+test("plain mutation wrappers inherit primitive writes and unresolved options without owning them", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/plain-wrapper.ts",
+      text: `
+        import { useMutation as useWrite, mutationOptions } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const request = () => api.entities({ workspaceId }).rename.patch({ name });
+        const useSave = () => useWrite({ ...unknownOptions, mutationFn: request });
+        const useWrapped = () => useSave();
+        useWrapped();
+        mutationOptions({ mutationFn: unknownRequest });
+      `,
+    },
+  ]);
+  expect(census.schemaVersion).toBe(2);
+  expect(census.mutations).toHaveLength(4);
+  for (const entry of census.mutations) {
+    switch (entry.kind) {
+      case "wrapper":
+        expect(entry.writes).toMatchObject([
+          { route: "/entities/:workspaceId/rename", method: "patch" },
+        ]);
+        expect(entry.unresolved.map(({ reason }) => reason)).toContain(
+          "dynamic-options-spread",
+        );
+        expect(entry.ownWrites).toEqual([]);
+        expect(entry.ownUnresolved).toEqual([]);
+        break;
+      case "useMutation":
+      case "mutationOptions":
+        expect(entry.ownWrites).toEqual(entry.writes);
+        expect(entry.ownUnresolved).toEqual(entry.unresolved);
+        break;
+      default:
+        entry.kind satisfies never;
+    }
+  }
+});
+
+test("raw helper calls remain owned even when an inherited primitive invokes the identical helper", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/raw-wrapper.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const request = () => api.entities({ workspaceId }).rename.patch({ name });
+        const useSave = () => useMutation({ mutationFn: request });
+        const useWrapped = () => {
+          const mutation = useSave();
+          request();
+          return mutation;
+        };
+        useWrapped();
+      `,
+    },
+  ]);
+  expect(census.mutations).toHaveLength(3);
+  const wrapper = census.mutations.find(
+    ({ callee }) => callee === "useWrapped",
+  );
+  expect(wrapper?.writes).toHaveLength(1);
+  expect(wrapper?.ownWrites).toEqual(wrapper?.writes);
+  expect(wrapper?.ownWrites).toMatchObject([
+    { route: "/entities/:workspaceId/rename", method: "patch" },
+  ]);
+  expect(wrapper?.ownUnresolved).toEqual([]);
+  expect(
+    census.mutations.find(({ callee }) => callee === "useSave")?.ownWrites,
+  ).toEqual([]);
+});
+
+test("own scans traverse ordinary middle wrappers and retain their unresolved operations", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/middle-wrapper.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const request = () => api.entities({ workspaceId }).rename.patch({ name });
+        const rawRequest = () => {
+          request();
+          return { mutationFn: unknownRequest };
+        };
+        const useBase = () => useMutation({ ...unknownOptions, mutationFn: request });
+        const useMiddle = () => {
+          const mutation = useBase();
+          rawRequest();
+          return mutation;
+        };
+        const useOuter = () => useMiddle();
+        useOuter();
+      `,
+    },
+  ]);
+  expect(census.mutations).toHaveLength(4);
+  for (const callee of ["useMiddle", "useOuter"]) {
+    const wrapper = census.mutations.find((entry) => entry.callee === callee);
+    expect(wrapper?.ownWrites).toMatchObject([
+      { route: "/entities/:workspaceId/rename", method: "patch" },
+    ]);
+    expect(wrapper?.ownUnresolved).toEqual([
+      {
+        reason: "dynamic-operation-function",
+        expression: "unknownRequest",
+        file: "apps/web/src/middle-wrapper.ts",
+      },
+    ]);
+    expect(wrapper?.unresolved.map(({ reason }) => reason)).toContain(
+      "dynamic-options-spread",
+    );
+  }
+  expect(
+    census.mutations.find(({ callee }) => callee === "useBase")?.ownWrites,
+  ).toEqual([]);
+});
+
+test("reader callbacks cannot conceal a wrapper's extra write behind a query primitive", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/query-wrapper.ts",
+      text: `
+        import { useMutation, useQuery } from "@tanstack/react-query";
+        import { api } from "@/api";
+        const useRename = () => useMutation({
+          mutationFn: () => api.entities({ workspaceId }).rename.patch({ name }),
+        });
+        const useWrapper = () => {
+          const mutation = useRename();
+          useQuery({ queryKey: ["documents"], queryFn: () => api.documents({ id }).patch({ name }) });
+          return mutation;
+        };
+        useWrapper();
+      `,
+    },
+  ]);
+  const wrapper = census.mutations.find(
+    ({ callee }) => callee === "useWrapper",
+  );
+  expect(wrapper?.writes).toHaveLength(2);
+  expect(wrapper?.ownWrites).toMatchObject([
+    { route: "/documents/:id", method: "patch" },
+  ]);
+  expect(wrapper?.ownWrites).toHaveLength(1);
+});
+
 test("reader factories, API chain elements and imported cache helpers resolve without executing modules", () => {
   const census = inspectMutationQuerySources([
     {

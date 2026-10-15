@@ -1011,8 +1011,9 @@ const inspectMutationExecution = ({
       : { status: "invalid", reason: error };
   }
 
+  const ownWrites = entry.kind === "wrapper" ? entry.ownWrites : entry.writes;
   const observedWrites = new Set(
-    entry.writes.map(({ method, route }) => `${method.toUpperCase()} ${route}`),
+    ownWrites.map(({ method, route }) => `${method.toUpperCase()} ${route}`),
   );
   if (
     [...contracts.values()].some(({ writes }) =>
@@ -1613,6 +1614,7 @@ export const inspectMutationQueryInvalidation = (
     const module = indexed.get(entry.file);
     const call = find(entry);
     if (!module || !call) {
+      invalidMutationIds.add(entry.id);
       invalidMutationReasons.set(
         entry.id,
         "Mutation call location could not be resolved from its census.",
@@ -1656,11 +1658,25 @@ export const inspectMutationQueryInvalidation = (
   while (changed) {
     changed = false;
     for (const entry of census.mutations) {
-      if (validMutationIds.has(entry.id) || entry.wrapperOf.length === 0) {
+      if (
+        validMutationIds.has(entry.id) ||
+        invalidMutationIds.has(entry.id) ||
+        entry.kind !== "wrapper" ||
+        entry.ownUnresolved.length > 0 ||
+        entry.wrapperOf.length === 0
+      ) {
         continue;
       }
       if (entry.wrapperOf.every((id) => validMutationIds.has(id))) {
-        validMutationIds.add(entry.id);
+        if (entry.ownWrites.length > 0) {
+          invalidMutationIds.add(entry.id);
+          invalidMutationReasons.set(
+            entry.id,
+            "Mutation wrapper contains writes outside its nested mutation primitives.",
+          );
+        } else {
+          validMutationIds.add(entry.id);
+        }
         changed = true;
       }
     }

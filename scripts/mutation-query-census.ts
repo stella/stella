@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -117,9 +118,11 @@ export type MutationCensusEntry = CensusLocation & {
   kind: "useMutation" | "mutationOptions" | "wrapper";
   wrapperOf: string[];
   writes: CensusRoute[];
+  ownWrites: CensusRoute[];
   cacheEffects: CensusCacheEffect[];
   readerIds: string[];
   unresolved: CensusUnresolved[];
+  ownUnresolved: CensusUnresolved[];
 };
 export type QueryReaderCensusEntry = CensusLocation & {
   kind: string;
@@ -371,10 +374,14 @@ type ScanArgs = {
   active?: Set<ts.Node>;
 };
 
+type CallScanMode = "transitive" | "outside-mutations";
+
 class CallScanner {
   readonly analyzer;
-  constructor(analyzer: CensusAnalyzer) {
+  readonly mode;
+  constructor(analyzer: CensusAnalyzer, mode: CallScanMode) {
     this.analyzer = analyzer;
+    this.mode = mode;
   }
   readonly routes: CensusRoute[] = [];
   readonly effects: CensusCacheEffect[] = [];
@@ -385,6 +392,15 @@ class CallScanner {
   readonly visited = new Set<string>();
   readonly scanned = new Set<string>();
   readonly optionsNodes = new Set<ts.Node>();
+  deduplicate = <T>(items: T[]) =>
+    items.filter((item) => {
+      const key = JSON.stringify(item);
+      if (this.visited.has(key)) {
+        return false;
+      }
+      this.visited.add(key);
+      return true;
+    });
   unknown = (reason: string, node: ts.Node) =>
     this.unresolved.push({
       reason,
@@ -394,6 +410,18 @@ class CallScanner {
   scanCall = ({ current, depth, nextActive }: ScanCallArgs) => {
     const node = current.node;
     const name = this.analyzer.primitiveName(node);
+    switch (this.mode) {
+      case "transitive":
+        break;
+      case "outside-mutations":
+        if (MUTATIONS.has(name ?? "")) {
+          return;
+        }
+        break;
+      default:
+        this.mode satisfies never;
+        return panic("Unhandled mutation census scan mode");
+    }
     const route = this.analyzer.routeOf(node);
     if (this.analyzer.isExecutingReader(node)) {
       this.readerOf.add(this.analyzer.location(node).id);
@@ -572,6 +600,12 @@ class CallScanner {
     );
   };
 }
+
+type MutationOwnershipArgs = {
+  call: ts.CallExpression;
+  writes: CensusRoute[];
+  unresolved: CensusUnresolved[];
+};
 
 class CensusAnalyzer {
   readonly modules;
@@ -1170,6 +1204,26 @@ class CensusAnalyzer {
       readerWrapper;
     return { primitive, mutation, readerDisposition, readerWrapper, reader };
   };
+  mutationOwnership = ({ call, writes, unresolved }: MutationOwnershipArgs) => {
+    if (MUTATIONS.has(this.primitiveName(call) ?? "")) {
+      return { ownWrites: writes, ownUnresolved: unresolved };
+    }
+    const scanner = new CallScanner(this, "outside-mutations");
+    const body = this.invocation(call, new Map());
+    if (body) {
+      scanner.scan({ value: body, depth: 0 });
+    } else {
+      scanner.unknown("unresolved-mutation-wrapper", call);
+    }
+    return {
+      ownWrites: scanner.deduplicate(
+        scanner.routes.filter(
+          ({ method }) => method !== "get" && method !== "head",
+        ),
+      ),
+      ownUnresolved: scanner.deduplicate(scanner.unresolved),
+    };
+  };
   analyzeCall = (call: ts.CallExpression) => {
     const { primitive, mutation, readerDisposition, readerWrapper, reader } =
       this.classifyCall(call);
@@ -1183,11 +1237,11 @@ class CensusAnalyzer {
       wrapperOf,
       readerOf,
       readerOptions,
-      visited,
+      deduplicate,
       optionsNodes,
       unknown,
       scan,
-    } = new CallScanner(this);
+    } = new CallScanner(this, "transitive");
     if (reader && !readerWrapper && readerDisposition === "ambiguous") {
       unknown("unresolved-query-client-receiver", call.expression);
     }
@@ -1218,15 +1272,6 @@ class CensusAnalyzer {
     } else {
       unknown("options-missing", call);
     }
-    const deduplicate = <T>(items: T[]) =>
-      items.filter((item) => {
-        const key = JSON.stringify(item);
-        if (visited.has(key)) {
-          return false;
-        }
-        visited.add(key);
-        return true;
-      });
     const callLocation = this.uniqueLocation(call);
     if (mutation) {
       const writes = deduplicate(
@@ -1235,14 +1280,16 @@ class CensusAnalyzer {
       if (writes.length === 0) {
         unknown("no-static-write-route", call);
       }
+      const allUnresolved = deduplicate(unresolved);
       this.mutations.push({
         ...callLocation,
         kind: mutationKind(primitive),
         wrapperOf: [...wrapperOf].toSorted(),
         writes,
+        ...this.mutationOwnership({ call, writes, unresolved: allUnresolved }),
         cacheEffects: deduplicate(effects),
         readerIds: [],
-        unresolved: deduplicate(unresolved),
+        unresolved: allUnresolved,
       });
     }
     if (reader) {
@@ -1332,7 +1379,7 @@ class CensusAnalyzer {
     );
     const realtime = realtimeModule && [...realtimeModule.exports.entries()];
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       baselineSnapshot: true,
       analysis:
         "TypeScript syntax; route-family reader links are candidates, not proof of entity equivalence; unknown dynamic values are explicit.",
