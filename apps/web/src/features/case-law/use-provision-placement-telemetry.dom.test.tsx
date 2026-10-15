@@ -3,6 +3,8 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode } = await import("react");
 const { cleanup, render } = await import("@testing-library/react");
@@ -44,7 +46,7 @@ afterEach(() => {
   cleanup();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("placement telemetry reports structured failures once across strict effects and fresh-array rerenders", () => {

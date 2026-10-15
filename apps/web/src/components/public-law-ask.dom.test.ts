@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 
@@ -14,7 +15,7 @@ const { claimQueuedChatSend } =
   await import("@/features/chat/queued-chat-sends");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ASK = {
