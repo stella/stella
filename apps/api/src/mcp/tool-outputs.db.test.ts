@@ -6,15 +6,21 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
 
-import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
+import {
+  DEFAULT_MATTER_VISIBILITY,
+  defaultMatterVisibilityFor,
+} from "@stll/api-contract";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
@@ -522,12 +528,41 @@ describe("every MCP tool's real output passes its output contract", () => {
       expect(await visibilityOf(matterId)).toBe(visibility);
     }
 
-    // No client and no visibility: the same default the web app preselects.
+    // No client and no visibility: the same default the web app preselects,
+    // a personal matter only its creator sees.
     const internal = await call("save_matter", { name: "Internal know-how" });
     expect(await visibilityOf(idAt(internal, "matterId"))).toBe(
-      DEFAULT_MATTER_VISIBILITY,
+      defaultMatterVisibilityFor({ hasClient: false }),
+    );
+    expect(defaultMatterVisibilityFor({ hasClient: false })).toBe(
+      "assigned_only",
     );
     expect(DEFAULT_MATTER_VISIBILITY).toBe("admins_and_assigned");
+    // Its creator leads it, so the assigned-only matter keeps a steward.
+    const internalId = idAt(internal, "matterId");
+    const [internalRow] = await testDb
+      .select({ leadUserId: workspaces.leadUserId })
+      .from(workspaces)
+      .where(eq(workspaces.id, toSafeId<"workspace">(internalId)));
+    expect(internalRow?.leadUserId).toBe(caller.userId);
+
+    // A client matter without a choice follows the client default.
+    const contact = await call("save_contact", {
+      type: "organization",
+      display_name: "Acme s.r.o.",
+    });
+    const clientId = idAt(contact, "contactId");
+    const engagement = await call("save_matter", {
+      name: "Acme engagement",
+      client_id: clientId,
+    });
+    expect(await visibilityOf(idAt(engagement, "matterId"))).toBe(
+      "admins_and_assigned",
+    );
+
+    // Setting a client on the personal matter later never widens it.
+    await call("save_matter", { matter_id: internalId, client_id: clientId });
+    expect(await visibilityOf(internalId)).toBe("assigned_only");
   });
 
   test("a seeded organization drives each runnable tool", async () => {

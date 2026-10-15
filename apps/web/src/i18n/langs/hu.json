@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Ügy neve",
-      "personalDescription": "Ügyfél nélküli belső munkához, például sablonokhoz, know-how-hoz vagy belső adminisztrációhoz."
+      "personalDescription": "Ügyfél nélkül csak Ön látja az ügyet. Később megoszthatja, ha módosítja, ki láthatja."
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",

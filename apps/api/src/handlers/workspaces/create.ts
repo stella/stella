@@ -3,7 +3,7 @@ import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
@@ -46,9 +46,10 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
-// The client is optional and says nothing about who can see the matter:
-// `visibility` decides that (DEFAULT_MATTER_VISIBILITY unless the creator
-// chooses). `memberUserIds` adds members alongside the creator either way.
+// `visibility` decides who can see the matter. Unless the creator chooses,
+// a matter without a client is personal (assigned_only, led by its creator)
+// and a client matter gets the client default (defaultMatterVisibilityFor).
+// `memberUserIds` adds members alongside the creator either way.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
   clientId: t.Optional(
@@ -78,11 +79,13 @@ const config = {
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
-    "contact). visibility decides who can see it, independent of the " +
-    "client: all_members reaches every internal member without an " +
-    "assignment (never external users); admins_and_assigned, the default, " +
-    "reaches owners, admins and the assigned members; assigned_only reaches " +
-    "only the assigned members. The creator becomes the matter lead. " +
+    "contact). visibility decides who can see it: all_members reaches every " +
+    "internal member without an assignment (never external users); " +
+    "admins_and_assigned reaches owners, admins and the assigned members; " +
+    "assigned_only reaches only the assigned members. Without visibility, a " +
+    "matter with a client is admins_and_assigned and one without a client is " +
+    "personal: assigned_only, visible only to its creator. The creator " +
+    "becomes the matter lead. " +
     "Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -114,7 +117,9 @@ export const createWorkspaceHandler = async function* ({
   if ((body.memberUserIds?.length ?? 0) > 0) {
     yield* checkDemoAccountOperation(userEmail);
   }
-  const visibility = body.visibility ?? DEFAULT_MATTER_VISIBILITY;
+  const visibility =
+    body.visibility ??
+    defaultMatterVisibilityFor({ hasClient: body.clientId !== undefined });
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
       // The creator is always a member; requested members join them

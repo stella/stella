@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Nazwa sprawy",
-      "personalDescription": "Do pracy wewnętrznej bez klienta, np. szablonów, know-how lub administracji wewnętrznej."
+      "personalDescription": "Bez klienta sprawę widzisz tylko Ty. Możesz ją później udostępnić, zmieniając, kto może ją widzieć."
     },
     "createNewWorkspace": "Utwórz nową sprawę",
     "defaultName": "Bez tytułu",

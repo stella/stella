@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Bylos pavadinimas",
-      "personalDescription": "Vidiniam darbui be kliento, pavyzdžiui, šablonams, žinioms ar vidinei administracijai."
+      "personalDescription": "Be kliento bylą matote tik jūs. Vėliau galite ja pasidalyti pakeisdami, kas ją gali matyti."
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",

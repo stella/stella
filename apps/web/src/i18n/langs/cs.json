@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Název spisu",
-      "personalDescription": "Pro interní práci bez klienta, například vzory, know-how nebo interní administrativu."
+      "personalDescription": "Bez klienta vidíte věc jen vy. Později ji můžete sdílet změnou toho, kdo ji vidí."
     },
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",

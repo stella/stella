@@ -472,6 +472,7 @@ export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
 export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
 export {
   DEFAULT_MATTER_VISIBILITY,
+  defaultMatterVisibilityFor,
   MATTER_VISIBILITIES,
   MATTER_VISIBILITY,
   widensMatterVisibility,

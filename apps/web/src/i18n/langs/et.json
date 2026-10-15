@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Toimiku nimi",
-      "personalDescription": "Kliendita sisemiseks tööks, näiteks mallide, oskusteabe või sisemise halduse jaoks."
+      "personalDescription": "Ilma kliendita näete asja ainult teie. Hiljem saate seda jagada, muutes, kes seda näeb."
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",

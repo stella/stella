@@ -25,9 +25,22 @@ export const MATTER_VISIBILITY = {
   assignedOnly: "assigned_only",
 } as const satisfies Record<string, MatterVisibility>;
 
-/** What a new matter gets when the caller does not choose: web, API, MCP and CLI alike. */
+/** What a new client matter gets when the caller does not choose. */
 export const DEFAULT_MATTER_VISIBILITY: MatterVisibility =
   MATTER_VISIBILITY.adminsAndAssigned;
+
+/**
+ * What a new matter gets when the caller does not choose: web, API, MCP and
+ * CLI alike. A matter without a client is personal, visible only to its
+ * creator, who leads it; a client matter follows the client rule. Attaching a
+ * client later never widens visibility on its own.
+ */
+export const defaultMatterVisibilityFor = ({
+  hasClient,
+}: {
+  hasClient: boolean;
+}): MatterVisibility =>
+  hasClient ? DEFAULT_MATTER_VISIBILITY : MATTER_VISIBILITY.assignedOnly;
 
 /** How many people a visibility reaches, relative to the others. */
 const MATTER_VISIBILITY_REACH = {

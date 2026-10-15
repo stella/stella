@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Nome do caso",
-      "personalDescription": "Para trabalho interno sem cliente, como modelos, know-how ou administração interna."
+      "personalDescription": "Sem cliente, só você vê o caso. Você pode compartilhá-lo depois, alterando quem pode vê-lo."
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",

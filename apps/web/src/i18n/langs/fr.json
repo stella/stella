@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Nom du dossier",
-      "personalDescription": "Pour le travail interne sans client, comme les modèles, le savoir-faire ou l'administration interne."
+      "personalDescription": "Sans client, vous êtes seul à voir ce dossier. Vous pourrez le partager plus tard en modifiant qui peut le voir."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",

@@ -6,7 +6,6 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
 import type { ContactType, MatterVisibility } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -28,7 +27,10 @@ import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
+import {
+  dialogMatterVisibility,
+  getPossibleDuplicateMatters,
+} from "@/components/workspaces/create-matter-dialog.logic";
 import { MatterVisibilityChoice } from "@/components/workspaces/matter-visibility";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -133,11 +135,15 @@ const CreateMatterDialogBody = ({
   const createWorkspace = useCreateWorkspace();
   const createContact = useCreateContact();
   const [name, setName] = useState("");
-  const [visibility, setVisibility] = useState<MatterVisibility>(
-    DEFAULT_MATTER_VISIBILITY,
-  );
+  // null until the user picks: the default then follows the client field.
+  const [chosenVisibility, setChosenVisibility] =
+    useState<MatterVisibility | null>(null);
   const [selectedClient, setSelectedClient] =
     useState<MatterDraftClient | null>(draftClient);
+  const visibility = dialogMatterVisibility({
+    chosen: chosenVisibility,
+    hasClient: selectedClient !== null,
+  });
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const workspacesDataQuery = useChromeQuery({
@@ -266,12 +272,12 @@ const CreateMatterDialogBody = ({
       <DialogFormState
         dirty={
           name !== "" ||
-          visibility !== DEFAULT_MATTER_VISIBILITY ||
+          chosenVisibility !== null ||
           selectedClient?.id !== draftClient?.id
         }
         onDiscard={() => {
           setName("");
-          setVisibility(DEFAULT_MATTER_VISIBILITY);
+          setChosenVisibility(null);
           setSelectedClient(draftClient);
         }}
       />
@@ -335,14 +341,17 @@ const CreateMatterDialogBody = ({
                 : t("workspaces.parties.noClientOptional")
             }
           />
-          {selectedClient === null ? (
+          {selectedClient === null && visibility === "assigned_only" ? (
             <p className="text-muted-foreground text-xs">
               {t("workspaces.create.personalDescription")}
             </p>
           ) : null}
         </Field>
 
-        <MatterVisibilityChoice onChange={setVisibility} value={visibility} />
+        <MatterVisibilityChoice
+          onChange={setChosenVisibility}
+          value={visibility}
+        />
 
         {possibleDuplicates.length > 0 && (
           <section className="bg-muted/30 space-y-2 rounded-lg border px-3 py-3">

@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Nombre del asunto",
-      "personalDescription": "Para trabajo interno sin cliente, como plantillas, know-how o administración interna."
+      "personalDescription": "Sin cliente, solo tú puedes ver el asunto. Puedes compartirlo más tarde cambiando quién puede verlo."
     },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",

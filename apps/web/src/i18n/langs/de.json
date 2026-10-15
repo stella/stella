@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Name der Akte",
-      "personalDescription": "Für interne Arbeit ohne Klient, etwa Vorlagen, Know-how oder interne Verwaltung."
+      "personalDescription": "Ohne Mandanten sehen nur Sie diese Akte. Sie können sie später teilen, indem Sie ändern, wer sie sehen kann."
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",

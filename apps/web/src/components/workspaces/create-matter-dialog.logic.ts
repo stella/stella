@@ -1,3 +1,6 @@
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
+import type { MatterVisibility } from "@stll/api-contract";
+
 type ExistingWorkspace = {
   client?: { id: string } | null;
   members: {
@@ -112,3 +115,16 @@ export const getPossibleDuplicateMatters = ({
 
   return result;
 };
+
+/**
+ * The visibility the new-matter dialog submits: the user's explicit choice,
+ * or the shared default for whether the matter has a client (a matter without
+ * one is visible only to its creator).
+ */
+export const dialogMatterVisibility = ({
+  chosen,
+  hasClient,
+}: {
+  chosen: MatterVisibility | null;
+  hasClient: boolean;
+}): MatterVisibility => chosen ?? defaultMatterVisibilityFor({ hasClient });

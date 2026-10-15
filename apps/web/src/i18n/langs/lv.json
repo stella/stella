@@ -5678,7 +5678,7 @@
     },
     "create": {
       "matterName": "Lietas nosaukums",
-      "personalDescription": "Iekšējam darbam bez klienta, piemēram, veidnēm, zinātībai vai iekšējai administrācijai."
+      "personalDescription": "Bez klienta lietu redzat tikai jūs. Vēlāk to varat kopīgot, mainot, kas to var redzēt."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
