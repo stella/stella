@@ -24,14 +24,12 @@ import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

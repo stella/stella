@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 const { cleanup, fireEvent, render, screen, waitFor } =
@@ -20,6 +22,8 @@ const { QueryClient, QueryClientProvider } =
 const { legalListsOptions } =
   await import("@/lib/workspaces/queries/legal-lists");
 const { roleOptions } = await import("@/lib/auth-queries");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
 const clients: InstanceType<typeof QueryClient>[] = [];
 const messages = (await import("@/i18n/langs/en.json")).default;
 
@@ -31,7 +35,7 @@ afterEach(() => {
   clients.length = 0;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderEmptyMatter = async (
@@ -85,7 +89,20 @@ const renderEmptyMatter = async (
   render(
     <IntlProvider locale="en" messages={messages}>
       <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
+        <AuthenticatedUserProvider
+          user={{
+            activeOrganizationId: "org-probe",
+            email: "reviewer@example.com",
+            id: "user-probe",
+            image: null,
+            name: "Reviewer",
+            preferredName: null,
+            timezoneId: "Europe/Prague",
+            wordEditShortcut: null,
+          }}
+        >
+          <RouterProvider router={router} />
+        </AuthenticatedUserProvider>
       </QueryClientProvider>
     </IntlProvider>,
   );
@@ -97,6 +114,9 @@ test("an empty matter offers a link to create lists in that matter", async () =>
   const router = await renderEmptyMatter(workspaceId, "owner");
   expect(screen.getByText(messages.avt.view.noLists)).toBeTruthy();
   expect(screen.queryByText(messages.avt.view.pickList)).toBeNull();
+  expect(
+    screen.getByRole("button", { name: messages.avt.view.loadSample }),
+  ).toBeTruthy();
   const action = screen.getByRole("link", {
     name: messages.avt.view.createList,
   });
@@ -115,6 +135,9 @@ test("an empty matter shows no create action to a caller who cannot create lists
   expect(screen.getByText(messages.avt.view.noLists)).toBeTruthy();
   expect(
     screen.queryByRole("link", { name: messages.avt.view.createList }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: messages.avt.view.loadSample }),
   ).toBeNull();
   expect(screen.queryByText(messages.avt.view.pickList)).toBeNull();
 });

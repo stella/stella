@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({
   settings: {
     enableJavaScriptEvaluation: true,
@@ -21,7 +23,7 @@ const { fetchBoundedSsrResponse, SsrStreamTimeoutError } =
   await import("./ssr-response-stream");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("SSR deadline forwards React recovery instructions so pending boundaries hydrate", async () => {

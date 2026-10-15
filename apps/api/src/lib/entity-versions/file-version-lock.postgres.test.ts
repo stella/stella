@@ -32,9 +32,9 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { writeFileVersion } from "./write-file-version";
 

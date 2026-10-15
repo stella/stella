@@ -99,6 +99,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      root_checks: ${{ steps.root-checks.outputs.root_checks }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
@@ -656,6 +657,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -983,7 +985,7 @@ jobs:
             # inputs, the files the Dockerfile and the smoke read from the
             # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/ci-install*|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -1257,6 +1259,18 @@ jobs:
           NPM_TOKEN: ""
           # A tolerated failure is a warning, not a failure annotation.
           RETRY_FAILURE_LEVEL: warning
+
+      - name: Select root check inputs
+        id: root-checks
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-root-checks.ts; then
+            echo "::warning::Root check planning unavailable; retaining all checks."
+          fi
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
@@ -1597,6 +1611,7 @@ jobs:
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
@@ -2662,7 +2677,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Processed-field backlog guard')) }}
         # The case-law processed-field backlog (debts and unrecorded claims)
         # may only shrink against the measured base.
         run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
@@ -2810,6 +2825,19 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
+      - name: Dependabot group guard (installed packages)
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_012
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        # Related framework and plugin updates must stay in one PR even when
+        # upstream moves packages between scopes. The stale-ignore checks read
+        # installed manifests (Expo's bundled module list among them), so the
+        # guard runs here, after the install, which every change to
+        # .github/dependabot.yml or a manifest requires.
+        run: bun test scripts/dependabot-grouping.test.ts
+
       - name: Record static check receipts
         id: static_receipt_record
         if: success() && github.event_name == 'merge_group' && steps.static_receipts.outputs.artifact_name != ''
@@ -2951,7 +2979,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_003
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_003 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check local base selection')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_003 != 'true') }}
         run: bash scripts/canonical-base.test.sh
 
       - name: Check local skill overrides
@@ -2959,7 +2987,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_004
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check local skill overrides')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
         run: |
           bash scripts/check-local-skill-overrides.sh .
           bash scripts/check-local-skill-overrides.test.sh
@@ -3037,7 +3065,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: standalone_lockfiles
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Standalone lockfile guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
         # Bun reads only the installing directory's bunfig.toml, so a lockfile
         # outside the root workspace skips the root's release-age quarantine,
         # and an npm, Yarn or pnpm lockfile skips it entirely. Needs no
@@ -3057,7 +3085,7 @@ jobs:
           bun scripts/check-standalone-negated-shell.ts
 
       - name: Tauri package alignment
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tauri package alignment')) }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -3079,7 +3107,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_009
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_009 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tauri counterpart autofix tests')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_009 != 'true') }}
         run: bun test scripts/fix-tauri-package-alignment.test.ts scripts/tauri-autofix-workflow.test.ts
 
       - name: Lockfile release-age guard
@@ -3138,16 +3166,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
-      - name: Test oxlint plugins
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_012
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
-        run: |
-          bun test scripts/oxlint-plugin-test-coverage.test.ts
-          bun scripts/run-custom-lint-tests.ts
-
       - name: Prepare route network manifest
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3204,7 +3222,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_013
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Content delivery declarations')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
         # The guard follows handler imports into the gitignored capability
         # runtime modules, so generate them first instead of skipping them.
         run: |
@@ -3220,22 +3238,31 @@ jobs:
           CI_CHECK_CONTEXT: "Capability shard pack test reads real origin/main catalog and revision."
         id: capability_parity
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test capability shard merge and package parity')) }}
         # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
         run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
-      # Root script tests belong to no workspace package, so no scoped test
-      # run reaches them. Other steps call some by path; this runs every
-      # other one, so a new test cannot miss CI by missing a step.
-      - name: Test remaining repository scripts
+      - name: Generated files manifest guard
         env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
-        id: remaining_scripts
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: generated_manifest
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
-        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
+
+      - name: Test oxlint plugins
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_012
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        run: |
+          bun test scripts/oxlint-plugin-test-coverage.test.ts
 
       - name: Test release image CI gate
         env:
@@ -3262,16 +3289,6 @@ jobs:
         # nightly-typecheck, so coverage is identical to running it in
         # each install.
         run: bun run lint:ws
-
-      - name: Dependabot group guard
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_016
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_016 != 'true') }}
-        # Related framework and plugin updates must stay in one PR even when
-        # upstream moves packages between scopes.
-        run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
         id: static_check_017
@@ -3362,7 +3379,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_023
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_023 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check i18n sync')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_023 != 'true') }}
         run: bun run i18n:check
 
       - name: Release changelog guard
@@ -3473,7 +3490,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_024
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_024 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Rust format')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_024 != 'true') }}
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 
       - name: React Compiler bailout guard
@@ -3481,7 +3498,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_025
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_025 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/React Compiler bailout guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_025 != 'true') }}
         # Components the React Compiler bails out on (refs-in-render,
         # try/finally, an ESLint suppression on the component) are not
         # auto-memoized, so manual useMemo/useCallback there is load-bearing:
@@ -3710,6 +3727,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_038 != 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
+      - name: Store cache save supervisor
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_119
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_119 != 'true') }}
+        run: bun test scripts/ci-store-save.test.ts
+
       - name: Workflow lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -3895,7 +3920,7 @@ jobs:
 
       # Join both long checks before reusing their background slots.
       - name: Wait for capability and repository checks
-        wait: [capability_parity, remaining_scripts]
+        wait: [capability_parity, generated_manifest]
 
       # The api test runner only globs `src/**`, so the tests beside the api
       # scripts (seed guards, AI provider canary, MCP coverage) need an
@@ -3952,7 +3977,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_052
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_052 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Model catalog snapshot drift check')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_052 != 'true') }}
         # The enforced offline --check path regenerates from committed
         # snapshots and compares the deterministic output. Keep it scoped
         # to changes in the model catalog.
@@ -3965,7 +3990,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_053
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability description ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
         # A capability's `description` is what an MCP client reads before
         # deciding whether to call it, so every capability still missing one is
         # listed by exact id in apps/api/capability-description-ledger.json. A
@@ -4003,7 +4028,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_055
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_055 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/MCP coverage guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_055 != 'true') }}
         # Every safe-handler config must declare an `mcp` disposition (a
         # typecheck-enforced McpExposure). This guard imports every handler
         # module, verifies each disposition is well-formed, that every
@@ -4105,7 +4130,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_062
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_062 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release-channel script')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_062 != 'true') }}
         run: bash scripts/release-channel.test.sh
 
       # The web compiler uses native Rolldown bindings, while the deployed
@@ -4116,7 +4141,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_063
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_063 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test web container platform boundary')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_063 != 'true') }}
         run: bun test scripts/check-web-docker-platform.test.ts
 
       # Bun links @stll dependencies to local workspaces only while versions
@@ -4128,7 +4153,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_064
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_064 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test @stll resolution pin')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_064 != 'true') }}
         run: bun test scripts/stll-registry-resolutions.test.ts
 
       # The runner image stages workspace packages reached by externalized
@@ -4139,7 +4164,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_065
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_065 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test web runtime staging')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_065 != 'true') }}
         run: bun test scripts/stage-web-runtime.test.ts
 
       - name: Check Docker source closure
@@ -4208,18 +4233,18 @@ jobs:
       - name: Wait for API scripts and CLI runtime checks
         wait: [api_scripts, cli_runtime_parity]
 
-      - name: Generated files manifest guard
+      # Root script tests belong to no workspace package, so no scoped test
+      # run reaches them. Other steps call some by path; this runs every
+      # other one, so a new test cannot miss CI by missing a step.
+      - name: Test remaining repository scripts
         env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: generated_manifest
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
+        id: remaining_scripts
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
-        # Guard A registers tracked generated files; Guard B checks the
-        # manifest entries with offline checks against committed outputs.
-        run: |
-          bun scripts/generated-files-guard.ts --guard-a
-          bun scripts/generated-files-guard.ts --guard-b
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
+        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
       - name: Playwright config scope
         env:
@@ -5068,6 +5093,7 @@ jobs:
       - name: Install API script dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
           log-file: "${{ runner.temp }}/bun-install/api-test-durations.log"
         env:
@@ -6036,6 +6062,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
@@ -6968,6 +6995,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -7346,8 +7374,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Route count times per-route render time on a loaded runner: the slowest
+      # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Check route network baseline
-        timeout-minutes: 4
+        timeout-minutes: 8
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
@@ -8222,6 +8252,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
           NPM_TOKEN: ""
@@ -8441,6 +8472,13 @@ jobs:
               annotate "API image smoke" "Failed after: ${last_pass:-no check passed}"
             fi
           elif [[ -f "$build_log" ]]; then
+            # Docker prefixes nested workflow commands with BuildKit progress.
+            # Promote the install owner's fixed diagnostic to a runner annotation.
+            stall=$(grep -oE 'kind=infra class=install-stall .*' "$build_log" | head -n 1 || true)
+            if [[ -n "$stall" ]]; then
+              printf '::error title=infra-stall::%s\n' "$stall"
+              exit 0
+            fi
             # BuildKit prefixes each line with its step number; keep the
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error
@@ -8676,6 +8714,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
           log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
@@ -8848,6 +8887,7 @@ jobs:
       - name: Install scripts workspace dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -8945,6 +8985,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
           log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
@@ -9199,6 +9240,7 @@ jobs:
         if: matrix.os == 'macos'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
           NPM_TOKEN: ""
@@ -9224,9 +9266,20 @@ jobs:
         if: matrix.os == 'macos'
         uses: ./.github/actions/cargo-deny
 
+      # Licenses, bans and sources read only the resolved dependency graph.
+      # The graph's crates for every target are fetched first with bounded
+      # retries; the check then runs once, offline. Advisories need the
+      # published advisory database, so they run on the Dependency Audit
+      # schedule instead.
+      - name: Fetch license audit inputs
+        if: matrix.os == 'macos'
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
+
       - name: License audit
         if: matrix.os == 'macos'
-        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph
+        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph bans licenses sources
 
       - name: Docs
         shell: pwsh
