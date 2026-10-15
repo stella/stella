@@ -126,8 +126,9 @@ export const createConfirmOutboundActionHandler = (
                 eq(outboundActions.userId, user.id),
                 eq(outboundActions.status, "pending"),
                 eq(outboundActions.previewHash, previewHash),
-                // Expiry is judged by the database clock at the claim itself.
-                gt(outboundActions.expiresAt, sql`now()`),
+                // Expiry is judged by the database wall clock at the claim
+                // itself (now() would be the transaction start).
+                gt(outboundActions.expiresAt, sql`clock_timestamp()`),
               ),
             )
             .returning({ id: outboundActions.id });
