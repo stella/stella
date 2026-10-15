@@ -98,7 +98,13 @@ export const publishGeneratedOutput = ({
       writeFileSync(path.join(temporary, OUTPUT_FILE), output);
       writeFileSync(path.join(temporary, STAMP_FILE), serialized);
       // Another process may publish the same entry first; theirs is equal.
-      Result.try(() => renameSync(temporary, destination));
+      const published = Result.try(() => renameSync(temporary, destination));
+      if (
+        published.isErr() &&
+        statSync(destination, { throwIfNoEntry: false }) === undefined
+      ) {
+        throw published.error;
+      }
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
@@ -146,7 +152,14 @@ export const restoreGeneratedOutput = async ({
       (await isCompilerInputStampCurrent(stamp, context))
     ) {
       const now = new Date();
-      Result.try(() => utimesSync(directory, now, now));
+      // Another process may evict the entry meanwhile; this read still holds.
+      const touched = Result.try(() => utimesSync(directory, now, now));
+      if (
+        touched.isErr() &&
+        statSync(directory, { throwIfNoEntry: false }) !== undefined
+      ) {
+        throw touched.error;
+      }
       return { output, stamp, outputHash: parsed.value.outputHash };
     }
   }

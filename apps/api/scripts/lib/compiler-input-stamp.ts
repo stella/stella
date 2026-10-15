@@ -196,7 +196,7 @@ const relocateStamp = (
  * Stores the paths under a checkout `root`, and the probes module resolution
  * makes in its ancestors, relative to it.
  */
-export const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
+const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
   const realRoot = realpathSync(root);
   const token = rootToken("root", root);
   const realToken = rootToken("real-root", realRoot);
