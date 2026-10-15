@@ -111,7 +111,7 @@ describe("a new chat after navigating from matter B to matter A", () => {
     );
     const tab = newTab(store);
     expect(tab.workspaceId).toBeUndefined();
-    expect(tab.contextMatterIds ?? []).toEqual([]);
+    expect(tab.contextMatterIds).toEqual([]);
   });
 
   test("dock New chat keeps the tab's document and skill", () => {
