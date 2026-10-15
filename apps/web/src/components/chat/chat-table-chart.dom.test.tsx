@@ -5,6 +5,7 @@ import type { TableChartResponse } from "@stll/api-contract/table-chart";
 
 import arabic from "@/i18n/langs/ar.json";
 import english from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -26,7 +27,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const markdown =
