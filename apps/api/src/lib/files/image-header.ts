@@ -25,6 +25,8 @@ const TIFF_DIRECTORIES_MAX = 256;
 const JPEG_SEGMENTS_MAX = 4096;
 
 const EXIF_ORIENTATION_TAG = 0x01_12;
+/** APP1 length field (2) + `Exif\0\0` (6) + the smallest TIFF header (8). */
+const EXIF_SEGMENT_MIN_LENGTH = 16;
 const TIFF_IMAGE_WIDTH_TAG = 0x01_00;
 const TIFF_IMAGE_HEIGHT_TAG = 0x01_01;
 const TIFF_SHORT = 3;
@@ -184,6 +186,8 @@ const readTiffHeader = (bytes: Uint8Array): ImageHeader | null => {
 
 // ── Format readers ──────────────────────────────────────
 
+const PNG_IHDR_LENGTH = 13;
+
 /** PNG: IHDR is always the first chunk. */
 const readPngHeader = (bytes: Uint8Array): ImageHeader | null => {
   if (
@@ -195,6 +199,9 @@ const readPngHeader = (bytes: Uint8Array): ImageHeader | null => {
     return null;
   }
   const data = view(bytes);
+  if (data.getUint32(8) !== PNG_IHDR_LENGTH) {
+    return null;
+  }
   return header(data.getUint32(16), data.getUint32(20));
 };
 
@@ -252,7 +259,13 @@ const readJpegHeader = (bytes: Uint8Array): ImageHeader | null => {
         orientation,
       );
     }
-    if (marker === 0xe1 && startsWith(bytes, offset + 2, "Exif\0\0")) {
+    // `length` counts its own two bytes; the segment ends at offset + length,
+    // already checked to lie inside the buffer.
+    if (
+      marker === 0xe1 &&
+      length >= EXIF_SEGMENT_MIN_LENGTH &&
+      startsWith(bytes, offset + 2, "Exif\0\0")
+    ) {
       orientation = readTiffOrientation(
         new DataView(bytes.buffer, bytes.byteOffset + offset + 8, length - 8),
       );
@@ -281,6 +294,9 @@ const readBmpHeader = (bytes: Uint8Array): ImageHeader | null => {
   }
   const data = view(bytes);
   const infoSize = data.getUint32(14, true);
+  if (14 + infoSize > bytes.length) {
+    return null;
+  }
   if (infoSize === 12) {
     return header(data.getUint16(18, true), data.getUint16(20, true));
   }
@@ -312,7 +328,13 @@ const readWebpHeader = (bytes: Uint8Array): ImageHeader | null => {
   ) {
     return null;
   }
+  const chunkSize = uintLe(bytes, 16, 3) + (bytes[19] ?? 0) * 0x1_00_00_00;
+  const chunkFits = (minimum: number) =>
+    chunkSize >= minimum && 20 + chunkSize <= bytes.length;
   if (startsWith(bytes, 12, "VP8 ")) {
+    if (!chunkFits(10)) {
+      return null;
+    }
     // 14-bit dimensions; the top two bits of each are a scaling hint.
     return header(
       uintLe(bytes, 26, 2) % 0x40_00,
@@ -320,7 +342,7 @@ const readWebpHeader = (bytes: Uint8Array): ImageHeader | null => {
     );
   }
   if (startsWith(bytes, 12, "VP8L")) {
-    if (bytes[20] !== 0x2f) {
+    if (!chunkFits(5) || bytes[20] !== 0x2f) {
       return null;
     }
     // Width-1 and height-1 as consecutive 14-bit fields after the signature.
@@ -331,6 +353,9 @@ const readWebpHeader = (bytes: Uint8Array): ImageHeader | null => {
     );
   }
   if (startsWith(bytes, 12, "VP8X")) {
+    if (!chunkFits(10)) {
+      return null;
+    }
     return header(uintLe(bytes, 24, 3) + 1, uintLe(bytes, 27, 3) + 1);
   }
   return null;

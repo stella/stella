@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { HeaderReadableImageMimeType } from "@/api/lib/files/image-header";
 import { readImageHeader } from "@/api/lib/files/image-header";
@@ -74,6 +77,7 @@ const webpVp8x = (width: number, height: number) =>
     ascii(bytes, 0, "RIFF");
     ascii(bytes, 8, "WEBP");
     ascii(bytes, 12, "VP8X");
+    view.setUint32(16, 10, true);
     view.setUint32(24, width - 1, true);
     // Height-1 is the 24-bit field at 27; byte 30 would be the next chunk.
     bytes[27] = (height - 1) % 256;
@@ -86,6 +90,7 @@ const webpLossless = (width: number, height: number) =>
     ascii(bytes, 0, "RIFF");
     ascii(bytes, 8, "WEBP");
     ascii(bytes, 12, "VP8L");
+    view.setUint32(16, 5, true);
     bytes[20] = 0x2f;
     view.setUint32(21, width - 1 + (height - 1) * 0x40_00, true);
   });
@@ -180,5 +185,143 @@ describe("image header dimensions", () => {
     const looping = tiff();
     new DataView(looping.buffer).setUint32(64, 8);
     expect(readImageHeader(looping, "image/tiff")).toBeNull();
+  });
+});
+
+/** `bytes` with a big-endian uint16 written at `offset`. */
+const withUint16 = (bytes: Uint8Array, offset: number, value: number) => {
+  const copy = bytes.slice();
+  new DataView(copy.buffer).setUint16(offset, value);
+  return copy;
+};
+
+/** `bytes` with a little-endian uint32 written at `offset`. */
+const withUint32Le = (bytes: Uint8Array, offset: number, value: number) => {
+  const copy = bytes.slice();
+  new DataView(copy.buffer).setUint32(offset, value, true);
+  return copy;
+};
+
+const MALFORMED = [
+  // Truncated headers.
+  ["image/png", "truncated", png(10, 10).subarray(0, 20)],
+  ["image/jpeg", "truncated", jpeg(10, 10, 6).subarray(0, 60)],
+  ["image/gif", "truncated", gif(10, 10).subarray(0, 9)],
+  ["image/bmp", "truncated", bmp(10, 10).subarray(0, 24)],
+  ["image/webp", "truncated", webpVp8x(10, 10).subarray(0, 29)],
+  ["image/tiff", "truncated", tiff().subarray(0, 50)],
+  // Undersized segments: a declared length too small for what it must hold.
+  [
+    "image/png",
+    "undersized IHDR",
+    (() => {
+      const bytes = png(10, 10);
+      new DataView(bytes.buffer).setUint32(8, 4);
+      return bytes;
+    })(),
+  ],
+  // APP1 of length 4 still followed by the EXIF signature bytes.
+  ["image/jpeg", "undersized APP1", withUint16(jpeg(10, 10, 6), 4, 4)],
+  ["image/jpeg", "undersized SOF", withUint16(jpeg(10, 10, 1), 59, 4)],
+  ["image/bmp", "undersized info header", withUint32Le(bmp(10, 10), 14, 16)],
+  [
+    "image/webp",
+    "undersized VP8X chunk",
+    withUint32Le(webpVp8x(10, 10), 16, 2),
+  ],
+  [
+    "image/webp",
+    "undersized VP8L chunk",
+    withUint32Le(webpLossless(10, 10), 16, 1),
+  ],
+  // Length fields pointing past the end.
+  ["image/jpeg", "APP1 past the end", withUint16(jpeg(10, 10, 6), 4, 0xff_ff)],
+  [
+    "image/bmp",
+    "info header past the end",
+    withUint32Le(bmp(10, 10), 14, 0xff_ff),
+  ],
+  [
+    "image/webp",
+    "chunk past the end",
+    withUint32Le(webpVp8x(10, 10), 16, 0xff_ff),
+  ],
+  [
+    "image/tiff",
+    "directory past the end",
+    (() => {
+      const bytes = tiff();
+      new DataView(bytes.buffer).setUint32(4, 0xff_ff);
+      return bytes;
+    })(),
+  ],
+] as const satisfies readonly (readonly [
+  HeaderReadableImageMimeType,
+  string,
+  Uint8Array,
+])[];
+
+describe("malformed image headers", () => {
+  test.each(MALFORMED)(
+    "%s with %s reads as unreadable",
+    (mimeType, _case, bytes) => {
+      expect(readImageHeader(bytes, mimeType)).toBeNull();
+    },
+  );
+
+  test("an undersized APP1 drops only the orientation, never throws", () => {
+    // The frame header after it is intact, so the size is still known.
+    const bytes = jpeg(10, 20, 6);
+    // Shrink APP1 to 4 bytes and pad the rest with fill bytes so the walk
+    // resynchronises at the next marker.
+    const shrunk = withUint16(bytes, 4, 4);
+    shrunk.fill(0xff, 8, 39);
+    expect(readImageHeader(shrunk, "image/jpeg")).toEqual({
+      width: 10,
+      height: 20,
+      orientation: 1,
+    });
+  });
+
+  const MIME_TYPES = [
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+  ] as const satisfies readonly HeaderReadableImageMimeType[];
+
+  test("image header readers never throw on arbitrary bytes", () => {
+    assertProperty(
+      "image header readers never throw on arbitrary bytes",
+      fc.property(
+        fc.constantFrom(...MIME_TYPES),
+        fc.uint8Array({ maxLength: 96 }),
+        (mimeType, bytes) => {
+          readImageHeader(bytes, mimeType);
+        },
+      ),
+    );
+  });
+
+  test("image header readers never throw on corrupted valid headers", () => {
+    assertProperty(
+      "image header readers never throw on corrupted valid headers",
+      fc.property(
+        fc.constantFrom(...CASES),
+        fc.array(fc.tuple(fc.nat(), fc.integer({ min: 0, max: 255 })), {
+          maxLength: 8,
+        }),
+        fc.nat(),
+        ({ bytes, mimeType }, edits, cut) => {
+          const corrupted = bytes.slice(0, (cut % bytes.length) + 1);
+          for (const [at, value] of edits) {
+            corrupted[at % corrupted.length] = value;
+          }
+          readImageHeader(corrupted, mimeType);
+        },
+      ),
+    );
   });
 });
