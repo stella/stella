@@ -1,3 +1,5 @@
+import { stripUnicodeMarks } from "@stll/text-normalize/unicode";
+
 /**
  * NFD, then every `\p{Diacritic}` removed, spacing ones (`´`, `ʼ`, `^`)
  * included. `stripDiacritics` keeps spacing characters for search, but name
@@ -5,10 +7,8 @@
  * and are never re-keyed, so this fold stays pinned to the one they were
  * minted with.
  */
-const NAME_KEY_DIACRITIC_PATTERN = /\p{Diacritic}/gu;
-
 const stripNameKeyDiacritics = (text: string): string =>
-  text.normalize("NFD").replace(NAME_KEY_DIACRITIC_PATTERN, "");
+  stripUnicodeMarks(text, { form: "NFD", markClass: "diacritic" });
 
 /**
  * Academic titles a court prints around a judge's name, folded the way
