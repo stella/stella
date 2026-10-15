@@ -25,6 +25,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
+import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
@@ -1336,7 +1337,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         .map((name) => [name, "subagents cannot call it"] as const),
     ]),
   };
-  return tools;
+  // A run's approval-gated tools record each execution; validation sets never
+  // execute.
+  if (forValidation || recordAuditEvent === undefined) {
+    return tools;
+  }
+  return auditChatToolExecutions({
+    audit: { recordAuditEvent, safeDb, threadId },
+    tools,
+  });
 };
 
 type GetChatValidationToolsProps = Omit<

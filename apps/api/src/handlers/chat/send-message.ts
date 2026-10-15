@@ -2406,6 +2406,11 @@ export const createSendMessage = (
       const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
         async () =>
           await dependencies.loadExternalMcpTools({
+            executionAudit: {
+              recordAuditEvent,
+              safeDb,
+              threadId: body.threadId,
+            },
             nullUnionStrategy: externalMcpNullUnionStrategy,
             organizationId: session.activeOrganizationId,
             permit: grantThirdPartyOutboundPermit(),
