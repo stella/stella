@@ -14,6 +14,7 @@ import apiManifest from "../apps/api/package.json" with { type: "json" };
 import { isDbTest } from "../apps/api/scripts/test-batch-plan";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
+import { parseBunTestScript } from "./flake-gate-command";
 import { terminateFlakeProcessTree } from "./flake-gate-process";
 import { selectRustTargets } from "./flake-gate-rust";
 
@@ -121,24 +122,26 @@ export const selectTargets = ({
         env = Object.fromEntries([[gate[1].gate, gate[1].gateValue]]);
       }
     }
-    const testScript = manifest.scripts[script];
-    if (cwd !== repo && (!testScript || !/\bbun\b/u.test(testScript))) {
-      skipped.push({ file, reason: "owning package has no Bun test command" });
+    const parsed =
+      cwd === repo
+        ? { type: "supported" as const, flags: [] }
+        : parseBunTestScript(manifest.scripts[script] ?? "");
+    if (parsed.type === "unsupported") {
+      skipped.push({
+        file,
+        reason: `not gated (unsupported test script: ${parsed.reason})`,
+      });
       continue;
     }
     targets.push({
       file,
       cwd,
-      command:
-        cwd === repo
-          ? [process.execPath, "test", `./${file}`]
-          : [
-              process.execPath,
-              "run",
-              script,
-              "--",
-              `./${repoRelativePath(cwd, absolute)}`,
-            ],
+      command: [
+        process.execPath,
+        "test",
+        ...parsed.flags,
+        `./${repoRelativePath(cwd, absolute)}`,
+      ],
       env,
       runner: "bun",
     });

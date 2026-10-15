@@ -47,8 +47,8 @@ test("diff selection repeats changed tests only and preserves package runners an
       "apps/api/package.json",
       JSON.stringify({
         scripts: {
-          test: "bun scripts/run-tests.ts",
-          "test:postgres": "bun scripts/run-postgres-tests.ts",
+          test: "bun test --preload ./setup-env.ts src",
+          "test:postgres": "bun test --preload ./setup-postgres.ts src",
         },
       }),
     );
@@ -101,9 +101,9 @@ test("diff selection repeats changed tests only and preserves package runners an
     ]);
     expect(selected.targets.at(0)?.command).toEqual([
       process.execPath,
-      "run",
       "test",
-      "--",
+      "--preload",
+      "./setup-env.ts",
       "./src/unit.test.ts",
     ]);
     expect(selected.skipped).toEqual(
@@ -119,7 +119,7 @@ test("diff selection repeats changed tests only and preserves package runners an
     const withDb = selectTargets({ ...options, hasDb: true }).targets.find(
       ({ file }) => file.endsWith("db.test.ts"),
     );
-    expect(withDb?.command).toContain("test:postgres");
+    expect(withDb?.command).toContain("./setup-postgres.ts");
     expect(withDb?.env).toEqual({ STELLA_RUN_POSTGRES_TESTS: "true" });
   });
 });
@@ -172,7 +172,42 @@ test("mixed runtime packages select their Bun-only command", async () => {
     if (!target) {
       throw new TypeError("Expected Bun-only target");
     }
-    expect(target.command).toContain("test:bun");
+    expect(target.command).toEqual([
+      process.execPath,
+      "test",
+      "./unit.test.ts",
+    ]);
+    expect((await runOnce({ target, seed: 1, timeoutMs: 10_000 })).passed).toBe(
+      true,
+    );
+  });
+});
+
+test("selected files replace package directory filters and exclude failing siblings", async () => {
+  await withFixture(async (root) => {
+    write(
+      root,
+      "packages/filtered/package.json",
+      JSON.stringify({ scripts: { "test:bun": "bun test src" } }),
+    );
+    write(
+      root,
+      "packages/filtered/src/selected.test.ts",
+      'import {expect,test} from "bun:test"; test("changed", () => expect(true).toBe(true));',
+    );
+    write(
+      root,
+      "packages/filtered/src/sibling.test.ts",
+      'import {expect,test} from "bun:test"; test("unchanged failure", () => expect(true).toBe(false));',
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/filtered/src/selected.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected selected target");
+    }
     expect((await runOnce({ target, seed: 1, timeoutMs: 10_000 })).passed).toBe(
       true,
     );
@@ -392,7 +427,7 @@ test("owning runner deadlines release sockets held by detached test descendants"
     write(
       root,
       "packages/runner/package.json",
-      JSON.stringify({ scripts: { test: "bun runner.ts" } }),
+      JSON.stringify({ scripts: { test: "bun test --preload ./runner.ts" } }),
     );
     write(
       root,
