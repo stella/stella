@@ -5,6 +5,13 @@ export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
 }> {}
 
+// Only these job/step keys are omitted; new keys participate automatically.
+// YAML comments are absent from the parsed objects. Action inputs stay intact.
+export const CLASSIFICATION_EXCLUSIONS = {
+  job: ["name", "timeout-minutes"],
+  step: ["name", "timeout-minutes", "run"],
+} as const;
+
 const STEP = v.strictObject({
   uses: v.nullable(v.string()),
   run: v.nullable(v.string()),
@@ -25,6 +32,7 @@ const PARSER = String.raw`
 require 'psych'
 require 'json'
 require 'digest'
+EXCLUSIONS = JSON.parse(ARGV.fetch(0))
 MAX_SOURCE_BYTES = 4 * 1024 * 1024
 MAX_AST_NODES = 100_000
 MAX_EXPANDED_NODES = 250_000
@@ -110,8 +118,8 @@ def steps(value)
     {'uses'=>s['uses'],'run'=>s['run']}
   end
 end
-# Shell text is opaque; only its secret references and publish/deploy gates enter
-# the classification. Ordinary commands, names, timeouts and caches are excluded.
+# Run bodies remain opaque, but their secret references are retained separately.
+# Everything else participates unless its owning job/step exclusion names it.
 def secret_refs(value)
   case value
   when Hash
@@ -124,37 +132,24 @@ def secret_refs(value)
     []
   end
 end
+def project(value, scope)
+  value.reject { |key,_| EXCLUSIONS.fetch(scope).include?(key) }
+end
 def step_shapes(value)
-  value.flat_map do |s|
-    next step_shapes(s['parallel']) if s.key?('parallel')
-    shape = {'uses'=>s['uses'], 'secrets'=>secret_refs(s)}
-    if s.key?('uses')
-      shape['with'] = s['with']
-      shape['env'] = s['env']
-    end
-    if s.key?('uses') || s.fetch('run', '').match?(/publish|deploy|release|push/i)
-      shape['if'] = s['if']
-    end
-    shape unless shape.values.all? { |v| v.nil? || v == [] }
-  end.compact
+  value.filter_map do |s|
+    shape = project(s, 'step')
+    shape['parallel'] = step_shapes(s['parallel']) if s.key?('parallel')
+    refs = secret_refs(s['run'])
+    next if shape.empty? && refs.empty?
+    {'definition'=>shape, 'run-secret-refs'=>refs}
+  end
 end
 def job_shape(job, workflow)
-  runner = job['runs-on']
-  matrix = job.dig('strategy', 'matrix')
-  runner_matrix = {}
-  if matrix.is_a?(Hash)
-    JSON.generate(runner).scan(/matrix\.([A-Za-z_][A-Za-z0-9_-]*)/).flatten.each do |key|
-      runner_matrix[key] = matrix[key]
-      runner_matrix['include'] = matrix['include'] if matrix.key?('include')
-    end
-  end
-  {
-    'permissions'=>job.fetch('permissions', workflow['permissions']),
-    'secrets'=>job['secrets'], 'secret_refs'=>secret_refs([workflow['env'], job]),
-    'environment'=>job['environment'], 'uses'=>job['uses'], 'if'=>job['if'],
-    'runs-on'=>runner, 'runner-matrix'=>runner_matrix,
-    'steps'=>step_shapes(job.fetch('steps', []))
-  }
+  shape = project(job, 'job')
+  shape['steps'] = step_shapes(job['steps']) if job.key?('steps')
+  shape['permissions'] = job.fetch('permissions', workflow['permissions'])
+  shape['env'] = (workflow['env'] || {}).merge(job['env'] || {})
+  {'definition'=>shape, 'workflow-defaults'=>workflow['defaults']}
 end
 def digest(value)
   Digest::SHA256.hexdigest(JSON.generate(canon(value)))
@@ -192,20 +187,27 @@ if data.key?('runs')
     ss = [{'uses'=>nil,'run'=>JSON.generate(canon(r))}]
   end
 end
-shape = {'jobs'=>jobs.transform_values { |j| j['digest'] }, 'steps'=>step_shapes(data.dig('runs', 'steps') || []), 'using'=>data.dig('runs', 'using')}
+action = data['runs']&.dup
+if action && action.key?('steps')
+  action['steps'] = step_shapes(action['steps'])
+end
+shape = {'jobs'=>jobs.transform_values { |j| j['digest'] }, 'runs'=>action, 'inputs'=>data['inputs'], 'outputs'=>data['outputs']}
 STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'steps'=>ss}))
 `;
 
 export const parseDocument = (text: string) =>
   Result.try({
     try: () => {
-      const parsed = Bun.spawnSync(["ruby", "-e", PARSER], {
-        stdin: new TextEncoder().encode(text),
-        stdout: "pipe",
-        stderr: "pipe",
-        timeout: 15_000,
-        maxBuffer: 32 * 1024 * 1024,
-      });
+      const parsed = Bun.spawnSync(
+        ["ruby", "-e", PARSER, JSON.stringify(CLASSIFICATION_EXCLUSIONS)],
+        {
+          stdin: new TextEncoder().encode(text),
+          stdout: "pipe",
+          stderr: "pipe",
+          timeout: 15_000,
+          maxBuffer: 32 * 1024 * 1024,
+        },
+      );
       if (parsed.exitCode !== 0) {
         throw new AdmissionError({
           message: `YAML rejected: ${new TextDecoder().decode(parsed.stderr).trim()}`,

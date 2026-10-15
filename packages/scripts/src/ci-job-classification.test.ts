@@ -31,6 +31,7 @@ import { parseRemoteReference } from "../../../scripts/ci-job-classification/ref
 import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";
 import {
   AdmissionError,
+  CLASSIFICATION_EXCLUSIONS,
   parseDocument,
 } from "../../../scripts/ci-job-classification/yaml";
 
@@ -913,3 +914,142 @@ test("action input and environment mapping order does not change classification"
   }
   expect(changed.value.digest).toBe(original.value.digest);
 });
+
+test("reusable workflow caller inputs require review until metadata is refreshed", () => {
+  const f = fixture();
+  const key = "candidate:.github/workflows/ci.yml";
+  const original = f.reader.read("candidate", ".github/workflows/ci.yml");
+  const workflow = original.replace(
+    "  reusable:\n",
+    "  reusable:\n    with: {dist-tag: preview, publish: false}\n",
+  );
+  f.documents.set(key, workflow);
+  const options = {
+    ...f,
+    decisions: fixtureDecisions(f.manifest),
+    localActionPath: (directory: string) => `${directory}/action.yml`,
+  };
+  const baseline = generateClassification(options);
+  if (baseline.isErr()) {
+    throw baseline.error;
+  }
+  const changed = workflow.replace(
+    "dist-tag: preview, publish: false",
+    "dist-tag: stable, publish: true",
+  );
+  expect(changed).not.toBe(workflow);
+  f.documents.set(key, changed);
+  failure(
+    verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
+    ".github/workflows/ci.yml/reusable",
+  );
+  failure(
+    verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
+    "bun scripts/check-ci-job-classification.ts --write",
+  );
+  const refreshed = generateClassification({
+    ...options,
+    manifest: baseline.value,
+  });
+  if (refreshed.isErr()) {
+    throw refreshed.error;
+  }
+  expect(
+    verifyPublicMetadata({
+      manifest: refreshed.value,
+      reader: f.reader,
+    }).isOk(),
+  ).toBe(true);
+});
+
+// Key census from https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax.
+// Separate fixtures retain the job/step variants; future keys prove default inclusion.
+const classificationKeyFixtures = {
+  job: [
+    {
+      name: "Checks",
+      permissions: { contents: "read" },
+      needs: ["prepare"],
+      if: "always()",
+      "runs-on": "ubuntu-latest",
+      snapshot: { "image-name": "checks" },
+      environment: "staging",
+      concurrency: { group: "checks" },
+      "cache-mode": "read-only",
+      outputs: { artifact: "result" },
+      env: { MODE: "check" },
+      defaults: { run: { shell: "bash", "working-directory": "src" } },
+      steps: [{ run: "echo initial", env: { MODE: "check" } }],
+      "timeout-minutes": 10,
+      strategy: {
+        matrix: { os: ["ubuntu-latest"] },
+        "fail-fast": false,
+        "max-parallel": 2,
+      },
+      "continue-on-error": false,
+      container: { image: "node:24" },
+      services: { cache: { image: "redis:8" } },
+      "future-job-key": { nested: "value" },
+    },
+    { uses: "./child.yml", with: { channel: "preview" }, secrets: "inherit" },
+  ],
+  step: [
+    {
+      id: "action",
+      name: "Action",
+      if: "always()",
+      uses: "vendor/action@revision",
+      with: { mode: "check" },
+      env: { MODE: "check" },
+      "continue-on-error": false,
+      "timeout-minutes": 5,
+      "future-step-key": { nested: "value" },
+    },
+    {
+      run: "echo initial",
+      "working-directory": "src",
+      shell: "bash",
+      background: true,
+    },
+    { wait: "worker" },
+    { "wait-all": true },
+    { cancel: "worker" },
+    { parallel: [{ run: "echo child", env: { MODE: "check" } }] },
+  ],
+} as const;
+
+for (const scope of ["job", "step"] as const) {
+  test(`every fixture ${scope} key is projected or explicitly excluded`, () => {
+    const seen = new Set<string>();
+    const digest = (definition: Record<string, unknown>) => {
+      const workflow =
+        scope === "job"
+          ? { jobs: { check: definition } }
+          : { jobs: { check: { steps: [definition] } } };
+      const result = parseDocument(JSON.stringify(workflow));
+      if (result.isErr()) {
+        throw result.error;
+      }
+      return result.value.digest;
+    };
+    for (const definition of classificationKeyFixtures[scope]) {
+      const baseline = digest(definition);
+      for (const key of Object.keys(definition)) {
+        seen.add(key);
+        const withoutKey = Object.fromEntries(
+          Object.entries(definition).filter(([name]) => name !== key),
+        );
+        const excluded = CLASSIFICATION_EXCLUSIONS[scope].some(
+          (name) => name === key,
+        );
+        expect({ key, stable: digest(withoutKey) === baseline }).toEqual({
+          key,
+          stable: excluded,
+        });
+      }
+    }
+    expect(CLASSIFICATION_EXCLUSIONS[scope].every((key) => seen.has(key))).toBe(
+      true,
+    );
+  }, 15_000);
+}
