@@ -4,9 +4,12 @@ import type {
   ReaderAnswer,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
+import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
+import { Temporal } from "@stll/time";
 
 import { toSafeId } from "@/lib/safe-id";
 
+import { projectExpiredReaderAnswers } from "./reader-answers-polling";
 import {
   applyReaderAnswerEvent,
   consumeReaderAnswerStream,
@@ -220,5 +223,39 @@ describe("reader answer stream lifecycle", () => {
     });
     expect(result.isOk()).toBe(true);
     expect(events).toEqual([]);
+  });
+});
+
+describe("reader answer claim expiry", () => {
+  test("streamed text keeps the claim time, so an unmounted claim expires from the claim", () => {
+    const claimedAt = Temporal.Instant.from(now).epochMilliseconds;
+    const at = (offsetMs: number) =>
+      Temporal.Instant.fromEpochMilliseconds(claimedAt + offsetMs).toString();
+    const claimed = applyReaderAnswerEvent({
+      answer: answerFixture(),
+      event: started,
+      regenerate: false,
+      now: at(0),
+    });
+    const streamed = applyReaderAnswerEvent({
+      answer: claimed,
+      event: { type: "delta", messageId: started.messageId, delta: "part" },
+      regenerate: false,
+      now: at(100_000),
+    });
+    const message = streamed.messages.find(
+      ({ id }) => id === started.messageId,
+    );
+    expect(message?.updatedAt).toBe(at(0));
+    // The reader unmounted and recovery never succeeded: nothing owns the
+    // claim, so it times out once the deadline passes from the claim time.
+    const [expired] = projectExpiredReaderAnswers({
+      answers: [streamed],
+      ownedMessageIds: new Set(),
+      now: claimedAt + READER_ANSWER_DEADLINE_MS + 1,
+    });
+    expect(
+      expired?.messages.find(({ id }) => id === started.messageId),
+    ).toMatchObject({ status: "failed", errorCode: "timeout" });
   });
 });

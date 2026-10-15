@@ -216,10 +216,11 @@ export const applyReaderAnswerEvent = ({
           }
           switch (event.type) {
             case "delta":
+              // A streaming message's updatedAt is its claim time, which
+              // polling expires from; arriving text does not renew it.
               return {
                 ...message,
                 content: message.content + event.delta,
-                updatedAt: now,
               };
             case "complete":
               return {
