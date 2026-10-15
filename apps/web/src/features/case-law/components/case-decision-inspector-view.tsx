@@ -9,7 +9,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { BookTextIcon, InfoIcon } from "@stll/ui/icons";
+import { InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -55,6 +55,7 @@ import { useDecisionCitationAnchors } from "@/features/case-law/components/case-
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
 import { DecisionMainViewAction } from "@/features/case-law/components/decision-main-view-action";
+import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { detached } from "@/lib/detached";
@@ -80,7 +81,6 @@ export const CaseDecisionInspectorView = ({
   const t = useTranslations();
   const { payload } = tab;
   const textScale = useReaderTextScale();
-  const provisions = useReaderProvisionMode();
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const {
@@ -123,8 +123,12 @@ export const CaseDecisionInspectorView = ({
     element: contentElement,
     attach: attachContent,
   } = useReaderElement<HTMLElement>();
-  const { element: viewportElement, attach: attachViewport } =
-    useReaderElement<HTMLDivElement>();
+  const {
+    readerRef: scrollRef,
+    element: viewportElement,
+    attach: attachViewport,
+  } = useReaderElement<HTMLDivElement>();
+  const provisions = useReaderProvisionMode(scrollRef);
   // Cmd/Ctrl+F belongs to the decision in front of the reader rather than to
   // the results table behind it, for as long as there is text to search.
   const find = useInspectorFind({
@@ -185,17 +189,7 @@ export const CaseDecisionInspectorView = ({
           <>
             {decision !== undefined && (
               <>
-                <Button
-                  aria-label={t("caseLaw.reader.expandProvisions")}
-                  aria-pressed={provisions.expandProvisions}
-                  data-pressed={provisions.expandProvisions ? "" : undefined}
-                  onClick={provisions.toggle}
-                  size="icon-xs"
-                  tooltip={t("caseLaw.reader.expandProvisions")}
-                  variant="ghost"
-                >
-                  <BookTextIcon aria-hidden="true" className="size-3.5" />
-                </Button>
+                <ReaderProvisionModeToggle mode={provisions} size="pane" />
                 <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
                 <DecisionInfoPopover
                   decisionType={decision.decisionType}
