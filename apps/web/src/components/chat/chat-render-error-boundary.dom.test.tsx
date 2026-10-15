@@ -39,13 +39,18 @@ const textMessage = (
   text: string,
 ): ChatUIMessage => ({ id, role, parts: [{ type: "text", content: text }] });
 
-// A persisted message whose role has no render policy makes the message
+// A stored message whose role has no render policy (a shape the type rules
+// out, as a row from another version could still hold) makes the message
 // body throw while rendering, the same way any crashing part would.
-const unrenderableMessage = {
-  id: "unrenderable-message",
-  role: "unknown-role",
-  parts: [{ type: "text", content: "private unrenderable body" }],
-} as unknown as ChatUIMessage;
+const unrenderableMessage = (): ChatUIMessage => {
+  const message = textMessage(
+    "unrenderable-message",
+    "assistant",
+    "private unrenderable body",
+  );
+  Reflect.set(message, "role", "unknown-role");
+  return message;
+};
 
 const threadView = (threadMessages: ChatUIMessage[], analytics: Analytics) => (
   <ChatThreadTestRouter>
@@ -92,7 +97,7 @@ test("a message that fails to render is replaced by a fallback while its sibling
       threadView(
         [
           textMessage("first-message", "user", "First question"),
-          unrenderableMessage,
+          unrenderableMessage(),
           textMessage("last-message", "assistant", "Last answer"),
         ],
         analytics,

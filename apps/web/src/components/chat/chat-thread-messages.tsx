@@ -1011,7 +1011,8 @@ const UserAttachments = ({
 // Runs a message body's render inside its own component, so a throw while
 // building that body reaches the enclosing per-message error boundary
 // instead of the thread's render.
-const MessageBodyRender = ({ render }: { render: () => ReactNode }) => render();
+const MessageBodyRender = ({ render }: { render: () => Awaited<ReactNode> }) =>
+  render();
 
 // Shown in place of one message whose content failed to render, so the
 // rest of the thread and the composer stay usable.
