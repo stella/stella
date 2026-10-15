@@ -60,7 +60,11 @@ const rule = createTestDeterminismRule({
         }
         return null;
       }
-      if (node?.type === "CallExpression" && node.arguments.length === 0) {
+      if (
+        node?.type === "CallExpression" &&
+        Array.isArray(node.arguments) &&
+        node.arguments.length === 0
+      ) {
         const callee = unwrapExpression(node.callee);
         if (
           callee?.type === "MemberExpression" &&
@@ -84,8 +88,8 @@ const rule = createTestDeterminismRule({
       if (node.operator === "-" && left === "instant" && right === "instant") {
         return "elapsed";
       }
-      if (["+", "-", "*", "/"].includes(node.operator)) {
-        return left === "elapsed" || right === "elapsed" ? "elapsed" : null;
+      if (["+", "-", "*", "/"].some((operator) => operator === node.operator)) {
+        return [left, right].includes("elapsed") ? "elapsed" : null;
       }
       return null;
     };
@@ -134,6 +138,7 @@ const rule = createTestDeterminismRule({
       }
       return (
         subject?.type === "CallExpression" &&
+        Array.isArray(subject.arguments) &&
         isExpect(subject.callee) &&
         timing(subject.arguments.at(0)) === "elapsed"
       );

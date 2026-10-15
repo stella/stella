@@ -5,7 +5,7 @@ import path from "node:path";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-ambient-time-in-tests";
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule(RULE, source, { sourcePath: "x.test.ts" });
 
 describe(RULE, () => {

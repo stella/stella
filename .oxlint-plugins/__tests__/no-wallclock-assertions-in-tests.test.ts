@@ -5,7 +5,7 @@ import path from "node:path";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE = "no-wallclock-assertions-in-tests";
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule(RULE, source, { sourcePath: "x.test.ts" });
 
 const ELAPSED_ASSERTION =

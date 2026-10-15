@@ -1,10 +1,4 @@
 {
-  ".oxlint-plugins/__fixtures__/no-direct-test-state.fixture.test.ts": [
-    "no-classified-reachability"
-  ],
-  ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts": [
-    "no-classified-reachability"
-  ],
   ".oxlint-plugins/__tests__/public-law-read-boundary-per-file.test.ts": [
     "no-classified-reachability"
   ],
