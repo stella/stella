@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
       "desktopCardConnectedDetail": "Saistīts ar <bdi>{identity}</bdi> serverī {host} · versija {version}",
       "desktopCardConnectedDetailNoVersion": "Saistīts ar <bdi>{identity}</bdi> serverī {host}",
-      "desktopCardConnectedTitle": "stella desktop ir savienots",
+      "desktopCardConnectedTitle": "stella desktop ir sasaistīts",
       "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
       "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
       "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",

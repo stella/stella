@@ -4641,7 +4641,7 @@ type Messages = {
       "desktopCardApproveTitle": "stella desktop is asking to connect";
       "desktopCardConnectedDetail": "Linked to <bdi>{identity}</bdi> on {host} · version {version}";
       "desktopCardConnectedDetailNoVersion": "Linked to <bdi>{identity}</bdi> on {host}";
-      "desktopCardConnectedTitle": "stella desktop is connected";
+      "desktopCardConnectedTitle": "stella desktop is linked";
       "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.";
       "desktopCardMissingTitle": "stella desktop isn't linked yet";
       "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.";

@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "stella desktop prašo prisijungti",
       "desktopCardConnectedDetail": "Susieta su <bdi>{identity}</bdi> serveryje {host} · versija {version}",
       "desktopCardConnectedDetailNoVersion": "Susieta su <bdi>{identity}</bdi> serveryje {host}",
-      "desktopCardConnectedTitle": "stella desktop prijungta",
+      "desktopCardConnectedTitle": "stella desktop susieta",
       "desktopCardMissingDetail": "Įdiekite ją arba prijunkite, jei ji jau įdiegta šiame kompiuteryje.",
       "desktopCardMissingTitle": "stella desktop dar nesusieta",
       "desktopCardOutdatedDetail": "Versija {version} susieta su <bdi>{identity}</bdi>. Įdiekite naujausią versiją, kad dokumentai ir veikla toliau veiktų.",

@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "يطلب stella desktop الاتصال",
       "desktopCardConnectedDetail": "مرتبط بـ <bdi>{identity}</bdi> على {host} · الإصدار {version}",
       "desktopCardConnectedDetailNoVersion": "مرتبط بـ <bdi>{identity}</bdi> على {host}",
-      "desktopCardConnectedTitle": "stella desktop متصل",
+      "desktopCardConnectedTitle": "تم ربط stella desktop",
       "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
       "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
       "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",

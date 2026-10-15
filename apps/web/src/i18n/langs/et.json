@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "stella desktop soovib ühenduda",
       "desktopCardConnectedDetail": "Seotud kontoga <bdi>{identity}</bdi> serveris {host} · versioon {version}",
       "desktopCardConnectedDetailNoVersion": "Seotud kontoga <bdi>{identity}</bdi> serveris {host}",
-      "desktopCardConnectedTitle": "stella desktop on ühendatud",
+      "desktopCardConnectedTitle": "stella desktop on seotud",
       "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
       "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
       "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",

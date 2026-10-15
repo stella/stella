@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "stella desktop möchte sich verbinden",
       "desktopCardConnectedDetail": "Verknüpft mit <bdi>{identity}</bdi> auf {host} · Version {version}",
       "desktopCardConnectedDetailNoVersion": "Verknüpft mit <bdi>{identity}</bdi> auf {host}",
-      "desktopCardConnectedTitle": "stella desktop ist verbunden",
+      "desktopCardConnectedTitle": "stella desktop ist verknüpft",
       "desktopCardMissingDetail": "Installieren Sie es oder verbinden Sie es, falls es auf diesem Computer schon installiert ist.",
       "desktopCardMissingTitle": "stella desktop ist noch nicht verknüpft",
       "desktopCardOutdatedDetail": "Version {version} ist mit <bdi>{identity}</bdi> verknüpft. Installieren Sie die neueste Version, damit Dokumente und Aktivität weiter funktionieren.",

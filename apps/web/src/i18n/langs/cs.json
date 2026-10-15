@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "stella desktop žádá o připojení",
       "desktopCardConnectedDetail": "Propojeno s účtem <bdi>{identity}</bdi> na {host} · verze {version}",
       "desktopCardConnectedDetailNoVersion": "Propojeno s účtem <bdi>{identity}</bdi> na {host}",
-      "desktopCardConnectedTitle": "stella desktop je připojen",
+      "desktopCardConnectedTitle": "stella desktop je propojen",
       "desktopCardMissingDetail": "Nainstalujte ho, nebo ho připojte, pokud už na tomto počítači nainstalovaný je.",
       "desktopCardMissingTitle": "stella desktop zatím není propojen",
       "desktopCardOutdatedDetail": "Verze {version} je propojena s účtem <bdi>{identity}</bdi>. Nainstalujte nejnovější verzi, aby dokumenty a aktivita dál fungovaly.",

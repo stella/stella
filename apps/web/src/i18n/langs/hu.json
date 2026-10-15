@@ -4638,7 +4638,7 @@
       "desktopCardApproveTitle": "A stella desktop csatlakozást kér",
       "desktopCardConnectedDetail": "Összekapcsolva: <bdi>{identity}</bdi> · {host} · {version} verzió",
       "desktopCardConnectedDetailNoVersion": "Összekapcsolva: <bdi>{identity}</bdi> · {host}",
-      "desktopCardConnectedTitle": "A stella desktop csatlakoztatva",
+      "desktopCardConnectedTitle": "A stella desktop összekapcsolva",
       "desktopCardMissingDetail": "Telepítse, vagy kapcsolja össze, ha már telepítve van ezen a számítógépen.",
       "desktopCardMissingTitle": "A stella desktop még nincs összekapcsolva",
       "desktopCardOutdatedDetail": "A(z) {version} verzió össze van kapcsolva ezzel: <bdi>{identity}</bdi>. Telepítse a legújabb verziót, hogy a dokumentumok és a tevékenység tovább működjenek.",
