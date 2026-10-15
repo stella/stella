@@ -1067,7 +1067,10 @@ const applyReviewedLabelsTx = async ({
   tx,
   input,
   domain,
-}: DecideReviewedLabelsOptions): Promise<ReviewedLabelApplication> => {
+}: Omit<
+  DecideReviewedLabelsOptions,
+  "lock"
+>): Promise<ReviewedLabelApplication> => {
   const { settled, planned } = await decideReviewedLabels({
     tx,
     input,
