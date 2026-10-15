@@ -36,9 +36,13 @@ const stepScript = (workflow: string, job: string, name: string) => {
   return script;
 };
 
-// Formatting may wrap lines and add trailing commas; the code must match.
+// Formatting may wrap lines, add trailing commas or brace a single return
+// statement; the code must match.
 const compact = (source: string) =>
-  source.replaceAll(/\s+/gu, "").replaceAll(/,([)\]}])/gu, "$1");
+  source
+    .replaceAll(/\s+/gu, "")
+    .replaceAll(/,([)\]}])/gu, "$1")
+    .replaceAll(/\{(return[^;{}]*;)\}/gu, "$1");
 const functionBody = (source: string, header: string) => {
   const lines = source.split("\n");
   const start = lines.findIndex((line) => line.trim() === header);

@@ -17,7 +17,8 @@
  * Whether merge-group runs have work waiting for a runner. The pull request
  * CI yield and the queued-run steward inline this same predicate; a test
  * keeps the three definitions identical.
- * @param {{ github: ActionsClient, repo: Repository }} options
+ * @param {{ github: ActionsClient, repo: Repository }} options GitHub client and repository.
+ * @returns {Promise<boolean>} Whether merge-group work waits for a runner.
  */
 export const mergeQueueWaiting = async ({ github, repo }) => {
   for (const status of ["queued", "waiting", "pending", "requested"]) {
@@ -27,7 +28,9 @@ export const mergeQueueWaiting = async ({ github, repo }) => {
       status,
       per_page: 1,
     });
-    if (data.total_count > 0) return true;
+    if (data.total_count > 0) {
+      return true;
+    }
   }
   const { data } = await github.rest.actions.listWorkflowRunsForRepo({
     ...repo,
@@ -47,8 +50,9 @@ export const mergeQueueWaiting = async ({ github, repo }) => {
     );
     if (
       jobs.some((job) => job.status === "queued" || job.status === "waiting")
-    )
+    ) {
       return true;
+    }
   }
   return false;
 };
@@ -67,8 +71,8 @@ export const mergeQueueWaiting = async ({ github, repo }) => {
  *   intervalMs: number,
  *   sleep: (ms: number) => Promise<void>,
  *   notice: (message: string) => void,
- * }} options
- * @returns {Promise<"run" | "skip">}
+ * }} options GitHub client, run context and polling settings.
+ * @returns {Promise<"run" | "skip">} Whether the side workflow runs now.
  */
 export const mergeQueueGate = async ({
   github,
@@ -79,9 +83,13 @@ export const mergeQueueGate = async ({
   sleep,
   notice,
 }) => {
-  if (context.actor === "dependabot[bot]" || attempt > 1) return "run";
+  if (context.actor === "dependabot[bot]" || attempt > 1) {
+    return "run";
+  }
   const waiting = () => mergeQueueWaiting({ github, repo: context.repo });
-  if (!(await waiting())) return "run";
+  if (!(await waiting())) {
+    return "run";
+  }
   if (polls === 0) {
     notice(
       "Merge queue has waiting work; skipped for this push. Re-run the workflow or push again to run it.",
@@ -90,7 +98,9 @@ export const mergeQueueGate = async ({
   }
   for (let poll = 0; poll < polls; poll += 1) {
     await sleep(intervalMs);
-    if (!(await waiting())) return "run";
+    if (!(await waiting())) {
+      return "run";
+    }
   }
   notice("Merge queue still has waiting work; running anyway.");
   return "run";
