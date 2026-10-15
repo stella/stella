@@ -111,7 +111,7 @@ export const createRlsDesktopCredentials = async (
   const authorizers = createDesktopCredentialAuthorizers({
     ownerDb: asTestRaw<typeof rootDb>(testDb),
     membershipDb: asTestRaw<typeof rlsDb>(testDb),
-    verifyApiKey: auth.api.verifyApiKey,
+    verifyApiKey: () => auth.api.verifyApiKey,
     resolveMember: async (lookup) =>
       await resolveMemberAuthorization(lookup, testDb),
   });

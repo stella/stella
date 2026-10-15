@@ -81,7 +81,9 @@ type DesktopRegistryAuthorization = {
 type DesktopCredentialInfrastructure = {
   ownerDb: typeof rootDb;
   membershipDb: typeof rlsDb;
-  verifyApiKey: ReturnType<typeof getAuth>["api"]["verifyApiKey"];
+  // A getter, so authentication starts only for a request that carries a
+  // desktop credential, inside the step that maps its failure to 503.
+  verifyApiKey: () => ReturnType<typeof getAuth>["api"]["verifyApiKey"];
   resolveMember: typeof resolveCredentialMemberAuthorization;
 };
 
@@ -114,7 +116,7 @@ export const createDesktopCredentialAuthorizers = ({
     }
     const verified = await Result.tryPromise({
       try: async () =>
-        await verifyApiKey({
+        await verifyApiKey()({
           body: {
             configId: DESKTOP_REGISTRY_KEY_CONFIG,
             key: authorization.slice(7),
@@ -239,7 +241,7 @@ const productionAuthorizers = () =>
   createDesktopCredentialAuthorizers({
     ownerDb: rootDb,
     membershipDb: rlsDb,
-    verifyApiKey: getAuth().api.verifyApiKey,
+    verifyApiKey: () => getAuth().api.verifyApiKey,
     resolveMember: resolveCredentialMemberAuthorization,
   });
 

@@ -268,6 +268,9 @@ let ids: TestIds;
 let desktopCredentials: Awaited<ReturnType<typeof createRlsDesktopCredentials>>;
 const desktopFormatB = createSafeId<"templateLookupFormat">();
 const DESKTOP_BATCH_KEY = "matrix-desktop-batch";
+// Its own key, so the positive call writes a batch instead of replaying the
+// seeded receipt that the status case reads, whatever the case order.
+const DESKTOP_CREATE_BATCH_KEY = "matrix-desktop-create-batch";
 const DESKTOP_ENTRY = {
   dateWorked: "2026-10-09",
   timezoneId: "UTC",
@@ -691,12 +694,16 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
       expect(response.status).toBe(200);
       return await response.json();
     },
-    expectDenied: (result, { ids: testIds }) =>
-      expect(result).not.toMatchObject({
-        matters: expect.arrayContaining([
-          expect.objectContaining({ id: testIds.wsB1 }),
-        ]),
-      }),
+    expectDenied: (result, { ids: testIds }) => {
+      // A sees its own matter, so an empty list cannot pass as isolation.
+      const matters = recordField(result, "matters");
+      expect(matters).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsA1 })]),
+      );
+      expect(matters).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsB1 })]),
+      );
+    },
     expectPositive: (result, { ids: testIds }) =>
       expect(result).toMatchObject({
         matters: expect.arrayContaining([
@@ -709,14 +716,14 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     runAAgainstB: async ({ desktopA, ids: testIds }) =>
       await desktopA(
         desktopRequest("/batch", {
-          idempotencyKey: DESKTOP_BATCH_KEY,
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
           entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
         }),
       ),
     runBPositive: async ({ desktopB, ids: testIds }) =>
       await desktopB(
         desktopRequest("/batch", {
-          idempotencyKey: DESKTOP_BATCH_KEY,
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
           entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
         }),
       ),
