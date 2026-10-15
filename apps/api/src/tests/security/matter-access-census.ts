@@ -18,7 +18,7 @@ import ts from "typescript";
  * - `owner-connection-workspace-set`: it imports the owner connection
  *   (`rootDb`, which row policies do not filter) as a value and filters by a
  *   matter-id set: `inArray(<table>.workspaceId | workspaces.id, …)` under any
- *   local or namespaced name, SQL `workspace_id = ANY(` / `IN (` (literal or
+ *   local or namespaced name, SQL `workspace_id = ANY(` / `IN` (literal or
  *   with an interpolated matter column), or an `accessibleWorkspaceIds` /
  *   `activeWorkspaceIds` binding.
  *
@@ -74,9 +74,12 @@ const WORKSPACE_SET_IDENTIFIERS = new Set([
 const SQL_MEMBERSHIP = /\bworkspace_members\b/gu;
 const SQL_MEMBER_ROLE = /\b[a-z_]+\.role\b/u;
 const SQL_CLIENT_ID = /\bclient_id\b/u;
-const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any|in)\s*\(/giu;
-/** The literal right after an interpolated column opens a set predicate. */
-const SQL_SET_AFTER_COLUMN = /^\s*(?:=\s*any|in)\s*\(/iu;
+const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any\s*\(|in\b)/giu;
+/**
+ * The literal right after an interpolated column opens a set predicate; `IN`
+ * needs no parenthesis because an interpolated array expands to a list.
+ */
+const SQL_SET_AFTER_COLUMN = /^\s*(?:=\s*any\s*\(|in\b)/iu;
 
 /**
  * A column that holds a matter id: any `<table>.workspaceId`, or the
@@ -165,10 +168,14 @@ type Facts = {
 /** Local names that refer to drizzle's `inArray`, direct or namespaced. */
 type InArrayNames = { direct: Set<string>; namespaces: Set<string> };
 
+/** Local name -> imported name for every renamed value import. */
+type ImportedNames = Map<string, string>;
+
 const recordImport = (
   node: ts.ImportDeclaration,
   facts: Facts,
   inArray: InArrayNames,
+  imported: ImportedNames,
 ) => {
   if (
     !ts.isStringLiteral(node.moduleSpecifier) ||
@@ -180,6 +187,18 @@ const recordImport = (
   const bindings = node.importClause?.namedBindings;
   if (bindings === undefined) {
     return;
+  }
+  if (ts.isNamespaceImport(bindings)) {
+    // `root.rootDb` reaches the owner connection without naming it here.
+    if (specifier === "@/api/db/root") {
+      facts.importsRootDbValue = true;
+    }
+  } else {
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly && element.propertyName !== undefined) {
+        imported.set(element.name.text, element.propertyName.text);
+      }
+    }
   }
   if (specifier === "drizzle-orm") {
     if (ts.isNamespaceImport(bindings)) {
@@ -220,8 +239,13 @@ const isInArrayCall = (
       inArray.namespaces.has(node.expression.expression.text) &&
       node.expression.name.text === "inArray"));
 
-const recordIdentifier = (node: ts.Identifier, facts: Facts) => {
-  const name = node.text;
+const recordIdentifier = (
+  node: ts.Identifier,
+  facts: Facts,
+  imported: ImportedNames,
+) => {
+  // A renamed import is a use of the original name.
+  const name = imported.get(node.text) ?? node.text;
   if (VIEW_IDENTIFIERS.has(name)) {
     facts.view.add(node);
   }
@@ -268,14 +292,15 @@ const readFacts = (file: string, source: string): Facts => {
     workspaceSet: siteCounter(),
   };
   const inArray: InArrayNames = { direct: new Set(), namespaces: new Set() };
+  const imported: ImportedNames = new Map();
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
-      recordImport(node, facts, inArray);
+      recordImport(node, facts, inArray, imported);
       return;
     }
     if (ts.isIdentifier(node)) {
-      recordIdentifier(node, facts);
+      recordIdentifier(node, facts, imported);
     }
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -312,7 +337,7 @@ const readFacts = (file: string, source: string): Facts => {
 
 // Cheap prefilter so only candidate files are parsed.
 const CANDIDATE =
-  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb/u;
+  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|@\/api\/db\/root/u;
 
 const hasSites = (sites: MatterAccessSites) => Object.keys(sites).length > 0;
 

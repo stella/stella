@@ -219,6 +219,23 @@ describe("matter access census self-test", () => {
     ).toEqual([]);
   });
 
+  test("a renamed import of the authorization view is still a use of it", () => {
+    expect(
+      classifyMatterAccessModule(
+        "apps/api/src/lib/example-view.ts",
+        `import { stellaAuthorizedWorkspaces as allowed } from "@/api/db/schema";
+        export const readAllowed = async (tx: Tx) => await tx.select().from(allowed);`,
+      ),
+    ).toEqual([
+      {
+        file: "apps/api/src/lib/example-view.ts",
+        signal: "reads-authorization-view",
+        screened: false,
+        sites: { readAllowed: 1 },
+      },
+    ]);
+  });
+
   test("a module re-deriving the matter access rule fails the census", () => {
     const findings = classifyMatterAccessModule(
       "apps/api/src/lib/example-rule.ts",
