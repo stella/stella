@@ -5,14 +5,12 @@ import {
   PublicLawSearch,
   publicLawAskScope,
 } from "@/components/public-law-search";
-import {
-  caseLawCountryRegion,
-  fromCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
+import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { refineCaseLawQuery } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { caseLawCountryName } from "@/lib/case-law-route";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type CaseLawSearchProps = {
@@ -95,19 +93,4 @@ export const CaseLawSearch = ({
       searchLabel={t("caseLaw.searchLabel")}
     />
   );
-};
-
-/**
- * A corpus country as a reader names it. One helper, because the search box,
- * the top-bar menu and the home all have to say the same country the same
- * way.
- */
-export const caseLawCountryName = (
-  format: ReturnType<typeof useFormatter>,
-  code: string,
-): string => {
-  const region = caseLawCountryRegion(code);
-  return region === null
-    ? code
-    : format.displayName(region, { type: "region" });
 };

@@ -12,11 +12,11 @@ import {
 } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
-import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   FULL_DATE_MEDIUM_TIME_FORMAT,

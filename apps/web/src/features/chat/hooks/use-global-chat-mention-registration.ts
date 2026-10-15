@@ -27,7 +27,10 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { defaultCaseLawCountryForLocale } from "@/lib/case-law-route";
+import {
+  caseLawCountryName,
+  defaultCaseLawCountryForLocale,
+} from "@/lib/case-law-route";
 import {
   mcpConnectionsOptions,
   mcpConnectorsOptions,
@@ -110,17 +113,10 @@ const searchCaseLawMentions = async ({
 };
 
 /** "Case law · Czechia": the chip text of a corpus scope. */
-/** How the case-law browser names a corpus country ("Czechia"). */
-type CaseLawCountryName = (
-  format: ReturnType<typeof useFormatter>,
-  code: string,
-) => string;
-
 const corpusLabelFor =
   (
     t: ReturnType<typeof useTranslations<"chat.mention.corpus">>,
     format: ReturnType<typeof useFormatter>,
-    caseLawCountryName: CaseLawCountryName,
   ) =>
   (scope: ChatCorpusScope): string =>
     scope.corpus === "case_law"
@@ -177,16 +173,7 @@ const loadSourceMentions = async ({
   });
 };
 
-/**
- * `caseLawCountryName` comes from the app shell, which may reach into the
- * case-law feature; this chat hook may not. Pass the module-level function so
- * its identity is stable across renders.
- */
-export const useGlobalChatMentionRegistration = ({
-  caseLawCountryName,
-}: {
-  caseLawCountryName: CaseLawCountryName;
-}) => {
+export const useGlobalChatMentionRegistration = () => {
   const { registerExtension } = useChatEditorExtensions();
   const mentionProviders = useMentionProviders();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
@@ -209,11 +196,7 @@ export const useGlobalChatMentionRegistration = ({
             const [contextItems, sourceItems] = await Promise.all([
               mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
               loadSourceMentions({
-                corpusLabel: corpusLabelFor(
-                  tCorpus,
-                  format,
-                  caseLawCountryName,
-                ),
+                corpusLabel: corpusLabelFor(tCorpus, format),
                 organizationId: activeOrganizationId,
                 publicLawPreviewEnabled,
                 queryClient,
@@ -235,7 +218,6 @@ export const useGlobalChatMentionRegistration = ({
     };
   }, [
     activeOrganizationId,
-    caseLawCountryName,
     country,
     format,
     mentionProviders,

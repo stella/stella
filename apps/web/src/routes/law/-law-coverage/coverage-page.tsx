@@ -23,7 +23,6 @@ import { cn } from "@stll/ui/utils";
 
 import { Globe, type GlobeMarker } from "@/components/globe";
 import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
-import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import {
@@ -35,6 +34,7 @@ import {
   useLocale,
   useRelativeTime,
 } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,

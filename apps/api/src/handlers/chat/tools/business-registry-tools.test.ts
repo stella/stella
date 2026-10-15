@@ -217,8 +217,9 @@ describe("a jurisdiction with more than one register", () => {
     );
     const context = { emitCustomEvent: () => undefined };
     // The tool's execute is typed loosely; a call here is always a promise.
-    const call = async (input: Record<string, string>): Promise<unknown> =>
-      await execute(input, context);
+    const call = async (
+      input: Parameters<typeof execute>[0],
+    ): Promise<unknown> => await execute(input, context);
 
     // The default SK register is orsr; the chip names rpo, so rpo answers.
     await call({ jurisdiction: "SK", query: "31333532" });
