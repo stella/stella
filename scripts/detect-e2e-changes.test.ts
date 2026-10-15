@@ -1787,8 +1787,8 @@ describe("detect-e2e-changes", () => {
 
   test("grants every local reusable workflow the permissions its jobs declare", () => {
     // A called job may not request more than its caller grants; GitHub
-    // rejects the whole run at startup instead of failing a job, so a new
-    // scope in ci.yml silently stopped main-heavy and main-pr-depth.
+    // rejects the whole run at startup instead of failing a job, so no job
+    // result ever reports the mismatch.
     const rank = { none: 0, read: 1, write: 2 } as const;
     const levelOf = (value: unknown): number => {
       if (value !== "none" && value !== "read" && value !== "write") {
