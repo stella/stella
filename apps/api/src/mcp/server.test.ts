@@ -88,7 +88,10 @@ const listMcpToolsMock = mock(
     _scopes?: unknown,
   ): Promise<McpTool[]> => [],
 );
-const listMcpResourcesMock = mock((): Resource[] => []);
+const listMcpResourcesFake: Parameters<
+  typeof createMcpHttpRequestHandler
+>[0]["listMcpResources"] = async () => [];
+const listMcpResourcesMock = mock(listMcpResourcesFake);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 const mcpHandlerDependencies = {
@@ -221,7 +224,7 @@ describe("handleMcpHttpRequest", () => {
     listMcpToolsMock.mockReset();
     listMcpToolsMock.mockImplementation(async () => []);
     listMcpResourcesMock.mockReset();
-    listMcpResourcesMock.mockImplementation(() => []);
+    listMcpResourcesMock.mockImplementation(async () => []);
     readMcpResourceMock.mockReset();
     readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
@@ -1592,7 +1595,7 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    listMcpResourcesMock.mockReturnValue([
+    listMcpResourcesMock.mockResolvedValue([
       {
         uri: "stella://reference/template-markers",
         name: "template-markers",
@@ -1612,9 +1615,7 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
-      type: "mcp-context",
-    });
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", { context });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);
