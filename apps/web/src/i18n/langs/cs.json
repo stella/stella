@@ -173,6 +173,7 @@
       "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong> — jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
       "heldForReview": "Pozastaveno ke kontrole",
       "holdOutOfScoring": "Vyloučit z hodnocení",
+      "inScoring": "Zahrnuto do hodnocení",
       "includeInScoring": "Zahrnout do hodnocení",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Pokud je význam tohoto důkazu sporný, popište jak. Pokud sporný není, nechte pole prázdné.",
@@ -2074,6 +2075,7 @@
     "versionLabel": "Verze {version}",
     "viewSource": "Zobrazit zdroj",
     "website": "Web",
+    "whenToUse": "Kdy použít",
     "workflow": "Pracovní postup",
     "workflows": "Pracovní postupy",
     "zoomIn": "Přiblížit",
@@ -2553,6 +2555,10 @@
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
+      "validationInvalid": "Pole obsahuje hodnotu, kterou nelze uložit.",
+      "validationRequired": "Povinné pole je prázdné.",
+      "validationTooLong": "Příliš dlouhé: použijte nejvýše {limit, number} znaků.",
+      "validationTooShort": "Příliš krátké: použijte alespoň {limit, number} znaků.",
       "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
       "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
@@ -3648,6 +3654,10 @@
       "importTitle": "Importovat dovednost",
       "importedSkills": "{count, plural, one {Importována # dovednost} few {Importovány # dovednosti} other {Importováno # dovedností}}",
       "invalidPath": "Cesta smí obsahovat pouze malá písmena, číslice, tečky, pomlčky nebo podtržítka",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI může tuto dovednost použít sama, když se hodí k požadavku.",
+      "invocationManual": "Jen na vyžádání",
+      "invocationManualHelp": "Použije se jen tehdy, když ji spustíte přes / nebo ji přidáte do zprávy.",
       "license": "Licence: {license}",
       "newFile": "Nový soubor",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4348,8 @@
         "yearMonthSequential": "Rok-měsíc / průběžné (2026-02/001)",
         "yearSequential": "Rok / průběžné (2026/001)"
       },
+      "showInTitle": "Zobrazit číslo vedle názvu spisu",
+      "showInTitleDescription": "Když je vypnuté, název je přesně ten, který jste zadali.",
       "title": "Číslování spisů",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (pořadí), '{'YYYY'}' (rok), '{'YY'}' (dvouciferný rok), '{'MM'}' (měsíc)"
     },
@@ -4507,6 +4519,25 @@
     },
     "tokenHelp": "Jak získat token",
     "viewOnGithub": "Zobrazit na GitHubu"
+  },
+  "readerAnswers": {
+    "budgetError": "Rozpočet na odpovědi je vyčerpán.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozbalit odpověď",
+    "explain": "Vysvětlit",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Položit doplňující otázku",
+    "invalidCitations": "{count, plural, one {# citaci se nepodařilo ověřit.} few {# citace se nepodařilo ověřit.} other {# citací se nepodařilo ověřit.}}",
+    "loading": "Generování odpovědi…",
+    "minimise": "Sbalit odpověď",
+    "modelError": "Model nedokázal tuto odpověď dokončit.",
+    "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
+    "regenerate": "Vygenerovat odpověď znovu",
+    "selectionError": "Vyberte text v rámci jednoho odstavce (nejvýše 2 000 znaků).",
+    "send": "Odeslat doplňující otázku",
+    "share": "Sdílet s týmem",
+    "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",
+    "title": "Odpověď k vybranému textu"
   },
   "routeError": {
     "backToMatters": "Zpět na spisy",
@@ -5554,7 +5585,6 @@
     "viewVersion": "Zobrazit",
     "whenNotToUse": "Kdy nepoužívat",
     "whenNotToUsePlaceholder": "Kdy tento vzor nepoužít?",
-    "whenToUse": "Kdy použít",
     "whenToUsePlaceholder": "Kdy se má tento vzor použít? (pomáhá AI s výběrem vzoru)"
   },
   "timesheets": {
@@ -5675,7 +5705,7 @@
       "title": "Kopírovat do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Název spisu",
       "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."
     },
     "createNewWorkspace": "Vytvořit nový spis",
@@ -6127,15 +6157,12 @@
       "upcomingTasks": "Nadcházející agenda",
       "uploaded": "nahrál(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobní"
-    },
     "parties": {
       "addParty": "Přidat stranu",
       "changeClient": "Změnit klienta",
       "client": "Klient",
       "noClient": "Žádný klient nepřiřazen",
+      "noClientOptional": "Bez klienta (volitelné)",
       "noParties": "K tomuto spisu nejsou přidány žádné strany.",
       "partyRoles": {
         "co_counsel": "Spolupracující advokát",

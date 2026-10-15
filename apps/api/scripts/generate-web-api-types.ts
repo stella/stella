@@ -104,14 +104,12 @@ const HEADER = [
 
 type ApiProgramOptions = {
   virtualFiles: ReadonlyMap<string, string>;
-  oldProgram?: ts.Program;
   // Records the file-system answers the program depends on.
   recorder?: CompilerInputRecorder;
 };
 
 const createApiProgram = ({
   virtualFiles,
-  oldProgram,
   recorder,
 }: ApiProgramOptions): ts.Program => {
   const configHost: ts.ParseConfigFileHost = {
@@ -173,7 +171,6 @@ const createApiProgram = ({
     rootNames: [CONTRACT_PATH, ...virtualFiles.keys(), ...ambient],
     options,
     host,
-    ...(oldProgram === undefined ? {} : { oldProgram }),
   });
 };
 
@@ -1237,14 +1234,12 @@ type VerifyIdentityOptions = {
   // output file so the check compares it against the contract.
   declaredOutput: string;
   output: string;
-  oldProgram: ts.Program;
 };
 
 const verifyIdentity = ({
   names,
   declaredOutput,
   output,
-  oldProgram,
 }: VerifyIdentityOptions): readonly ts.Diagnostic[] => {
   const program = createApiProgram({
     virtualFiles: new Map([
@@ -1252,7 +1247,6 @@ const verifyIdentity = ({
       [OUTPUT_PATH, declaredOutput],
       [WIRE_CHECK_PATH, output],
     ]),
-    oldProgram,
   });
   const check = program.getSourceFile(CHECK_PATH);
   const generated = program.getSourceFile(OUTPUT_PATH);
@@ -1276,8 +1270,19 @@ type GenerateOptions = {
   recorder?: CompilerInputRecorder;
 };
 
-const generate = ({ validation, recorder }: GenerateOptions) => {
-  const started = performance.now();
+type Printed = {
+  output: string;
+  // Only for identity validation: the printout with response dates as
+  // declared, and the contract members it names.
+  declared?: { output: string; names: string[] };
+};
+
+// Builds the API program and returns strings only, so the program and its
+// checker are unreachable once this returns.
+const printWithProgram = ({
+  validation,
+  recorder,
+}: GenerateOptions): Printed => {
   const program = createApiProgram({
     virtualFiles: new Map(),
     ...(recorder === undefined ? {} : { recorder }),
@@ -1308,31 +1313,49 @@ const generate = ({ validation, recorder }: GenerateOptions) => {
       .join(", ")}`,
   );
 
-  const printed = performance.now();
-
   // Consumer tasks only need the printout. The dedicated CI --check owns
   // identity validation and determinism, without charging each compiler job.
   if (validation === "print") {
+    return { output };
+  }
+  return {
+    output,
+    declared: {
+      output: renderOutput(
+        printContract({
+          program,
+          contractSource,
+          webDependencies,
+          responseDates: RESPONSE_DATES.declared,
+        }),
+      ),
+      names: result.declarations.map(({ name }) => name),
+    },
+  };
+};
+
+const generate = ({ validation, recorder }: GenerateOptions) => {
+  const started = performance.now();
+  const { output, declared } = printWithProgram({
+    validation,
+    ...(recorder === undefined ? {} : { recorder }),
+  });
+  const printed = performance.now();
+  if (declared === undefined) {
     console.log(
       `generate-web-api-types: printed in ${Math.round(printed - started)} ms`,
     );
     return output;
   }
 
-  const declaredOutput = renderOutput(
-    printContract({
-      program,
-      contractSource,
-      webDependencies,
-      responseDates: RESPONSE_DATES.declared,
-    }),
-  );
-
+  // The identity check builds its own program; collecting the printing one
+  // first keeps a single checker alive, roughly halving peak memory. Reusing
+  // it as oldProgram would only save parse time and would keep its checker.
+  Bun.gc(true);
   const diagnostics = verifyIdentity({
-    names: result.declarations.map(({ name }) => name),
-    declaredOutput,
+    names: declared.names,
+    declaredOutput: declared.output,
     output,
-    oldProgram: program,
   });
   if (diagnostics.length > 0) {
     console.error(formatDiagnostics(diagnostics));
@@ -1466,6 +1489,11 @@ const main = async () => {
     validation: check ? "identity" : "print",
     recorder,
   });
+  // The determinism run starts after the identity check's program is
+  // collected, so it too runs alone.
+  if (check) {
+    Bun.gc(true);
+  }
   if (check && generate({ validation: "print" }) !== output) {
     panic(
       "generate-web-api-types: output is not deterministic across two generations",
@@ -1497,7 +1525,9 @@ const main = async () => {
   }
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
-      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
+      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +
+      // maxRSS is in kilobytes on every platform Node and Bun report it for.
+      `peak RSS ${Math.round(process.resourceUsage().maxRSS / 1024)} MiB`,
   );
 };
 

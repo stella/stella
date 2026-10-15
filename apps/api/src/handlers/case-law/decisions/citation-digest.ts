@@ -20,6 +20,7 @@ import {
   listDecisionCitationsHandler,
   listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
+  summarizeDecisionDoctrineHandler,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type {
   DecisionCitationRow,
@@ -37,10 +38,11 @@ export const CITATION_DIGEST_TOP_CITING = LIMITS.caseLawTopCitingDecisions;
 
 export type DecisionCitationDigest = {
   summary: DecisionCitationSummary;
+  doctrineSummary: Awaited<ReturnType<typeof summarizeDecisionDoctrineHandler>>;
   /** At most `CITATION_DIGEST_TOP_CITING`, most authoritative first. */
   topCiting: TopCitingDecisionsResult;
   /** The first page of what this decision cites, unresolved rows included. */
-  cites: (Omit<DecisionCitationRow, "citationText"> & {
+  cites: (Omit<DecisionCitationRow, "citationText" | "evidenceQuote"> & {
     citationText: string | null;
     textWithheldReason: DecisionTextWithheldReason | null;
   })[];
@@ -64,6 +66,9 @@ export const readGatedDecisionCitationDigest = async ({
     async (subject) => {
       // One transaction, one connection: the statements run in turn.
       const summary = await summarizeDecisionCitationsHandler({ subject });
+      const doctrineSummary = await summarizeDecisionDoctrineHandler({
+        subject,
+      });
       const topCiting = await listTopCitingDecisionsHandler({
         subject,
         summary,
@@ -93,12 +98,16 @@ export const readGatedDecisionCitationDigest = async ({
       const textWithheldReason = decisionTextWithheldReason(source.descriptor);
       return {
         summary,
+        doctrineSummary,
         topCiting,
-        cites: cites.items.map((item) => ({
-          ...item,
-          citationText: textWithheldReason === null ? item.citationText : null,
-          textWithheldReason,
-        })),
+        cites: cites.items.map(
+          ({ evidenceQuote: _evidenceQuote, ...item }) => ({
+            ...item,
+            citationText:
+              textWithheldReason === null ? item.citationText : null,
+            textWithheldReason,
+          }),
+        ),
         citesMore: cites.nextCursor !== null,
       };
     },

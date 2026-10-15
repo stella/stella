@@ -38,7 +38,7 @@ const config = {
   contract: "patch",
   description:
     "Read the organization's general settings: document processing mode, " +
-    "matter-number pattern and padding, practice jurisdictions, prompt " +
+    "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
     "caching, memory extraction, time policy, and the time zone whose calendar " +
     "decides the organization's day. declaredFeatureIds identifies policies in force; " +
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
@@ -59,6 +59,7 @@ const config = {
 
 type OrganizationSettingsRow = {
   documentProcessingMode: DocumentProcessingMode;
+  matterNumberingEnabled: boolean;
   matterNumberPadding: number;
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
@@ -105,6 +106,7 @@ export const projectOrganizationSettingsRow = (
       row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
     matterNumberPadding:
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+    matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
     practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
     managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
@@ -138,6 +140,7 @@ const readOrganizationSettings = createSafeRootHandler(
             documentProcessingMode: true,
             matterNumberPattern: true,
             matterNumberPadding: true,
+            matterNumberingEnabled: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
             managedAIResidency: true,
