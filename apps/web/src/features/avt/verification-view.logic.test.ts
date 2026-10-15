@@ -227,7 +227,7 @@ describe("stored statement text", () => {
     const run = witnessStatementRun();
     const presentation = selectClaimPresentation(run.blocks, run.claims);
     if (presentation.type !== "prose") {
-      return panic("Expected the witness statement to render as prose");
+      panic("Expected the witness statement to render as prose");
     }
 
     expect(presentation.readingOrder).toEqual(
