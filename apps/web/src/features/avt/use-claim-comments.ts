@@ -31,9 +31,9 @@ export type ClaimComments = {
   /** False outside a signed-in session: nothing to read or write as. */
   available: boolean;
   comments: readonly ReaderAnnotation[];
-  create: (body: string, visibility: AnnotationVisibility) => unknown;
-  remove: (id: string) => unknown;
-  update: (change: ClaimCommentChange) => unknown;
+  create: (body: string, visibility: AnnotationVisibility) => Promise<unknown>;
+  remove: (id: string) => Promise<unknown>;
+  update: (change: ClaimCommentChange) => Promise<unknown>;
 };
 
 /** The block a claim's comment is anchored on, as the server stores it. */
