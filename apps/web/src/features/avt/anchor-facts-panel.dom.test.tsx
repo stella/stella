@@ -273,17 +273,27 @@ for (const scenario of [
     role: "intern",
     factDetails: null,
     reason: messages.errors.api.forbidden,
+    status: messages.avt.anchorFacts.inScoring,
     name: "a reviewer without update permission cannot edit a new fact",
   },
   {
     role: "owner",
     factDetails: describedFact,
     reason: messages.errors.actionAdmission.notEnabled,
+    status: null,
     name: "a fact with scoring omitted cannot be edited even by an owner",
   },
 ] as const) {
   test(scenario.name, async () => {
     const requests = mountFact(scenario);
+    for (const label of [
+      messages.avt.anchorFacts.inScoring,
+      messages.avt.anchorFacts.heldForReview,
+    ]) {
+      expect(screen.queryByText(label) !== null).toBe(
+        label === scenario.status,
+      );
+    }
     const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
     const note = screen.getByRole("menuitem", {
       name: messages.avt.anchorFacts.addInterpretationNote,

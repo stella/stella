@@ -20,6 +20,7 @@ import {
   ShieldAlertIcon,
 } from "@stll/ui/icons";
 import { ListItemStatus } from "@stll/ui/list";
+import type { StatusTone } from "@stll/ui/list";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   Select,
@@ -187,10 +188,11 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const [addingSource, setAddingSource] = React.useState(false);
   const [noteDraft, setNoteDraft] = React.useState<string | null>(null);
   const details = fact.factDetails;
-  const canEdit =
-    canUpdate && (details === null || details.scoring !== undefined);
+  // An undescribed fact counts as included; a described one without a scoring
+  // value is not editable here and claims no scoring status.
+  const scoring = details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
+  const canEdit = canUpdate && scoring !== undefined;
   const canAddSource = legalListsEnabled && canUpdate;
-  const held = details?.scoring === "held";
   const note = details?.interpretationNote ?? null;
   const { reference, statement } = factLabel(fact.name, {
     medium: details?.medium ?? null,
@@ -200,11 +202,6 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
 
   const save = (changes: Partial<EditableFactDetails>) => {
     if (!canEdit) {
-      return;
-    }
-    const scoring =
-      details === null ? UNDESCRIBED_FACT.scoring : details.scoring;
-    if (scoring === undefined) {
       return;
     }
     saveDetails(fact.id, {
@@ -275,12 +272,12 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
         )}
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-        <ListItemStatus tone={held ? "warning" : "success"}>
-          {held
-            ? t("avt.anchorFacts.heldForReview")
-            : t("avt.anchorFacts.inScoring")}
-        </ListItemStatus>
-        {held && (
+        {scoring !== undefined && (
+          <ListItemStatus tone={SCORING_STATUS[scoring].tone}>
+            {t(SCORING_STATUS[scoring].labelKey)}
+          </ListItemStatus>
+        )}
+        {scoring === "held" && (
           <Button
             disabled={!canEdit}
             onClick={() => save({ scoring: "included" })}
@@ -310,7 +307,7 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
             <MoreHorizontalIcon />
           </MenuTrigger>
           <MenuPopup align="end">
-            {!held && (
+            {scoring !== "held" && (
               <MenuItem
                 disabled={!canEdit}
                 onClick={() => save({ scoring: "held" })}
@@ -417,6 +414,17 @@ const UNDESCRIBED_FACT = {
   scoring: "included",
   confidence: null,
 } as const satisfies EditableFactDetails;
+
+type FactScoring = NonNullable<EditableFactDetails["scoring"]>;
+
+/** How each scoring state reads in a fact row. */
+const SCORING_STATUS = {
+  included: { tone: "success", labelKey: "avt.anchorFacts.inScoring" },
+  held: { tone: "warning", labelKey: "avt.anchorFacts.heldForReview" },
+} as const satisfies Record<
+  FactScoring,
+  { tone: StatusTone; labelKey: string }
+>;
 
 type ConfidenceSelectProps = {
   value: FactConfidence | null;
