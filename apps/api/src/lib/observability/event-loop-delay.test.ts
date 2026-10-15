@@ -136,4 +136,50 @@ describe("event-loop delay monitoring", () => {
       },
     ]);
   });
+
+  test("carries the process's memory as byte metrics when reported", () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+
+    emitEventLoopDelayMetric({
+      maxMs: 5,
+      p99Ms: 4,
+      memory: {
+        rssBytes: 1_500_000_000,
+        heapUsedBytes: 400_000_000,
+        arrayBuffersBytes: 300_000_000,
+        uploadFinalizeInFlightBytes: 50_000_000,
+      },
+    });
+
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+      {
+        _aws: {
+          Timestamp: expect.any(Number),
+          CloudWatchMetrics: [
+            {
+              Namespace: "Stella/Api",
+              Dimensions: [[]],
+              Metrics: [
+                { Name: "EventLoopDelayMax", Unit: "Milliseconds" },
+                { Name: "EventLoopDelayP99", Unit: "Milliseconds" },
+                { Name: "ProcessRssBytes", Unit: "Bytes" },
+                { Name: "ProcessHeapUsedBytes", Unit: "Bytes" },
+                { Name: "ProcessArrayBuffersBytes", Unit: "Bytes" },
+                { Name: "UploadFinalizeInFlightBytes", Unit: "Bytes" },
+              ],
+            },
+          ],
+        },
+        EventLoopDelayMax: 5,
+        EventLoopDelayP99: 4,
+        ProcessRssBytes: 1_500_000_000,
+        ProcessHeapUsedBytes: 400_000_000,
+        ProcessArrayBuffersBytes: 300_000_000,
+        UploadFinalizeInFlightBytes: 50_000_000,
+      },
+    ]);
+  });
 });

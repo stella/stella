@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
     "checkingDocxEditTitle": "Sprawdzanie dokumentu",
     "chooseEvidence": "Wybierz plik, aby wstawić numerowane odniesienie do dowodu.",
+    "collaborationSnapshotRecovered": "Nie udało się ponownie otworzyć zapisanej kopii współpracy. Pokój został odtworzony z ostatniego zapisanego dokumentu; niezapisane zmiany mogły zostać utracone.",
     "comment": "Komentarz",
     "comments": {
       "addPlaceholder": "Dodaj komentarz...",
