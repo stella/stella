@@ -391,10 +391,12 @@ const CITATION_TEXT_EMPTY_MESSAGE = {
 export const UnresolvedCitationRow = ({
   item,
 }: {
-  item: Pick<
-    DecisionCitation,
-    "citationText" | "textIncompleteReason" | "textWithheldReason"
-  >;
+  // An unresolved citation names no decision, so it carries no identity.
+  item: {
+    citationText: string | null;
+    textIncompleteReason: CitationTextIncompleteReason | null;
+    textWithheldReason: DecisionTextWithheldReason | null;
+  };
 }) => {
   const t = useTranslations();
   const reason = item.textWithheldReason ?? item.textIncompleteReason;
