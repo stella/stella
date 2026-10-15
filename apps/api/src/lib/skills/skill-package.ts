@@ -7,7 +7,7 @@ import {
   normalizeResourcePath,
   validateSkillPackage,
 } from "@stll/skills";
-import type { SkillPackageDiagnostic } from "@stll/skills";
+import type { SkillInvocation, SkillPackageDiagnostic } from "@stll/skills";
 import { hashSkillEntrypoint, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { Temporal } from "@stll/time";
 
@@ -75,6 +75,11 @@ export type ParsedSkillPackage = {
   compatibility: string | null;
   description: string;
   entrypointHash: string;
+  /**
+   * From the package's `metadata.stella-invocation` or its top-level
+   * `disable-model-invocation`; stored on the row's own column.
+   */
+  invocation: SkillInvocation;
   license: string | null;
   metadata: Record<string, string>;
   name: string;
@@ -648,6 +653,7 @@ const parseSkillFiles = (
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
     entrypointHash: hashSkillEntrypoint(source),
+    invocation: metadata.invocation,
     license: metadata.license ?? null,
     metadata: metadata.metadata ?? {},
     name: metadata.name,

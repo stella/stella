@@ -60,6 +60,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   caseLawCitation: { type: "non_resource", reason: "association" },
   caseLawCitationReview: { type: "non_resource", reason: "association" },
+  caseLawCitationDoctrineReview: {
+    type: "non_resource",
+    reason: "association",
+  },
   caseLawCitationResolutionCensusRun: {
     type: "non_resource",
     reason: "projection",

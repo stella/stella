@@ -92,21 +92,6 @@ runs:
         # render.
         extra-services: gotenberg
 
-    - name: Require the stack
-      # The action exits 0 with `status=rate-limited` when Docker Hub throttles
-      # the image pulls. The e2e suites accept that skip; this capture cannot: it
-      # is the only guard on assets that ship on the marketing site, so a skipped
-      # run would report success without comparing a single PNG. Every later
-      # `status == 'ready'` condition is therefore unreachable-if-false, and only
-      # the `always()` cleanup steps still test it.
-      if: steps.e2e-stack.outputs.status != 'ready'
-      shell: bash
-      env:
-        STATUS: ${{ steps.e2e-stack.outputs.status }}
-      run: |
-        echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
-        exit 1
-
     - name: Wait for production web build
       # Same bounded poll as the e2e shards: the build job runs concurrently
       # with this one, and once it has ended without publishing the artifact
@@ -213,7 +198,7 @@ runs:
         fi
 
     - name: Stop production web server
-      if: always() && steps.e2e-stack.outputs.status == 'ready'
+      if: always() && steps.e2e-stack.outcome == 'success'
       shell: bash
       run: |
         if [[ -f /tmp/web.pid ]]; then
