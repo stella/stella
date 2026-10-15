@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { entityCreateLocalInvalidationKeys } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
 import {
@@ -61,6 +62,7 @@ export const useLoadSampleCase = ({
   view: AvtWorkspaceView;
   workspaceId: string;
 }) => {
+  const submit = useIdempotentSubmit();
   const queryClient = useQueryClient();
   const updateView = useUpdateView(workspaceId);
   const t = useTranslations();
@@ -110,10 +112,14 @@ export const useLoadSampleCase = ({
       operation: async (fact) =>
         await Result.tryPromise(async () => {
           const item = unwrapEden(
-            await api.tasks(scope).put({
-              name: fact.statement,
-              listId: toSafeId<"legalList">(listId),
-              listItemType: "fact",
+            await submit.run({
+              operation: `sample.${workspaceId}.${listId}.task`,
+              body: {
+                name: fact.statement,
+                listId: toSafeId<"legalList">(listId),
+                listItemType: "fact" as const,
+              },
+              send: api.tasks(scope).put,
             }),
           );
           await writeDetails(fact, item.entityId);
@@ -147,9 +153,10 @@ export const useLoadSampleCase = ({
     const propertyId =
       properties.find((property) => property.content.type === "file")?.id ??
       unwrapEden(
-        await api.properties({ workspaceId }).put({
-          name: t("common.documents"),
-          contentType: "file",
+        await submit.run({
+          operation: `sample.${workspaceId}.property`,
+          body: { name: t("common.documents"), contentType: "file" as const },
+          send: api.properties({ workspaceId }).put,
         }),
       ).id;
     const uploaded = await uploadFileEntitiesBatched({
@@ -182,7 +189,13 @@ export const useLoadSampleCase = ({
       );
       const listId =
         existing?.id ??
-        unwrapEden(await api.lists(scope).put({ name: SAMPLE_LIST_NAME })).id;
+        unwrapEden(
+          await submit.run({
+            operation: `sample.${workspaceId}.list`,
+            body: { name: SAMPLE_LIST_NAME },
+            send: api.lists(scope).put,
+          }),
+        ).id;
       const factsIncomplete = await loadFacts(listId);
       const documentLoaded = await loadDocument();
       const load = {

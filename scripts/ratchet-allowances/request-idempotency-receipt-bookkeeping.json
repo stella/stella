@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 4,
+  "reason": "Request receipts are ephemeral replay coordination. Claim/takeover, completion, failure release and bounded retention do not change a user resource; create handlers retain their existing business audit events. Recording each receipt transition would duplicate those events and retain technical replay metadata beyond the receipt lifetime."
+}

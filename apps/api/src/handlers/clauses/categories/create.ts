@@ -5,6 +5,7 @@ import { createCategoryBodySchema, createCategoryHandler } from "../categories";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a category in the organization's clause library taxonomy, " +
     "optionally under a parent category. Refused once the organization holds " +

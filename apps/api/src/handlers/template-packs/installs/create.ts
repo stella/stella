@@ -45,6 +45,7 @@ const installTemplatePackBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Copy templates from a bundled pack into the organization's template " +
     "library as ordinary templates with a first version; each records the " +

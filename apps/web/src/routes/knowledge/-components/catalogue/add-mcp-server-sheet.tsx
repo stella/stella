@@ -25,6 +25,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -130,9 +131,9 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const addServerMutation = useMutation({
-    mutationFn: async (params: AddServerParams) => {
-      const response = await api.mcp.connectors.post(params);
+  const addServerMutation = useIdempotentMutation({
+    mutationFn: async (params: AddServerParams, request) => {
+      const response = await api.mcp.connectors.post(params, request);
       return unwrapEden(response);
     },
     onSuccess: (data, { url }) => {
@@ -156,12 +157,18 @@ export const AddMcpServerSheet = ({
     onError: handleApiError,
   });
 
-  const saveTokenMutation = useMutation({
-    mutationFn: async (payload: { connectorSlug: string; token: string }) => {
-      const response = await api.mcp.connections.post({
-        connectorSlug: payload.connectorSlug,
-        token: payload.token,
-      });
+  const saveTokenMutation = useIdempotentMutation({
+    mutationFn: async (
+      payload: { connectorSlug: string; token: string },
+      request,
+    ) => {
+      const response = await api.mcp.connections.post(
+        {
+          connectorSlug: payload.connectorSlug,
+          token: payload.token,
+        },
+        request,
+      );
       return unwrapEden(response);
     },
     onSuccess: () => {

@@ -64,19 +64,28 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const RATE_LIMITED_STATUS = 429;
 
 type FeedbackRequestBody = ReturnType<typeof buildFeedbackRequestBody>;
 
-const submitFeedbackReport = async (
-  channel: FeedbackChannel,
-  body: FeedbackRequestBody,
-): Promise<FeedbackReceiptView> => {
+type SubmitFeedbackReportOptions = {
+  channel: FeedbackChannel;
+  body: FeedbackRequestBody;
+  request: IdempotentRequest;
+};
+
+const submitFeedbackReport = async ({
+  channel,
+  body,
+  request,
+}: SubmitFeedbackReportOptions): Promise<FeedbackReceiptView> => {
   switch (channel) {
     case FEEDBACK_CHANNELS.account:
-      return unwrapEden(await api.feedback.post(body));
+      return unwrapEden(await api.feedback.post(body, request));
     case FEEDBACK_CHANNELS.public: {
       // The intake parses the raw text itself so it can reject unknown keys.
       const data = unwrapEden(
@@ -171,17 +180,20 @@ const FeedbackReport = ({
     steps: v.pipe(v.string(), v.trim(), v.maxLength(FEEDBACK_LIMITS.steps)),
   });
 
+  const submitIntent = useIdempotentSubmit();
   const submit = useMutation({
     mutationFn: async (report: v.InferOutput<typeof schema>) =>
-      await submitFeedbackReport(
-        channel,
-        buildFeedbackRequestBody({
+      await submitIntent.run({
+        operation: `feedback.create:${channel}`,
+        body: buildFeedbackRequestBody({
           clientVersion: __APP_VERSION__,
           errorReference,
           report,
           route,
         }),
-      ),
+        send: async (body, request) =>
+          await submitFeedbackReport({ channel, body, request }),
+      }),
     onSuccess: (_response, report) => {
       analytics.captureFeedbackReportSubmitted({
         area: report.area,

@@ -48,6 +48,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -408,6 +409,7 @@ const StyleSetFormDialog = ({
   onSaved,
   styleSet,
 }: StyleSetDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const sourceLabelId = useId();
   const [name, setName] = useState(styleSet?.name ?? "");
@@ -430,9 +432,13 @@ const StyleSetFormDialog = ({
         setSaving(false);
         return;
       }
-      response = await api["style-sets"].put({
-        name: normalizedName,
-        styleSource: file,
+      response = await idempotentSubmit.run({
+        operation: JSON.stringify(['api["style-sets"]']),
+        body: {
+          name: normalizedName,
+          styleSource: file,
+        },
+        send: api["style-sets"].put,
       });
     }
     setSaving(false);

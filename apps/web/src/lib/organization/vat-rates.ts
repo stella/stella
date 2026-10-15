@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -29,9 +30,12 @@ export type VatRateCommand =
   | { type: "create"; values: VatRateInput }
   | { type: "update"; id: string; values: VatRateInput }
   | { type: "archive"; id: string };
-export const sendVatRateCommand = async (command: VatRateCommand) => {
+export const sendVatRateCommand = async (
+  command: VatRateCommand,
+  request: IdempotentRequest,
+) => {
   if (command.type === "create") {
-    return unwrapEden(await api["vat-rates"].post(command.values));
+    return unwrapEden(await api["vat-rates"].post(command.values, request));
   }
   const rate = api["vat-rates"]({ vatRateId: toSafeId<"vatRate">(command.id) });
   switch (command.type) {

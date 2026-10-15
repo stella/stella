@@ -36,6 +36,7 @@ const CREATE_OUTCOME = {
 const createDocxSuggestions = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },

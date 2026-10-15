@@ -27,7 +27,8 @@ const sends: unknown[] = [];
 const unexpected: string[] = [];
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -100,7 +101,7 @@ const savedThread = {
   webSearchAvailable: false,
   webSearchEnabled: false,
 } satisfies ThreadResponse;
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   testing.cleanup();
@@ -243,7 +244,7 @@ const serveSavedBuilder = () => {
 };
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -265,9 +266,7 @@ const draftPrompt = (text: string) => {
 };
 
 /** The thread page as its route mounts it, ready to send. */
-const openThreadPage = async (
-  client: InstanceType<typeof query.QueryClient>,
-) => {
+const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -294,7 +293,7 @@ const openThreadPage = async (
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
             <AuthenticatedUserProvider user={user}>
@@ -304,7 +303,7 @@ const openThreadPage = async (
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   await testing.waitFor(() =>

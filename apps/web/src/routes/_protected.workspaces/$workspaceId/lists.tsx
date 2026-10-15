@@ -51,6 +51,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   loadCallerFeature,
   useCallerFeatureEnabled,
@@ -124,6 +125,7 @@ function DisabledListsRedirect() {
 }
 
 function LegalListsPage() {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
@@ -143,9 +145,12 @@ function LegalListsPage() {
     }
     setCreatingList(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name });
+      const response = await submit.run({
+        operation: `lists.create:${workspaceId}`,
+        body: { name },
+        send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .put,
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -276,6 +281,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const candidatesView = useQueryView(candidates);
   const candidatesData =
     candidatesView.type === "items" ? candidatesView.items : undefined;
+  const submit = useIdempotentSubmit();
   const [name, setName] = useState("");
   const [itemType, setItemType] = useState<ListItemType>("task");
   const [sectionName, setSectionName] = useState("");
@@ -294,16 +300,19 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     }
     setCreating(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
+      const response = await submit.run({
+        operation: `tasks.create:${workspaceId}`,
+        body: {
           name: itemName,
           listId: toSafeId<"legalList">(listId),
           listItemType: itemType,
           ...(selectedSectionId !== NO_SECTION_VALUE && {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
-        });
+        },
+        send: api.tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .put,
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -342,12 +351,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (nextSectionName.length === 0) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .sections.post({
+    const response = await submit.run({
+      operation: `lists.sections.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         name: nextSectionName,
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .sections.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -362,12 +374,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (selectedPropertyId === NO_COLUMN_VALUE) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .columns.post({
+    const response = await submit.run({
+      operation: `lists.columns.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         propertyId: toSafeId<"property">(selectedPropertyId),
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .columns.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -403,8 +418,16 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const result = await Result.tryPromise(async () => {
       const response =
         decision === "accept"
-          ? await endpoint.accept.post(input)
-          : await endpoint.reject.post(input);
+          ? await submit.run({
+              operation: `lists.generation-candidates.accept:${workspaceId}`,
+              body: input,
+              send: endpoint.accept.post,
+            })
+          : await submit.run({
+              operation: `lists.generation-candidates.reject:${workspaceId}`,
+              body: input,
+              send: endpoint.reject.post,
+            });
       if (response.error) {
         throw toAPIError(response.error);
       }

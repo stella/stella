@@ -36,6 +36,7 @@ const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {
 export default createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     contentDelivery: {
       type: "none",
       reason:

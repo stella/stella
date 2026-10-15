@@ -34,6 +34,7 @@ const createSkillBodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Author an agent skill from text: name, description, instruction body, " +
     "and an optional slash command. Team scope requires admin or owner, " +

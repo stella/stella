@@ -14,6 +14,7 @@ import {
 
 export const CORS_EXPOSED_HEADERS = [
   "Content-Disposition",
+  "Idempotency-Replayed",
   "X-Ai-Field-Errors",
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,

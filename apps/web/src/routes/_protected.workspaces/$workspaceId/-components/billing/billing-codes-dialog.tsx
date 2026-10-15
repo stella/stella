@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -49,23 +50,29 @@ export const BillingCodesDialog = ({
   );
   const analytics = useAnalytics();
 
-  const createCode = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      ...body
-    }: {
-      workspaceId: string;
-      type: "task" | "activity";
-      code: string;
-      label: string;
-      active?: boolean;
-      sortOrder?: number;
-    }) => {
+  const createCode = useIdempotentMutation({
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        ...body
+      }: {
+        workspaceId: string;
+        type: "task" | "activity";
+        code: string;
+        label: string;
+        active?: boolean;
+        sortOrder?: number;
+      },
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).put({
-        ...body,
-      });
+      }).put(
+        {
+          ...body,
+        },
+        request,
+      );
 
       return unwrapEden(response);
     },

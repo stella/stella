@@ -64,6 +64,7 @@ export const createMatterLinkHandler = async ({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Link one case-law decision from the corpus to the current matter, with " +
     "an optional note. A decision that is not in the corpus is a 404; a " +

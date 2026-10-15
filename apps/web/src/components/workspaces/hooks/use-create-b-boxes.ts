@@ -1,17 +1,13 @@
 import { useCallback, useRef } from "react";
 
-import {
-  useIsMutating,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useIsMutating, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
@@ -52,12 +48,13 @@ export const useCreateBBoxes = ({
   inflightSetRef.current ??= new Set<string>();
   const inflight = inflightSetRef.current;
 
-  const mutation = useMutation({
+  const mutation = useIdempotentMutation({
+    idempotencyScope: `${workspaceId}:${justification.id}`,
     scope: {
       id: justification.id,
     },
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
-    mutationFn: async () => {
+    mutationFn: async (_variables, request) => {
       if (justification.boundingBoxes || inflight.has(justification.id)) {
         return undefined;
       }
@@ -66,9 +63,12 @@ export const useCreateBBoxes = ({
 
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["bounding-boxes"].post({
-          justificationId: toSafeId<"justification">(justification.id),
-        });
+        ["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justification.id),
+          },
+          request,
+        );
 
       return unwrapEden(response);
     },

@@ -11,6 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Rotate a matter's inbound address; the previous address stops accepting mail immediately.",

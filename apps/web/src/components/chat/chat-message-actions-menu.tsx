@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -43,6 +43,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -98,8 +99,9 @@ export const ChatMessageActionsMenu = ({
   const workspaceId =
     threadRef.scope === "workspace" ? threadRef.workspaceId : undefined;
 
-  const fork = useMutation({
-    mutationFn: async (_destination: ForkDestination) => {
+  const fork = useIdempotentMutation({
+    idempotencyScope: `chat.${threadRef.threadId}.${message.id}.fork`,
+    mutationFn: async (_destination: ForkDestination, request) => {
       if (pendingForkThreadId.current === null) {
         pendingForkThreadId.current = createChatThreadId();
       }
@@ -111,6 +113,7 @@ export const ChatMessageActionsMenu = ({
             upToMessageId: toSafeId<"chatMessage">(message.id),
           },
           {
+            ...request,
             query: workspaceId
               ? { workspaceId: toSafeId<"workspace">(workspaceId) }
               : {},

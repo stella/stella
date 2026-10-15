@@ -45,6 +45,7 @@ const bodySchema = t.Object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   // The run is queued here; its worker takes a background slot.
   actionAdmission: { type: "handler", actionKind: "list-verification.start" },
   description:

@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useMutationState,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -25,6 +21,8 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import { useObservedMutationState } from "@/lib/idempotency/use-observed-mutation-state";
 import { toSafeId } from "@/lib/safe-id";
 
 type ClaimId = VerificationClaim["id"];
@@ -105,13 +103,16 @@ export const useClaimReviewActions = (scope: RunScope) => {
 
   const now = () => Temporal.Now.instant().toString();
 
-  const record = useMutation({
+  const record = useIdempotentMutation({
     mutationKey,
     // A run's review actions reach the server in the order they were taken.
     scope: { id: mutationKey.join(":") },
-    mutationFn: async ({ targetIds: [claimId], event }: RecordVariables) =>
+    mutationFn: async (
+      { targetIds: [claimId], event }: RecordVariables,
+      request,
+    ) =>
       unwrapEden(
-        await lists()["claim-reviews"].post({ runId, claimId, event }),
+        await lists()["claim-reviews"].post({ runId, claimId, event }, request),
       ),
     onMutate: async ({ targetIds, event }) =>
       await applyOptimistic(targetIds, (review) =>
@@ -127,11 +128,13 @@ export const useClaimReviewActions = (scope: RunScope) => {
     onError: (error, _variables, context) => rollback(error, context),
   });
 
-  const bulk = useMutation({
+  const bulk = useIdempotentMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
-    mutationFn: async ({ targetIds: claimIds }: BulkVariables) =>
-      unwrapEden(await lists()["claim-reviews"].bulk.post({ runId, claimIds })),
+    mutationFn: async ({ targetIds: claimIds }: BulkVariables, request) =>
+      unwrapEden(
+        await lists()["claim-reviews"].bulk.post({ runId, claimIds }, request),
+      ),
     onMutate: async ({ targetIds }) =>
       await applyOptimistic(targetIds, (review) =>
         predictBulkReviewed(review, { at: now(), actorId }),
@@ -168,11 +171,11 @@ export const useClaimSaveState = (
   scope: RunScope,
   claimId: ClaimId,
 ): SaveState => {
-  const entries = useMutationState({
+  const entries = useObservedMutationState({
     filters: { mutationKey: claimReviewMutationKey(scope) },
-    select: (mutation) => ({
-      targetIds: readTargetIds(mutation.state.variables),
-      status: mutation.state.status,
+    select: (state) => ({
+      targetIds: readTargetIds(state.variables),
+      status: state.status,
     }),
   });
   return saveStateOf(entries, claimId);

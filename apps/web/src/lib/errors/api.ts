@@ -8,6 +8,8 @@ import {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   MEMBER_REMOVAL_BUSY_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
@@ -137,6 +139,8 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
+  [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",

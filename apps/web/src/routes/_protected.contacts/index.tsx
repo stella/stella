@@ -90,11 +90,9 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
-import { createUuid } from "@/lib/uuid";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -937,7 +935,6 @@ const CreateContactDialog = ({
             : undefined;
 
         await createContact.mutateAsync({
-          id: toSafeId<"contact">(createUuid()),
           type: value.type,
           displayName: value.displayName,
           ...(firstName && { firstName }),

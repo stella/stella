@@ -45,6 +45,8 @@ import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 // ── Types ────────────────────────────────────────────
 
@@ -67,7 +69,10 @@ type CategoryApiResponse<Data> = {
 };
 
 type CategoryApiOptions = {
-  create: (name: string) => Promise<CategoryApiResponse<CategoryEntity>>;
+  create: (
+    name: string,
+    request: IdempotentRequest,
+  ) => Promise<CategoryApiResponse<CategoryEntity>>;
   rename: (id: string, name: string) => Promise<CategoryApiResponse<unknown>>;
   remove: (id: string) => Promise<CategoryApiResponse<unknown>>;
   /** Toast title when a create or rename fails. */
@@ -85,6 +90,7 @@ export const useCategoryOps = ({
   saveFailedTitle,
   deleteFailedTitle,
 }: CategoryApiOptions): CategoryOps => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const reportFailure = (title: string, error: ToAPIErrorProps) => {
     notifyUserError(toAPIError(error), title, {
@@ -94,7 +100,11 @@ export const useCategoryOps = ({
 
   return {
     create: async (name) => {
-      const response = await create(name);
+      const response = await idempotentSubmit.run({
+        body: name,
+        operation: "category.create",
+        send: create,
+      });
       if (response.error) {
         reportFailure(saveFailedTitle, response.error);
         return null;

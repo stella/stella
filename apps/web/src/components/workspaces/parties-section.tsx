@@ -50,9 +50,9 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
   PARTY_ROLES,
@@ -76,18 +76,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const createContact = useCreateContact();
 
   const handleCreateAndSetClient = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          handleSetClient({ id, displayName: name });
+          handleSetClient({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -364,18 +363,17 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
   };
 
   const handleCreateContact = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
-        onSuccess: () => {
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          setSelectedContact({ id, displayName: name });
+          setSelectedContact({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -621,6 +619,7 @@ const AddPartyDialog = ({
   workspaceId,
   showTriggerLabel = true,
 }: AddPartyDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
@@ -635,12 +634,18 @@ const AddPartyDialog = ({
       isPrimary?: boolean;
       notes?: string | null;
     }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(ws) })
-        .contacts.put({
+      const response = await idempotentSubmit.run({
+        operation: JSON.stringify([
+          'api.workspaces({workspaceId:toSafeId<"workspace">(ws)}).contacts',
+          { workspaceId: toSafeId<"workspace">(ws) },
+        ]),
+        body: {
           ...body,
           contactId: toSafeId<"contact">(body.contactId),
-        });
+        },
+        send: api.workspaces({ workspaceId: toSafeId<"workspace">(ws) })
+          .contacts.put,
+      });
 
       return unwrapEden(response);
     },

@@ -16,6 +16,7 @@ const bodySchema = t.Object({
 export default createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     contentDelivery: {
       type: "none",
       reason:

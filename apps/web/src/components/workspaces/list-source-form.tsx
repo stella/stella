@@ -18,6 +18,7 @@ import { PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -42,6 +43,7 @@ export const ListSourceForm = ({
   onClose,
   onCreated,
 }: ListSourceFormProps) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const format = useFormatter();
@@ -91,16 +93,20 @@ export const ListSourceForm = ({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
       return unwrapEden(
-        await listApi["item-sources"].post({
-          listId: toSafeId<"legalList">(listId),
-          itemEntityId: toSafeId<"entity">(itemEntityId),
-          sourceEntityId: document.entityId,
-          sourceEntityVersionId: document.currentVersionId,
-          locator:
-            isPdf && page !== ""
-              ? { type: "pdf-page", pageNumber: Number(page) }
-              : { type: "document" },
-          quote: quote === "" ? null : quote,
+        await submit.run({
+          operation: `list-source-create:${workspaceId}`,
+          send: listApi["item-sources"].post,
+          body: {
+            listId: toSafeId<"legalList">(listId),
+            itemEntityId: toSafeId<"entity">(itemEntityId),
+            sourceEntityId: document.entityId,
+            sourceEntityVersionId: document.currentVersionId,
+            locator:
+              isPdf && page !== ""
+                ? { type: "pdf-page", pageNumber: Number(page) }
+                : { type: "document" },
+            quote: quote === "" ? null : quote,
+          },
         }),
       );
     },

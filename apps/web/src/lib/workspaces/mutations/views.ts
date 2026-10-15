@@ -6,6 +6,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
@@ -21,7 +22,6 @@ import {
 } from "./views.logic";
 
 type CreateViewVars = {
-  id: string;
   name: string;
   layout: ViewLayout;
   templateProperties?: ViewTemplateProperty[];
@@ -31,11 +31,18 @@ export const useCreateView = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (body: CreateViewVars) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async (body: CreateViewVars, request) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
+        .put(
+          {
+            ...body,
+            id: toSafeId<"workspaceView">(request.headers["Idempotency-Key"]),
+          },
+          request,
+        );
       return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {

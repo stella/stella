@@ -37,6 +37,7 @@ import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   contentDelivery: {
     type: "none",
     reason:

@@ -25,6 +25,7 @@ export const createMatterLinksBatchBodySchema = t.Object(
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Link a selection of case-law decisions to the current matter in one " +
     "call, each with an optional note. Best effort and idempotent: the " +

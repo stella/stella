@@ -56,6 +56,3 @@ CREATE POLICY "user_delete" ON "request_idempotency_receipts" AS PERMISSIVE FOR 
 CREATE POLICY "retention_owner_select" ON "request_idempotency_receipts" FOR SELECT TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
 );--> statement-breakpoint
-CREATE POLICY "retention_owner_delete" ON "request_idempotency_receipts" FOR DELETE TO PUBLIC USING (
-  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.request_idempotency_receipts'::regclass)
-);

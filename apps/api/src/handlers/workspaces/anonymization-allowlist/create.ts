@@ -23,6 +23,7 @@ const SCOPE_VALUES = ["document", "workspace"] as const;
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add a never-mask entry to a matter's anonymization allowlist, so a term " +
     "that detection finds is left in the clear. scope workspace covers the " +

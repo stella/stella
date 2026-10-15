@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import { Elysia } from "elysia";
+import type { ElysiaCustomStatusResponse } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
@@ -60,6 +61,38 @@ type MixedResponseHandler = MustBeNever<
   >[1]
 >;
 true satisfies [ResponseHandler, MixedResponseHandler] extends [never, never]
+  ? true
+  : false;
+
+const replayConfig = { ...config, idempotency: { type: "replay" } } as const;
+type ReplayResponseHandler = MustBeNever<
+  Parameters<typeof createSafeRootHandler<typeof replayConfig, Response>>[1]
+>;
+type ReplayStreamHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<typeof replayConfig, ReadableStream>
+  >[1]
+>;
+type ReplayBinaryHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<typeof replayConfig, Blob | { value: string }>
+  >[1]
+>;
+type ReplayWrappedResponseHandler = MustBeNever<
+  Parameters<
+    typeof createSafeRootHandler<
+      typeof replayConfig,
+      ElysiaCustomStatusResponse<201, Response>
+    >
+  >[1]
+>;
+true satisfies ReplayWrappedResponseHandler extends never ? true : false;
+
+true satisfies [
+  ReplayResponseHandler,
+  ReplayStreamHandler,
+  ReplayBinaryHandler,
+] extends [never, never, never]
   ? true
   : false;
 

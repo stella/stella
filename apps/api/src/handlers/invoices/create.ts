@@ -377,6 +377,7 @@ const invoiceCreationError = (error: SafeDbError | HandlerError) =>
 const createInvoice = createSafeHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Create a draft invoice from approved, not-yet-invoiced client time " +
       "entries in a matter, marking them billed. Hourly invoices require " +

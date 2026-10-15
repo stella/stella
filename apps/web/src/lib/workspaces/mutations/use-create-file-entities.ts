@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +24,9 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { deriveIdempotentRequest } from "@/lib/idempotency/idempotent-subrequest";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -73,6 +72,7 @@ type PreparedFileEntityUpload = {
 
 type PrepareFolderTreeUploadOptions = {
   workspaceId: string;
+  headers: Record<string, string>;
   parentId: string | null;
   propertyId: string | null;
   plan: DroppedFolderUploadPlan;
@@ -85,6 +85,7 @@ type PreparedFolderTreeUpload = {
 };
 
 const prepareFolderTreeUpload = async ({
+  headers,
   workspaceId,
   parentId,
   propertyId,
@@ -104,12 +105,15 @@ const prepareFolderTreeUpload = async ({
 
   const response = await api
     .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["entity-create"].tree.post({
-      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
-      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-      directories: plan.directories,
-      files,
-    });
+    ["entity-create"].tree.post(
+      {
+        propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+        parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+        directories: plan.directories,
+        files,
+      },
+      { headers },
+    );
 
   if (response.error) {
     throw toAPIError(response.error);
@@ -725,17 +729,22 @@ export const useCreateFileEntities = (workspaceId: string) => {
     (store) => store.ask,
   );
 
-  const ensureFileProperty = async (): Promise<string> => {
+  const ensureFileProperty = async (
+    request: IdempotentRequest,
+  ): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
 
     if (propertyId) {
       return propertyId;
     }
 
-    const response = await api.properties({ workspaceId }).put({
-      name: t("common.documents"),
-      contentType: "file",
-    });
+    const response = await api.properties({ workspaceId }).put(
+      {
+        name: t("common.documents"),
+        contentType: "file",
+      },
+      await deriveIdempotentRequest(request, "property"),
+    );
     propertyId = unwrapEden(response).id;
     return propertyId;
   };
@@ -756,15 +765,17 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
   };
 
-  const { isPending, mutate } = useMutation({
-    mutationFn: async (input: CreateFileEntitiesInput) => {
+  const { isPending, mutate } = useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async (input: CreateFileEntitiesInput, request) => {
       const parentId = input.parentId ?? null;
 
       if ("tree" in input) {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
-          plan.files.length > 0 ? await ensureFileProperty() : null;
+          plan.files.length > 0 ? await ensureFileProperty(request) : null;
         const preparedTree = await prepareFolderTreeUpload({
+          headers: (await deriveIdempotentRequest(request, "tree")).headers,
           workspaceId,
           parentId,
           propertyId,
@@ -797,7 +808,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       const uploaded = await uploadFileEntitiesBatched({
         files: input.files,
         workspaceId,
-        propertyId: await ensureFileProperty(),
+        propertyId: await ensureFileProperty(request),
         parentId,
         labels,
         onError: (error) => analytics.captureError(error),

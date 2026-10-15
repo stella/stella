@@ -93,6 +93,7 @@ const onlySourceDocumentTitle = (
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:

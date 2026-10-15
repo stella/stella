@@ -6,6 +6,7 @@ import type { ReviewFlag } from "@stll/api-contract";
 import { documentReviewRunPollInterval } from "@/components/ai-suggestions/document-review-run.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -396,11 +397,10 @@ type SaveRunAsPlaybookArgs = {
 /** Keep the positions a run was executed against as an org playbook. The run
  *  snapshot is the whole input: the endpoint reads it through the caller's own
  *  workspace access and copies it into a draft definition. */
-export const saveRunAsPlaybook = async ({
-  workspaceId,
-  runId,
-  name,
-}: SaveRunAsPlaybookArgs) =>
+export const saveRunAsPlaybook = async (
+  { workspaceId, runId, name }: SaveRunAsPlaybookArgs,
+  request: IdempotentRequest,
+) =>
   unwrapEden(
     await api.playbooks["from-run"].post(
       {
@@ -408,6 +408,9 @@ export const saveRunAsPlaybook = async ({
         runId: toSafeId<"documentReviewRun">(runId),
         ...(name === undefined ? {} : { name }),
       },
-      { fetch: { signal: AbortSignal.timeout(SAVE_AS_PLAYBOOK_TIMEOUT_MS) } },
+      {
+        ...request,
+        fetch: { signal: AbortSignal.timeout(SAVE_AS_PLAYBOOK_TIMEOUT_MS) },
+      },
     ),
   );

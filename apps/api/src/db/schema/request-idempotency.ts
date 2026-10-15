@@ -61,13 +61,9 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
       OR (${table.state} = 'completed' AND ${table.responseStatus} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
-    // Retention runs as the table owner across organizations.
+    // Retention reads candidates globally and deletes through user scopes.
     p.pgPolicy("retention_owner_select", {
       for: "select",
-      using: ownerOnly,
-    }),
-    p.pgPolicy("retention_owner_delete", {
-      for: "delete",
       using: ownerOnly,
     }),
   ],

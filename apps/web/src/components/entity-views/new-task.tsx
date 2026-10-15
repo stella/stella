@@ -18,6 +18,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -40,6 +41,7 @@ export const NewEntityViewTask = ({
   agendaKind = "task",
   assigneeUserId,
 }: NewEntityViewTaskProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
@@ -61,9 +63,12 @@ export const NewEntityViewTask = ({
     setPending(true);
     const result = await Result.tryPromise(async () =>
       unwrapEden(
-        await api
-          .tasks({ workspaceId: toSafeId<"workspace">(selectedWorkspaceId) })
-          .put({
+        await idempotentSubmit.run({
+          operation: JSON.stringify([
+            'api.tasks({workspaceId:toSafeId<"workspace">(selectedWorkspaceId)})',
+            { workspaceId: toSafeId<"workspace">(selectedWorkspaceId) },
+          ]),
+          body: {
             name: t("tasks.untitled"),
             status,
             agendaKind,
@@ -75,7 +80,11 @@ export const NewEntityViewTask = ({
                       ? []
                       : [toSafeId<"user">(assigneeUserId)],
                 }),
-          }),
+          },
+          send: api.tasks({
+            workspaceId: toSafeId<"workspace">(selectedWorkspaceId),
+          }).put,
+        }),
       ),
     );
     if (result.isErr()) {
