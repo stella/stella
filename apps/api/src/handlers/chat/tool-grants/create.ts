@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
+import {
+  isApprovalGatedBuiltInChatTool,
+  isGrantableChatTool,
+} from "@stll/api-contract/chat-tool-grants";
 
 import {
   chatThreads,
@@ -10,10 +13,7 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
-import {
-  CHAT_TOOL_GRANTS_MAX,
-  resolveExternalMcpGrantConnectorId,
-} from "@/api/handlers/chat/tools/chat-tool-grants";
+import { resolveExternalMcpGrantConnectorId } from "@/api/handlers/chat/tools/chat-tool-grants";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -44,7 +44,8 @@ const notGrantable = () =>
 /**
  * Store a standing approval for one tool (or, for an external connector tool,
  * for its connector). The API decides what the grant covers and refuses tools
- * whose grant policy requires approval on every call.
+ * whose grant policy requires approval on every call. Storing it again is a
+ * no-op (unique per subject and scope).
  */
 const createChatToolGrant = createSafeRootHandler(
   config,
@@ -55,7 +56,16 @@ const createChatToolGrant = createSafeRootHandler(
     session,
     user,
   }) {
-    if (!isGrantableChatTool(toolName)) {
+    // Only an approval-gated built-in tool or a connector tool can hold a
+    // grant, so one user's grants in scope for a conversation stay bounded
+    // by the tools that exist, whatever a client sends.
+    if (
+      !isGrantableChatTool(toolName) ||
+      !(
+        isExternalMcpToolName(toolName) ||
+        isApprovalGatedBuiltInChatTool(toolName)
+      )
+    ) {
       return Result.err(notGrantable());
     }
     const organizationId = session.activeOrganizationId;
@@ -106,25 +116,6 @@ const createChatToolGrant = createSafeRootHandler(
           if (mcpConnectorId === null) {
             return Result.err(notGrantable());
           }
-        }
-
-        const held = await tx
-          .select({ id: chatToolGrants.id })
-          .from(chatToolGrants)
-          .where(
-            and(
-              eq(chatToolGrants.organizationId, organizationId),
-              eq(chatToolGrants.userId, user.id),
-            ),
-          )
-          .limit(CHAT_TOOL_GRANTS_MAX);
-        if (held.length >= CHAT_TOOL_GRANTS_MAX) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Remove a stored approval before adding another",
-            }),
-          );
         }
 
         const values = {

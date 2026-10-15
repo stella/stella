@@ -22,7 +22,11 @@ import {
   sanitizeToolNamePart,
 } from "@/api/lib/mcp-upstream/namespace";
 
-/** Upper bound on grants one user can hold in one organization. */
+/**
+ * Bound on the grants that apply in one conversation. Grants exist only for
+ * approval-gated built-in tools and installed connectors, once per scope, so
+ * the `always` grants plus one conversation's grants stay far below it.
+ */
 export const CHAT_TOOL_GRANTS_MAX = 500;
 
 export type StoredChatToolGrant = {
