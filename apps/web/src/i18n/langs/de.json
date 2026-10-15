@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
       },
+      "showInTitle": "Nummer neben dem Namen der Akte anzeigen",
+      "showInTitleDescription": "Wenn dies aus ist, ist der Titel genau der eingegebene Name.",
       "title": "Aktennummerierung",
       "tokenHelp": "Verfügbare Platzhalter: '{'SEQ'}' (Laufnummer), '{'YYYY'}' (Jahr), '{'YY'}' (zweistelliges Jahr), '{'MM'}' (Monat)"
     },
@@ -5703,7 +5705,7 @@
       "title": "In Akte kopieren"
     },
     "create": {
-      "ownerTypeToggle": "Aktentyp",
+      "matterName": "Name der Akte",
       "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
     },
     "createNewWorkspace": "Neue Akte erstellen",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Anstehende Agenda",
       "uploaded": "hochgeladen"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Persönlich"
-    },
     "parties": {
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
       "noClient": "Kein Klient zugeordnet",
+      "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
       "partyRoles": {
         "co_counsel": "Mitanwalt",

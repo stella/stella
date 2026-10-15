@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
       },
+      "showInTitle": "Zobraziť číslo vedľa názvu spisu",
+      "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
       "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
@@ -5703,7 +5705,7 @@
       "title": "Kopírovať do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Názov spisu",
       "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobný"
-    },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "noClient": "Žiadny klient nepriradený",
+      "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
         "co_counsel": "Spolupracujúci advokát",

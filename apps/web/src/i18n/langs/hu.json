@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
         "yearSequential": "Év / Sorszámos (2026/001)"
       },
+      "showInTitle": "Szám megjelenítése az ügy neve mellett",
+      "showInTitleDescription": "Ha ki van kapcsolva, a cím pontosan a megadott név.",
       "title": "Ügyszámozás",
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
@@ -5703,7 +5705,7 @@
       "title": "Másolás ügyiratba"
     },
     "create": {
-      "ownerTypeToggle": "Ügy típusa",
+      "matterName": "Ügy neve",
       "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
     },
     "createNewWorkspace": "Új ügy létrehozása",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Közelgő agenda",
       "uploaded": "feltöltötte"
     },
-    "ownerType": {
-      "client": "Ügyfél",
-      "personal": "Személyes"
-    },
     "parties": {
       "addParty": "Fél hozzáadása",
       "changeClient": "Ügyfél módosítása",
       "client": "Ügyfél",
       "noClient": "Nincs ügyfél hozzárendelve",
+      "noClientOptional": "Nincs ügyfél (nem kötelező)",
       "noParties": "Ehhez az ügyhöz nincsenek felek hozzáadva.",
       "partyRoles": {
         "co_counsel": "Társügyvéd",

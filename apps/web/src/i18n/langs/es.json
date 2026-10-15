@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Año-Mes / Secuencial (2026-02/001)",
         "yearSequential": "Año / Secuencial (2026/001)"
       },
+      "showInTitle": "Mostrar el número junto al nombre del asunto",
+      "showInTitleDescription": "Si está desactivado, el título es exactamente el nombre que escribió.",
       "title": "Numeración de asuntos",
       "tokenHelp": "Tokens disponibles: '{'SEQ'}' (secuencia), '{'YYYY'}' (año), '{'YY'}' (año de 2 dígitos), '{'MM'}' (mes)"
     },
@@ -5703,7 +5705,7 @@
       "title": "Copiar a asunto"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de asunto",
+      "matterName": "Nombre del asunto",
       "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
     },
     "createNewWorkspace": "Crear nuevo asunto",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "subió"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Personal"
-    },
     "parties": {
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
       "client": "Cliente",
       "noClient": "Sin cliente asignado",
+      "noClientOptional": "Sin cliente (opcional)",
       "noParties": "No se han añadido partes a este asunto.",
       "partyRoles": {
         "co_counsel": "Co-abogado",

@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Année-Mois / Séquentiel (2026-02/001)",
         "yearSequential": "Année / Séquentiel (2026/001)"
       },
+      "showInTitle": "Afficher le numéro à côté du nom du dossier",
+      "showInTitleDescription": "Lorsque cette option est désactivée, le titre est exactement le nom saisi.",
       "title": "Numérotation des dossiers",
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
@@ -5703,7 +5705,7 @@
       "title": "Copier vers un dossier"
     },
     "create": {
-      "ownerTypeToggle": "Type de dossier",
+      "matterName": "Nom du dossier",
       "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
-    "ownerType": {
-      "client": "Client",
-      "personal": "Personnel"
-    },
     "parties": {
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
       "noClient": "Aucun client attribué",
+      "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
       "partyRoles": {
         "co_counsel": "Co-conseil",

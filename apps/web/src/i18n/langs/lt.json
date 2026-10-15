@@ -4360,6 +4360,8 @@
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
       },
+      "showInTitle": "Rodyti numerį šalia bylos pavadinimo",
+      "showInTitleDescription": "Kai išjungta, pavadinimas yra būtent tas, kurį įvedėte.",
       "title": "Bylų numeravimas",
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
@@ -5703,7 +5705,7 @@
       "title": "Kopijuoti į bylą"
     },
     "create": {
-      "ownerTypeToggle": "Bylos tipas",
+      "matterName": "Bylos pavadinimas",
       "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
     },
     "createNewWorkspace": "Sukurti naują bylą",
@@ -6155,15 +6157,12 @@
       "upcomingTasks": "Būsima agenda",
       "uploaded": "įkėlė"
     },
-    "ownerType": {
-      "client": "Klientas",
-      "personal": "Asmeninė"
-    },
     "parties": {
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
       "noClient": "Klientas nepriskirtas",
+      "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
       "partyRoles": {
         "co_counsel": "Bendraadvokatas",
