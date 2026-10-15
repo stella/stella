@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, renderHook, act } = await import("@testing-library/react");
@@ -22,7 +23,7 @@ afterEach(async () => {
   clients.length = 0;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test.each([403, 404, 409, 500])(

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
@@ -19,7 +21,7 @@ const { COMPOSER_LIST_VIEWPORT_CLASS_NAME } =
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const OPEN = "Open";

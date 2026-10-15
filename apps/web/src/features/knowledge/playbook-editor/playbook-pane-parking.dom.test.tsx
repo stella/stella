@@ -5,6 +5,7 @@ import { immer } from "zustand/middleware/immer";
 
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { PlaybookSnapshot } from "./playbook-editor-sync.logic";
 import type { ParkedPlaybookPane } from "./playbook-pane-parking";
@@ -128,7 +129,7 @@ afterEach(() => {
   cancelPlaybookPaneLeave();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("closing a dirty pane keeps the tab when cancelled and closes only after confirmation", async () => {
