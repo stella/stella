@@ -180,7 +180,7 @@ export const radarBody = (
     "",
     ...group.entries.map(
       ({ kind: entryKind, source, id, expiresAt }) =>
-        `- ${entryKind}: ${source}: ${id}; expiry ${expiresAt}`,
+        `- ${entryKind}: ${source}: ${id}; expiry ${expiresAt.slice(0, 10)}`,
     ),
   ].join("\n");
 

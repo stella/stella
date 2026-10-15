@@ -38,6 +38,20 @@ const group = () => {
   }
   return result;
 };
+test("public proposal bodies show dates while structured proposals retain exact expiry", () => {
+  const grouped = group();
+  for (const kind of ["removal", "extension"] as const) {
+    const body = radarBody(grouped, kind, now);
+    expect(body).toContain("expiry 2026-10-18");
+    expect(body).not.toMatch(/\b\d{2}:\d{2}\b/u);
+    expect(body).not.toMatch(/T\d{2}[^\s]*Z/u);
+    expect(body).not.toContain(expiry);
+  }
+  for (const proposalEntry of extensionProposal(grouped).entries) {
+    expect(proposalEntry.expiresAt).toBe(expiry);
+  }
+});
+
 test("three-day radar boundary includes exactly due entries", () => {
   expect(dueWaivers([entry("bunfig.toml")], now, 3)).toHaveLength(1);
   expect(
