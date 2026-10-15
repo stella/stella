@@ -40,7 +40,13 @@ export const isLoopbackHost = (host: string): boolean => {
   if (LOOPBACK_NAMES.has(name) || name.endsWith(".localhost")) {
     return true;
   }
-  // 127.0.0.0/8, also as an IPv4-mapped IPv6 address.
+  // 127.0.0.0/8, also as an IPv4-mapped IPv6 address, which URL parsing
+  // normalizes to hex (`::ffff:127.0.0.1` becomes `::ffff:7f00:1`).
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/u.exec(name);
+  if (mappedHex?.[1] !== undefined) {
+    // The high hextet carries the first two octets; 0x7f00-0x7fff is 127.x.
+    return Math.floor(Number.parseInt(mappedHex[1], 16) / 256) === 127;
+  }
   const v4 = name.startsWith("::ffff:") ? name.slice("::ffff:".length) : name;
   return net.isIPv4(v4) && v4.startsWith("127.");
 };

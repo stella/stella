@@ -37,6 +37,8 @@ describe("loopback hosts", () => {
     "::1",
     "[::1]",
     "::ffff:127.0.0.1",
+    new URL("http://[::ffff:127.0.0.1]/").hostname,
+    "[::ffff:7f12:3456]",
   ])("%s is local", (host) => {
     expect(isLoopbackHost(host)).toBe(true);
   });
@@ -47,6 +49,8 @@ describe("loopback hosts", () => {
     "128.0.0.1",
     "10.0.0.1",
     "::2",
+    new URL("http://[::ffff:10.0.0.1]/").hostname,
+    "[::ffff:8000:1]",
     "",
   ])("%s is not local", (host) => {
     expect(isLoopbackHost(host)).toBe(false);
