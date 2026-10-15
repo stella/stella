@@ -23,7 +23,10 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * The candidate scan through both engine transports.
@@ -219,14 +222,15 @@ const projected = (
   fields: readonly string[],
 ): Record<string, unknown> =>
   Object.fromEntries(
-    Object.entries(passage).filter(
-      ([key]) => key !== "score" && fields.includes(key),
-    ),
+    Object.entries({
+      ...passage,
+      projection_revision: testRevisionOf(passage.document_id),
+    }).filter(([key]) => key !== "score" && fields.includes(key)),
   );
 
 const stored = (passage: FixturePassage): Record<string, unknown> => {
   const { score: _score, ...rest } = passage;
-  return rest;
+  return { ...rest, projection_revision: testRevisionOf(passage.document_id) };
 };
 
 const json = (value: unknown): Response =>
@@ -487,7 +491,7 @@ describe("the scored transport", () => {
         "/api/v1/_elastic/case_law_v5_cs_sk/_search",
       );
       expect(request.url.searchParams.get("_source_includes")).toBe(
-        "document_id,chunk_id,anchor_id",
+        "document_id,chunk_id,anchor_id,projection_revision",
       );
       expect(request.body).toEqual({
         query: {

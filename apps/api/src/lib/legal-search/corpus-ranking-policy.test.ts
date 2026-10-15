@@ -22,7 +22,10 @@ import {
   courtTierSignal,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -72,6 +75,9 @@ const stubRankingScores = (
       const hits = scores.map((score, rank) => ({
         _source: {
           document_id: `doc-${Math.floor(rank / passagesPerDocument)}`,
+          projection_revision: testRevisionOf(
+            `doc-${Math.floor(rank / passagesPerDocument)}`,
+          ),
           chunk_id: `passage-${rank}`,
           anchor_id: `anchor-${rank}`,
         },
@@ -286,6 +292,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       const hits = Array.from({ length: 7100 }, (_, rank) => ({
         _source: {
           document_id: rank < 2 ? "first" : `doc-${rank}`,
+          projection_revision: testRevisionOf(
+            rank < 2 ? "first" : `doc-${rank}`,
+          ),
           chunk_id: `passage-${rank}`,
           anchor_id: `anchor-${rank}`,
         },
@@ -564,6 +573,9 @@ test("ties below the cutoff page deterministically despite engine tie order", as
               ["p0", "p1"].map((anchor_id) => ({
                 _source: {
                   document_id: `doc-${String(index).padStart(3, "0")}`,
+                  projection_revision: testRevisionOf(
+                    `doc-${String(index).padStart(3, "0")}`,
+                  ),
                   anchor_id,
                 },
                 _score: 1,

@@ -605,8 +605,7 @@ export const readServingCorpusIndexTargetTx = async (
   ].filter(([, generation]) => generation !== serving.generation);
   if (jurisdiction !== undefined) {
     const servedBy = flipped.find(
-      ([flippedJurisdiction]) =>
-        flippedJurisdiction === jurisdiction.toUpperCase(),
+      ([flippedJurisdiction]) => flippedJurisdiction === jurisdiction,
     );
     return await resolveGenerationTargetTx(tx, {
       serving:

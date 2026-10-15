@@ -195,12 +195,10 @@ export const CASE_LAW_INDEX_GROUPS: ReadonlyMap<
  * Lowercase index group of a country in the grouped generation of this order;
  * its own code when unlisted.
  */
-export const caseLawIndexGroupAt = (order: number, country: string): string => {
-  const upper = country.toUpperCase();
-  return isCaseLawJurisdictionKey(upper)
-    ? groupOfJurisdictionAt(order, upper)
+export const caseLawIndexGroupAt = (order: number, country: string): string =>
+  isCaseLawJurisdictionKey(country)
+    ? groupOfJurisdictionAt(order, country)
     : country.toLowerCase();
-};
 
 /** The groups the grouped generation of this order has, in declaration order. */
 export const caseLawIndexGroupNamesAt = (
@@ -242,14 +240,12 @@ const caseLawIndexGroupHasProvisionKeys = (group: string): boolean =>
  */
 export const caseLawJurisdictionHasProvisionKeys = (
   jurisdiction: string,
-): boolean => {
-  const upper = jurisdiction.toUpperCase();
-  return (
-    isCaseLawJurisdictionKey(upper) &&
-    isRehomedJurisdiction(upper) &&
-    caseLawIndexGroupHasProvisionKeys(CASE_LAW_INDEX_GROUP_REHOMES[upper].group)
+): boolean =>
+  isCaseLawJurisdictionKey(jurisdiction) &&
+  isRehomedJurisdiction(jurisdiction) &&
+  caseLawIndexGroupHasProvisionKeys(
+    CASE_LAW_INDEX_GROUP_REHOMES[jurisdiction].group,
   );
-};
 
 /**
  * The generation-order match the backfill checkpoint's `generation_order`
@@ -295,7 +291,7 @@ export const caseLawIndexIdSql = (
   WHEN ${order}
        BETWEEN ${sql.raw(String(CASE_LAW_INDEX_GROUPING_FROM_GENERATION))}
        AND ${sql.raw(String(POSTGRES_INTEGER_MAX))}
-  THEN ${generation} || '_' || CASE upper(${country})
+  THEN ${generation} || '_' || CASE ${country}
     ${groupArms}
     ELSE lower(${country})
   END

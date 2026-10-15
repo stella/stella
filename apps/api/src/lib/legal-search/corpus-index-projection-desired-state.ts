@@ -466,7 +466,7 @@ const lockCaseLawProjectionInput = async (
   ).get(String(row.documentId));
   const vacatedFrom =
     (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
-      row.jurisdiction.toUpperCase(),
+      row.jurisdiction,
     ) ?? null;
   return {
     epoch: row.projectionEpoch,

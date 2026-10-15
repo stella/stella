@@ -7,8 +7,9 @@
  */
 import { Result } from "better-result";
 import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -22,7 +23,10 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
+import {
+  caseLawCorpusAppliedRevision,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   flipCaseLawJurisdictionServing,
   purgeFlippedJurisdictionBatchTx,
@@ -40,10 +44,12 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   advanceCorpusProjectionDesiredStateTx,
   ensureCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -68,6 +74,7 @@ const SVK_DECISION_ID = toSafeId<"caseLawDecision">(
 const V9_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000509",
 );
+const originalFetch = globalThis.fetch;
 const NOW = new Date("2026-08-26T00:00:00.000Z");
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -130,6 +137,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  globalThis.fetch = originalFetch;
   await client.close();
 });
 
@@ -419,25 +427,44 @@ test("the flip is refused while the group is not attested, not complete, or not 
   expect((await read("CZE")).route.indexId).toBe("case_law_v8_cs_sk");
 });
 
-test("a lower-case country row of the jurisdiction holds the flip until it is seeded", async () => {
-  const engine = await buildV9();
-  // The routing reads `cze` as CZE, so the gate must count it.
+test("the corpus country guard refuses lower-case inserts and updates", async () => {
   const lowerCaseId = toSafeId<"caseLawDecision">(
     "0198e331-e578-7000-8000-0000000005f2",
   );
-  await db.insert(caseLawDecisions).values({
-    id: lowerCaseId,
-    sourceId: SOURCE_ID,
-    caseNumber: "5 As 4/2008",
-    court: "Nejvyšší správní soud",
-    country: "cze",
-    language: "cs",
-    contentHash: "c".repeat(64),
+  const insertError = await rejectionOf(
+    db.insert(caseLawDecisions).values({
+      id: lowerCaseId,
+      sourceId: SOURCE_ID,
+      caseNumber: "5 As 4/2008",
+      court: "Nejvyšší správní soud",
+      country: "cze",
+      language: "cs",
+      contentHash: "c".repeat(64),
+    }),
+  );
+  expect(insertError).toMatchObject({
+    cause: {
+      code: "23514",
+      constraint: "case_law_decisions_corpus_country_shape",
+    },
   });
-  expect(
-    (await flip(engine)).match({ ok: () => "ok", err: (error) => error._tag }),
-  ).toBe("CaseLawServingFlipIncompleteError");
-  expect(await pointerRows()).toEqual([]);
+  const updateError = await rejectionOf(
+    db
+      .update(caseLawDecisions)
+      .set({ country: "cze" })
+      .where(eq(caseLawDecisions.id, CZE_DECISION_ID)),
+  );
+  expect(updateError).toMatchObject({
+    cause: {
+      code: "23514",
+      constraint: "case_law_decisions_corpus_country_shape",
+    },
+  });
+  const rows = await db
+    .select({ country: caseLawDecisions.country })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, CZE_DECISION_ID));
+  expect(rows).toEqual([{ country: "CZE" }]);
 });
 
 test("the flip is refused for an index the engine does not hold or one that drifted", async () => {
@@ -575,6 +602,34 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
   expect(global.serving.generation).toBe("case_law_v8");
 
   // The acceptance follows the pointer: v9's applied copy is the current one.
+  const appliedStates = await db
+    .select({
+      generation: corpusIndexProjectionStates.generation,
+      revision: corpusIndexProjectionStates.appliedRevision,
+      indexId: corpusIndexProjectionStates.appliedIndexId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID))
+    .orderBy(corpusIndexProjectionStates.generation);
+  expect(appliedStates).toEqual([
+    {
+      generation: "case_law_v8",
+      revision: toSafeId<"corpusIndexProjectionIntent">(
+        "0198e331-e578-7000-8000-000000000508",
+      ),
+      indexId: "case_law_v8_cs_sk",
+    },
+    {
+      generation: "case_law_v9",
+      revision: V9_REVISION,
+      indexId: "case_law_v9_cze",
+    },
+  ]);
+  const acceptedRevision = await db
+    .select({ revision: caseLawCorpusAppliedRevision("case_law_v8") })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, CZE_DECISION_ID));
+  expect(acceptedRevision).toEqual([{ revision: V9_REVISION }]);
   expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
   await db
     .update(corpusIndexProjectionStates)
@@ -592,6 +647,147 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
   expect(again.isOk() ? again.value.type : again.error._tag).toBe(
     "already_flipped",
   );
+});
+
+test("global counts equal a single copy after the flip and before purge", async () => {
+  const engine = await buildV9();
+  const oldRevision = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-000000000508",
+  );
+  const slovakRevision = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-00000000050a",
+  );
+  await applyDesired("case_law_v8", CZE_DECISION_ID, oldRevision);
+  await applyDesired("case_law_v8", SVK_DECISION_ID, slovakRevision);
+  const flipped = await flip(engine);
+  expect(flipped.isOk() ? flipped.value.type : flipped.error._tag).toBe(
+    "flipped",
+  );
+  const global = await read(undefined);
+  const current = [
+    {
+      document_id: CZE_DECISION_ID,
+      projection_revision: V9_REVISION,
+      text: "Czech one",
+    },
+    {
+      document_id: CZE_DECISION_ID,
+      projection_revision: V9_REVISION,
+      text: "Czech two",
+    },
+    {
+      document_id: SVK_DECISION_ID,
+      projection_revision: slovakRevision,
+      text: "Slovak one",
+    },
+  ];
+  let hits = current;
+  globalThis.fetch = Object.assign(
+    async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const body = v.parse(
+        v.object({
+          start_offset: v.optional(v.number(), 0),
+          max_hits: v.optional(v.number(), 100),
+          snippet_fields: v.optional(v.string()),
+        }),
+        JSON.parse(v.parse(v.string(), init?.body)),
+      );
+      return Response.json({
+        num_hits: hits.length,
+        hits: hits.slice(body.start_offset, body.start_offset + body.max_hits),
+        ...(body.snippet_fields === undefined
+          ? {}
+          : { snippets: hits.map((hit) => ({ text: [hit.text] })) }),
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const search = async () =>
+    await readCorpusIndexSearchPage({
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: global.route.indexId,
+      query: "text:fixture",
+      limit: 40,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      scanTransport: { type: "native" },
+      rankingMode: "off",
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => 0,
+      rankCandidates: async (candidates) => {
+        const rows = await db
+          .select({
+            id: caseLawDecisions.id,
+            revision: caseLawCorpusAppliedRevision("case_law_v8"),
+          })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              inArray(
+                caseLawDecisions.id,
+                candidates.map(({ id }) => toSafeId<"caseLawDecision">(id)),
+              ),
+              currentCaseLawCorpusProjection("case_law_v8"),
+            ),
+          );
+        const revisionById = new Map(
+          rows.flatMap(({ id, revision }) =>
+            revision === null ? [] : [[id, revision]],
+          ),
+        );
+        return {
+          context: { decisionCount: rows.length },
+          groups: [],
+          ranked: candidates
+            .filter(({ id }) =>
+              revisionById.has(toSafeId<"caseLawDecision">(id)),
+            )
+            .map((candidate) => ({
+              ...candidate,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+          revisionById,
+        };
+      },
+    });
+  const singleCopy = await search();
+  hits = [
+    ...current
+      .filter((hit) => hit.document_id === CZE_DECISION_ID)
+      .map((hit) => ({ ...hit, projection_revision: oldRevision })),
+    ...current,
+  ];
+  const beforePurge = await search();
+  expect(beforePurge.passageCountById).toEqual(singleCopy.passageCountById);
+  expect(beforePurge.passageCountById).toEqual(
+    new Map([
+      [CZE_DECISION_ID, 2],
+      [SVK_DECISION_ID, 1],
+    ]),
+  );
+  expect(beforePurge.pageRanked.map(({ id }) => id).toSorted()).toEqual(
+    singleCopy.pageRanked.map(({ id }) => id).toSorted(),
+  );
+  expect(beforePurge.pageRanked).toHaveLength(2);
+  expect(beforePurge.context.decisionCount).toBe(
+    singleCopy.context.decisionCount,
+  );
+  expect(beforePurge.context.decisionCount).toBe(2);
+  expect(
+    [...beforePurge.passageCountById.values()].reduce(
+      (sum, count) => sum + count,
+      0,
+    ),
+  ).toBe(3);
 });
 
 test("after the flip the old copies are scheduled for erasure and the new ones are untouched", async () => {

@@ -61,9 +61,7 @@ export const readCaseLawJurisdictionVacatedTx = async (
   tx: ReadTransaction,
   jurisdictions: readonly string[],
 ): Promise<JurisdictionServingGenerations> => {
-  const distinct = [
-    ...new Set(jurisdictions.map((jurisdiction) => jurisdiction.toUpperCase())),
-  ];
+  const distinct = [...new Set(jurisdictions)];
   if (distinct.length === 0) {
     return new Map();
   }

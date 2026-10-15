@@ -552,9 +552,7 @@ const bootstrapCaseLaw = async ({
               decisionDate: row.decisionDate,
               ecli: row.ecli,
               metadata: row.metadata,
-              vacatedFrom:
-                vacatedByJurisdiction.get(row.jurisdiction.toUpperCase()) ??
-                null,
+              vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
               provisionKeys:
                 provisionKeysByDecision.get(row.documentId) ??
                 panic(

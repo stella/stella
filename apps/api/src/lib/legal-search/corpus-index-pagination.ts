@@ -170,6 +170,7 @@ const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
   "document_id",
   "chunk_id",
   "anchor_id",
+  "projection_revision",
 ] as const;
 
 type CorpusIndexSearchPageInput<TContext> = {
@@ -915,6 +916,37 @@ const resolveCorpusSearchCursor = ({
 };
 
 /**
+ * Count only the physical copy Postgres records as applied. Intent revisions
+ * are unique across generations and bind an index id, so an old generation's
+ * passages cannot inflate a flipped jurisdiction before its purge completes.
+ * Counts are collected during the existing scan; no per-document read is added.
+ */
+const appliedPassageCounter = () => {
+  const counts = new Map<string, Map<string, number>>();
+  return {
+    record: (id: string, revision: unknown): boolean => {
+      if (typeof revision !== "string") {
+        return false;
+      }
+      let revisions = counts.get(id);
+      if (revisions === undefined) {
+        revisions = new Map();
+        counts.set(id, revisions);
+      }
+      revisions.set(revision, (revisions.get(revision) ?? 0) + 1);
+      return true;
+    },
+    applied: (revisionById: ReadonlyMap<string, CorpusProjectionRevision>) =>
+      new Map(
+        [...revisionById].map(([id, revision]) => [
+          id,
+          counts.get(id)?.get(revision) ?? 0,
+        ]),
+      ),
+  };
+};
+
+/**
  * One page of the cursor chain: a scan of the window its cursor names (the
  * first window without one) under the fixed round cap.
  */
@@ -943,7 +975,8 @@ const readWindowPage = async <TContext>({
   const scores = scanScoreRecorder();
   /** Diagnostic clause addressing the best passage the unfiltered scan ranked. */
   const passageClauseById = new Map<string, string>();
-  const passageCountById = new Map<string, number>();
+  const seenIds = new Set<string>();
+  const passageCounts = appliedPassageCounter();
   let ranking: CorpusIndexRanking<TContext> | null = null;
   let windowed: RankedHit[] = [];
   // Absolute rank in the engine's order, so a hit keeps the score its cursor
@@ -969,9 +1002,7 @@ const readWindowPage = async <TContext>({
   // consumed scan budget the same way extra passages did.
   const scanBudget = (): number => {
     const resultUnits =
-      ranking === null
-        ? passageCountById.size
-        : Math.max(1, ranking.ranked.length);
+      ranking === null ? seenIds.size : Math.max(1, ranking.ranked.length);
     if (resultUnits === 0) {
       return LIMITS.corpusIndexSearchScanLimit;
     }
@@ -1034,6 +1065,9 @@ const readWindowPage = async <TContext>({
           break;
         case "valid": {
           const { id } = disposition;
+          if (!passageCounts.record(id, hit[projectionRevisionField])) {
+            malformed += 1;
+          }
           lastScannedId = id;
           // Keep emitted candidates while replaying the window: their best
           // member must still represent the group when the ranker folds it.
@@ -1043,12 +1077,10 @@ const readWindowPage = async <TContext>({
           // best-scoring passage: it sets the document's rank and the passage
           // the highlight round addresses again. Later passages of the same
           // document only add to its breadth count.
-          const seen = passageCountById.get(id);
-          if (seen !== undefined) {
-            passageCountById.set(id, seen + 1);
+          if (seenIds.has(id)) {
             continue;
           }
-          passageCountById.set(id, 1);
+          seenIds.add(id);
 
           candidates.push({
             id,
@@ -1132,7 +1164,7 @@ const readWindowPage = async <TContext>({
     context: ranking.context,
     snippetById: snippets.snippetById,
     anchorIdById: snippets.anchorIdById,
-    passageCountById,
+    passageCountById: passageCounts.applied(ranking.revisionById),
     revisionById: ranking.revisionById,
     passageClauseById,
     stop,
@@ -1400,7 +1432,8 @@ const readBm25SearchPage = async <TContext>(
   const candidates: ScoredCandidate[] = [];
   const bestScoreById = new Map<string, number>();
   const passageClauseById = new Map<string, string>();
-  const passageCountById = new Map<string, number>();
+  const seenIds = new Set<string>();
+  const passageCounts = appliedPassageCounter();
   let malformed = 0;
   for (const { fields: hit, score } of hits) {
     if (topScore === null) {
@@ -1413,11 +1446,13 @@ const readBm25SearchPage = async <TContext>(
         break;
       case "valid": {
         const { id } = disposition;
-        const seen = passageCountById.get(id);
-        passageCountById.set(id, (seen ?? 0) + 1);
-        if (seen !== undefined) {
+        if (!passageCounts.record(id, hit[projectionRevisionField])) {
+          malformed += 1;
+        }
+        if (seenIds.has(id)) {
           continue;
         }
+        seenIds.add(id);
         // Retain the cursor decision until grouping; dropping its representative
         // could expose a language sibling and repeat a judgment on the next page.
         // Filter-only matches can have no lexical signal (all scores zero).
@@ -1490,7 +1525,7 @@ const readBm25SearchPage = async <TContext>(
     context: ranking.context,
     snippetById: snippets.snippetById,
     anchorIdById: snippets.anchorIdById,
-    passageCountById,
+    passageCountById: passageCounts.applied(ranking.revisionById),
     revisionById: ranking.revisionById,
     passageClauseById,
     stop,

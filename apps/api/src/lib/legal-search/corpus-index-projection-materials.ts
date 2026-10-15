@@ -311,8 +311,7 @@ const readCaseLawMaterials = async (
       identifiers:
         identifiersByDecision.get(row.documentId) ??
         panic(`Corpus projection material lost identifiers: ${row.documentId}`),
-      vacatedFrom:
-        vacatedByJurisdiction.get(row.jurisdiction.toUpperCase()) ?? null,
+      vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
       provisionKeys:
         provisionKeysByDecision.get(row.documentId) ??
         panic(

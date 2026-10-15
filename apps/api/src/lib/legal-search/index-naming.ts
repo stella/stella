@@ -89,7 +89,9 @@ export const corpusIndexId = (
   }
   const groupedOrder = groupedCaseLawGenerationOrder(generation);
   const suffix =
-    groupedOrder === null ? jur : caseLawIndexGroupAt(groupedOrder, jur);
+    groupedOrder === null
+      ? jur
+      : caseLawIndexGroupAt(groupedOrder, jurisdiction);
   const indexId = `${generation}_${suffix}`;
   if (indexId.length > CORPUS_INDEX_ID_MAX_LENGTH) {
     panic(`Corpus index id exceeds storage limit: ${indexId}`);

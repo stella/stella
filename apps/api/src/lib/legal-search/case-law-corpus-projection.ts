@@ -23,7 +23,7 @@ const servingGenerationOfDecision = (generation: string) =>
     SELECT pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}
     FROM ${corpusIndexJurisdictionServing} pointer
     WHERE pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
-      AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = upper(${caseLawDecisions.country})
+      AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${caseLawDecisions.country}
   ), ${generation})`;
 
 /** Only an applied revision with exactly one physical passage proves a singleton. */
@@ -77,7 +77,7 @@ const acceptedCaseLawProjectionStateAt = (
 /** The jurisdiction-serving pointer row of the decision's country. */
 const caseLawDecisionPointer = sql`
         pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
-        AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = upper(${caseLawDecisions.country})`;
+        AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = ${caseLawDecisions.country}`;
 
 /**
  * Accept a physical hit only when the generation that serves the decision's

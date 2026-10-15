@@ -280,9 +280,7 @@ const hasUnseededDecisionTx = async (
     .from(caseLawDecisions)
     .where(
       and(
-        // The routing reads a decision's country case-insensitively, so the
-        // gate does too: a lower-case row is the jurisdiction's as well.
-        sql`upper(${caseLawDecisions.country}) = ${jurisdiction}`,
+        eq(caseLawDecisions.country, jurisdiction),
         notExists(
           tx
             .select({ one: sql`1` })
@@ -325,7 +323,7 @@ export const flipCaseLawJurisdictionServing = async (
   context: CaseLawServingFlipContext,
   options: CaseLawServingFlipOptions,
 ): Promise<Result<CaseLawServingFlipOutcome, CaseLawServingFlipRefusal>> => {
-  const jurisdiction = options.jurisdiction.toUpperCase();
+  const jurisdiction = options.jurisdiction;
   const target = {
     family: "case_law",
     generation: options.generation,
@@ -555,7 +553,6 @@ export const purgeFlippedJurisdictionBatchTx = async (
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > PURGE_BATCH_MAX) {
     return panic(`Purge batch size must be 1..${String(PURGE_BATCH_MAX)}`);
   }
-  const upper = jurisdiction.toUpperCase();
   const pointer = (
     await tx
       .select({
@@ -566,14 +563,14 @@ export const purgeFlippedJurisdictionBatchTx = async (
       .where(
         and(
           eq(corpusIndexJurisdictionServing.family, "case_law"),
-          eq(corpusIndexJurisdictionServing.jurisdiction, upper),
+          eq(corpusIndexJurisdictionServing.jurisdiction, jurisdiction),
         ),
       )
       .limit(1)
   ).at(0);
   if (pointer === undefined || pointer.fromGeneration !== fromGeneration) {
     return panic(
-      `${upper} is not flipped away from ${fromGeneration}; nothing may be purged from it`,
+      `${jurisdiction} is not flipped away from ${fromGeneration}; nothing may be purged from it`,
     );
   }
   const decisions = await tx
@@ -581,8 +578,7 @@ export const purgeFlippedJurisdictionBatchTx = async (
     .from(caseLawDecisions)
     .where(
       and(
-        // Case-insensitive, as the routing reads a decision's country.
-        sql`upper(${caseLawDecisions.country}) = ${upper}`,
+        eq(caseLawDecisions.country, jurisdiction),
         afterEntityId === null
           ? undefined
           : gt(caseLawDecisions.id, afterEntityId),

@@ -275,9 +275,8 @@ test("every declared jurisdiction routes into every case-law generation", () => 
       const indexId = `${generation}_${group}`;
       expect([
         corpusIndexIdFromManifest(manifest, jurisdiction),
-        corpusIndexIdFromManifest(manifest, jurisdiction.toLowerCase()),
         requireCorpusIndexIdForManifest(manifest, indexId),
-      ]).toEqual([indexId, indexId, indexId]);
+      ]).toEqual([indexId, indexId]);
     }
   }
   // Non-vacuity: the generations were built before Hungary was declared, and
@@ -342,12 +341,9 @@ test("a query routes where the projection writes", () => {
     indexId: "case_law_v7_cs_sk",
     jurisdictionClause: "CZE",
   });
-  // The clause is the canonical code indexed documents carry, whatever case
-  // the scope arrived in.
-  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze")).toEqual({
-    indexId: "case_law_v7_cs_sk",
-    jurisdictionClause: "CZE",
-  });
+  expect(() =>
+    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze"),
+  ).toThrow("Undeclared case-law jurisdiction");
   // A single-jurisdiction index is bounded by the index alone.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "POL")).toEqual({
     indexId: "case_law_v7_pol",
@@ -971,7 +967,7 @@ test("case_law_v9 is a partial generation: Czech decisions in a group of their o
       corpusIndexManifestCoversJurisdiction(v9, jurisdiction),
     ]).toEqual([jurisdiction, jurisdiction === "CZE"]);
   }
-  expect(corpusIndexManifestCoversJurisdiction(v9, "cze")).toBe(true);
+  expect(corpusIndexManifestCoversJurisdiction(v9, "cze")).toBe(false);
 
   // Czech decisions are in a group of their own from v9 on, and in the group
   // they were created in before: the serving generations route exactly as

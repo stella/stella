@@ -124,7 +124,27 @@ beforeEach(() => {
       return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
     }
     if (engineHits === null) {
-      return new Response(JSON.stringify(responseBody), { status: 200 });
+      const bodyWithRevisions =
+        typeof responseBody === "object" &&
+        responseBody !== null &&
+        "hits" in responseBody &&
+        Array.isArray(responseBody.hits)
+          ? {
+              ...responseBody,
+              hits: responseBody.hits.map((hit: unknown) =>
+                typeof hit === "object" &&
+                hit !== null &&
+                "document_id" in hit &&
+                typeof hit.document_id === "string"
+                  ? {
+                      ...hit,
+                      projection_revision: testRevisionOf(hit.document_id),
+                    }
+                  : hit,
+              ),
+            }
+          : responseBody;
+      return new Response(JSON.stringify(bodyWithRevisions), { status: 200 });
     }
     const offset = Number(body["start_offset"] ?? 0);
     const matching =
@@ -142,7 +162,10 @@ beforeEach(() => {
     return new Response(
       JSON.stringify({
         num_hits: engineHits.length,
-        hits: window,
+        hits: window.map((hit) => ({
+          ...hit,
+          projection_revision: testRevisionOf(hit.document_id),
+        })),
         snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
       }),
       { status: 200 },

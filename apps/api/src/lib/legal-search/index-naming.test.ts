@@ -35,10 +35,8 @@ test("case-law ids are per index group from the grouping generation on", () => {
     expect(corpusIndexId("case_law_v3", country)).toBe(`case_law_v3_${group}`);
     // A rehomed jurisdiction keeps its group in every generation before the
     // rehome and takes the new one from it on.
-    expect(corpusIndexId("case_law_v8", country.toLowerCase())).toBe(
-      `case_law_v8_${group}`,
-    );
-    expect(corpusIndexId("case_law_v12", country.toLowerCase())).toBe(
+    expect(corpusIndexId("case_law_v8", country)).toBe(`case_law_v8_${group}`);
+    expect(corpusIndexId("case_law_v12", country)).toBe(
       `case_law_v12_${caseLawIndexGroupAt(12, country)}`,
     );
     // Grouping is a rule about the case-law family's generations only.
@@ -75,7 +73,7 @@ test("a country outside the declaration never lands in a declared group", () => 
     expect([group, selfNamed || group.includes("_")]).toEqual([group, true]);
   }
   fc.assert(
-    fc.property(fc.stringMatching(/^[A-Za-z]{2,8}$/u), (code) => {
+    fc.property(fc.stringMatching(/^[A-Z]{2,8}$/u), (code) => {
       const indexId = corpusIndexId("case_law_v3", code);
       const declared = Object.hasOwn(
         CASE_LAW_INDEX_GROUP_OF,
@@ -110,7 +108,7 @@ test("the jurisdictions of an index are the inverse of its derivation", () => {
         fc.constantFrom("case_law_v2", "case_law_v3", "legislation_v1"),
         fc.stringMatching(generationPattern),
       ),
-      fc.stringMatching(/^[A-Za-z]{2,8}$/u),
+      fc.stringMatching(/^[A-Z]{2,8}$/u),
       (generation, jurisdiction) => {
         const indexId = corpusIndexId(generation, jurisdiction);
         const held = corpusIndexJurisdictions(generation, indexId);
