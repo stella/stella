@@ -31,7 +31,7 @@ import type {
   SanctionsActiveEdition,
   SanctionsIndexCache,
 } from "@/api/lib/lists/sanctions/screening-index";
-import { SANCTIONS_INCOMPLETE_REASON } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import { aggregateSanctionsScreeningStatus } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
@@ -141,8 +141,9 @@ export type SanctionsListOutcome =
       })
   | (ListOutcomeBase &
       ScreenedEdition & {
-        status: "clear";
-        reason: typeof SANCTIONS_INCOMPLETE_REASON;
+        /** A bounded scan found no match in the part it screened. */
+        status: "incomplete";
+        reason: null;
         totalMatches: 0;
         truncated: true;
         possibleMatches: [];
@@ -170,8 +171,8 @@ export type SanctionsListOutcome =
 export type SanctionsScreening = {
   /**
    * `possible-match` when any list has one; otherwise `unavailable` when any
-   * list could not answer; `clear` when every list answered clear. A list
-   * with reason `screening-incomplete` only cleared its bounded scan.
+   * list could not answer; otherwise `incomplete` when any list was only
+   * partly screened; `clear` only when every list was fully screened clear.
    */
   status: SanctionsScreeningStatus;
   checkedAt: string;
@@ -260,18 +261,8 @@ const toScreeningQuery = (
 
 const aggregateSanctionsStatus = (
   lists: readonly SanctionsListOutcome[],
-): SanctionsScreeningStatus => {
-  if (lists.some((list) => list.status === "possible-match")) {
-    return "possible-match";
-  }
-  if (
-    lists.length === 0 ||
-    lists.some((list) => list.status === "unavailable")
-  ) {
-    return "unavailable";
-  }
-  return "clear";
-};
+): SanctionsScreeningStatus =>
+  aggregateSanctionsScreeningStatus(lists.map((list) => list.status));
 
 const toPendingUpdate = (
   heldUpdate: SanctionsSourceFreshness["heldUpdate"],
@@ -319,6 +310,20 @@ const unavailableList = (
   possibleMatches: [],
 });
 
+/** A bounded scan of a fresh edition that found nothing in what it read. */
+const incompleteList = (
+  base: ListOutcomeBase,
+  edition: ScreenedEdition,
+): SanctionsListOutcome => ({
+  ...base,
+  ...edition,
+  status: "incomplete",
+  reason: null,
+  totalMatches: 0,
+  truncated: true,
+  possibleMatches: [],
+});
+
 const toPossibleMatch = (
   match: PossibleMatch,
   editionId: string,
@@ -344,7 +349,8 @@ const toPossibleMatch = (
 });
 
 type SanctionsListMatchFailure =
-  | { code: "screening-incomplete" }
+  // The matcher stopped at its work bound before exhausting its candidates.
+  | { code: "work-limit" }
   | {
       code: "load-failed";
       stage: "public-matcher" | "list-screening";
@@ -431,9 +437,7 @@ const screenList = async ({
     });
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {
-        return Result.err({
-          code: "screening-incomplete" as const,
-        });
+        return Result.err({ code: "work-limit" as const });
       }
       return panic("A validated sanctions query was rejected");
     }
@@ -455,16 +459,8 @@ const screenList = async ({
   };
   if (matched.value.isErr()) {
     const failure = matched.value.error;
-    if (failure.code === "screening-incomplete") {
-      return {
-        ...base,
-        ...screenedEdition,
-        status: "clear",
-        reason: SANCTIONS_INCOMPLETE_REASON,
-        totalMatches: 0,
-        truncated: true,
-        possibleMatches: [],
-      };
+    if (failure.code === "work-limit") {
+      return incompleteList(base, screenedEdition);
     }
     if (failure.reason !== null) {
       reportFailure({
@@ -482,15 +478,7 @@ const screenList = async ({
   );
   if (first === undefined) {
     if (screened.truncated) {
-      return {
-        ...base,
-        ...screenedEdition,
-        status: "clear",
-        reason: SANCTIONS_INCOMPLETE_REASON,
-        totalMatches: 0,
-        truncated: true,
-        possibleMatches: [],
-      };
+      return incompleteList(base, screenedEdition);
     }
     return {
       ...base,

@@ -25,7 +25,10 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { transitionUpsertBatch } from "@/api/lib/db/transitions";
-import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import {
+  readSanctionsFreshness,
+  type SanctionsSourceFreshness,
+} from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
 import { lapseSanctionsMatches } from "@/api/lib/lists/sanctions/monitoring-lapse";
 import { lockSanctionsMonitoring } from "@/api/lib/lists/sanctions/monitoring-lock";
@@ -49,6 +52,41 @@ type SanctionsMonitoringResult = {
   contactId: SafeId<"contact">;
   contactFingerprint: string;
   outcome: SanctionsListOutcome;
+};
+
+/**
+ * What a list's outcome settles for monitoring. Only a full answer (clear or
+ * possible-match) on the current edition is diffed against stored matches;
+ * an unavailable or incomplete outcome cannot prove a match absent, so it is
+ * recorded as coverage only: no match lapses and nothing notifies until a
+ * later screening answers in full.
+ */
+const monitoringCoverage = (
+  outcome: SanctionsListOutcome,
+  freshness: SanctionsSourceFreshness,
+):
+  | "diff"
+  | "stale-edition"
+  | { status: "unavailable"; reason: string | null }
+  | { status: "incomplete"; reason: null } => {
+  if (freshness.status === "unavailable") {
+    return { status: "unavailable", reason: freshness.reason };
+  }
+  const editionId = freshness.edition?.id ?? null;
+  switch (outcome.status) {
+    case "clear":
+    case "possible-match":
+      return outcome.editionId === editionId ? "diff" : "stale-edition";
+    case "incomplete":
+      return outcome.editionId === editionId
+        ? { status: "incomplete", reason: null }
+        : "stale-edition";
+    case "unavailable":
+      return { status: "unavailable", reason: outcome.reason };
+    default:
+      outcome satisfies never;
+      return panic("Unhandled sanctions list outcome");
+  }
 };
 
 type CommitMonitoringBatchOptions = {
@@ -640,33 +678,30 @@ export const commitSanctionsMonitoringBatch = async ({
           terminalContactIds.push(contact.id);
           continue;
         }
-
         if (
           monitoringFingerprint(contact) !== item.contactFingerprint ||
           item.outcome.source !== source
         ) {
           continue;
         }
-        if (
-          freshness.status === "unavailable" ||
-          item.outcome.reason !== null
-        ) {
+        const coverage = monitoringCoverage(item.outcome, freshness);
+        if (coverage === "stale-edition") {
+          continue;
+        }
+        if (coverage !== "diff") {
           checkpoint.rows.push({
             organizationId,
             contactId: contact.id,
             sourceId: source,
             editionId,
-            status: "unavailable",
-            reason: freshness.reason ?? item.outcome.reason,
+            ...coverage,
             contactFingerprint: item.contactFingerprint,
             checkedAt: now,
           });
           terminalContactIds.push(contact.id);
           continue;
         }
-        if (item.outcome.editionId === editionId) {
-          eligible.push(item);
-        }
+        eligible.push(item);
       }
       const excludedIds = checkpoint.rows
         .filter((row) => row.status === "excluded")

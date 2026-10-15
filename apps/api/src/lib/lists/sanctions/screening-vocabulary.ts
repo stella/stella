@@ -16,13 +16,51 @@ export type SanctionsClassification =
   (typeof SANCTIONS_CLASSIFICATIONS)[number];
 
 export const SANCTIONS_SCREENING_STATUSES = [
+  // Every candidate was screened and none matched.
   "clear",
+  // At least one entry resembles the subject; each needs human review.
   "possible-match",
+  // The list could not answer: nothing was screened.
   "unavailable",
+  // A bounded scan screened only part of the list and found no match: not a
+  // clearance.
+  "incomplete",
 ] as const;
 
 export type SanctionsScreeningStatus =
   (typeof SANCTIONS_SCREENING_STATUSES)[number];
+
+/**
+ * How strongly each list status decides the screening's: the highest one
+ * present wins. Total over the status union, so a new status must be ranked.
+ */
+const SANCTIONS_STATUS_PRECEDENCE = {
+  clear: 0,
+  incomplete: 1,
+  unavailable: 2,
+  "possible-match": 3,
+} as const satisfies Record<SanctionsScreeningStatus, number>;
+
+/**
+ * The screening's status from its lists' statuses: possible-match, then
+ * unavailable, then incomplete. It is clear only when there is at least one
+ * list and every list is clear; no lists at all is unavailable.
+ */
+export const aggregateSanctionsScreeningStatus = (
+  statuses: readonly SanctionsScreeningStatus[],
+): SanctionsScreeningStatus => {
+  let aggregate: SanctionsScreeningStatus | null = null;
+  for (const status of statuses) {
+    if (
+      aggregate === null ||
+      SANCTIONS_STATUS_PRECEDENCE[status] >
+        SANCTIONS_STATUS_PRECEDENCE[aggregate]
+    ) {
+      aggregate = status;
+    }
+  }
+  return aggregate ?? "unavailable";
+};
 
 export const SANCTIONS_UNAVAILABLE_REASONS = [
   // No edition of the list has been loaded yet.
@@ -52,19 +90,6 @@ export const SANCTIONS_PUBLIC_UNAVAILABLE_REASONS = [
 
 export type SanctionsUnavailableReason =
   (typeof SANCTIONS_PUBLIC_UNAVAILABLE_REASONS)[number];
-
-/** A bounded scan found no match, but did not exhaust its candidates. */
-export const SANCTIONS_INCOMPLETE_REASON = "screening-incomplete";
-
-export const SANCTIONS_LIST_REASONS = [
-  ...SANCTIONS_UNAVAILABLE_REASONS,
-  SANCTIONS_INCOMPLETE_REASON,
-] as const;
-
-export const SANCTIONS_PUBLIC_LIST_REASONS = [
-  ...SANCTIONS_PUBLIC_UNAVAILABLE_REASONS,
-  SANCTIONS_INCOMPLETE_REASON,
-] as const;
 
 /** The reasons a signed-in screening can give: never "warming". */
 export type SanctionsSignedInUnavailableReason =

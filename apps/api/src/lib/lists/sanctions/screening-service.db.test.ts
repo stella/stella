@@ -419,6 +419,8 @@ describe("sanctions screening service", () => {
         truncated: true,
       });
       expect(un.possibleMatches).toHaveLength(SANCTIONS_MATCH_LIMIT);
+      // A capped scan that found matches stays a possible match.
+      expect(result.unwrap().status).toBe("possible-match");
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -1577,7 +1579,7 @@ test.each(["matcher-unavailable", "operation"] as const)(
   },
 );
 
-test("a bounded scan with no matches retains its screened edition and incomplete annotation", async () => {
+test("a bounded scan with no matches is incomplete and keeps its screened edition", async () => {
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const result = await screenSanctionsSubject({
     db: requestDb,
@@ -1599,11 +1601,11 @@ test("a bounded scan with no matches retains its screened edition and incomplete
         truncated: true,
       }),
   });
-  expect(result.unwrap().status).toBe("clear");
+  expect(result.unwrap().status).toBe("incomplete");
   for (const list of result.unwrap().lists) {
     expect(list).toMatchObject({
-      status: "clear",
-      reason: "screening-incomplete",
+      status: "incomplete",
+      reason: null,
       truncated: true,
       totalMatches: 0,
       possibleMatches: [],
@@ -1695,13 +1697,18 @@ test("work exhaustion returns an incomplete screened result without reporting a 
       refresh: async () => {},
     },
   });
-  expect(listOf(result.unwrap().lists, "eu")).toMatchObject({
-    status: "clear",
-    reason: "screening-incomplete",
+  const eu = listOf(result.unwrap().lists, "eu");
+  expect(eu).toMatchObject({
+    status: "incomplete",
+    reason: null,
     truncated: true,
     totalMatches: 0,
     possibleMatches: [],
   });
+  expect(eu.editionId).not.toBeNull();
+  expect(eu.publishedAt).not.toBeNull();
+  expect(eu.verifiedAt).not.toBeNull();
+  expect(result.unwrap().status).toBe("incomplete");
   expect(reports).toEqual([]);
 });
 
@@ -1752,8 +1759,8 @@ test("public matcher work exhaustion returns incomplete without pool failure or 
     });
     for (const list of result.unwrap().lists) {
       expect(list).toMatchObject({
-        status: "clear",
-        reason: "screening-incomplete",
+        status: "incomplete",
+        reason: null,
         truncated: true,
       });
     }
@@ -1914,7 +1921,7 @@ test.each(Object.values(boundaryFaults))(
       }
       const result = (await pending).unwrap();
       expect(result.status).toBe(
-        fault === "work-limit" ? "clear" : "unavailable",
+        fault === "work-limit" ? "incomplete" : "unavailable",
       );
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
@@ -1935,7 +1942,7 @@ test.each(Object.values(boundaryFaults))(
       if (fault === "work-limit") {
         expect(boundary).toHaveLength(0);
         expect(
-          result.lists.every(({ reason }) => reason === "screening-incomplete"),
+          result.lists.every(({ status }) => status === "incomplete"),
         ).toBe(true);
       } else {
         expect(boundary.length).toBeGreaterThan(0);

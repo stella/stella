@@ -1385,12 +1385,12 @@ describe("public sanctions search parity", () => {
         expect(
           partial.lists.find(({ source }) => source === "eu"),
         ).toMatchObject({
-          status: "clear",
-          reason: "screening-incomplete",
+          status: "incomplete",
+          reason: null,
           truncated: true,
           possibleMatches: [],
         });
-        expect(partial.status).toBe("clear");
+        expect(partial.status).toBe("incomplete");
       } finally {
         context.kill();
         await pool.close();

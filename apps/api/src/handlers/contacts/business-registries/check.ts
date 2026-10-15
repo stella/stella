@@ -168,10 +168,11 @@ const businessRegistriesCheck = createSafeRootHandler(
       "not-registered (the source holds no record of the subject), " +
       "unavailable (the source could not answer; never read this as clear), " +
       "or not-covered (the source cannot answer for this subject type). The " +
-      "sanctions check returns one outcome per list (clear, possible-match " +
-      "or unavailable) with the edition screened, and is clear only when " +
-      "every list is. A clear list with reason screening-incomplete screened " +
-      "only a bounded subset; it is not a full clearance.",
+      "sanctions check returns one outcome per list (clear, possible-match, " +
+      "incomplete or unavailable) with the edition screened, and is clear " +
+      "only when every list was fully screened and clear. Incomplete means " +
+      "only a bounded subset of the list was screened and nothing matched; " +
+      "it is not a clearance.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "check_counterparty" },

@@ -19,7 +19,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { monitoringFingerprint } from "@/api/lib/lists/sanctions/monitoring-input";
-import { SANCTIONS_NOTIFICATION_EVENT_TYPES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
+import {
+  SANCTIONS_NOTIFICATION_EVENT_TYPES,
+  type SANCTIONS_SCREENING_STATUSES,
+} from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import {
   isSanctionsSource,
   sanctionsSourceIds,
@@ -33,6 +36,21 @@ import {
 } from "@/api/lib/pagination";
 
 export const SANCTIONS_MONITORING_PAGE_SIZE = 100;
+
+/**
+ * Whether a list's current coverage shows its active matches. An incomplete
+ * screening could not prove a stored match absent, so the match stays shown.
+ */
+const SHOWS_ACTIVE_MATCHES = {
+  clear: false,
+  "possible-match": true,
+  unavailable: false,
+  incomplete: true,
+  excluded: false,
+} as const satisfies Record<
+  (typeof SANCTIONS_SCREENING_STATUSES)[number],
+  boolean
+>;
 const loadMonitoringClassifier = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
@@ -146,7 +164,8 @@ export const readContactSanctions = async (
     const screening = screenings.find((row) => row.sourceId === source.source);
     return source.status === "fresh" &&
       source.edition !== null &&
-      screening?.status === "possible-match" &&
+      screening !== undefined &&
+      SHOWS_ACTIVE_MATCHES[screening.status] &&
       screening.editionId === source.edition.id &&
       screening.contactFingerprint === fingerprint
       ? [

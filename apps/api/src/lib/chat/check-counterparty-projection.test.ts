@@ -94,18 +94,18 @@ describe("check_counterparty projection", () => {
     ).toBe(true);
   });
 
-  test("preserves an incomplete clear screening in the signed-in projection", () => {
+  test("preserves an incomplete screening in the signed-in projection", () => {
     const partialList = {
       ...unPossibleMatchList,
-      status: "clear",
-      reason: "screening-incomplete",
+      status: "incomplete",
+      reason: null,
       totalMatches: 0,
       truncated: true,
       possibleMatches: [],
     } satisfies SanctionsListOutcome;
     const result = {
       ...sanctionsPossibleMatch,
-      status: "clear",
+      status: "incomplete",
       lists: [partialList],
     } satisfies CounterpartyCheckResult;
     const projected = v.parse(CHECK_COUNTERPARTY_PROJECTION, result);

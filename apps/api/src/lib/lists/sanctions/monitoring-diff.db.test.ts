@@ -366,7 +366,7 @@ test(
       );
       expect(await stateFor(contact.id)).toEqual(initial);
     }
-    const incompleteClear = {
+    const incomplete = {
       source: outcome.source,
       issuer: outcome.issuer,
       classification: outcome.classification,
@@ -374,22 +374,63 @@ test(
       editionId: outcome.editionId,
       publishedAt: outcome.publishedAt,
       verifiedAt: outcome.verifiedAt,
-      status: "clear",
-      reason: "screening-incomplete",
+      status: "incomplete",
+      reason: null,
       totalMatches: 0,
       truncated: true,
       possibleMatches: [],
     } satisfies SanctionsListOutcome;
-    expect(await commit({ ...work, outcome: incompleteClear })).toEqual([
+    // A bounded scan of an edition that is no longer current settles nothing.
+    expect(
+      await commit({
+        ...work,
+        outcome: {
+          ...incomplete,
+          editionId: "00000000-0000-4000-8000-0000000000aa",
+        },
+      }),
+    ).toEqual([]);
+    expect(await stateFor(contact.id)).toEqual(initial);
+    // On the current edition it is recorded as coverage only: no active match
+    // lapses and no event (so no notification) is written.
+    expect(await commit({ ...work, outcome: incomplete })).toEqual([
       contact.id,
     ]);
     const bounded = await stateFor(contact.id);
     expect(bounded.matches).toEqual(initial.matches);
     expect(bounded.events).toEqual(initial.events);
     expect(bounded.coverage).toMatchObject({
-      status: "unavailable",
-      reason: "screening-incomplete",
+      status: "incomplete",
+      reason: null,
+      editionId,
     });
+    const read = await scopedDb(
+      async (tx) =>
+        await readContactSanctions(tx, {
+          organizationId: orgId,
+          contactId: contact.id,
+          now,
+        }),
+    );
+    if (read.isErr()) {
+      panic("Synthetic contact read failed");
+    }
+    expect(
+      read.value.lists.find(({ source }) => source === "eu"),
+    ).toMatchObject({ status: "incomplete", reason: null });
+    expect(
+      read.value.matches.items.map(({ sourceEntryId }) => sourceEntryId),
+    ).toEqual([first.sourceEntryId, second.sourceEntryId]);
+    await expectFailure(
+      async () =>
+        await scopedDb(async (tx) => {
+          await tx
+            .update(sanctionsContactScreenings)
+            .set({ editionId: null })
+            .where(eq(sanctionsContactScreenings.contactId, contact.id));
+        }),
+      "sanctions_contact_screenings_incomplete_edition_check",
+    );
     await db.insert(sanctionsEditionEntries).values(
       entries.slice(2, 1000).map(({ sourceEntryId, contentHash }) => ({
         editionId,

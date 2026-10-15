@@ -147,16 +147,17 @@ describe("anonymous sanctions search", () => {
     },
   );
 
-  test("preserves incomplete clear outcomes through the public response schema", async () => {
+  test("preserves incomplete outcomes through the public response schema", async () => {
     const partial = {
       ...screening,
+      status: "incomplete",
       lists: [
         {
           source: "us-sdn",
           issuer: "US",
           classification: "informational",
-          status: "clear",
-          reason: "screening-incomplete",
+          status: "incomplete",
+          reason: null,
           editionId: "edition-sdn",
           publishedAt: "2026-09-29",
           verifiedAt: screening.checkedAt,
