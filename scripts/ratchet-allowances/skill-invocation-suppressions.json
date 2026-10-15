@@ -1,5 +1,5 @@
 {
   "metric": "lint-suppression-directives",
-  "delta": 2,
-  "reason": "One assertion mints the model-offered skill brand after filtering. MCP prompt resource reads await sequentially because the remaining byte budget determines whether the next resource may be read. Both exceptions name their specific lint rule at the owning statement."
+  "delta": 1,
+  "reason": "The approved compile-only ModelOfferedSkills unique-symbol brand is minted once by assertion after the invocation filter. TypeScript cannot infer a property that deliberately has no runtime representation, so this sole cast requires its named no-unsafe-type-assertion directive."
 }

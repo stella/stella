@@ -108,7 +108,11 @@ const createRecordingContext = (userId: SafeId<"user">) => {
     returnedRows.flatMap((row) =>
       typeof row["body"] === "string" ? [row["body"]] : [],
     );
-  return { bodiesRead, context };
+  const resourceContentsRead = () =>
+    returnedRows.flatMap((row) =>
+      typeof row["content"] === "string" ? [row["content"]] : [],
+    );
+  return { bodiesRead, context, resourceContentsRead };
 };
 
 describe("MCP skill tools against the database", () => {
@@ -406,6 +410,77 @@ describe("MCP skill tools against the database", () => {
       ]),
     );
   });
+
+  test.each([60_000, 60_001])(
+    "a prompt audits reads and stops after exhausting its budget (%i characters)",
+    async (contentLength) => {
+      const slug = `manual-budget-${Bun.randomUUIDv7()}`;
+      const skillId = await insertSkill({
+        body: "Follow the attached instructions.",
+        slug,
+        userId: ids.userA1,
+      });
+      await testDb
+        .update(agentSkills)
+        .set({ invocation: "manual" })
+        .where(eq(agentSkills.id, skillId));
+      const budgetContent = "x".repeat(contentLength);
+      await testDb.insert(agentSkillResources).values([
+        {
+          id: testId(),
+          organizationId: ids.orgA,
+          skillId,
+          path: "references/a.md",
+          content: budgetContent,
+          sizeBytes: budgetContent.length,
+        },
+        {
+          id: testId(),
+          organizationId: ids.orgA,
+          skillId,
+          path: "references/b.md",
+          content: "Must stay unread.",
+          sizeBytes: 17,
+        },
+      ]);
+      const recording = createRecordingContext(ids.userA1);
+      const prompt = (
+        await getSkillPrompt({
+          args: undefined,
+          context: asTestRaw<McpRequestContext>({
+            ...recording.context,
+            grantedScopes: ["stella:skills"],
+          }),
+          mode: "default",
+          name: namespaceSkillToolName(slug),
+        })
+      ).unwrap();
+      const budgetExhausted = contentLength === 60_000;
+      expect(recording.resourceContentsRead()).toEqual(
+        budgetExhausted
+          ? [budgetContent]
+          : [budgetContent, "Must stay unread."],
+      );
+      const audited = await testDb
+        .select({ metadata: auditLogs.metadata })
+        .from(auditLogs)
+        .where(eq(auditLogs.resourceId, skillId));
+      expect(
+        audited.map(({ metadata }) => metadata?.["path"]).toSorted(),
+      ).toEqual(
+        budgetExhausted
+          ? [null, "references/a.md"].toSorted()
+          : [null, "references/a.md", "references/b.md"].toSorted(),
+      );
+      expect(prompt.messages).toHaveLength(2);
+      expect(prompt.messages.at(0)?.content).toMatchObject({
+        text: expect.stringContaining(
+          budgetExhausted ? "references/b.md" : "references/a.md",
+        ),
+        type: "text",
+      });
+    },
+  );
 
   test("an unknown prompt name returns a typed error", async () => {
     const { context } = createRecordingContext(ids.userA1);

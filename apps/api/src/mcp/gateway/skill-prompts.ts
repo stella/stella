@@ -5,6 +5,8 @@ import type {
 } from "@modelcontextprotocol/server";
 import { Result, TaggedError } from "better-result";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -124,7 +126,7 @@ export const getSkillPrompt = async ({
   });
   await auditReads({
     context,
-    paths: [null, ...embedded.read.map(({ path }) => path)],
+    paths: [null, ...embedded.pathsRead],
     skill,
     success: true,
   });
@@ -178,30 +180,40 @@ const embedResources = async ({
   skill: ResolvedSkillTool;
 }): Promise<{
   omitted: string[];
+  pathsRead: string[];
   read: { content: string; path: string }[];
 }> => {
   const read: { content: string; path: string }[] = [];
   const omitted: string[] = [];
+  const pathsRead: string[] = [];
   let remaining = SKILL_PROMPT_RESOURCE_BUDGET_CHARS;
-  for (const path of paths) {
-    // One file at a time keeps the budget exact; a skill has few files.
-    // oxlint-disable-next-line no-await-in-loop -- sequential by design: the budget decides whether the next file is read at all
-    const resource = await readSkillTool({
-      context,
-      resourcePath: path,
-      skill,
-    });
-    if (resource?.type !== SKILL_TOOL_READ_TYPE.resource) {
-      continue;
-    }
-    if (resource.content.length > remaining) {
-      omitted.push(path);
-      continue;
-    }
-    remaining -= resource.content.length;
-    read.push({ content: resource.content, path });
-  }
-  return { omitted, read };
+  await mapWithConcurrency({
+    items: paths,
+    // The remaining budget belongs to the preceding read, so process one at a time.
+    limit: 1,
+    operation: async (path) => {
+      if (remaining === 0) {
+        omitted.push(path);
+        return;
+      }
+      const resource = await readSkillTool({
+        context,
+        resourcePath: path,
+        skill,
+      });
+      if (resource?.type !== SKILL_TOOL_READ_TYPE.resource) {
+        return;
+      }
+      pathsRead.push(path);
+      if (resource.content.length > remaining) {
+        omitted.push(path);
+        return;
+      }
+      remaining -= resource.content.length;
+      read.push({ content: resource.content, path });
+    },
+  });
+  return { omitted, pathsRead, read };
 };
 
 const auditReads = async ({
