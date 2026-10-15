@@ -4,7 +4,7 @@ import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
 
 import { appInputSchema } from "./mcp-app-inputs";
 
-test("browser contracts omit tool prose without changing schema fields or literal values", () => {
+test("browser contracts omit tool prose and annotations without changing schema fields or literal values", () => {
   const literal = {
     description: "domain value",
     "x-stella-kind": "domain value",
@@ -21,17 +21,7 @@ test("browser contracts omit tool prose without changing schema fields or litera
     },
     required: ["description"],
   };
-  const normalized = appInputSchema(schema, "normalization");
-  expect(normalized).toEqual({
-    type: "object",
-    properties: {
-      description: { type: "string" },
-      choice: { const: literal, enum: [literal], default: literal },
-      date: { type: "string", [AGENT_INPUT_NORMALIZATION_KEY]: annotation },
-    },
-    required: ["description"],
-  });
-  expect(appInputSchema(normalized, "validation")).toEqual({
+  expect(appInputSchema(schema)).toEqual({
     type: "object",
     properties: {
       description: { type: "string" },

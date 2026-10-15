@@ -23,10 +23,7 @@ import {
 import type { AppFailure } from "./app-error";
 import { appLocale, setAppDocumentLocale } from "./locale";
 import { mountAppViewport } from "./size";
-import {
-  projectAppToolArguments,
-  validateAppToolArguments,
-} from "./tool-input";
+import { projectAppToolArguments } from "./tool-input";
 
 export const createViewportApp = (name: string) =>
   new App({ name, version: "1.0.0" }, {}, { autoResize: false });
@@ -216,20 +213,11 @@ export const requestPresentationTool = async ({
       failure: appFailure("unavailable", requestId),
     } as const;
   }
+  // The server normalizes and validates; a refusal returns as a tool error.
   const arguments_ = projectAppToolArguments(request.name, request.arguments);
-  const checked = validateAppToolArguments(request.name, arguments_);
-  if (checked.status === "invalid") {
-    return {
-      status: "error",
-      failure: {
-        ...appFailure("invalid_arguments", requestId),
-        fields: checked.fields,
-      },
-    } as const;
-  }
-  onRequest?.(checked.arguments);
+  onRequest?.(arguments_);
   const called = await Result.tryPromise(async () =>
-    app.callServerTool({ name: request.name, arguments: checked.arguments }),
+    app.callServerTool({ name: request.name, arguments: arguments_ }),
   );
   if (Result.isError(called)) {
     return {
@@ -241,7 +229,7 @@ export const requestPresentationTool = async ({
     status: "ready",
     result: called.value,
     requestId,
-    arguments: checked.arguments,
+    arguments: arguments_,
   } as const;
 };
 

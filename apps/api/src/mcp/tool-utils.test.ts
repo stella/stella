@@ -9,6 +9,7 @@ import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { ISO_DATE_SCHEMA } from "@/api/mcp/input-schemas";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
@@ -19,7 +20,6 @@ import {
   didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
   mapValibotIssues,
   notFoundResult,

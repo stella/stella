@@ -105,9 +105,3 @@ await Promise.all(
     async ({ path: file, contents }) => await Bun.write(file, contents),
   ),
 );
-
-// The tool registry behind the input schemas pulls in `@/api/lib/sse.ts`,
-// which opens a Redis subscriber at import time and never unrefs it. That
-// suits the long-running API process but would keep this one-off generator's
-// event loop open after every artifact is written, so exit explicitly.
-process.exit(0);

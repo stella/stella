@@ -76,6 +76,74 @@
     "reason": "Existing listCapabilitiesArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:10::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:10::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:128::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:128::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:16::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:512::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:512::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::maxLength:8::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::2",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::3",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::4",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::5",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::6",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::7",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minLength:1::8",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/case-law-search-input.ts::searchCaseLawArgsSchema::minValue:1::1",
+    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/compat-ids.ts::compatCorpusIdInputSchema::minLength:1::1",
     "reason": "Existing compatCorpusIdInputSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -160,6 +228,10 @@
     "reason": "Existing SKILL_TOOL_INPUT MCP input bound; shared LIMITS migration pending."
   },
   {
+    "id": "apps/api/src/mcp/input-schemas.ts::cursorInput::minLength:1::1",
+    "reason": "Existing cursorInput MCP input bound; shared LIMITS migration pending."
+  },
+  {
     "id": "apps/api/src/mcp/knowledge-tools.ts::clauseBodyArgSchema::minLength:1::1",
     "reason": "Existing clauseBodyArgSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -224,36 +296,36 @@
     "reason": "Existing savePlaybookArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/legislation-tools.ts::anchorInputSchema::maxLength:256::1",
+    "id": "apps/api/src/mcp/legislation-input.ts::anchorInputSchema::maxLength:256::1",
     "reason": "Existing anchorInputSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/legislation-tools.ts::anchorInputSchema::minLength:1::1",
+    "id": "apps/api/src/mcp/legislation-input.ts::anchorInputSchema::minLength:1::1",
     "reason": "Existing anchorInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-input.ts::eliInputSchema::maxLength:512::1",
+    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-input.ts::eliInputSchema::minLength:1::1",
+    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-input.ts::languageInputSchema::maxLength:8::1",
+    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-input.ts::languageInputSchema::minLength:2::1",
+    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
+  },
+  {
+    "id": "apps/api/src/mcp/legislation-input.ts::readProvisionHistoryArgsSchema::minValue:1::1",
+    "reason": "Existing readProvisionHistoryArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/legislation-tools.ts::asOfInputSchema::maxLength:10::1",
     "reason": "Existing asOfInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/legislation-tools.ts::eliInputSchema::maxLength:512::1",
-    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/legislation-tools.ts::eliInputSchema::minLength:1::1",
-    "reason": "Existing eliInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/legislation-tools.ts::languageInputSchema::maxLength:8::1",
-    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/legislation-tools.ts::languageInputSchema::minLength:2::1",
-    "reason": "Existing languageInputSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/legislation-tools.ts::readProvisionHistoryArgsSchema::minValue:1::1",
-    "reason": "Existing readProvisionHistoryArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/legislation-tools.ts::searchLegislationArgsSchema::maxLength:10::1",
@@ -652,74 +724,6 @@
     "reason": "Existing searchAcrossMattersArgsSchema MCP input bound; shared LIMITS migration pending."
   },
   {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:10::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:10::2",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:128::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:128::2",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:16::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:512::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:512::2",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::maxLength:8::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::2",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::3",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::4",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::5",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::6",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::7",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minLength:1::8",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
-    "id": "apps/api/src/mcp/stella-tools.ts::searchCaseLawArgsSchema::minValue:1::1",
-    "reason": "Existing searchCaseLawArgsSchema MCP input bound; shared LIMITS migration pending."
-  },
-  {
     "id": "apps/api/src/mcp/stella-tools.ts::setPracticeJurisdictionsArgsSchema::minLength:1::1",
     "reason": "Existing setPracticeJurisdictionsArgsSchema MCP input bound; shared LIMITS migration pending."
   },
@@ -766,10 +770,6 @@
   {
     "id": "apps/api/src/mcp/tool-utils.test.ts::schema::minLength:1::2",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/api/src/mcp/tool-utils.ts::cursorInput::minLength:1::1",
-    "reason": "Existing cursorInput MCP input bound; shared LIMITS migration pending."
   },
   {
     "id": "apps/api/src/mcp/valibot-tool-definition.test.ts::contract::maxLength:8::1",

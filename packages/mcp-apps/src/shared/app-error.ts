@@ -6,7 +6,6 @@ import {
   mcpAppRequestIdSchema,
 } from "@stll/api-contract/mcp-app-failure";
 import type { McpAppFailure } from "@stll/api-contract/mcp-app-failure";
-import { Temporal } from "@stll/time";
 
 import { appLocale, type AppMessageKey } from "./locale";
 
@@ -44,10 +43,19 @@ export const formatAppError = (
 
 export type AppFailure = McpAppFailure;
 
+let receiptSession: string | undefined;
 let requestSequence = 0;
-/** Local receipts identify failures that never received a server request ID. */
-export const createAppRequestId = () =>
-  `app-${Temporal.Now.instant().epochMilliseconds}-${++requestSequence}`;
+/**
+ * Local receipts identify failures that never received a server request ID.
+ * One random prefix per app instance keeps separate instances' receipts apart.
+ */
+export const createAppRequestId = () => {
+  receiptSession ??= Array.from(
+    crypto.getRandomValues(new Uint8Array(6)),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `app-${receiptSession}-${++requestSequence}`;
+};
 
 export const parseAppFailure = (payload: unknown): AppFailure | undefined => {
   const parsed = v.safeParse(mcpAppFailureEnvelopeSchema, payload);

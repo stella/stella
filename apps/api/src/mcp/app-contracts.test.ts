@@ -23,11 +23,9 @@ import type {
   ResolveResults,
   SearchResults,
 } from "@stll/mcp-apps/shared/contracts";
-import {
-  projectAppToolArguments,
-  validateAppToolArguments,
-} from "@stll/mcp-apps/shared/tool-input";
+import APP_INPUT_SCHEMAS from "@stll/mcp-apps/shared/input-schemas";
 
+import { appInputSchema } from "../../scripts/lib/mcp-app-inputs";
 import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
@@ -41,8 +39,8 @@ import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
 import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
+import { mcpAppToolInputSchema } from "./app-tool-inputs";
 import type { McpMode } from "./constants";
-import { normalizeObjectInputAtBoundary } from "./input-normalization";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
@@ -739,61 +737,25 @@ describe("MCP app registry and contracts", () => {
   });
 });
 
-test("every presentation app shares the server input normalization for repaired values", () => {
-  const cases = [
-    {
-      name: "search_case_law",
-      arguments: {
-        queries: ["dismissal"],
-        country: "CZ",
-        limit: 50,
-        date_from: "2024",
-        courts: "X",
-        category: "",
-        cursor: null,
-        source_id: null,
-        strict: "ano",
-        sort: "RELEVANCE",
-      },
-    },
-    {
-      name: "read_provision_history",
-      arguments: {
-        eli: "89/2012 Sb.",
-        limit: 50,
-        anchor: "par_1",
-        cursor: null,
-        language: null,
-      },
-    },
-    {
-      name: "open_case_law_decision",
-      arguments: {
-        decision_id: "00000000-0000-4000-8000-000000000001",
-        paragraphs: null,
-      },
-    },
-  ] as const;
-  for (const request of cases) {
+test("browser input schemas match the input every app-callable tool declares", () => {
+  const tools = [
+    ...new Set(
+      MCP_APPS.filter((app) => app.type === "presentation").flatMap(
+        (app) => app.callableTools,
+      ),
+    ),
+  ];
+  expect(Object.keys(APP_INPUT_SCHEMAS).toSorted()).toEqual(tools.toSorted());
+  for (const name of tools) {
     const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      ({ name }) => name === request.name,
+      (tool) => tool.name === name,
     );
     expect(definition).toBeDefined();
-    if (definition === undefined) {
-      throw new TypeError("Missing declared presentation tool");
-    }
-    const server = normalizeObjectInputAtBoundary({
-      access: "read",
-      schema: definition.inputSchema,
-      value: projectAppToolArguments(request.name, request.arguments),
-    });
-    const app = validateAppToolArguments(request.name, request.arguments);
-    expect(server.ok).toBe(true);
-    expect(app.status).toBe("valid");
-    if (!server.ok || app.status !== "valid") {
-      continue;
-    }
-    expect(app.arguments).toEqual(server.value);
-    expect(app.arguments).not.toEqual(request.arguments);
+    expect(appInputSchema(mcpAppToolInputSchema(name))).toEqual(
+      appInputSchema(definition?.inputSchema),
+    );
+    expect(APP_INPUT_SCHEMAS[name]).toEqual(
+      appInputSchema(definition?.inputSchema),
+    );
   }
 });

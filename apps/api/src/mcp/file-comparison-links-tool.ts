@@ -33,6 +33,7 @@ import type {
   PrepareFileComparisonDependencies,
   ReservedUpload,
 } from "@/api/mcp/file-comparison-prepare-tool";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   InternalToolErrorResult,
@@ -40,7 +41,6 @@ import type {
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,

@@ -12,15 +12,12 @@ import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { fileComparisonPermissionDenied } from "@/api/mcp/file-comparison-prepare-tool";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   TypedMcpToolHandler,
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
-import {
-  nullAsAbsent,
-  toolDataResult,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { toolDataResult, validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,

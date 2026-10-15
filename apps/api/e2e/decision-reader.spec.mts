@@ -1409,7 +1409,7 @@ test("search pages with only model guidance have no notice", async ({
   await expect(app.locator("[data-app-notice]")).toHaveCount(0);
 });
 
-test("search next page and filter normalize raw model arguments before calling the host", async ({
+test("search next page and filter pass the declared model arguments to the server, which normalizes them", async ({
   page,
 }) => {
   const search = {
@@ -1442,21 +1442,14 @@ test("search next page and filter normalize raw model arguments before calling t
   expect(recorded.calls).toEqual([
     {
       name: "search_case_law",
-      arguments: {
-        queries: ["dismissal"],
-        country: "CZE",
-        limit: 20,
-        date_from: "2024-01-01",
-        courts: ["X"],
-        cursor: "fixture-search-page-2",
-      },
+      arguments: { ...searchInput, cursor: "fixture-search-page-2" },
     },
     {
       name: "search_case_law",
       arguments: {
         queries: ["dismissal"],
         country: "CZE",
-        limit: 20,
+        limit: 50,
         date_from: "2024-01-01",
         courts: ["X"],
       },

@@ -42,6 +42,7 @@ import {
   type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -52,13 +53,11 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildDocumentUrl,
   buildMatterUrl,
-  cursorInput,
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

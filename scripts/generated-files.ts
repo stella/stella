@@ -278,8 +278,6 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/src/shared/generated/contracts.js",
       "packages/mcp-apps/src/shared/generated/contracts.d.ts",
       "packages/mcp-apps/src/shared/generated/input-schemas.json",
-      "packages/mcp-apps/src/shared/generated/input-validators.js",
-      "packages/mcp-apps/src/shared/generated/input-validators.d.ts",
     ],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",

@@ -9,6 +9,7 @@ import {
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/input-schemas";
 import type {
   McpToolDefinition,
   McpToolAnnotationReasons,
@@ -16,7 +17,6 @@ import type {
   McpToolOutputContract,
   McpToolOutputSchema,
 } from "@/api/mcp/tool-types";
-import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 
 const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   errorMode: "throw",
@@ -748,6 +748,28 @@ const nullableAsTypeArray = (
   return { ...siblings, ...branch, type: [type, "null"] };
 };
 
+type ValibotMcpToolInputContract = Pick<
+  ValibotMcpToolInput,
+  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+>;
+
+/**
+ * The JSON Schema a tool advertises for its declared input. Reading it needs
+ * only the input contract, not the tool's handler or its registry.
+ */
+export const deriveValibotMcpInputSchema = ({
+  inputSchema,
+  inputNormalization,
+  jsonSchemaProjectionWaiver,
+}: ValibotMcpToolInputContract): McpToolInputSchema =>
+  applyInputNormalizationPlan(
+    deriveMcpInputSchema(
+      inputSchema.advertisedSchema,
+      jsonSchemaProjectionWaiver,
+    ),
+    inputNormalization,
+  );
+
 /**
  * Defines a native tool from the same Valibot schema its handler parses.
  * `inputSchemaSource` retains that actual schema as internal registry metadata:
@@ -795,13 +817,11 @@ export const defineValibotMcpTool = <
         ? `${subject} can access public or external entities outside the private workspace.`
         : `${subject} is confined to the private workspace or a bounded computation.`,
     },
-    inputSchema: applyInputNormalizationPlan(
-      deriveMcpInputSchema(
-        inputSchema.advertisedSchema,
-        jsonSchemaProjectionWaiver,
-      ),
+    inputSchema: deriveValibotMcpInputSchema({
+      inputSchema,
       inputNormalization,
-    ),
+      jsonSchemaProjectionWaiver,
+    }),
     inputSchemaSource: inputSchema,
     inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,
   };
