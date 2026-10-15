@@ -63,6 +63,7 @@ export const AUDIT_RESOURCE_TYPE = {
   LEGAL_LIST_VERIFICATION: "legal_list_verification",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
+  OUTBOUND_ACTION: "outbound_action",
   PDF_SIGNING_SESSION: "pdf_signing_session",
   PLAYBOOK: "playbook",
   PROPERTY: "property",

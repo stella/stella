@@ -346,6 +346,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   legal_list_item: "other",
   mcp_gateway_tool: "other",
   organization_settings: "other",
+  outbound_action: "other",
   property: "other",
   rate_entry: "other",
   report_export: "other",

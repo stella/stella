@@ -84,6 +84,7 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { outboundActionsRoute } from "@/api/handlers/outbound-actions/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -560,6 +561,7 @@ const api = new Elysia()
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)
+      .use(outboundActionsRoute)
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
       .use(apiKeysRoute)

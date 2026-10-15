@@ -162,6 +162,7 @@ export type SafeIdType =
   | "numberSeries"
   | "reportExport"
   | "schedulerJobRun"
+  | "outboundAction"
   | "sharepointConnection"
   | "sharepointOAuthState"
   | "styleSet"
