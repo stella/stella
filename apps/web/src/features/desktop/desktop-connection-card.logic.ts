@@ -41,9 +41,10 @@ export const desktopCardState = ({
 /**
  * Install and connect stay on offer until this computer itself holds the
  * link: a link on another computer, an outdated app or none at all still
- * leaves this one to set up.
+ * leaves this one to set up. The card shows the downloads and the connect
+ * button from this one decision, so they cannot disagree.
  */
-export const offersDesktopInstall = (card: DesktopCardState): boolean =>
+export const offersDesktopSetup = (card: DesktopCardState): boolean =>
   card.type === "missing" ||
   card.type === "outdated" ||
   (card.type === "connected" && !card.onThisComputer);

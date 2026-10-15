@@ -18,7 +18,7 @@ import { cn } from "@stll/ui/utils";
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import {
   desktopCardState,
-  offersDesktopInstall,
+  offersDesktopSetup,
 } from "@/features/desktop/desktop-connection-card.logic";
 import type { DesktopCardState } from "@/features/desktop/desktop-connection-card.logic";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
@@ -146,8 +146,7 @@ export const DesktopConnectionCard = () => {
                 {t("common.approve")}
               </Button>
             ) : null}
-            {card.type === "missing" ||
-            (card.type === "connected" && !card.onThisComputer) ? (
+            {offersDesktopSetup(card) ? (
               <Button
                 loading={connection.status === "connecting"}
                 onClick={onConnect}
@@ -158,7 +157,7 @@ export const DesktopConnectionCard = () => {
             ) : null}
           </div>
         </div>
-        {offersDesktopInstall(card) ? (
+        {offersDesktopSetup(card) ? (
           <div className="mt-4 border-t pt-4">
             <DesktopDownloadButtons platform={platform} />
           </div>

@@ -4,7 +4,7 @@ import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import {
   desktopCardState,
-  offersDesktopInstall,
+  offersDesktopSetup,
 } from "@/features/desktop/desktop-connection-card.logic";
 
 const desktop = {
@@ -61,14 +61,14 @@ describe("desktop connection card", () => {
       challengeWaiting: false,
       presence: { type: "current", desktop },
     });
-    expect(offersDesktopInstall(card)).toBe(true);
+    expect(offersDesktopSetup(card)).toBe(true);
     expect(
-      offersDesktopInstall({
+      offersDesktopSetup({
         type: "connected",
         version: "",
         onThisComputer: true,
       }),
     ).toBe(false);
-    expect(offersDesktopInstall({ type: "approve" })).toBe(false);
+    expect(offersDesktopSetup({ type: "approve" })).toBe(false);
   });
 });
