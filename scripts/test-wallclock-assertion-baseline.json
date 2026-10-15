@@ -59,6 +59,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/legal-search/corpus-index-pagination.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts": {
     "count": 1,
     "owner": "api",

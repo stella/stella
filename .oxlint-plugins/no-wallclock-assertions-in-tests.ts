@@ -24,6 +24,8 @@ const ORDERED_MATCHERS = new Set([
   "toBeLessThanOrEqual",
   "toBeGreaterThan",
   "toBeGreaterThanOrEqual",
+  "toBeCloseTo",
+  "toBeWithin",
 ]);
 
 type Timing = "instant" | "elapsed" | "ratio" | null;
@@ -140,7 +142,9 @@ const rule = createTestDeterminismRule({
         subject?.type === "CallExpression" &&
         Array.isArray(subject.arguments) &&
         isExpect(subject.callee) &&
-        timing(subject.arguments.at(0)) === "elapsed"
+        [subject.arguments.at(0), ...node.arguments].some(
+          (argument) => timing(argument) === "elapsed",
+        )
       );
     };
   },

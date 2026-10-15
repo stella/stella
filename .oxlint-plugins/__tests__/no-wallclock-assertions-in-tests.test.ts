@@ -27,6 +27,85 @@ describe(RULE, () => {
     ).toEqual([3, 4, 5, 6]);
   });
 
+  test.each([
+    "toBeLessThan(elapsed)",
+    "toBeLessThanOrEqual(elapsed)",
+    "toBeGreaterThan(elapsed)",
+    "toBeGreaterThanOrEqual(elapsed)",
+    "toBeCloseTo(elapsed)",
+    "toBeWithin(elapsed, 200)",
+    "toBeWithin(0, elapsed)",
+  ])("rejects elapsed time in the expected argument: %s", async (matcher) => {
+    expect(
+      await lint(
+        [
+          'import { expect } from "bun:test";',
+          "const elapsed = performance.now() - performance.now();",
+          `expect(100).${matcher};`,
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+
+  test("rejects elapsed actual values in approximate and range matchers", async () => {
+    expect(
+      await lint(
+        [
+          "const elapsed = Date.now() - Date.now();",
+          "expect(elapsed).toBeCloseTo(100);",
+          "expect(elapsed).toBeWithin(0, 100);",
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3]);
+  });
+
+  test("follows assertion imports, aliases, and modifiers for elapsed expected bounds", async () => {
+    expect(
+      await lint(
+        [
+          'import * as testing from "bun:test";',
+          'import { expect as check } from "@playwright/test";',
+          "const start = performance.now();",
+          "const elapsed = performance.now() - start;",
+          "const verify = check;",
+          "testing.expect(100).not.toBeGreaterThan(elapsed);",
+          "verify(100).resolves.toBeWithin(0, elapsed);",
+          "check(100).rejects.toBeCloseTo(elapsed);",
+        ].join("\n"),
+      ),
+    ).toEqual([6, 7, 8]);
+  });
+
+  test("accepts ordinary numeric bounds and shadowed expect for every timing matcher", async () => {
+    expect(
+      await lint(
+        [
+          "const elapsed = 10 - 5;",
+          "expect(100).toBeLessThan(elapsed);",
+          "expect(100).toBeLessThanOrEqual(elapsed);",
+          "expect(100).toBeGreaterThan(elapsed);",
+          "expect(100).toBeGreaterThanOrEqual(elapsed);",
+          "expect(100).toBeCloseTo(elapsed);",
+          "expect(100).toBeWithin(0, elapsed);",
+          "expect(elapsed).toBeCloseTo(5);",
+          "expect(elapsed).toBeWithin(0, 100);",
+          "const localExpect = (expect) => {",
+          "  const duration = Date.now() - Date.now();",
+          "  expect(100).toBeLessThan(duration);",
+          "  expect(100).toBeLessThanOrEqual(duration);",
+          "  expect(100).toBeGreaterThan(duration);",
+          "  expect(100).toBeGreaterThanOrEqual(duration);",
+          "  expect(100).toBeCloseTo(duration);",
+          "  expect(100).toBeWithin(0, duration);",
+          "  expect(duration).toBeCloseTo(100);",
+          "  expect(duration).toBeWithin(0, 100);",
+          "};",
+          "void localExpect;",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("follows clock, timestamp, elapsed, and expect aliases", async () => {
     expect(
       await lint(
