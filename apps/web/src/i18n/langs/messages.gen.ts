@@ -5681,7 +5681,7 @@ type Messages = {
     };
     "create": {
       "matterName": "Matter name";
-      "personalDescription": "For internal work without a client, such as templates, know-how or internal administration.";
+      "personalDescription": "Without a client, the matter is visible only to you. You can share it later by changing who can see it.";
     };
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
