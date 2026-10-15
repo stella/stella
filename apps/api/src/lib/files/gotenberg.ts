@@ -120,8 +120,10 @@ export const convertToPdf = async (
       catch: (cause) =>
         new ImagePdfError({ message: "Failed to embed image", cause }),
     });
+    // An embed failure never reaches the caller (it falls back below), so
+    // only the value crosses into the caller-facing error type.
     if (Result.isOk(embedded)) {
-      return embedded;
+      return Result.ok(embedded.value);
     }
     // The header promised an encoding the embedder then refused: observe
     // it and let the converter render the image instead.
