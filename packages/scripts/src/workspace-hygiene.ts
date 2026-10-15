@@ -58,7 +58,7 @@ const BABEL_TOOLCHAINS = [
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
-  oxlintConfig: "1.0.2",
+  oxlintConfig: "1.2.4",
   tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;

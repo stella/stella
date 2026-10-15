@@ -87,7 +87,8 @@ apt_network() {
   # --print-uris reads configured indexes without contacting their servers.
   hosts="$(set -o pipefail; apt-get --print-uris update | awk -F/ '/^\047https?:\/\// { host=$3; sub(/.*@/, "", host); if (!seen[host]++) { printf "%s%s", separator, host; separator="," } }')" || return "$?"
   [[ -n "$hosts" ]] || hosts='configured APT hosts'
-  network_run "$hosts" 180 apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any "$@"
+  # APT_DEADLINE: whole-call seconds; callers that also unpack packages may extend it.
+  network_run "$hosts" "${APT_DEADLINE:-180}" apt-get -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=3 -o APT::Update::Error-Mode=any "$@"
 }
 apt_refresh_for() {
   # Skip the refresh only when the install downloads nothing: then no package
@@ -211,9 +212,11 @@ apt_install() (
   local package
   for package in "$@"; do
     if [[ "$package" == */* ]]; then
-      # apt cannot fetch local archives with --download-only; their installs stay
-      # bounded as a whole (dependencies are normally present already).
-      DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends "$@"
+      # apt cannot fetch local archives with --download-only, so their installs
+      # stay one call. Package triggers can be slow on cloud filesystems; the
+      # longer whole-call deadline covers them while Acquire timeouts still
+      # bound each network request.
+      APT_DEADLINE=600 DEBIAN_FRONTEND=noninteractive apt_network install -y --no-install-recommends "$@"
       return
     fi
   done
