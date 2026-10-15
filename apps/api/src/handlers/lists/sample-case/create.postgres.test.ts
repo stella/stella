@@ -431,10 +431,17 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
     });
   }, 120_000);
 
-  const assertFreshSample = async (
-    fixture: SampleFixture,
-    stale: Awaited<ReturnType<typeof loadSampleCase>>,
-  ) => {
+  type FreshSampleOptions = {
+    fixture: SampleFixture;
+    stale: Awaited<ReturnType<typeof loadSampleCase>>;
+    priorFacts: "retained" | "deleted";
+  };
+
+  const assertFreshSample = async ({
+    fixture,
+    stale,
+    priorFacts,
+  }: FreshSampleOptions) => {
     if (stale.isErr()) {
       throw stale.error;
     }
@@ -454,13 +461,26 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
       fresh.value.fileFieldId,
     );
     const facts = await fixture.db
-      .select({ name: entities.name })
+      .select({ name: entities.name, detail: legalListFactDetails })
       .from(legalListItems)
       .innerJoin(entities, eq(entities.id, legalListItems.entityId))
-      .where(eq(legalListItems.listId, fresh.value.listId));
-    expect(facts.map(({ name }) => name).toSorted()).toEqual(
-      SAMPLE_FACTS.map(({ statement }) => statement).toSorted(),
-    );
+      .innerJoin(
+        legalListFactDetails,
+        eq(legalListFactDetails.itemEntityId, legalListItems.entityId),
+      )
+      .where(eq(legalListItems.listId, fresh.value.listId))
+      .orderBy(legalListItems.position);
+    expect(facts).toHaveLength(SAMPLE_FACTS.length);
+    for (const [position, expected] of SAMPLE_FACTS.entries()) {
+      // Surviving facts keep their names, so the replacement uses free siblings.
+      expect(facts.at(position)).toMatchObject({
+        name:
+          priorFacts === "retained"
+            ? `${expected.statement}_1`
+            : expected.statement,
+        detail: expected.details,
+      });
+    }
     const released = await fixture.db.query.legalLists.findFirst({
       where: { id: { eq: stale.value.listId } },
     });
@@ -484,7 +504,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
       await fixture.db
         .delete(entities)
         .where(eq(entities.id, stale.value.documentEntityId));
-      await assertFreshSample(fixture, stale);
+      await assertFreshSample({ fixture, stale, priorFacts: "retained" });
     });
   }, 120_000);
 
@@ -502,7 +522,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
             eq(entities.listItemType, LIST_ITEM_TYPE.FACT),
           ),
         );
-      await assertFreshSample(fixture, stale);
+      await assertFreshSample({ fixture, stale, priorFacts: "deleted" });
     });
   }, 120_000);
 
