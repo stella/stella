@@ -39,6 +39,8 @@ import type {
 } from "@/features/avt/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
+import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
   (mark): mark is TextMarkState => mark in MARK_PRIORITY,
@@ -51,11 +53,16 @@ const CLAIM_STATES = Object.keys(STATE_COLOR).filter(
 /** Before Folio has handed over the document, no claim has a place yet. */
 const NOT_YET_LOCATED: ClaimLocations = { located: [], unlocated: [] };
 
+/** The block the original should bring into view. Each request is its own
+ *  object, so asking for the same block twice scrolls twice. */
+export type OriginalScrollTarget = { blockId: string };
+
 type OriginalDocxViewProps = {
   workspaceId: string;
   run: VerificationRun;
   claims: readonly VerificationClaim[];
   selected: VerificationClaim["id"] | null;
+  scrollTarget: OriginalScrollTarget | null;
   markOf: (claim: VerificationClaim) => OriginalClaimMark;
   onSelect: (id: VerificationClaim["id"]) => void;
 };
@@ -65,6 +72,7 @@ export const OriginalDocxView = ({
   run,
   claims,
   selected,
+  scrollTarget,
   markOf,
   onSelect,
 }: OriginalDocxViewProps) => {
@@ -180,6 +188,22 @@ export const OriginalDocxView = ({
   useExternalSyncEffect(() => {
     schedulePaint();
   }, [marksKey, schedulePaint]);
+
+  // The viewer can scroll only once Folio has handed over the document: a
+  // target asked for while the file or the viewer is still loading waits for
+  // it, then goes to the viewer's block scroll, which retries while the pages
+  // lay out.
+  const documentReady = doc !== null;
+  useExternalSyncEffect(() => {
+    if (!documentReady || scrollTarget === null) {
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
+        detail: { blockId: scrollTarget.blockId, fieldId: run.fileFieldId },
+      }),
+    );
+  }, [documentReady, run.fileFieldId, scrollTarget]);
 
   const claimUnder = (event: React.MouseEvent) =>
     claimUnderPoint(rangesRef.current, { x: event.clientX, y: event.clientY });

@@ -30,6 +30,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
+import type { OriginalScrollTarget } from "@/features/avt/original-docx-view";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -66,8 +67,6 @@ import {
 import type { ClaimPresentation } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
-import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 // Folio and the file viewer load only when someone opens the original.
 const OriginalDocxView = React.lazy(async () => {
@@ -121,6 +120,11 @@ export const VerificationView = ({
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
   const [documentView, setDocumentView] =
     React.useState<DocumentView>("reading");
+  // Where the DOCX original should bring the reader next. It is held, not
+  // fired, so a step taken while the original is still loading lands once
+  // the viewer has the document.
+  const [originalScroll, setOriginalScroll] =
+    React.useState<OriginalScrollTarget | null>(null);
   const original = originalKind(run.blocks);
   const hasOriginal = original !== null;
   const view = hasOriginal ? documentView : "reading";
@@ -159,7 +163,7 @@ export const VerificationView = ({
     if (view === "original") {
       const claim = claimById.get(id);
       if (claim !== undefined) {
-        scrollOriginalToClaim(run, claim);
+        scrollOriginalToClaim(claim);
       }
       return;
     }
@@ -168,11 +172,31 @@ export const VerificationView = ({
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  // The original opens on the selected claim, as the reading view shows it.
+  // Bring the original to a claim's block or page. Both requests are held
+  // while the document is still loading: the block as state the DOCX view
+  // applies once Folio has the document, the page in the inspector store the
+  // PDF viewer reads. On a PDF the claim's box then brings itself into view
+  // once its page is drawn.
+  const scrollOriginalToClaim = (claim: VerificationClaim) => {
+    if (claim.anchor.type === "pdf-page") {
+      useInspectorCommandStore.getState().requestPdfPageScroll({
+        tabId: run.fileFieldId,
+        pageNumber: claim.anchor.pageNumber,
+      });
+      return;
+    }
+    // A new target for every request, so stepping back onto the same block
+    // scrolls again.
+    setOriginalScroll({ blockId: claim.anchor.blockId });
+  };
+
+  // The original opens on the selected claim, as the reading view shows it;
+  // a step taken in an earlier visit is not replayed.
   const openDocumentView = (next: DocumentView) => {
     setDocumentView(next);
+    setOriginalScroll(null);
     if (next === "original" && selectedClaim !== undefined) {
-      scrollOriginalToClaim(run, selectedClaim);
+      scrollOriginalToClaim(selectedClaim);
     }
   };
 
@@ -371,6 +395,7 @@ export const VerificationView = ({
                     markOf={originalMark}
                     onSelect={setSelected}
                     run={run}
+                    scrollTarget={originalScroll}
                     selected={selected}
                     workspaceId={workspaceId}
                   />
@@ -435,27 +460,6 @@ const READER_STYLE = {
 } as const;
 
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
-
-/** Bring the original to a claim's block or page; both viewers hold the
- *  request while the document is still loading. On a PDF the claim's box
- *  then brings itself into view once its page is drawn. */
-const scrollOriginalToClaim = (
-  run: VerificationRun,
-  claim: VerificationClaim,
-): void => {
-  if (claim.anchor.type === "pdf-page") {
-    useInspectorCommandStore.getState().requestPdfPageScroll({
-      tabId: run.fileFieldId,
-      pageNumber: claim.anchor.pageNumber,
-    });
-    return;
-  }
-  window.dispatchEvent(
-    new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
-      detail: { blockId: claim.anchor.blockId, fieldId: run.fileFieldId },
-    }),
-  );
-};
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;
