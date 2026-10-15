@@ -98,6 +98,18 @@ describe("shell detection", () => {
     ).toEqual([]);
   });
 
+  test("a hostname that only starts with a loopback name is remote", () => {
+    expect(
+      scanShell("curl -fsS http://localhost:3000/health", "probe"),
+    ).toEqual([]);
+    expect(
+      scanShell(
+        "curl -fsSL https://localhost.example.com/tool -o tool",
+        "remote",
+      ),
+    ).toHaveLength(1);
+  });
+
   test("curl with its own retry-all-errors budget counts as retried", () => {
     expect(
       scanShell(

@@ -88,9 +88,10 @@ const RETRY_START =
 const startsWithRetry = (segment: string): boolean =>
   RETRY_START.test(segment.replace(CONTROL_PREFIX, ""));
 const NATIVE_CURL_RETRY = /--retry[\s=]+[1-9]/u;
-const LOOPBACK = /\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b|\[::1\]/u;
+// A loopback host ends the hostname: `localhost.example.com` is remote.
+const LOOPBACK = /\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?![\w.-])|\[::1\]/u;
 const REMOTE_URL =
-  /\bhttps?:\/\/(?!localhost\b|127\.0\.0\.1\b|0\.0\.0\.0\b|\[::1\])/u;
+  /\bhttps?:\/\/(?!(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?![\w.-])|\[::1\])/u;
 const PROSE = /^\s*(?:echo|printf|:)(?:\s|$)/u;
 
 // A `case` arm's pattern list (`a|b|scripts/x.sh)`) names paths, not commands.
