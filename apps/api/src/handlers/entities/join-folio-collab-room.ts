@@ -318,6 +318,7 @@ const joinFolioCollabRoomHandler = async function* ({
           id: folioCollabRooms.id,
           seedClaimedAt: folioCollabRooms.seedClaimedAt,
           seedState: folioCollabRooms.seedState,
+          savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
           snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
           yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
@@ -372,6 +373,7 @@ const joinFolioCollabRoomHandler = async function* ({
             id: folioCollabRooms.id,
             seedClaimedAt: folioCollabRooms.seedClaimedAt,
             seedState: folioCollabRooms.seedState,
+            savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
             snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
             yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
             yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
@@ -523,9 +525,12 @@ const joinFolioCollabRoomHandler = async function* ({
         token,
         tokenExpiresAt,
         snapshotRecovered: room.snapshotRecoveredAt !== null,
-        // Pending receipts never enabled edits, so a stale claim contains only its pristine seed.
+        // Only a receipt bound to the saved version proves a claimed seed is pristine.
         yjsSnapshotRevision:
-          room.seedState === "claimed" ? 0 : room.yjsSnapshotRevision,
+          room.seedState === "claimed" &&
+          room.savedSnapshotCut?.versionId === room.baseVersionId
+            ? 0
+            : room.yjsSnapshotRevision,
       } as const;
     }),
   );

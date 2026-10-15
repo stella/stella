@@ -997,6 +997,85 @@ test("publishing a checkpoint retains its snapshot cut when later edits already 
   );
 });
 
+describe("stale pending seed recovery notices", () => {
+  test.each(["version-bound", "missing", "stale-version"] as const)(
+    "reclaims a stored seed with a %s saved cut",
+    async (cutState) => {
+      const staleAt = new Date(
+        Date.now() - FOLIO_COLLAB_SEED_CLAIM_STALE_MS - 1,
+      );
+      const roomId = await insertRoom({
+        generation: 4,
+        seedClaimedAt: staleAt,
+        seedClaimedBy: ids.userA1,
+        seedState: "claimed",
+        yjsSnapshotRevision: 3,
+        yjsSnapshotSizeBytes: 1,
+        yjsSnapshotUpdatedAt: staleAt,
+      });
+      if (cutState !== "missing") {
+        await testDb
+          .update(folioCollabRooms)
+          .set({
+            savedSnapshotCut: {
+              versionId:
+                cutState === "version-bound"
+                  ? ids.entityVersionA1
+                  : createSafeId<"entityVersion">(),
+              sha256Hex: "a".repeat(64),
+            },
+          })
+          .where(eq(folioCollabRooms.id, roomId));
+      }
+      const scopedDb = asTestRaw<
+        Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+      >(
+        async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+          await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA1),
+      );
+      const fake = startFakeS3();
+      try {
+        const noAudit = async () => undefined;
+        const joined = await joinFolioCollabRoom.handler(
+          asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
+            body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
+            safeDb: safeDbFromScoped(scopedDb),
+            session: { activeOrganizationId: ids.orgA },
+            user: { id: ids.userA1, email: "editor@example.test" },
+            workspaceId: ids.wsA1,
+            memberRole: sessionMemberRole("owner"),
+            request: new Request("https://example.test/join"),
+            route:
+              "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+            recordAuditEvent: noAudit,
+            createAuditRecorder: () => noAudit,
+          }),
+        );
+        expect(joined).toMatchObject({
+          roomId,
+          generation: 5,
+          shouldSeed: true,
+          snapshotRecovery:
+            cutState === "version-bound" ? "none" : "unsaved-changes-discarded",
+        });
+        const rooms = await testDb
+          .select({
+            snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+            savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+          })
+          .from(folioCollabRooms)
+          .where(eq(folioCollabRooms.id, roomId));
+        expect(rooms.at(0)).toEqual({
+          snapshotRevision: 0,
+          savedSnapshotCut: null,
+        });
+      } finally {
+        fake.stop();
+      }
+    },
+  );
+});
+
 describe("folio collaboration snapshot recovery notice", () => {
   test("only a seeding join after discarded state reports the loss", () => {
     const cases = [

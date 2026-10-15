@@ -486,7 +486,12 @@ export const useFolioCollaborationRoom = ({
                   }
                   const waited = await waitForRetry();
                   if (Result.isError(waited)) {
-                    reject(waited.error);
+                    reject(
+                      new CollaborationGenerationRejoinError({
+                        cause: waited.error,
+                        message: "Collaboration generation retry failed.",
+                      }),
+                    );
                     return;
                   }
                   if (isDisposed()) {

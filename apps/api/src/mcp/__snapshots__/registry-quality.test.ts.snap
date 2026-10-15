@@ -4398,6 +4398,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     "enum": [
                       "levelOnly"
                     ],
+                    "description": "Set only the paragraph's list nesting depth",
                     "type": "string"
                   },
                   "ilvl": {
@@ -4411,7 +4412,8 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                   "kind",
                   "ilvl"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
@@ -10901,6 +10903,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "enum": [
                       "levelOnly"
                     ],
+                    "description": "Set only the paragraph's list nesting depth",
                     "type": "string"
                   },
                   "ilvl": {
@@ -10914,7 +10917,8 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "kind",
                   "ilvl"
                 ],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "List nesting depth for the paragraph"
               },
               "is_directive": {
                 "type": "boolean",
