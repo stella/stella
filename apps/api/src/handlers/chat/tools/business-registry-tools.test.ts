@@ -216,19 +216,19 @@ describe("a jurisdiction with more than one register", () => {
       businessRegistryCallScope([rpo]),
     );
     const context = { emitCustomEvent: () => undefined };
+    // The tool's execute is typed loosely; a call here is always a promise.
+    const call = async (input: Record<string, string>): Promise<unknown> =>
+      await execute(input, context);
 
     // The default SK register is orsr; the chip names rpo, so rpo answers.
-    await execute({ jurisdiction: "SK", query: "31333532" }, context);
+    await call({ jurisdiction: "SK", query: "31333532" });
     expect(calls).toEqual(["rpo"]);
 
     const otherRegister = await rejectionOf(
-      execute(
-        { jurisdiction: "SK", query: "31333532", registry: "orsr" },
-        context,
-      ),
+      call({ jurisdiction: "SK", query: "31333532", registry: "orsr" }),
     );
     const otherJurisdiction = await rejectionOf(
-      execute({ jurisdiction: "CZ", query: "27082440" }, context),
+      call({ jurisdiction: "CZ", query: "27082440" }),
     );
 
     expect(otherRegister).toBeInstanceOf(ChatToolError);

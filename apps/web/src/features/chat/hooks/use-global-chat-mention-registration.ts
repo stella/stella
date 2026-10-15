@@ -159,10 +159,11 @@ const loadSourceMentions = async ({
         await queryClient.query(mcpConnectionsOptions(organizationId, userId)),
     ),
   ]);
-  for (const read of [catalog, connections]) {
-    if (Result.isError(read)) {
-      getAnalytics().captureError(read.error);
-    }
+  if (Result.isError(catalog)) {
+    getAnalytics().captureError(catalog.error);
+  }
+  if (Result.isError(connections)) {
+    getAnalytics().captureError(connections.error);
   }
   const connectorCatalog = Result.isOk(catalog) ? catalog.value : null;
   return buildSourceMentionOptions({
