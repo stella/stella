@@ -98,6 +98,72 @@ export type CompilerInputRecorder = {
   /** Records a file the caller reads outside the compiler. */
   readFile: (fileName: string) => string | undefined;
   stamp: (context: string) => CompilerInputStamp;
+  /**
+   * The same answers for another checkout or machine: installed files are
+   * compared by content (another install writes them with other times) and
+   * paths under `root` are stored relative to it (see relocateStamp).
+   */
+  portableStamp: (context: string, root: string) => CompilerInputStamp;
+};
+
+// Stands for the checkout root in a portable stamp.
+export const ROOT_TOKEN = "<root>";
+
+const relocatePath = (value: string, from: string, to: string) => {
+  if (value === from) {
+    return to;
+  }
+  return value.startsWith(`${from}/`)
+    ? `${to}${value.slice(from.length)}`
+    : value;
+};
+
+/** Rewrites every path in a stamp that lies under `from` to lie under `to`. */
+export const relocateStamp = (
+  stamp: CompilerInputStamp,
+  from: string,
+  to: string,
+): CompilerInputStamp => {
+  const move = (value: string) => relocatePath(value, from, to);
+  const moveList = (values: readonly string[]) => values.map(move);
+  const moveKeys = <Value>(
+    record: Record<string, Value>,
+    moveValue: (value: Value) => Value,
+  ) =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        move(key),
+        moveValue(value),
+      ]),
+    );
+  const keep = <Value>(value: Value) => value;
+  return {
+    context: stamp.context,
+    contents: moveKeys(stamp.contents, keep),
+    installed: moveKeys(stamp.installed, keep),
+    files: {
+      present: moveList(stamp.files.present),
+      absent: moveList(stamp.files.absent),
+    },
+    directories: {
+      present: moveList(stamp.directories.present),
+      absent: moveList(stamp.directories.absent),
+    },
+    realpaths: moveKeys(stamp.realpaths, move),
+    subdirectories: moveKeys(stamp.subdirectories, moveList),
+    listings: stamp.listings.map(
+      ([[directory, extensions, excludes, includes, depth], found]) => [
+        [
+          move(directory),
+          extensions,
+          excludes === null ? null : moveList(excludes),
+          includes === null ? null : moveList(includes),
+          depth,
+        ],
+        moveList(found),
+      ],
+    ),
+  };
 };
 
 // Paths and keys, not text: a stable code-unit order on every machine.
@@ -121,6 +187,7 @@ const existence = (answers: Map<string, boolean>) => {
 export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const contents = new Map<string, string | null>();
   const installed = new Map<string, string | null>();
+  const installedContents = new Map<string, string | null>();
   const files = new Map<string, boolean>();
   const directories = new Map<string, boolean>();
   const realpaths = new Map<string, string>();
@@ -137,6 +204,7 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
           ? null
           : installedFingerprint(statSync(fileName, { throwIfNoEntry: false })),
       );
+      installedContents.set(fileName, contentHash(bytes));
     } else {
       contents.set(fileName, contentHash(bytes));
     }
@@ -198,21 +266,32 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     record(host);
     return host;
   };
+  const stamp = (
+    context: string,
+    contentsOf: Map<string, string | null>,
+    installedOf: Map<string, string | null>,
+  ): CompilerInputStamp => ({
+    context,
+    contents: sortedRecord(contentsOf),
+    installed: sortedRecord(installedOf),
+    files: existence(files),
+    directories: existence(directories),
+    realpaths: sortedRecord(realpaths),
+    subdirectories: sortedRecord(subdirectories),
+    listings: [...listings]
+      .toSorted(([left], [right]) => compareKeys(left, right))
+      .map(([, listing]) => listing),
+  });
   return {
     wrap,
     readFile: recordRead,
-    stamp: (context) => ({
-      context,
-      contents: sortedRecord(contents),
-      installed: sortedRecord(installed),
-      files: existence(files),
-      directories: existence(directories),
-      realpaths: sortedRecord(realpaths),
-      subdirectories: sortedRecord(subdirectories),
-      listings: [...listings]
-        .toSorted(([left], [right]) => compareKeys(left, right))
-        .map(([, listing]) => listing),
-    }),
+    stamp: (context) => stamp(context, contents, installed),
+    portableStamp: (context, root) =>
+      relocateStamp(
+        stamp(context, new Map([...contents, ...installedContents]), new Map()),
+        root,
+        ROOT_TOKEN,
+      ),
   };
 };
 
