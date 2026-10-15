@@ -26,6 +26,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   documentWriteRefusal,
   DocumentWriteRefusedError,
@@ -192,7 +193,7 @@ const insertSample = async ({
     eq(legalLists.workspaceId, workspaceId),
   );
   if (listCount >= LIMITS.legalListsPerWorkspace) {
-    return abortTransaction(
+    abortTransaction(
       new HandlerError({
         status: 409,
         message: "This matter has reached the list limit.",
@@ -204,7 +205,7 @@ const insertSample = async ({
     eq(entities.workspaceId, workspaceId),
   );
   if (entityCount + SAMPLE_FACTS.length > LIMITS.entitiesCount) {
-    return abortTransaction(
+    abortTransaction(
       new HandlerError({
         status: 409,
         message: "This matter has no room for all sample facts.",
@@ -372,7 +373,7 @@ export const loadSampleCase = async ({
               concurrent.receipt = winner;
               // The canonical writer reclaims the losing file and rolls back its
               // document, stamp, audit and intent finalization before this returns.
-              return tx.rollback();
+              tx.rollback();
             }
             await insertSample({
               tx,
@@ -458,7 +459,7 @@ const sampleDocumentError = (error: BufferError): HandlerError => {
   }
 };
 
-export default createSafeHandler(
+const createSampleCase = createSafeHandler(
   config,
   async function* ({
     scopedDb,
@@ -486,3 +487,10 @@ export default createSafeHandler(
     return Result.ok(sample);
   },
 );
+
+declareAggregateMutation(createSampleCase.handler, {
+  type: "aggregate",
+  aggregates: ["sampleCase"],
+});
+
+export default createSampleCase;

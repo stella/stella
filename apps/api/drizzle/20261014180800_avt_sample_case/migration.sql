@@ -10,11 +10,11 @@ COMMIT;
 --> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 SET lock_timeout = 0;--> statement-breakpoint
--- Rebuild only this migration's interrupted index before replay.
-DROP INDEX CONCURRENTLY IF EXISTS "legal_lists_sample_workspace_uidx";
+-- IF NOT EXISTS keeps a valid uniqueness boundary across retries; the
+-- concurrent rebuild repairs a build a previous attempt left INVALID.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "legal_lists_sample_workspace_uidx" ON "legal_lists" ("workspace_id") WHERE "sample_case" IS NOT NULL;
 --> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE UNIQUE INDEX CONCURRENTLY "legal_lists_sample_workspace_uidx" ON "legal_lists" ("workspace_id") WHERE "sample_case" IS NOT NULL;
+REINDEX INDEX CONCURRENTLY "legal_lists_sample_workspace_uidx";
 --> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint

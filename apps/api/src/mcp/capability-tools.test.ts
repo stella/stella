@@ -386,6 +386,10 @@ describe("list verification access grants across MCP tools", () => {
         status: "verified",
       },
     },
+    "lists.sample-case.create": {
+      params,
+      body: { filePropertyName: "Documents" },
+    },
   } as const;
 
   let previousGrants = env.API_FEATURE_ACCESS_GRANTS;
