@@ -145,7 +145,7 @@ describe("entityTabGlyph", () => {
   });
 
   test("a dotfile's own extension (a second dot) still drops", () => {
-    expect(entityTabGlyph(".env.local")).toBe(".en");
+    expect(entityTabGlyph(".settings.local")).toBe(".se");
   });
 
   test("honours a custom length", () => {

@@ -12,9 +12,11 @@ export type ReaderMessageKey =
   | "caseLaw.reader.headMatter"
   | "caseLaw.notesFilter.ai"
   | "common.court"
-  | "statutes.currentWording"
   | "statutes.wordingVersionUnknown"
   | "statutes.openProvision"
+  | "statutes.provisionTextUnavailable"
+  | "statutes.showCitedPartOnly"
+  | "statutes.showFullProvision"
   // Every disclosure context, so a context added to the contract cannot ship
   // until each host that renders the reader carries its sentence.
   | AiDisclosureMessageKey;

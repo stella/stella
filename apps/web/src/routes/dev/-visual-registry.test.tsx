@@ -6,7 +6,6 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 
-import { railCourtAbbreviation } from "@/features/case-law/components/case-decision-rail-icon.logic";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 
@@ -49,10 +48,8 @@ describe("registered visual fixtures", () => {
         if (decision?.type === "present") {
           expect(row).toContain(decision.badge.caseNumber);
           expect(row).toContain(decision.badge.court);
-          const abbreviation = railCourtAbbreviation(
-            decision.badge.courtAbbreviation,
-          );
-          if (abbreviation === null) {
+          const abbreviation = decision.badge.courtAbbreviation?.trim();
+          if (!abbreviation || abbreviation.length > 4) {
             expect(row).not.toContain('data-slot="court-badge"');
           } else {
             expect(row).toContain('data-slot="court-badge"');

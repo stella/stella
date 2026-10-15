@@ -489,6 +489,12 @@ const resolvedRunArgument = (
   element: ts.Expression,
   helpers: ReadonlySet<string>,
 ): string | undefined => {
+  if (
+    ts.isSpreadElement(element) &&
+    isNonMountingCommandSpread(element.expression)
+  ) {
+    return "non-mounting-command";
+  }
   const literal = staticArgument(element);
   if (isVolumeNameHelperCall(element, helpers)) {
     return "name";
@@ -561,7 +567,7 @@ const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
       break;
     }
     const width = dockerGlobalWidth(arg);
-    if (width === 0 || (width === 2 && args[index + 1] === undefined)) {
+    if (width === 0 || (width === 2 && index + 1 >= args.length)) {
       return "unresolved";
     }
     index += width - 1;
@@ -591,6 +597,242 @@ const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
         : undefined;
     default:
       return undefined;
+  }
+};
+
+type NonMountingTypeOptions = {
+  type: ts.TypeNode;
+  source: ts.SourceFile;
+  seen?: Set<ts.TypeNode>;
+};
+
+const ownsCommandTypeName = (
+  statement: ts.Statement,
+  name: string,
+): boolean => {
+  if (
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isEnumDeclaration(statement)
+  ) {
+    return statement.name?.text === name;
+  }
+  if (ts.isImportEqualsDeclaration(statement)) {
+    return statement.name.text === name;
+  }
+  if (!ts.isImportDeclaration(statement)) {
+    return false;
+  }
+  if (statement.importClause?.name?.text === name) {
+    return true;
+  }
+  const bindings = statement.importClause?.namedBindings;
+  if (bindings === undefined) {
+    return false;
+  }
+  return ts.isNamespaceImport(bindings)
+    ? bindings.name.text === name
+    : bindings.elements.some((element) => element.name.text === name);
+};
+
+const isNonMountingTuple = (type: ts.TupleTypeNode): boolean => {
+  const prefix: string[] = [];
+  for (const element of type.elements) {
+    if (
+      !ts.isLiteralTypeNode(element) ||
+      !ts.isStringLiteral(element.literal)
+    ) {
+      break;
+    }
+    prefix.push(element.literal.text);
+  }
+  if (
+    prefix.length === 0 ||
+    ((prefix.at(0) === "volume" || prefix.at(0) === "container") &&
+      prefix.length < 2)
+  ) {
+    return false;
+  }
+  return parseDockerCommand(prefix) === undefined;
+};
+
+const isNonMountingCommandType = ({
+  type,
+  source,
+  seen = new Set<ts.TypeNode>(),
+}: NonMountingTypeOptions): boolean => {
+  if (seen.has(type)) {
+    return false;
+  }
+  seen.add(type);
+  if (
+    ts.isTypeOperatorNode(type) &&
+    type.operator === ts.SyntaxKind.ReadonlyKeyword
+  ) {
+    return isNonMountingCommandType({ type: type.type, source, seen });
+  }
+  if (ts.isUnionTypeNode(type)) {
+    return type.types.every((branch) =>
+      isNonMountingCommandType({ type: branch, source, seen: new Set(seen) }),
+    );
+  }
+  if (
+    ts.isTypeReferenceNode(type) &&
+    ts.isIdentifier(type.typeName) &&
+    !type.typeArguments?.length
+  ) {
+    const name = type.typeName.text;
+    for (let scope = type.parent; ; scope = scope.parent) {
+      if (
+        (ts.isFunctionLike(scope) ||
+          ts.isClassDeclaration(scope) ||
+          ts.isInterfaceDeclaration(scope) ||
+          ts.isTypeAliasDeclaration(scope)) &&
+        scope.typeParameters?.some((parameter) => parameter.name.text === name)
+      ) {
+        return false;
+      }
+      if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+        continue;
+      }
+      const alias = scope.statements.find((statement) =>
+        ownsCommandTypeName(statement, name),
+      );
+      if (alias !== undefined) {
+        return (
+          ts.isTypeAliasDeclaration(alias) &&
+          !alias.typeParameters?.length &&
+          isNonMountingCommandType({ type: alias.type, source, seen })
+        );
+      }
+      if (ts.isSourceFile(scope)) {
+        return false;
+      }
+    }
+  }
+  if (!ts.isTupleTypeNode(type)) {
+    return false;
+  }
+  return isNonMountingTuple(type);
+};
+
+const bindingNamesCommand = (binding: ts.BindingName, name: string): boolean =>
+  ts.isIdentifier(binding)
+    ? binding.text === name
+    : binding.elements.some(
+        (element) =>
+          ts.isBindingElement(element) &&
+          bindingNamesCommand(element.name, name),
+      );
+
+type BlockCommandDomainOptions = {
+  scope: ts.Block | ts.SourceFile;
+  reference: ts.Identifier;
+  seen: Set<ts.Expression>;
+};
+
+const blockCommandDomain = ({
+  scope,
+  reference,
+  seen,
+}: BlockCommandDomainOptions): boolean | undefined => {
+  for (const statement of scope.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      if (
+        (ts.isFunctionDeclaration(statement) ||
+          ts.isClassDeclaration(statement)) &&
+        statement.name?.text === reference.text
+      ) {
+        return false;
+      }
+      continue;
+    }
+    const declaration = statement.declarationList.declarations.find(
+      ({ name }) => bindingNamesCommand(name, reference.text),
+    );
+    if (declaration === undefined) {
+      continue;
+    }
+    if (!ts.isIdentifier(declaration.name)) {
+      return false;
+    }
+    if (declaration.type !== undefined) {
+      return isNonMountingCommandType({
+        type: declaration.type,
+        source: reference.getSourceFile(),
+      });
+    }
+    return (
+      statement.declarationList.getFirstToken()?.kind ===
+        ts.SyntaxKind.ConstKeyword &&
+      declaration.initializer !== undefined &&
+      isNonMountingCommandSpread(declaration.initializer, seen)
+    );
+  }
+  return undefined;
+};
+
+const isNonMountingCommandSpread = (
+  expression: ts.Expression,
+  seen = new Set<ts.Expression>(),
+): boolean => {
+  if (!ts.isIdentifier(expression) || seen.has(expression)) {
+    return false;
+  }
+  seen.add(expression);
+  for (let node = expression.parent; ; node = node.parent) {
+    if (ts.isBlock(node) || ts.isSourceFile(node)) {
+      const proof = blockCommandDomain({
+        scope: node,
+        reference: expression,
+        seen,
+      });
+      if (proof !== undefined) {
+        return proof;
+      }
+    }
+    if (ts.isSourceFile(node)) {
+      return false;
+    }
+    if (
+      ts.isCatchClause(node) &&
+      node.variableDeclaration !== undefined &&
+      bindingNamesCommand(node.variableDeclaration.name, expression.text)
+    ) {
+      return false;
+    }
+    if (
+      (ts.isForStatement(node) ||
+        ts.isForOfStatement(node) ||
+        ts.isForInStatement(node)) &&
+      node.initializer !== undefined &&
+      ts.isVariableDeclarationList(node.initializer) &&
+      node.initializer.declarations.some(({ name }) =>
+        bindingNamesCommand(name, expression.text),
+      )
+    ) {
+      return false;
+    }
+    if (!ts.isFunctionLike(node)) {
+      continue;
+    }
+    if (ts.isFunctionExpression(node) && node.name?.text === expression.text) {
+      return false;
+    }
+    const parameter = node.parameters.find(({ name }) =>
+      bindingNamesCommand(name, expression.text),
+    );
+    if (parameter !== undefined) {
+      return (
+        ts.isIdentifier(parameter.name) &&
+        parameter.type !== undefined &&
+        isNonMountingCommandType({
+          type: parameter.type,
+          source: expression.getSourceFile(),
+        })
+      );
+    }
   }
 };
 

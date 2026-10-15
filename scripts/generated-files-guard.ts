@@ -1,10 +1,12 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
   GENERATORS,
   GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
+  type Generator,
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);
@@ -203,20 +205,142 @@ const checkManifest = async () => {
   console.log(`Manifest: ${GENERATORS.length} generator families`);
 };
 
-const guardB = () => {
-  for (const generator of orderGenerators(GENERATORS)) {
-    if (!generator.check) {
-      continue;
+// These commands only compare committed outputs or write private temporary
+// directories. Changed/new commands, compiler/AST guards and WASM builds stay
+// exclusive until audited. Reservations bound scheduling, not actual child RSS;
+// leave runner memory outside this 2 GiB budget for the parent and the OS.
+const LIGHT_CHECK_COMMANDS = [
+  ["bun", "scripts/generate-cloud-setup.ts"],
+  ["bun", "scripts/generate-bun-toolchain.ts"],
+  ["bun", "apps/api/scripts/generate-transition-triggers.ts"],
+  ["bun", "--cwd=packages/scan-engine", "run", "check:fixtures"],
+  ["bun", "--filter", "@stll/ai-catalog", "gen:rates", "--check"],
+  [
+    "bun",
+    "packages/scripts/src/i18n-typegen.ts",
+    "apps/web/src/i18n/langs",
+    "--check",
+  ],
+  [
+    "bun",
+    "packages/scripts/src/i18n-typegen.ts",
+    "apps/landing/src/i18n/messages",
+    "--check",
+  ],
+  [
+    "bun",
+    "packages/scripts/src/i18n-typegen.ts",
+    "packages/transactional/i18n/langs",
+    "--check",
+  ],
+  [
+    "bun",
+    "packages/scripts/src/glossary-gen.ts",
+    "apps/web/src/i18n",
+    "--check",
+  ],
+  ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
+  ["bun", "run", "selfhost:check"],
+  [
+    "bun",
+    "--cwd=packages/catalogue",
+    "scripts/generate-manifest.ts",
+    "--check",
+  ],
+  ["bun", "--cwd=packages/skills", "scripts/generate-manifests.ts", "--check"],
+  ["bun", "scripts/generate-us-courts.ts", "--check"],
+] as const;
+const lightCommands = new Set(
+  LIGHT_CHECK_COMMANDS.map((command) => JSON.stringify(command)),
+);
+const GENERATOR_MEMORY_BUDGET_MIB = 2048;
+const LIGHT_CHECK_MEMORY_MIB = 1024;
+const MAX_GENERATOR_PROCESSES = 2;
+
+const checkGenerator = async ({ id, check }: Generator) => {
+  if (check === null) {
+    return 0;
+  }
+  console.log(`Checking ${id}`);
+  const child = Bun.spawn([...check], {
+    cwd: ROOT.pathname,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  await child.exited;
+  return childExitStatus(child);
+};
+
+export const runGeneratorChecks = async (
+  generators: readonly Generator[],
+  run = checkGenerator,
+) => {
+  const pending = new Map(
+    orderGenerators(generators).map((generator) => [generator.id, generator]),
+  );
+  const completed = new Set<string>();
+  const active = new Map<string, Promise<void>>();
+  const failures = new Map<string, string>();
+  let reservedMemory = 0;
+  const runReserved = async (generator: Generator, memory: number) => {
+    const result = await Result.tryPromise(async () => run(generator));
+    if (Result.isError(result)) {
+      failures.set(generator.id, result.error.message);
+    } else if (result.value !== 0) {
+      failures.set(generator.id, `exit ${result.value}`);
     }
-    console.log(`Checking ${generator.id}`);
-    const result = Bun.spawnSync([...generator.check], {
-      cwd: ROOT.pathname,
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    if (result.exitCode !== 0) {
-      panic(`Generator check failed: ${generator.id}`);
+    reservedMemory -= memory;
+    completed.add(generator.id);
+    active.delete(generator.id);
+  };
+  while (pending.size > 0 || active.size > 0) {
+    for (const [id, generator] of pending) {
+      if (
+        generator.after.some(
+          (dependency) => pending.has(dependency) || active.has(dependency),
+        )
+      ) {
+        continue;
+      }
+      if (generator.check === null) {
+        pending.delete(id);
+        completed.add(id);
+        continue;
+      }
+      const memory = lightCommands.has(JSON.stringify(generator.check))
+        ? LIGHT_CHECK_MEMORY_MIB
+        : GENERATOR_MEMORY_BUDGET_MIB;
+      if (
+        active.size >= MAX_GENERATOR_PROCESSES ||
+        reservedMemory + memory > GENERATOR_MEMORY_BUDGET_MIB
+      ) {
+        continue;
+      }
+      pending.delete(id);
+      reservedMemory += memory;
+      active.set(id, runReserved(generator, memory));
     }
+    if (active.size > 0) {
+      await Promise.race(active.values());
+    } else if (pending.size > 0) {
+      panic("Generator checks cannot make dependency progress");
+    }
+  }
+  return generators.flatMap(({ id }) => {
+    if (!completed.has(id)) {
+      panic(`Generator check was not completed: ${id}`);
+    }
+    const failure = failures.get(id);
+    return failure === undefined ? [] : [{ id, failure }];
+  });
+};
+
+const guardB = async () => {
+  const failures = await runGeneratorChecks(GENERATORS);
+  if (failures.length > 0) {
+    panic(
+      `Generator checks failed:\n${failures.map(({ id, failure }) => `${id}: ${failure}`).join("\n")}`,
+    );
   }
 };
 
@@ -229,12 +353,12 @@ if (import.meta.main) {
       break;
     case "--guard-b":
       await checkManifest();
-      guardB();
+      await guardB();
       break;
     case "--check":
       await checkManifest();
       await guardA();
-      guardB();
+      await guardB();
       break;
     default:
       panic(

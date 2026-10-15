@@ -8,6 +8,7 @@ import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
@@ -23,6 +24,7 @@ import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -48,8 +50,9 @@ import type {
 } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
@@ -84,11 +87,11 @@ export const LeadingCitations = ({
         (direction) => {
           if (
             totalCitations(summary[direction]) === 0 &&
-            !summary.capped[direction]
+            !citationSummaryIsCapped(summary, direction)
           ) {
             return null;
           }
-          return summary.capped[direction] ? (
+          return citationSummaryIsCapped(summary, direction) ? (
             <CappedDirectionSection
               count={totalCitations(summary[direction])}
               decision={decision}
@@ -288,6 +291,10 @@ const LeadingRow = ({
         onClick={() => setOpen(!open)}
         type="button"
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <ChevronRightIcon
           className={cn(
             "text-foreground-disabled mt-0.5 size-3 shrink-0 transition-transform",

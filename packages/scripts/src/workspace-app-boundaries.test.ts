@@ -187,6 +187,43 @@ describe("workspace app boundaries", () => {
     ]);
   });
 
+  test("ignores not-yet-generated API typecheck configs but no other missing extends", () => {
+    const rootDir = createRoot();
+    writePackage(rootDir, "apps/api", { name: "@stll/api" });
+    writeFileSync(
+      path.join(rootDir, "apps/api/tsconfig.json"),
+      JSON.stringify({ compilerOptions: { types: [] }, include: [] }),
+    );
+    writeFileSync(
+      path.join(rootDir, "apps/api/tsconfig.src.json"),
+      JSON.stringify({
+        extends: [
+          "./tsconfig.json",
+          "./.cache/typecheck-declarations/src.json",
+        ],
+      }),
+    );
+
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([]);
+
+    writeFileSync(
+      path.join(rootDir, "apps/api/tsconfig.tests.json"),
+      JSON.stringify({
+        extends: [
+          "./tsconfig.json",
+          "./.cache/typecheck-declarations/other.json",
+        ],
+      }),
+    );
+
+    expect(validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual([
+      {
+        message: expect.stringContaining("invalid TypeScript configuration"),
+        path: "apps/api/tsconfig.tests.json",
+      },
+    ]);
+  });
+
   test("uses Git's tracked, untracked, and ignored file set", () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });

@@ -44,6 +44,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 
 /** JSON columns read and found to hold no user or member id. */
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
+  "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
   "chat_message_revisions.edit",
   "agent_skills.metadata",
@@ -92,6 +93,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "correspondence_filers.filed_by_display",
   "database_backfill_states.batch",
   "desktop_edit_handoffs.linked_account",
+  "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
   "document_review_parties.parties",
@@ -193,6 +195,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "desktop_time_entry_batches.user_id":
+    "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
+  "account_audit_logs.user_id":
+    "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":

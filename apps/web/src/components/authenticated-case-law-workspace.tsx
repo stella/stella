@@ -22,6 +22,7 @@ type AuthenticatedCaseLawWorkspaceProps = {
   decision: ComponentProps<typeof DecisionWorkspace>["decision"];
   decisionId: SafeId<"caseLawDecision">;
   initialAnchorId?: string | undefined;
+  landingSessionId?: string | undefined;
   user: AuthenticatedUser;
 };
 
@@ -29,6 +30,7 @@ export const AuthenticatedCaseLawWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
+  landingSessionId,
   user,
 }: AuthenticatedCaseLawWorkspaceProps) => (
   <AuthenticatedUserProvider user={user}>
@@ -40,6 +42,7 @@ export const AuthenticatedCaseLawWorkspace = ({
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
+              landingSessionId={landingSessionId}
             />
           </div>
           {/* The law shell docks the inspector; the reader only seeds its tabs. */}
@@ -58,9 +61,10 @@ const AuthenticatedDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
+  landingSessionId,
 }: Pick<
   AuthenticatedCaseLawWorkspaceProps,
-  "decision" | "decisionId" | "initialAnchorId"
+  "decision" | "decisionId" | "initialAnchorId" | "landingSessionId"
 >) => {
   const { ensureAIAvailable } = useAIKeyGate();
 
@@ -71,6 +75,7 @@ const AuthenticatedDecisionWorkspace = ({
       decisionId={decisionId}
       ensureAIAvailable={ensureAIAvailable}
       initialAnchorId={initialAnchorId}
+      landingSessionId={landingSessionId}
     />
   );
 };

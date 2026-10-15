@@ -56,7 +56,10 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
   planCombinationRun,
@@ -123,10 +126,11 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // - Every combination of response shape, turn position and provider that
 //   the product and the provider's protocol can produce is enumerated, and
 //   every exclusion names its predicate (`turn-outcome-matrix.ts`). Pull
-//   requests run the all-pairs cover; every night runs every combination
-//   in shards (`nightly-property-test.yml`, `TURN_OUTCOME_COMBINATIONS=all`
-//   and `TURN_OUTCOME_SHARD`). With three dimensions, the all-triples cover
-//   is every combination.
+//   requests run a cover that takes every shape, position and provider at
+//   least once; every night runs every combination in shards
+//   (`nightly-property-test.yml`, `TURN_OUTCOME_COMBINATIONS=all` and
+//   `TURN_OUTCOME_SHARD`). With three dimensions, the all-triples cover is
+//   every combination.
 // - The builders that show model output beside the turn (title, recap,
 //   suggested prompts, a subagent's answer) never show a blank for any
 //   shape, on every provider.
@@ -145,12 +149,14 @@ const surfaces = enumerateSurfaceCombinations(cassettes);
 const turnPlan = planCombinationRun({
   included: turns.included,
   mode: process.env["TURN_OUTCOME_COMBINATIONS"],
+  pullRequestStrength: 1,
   shard: process.env["TURN_OUTCOME_SHARD"],
   valuesOf: turnCombinationValues,
 });
 const surfacePlan = planCombinationRun({
   included: surfaces.included,
   mode: process.env["TURN_OUTCOME_COMBINATIONS"],
+  pullRequestStrength: 1,
   shard: process.env["TURN_OUTCOME_SHARD"],
   valuesOf: surfaceCombinationValues,
 });
@@ -708,6 +714,7 @@ const SURFACE_SHOWS = {
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb: safeDbOf(),
+      organizationStateDb: testOrganizationStateDb,
       threadId,
       threadWorkspaceId: null,
       userId: ids.userA1,

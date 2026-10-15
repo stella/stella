@@ -100,7 +100,7 @@ jobs:
       - name: Signature store token
         id: store-token
         if: steps.credentials.outputs.store_required == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v2
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: 2871141
           private-key: ${{ secrets.CLA_APP_PRIVATE_KEY }}
@@ -129,6 +129,12 @@ jobs:
             const STORE = { owner: "stella", repo: "cla", path: "signatures/cla.json" };
             const BRANCH = "cla-signatures";
             const MAX_WRITE_ATTEMPTS = 3;
+            const MAX_API_ATTEMPTS = 3;
+            const API_BACKOFF_MS = 2000;
+            const TIMEOUT_CODES = new Set([
+              "ETIMEDOUT", "ESOCKETTIMEDOUT", "UND_ERR_CONNECT_TIMEOUT",
+              "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT",
+            ]);
             const MAX_PULL_COMMITS = 250;
             const MAX_COMMIT_AUTHORS = 1000;
             const { owner, repo } = context.repo;
@@ -142,17 +148,39 @@ jobs:
             };
             const positiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
             const validSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value);
-            const request = (route, params) => api.request(route, { owner, repo, ...params });
-            const list = async (route, params) => {
+            const retryApi = async (operation) => {
+              for (let attempt = 1; ; attempt++) {
+                try {
+                  return await operation();
+                } catch (error) {
+                  const timeout = error.name === "TimeoutError" || TIMEOUT_CODES.has(error.code) || TIMEOUT_CODES.has(error.cause?.code);
+                  const transient = error.status === 429 || (error.status >= 500 && error.status <= 599) ||
+                    (error.status == null && timeout);
+                  if (!transient || error.name === "ClaPolicyError") throw error;
+                  if (attempt === MAX_API_ATTEMPTS) {
+                    const unavailable = new Error(`CLA_API_UNAVAILABLE status=${error.status ?? "TIMEOUT"} attempts=${attempt}`);
+                    unavailable.name = "ClaInfrastructureError";
+                    throw unavailable;
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, API_BACKOFF_MS * 2 ** (attempt - 1)));
+                }
+              }
+            };
+            // Only reads are replayed: a lost write response may already have committed.
+            const request = (route, params) => route.startsWith("GET ")
+              ? retryApi(() => api.request(route, { owner, repo, ...params }))
+              : api.request(route, { owner, repo, ...params });
+            const list = (route, params, limit = Infinity) => retryApi(async () => {
               const items = [];
               for await (const response of api.paginate.iterator(route, { owner, repo, per_page: 100, ...params })) {
                 if (!Array.isArray(response.data)) fail("CLA_INVALID_API_LIST");
                 items.push(...response.data);
+                if (items.length > limit) fail("CLA_COMMIT_LIMIT_EXCEEDED");
               }
               return items;
-            };
+            });
             const readSignatures = async () => {
-              const { data } = await store.request("GET /repos/{owner}/{repo}/contents/{path}", { ...STORE, ref: BRANCH });
+              const { data } = await retryApi(() => store.request("GET /repos/{owner}/{repo}/contents/{path}", { ...STORE, ref: BRANCH }));
               if (data.type !== "file" || data.encoding !== "base64" || !validSha(data.sha) || typeof data.content !== "string") {
                 fail("CLA_INVALID_SIGNATURE_FILE");
               }
@@ -183,7 +211,7 @@ jobs:
             const account = async (user) => {
               if (!positiveInteger(user?.databaseId) || typeof user.login !== "string") fail("CLA_INVALID_AUTHOR");
               if (!accounts.has(user.databaseId)) {
-                const { data } = await api.request("GET /users/{username}", { username: user.login });
+                const { data } = await retryApi(() => api.request("GET /users/{username}", { username: user.login }));
                 if (data.id !== user.databaseId || data.login !== user.login || !["User", "Bot"].includes(data.type)) fail("CLA_AUTHOR_IDENTITY_CHANGED");
                 accounts.set(user.databaseId, data);
               }
@@ -192,9 +220,9 @@ jobs:
             const exempt = async (author) => {
               if (!positiveInteger(author?.id) || typeof author.login !== "string") fail("CLA_INVALID_AUTHOR");
               if (author.type === "Bot" || ALLOWLIST.has(author.login.toLowerCase())) return true;
-              const membership = await store.request("GET /orgs/{org}/memberships/{username}", {
+              const membership = await retryApi(() => store.request("GET /orgs/{org}/memberships/{username}", {
                 org: owner, username: author.login,
-              }).then(({ data }) => data, (error) => {
+              })).then(({ data }) => data, (error) => {
                 if (error.status === 404) return null;
                 throw error;
               });
@@ -236,14 +264,9 @@ jobs:
             };
             const verifyPull = async (pull, groupEntry, includeOpener = true) => {
               if (!positiveInteger(pull.commits) || pull.commits > MAX_PULL_COMMITS) fail("CLA_COMMIT_LIMIT_EXCEEDED");
-              const commits = [];
-              for await (const page of api.paginate.iterator("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
-                owner, repo, pull_number: pull.number, per_page: 100,
-              })) {
-                if (!Array.isArray(page.data)) fail("CLA_INVALID_API_LIST");
-                commits.push(...page.data);
-                if (commits.length > MAX_PULL_COMMITS) fail("CLA_COMMIT_LIMIT_EXCEEDED");
-              }
+              const commits = await list("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
+                pull_number: pull.number,
+              }, MAX_PULL_COMMITS);
               if (commits.length !== pull.commits) fail("CLA_INCOMPLETE_COMMIT_LIST");
               const commitShas = new Set(commits.map(({ sha }) => sha));
               if (commitShas.size !== commits.length) fail("CLA_DUPLICATE_COMMIT");
@@ -276,14 +299,14 @@ jobs:
                 let total;
                 let count = 0;
                 do {
-                  const result = await api.graphql(`query($owner:String!, $repo:String!, $oid:GitObjectID!, $cursor:String) {
+                  const result = await retryApi(() => api.graphql(`query($owner:String!, $repo:String!, $oid:GitObjectID!, $cursor:String) {
                     repository(owner:$owner,name:$repo) { object(oid:$oid) { ... on Commit {
                       oid authors(first:100,after:$cursor) {
                         totalCount nodes { user { databaseId login __typename } }
                         pageInfo { hasNextPage endCursor }
                       }
                     } } }
-                  }`, { owner, repo, oid: commit.sha, cursor });
+                  }`, { owner, repo, oid: commit.sha, cursor }));
                   const object = result.repository?.object;
                   const page = object?.authors;
                   if (object?.oid !== commit.sha || !Array.isArray(page?.nodes) || !positiveInteger(page.totalCount) ||
@@ -353,7 +376,7 @@ jobs:
               const cursors = new Set();
               let cursor = null;
               do {
-                const result = await api.graphql(`query($owner: String!, $repo: String!, $branch: String!, $cursor: String) {
+                const result = await retryApi(() => api.graphql(`query($owner: String!, $repo: String!, $branch: String!, $cursor: String) {
                   repository(owner: $owner, name: $repo) {
                     mergeQueue(branch: $branch) {
                       entries(first: 100, after: $cursor) {
@@ -362,7 +385,7 @@ jobs:
                       }
                     }
                   }
-                }`, { owner, repo, branch: baseRef, cursor });
+                }`, { owner, repo, branch: baseRef, cursor }));
                 const page = result.repository?.mergeQueue?.entries;
                 if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") fail("CLA_INVALID_QUEUE_RESPONSE");
                 for (const entry of page.nodes) {
@@ -461,9 +484,14 @@ jobs:
                   fail("CLA_UNSUPPORTED_EVENT");
               }
             } catch (error) {
-              const code = error.name === "ClaPolicyError" ? error.message : `CLA_API_ERROR_${error.status ?? "UNKNOWN"}`;
-              for (const id of checks) {
-                await completeCheck(id, "failure", "CLA_ERROR", `Verification failed (${code}). Check workflow permissions and rerun.`);
-              }
+              const infrastructure = error.name === "ClaInfrastructureError";
+              const code = infrastructure || error.name === "ClaPolicyError" ? error.message : `CLA_API_ERROR_${error.status ?? "UNKNOWN"}`;
+              if (infrastructure) core.error(code, { title: "signature-service-unavailable" });
               core.setFailed(code);
+              for (const id of checks) {
+                await completeCheck(id, "failure", infrastructure ? "CLA_API_UNAVAILABLE" : "CLA_ERROR",
+                  `Verification failed (${code}). Check workflow permissions and rerun.`).catch((reportError) => {
+                    core.error(`CLA_CHECK_REPORT_ERROR_${reportError.status ?? "UNKNOWN"}`, { title: "signature-check-report-failed" });
+                  });
+              }
             }

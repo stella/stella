@@ -76,11 +76,13 @@ test.describe("lockless DOCX collaboration", () => {
   let collaboratorContext: BrowserContext | null = null;
   let workspace: TestWorkspace | null = null;
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     await collaboratorContext?.close();
     collaboratorContext = null;
     if (workspace !== null) {
-      await deleteTestWorkspace(request, workspace.id);
+      await deleteTestWorkspace(request, workspace.id, {
+        leave: { page, testInfo },
+      });
       workspace = null;
     }
   });

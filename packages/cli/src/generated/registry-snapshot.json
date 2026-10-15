@@ -393,7 +393,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_decision",
-    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (`url` reader, `source_url` publisher), metadata, textFields and citation summaries (citedBy count, polarity, top 5 citers; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. `include` picks fields; [] returns text and identity only.",
+    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (`url` reader, `source_url` publisher), metadata, textFields and citation summaries (citedBy reference counts, polarity, top citers: exact or bounded by candidateWindow 2048 edges; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. `include` picks fields; [] returns text and identity only.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -1128,7 +1128,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_statute_provisions",
-    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. One batched call accepts multiple provisions. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read statute provisions: items[] entries are { eli, anchor } with optional as_of and language, or document_id from read_provision_history for an exact consolidation. document_id and as_of are mutually exclusive. Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). Entries return in input order: found carries text; invalid, not_found, uncovered_date (no applicable consolidation, including inconsistent publisher dates), provision_not_found and text_withheld (AI use barred) carry messages. Continue long text with nextTextCursor as text_cursor on the same entry until null. url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -1161,11 +1161,22 @@
                 "maxLength": 10,
                 "description": "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today."
               },
+              "document_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Exact consolidation handle returned as documentId by read_provision_history"
+              },
               "language": {
                 "type": "string",
                 "minLength": 2,
                 "maxLength": 8,
                 "description": "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each."
+              },
+              "text_cursor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "Opaque nextTextCursor from this provision and consolidation"
               }
             },
             "required": ["eli", "anchor"],
@@ -1192,7 +1203,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_provision_history",
-    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older windows. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+    "description": "Read one provision's wording in each consolidation of the work, newest validity window first, so two wordings can be compared without downloading whole statutes. Takes the work's `eli` and an `anchor` from read_statute's outline. A consolidation that does not carry the anchor is left out of `items`. Pass the returned nextCursor back as cursor for older versions. Long wording returns nextTextCursor on its item; pass it back as text_cursor with the same eli, anchor, and version-page cursor until it is null. Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     "inputSchema": {
       "type": "object",
       "required": ["eli", "anchor"],
@@ -1234,6 +1245,12 @@
           "minLength": 1,
           "maxLength": 512,
           "description": "Opaque cursor from a previous read_provision_history call to read the next page"
+        },
+        "text_cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque nextTextCursor from one item in the requested history page"
         }
       }
     },
@@ -2886,7 +2903,7 @@
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
         },
         "reference": {
           "type": "string",
@@ -5333,7 +5350,7 @@
         "action": {
           "enum": ["add_member", "remove_member", "update_org_settings"],
           "type": "string",
-          "description": "Administrative action to perform"
+          "description": "Administrative action; the settings fields apply only to update_org_settings"
         },
         "matter_id": {
           "type": "string",
@@ -5354,33 +5371,37 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+        },
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": ["off", "searchable-text"],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5392,11 +5413,11 @@
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [

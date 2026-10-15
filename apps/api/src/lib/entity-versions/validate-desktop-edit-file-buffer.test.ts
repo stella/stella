@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
@@ -25,11 +27,13 @@ const makePackage = async ({
 }: MakePackageOptions) => {
   const config = DESKTOP_EDIT_FILE_TYPE_CONFIG[fileType];
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${mainPartContentType ?? config.mainPartContentType}"/></Types>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     config.mainPartPath,
     `<?xml version="1.0"?><x:${config.mainRootLocalName} xmlns:x="${mainRootNamespace ?? config.mainRootNamespaces[0]}"/>`,
   );
@@ -95,7 +99,8 @@ describe("desktop edit file validation", () => {
 
   test("rejects a package without content type declarations", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
     );
@@ -112,11 +117,13 @@ describe("desktop edit file validation", () => {
   test("rejects a malformed main part", async () => {
     const config = DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       `<?xml version="1.0"?><Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/${config.mainPartPath}" ContentType="${config.mainPartContentType}"/></Types>`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       config.mainPartPath,
       `<x:workbook xmlns:x="${config.mainRootNamespaces[0]}">`,
     );

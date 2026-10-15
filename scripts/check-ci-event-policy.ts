@@ -6,6 +6,7 @@ import {
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { flattenWorkflowSteps } from "./workflow-steps";
 
 const policySchema = v.object({
   jobs: v.record(
@@ -17,6 +18,7 @@ const policySchema = v.object({
       "schema-pr",
       "pr-opt-in",
       "release-pr",
+      "dispatch-only",
     ]),
   ),
   periodicJobs: v.optional(v.array(v.string()), []),
@@ -48,10 +50,15 @@ export const workflowSchema = v.looseObject({
       if: v.optional(v.union([v.string(), v.boolean()])),
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
       steps: v.optional(
-        v.array(
-          v.looseObject({
-            env: v.optional(v.record(v.string(), v.unknown())),
-          }),
+        v.pipe(
+          v.unknown(),
+          v.transform(flattenWorkflowSteps),
+          v.array(
+            v.looseObject({
+              env: v.optional(v.record(v.string(), v.unknown())),
+              run: v.optional(v.string()),
+            }),
+          ),
         ),
       ),
     }),
@@ -241,6 +248,40 @@ const requiresPostgresPrSwitch = ({
       )
     : condition.includes("vars.CI_POSTGRES_PR_SELECTION == 'on'");
 
+type CheckCompilerProofPolicyOptions = Pick<
+  CheckJobEventPolicyOptions,
+  "key" | "job" | "eventPolicy" | "triggers"
+>;
+
+const checkCompilerProofPolicy = ({
+  key,
+  job,
+  eventPolicy,
+  triggers,
+}: CheckCompilerProofPolicyOptions) => {
+  const problems: string[] = [];
+  const compilerProof = job.steps?.some((step) =>
+    /\b(?:check:typecheck-parity|typecheck-parity\.ts|stll-typecheck-parity|typecheck-command-probe(?:\.sh|\.ts))\b/u.test(
+      step.run ?? "",
+    ),
+  );
+  if (compilerProof && eventPolicy !== "dispatch-only") {
+    problems.push(
+      `${key}: compiler parity and probes require dispatch-only policy`,
+    );
+  }
+  if (
+    eventPolicy === "dispatch-only" &&
+    (Object.keys(triggers).length !== 1 ||
+      !Object.hasOwn(triggers, "workflow_dispatch"))
+  ) {
+    problems.push(
+      `${key}: dispatch-only jobs require workflow_dispatch as the only trigger`,
+    );
+  }
+  return problems;
+};
+
 const checkJobEventPolicy = ({
   key,
   file,
@@ -251,6 +292,9 @@ const checkJobEventPolicy = ({
   planOutputs,
 }: CheckJobEventPolicyOptions) => {
   const problems: string[] = [];
+  if (eventPolicy === "dispatch-only") {
+    return problems;
+  }
   if (file === "codeql.yml" && eventPolicy !== "release-pr") {
     return [`${key}: CodeQL jobs must declare nightly/manual/release policy`];
   }
@@ -437,6 +481,12 @@ export const checkCiEventPolicies = ({
         continue;
       }
       problems.push(
+        ...checkCompilerProofPolicy({
+          key,
+          job,
+          eventPolicy,
+          triggers: workflow.on,
+        }),
         ...checkJobEventPolicy({
           key,
           file,

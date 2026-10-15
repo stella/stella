@@ -967,6 +967,7 @@ describe("renderEmailHtml", () => {
 });
 
 describe("emailToHtml (.eml)", () => {
+  const attachmentText = "Attachment text";
   const eml = [
     "From: Jane Lawyer <jane@example.com>",
     "To: client@example.org",
@@ -994,7 +995,7 @@ describe("emailToHtml (.eml)", () => {
     "Content-Type: text/plain; charset=utf-8",
     'Content-Disposition: attachment; filename="notes.txt"',
     "",
-    "Attachment text",
+    attachmentText,
     "--BND",
     "Content-Type: image/png",
     "Content-Transfer-Encoding: base64",
@@ -1073,9 +1074,7 @@ describe("emailToHtml (.eml)", () => {
     if (!attachment) {
       return;
     }
-    expect(new TextDecoder().decode(attachment.bytes).trim()).toBe(
-      "Attachment text",
-    );
+    expect(attachment.bytes).toEqual(new TextEncoder().encode(attachmentText));
   });
 
   test("preserves declared attachment text charsets", async () => {
@@ -1120,7 +1119,7 @@ describe("emailToHtml (.eml)", () => {
         id: "attachment-1",
         fileName: "notes.txt",
         mimeType: "text/plain",
-        sizeBytes: 16,
+        sizeBytes: new TextEncoder().encode(attachmentText).byteLength,
         previewable: true,
       },
       {

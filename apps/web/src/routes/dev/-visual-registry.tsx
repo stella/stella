@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "oauth-consent": {
+    load: async () => {
+      const { OAuthConsentPlayground } =
+        await import("./-components/oauth-consent-playground");
+      return { default: OAuthConsentPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
@@ -81,11 +88,25 @@ const visualLoaders = {
       return { default: ProtectedPendingSkeleton };
     },
   },
+  "provision-header": {
+    load: async () => {
+      const { ProvisionHeaderPlayground } =
+        await import("./-components/provision-header-playground");
+      return { default: ProvisionHeaderPlayground };
+    },
+  },
   "workspace-table": {
     load: async () => {
       const { WorkspaceTablePlayground } =
         await import("./-components/workspace-table-playground");
       return { default: WorkspaceTablePlayground };
+    },
+  },
+  "public-law-toolbar": {
+    load: async () => {
+      const { PublicLawToolbarPlayground } =
+        await import("./-components/public-law-toolbar-playground");
+      return { default: PublicLawToolbarPlayground };
     },
   },
 } as const satisfies Record<VisualName, VisualLoader>;

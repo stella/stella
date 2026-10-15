@@ -47,10 +47,10 @@ import { createProviderCallError } from "@/api/lib/errors/provider-call-failure"
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
-import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { outputTokensWithinModelLimit } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -255,10 +255,7 @@ const inlineStarter =
     starts.count += 1;
     const admitted = {
       signal: new AbortController().signal,
-      admission: admitFixtureModelDispatch({
-        organizationId,
-        actionKind: "case-law.analysis",
-      }),
+      admission: testModelAdmission(organizationId, "case-law.analysis"),
     };
     const started = await start(admitted);
     await background(admitted, started);

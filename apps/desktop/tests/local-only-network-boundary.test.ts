@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  CONFIRMED_ENTRY_NETWORK_MODULES,
   LOCAL_ONLY_FEATURES,
   LOCAL_ONLY_GATE_MODULES,
   LOCAL_ONLY_SHARED_MODULES,
@@ -12,6 +13,12 @@ import {
 const NATIVE_SOURCE = path.join(import.meta.dir, "../src-tauri/src");
 const NETWORK_PATTERN =
   /\b(?:hyper|ureq|surf)::|\b(?:tokio|std)::net::|\b(?:TcpStream|UdpSocket|ToSocketAddrs)\b/u;
+
+const featureDataReference = (id: string) =>
+  new RegExp(
+    `(?:\\b(?:use|mod)\\s+[^;]*\\b${id}(?:_\\w+)?\\b|\\b${id}(?:_\\w+)?::)`,
+    "u",
+  );
 
 const readNative = async (file: string) =>
   readFile(path.join(NATIVE_SOURCE, file), "utf-8");
@@ -93,11 +100,36 @@ describe("local-only network boundary", () => {
     for (const file of LOCAL_ONLY_GATE_MODULES) {
       const source = await readNative(file);
       for (const feature of LOCAL_ONLY_FEATURES) {
-        expect(source, file).not.toMatch(
-          new RegExp(`\\b${feature.id}(?:_\\w+)?::`, "u"),
-        );
+        expect(source, file).not.toMatch(featureDataReference(feature.id));
       }
       expect(source, file).not.toMatch(/\b(?:local_store|LocalCaller)\b/u);
+    }
+  });
+
+  test("the data boundary detects qualified, grouped, and aliased imports", () => {
+    for (const feature of LOCAL_ONLY_FEATURES) {
+      for (const source of [
+        `use crate::${feature.id} as private_data;`,
+        `use crate::{account::StoredLinkedAccount, ${feature.id}_store::Store};`,
+        `crate::${feature.id}::read();`,
+      ]) {
+        expect(source).toMatch(featureDataReference(feature.id));
+      }
+      expect("use crate::types::DesktopAccountCredential;").not.toMatch(
+        featureDataReference(feature.id),
+      );
+    }
+  });
+
+  test("confirmed-entry network owners cannot access recorded data", async () => {
+    for (const file of CONFIRMED_ENTRY_NETWORK_MODULES) {
+      const source = await readNative(file);
+      for (const feature of LOCAL_ONLY_FEATURES) {
+        expect(source, file).not.toMatch(featureDataReference(feature.id));
+      }
+      expect(source, file).not.toMatch(
+        /\b(?:Activity\w*|RawSegment|Segment|ProposedBlock|DayFile|local_store|foreground_app|idle_time|desktop_telemetry)\b/u,
+      );
     }
   });
 
@@ -109,10 +141,13 @@ describe("local-only network boundary", () => {
     "%s reports fixed error codes only, never what it recorded",
     async (_id, feature) => {
       const featureFiles = [
-        ...(await nativeFiles()).filter((name) =>
-          isFeatureModule(feature, name),
-        ),
-        ...feature.nativeModules.map(({ file }) => file),
+        ...new Set([
+          ...(await nativeFiles()).filter((name) =>
+            isFeatureModule(feature, name),
+          ),
+          ...feature.nativeModules.map(({ file }) => file),
+          ...feature.commandOwners.map(({ module }) => path.basename(module)),
+        ]),
       ];
       expect(featureFiles.length).toBeGreaterThan(0);
       for (const file of featureFiles) {

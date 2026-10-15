@@ -13,14 +13,20 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  /**
+   * Whether the autofix workflow may run `write` and push its outputs. Only a
+   * pure function of committed source qualifies: no network, secrets, clock,
+   * randomness, or untracked machine state. `autofix-pure-generators.test.ts`
+   * records what was checked for the ones enabled after the first pass.
+   */
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -37,7 +43,73 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
+  {
+    id: "cloud-setup",
+    outputKind: "committed",
+    outputs: [".agents/cloud-setup.sh"],
+    inputs: [
+      "stll-toolchain.json",
+      ".node-version",
+      "package.json",
+      "bun.lock",
+      "scripts/generate-cloud-setup.ts",
+      "scripts/generated-artifacts.ts",
+    ],
+    write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
+    check: ["bun", "scripts/generate-cloud-setup.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "api-image-install-tooling",
+    outputKind: "committed",
+    outputs: ["apps/api/Dockerfile"],
+    blocks: [
+      {
+        path: "apps/api/Dockerfile",
+        begin: "# BEGIN GENERATED INSTALL TOOLING",
+        end: "# END GENERATED INSTALL TOOLING",
+      },
+    ],
+    // The closure has relative imports only, so it changes only through
+    // these files; the check fails when the closure outgrows this list.
+    inputs: [
+      "apps/api/Dockerfile",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/sha256/src/bun.ts",
+      "scripts/ci-install-store.ts",
+      "scripts/ci-install.ts",
+      "scripts/docker-source-closure.ts",
+    ],
+    write: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--write-install-tooling",
+    ],
+    check: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--check-install-tooling",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "bun-toolchain",
+    outputKind: "committed",
+    outputs: ["scripts/bun-toolchain.gen.json"],
+    inputs: [
+      "package.json",
+      "scripts/generate-bun-toolchain.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
+    check: ["bun", "scripts/generate-bun-toolchain.ts"],
+    autofix: true,
+    after: [],
+  },
   {
     id: "status-tables",
     outputKind: "committed",
@@ -150,7 +222,11 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "apps/api/src/lib/chat/legislation-result-projections.ts",
+      "apps/api/src/lib/chat/projection-fields.ts",
+      "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
+      "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
       ".oxfmtrc.json",
@@ -195,6 +271,38 @@ export const GENERATORS = [
     after: ["cli-registry"],
   },
   {
+    id: "mcp-app-contracts",
+    outputKind: "committed",
+    outputs: [
+      "packages/mcp-apps/src/shared/generated/schemas.json",
+      "packages/mcp-apps/src/shared/generated/contracts.js",
+      "packages/mcp-apps/src/shared/generated/contracts.d.ts",
+    ],
+    inputs: [
+      "apps/api/scripts/generate-mcp-app-contracts.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
+      "apps/api/src/mcp/app-browser-contracts.ts",
+      "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/mcp/decision-reader-contract.ts",
+      "apps/api/src/mcp/valibot-tool-definition.ts",
+      "apps/api/src/lib/chat/*projection*.ts",
+      "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
+      "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/search/pagination-outcome-projection.ts",
+      "apps/api/src/lib/json-schema/**",
+      "packages/mcp-apps/src/manifest.ts",
+      "packages/api-contract/**",
+      "packages/legal-ast/**",
+      "bun.lock",
+    ],
+    write: ["bun", "--cwd=apps/api", "run", "generate:mcp-app-contracts"],
+    check: null,
+    checkedBy: "MCP app package bundles and shared assets guard",
+    autofix: true,
+    after: [],
+  },
+  {
     id: "api-typecheck-projects",
     outputKind: "committed",
     outputs: [
@@ -229,20 +337,24 @@ export const GENERATORS = [
     id: "mcp-app-bundles",
     outputKind: "committed",
     outputs: [
-      "apps/api/src/mcp/apps/*/generated/app.html.txt",
-      "apps/api/src/mcp/apps/shared/generated/*",
+      "packages/mcp-apps/src/*/generated/app.html.txt",
+      "packages/mcp-apps/src/shared/generated/messages.json",
+      "packages/mcp-apps/src/shared/generated/reader-messages.json",
+      "packages/mcp-apps/src/shared/generated/reader-inputs.json",
+      "packages/mcp-apps/src/shared/generated/style.css",
+      "packages/mcp-apps/src/generated/bundles.ts",
     ],
     inputs: [
-      "apps/api/src/mcp/apps/**",
-      "apps/api/scripts/build-mcp-apps.ts",
-      "apps/api/scripts/lib/mcp-app-html-guard.ts",
-      "apps/api/scripts/lib/mcp-reader-ui-guard.ts",
-      "apps/api/src/mcp/app-contracts.ts",
-      "apps/api/src/lib/chat/projections.ts",
-      "apps/api/src/lib/chat/case-law-result-projections.ts",
-      "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "packages/mcp-apps/src/**",
+      "packages/mcp-apps/scripts/build-mcp-apps.ts",
+      "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
+      "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "packages/scripts/src/react-compiler-options.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
+      "apps/api/src/lib/chat/legislation-result-projections.ts",
+      "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
-      "apps/api/src/lib/chat/projection-fields.ts",
       "apps/web/src/fonts.css",
       "apps/web/src/i18n/langs/*.json",
       "packages/decision-reader/**",
@@ -254,11 +366,11 @@ export const GENERATORS = [
       "packages/fetch/**",
       "bun.lock",
     ],
-    write: ["bun", "--cwd=apps/api", "run", "build:mcp-apps"],
+    write: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
     check: null,
-    checkedBy: "MCP App bundle and shared assets guard",
+    checkedBy: "MCP app package bundles and shared assets guard",
     autofix: true,
-    after: [],
+    after: ["mcp-app-contracts"],
   },
   {
     id: "scan-engine-fixtures",
@@ -319,7 +431,8 @@ export const GENERATORS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--write"],
     check: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--check"],
-    autofix: true,
+    // Its output is a protected baseline: autofix may never write it.
+    autofix: false,
     after: ["capability-catalog", "cli-registry"],
   },
   {
@@ -406,6 +519,7 @@ export const GENERATORS = [
       "apps/web/route-tree.config.ts",
       "apps/web/scripts/generate-route-tree.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
+      "packages/scripts/src/generated-input-identity.ts",
       "scripts/generated-files.ts",
       "packages/scripts/src/generated-files.ts",
       "apps/web/package.json",
@@ -495,7 +609,7 @@ export const GENERATORS = [
       "apps/web/src/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -517,7 +631,7 @@ export const GENERATORS = [
       "apps/landing/src/i18n/messages",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -539,7 +653,7 @@ export const GENERATORS = [
       "packages/transactional/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -565,6 +679,7 @@ export const GENERATORS = [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/text-normalize/src/**",
       ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
@@ -594,7 +709,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
     check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -613,10 +728,16 @@ export const GENERATORS = [
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
       "apps/collab/src/env*.ts",
+      // Read by the generator: build args and catalog helpers.
+      "apps/web/Dockerfile",
+      "apps/api/src/db-url.ts",
+      "apps/api/src/lib/configuration-placeholders.ts",
+      "apps/api/src/lib/rate-limit/budget-config-schema.ts",
+      "packages/runtime-mode/src/index.ts",
     ],
     write: ["bun", "run", "env:generate"],
     check: ["bun", "run", "env:check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -649,6 +770,8 @@ export const GENERATORS = [
       "scripts/selfhost-contract.ts",
       "scripts/selfhost-tool.ts",
       "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "apps/api/src/db/role-names.ts",
       ".oxfmtrc.json",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
@@ -658,7 +781,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "run", "selfhost:generate"],
     check: ["bun", "run", "selfhost:check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -700,6 +823,9 @@ export const GENERATORS = [
     inputs: [
       "packages/catalogue/entries/**",
       "packages/catalogue/scripts/generate-manifest.ts",
+      "packages/catalogue/scripts/catalogue-filesystem.ts",
+      "packages/catalogue/src/schema.ts",
+      "packages/portable-path/src/**",
     ],
     write: ["bun", "--filter", "@stll/catalogue", "generate"],
     check: [
@@ -841,6 +967,29 @@ export const GENERATORS = [
     after: [],
   },
   {
+    // Re-parses the seeded case-law archives through the current parsers
+    // (rows with recorded raw) or applies the read-time AST repairs (rows
+    // without). It fails instead of re-stamping a stored analysis whose
+    // input would change; see apps/api/scripts/reparse-case-law-fixtures.ts.
+    id: "case-law-fixture-reparse",
+    outputKind: "committed",
+    outputs: ["apps/api/scripts/__fixtures__/case-law/*.json.gz"],
+    // The re-parse imports the adapters, which reach most of the API source
+    // and several packages; any of it can shape the output. A test walks the
+    // import graph and fails when a reachable module is not covered here.
+    inputs: [
+      "apps/api/scripts/reparse-case-law-fixtures.ts",
+      "apps/api/scripts/lib/case-law-fixture-reparse.ts",
+      "apps/api/scripts/lib/case-law-fixture-analyses.ts",
+      "apps/api/src/**",
+      "packages/**",
+    ],
+    write: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--write"],
+    check: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "ai-instructions",
     outputKind: "committed",
     outputs: [
@@ -862,6 +1011,10 @@ export const GENERATORS = [
     after: [],
   },
 ] as const satisfies readonly Generator[];
+
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
 
 export const GUARD_A_EXCLUSIONS = [
   {
@@ -920,7 +1073,7 @@ const outputFeedsInput = (output: string, input: string) =>
   matchesGeneratedGlob(output, globWitness(input));
 
 export const generatorsForFiles = (files: readonly string[]) => {
-  const selected = new Set(
+  const selected = new Set<string>(
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&

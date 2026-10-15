@@ -366,6 +366,8 @@
       "chooseList": "Vybrať zoznam",
       "createList": "Vytvoriť zoznam",
       "evidenceList": "Fakty zo zoznamu",
+      "loadSample": "Načítať ukážkový prípad",
+      "loadSampleFailed": "Ukážkový prípad sa nepodarilo načítať",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
     }
@@ -538,6 +540,16 @@
       "createInvoice": "Vytvoriť faktúru",
       "dueDate": "Dátum splatnosti",
       "editInvoice": "Upraviť faktúru",
+      "export": {
+        "accounting": "Import do účtovníctva",
+        "eBilling": "Elektronická fakturácia",
+        "eso9": "Importná tabuľka ESO9 (XLSX)",
+        "exporting": "Pripravujem export…",
+        "isdoc": "E-faktúra ISDOC (ABRA Gen a ďalšie)",
+        "spreadsheets": "Tabuľky",
+        "xlsx": "Faktúry (XLSX)",
+        "xlsxLines": "Položky faktúr (XLSX)"
+      },
       "finalize": "Finalizovať",
       "invoiceDate": "Dátum faktúry",
       "invoiceDetail": "Detail faktúry",
@@ -1276,6 +1288,11 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "history": {
+      "matterUnavailable": "Tento spis nie je dostupný",
+      "older": "Staršie",
+      "previous7Days": "Predchádzajúcich 7 dní"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
@@ -1427,17 +1444,23 @@
     },
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
+    "sendErrorConnectionFailed": "Pripojenie k chatu zlyhalo. Skontrolujte pripojenie a skúste to znova.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
+    "sendErrorNotStarted": "Konverzácia je stále zaneprázdnená. Chvíľu počkajte a skúste to znova.",
+    "sendErrorPreparationFailed": "Správu sa nepodarilo pripraviť. Znova otvorte chat a skúste to znova.",
     "sendErrorProviderBilling": "Poskytovateľ AI nahlásil problém s fakturáciou. Obráťte sa na správcu pracovného priestoru.",
     "sendErrorProviderCredentialsRejected": "Poskytovateľ AI odmietol nastavené prihlasovacie údaje. Požiadajte správcu pracovného priestoru, aby skontroloval kľúč API v nastaveniach organizácie.",
     "sendErrorProviderUnavailable": "AI poskytovateľ je dočasne nedostupný. Skúste to prosím o chvíľu znova.",
     "sendErrorQuotaExhausted": "Kvóta poskytovateľa AI je vyčerpaná. Skúste to o minútu znova alebo sa obráťte na správcu pracovného priestoru.",
     "sendErrorStreamIncomplete": "Odpoveď AI sa prerušila skôr, ako bola dokončená. Skúste to znova.",
+    "sendErrorTimedOut": "Chat neodpovedal včas. Skúste to znova.",
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
+    "signInToChat": "Prihláste sa a chatujte o tomto dokumente",
+    "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše AI zručnosti",
@@ -1768,6 +1791,8 @@
     "citations": "Citácie",
     "clauses": "Ustanovenia",
     "clearDate": "Vymazať dátum",
+    "clearFilters": "Vymazať filtre",
+    "clearSearch": "Vymazať hľadanie",
     "close": "Zavrieť",
     "closeAll": "Zavrieť všetko",
     "closeOthers": "Zavrieť ostatné",
@@ -1798,6 +1823,7 @@
       "nextDecade": "Nasledujúce desaťročie",
       "nextMonth": "Nasledujúci mesiac",
       "nextYear": "Nasledujúci rok",
+      "outOfRange": "Vyberte dátum v povolenom rozsahu.",
       "previousDecade": "Predchádzajúce desaťročie",
       "previousMonth": "Predchádzajúci mesiac",
       "previousYear": "Predchádzajúci rok",
@@ -2099,28 +2125,27 @@
     "showAllPermissions": "{count, plural, one {Zobraziť povolenie} few {Zobraziť všetky # povolenia} many {Zobraziť všetkých # povolení} other {Zobraziť všetkých # povolení}}",
     "signedInAs": "Prihlásený ako <email>{accountEmail}</email>",
     "summaryAdminRead": "protokol auditu",
-    "summaryAdminWrite": "členovia a nastavenia organizácie vrátane odstraňovania",
-    "summaryBillingWrite": "časové záznamy vrátane odstraňovania",
-    "summaryChat": "chaty vrátane odstraňovania",
-    "summaryContactsWrite": "kontakty vrátane odstraňovania",
-    "summaryDocumentsWrite": "dokumenty vrátane odstraňovania",
+    "summaryAdminWrite": "členovia a nastavenia organizácie",
+    "summaryBillingWrite": "časové záznamy",
+    "summaryChat": "chaty",
+    "summaryContactsWrite": "kontakty",
+    "summaryDocumentsWrite": "dokumenty",
     "summaryExternalMcps": "pripojené integrácie",
-    "summaryFeedback": "spätná väzba",
-    "summaryKnowledgeWrite": "vzorové ustanovenia a playbooky vrátane odstraňovania ustanovení",
-    "summaryLawRead": "verejné právne predpisy a judikatúru",
-    "summaryLineChange": "<group>Môže meniť:</group> {items} ({count})",
+    "summaryKnowledgeWrite": "vzorové ustanovenia a playbooky",
+    "summaryLawRead": "verejné právne predpisy a judikatúra",
+    "summaryLineChange": "<group>Vytváranie a úpravy:</group> {items}",
     "summaryLineOther": "<group>Ďalej:</group> {items}",
-    "summaryLineRead": "<group>Môže čítať:</group> {items} ({count})",
-    "summaryMattersWrite": "spisy a úlohy vrátane odstraňovania",
-    "summaryOfflineAccess": "trvalé prihlásenie",
-    "summaryOnboarding": "jurisdikcie praxe",
+    "summaryLineRead": "<group>Čítanie:</group> {items}",
+    "summaryLineUse": "<group>Používanie:</group> {items}",
+    "summaryMattersWrite": "spisy a úlohy",
     "summaryProfile": "profil",
     "summaryRead": "dokumenty, spisy a kontakty",
     "summaryReadAnonymized": "anonymizované dokumenty a spisy",
     "summarySearch": "vyhľadávanie",
     "summarySearchAnonymized": "anonymizované vyhľadávanie",
-    "summarySkills": "zručnosti vrátane odstraňovania",
-    "summaryTemplates": "vzory dokumentov vrátane odstraňovania",
+    "summarySkills": "zručnosti",
+    "summaryStaySignedIn": "Zostať prihlásený",
+    "summaryTemplates": "vzory dokumentov",
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentov",
     "title": "Autorizácia prístupu",
     "unverifiedApp": "Neoverená aplikácia",
@@ -2901,6 +2926,7 @@
     "checkingDocxEditDescription": "stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte súbor na vloženie číslovaného odkazu na dôkaz.",
+    "collaborationSnapshotRecovered": "Uloženú kópiu na spoluprácu sa nepodarilo znova otvoriť. Miestnosť bola obnovená z posledného uloženého dokumentu; neuložené zmeny sa mohli stratiť.",
     "comment": "Komentár",
     "comments": {
       "addPlaceholder": "Pridať komentár...",
@@ -3596,6 +3622,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Vytvorte playbook na kontrolu zmlúv pozíciu po pozícii na základe vašich predtým podpísaných zmlúv, krátkeho rozhovoru a bežných trhových štandardov.",
+          "name": "Vytvoriť playbook"
+        }
+      },
       "builtInSection": "Vstavané zručnosti",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
@@ -4123,7 +4155,6 @@
     "appsSubtitle": "stella funguje aj mimo prehliadača: v aplikácii pre počítač a vo vašom AI asistentovi. K tomuto nastaveniu sa môžete kedykoľvek neskôr vrátiť.",
     "appsTitle": "Získajte stellu všade",
     "catalogueAlwaysOn": "Vždy zapnuté",
-    "catalogueClearSearch": "Vymazať hľadanie",
     "catalogueCommunityHeading": "Ostatné",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi}}",
     "catalogueDetailAbout": "O nástroji",
@@ -4310,6 +4341,8 @@
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
       },
+      "showInTitle": "Zobraziť číslo vedľa názvu spisu",
+      "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
       "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
@@ -4492,6 +4525,8 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",
     "continueInChat": "Pokračovať v chate",
     "dateFrom": "Od",
     "dateTo": "Do",
@@ -4941,17 +4976,22 @@
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
     "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
+    "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
@@ -4967,7 +5007,6 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
@@ -5641,7 +5680,7 @@
       "title": "Kopírovať do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Názov spisu",
       "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
@@ -6093,15 +6132,12 @@
       "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobný"
-    },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "noClient": "Žiadny klient nepriradený",
+      "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
         "co_counsel": "Spolupracujúci advokát",
@@ -6384,7 +6420,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
-      "clearFilters": "Vymazať filtre",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",

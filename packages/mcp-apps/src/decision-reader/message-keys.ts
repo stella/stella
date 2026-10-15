@@ -1,0 +1,30 @@
+import type { ReaderMessageKey } from "@stll/decision-reader/reader-message-types";
+
+export const READER_MESSAGE_KEYS = {
+  "statutes.diffRemoved": "statutes.diffRemoved",
+  "statutes.diffInserted": "statutes.diffInserted",
+  "common.copyLink": "common.copyLink",
+  "common.back": "common.back",
+  "caseLaw.viewer.legalSentence": "caseLaw.viewer.legalSentence",
+  "caseLaw.viewer.abstract": "caseLaw.viewer.abstract",
+  "folio.comment": "folio.comment",
+  "legalReader.annotations.highlight": "legalReader.annotations.highlight",
+  "caseLaw.reader.headMatter": "caseLaw.reader.headMatter",
+  "caseLaw.notesFilter.ai": "caseLaw.notesFilter.ai",
+  "common.court": "common.court",
+  "statutes.wordingVersionUnknown": "statutes.wordingVersionUnknown",
+  "statutes.openProvision": "statutes.openProvision",
+  "statutes.provisionTextUnavailable": "statutes.provisionTextUnavailable",
+  "statutes.showCitedPartOnly": "statutes.showCitedPartOnly",
+  "statutes.showFullProvision": "statutes.showFullProvision",
+  "aiDisclosure.caseLaw": "aiDisclosure.caseLaw",
+} as const satisfies Record<ReaderMessageKey, ReaderMessageKey>;
+
+export const READER_TEMPLATE_KEYS = [
+  "caseLaw.viewer.textUnavailable",
+  "caseLaw.reader.documentUpdated",
+  "caseLaw.reader.sourceAttribution",
+  "caseLaw.viewer.dissentByline",
+  "statutes.provisionEffectiveFrom",
+  "statutes.provisionPartTextUnavailable",
+] as const;

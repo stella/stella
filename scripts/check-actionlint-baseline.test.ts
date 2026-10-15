@@ -38,10 +38,15 @@ const runFixture = ({
     const baselinePath = path.join(root, BASELINE_PATHS.actionlint);
     mkdirSync(path.dirname(baselinePath), { recursive: true });
     writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+    mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(root, ".github/workflows/example.yml"),
+      "jobs: {}\n",
+    );
     const binary = path.join(root, "fake-actionlint");
     writeFileSync(
       binary,
-      `#!/bin/sh\n[ "$#" -eq 2 ] && [ "$1" = '-format' ] && [ "$2" = '{{json .}}' ] || exit 99\ncat <<'JSON'\n${JSON.stringify(findings)}\nJSON\nexit ${status}\n`,
+      `#!/bin/sh\n[ "$#" -eq 5 ] && [ "$1" = '-format' ] && [ "$2" = '{{json .}}' ] && [ "$3" = '-stdin-filename' ] && [ "$4" = '.github/workflows/example.yml' ] && [ "$5" = '-' ] || exit 99\ncat >/dev/null\ncat <<'JSON'\n${JSON.stringify(findings)}\nJSON\nexit ${status}\n`,
     );
     chmodSync(binary, 0o755);
     const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], {

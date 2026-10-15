@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { Temporal } from "@stll/time";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -238,9 +240,15 @@ export const overviewOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: workspacesKeys.overview(workspaceId),
     queryFn: async ({ signal }) => {
+      // The agenda starts at the reader's own date, read at fetch time; the
+      // overview drops deadlines that pass before the next fetch.
+      const agendaFrom = Temporal.Now.instant()
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate()
+        .toString();
       const response = await api
         .workspaces({ workspaceId })
-        .overview.get({ fetch: { signal } });
+        .overview.get({ query: { agendaFrom }, fetch: { signal } });
 
       return unwrapEden(response);
     },

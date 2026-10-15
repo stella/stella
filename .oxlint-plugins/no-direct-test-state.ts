@@ -6,8 +6,10 @@ import {
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { BASELINE_PATHS } from "../scripts/baseline-paths.ts";
-import { parseTestStateBaseline } from "../scripts/check-test-state-baseline.ts";
+import { parseTestBaseline } from "../scripts/check-test-state-baseline.ts";
 import {
   type ScopeContext,
   type FilenameContext,
@@ -32,7 +34,7 @@ const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const baselineCounts = () => {
   const text = readFileSync(path.join(REPO_ROOT, BASELINE_PATH), "utf-8");
   const counts = new Map<string, number>();
-  for (const member of parseTestStateBaseline(text, BASELINE_PATH)) {
+  for (const member of parseTestBaseline(text, BASELINE_PATH)) {
     const file = member.slice(0, member.lastIndexOf("::"));
     counts.set(file, (counts.get(file) ?? 0) + 1);
   }
@@ -253,7 +255,7 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            filename = path.relative(REPO_ROOT, filenameForContext(context));
+            filename = repoRelativePath(REPO_ROOT, filenameForContext(context));
             mutations = [];
             hasFixture = false;
             concurrent = [];

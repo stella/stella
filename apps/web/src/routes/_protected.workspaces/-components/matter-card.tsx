@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { FileIcon } from "@stll/ui/icons";
+import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -21,7 +22,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
-import { getMatterColor } from "@/lib/matter-colors";
+import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
@@ -47,6 +48,7 @@ export const MatterCard = ({
   hideClientName,
 }: MatterCardProps) => {
   const t = useTranslations();
+  const showMatterNumber = useMatterNumberingEnabled();
 
   const lastActivityAt = formatRelativeTime(workspace.lastActivityAt);
   const [previewEnabled, setPreviewEnabled] = useState(false);
@@ -134,16 +136,18 @@ export const MatterCard = ({
                   </Link>
                 )}
               </h2>
-              {rename.status !== "editing" && workspace.reference && (
-                <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 font-mono text-xs">
-                  <span
-                    aria-hidden
-                    className="size-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getMatterColor(workspace.id) }}
-                  />
-                  {workspace.reference}
-                </span>
-              )}
+              {showMatterNumber &&
+                rename.status !== "editing" &&
+                workspace.reference && (
+                  <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 font-mono text-xs">
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getMatterColor(workspace.id) }}
+                    />
+                    {workspace.reference}
+                  </span>
+                )}
             </div>
 
             {/* Line 1.5: client name (flat view only) */}

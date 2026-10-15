@@ -1,6 +1,8 @@
 import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
 import { hasSeparateTableTarget } from "@/api/lib/bilingual/rows";
@@ -354,6 +356,10 @@ export const applyFormattedBilingualTranslations = async (
       applyRow(doc, paragraphs, row, translation);
     }
   }
-  archive.zip.file(DOCUMENT_PART, slimdom.serializeToWellFormedString(doc));
+  writeZipEntry(
+    archive.zip,
+    DOCUMENT_PART,
+    slimdom.serializeToWellFormedString(doc),
+  );
   return await archive.zip.generateAsync({ type: "arraybuffer" });
 };

@@ -13,9 +13,7 @@
 //   path.resolve(root, input).indexOf(root) === 0
 //
 // Allowed:
-//   candidate.startsWith(`${root}${path.sep}`)
-//   const relative = path.relative(root, candidate)
-//   !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+//   isPathInside(root, candidate) from @stll/portable-path
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Variable } from "@oxlint/plugins";
@@ -107,8 +105,7 @@ export default eslintCompatPlugin({
         messages: {
           noPathPrefixContainment:
             "A bare path prefix also accepts sibling paths such as " +
-            "'<root>-backup'. Use path.relative() with '..' and absolute-path " +
-            "checks, or an approved boundary-aware containment helper.",
+            "'<root>-backup'. Use isPathInside() from @stll/portable-path.",
         },
       },
       createOnce(context) {
