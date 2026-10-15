@@ -1846,7 +1846,7 @@ describe("detect-e2e-changes", () => {
           )) {
             expect({
               location,
-              callee: `${uses}#${scope}`,
+              callee: `${uses}#${String(scope)}`,
               name,
               granted: granted[name] ?? "none",
               covers: levelOf(granted[name] ?? "none") >= levelOf(level),
