@@ -8,7 +8,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 // Re-record by asking the same question on a seeded stack and replacing it.
 export const CHAT_CITATIONS_CASSETTE = [
   {
-    createdAt: "2026-10-15T16:27:07.174Z",
+    createdAt: new Date("2026-10-15T16:27:07.174Z"),
     edited: false,
     id: "01a14063-8701-7101-8768-774f6e586a6b",
     role: "user",
@@ -22,7 +22,7 @@ export const CHAT_CITATIONS_CASSETTE = [
     ],
   },
   {
-    createdAt: "2026-10-15T16:27:50.143Z",
+    createdAt: new Date("2026-10-15T16:27:50.143Z"),
     edited: false,
     id: "01a14063-899e-72ff-9165-ae0a26f7a85a",
     metadata: {

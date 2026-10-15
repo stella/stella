@@ -108,7 +108,7 @@ const QuoteAttribution = ({
         })}`;
   // The decision opens beside the answer, at the paragraph the quotation
   // comes from; modifier clicks keep the link's native behaviour.
-  const openAtQuote = (event: MouseEvent<HTMLAnchorElement>) => {
+  const openAtQuote = (event: MouseEvent<HTMLElement>) => {
     if (!isPlainPrimaryClick(event)) {
       return;
     }

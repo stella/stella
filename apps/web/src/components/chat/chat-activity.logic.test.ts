@@ -6,7 +6,14 @@ import {
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
+import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+
+// Fixtures cross the same projection boundary the thread renders through.
+const projectParts = (parts: ChatMessage["parts"]) =>
+  projectCanonicalChatUIMessages([
+    { id: "message", parts, role: "assistant" },
+  ]).flatMap((message) => message.parts);
 
 describe("chat tool activity", () => {
   test("classifies evidence gathering as research", () => {
@@ -63,6 +70,7 @@ describe("process summary", () => {
         id: "read",
         name: "read_document" as const,
         arguments: "{}",
+        input: {},
         state: "complete" as const,
         output: { text: "11.3 Aggregate liability" },
       },
@@ -71,6 +79,7 @@ describe("process summary", () => {
         id: "read-failed",
         name: "read_section" as const,
         arguments: "{}",
+        input: {},
         state: "complete" as const,
         output: { error: "Renumbered" },
       },
@@ -79,6 +88,7 @@ describe("process summary", () => {
         id: "still-running",
         name: "web_search" as const,
         arguments: "{}",
+        input: {},
         state: "input-complete" as const,
       },
       {
@@ -86,6 +96,7 @@ describe("process summary", () => {
         id: "edit",
         name: "suggest_changes" as const,
         arguments: "{}",
+        input: {},
         state: "complete" as const,
         output: { success: true },
       },
@@ -94,12 +105,13 @@ describe("process summary", () => {
         id: "ask",
         name: "ask-user" as const,
         arguments: "{}",
+        input: {},
         state: "complete" as const,
         output: { answers: [] },
       },
     ] satisfies ChatMessage["parts"];
 
-    expect(countProcessWork(parts)).toEqual(
+    expect(countProcessWork(projectParts(parts))).toEqual(
       new Map([
         ["research", 1],
         ["artifact", 1],
@@ -120,6 +132,7 @@ describe("thread activity", () => {
           id: "failed-search",
           name: "mcp__registry__lookup_company" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: { error: "Unavailable" },
         },
@@ -128,6 +141,7 @@ describe("thread activity", () => {
           id: "successful-search",
           name: "web_search" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: {
             jurisdiction: "global" as const,
@@ -157,6 +171,7 @@ describe("thread activity", () => {
               id: "failed-mcp-search",
               name: "mcp__registry__lookup_company" as const,
               arguments: "{}",
+              input: {},
               state: "complete" as const,
               output: { content: [], isError: true },
             },

@@ -6,8 +6,10 @@ import { RotateCcwIcon } from "@stll/ui/icons";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
 import type {
   ChatToolCallPart,
+  ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -40,7 +42,9 @@ const searchHistory = (
   arguments: JSON.stringify({ query: "indemnity cap" }),
   state,
   input: { query: "indemnity cap" },
-  ...(state === "complete" ? { output: { results: [] } } : {}),
+  ...(state === "complete"
+    ? { output: { query: "indemnity cap", results: [] } }
+    : {}),
 });
 
 const readSection = (
@@ -140,10 +144,11 @@ const LAST_FRAME = FRAMES.length - 1;
 const THREAD_FRAME_CLASS =
   "bg-popover/40 flex flex-col gap-3 rounded-2xl border p-4";
 
-const toMessages = (frame: Frame): PersistedChatMessage[] => [
-  QUESTION,
-  { id: "status-assistant-1", parts: frame.parts, role: "assistant" },
-];
+const toMessages = (frame: Frame): ChatUIMessage[] =>
+  projectCanonicalChatUIMessages([
+    QUESTION,
+    { id: "status-assistant-1", parts: frame.parts, role: "assistant" },
+  ]);
 
 const noop = () => {
   /* no-op in playground */

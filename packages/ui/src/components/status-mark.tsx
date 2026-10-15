@@ -7,7 +7,7 @@ type StatusMarkStatus = "pending" | "running" | "done" | "failed";
 type StatusMarkProps = {
   status: StatusMarkStatus;
   /** Accessible name; omit when adjacent text already states the status. */
-  label?: string;
+  label?: string | undefined;
   className?: string;
 };
 

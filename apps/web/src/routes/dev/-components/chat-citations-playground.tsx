@@ -8,7 +8,11 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatUIMessage,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
@@ -19,7 +23,7 @@ const PART_INTERVAL_MS = 700;
 const TEXT_CHUNKS = 24;
 const TEXT_CHUNK_MS = 90;
 
-type Frame = { isGenerating: boolean; messages: PersistedChatMessage[] };
+type Frame = { isGenerating: boolean; messages: ChatUIMessage[] };
 
 const [QUESTION, ANSWER] = CHAT_CITATIONS_CASSETTE;
 
@@ -30,10 +34,8 @@ const buildFrames = (): Frame[] => {
     return [];
   }
   const frames: Frame[] = [];
-  const withParts = (parts: PersistedChatMessage["parts"]) => [
-    QUESTION,
-    { ...ANSWER, parts },
-  ];
+  const withParts = (parts: PersistedChatMessage["parts"]) =>
+    projectCanonicalChatUIMessages([QUESTION, { ...ANSWER, parts }]);
   const textIndex = ANSWER.parts.findIndex((part) => part.type === "text");
   const processParts =
     textIndex === -1 ? ANSWER.parts : ANSWER.parts.slice(0, textIndex);
@@ -56,7 +58,10 @@ const buildFrames = (): Frame[] => {
       });
     }
   }
-  frames.push({ isGenerating: false, messages: CHAT_CITATIONS_CASSETTE });
+  frames.push({
+    isGenerating: false,
+    messages: projectCanonicalChatUIMessages(CHAT_CITATIONS_CASSETTE),
+  });
   return frames;
 };
 
