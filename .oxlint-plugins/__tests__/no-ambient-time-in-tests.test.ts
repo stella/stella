@@ -26,6 +26,67 @@ describe(RULE, () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  test.each([
+    "Date();",
+    "Date(2020);",
+    "globalThis.Date();",
+    "globalThis.Date(2020);",
+  ])(
+    "rejects Date function calls even with explicit arguments: %s",
+    async (source) => {
+      expect(await lint(source)).toEqual([1]);
+    },
+  );
+
+  test("follows Date function aliases and destructured constructors", async () => {
+    expect(
+      await lint(
+        [
+          "const clock = Date;",
+          "clock();",
+          "clock(2020);",
+          "const { Date: Clock } = globalThis;",
+          "Clock();",
+          "Clock(2020);",
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 5, 6]);
+  });
+
+  test("follows called, applied, and bound Date functions without treating bound arguments as fixed dates", async () => {
+    expect(
+      await lint(
+        [
+          "Date.call(null);",
+          "Date.call(null, 2020);",
+          "Date.apply(null, []);",
+          "Date.apply(null, [2020]);",
+          "const clock = Date.bind(null);",
+          "clock();",
+          "clock(2020);",
+          "const fixedArgument = Date.bind(null, 2020);",
+          "fixedArgument();",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4, 6, 7, 9]);
+  });
+
+  test("accepts fixed Date construction and shadowed Date function aliases", async () => {
+    expect(
+      await lint(
+        [
+          "new Date(2020);",
+          "const Clock = Date; new Clock(2020);",
+          "const { Date: GlobalClock } = globalThis; new GlobalClock(2020);",
+          "const Fixed = Date.bind(null, 2020); new Fixed();",
+          "const shadowDate = (Date) => { Date(); Date(2020); const clock = Date; clock(); clock(2020); };",
+          "const shadowRoot = (globalThis) => { globalThis.Date(); const { Date: Clock } = globalThis; Clock(2020); };",
+          "void [shadowDate, shadowRoot];",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("follows aliases, destructuring, nested bindings and later assignments", async () => {
     expect(
       await lint(

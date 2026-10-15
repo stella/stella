@@ -136,7 +136,18 @@ export const createTimeResolver = (
     return [];
   };
 
-  const paths = (input: unknown, seen = new Set<Variable>()): string[] => {
+  type Invocation = "call" | "construct";
+  type ResolvePathsOptions = {
+    seen?: ReadonlySet<Variable>;
+    invocation?: Invocation;
+  };
+  const paths = (
+    input: unknown,
+    {
+      seen = new Set<Variable>(),
+      invocation = "call",
+    }: ResolvePathsOptions = {},
+  ): string[] => {
     const node = unwrapExpression(input);
     if (node === null) {
       return [];
@@ -149,8 +160,9 @@ export const createTimeResolver = (
       const callee = unwrapExpression(node.callee);
       return callee?.type === "MemberExpression" &&
         memberPropertyName(callee) === "bind"
-        ? paths(callee.object, seen).filter(
+        ? paths(callee.object, { seen, invocation }).filter(
             (path) =>
+              invocation === "call" ||
               path !== "Date" ||
               !Array.isArray(node.arguments) ||
               node.arguments.length <= 1,
@@ -162,7 +174,7 @@ export const createTimeResolver = (
       if (property === null) {
         return [];
       }
-      return paths(node.object, seen).map((base) =>
+      return paths(node.object, { seen, invocation }).map((base) =>
         memberPath({ base, property }),
       );
     }
@@ -193,7 +205,7 @@ export const createTimeResolver = (
       if (properties === null) {
         return;
       }
-      for (const base of paths(source, nextSeen)) {
+      for (const base of paths(source, { seen: nextSeen, invocation })) {
         let resolved = base;
         for (const property of properties) {
           resolved = memberPath({ base: resolved, property });
@@ -225,7 +237,8 @@ export const createTimeResolver = (
     if (node?.type !== "CallExpression" && node?.type !== "NewExpression") {
       return false;
     }
-    return callablePaths(node.callee).some((clock) => {
+    const invocation = node.type === "NewExpression" ? "construct" : "call";
+    return callablePaths(node.callee, invocation).some((clock) => {
       if (node.type === "NewExpression") {
         return (
           clock === "Date" &&
@@ -234,6 +247,7 @@ export const createTimeResolver = (
         );
       }
       return (
+        clock === "Date" ||
         clock === "Date.now" ||
         clock === "performance.now" ||
         /^Temporal\.Now\.[^.]+$/u.test(clock)
@@ -241,8 +255,10 @@ export const createTimeResolver = (
     });
   };
 
-  const callablePaths = (input: unknown) =>
-    paths(input).map((path) => path.replace(/\.(?:call|apply)$/u, ""));
+  const callablePaths = (input: unknown, invocation: Invocation = "call") =>
+    paths(input, { invocation }).map((path) =>
+      path.replace(/\.(?:call|apply)$/u, ""),
+    );
 
   return { isAmbientRead, globalPaths: paths, callablePaths };
 };
