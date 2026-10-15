@@ -1294,6 +1294,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {and # more} other {and # more}}"
     },
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.",
     "improvePrompt": "Improve prompt",
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.",
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.",

@@ -27,8 +27,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -52,10 +50,10 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
-  COMPACTION_GENERATION_POLICY,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
+  compactionGenerationRequest,
   estimateTextTokens,
   renderTaggedValue,
   safeStringify,
@@ -164,7 +162,6 @@ type RunChatThreadCompactionOptions = {
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
-  reasoningEffort?: ReasoningEffort | undefined;
   safeDb: SafeDb;
   /** Test seam. Defaults to the real structured-summary model call. */
   summarize?: ChatCompactionSummarize | undefined;
@@ -693,14 +690,12 @@ const createModelSummarizer =
         role: "chat",
         scopeKey: null,
       }),
-      ...COMPACTION_GENERATION_POLICY,
+      ...compactionGenerationRequest(renderIncrementalCompactionPrompt(prompt)),
       modelId: options.modelId,
       organizationId: options.organizationId,
       admission: options.admission,
       orgAIConfig: options.orgAIConfig,
       managedAIResidency: options.managedAIResidency,
-      reasoningEffort: options.reasoningEffort,
-      prompt: renderIncrementalCompactionPrompt(prompt),
       role: "chat",
       serviceTier: "batch",
       system: CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,

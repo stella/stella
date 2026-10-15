@@ -39,6 +39,7 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
+import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import type {
   PersistedToolCallPart,
   PersistedToolResultPart,
@@ -173,6 +174,9 @@ export type ChatMessageMetadata = {
    * deliberately does not accept this field. */
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;
   anonRestorations?: ChatAnonRestorationsData | undefined;
+  /** Server-owned: what the answer's context left out (`context-notice.ts`).
+   * Incoming client metadata deliberately does not accept this field. */
+  contextNotice?: ChatContextNotice | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;

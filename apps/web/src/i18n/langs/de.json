@@ -1294,6 +1294,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
     },
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",

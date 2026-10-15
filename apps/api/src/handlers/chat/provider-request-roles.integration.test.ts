@@ -235,9 +235,6 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   return threadId;
 };
 
-const effortOf = (effort: EffortChoice) =>
-  effort === "default" ? undefined : effort;
-
 const noAudit = async () => await Promise.resolve();
 
 /** A skill of the organization's owner, with its first revision. */
@@ -355,7 +352,7 @@ const ROLE_REQUESTS = {
   "pre-stream-compaction": {
     file: "handlers/chat/compaction.ts",
     role: "chat",
-    settings: { caching: false, effort: true, sendMode: true },
+    settings: { caching: false, effort: false, sendMode: true },
     run: async (run) => {
       await compactChatMessagesForModel({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -366,7 +363,6 @@ const ROLE_REQUESTS = {
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         preserveTokens: 1,
-        reasoningEffort: effortOf(run.effort),
         tenantWorkspaceIds: [],
         triggerTokens: 1,
       });
@@ -397,7 +393,7 @@ const ROLE_REQUESTS = {
   "thread-compaction": {
     file: "lib/chat/thread-compaction.ts",
     role: "chat",
-    settings: { caching: false, effort: true, sendMode: false },
+    settings: { caching: false, effort: false, sendMode: false },
     run: async (run) => {
       await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -407,7 +403,6 @@ const ROLE_REQUESTS = {
         organizationId: ids.orgA,
         admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
-        reasoningEffort: effortOf(run.effort),
         safeDb: safeDbOf(),
         threadId: await seedThread(),
         triggerTokens: 1,

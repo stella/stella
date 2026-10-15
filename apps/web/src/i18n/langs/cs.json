@@ -1294,6 +1294,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
     },
+    "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",

@@ -1294,6 +1294,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
     },
+    "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",

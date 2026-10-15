@@ -1294,6 +1294,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
     },
+    "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",

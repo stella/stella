@@ -109,8 +109,27 @@ export class ProviderCallError extends HandlerError {
   }
 }
 
+/**
+ * How a model run ended, as a failure records it for telemetry. `finish` is
+ * the finish the run was graded by (`unfinished` when the stream ended
+ * without one), and `providerStopReason` the stop reason the provider
+ * reported, when its table lists it (`provider-stop-reasons.ts`).
+ */
+export type ModelRunFinish = {
+  finish:
+    | "content_filter"
+    | "length"
+    | "none"
+    | "stop"
+    | "tool_calls"
+    | "unfinished";
+  providerStopReason?: string | undefined;
+};
+
 type ModelRunErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
+  /** The finish the run ended with, where one was observed. */
+  finish?: ModelRunFinish | undefined;
 };
 
 /**
@@ -122,15 +141,17 @@ type ModelRunErrorOptions = {
 export class ModelRunError extends HandlerError {
   readonly provider: ResolvedTanStackTextModel["provider"];
   readonly keySource: ResolvedTanStackTextModel["keySource"];
+  readonly finish: ModelRunFinish | undefined;
 
   constructor(
-    { model }: ModelRunErrorOptions,
+    { model, finish }: ModelRunErrorOptions,
     message: string = MODEL_RUN_ERROR_MESSAGE,
   ) {
     super({ message, status: 502 });
     this.name = "ModelRunError";
     this.provider = model.provider;
     this.keySource = model.keySource;
+    this.finish = finish;
   }
 }
 
@@ -152,6 +173,45 @@ export class ModelOutputIncompleteError extends ModelRunError {
   constructor(options: ModelRunErrorOptions) {
     super(options, MODEL_OUTPUT_INCOMPLETE_MESSAGE);
     this.name = "ModelOutputIncompleteError";
+  }
+}
+
+export const MODEL_OUTPUT_MODERATED_MESSAGE =
+  "The AI provider stopped the answer under its content policy";
+
+/**
+ * The provider filtered the model's answer (a `content_filter` finish): the
+ * provider's policy decision, not a fault of this service, and not an answer
+ * a caller can use.
+ */
+export class ModelOutputModeratedError extends ModelRunError {
+  static {
+    declareFailureClass(this, "model_output_moderated");
+  }
+
+  constructor(options: ModelRunErrorOptions) {
+    super(options, MODEL_OUTPUT_MODERATED_MESSAGE);
+    this.name = "ModelOutputModeratedError";
+  }
+}
+
+export const MODEL_RUN_UNFINISHED_MESSAGE =
+  "The AI model ended its run without an answer";
+
+/**
+ * A text run that ended without a finished answer: it stopped to call a tool
+ * the run did not offer, its provider reported no finish, or its stream
+ * closed before the finish. The provider stopped short of an answer, so it is
+ * graded as an incomplete provider stream.
+ */
+export class ModelRunUnfinishedError extends ModelRunError {
+  static {
+    declareFailureClass(this, "provider_stream_incomplete");
+  }
+
+  constructor(options: ModelRunErrorOptions) {
+    super(options, MODEL_RUN_UNFINISHED_MESSAGE);
+    this.name = "ModelRunUnfinishedError";
   }
 }
 

@@ -20,6 +20,10 @@ import type {
   ContinuationThinking,
 } from "@/api/lib/chat/closed-transcript";
 import {
+  requestedOutputCeiling,
+  spentOutputCeiling,
+} from "@/api/lib/chat/output-ceiling";
+import {
   refuseTurnPausingRequest,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
@@ -107,6 +111,30 @@ export const isOutputCeilingStopReport = ({
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
   isOutputCeilingStopReport(chunk);
 
+type RunFinishReason = RunFinishedChunk["finishReason"];
+
+/**
+ * Whether a finish keeps its own reading when the response also spent its
+ * output ceiling. A clean stop is the provider saying the answer ended, and
+ * a tool call is a turn the engine continues; every other finish (a
+ * filtered response, none reported) is read as the ceiling that cut it.
+ */
+const finishStandsAgainstCeiling = (reason: RunFinishReason): boolean => {
+  switch (reason) {
+    case "stop":
+    case "tool_calls":
+    case "length":
+      return true;
+    case "content_filter":
+    case null:
+    case undefined:
+      return false;
+    default:
+      reason satisfies never;
+      return panic(`Unhandled finish reason: ${String(reason)}`);
+  }
+};
+
 /**
  * A response cut off at the output ceiling, read as a `length` finish.
  *
@@ -122,10 +150,17 @@ const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
  * and then finishes anyway (Gemini) has its closing events pass in order, and
  * its trailing `RUN_FINISHED` gives the finish the usage the stop lacked.
  *
+ * Given the request's `ceiling`, the usage a terminal event reports is
+ * evidence too: a response that spent the whole ceiling was cut by it, even
+ * where the provider labels the stop otherwise (a filtered or unfinished
+ * response, a reason it does not list) or ends without a reason. A clean
+ * `stop` or a tool call keeps its own finish.
+ *
  * @yields Every chunk of the run, with a ceiling stop read as `length`.
  */
 export const readOutputCeilingStopAsLength = async function* (
   chunks: AsyncIterable<StreamChunk>,
+  { ceiling }: { ceiling?: number | undefined } = {},
 ): AsyncIterable<StreamChunk> {
   let runIdentity: { runId: string; threadId: string } | undefined;
   let held: RunFinishedChunk | undefined;
@@ -139,7 +174,7 @@ export const readOutputCeilingStopAsLength = async function* (
         if (
           held !== undefined ||
           runIdentity === undefined ||
-          !isOutputCeilingStop(chunk)
+          !(isOutputCeilingStop(chunk) || spentOutputCeiling(chunk, ceiling))
         ) {
           break;
         }
@@ -159,6 +194,13 @@ export const readOutputCeilingStopAsLength = async function* (
       }
       case EventType.RUN_FINISHED: {
         if (held === undefined) {
+          if (
+            !finishStandsAgainstCeiling(chunk.finishReason) &&
+            spentOutputCeiling(chunk, ceiling)
+          ) {
+            yield { ...chunk, finishReason: "length" };
+            continue;
+          }
           break;
         }
         if (held.usage === undefined && chunk.usage !== undefined) {
@@ -593,6 +635,12 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
               }),
             ),
           ),
+          {
+            ceiling:
+              provider === undefined
+                ? undefined
+                : requestedOutputCeiling(provider, options.modelOptions),
+          },
         ),
         options,
       ),
