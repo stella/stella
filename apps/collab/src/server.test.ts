@@ -1,6 +1,6 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { describe, expect, test } from "bun:test";
-import { applyUpdate, Doc } from "yjs";
+import { applyUpdate, Doc, encodeStateAsUpdate } from "yjs";
 
 import {
   FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
@@ -8,6 +8,8 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
+import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
+import { FetchBoundaryError } from "@stll/errors";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCollabServer } from "./server";
@@ -36,6 +38,8 @@ type FakeStellaApi = {
   refreshRequests: () => number;
   releaseFirstStore: () => void;
   setGeneration: (generation: number) => void;
+  setAuthorizedGeneration: (generation: number) => void;
+  setLoadResponse: (response: FolioCollabSnapshotLoadResponse) => void;
   snapshotAuthorizationHeaders: () => (string | null)[];
   storeRequestBodies: () => Record<string, unknown>[];
   storeRequests: () => number;
@@ -132,6 +136,7 @@ const createFakeStellaApi = ({
   const authorizeRequestBodies: Record<string, unknown>[] = [];
   const heartbeatRequestBodies: Record<string, unknown>[] = [];
   const loadRequestBodies: Record<string, unknown>[] = [];
+  let loadResponse: FolioCollabSnapshotLoadResponse | undefined;
   let latestSnapshotBase64 = initialSnapshotBase64;
   let latestSnapshotRevision = initialSnapshotBase64 === null ? 0 : 1;
   let refreshRequests = 0;
@@ -139,7 +144,7 @@ const createFakeStellaApi = ({
   const storeRequestBodies: Record<string, unknown>[] = [];
   let storeRequests = 0;
   let currentToken = token;
-  const tokenGeneration = generation;
+  let tokenGeneration = generation;
   const firstStoreGate = Promise.withResolvers<undefined>();
   let firstStoreHeld = holdFirstStore;
 
@@ -229,11 +234,14 @@ const createFakeStellaApi = ({
           return Response.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        return Response.json({
-          generation: roomGenerations.get(String(body["roomId"])),
-          snapshotBase64: latestSnapshotBase64,
-          snapshotRevision: latestSnapshotRevision,
-        });
+        return Response.json(
+          loadResponse ?? {
+            generation: roomGenerations.get(String(body["roomId"])),
+            loadOutcome: "loaded",
+            snapshotBase64: latestSnapshotBase64,
+            snapshotRevision: latestSnapshotRevision,
+          },
+        );
       }
 
       if (url.pathname === "/v1/folio-collab-rooms/snapshot/store") {
@@ -302,8 +310,17 @@ const createFakeStellaApi = ({
     loadRequestBodies: () => loadRequestBodies,
     refreshRequests: () => refreshRequests,
     releaseFirstStore: () => firstStoreGate.resolve(undefined),
+    setAuthorizedGeneration: (nextGeneration) => {
+      roomGenerations.set(roomId, nextGeneration);
+      tokenGeneration = nextGeneration;
+    },
     setGeneration: (nextGeneration) => {
       roomGenerations.set(roomId, nextGeneration);
+    },
+    setLoadResponse: (response) => {
+      loadResponse = response;
+      latestSnapshotBase64 = response.snapshotBase64;
+      latestSnapshotRevision = response.snapshotRevision;
     },
     snapshotAuthorizationHeaders: () => snapshotAuthorizationHeaders,
     storeRequestBodies: () => storeRequestBodies,
@@ -991,6 +1008,260 @@ describe("collaboration server", () => {
       await fakeApi.destroy();
     }
   }, 15_000);
+
+  test("rejoins a refused room in its new generation before saving document content", async () => {
+    const fakeApi = createFakeStellaApi();
+    fakeApi.setLoadResponse({
+      generation: 1,
+      loadOutcome: "rematerialize-from-docx",
+      resetGeneration: 0,
+      snapshotBase64: null,
+      snapshotRevision: 0,
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const refusedDocument = new Doc();
+    const closeCodes: number[] = [];
+    const refusedProvider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: refusedDocument,
+    });
+    const reopenedDocument = new Doc();
+    let reopenedProvider: HocuspocusProvider | undefined;
+
+    try {
+      await waitFor(
+        () => closeCodes.includes(FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE),
+        "Refused initial load did not close the reset generation.",
+      );
+      refusedProvider.destroy();
+
+      expect(fakeApi.storeRequestBodies()).toHaveLength(0);
+      fakeApi.setAuthorizedGeneration(1);
+      fakeApi.setLoadResponse({
+        generation: 1,
+        loadOutcome: "loaded",
+        snapshotBase64: null,
+        snapshotRevision: 0,
+      });
+      reopenedProvider = createProvider({
+        name: TEST_ROOM_NAME,
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc: reopenedDocument,
+      });
+      await waitFor(
+        () => reopenedProvider?.synced === true,
+        "New generation did not reload the room.",
+      );
+      expect(fakeApi.loadRequestBodies()).toHaveLength(2);
+      reopenedDocument.getText("body").insert(0, "saved document content");
+      reopenedProvider.flushPendingUpdates();
+      await waitFor(
+        () => fakeApi.latestSnapshotRevision() === 1,
+        "Reopened document content was not saved.",
+      );
+      expect(fakeApi.storeRequestBodies().at(0)).toMatchObject({
+        expectedGeneration: 1,
+        expectedSnapshotRevision: 0,
+      });
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "body")).toBe("saved document content");
+      restored.destroy();
+    } finally {
+      refusedProvider.destroy();
+      reopenedProvider?.destroy();
+      refusedDocument.destroy();
+      reopenedDocument.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("merges a concurrent replacement snapshot without closing its room", async () => {
+    const fakeApi = createFakeStellaApi({ holdFirstStore: true });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+      serviceToken: TEST_SERVICE_TOKEN,
+    });
+    const document = new Doc();
+    const replacement = new Doc();
+    replacement.getText("replacement").insert(0, "concurrent saved state");
+    const closeCodes: number[] = [];
+    const provider = createProvider({
+      name: TEST_ROOM_NAME,
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc: document,
+    });
+
+    try {
+      await waitFor(
+        () =>
+          provider.isAuthenticated &&
+          provider.synced &&
+          fakeApi.loadRequestBodies().length === 1,
+        "Provider did not load the room.",
+      );
+      document.getText("local").insert(0, "local state");
+      provider.flushPendingUpdates();
+      await waitFor(
+        () => fakeApi.storeRequests() === 1,
+        "First snapshot store did not start.",
+      );
+      fakeApi.setLoadResponse({
+        generation: 0,
+        loadOutcome: "loaded",
+        snapshotBase64: Buffer.from(encodeStateAsUpdate(replacement)).toString(
+          "base64",
+        ),
+        snapshotRevision: 1,
+      });
+      fakeApi.releaseFirstStore();
+      await waitFor(
+        () => fakeApi.latestSnapshotRevision() === 2,
+        "Replacement snapshot was not merged and saved.",
+      );
+      await waitFor(
+        () =>
+          getTextContent(document, "replacement") === "concurrent saved state",
+        "Replacement snapshot did not reach the connected client.",
+      );
+      expect(fakeApi.loadRequestBodies()).toHaveLength(2);
+      expect(closeCodes).not.toContain(
+        FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+      );
+      expect(provider.isAuthenticated).toBeTrue();
+      const restored = new Doc();
+      applyUpdate(
+        restored,
+        Buffer.from(fakeApi.latestSnapshotBase64() ?? "", "base64"),
+      );
+      expect(getTextContent(restored, "local")).toBe("local state");
+      expect(getTextContent(restored, "replacement")).toBe(
+        "concurrent saved state",
+      );
+      restored.destroy();
+    } finally {
+      fakeApi.releaseFirstStore();
+      provider.destroy();
+      document.destroy();
+      replacement.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test.each([0, 1])(
+    "closes only the reset generation after snapshot refusal (reset %i)",
+    async (resetGeneration) => {
+      const fakeApi = createFakeStellaApi({ holdFirstStore: true });
+      const collabServer = await createCollabServer({
+        apiUrl: fakeApi.url,
+        debounceMs: 20,
+        maxDebounceMs: 100,
+        port: 0,
+        serviceToken: TEST_SERVICE_TOKEN,
+        shutdownDrainTimeoutMs: 25,
+      });
+      const document = new Doc();
+      const closeCodes: number[] = [];
+      const provider = createProvider({
+        name: TEST_ROOM_NAME,
+        onClose: (code) => {
+          closeCodes.push(code);
+        },
+        token: "collab_token_test",
+        url: collabServer.websocketUrl,
+        ydoc: document,
+      });
+
+      try {
+        await waitFor(
+          () =>
+            provider.isAuthenticated &&
+            provider.synced &&
+            fakeApi.loadRequestBodies().length === 1,
+          "Provider did not load the room.",
+        );
+        const serverDocument =
+          collabServer.hocuspocus.documents.get(TEST_ROOM_NAME);
+        if (serverDocument === undefined) {
+          throw new Error("Loaded room document is missing.");
+        }
+        const serverConnection = serverDocument.getConnections().at(0);
+        if (serverConnection === undefined) {
+          throw new Error("Loaded room connection is missing.");
+        }
+        const storeResult = rejectionOf(
+          collabServer.hocuspocus.hooks("onStoreDocument", {
+            clientsCount: 1,
+            document: serverDocument,
+            documentName: TEST_ROOM_NAME,
+            instance: collabServer.hocuspocus,
+            lastContext: serverConnection.context,
+            lastTransactionOrigin: undefined,
+          }),
+        );
+        await waitFor(
+          () => fakeApi.storeRequests() === 1,
+          "First snapshot store did not start.",
+        );
+        fakeApi.setLoadResponse({
+          generation: resetGeneration + 1,
+          loadOutcome: "rematerialize-from-docx",
+          resetGeneration,
+          snapshotBase64: null,
+          snapshotRevision: 1,
+        });
+        fakeApi.releaseFirstStore();
+        const storeError = await storeResult;
+        expect(storeError).toBeInstanceOf(FetchBoundaryError);
+        expect(storeError).toHaveProperty("status", 428);
+        expect(fakeApi.loadRequestBodies()).toHaveLength(2);
+        if (resetGeneration === 0) {
+          await waitFor(
+            () => closeCodes.includes(FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE),
+            "Reset generation connection was not closed.",
+          );
+        } else {
+          expect(closeCodes).not.toContain(
+            FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
+          );
+          expect(provider.isAuthenticated).toBeTrue();
+        }
+        expect(fakeApi.latestSnapshotBase64()).toBeNull();
+        expect(fakeApi.latestSnapshotRevision()).toBe(1);
+        expect(fakeApi.storeRequestBodies()).toHaveLength(1);
+      } finally {
+        fakeApi.releaseFirstStore();
+        provider.destroy();
+        document.destroy();
+        await collabServer.destroy();
+        await fakeApi.destroy();
+      }
+    },
+  );
 
   test("rejects a stale snapshot generation without publishing old room state", async () => {
     const fakeApi = createFakeStellaApi({

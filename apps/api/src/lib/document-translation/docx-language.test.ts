@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { readDocxDeclaredSourceLanguage } from "./docx-language";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -56,7 +58,8 @@ const createDocx = async ({
       return `<w:r>${runProperties}<w:t>${run.text}</w:t></w:r>`;
     })
     .join("");
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<w:document xmlns:w="${W_NS}"><w:body><w:p>${runXml}</w:p></w:body></w:document>`,
   );
@@ -64,7 +67,8 @@ const createDocx = async ({
     defaultLanguages ?? (defaultLanguage ? { val: defaultLanguage } : {}),
   );
   if (defaultAttributes) {
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/styles.xml",
       `<w:styles xmlns:w="${W_NS}"><w:docDefaults><w:rPrDefault>` +
         `<w:rPr><w:lang ${defaultAttributes}/></w:rPr>` +
@@ -75,7 +79,8 @@ const createDocx = async ({
     themeLanguages ?? (themeLanguage ? { val: themeLanguage } : {}),
   );
   if (themeAttributes) {
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/settings.xml",
       `<w:settings xmlns:w="${W_NS}">` +
         `<w:themeFontLang ${themeAttributes}/>` +
