@@ -10,6 +10,7 @@ ALTER TABLE "agent_skills"
   ADD COLUMN IF NOT EXISTS "invocation" text DEFAULT 'auto' NOT NULL;
 --> statement-breakpoint
 
+-- stella-migration-safety: reviewed drop-constraint - the constraint is new in this migration, so the guarded drop only makes a replay idempotent; rollback drops the column, which drops the constraint with it
 ALTER TABLE "agent_skills" DROP CONSTRAINT IF EXISTS "agent_skills_invocation_check";
 --> statement-breakpoint
 

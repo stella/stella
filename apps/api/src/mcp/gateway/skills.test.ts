@@ -193,6 +193,7 @@ describe("MCP gateway skill tools", () => {
         description: `desc ${String(i)}`,
         displayName: `Skill ${String(i)}`,
         id: toSafeId<"agentSkill">(`skill_${String(i)}`),
+        invocation: "auto" as const,
         name: `skill-${String(i)}`,
         source: CHAT_SKILL_SOURCE.installed,
         version: null,

@@ -542,8 +542,10 @@ export type ChatUntrustedPromptSuffix = v.InferOutput<
 type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 
 /** The turn's prompt, and what the turn may stamp onto the answer it gets. */
-export type ChatSystemPromptParts = ChatPromptParts & {
+export type ChatSystemPromptParts = Omit<ChatPromptParts, "skillMetadata"> & {
   decisionPassageNumbers: DecisionPassageNumbers;
+  /** The turn's catalog, invocation rule applied; what the skill tools serve. */
+  skillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
 };
 
 export type ChatPromptParts = {
@@ -570,7 +572,7 @@ export type ChatPromptParts = {
    * logging).
    */
   fullPrompt: ChatFullPrompt;
-  skillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
+  skillMetadata: readonly PromptSkillMetadata[];
   activeSkillContext: ActiveChatSkillContext | null;
 };
 
