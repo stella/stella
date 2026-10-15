@@ -34,5 +34,11 @@
     "from": "837ee1e4a66f80b891712a0f16ea36fbe738bbe24d8b7276962d66bf45b862cb",
     "to": "0bd9ba054686e0e66aa4cf82b6f842559e3ff0ab7a2b7bd50b82c68d47b09055",
     "reason": "Same FOR UPDATE on the matter being deleted; the locked read also selects its visibility."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "from": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
+    "to": "2f5507d8eb48a66ea1d3a7eeadb72c071990dc4a8137972e021ee5bfc1147d7d",
+    "reason": "Same FOR UPDATE on the client contact; the check moved into a helper so the update handler keeps one responsibility per step."
   }
 ]

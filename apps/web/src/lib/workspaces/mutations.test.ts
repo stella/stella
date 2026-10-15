@@ -62,10 +62,6 @@ describe("workspace update cache invalidation", () => {
         value: "user_test",
       },
       name: { type: "name", value: "Renamed matter" },
-      promote: {
-        type: "promote",
-        value: { clientId: "contact_test" },
-      },
       reference: { type: "reference", value: "REF-42" },
       visibility: { type: "visibility", value: "assigned_only" },
     } as const satisfies {
@@ -86,7 +82,6 @@ describe("workspace update cache invalidation", () => {
       color: "query-cache",
       leadUserId: "query-cache",
       name: "route-metadata",
-      promote: "query-cache",
       reference: "query-cache",
       visibility: "query-cache",
     });
@@ -104,17 +99,6 @@ describe("workspace update cache invalidation", () => {
       workspaceUpdateBody({ type: "leadUserId", value: "user_test" }),
       workspaceUpdateBody({ type: "leadUserId", value: null }),
       workspaceUpdateBody({ type: "name", value: "Renamed matter" }),
-      workspaceUpdateBody({
-        type: "promote",
-        value: { clientId: "contact_test", memberUserIds: [] },
-      }),
-      workspaceUpdateBody({
-        type: "promote",
-        value: {
-          clientId: "contact_test",
-          memberUserIds: ["user_one", "user_two"],
-        },
-      }),
       workspaceUpdateBody({ type: "reference", value: "REF-42" }),
       workspaceUpdateBody({ type: "visibility", value: "all_members" }),
     ];
@@ -126,13 +110,6 @@ describe("workspace update cache invalidation", () => {
       { leadUserId: "user_test" },
       { leadUserId: null },
       { name: "Renamed matter" },
-      { promote: { clientId: contactId } },
-      {
-        promote: {
-          clientId: contactId,
-          memberUserIds: ["user_one", "user_two"],
-        },
-      },
       { reference: "REF-42" },
       { visibility: "all_members" },
     ]);

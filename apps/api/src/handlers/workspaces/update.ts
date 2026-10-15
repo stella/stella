@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -10,7 +10,6 @@ import {
 } from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
 
-import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -25,15 +24,12 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
@@ -54,36 +50,20 @@ const updateWorkspaceBodySchema = t.Object({
   // Who can see the matter. Only the matter lead or an organization
   // owner/admin may change it, and every change is audited.
   visibility: t.Optional(tMatterVisibility()),
-  // Attaches a client to a matter that has none, optionally adding
-  // members in the same write. It does not change who can see the
-  // matter; `visibility` alone decides that.
-  promote: t.Optional(
-    t.Object({
-      clientId: tSafeId("contact"),
-      memberUserIds: t.Optional(
-        t.Array(t.String({ maxLength: 128 }), {
-          maxItems: LIMITS.workspaceMembersCount - 1,
-        }),
-      ),
-    }),
-  ),
 });
 
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, reference, billing reference, colour, or " +
-    "lead (who must already be a member of it). Only the fields you pass are " +
-    "written. Attaching a client to a personal matter is a one-way promotion " +
-    "and must go through promote, which takes the client contact and " +
-    "optionally the members to share it with at the same time; a bare " +
-    "clientId on a personal matter, and any attempt to re-promote a matter " +
-    "that already has a client, are refused. visibility decides who can " +
-    "see the matter, independent of its client: all_members (every internal " +
-    "member), admins_and_assigned (owners, admins and assigned members) or " +
-    "assigned_only (assigned members only, at least one). Only the matter " +
-    "lead or an organization owner or admin may change the visibility or " +
-    "the lead.",
+    "Change a matter: its name, client, reference, billing reference, colour, " +
+    "lead (who must already be a member of it) or visibility. Only the fields " +
+    "you pass are written. clientId attaches a client to a matter or replaces " +
+    "its client; members are managed separately, and the client does not " +
+    "decide who can see the matter. visibility does: all_members (every " +
+    "internal member), admins_and_assigned (owners, admins and assigned " +
+    "members) or assigned_only (assigned members only, led by an assigned " +
+    "internal member). Only the matter lead or an organization owner or admin " +
+    "may change the visibility or the lead.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -101,7 +81,6 @@ const validateLeadIsMember = async (
   tx: Transaction,
   leadUserId: string | null | undefined,
   workspaceId: SafeId<"workspace">,
-  requestedMemberUserIds: readonly string[] = [],
 ): Promise<LeadValidationFailure | null> => {
   if (leadUserId === undefined || leadUserId === null) {
     return null;
@@ -116,7 +95,7 @@ const validateLeadIsMember = async (
       ),
     )
     .limit(1);
-  if (existing.length === 0 && !requestedMemberUserIds.includes(leadUserId)) {
+  if (existing.length === 0) {
     return {
       ok: false,
       status: 400,
@@ -279,9 +258,84 @@ const checkResultingSteward = async ({
       };
 };
 
+/** Refuse a client that is not a contact of this organization. */
+const checkClientExists = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+  clientId: SafeId<"contact"> | undefined,
+) => {
+  if (clientId === undefined) {
+    return null;
+  }
+  const client = await tx
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.id, clientId),
+        eq(contacts.organizationId, organizationId),
+      ),
+    )
+    .for("update")
+    .limit(1)
+    .then((rows) => rows.at(0) ?? null);
+  return client
+    ? null
+    : { ok: false as const, status: 404 as const, message: "Client not found" };
+};
+
+/**
+ * Lead and visibility are the matter's stewardship: check who may change
+ * them, then that the resulting matter keeps a usable steward. An update adds
+ * no members, so the steward must already be assigned.
+ */
+const checkStewardshipChanges = async ({
+  tx,
+  actor,
+  organizationId,
+  workspaceId,
+  workspace,
+  body,
+  visibilityChanged,
+}: {
+  tx: Transaction;
+  actor: WorkspaceUpdateActor;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  workspace: { leadUserId: string | null; visibility: MatterVisibility };
+  body: { leadUserId?: string | null; visibility?: MatterVisibility };
+  visibilityChanged: boolean;
+}): Promise<StewardshipFailure | StewardFailure | null> => {
+  if (
+    body.leadUserId !== undefined &&
+    body.leadUserId !== workspace.leadUserId
+  ) {
+    const stewardship = checkStewardship(actor, workspace.leadUserId);
+    if (stewardship) {
+      return stewardship;
+    }
+  }
+  if (visibilityChanged) {
+    const visibilityCheck = checkVisibilityChange({
+      actor,
+      currentLeadUserId: workspace.leadUserId,
+    });
+    if (visibilityCheck) {
+      return visibilityCheck;
+    }
+  }
+  return await checkResultingSteward({
+    tx,
+    organizationId,
+    workspaceId,
+    current: workspace,
+    next: { leadUserId: body.leadUserId, visibility: body.visibility },
+    assigningUserIds: [],
+  });
+};
+
 export type UpdateWorkspaceHandlerProps = {
   actor: WorkspaceUpdateActor;
-  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -294,16 +348,12 @@ export type UpdateWorkspaceHandlerProps = {
 // search-index writes.
 export const updateWorkspaceHandler = async function* ({
   actor,
-  userEmail,
   safeDb,
   organizationId,
   workspaceId,
   recordAuditEvent,
   body,
 }: UpdateWorkspaceHandlerProps) {
-  if ((body.promote?.memberUserIds?.length ?? 0) > 0) {
-    yield* checkDemoAccountOperation(userEmail);
-  }
   const txResult = await safeDb(async (tx) => {
     const workspaceRows = await tx
       .select({
@@ -329,127 +379,37 @@ export const updateWorkspaceHandler = async function* ({
       };
     }
 
-    // Promotion is only valid for personal matters (clientId IS
-    // NULL). Reject any attempt to "re-promote" a client matter so
-    // the call site does not silently overwrite the existing
-    // client + member set.
-    if (body.promote && workspace.clientId !== null) {
-      return {
-        ok: false as const,
-        status: 400 as const,
-        message: "Workspace is already a client matter",
-      };
+    const clientCheck = await checkClientExists(
+      tx,
+      organizationId,
+      body.clientId,
+    );
+    if (clientCheck) {
+      return clientCheck;
     }
 
-    // Bare clientId on a personal matter is conceptually a
-    // promotion we want to be explicit about. Force callers to
-    // use `promote` for personal -> client.
-    if (body.clientId && workspace.clientId === null) {
-      return {
-        ok: false as const,
-        status: 400 as const,
-        message: "Use promote to attach a client to a personal matter",
-      };
-    }
-
-    const promotionClientId = body.promote?.clientId ?? body.clientId;
-    if (promotionClientId) {
-      const client = await tx
-        .select({ id: contacts.id })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.id, promotionClientId),
-            eq(contacts.organizationId, organizationId),
-          ),
-        )
-        .for("update")
-        .limit(1)
-        .then((rows) => rows.at(0) ?? null);
-
-      if (!client) {
-        return {
-          ok: false as const,
-          status: 404 as const,
-          message: "Client not found",
-        };
-      }
-    }
-
-    const requestedMemberUserIds = body.promote?.memberUserIds
-      ? Array.from(new Set(body.promote.memberUserIds))
-      : [];
-
-    if (requestedMemberUserIds.length > 0) {
-      const orgMembers = await tx
-        .select({ userId: member.userId })
-        .from(member)
-        .where(
-          and(
-            eq(member.organizationId, organizationId),
-            inArray(member.userId, requestedMemberUserIds),
-          ),
-        )
-        .for("update");
-
-      if (orgMembers.length !== requestedMemberUserIds.length) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Some users are not members of this organization",
-        };
-      }
-    }
-
-    const promotionUpdate = body.promote
-      ? { clientId: body.promote.clientId }
-      : {};
-
-    // Lead must be a member of the workspace. Accept both pre-existing
-    // members and any added in this same call (promotion path) so the
-    // caller can promote + add team + set lead atomically.
     const leadCheck = await validateLeadIsMember(
       tx,
       body.leadUserId,
       workspaceId,
-      requestedMemberUserIds,
     );
     if (leadCheck) {
       return leadCheck;
     }
 
-    if (
-      body.leadUserId !== undefined &&
-      body.leadUserId !== workspace.leadUserId
-    ) {
-      const stewardship = checkStewardship(actor, workspace.leadUserId);
-      if (stewardship) {
-        return stewardship;
-      }
-    }
-
     const visibilityChanged =
       body.visibility !== undefined && body.visibility !== workspace.visibility;
-    if (body.visibility !== undefined && visibilityChanged) {
-      const visibilityCheck = checkVisibilityChange({
-        actor,
-        currentLeadUserId: workspace.leadUserId,
-      });
-      if (visibilityCheck) {
-        return visibilityCheck;
-      }
-    }
-
-    const stewardCheck = await checkResultingSteward({
+    const stewardshipCheck = await checkStewardshipChanges({
       tx,
+      actor,
       organizationId,
       workspaceId,
-      current: workspace,
-      next: { leadUserId: body.leadUserId, visibility: body.visibility },
-      assigningUserIds: requestedMemberUserIds,
+      workspace,
+      body,
+      visibilityChanged,
     });
-    if (stewardCheck) {
-      return stewardCheck;
+    if (stewardshipCheck) {
+      return stewardshipCheck;
     }
 
     // Before the write, so a reference that is both retired and currently held
@@ -481,36 +441,15 @@ export const updateWorkspaceHandler = async function* ({
           "leadUserId",
           "visibility",
         ]),
-        ...promotionUpdate,
       })
       .where(eq(workspaces.id, workspaceId));
 
-    // Audit reflects rows actually inserted, not the raw request:
-    // onConflictDoNothing silently skips users already on the
-    // workspace (e.g., the creator on a freshly-promoted personal
-    // matter), and we don't want the log to claim they were added.
-    let insertedMemberUserIds: string[] = [];
-    if (body.promote && requestedMemberUserIds.length > 0) {
-      const inserted = await tx
-        .insert(workspaceMembers)
-        .values(
-          requestedMemberUserIds.map((id) => ({
-            workspaceId,
-            userId: brandPersistedUserId(id),
-          })),
-        )
-        .onConflictDoNothing()
-        .returning({ userId: workspaceMembers.userId });
-      insertedMemberUserIds = inserted.map((row) => row.userId);
-    }
-
-    const newClientId = body.promote?.clientId ?? body.clientId;
     const changes: Record<string, { old: unknown; new: unknown }> = {};
     if (body.name !== undefined && body.name !== workspace.name) {
       changes["name"] = { old: workspace.name, new: body.name };
     }
-    if (newClientId !== undefined && newClientId !== workspace.clientId) {
-      changes["clientId"] = { old: workspace.clientId, new: newClientId };
+    if (body.clientId !== undefined && body.clientId !== workspace.clientId) {
+      changes["clientId"] = { old: workspace.clientId, new: body.clientId };
     }
     if (
       body.reference !== undefined &&
@@ -540,12 +479,6 @@ export const updateWorkspaceHandler = async function* ({
       changes["leadUserId"] = {
         old: workspace.leadUserId,
         new: body.leadUserId,
-      };
-    }
-    if (insertedMemberUserIds.length > 0) {
-      changes["membersAdded"] = {
-        old: null,
-        new: insertedMemberUserIds,
       };
     }
     if (visibilityChanged) {
@@ -630,7 +563,6 @@ const updateWorkspace = createSafeHandler(
           workspace: ["update"],
         }),
       },
-      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,

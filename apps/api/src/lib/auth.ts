@@ -278,6 +278,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   leadsAssignedOnlyMatter,
   reachesMatterWithoutAssignmentSql,
@@ -2914,6 +2915,20 @@ const createAuthDatabases = (
   safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
 });
 
+const readOrganizationWorkspaces = async (
+  scopedDb: AuthScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+  );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3020,12 +3035,9 @@ const resolveValidateAuth = async ({
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb(
-      async (tx) =>
-        await tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(eq(workspaces.organizationId, activeOrganizationId)),
+    accessibleWorkspacesPromise ??= readOrganizationWorkspaces(
+      scopedDb,
+      activeOrganizationId,
     ).then((items) => {
       for (const workspace of items) {
         validatedWorkspaceIdSet.add(workspace.id);

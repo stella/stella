@@ -116,7 +116,6 @@ const changeVisibility = async ({
   const result = await Result.gen(() =>
     updateWorkspaceHandler({
       actor,
-      userEmail: "member@example.test",
       safeDb,
       organizationId: ids.orgA,
       workspaceId,

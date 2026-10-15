@@ -43,6 +43,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
 // The client is optional and says nothing about who can see the matter:
@@ -213,10 +214,10 @@ export const createWorkspaceHandler = async function* ({
         );
       }
 
-      const newName =
-        duplicatedNames.length > 0
-          ? `${body.name} (${duplicatedNames.length})`
-          : body.name;
+      const newName = nextAvailableMatterName(
+        body.name,
+        duplicatedNames.map(({ name }) => name),
+      );
 
       const pattern =
         settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;

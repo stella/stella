@@ -14,6 +14,7 @@ import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  contacts,
   documentReferenceCounters,
   entities,
   entityVersions,
@@ -305,7 +306,6 @@ describe("matter reference change", () => {
           userId: ids.userA1,
           managesOrganizationMatters: true,
         },
-        userEmail: "standard@example.test",
         safeDb,
         organizationId: ids.orgA,
         workspaceId,
@@ -617,4 +617,43 @@ test("later issuance reserves its prefix while moved history keeps its original 
       ),
     );
   expect(zeroLedger).toEqual({ workspaceId: staleOwner, lastValue: 4 });
+});
+
+describe("client attachment", () => {
+  test("attaching a client turns a personal matter into a client matter", async () => {
+    const workspaceId = await createMatter("PERSONAL/CLIENT");
+    const clientId = createSafeId<"contact">();
+    await testDb.insert(contacts).values({
+      id: clientId,
+      organizationId: ids.orgA,
+      type: "organization",
+      displayName: "Acme",
+    });
+    try {
+      const { safeDb } = scopeFor([workspaceId]);
+      const result = await Result.gen(() =>
+        updateWorkspaceHandler({
+          safeDb,
+          organizationId: ids.orgA,
+          workspaceId,
+          recordAuditEvent,
+          body: { clientId },
+        }),
+      );
+
+      expect(result.isOk()).toBe(true);
+      const stored = await testDb
+        .select({ clientId: workspaces.clientId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId));
+      expect(stored).toEqual([{ clientId }]);
+    } finally {
+      // client_id restricts deleting the contact, so detach it first.
+      await testDb
+        .update(workspaces)
+        .set({ clientId: null })
+        .where(eq(workspaces.id, workspaceId));
+      await testDb.delete(contacts).where(eq(contacts.id, clientId));
+    }
+  });
 });
