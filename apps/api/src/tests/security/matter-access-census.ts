@@ -17,18 +17,20 @@ import ts from "typescript";
  *   i.e. it computes the view's rule a second time. No module may.
  * - `owner-connection-workspace-set`: it imports the owner connection
  *   (`rootDb`, which row policies do not filter) as a value and filters by a
- *   workspace-id set (`inArray(<table>.workspaceId, …)`, `workspace_id = ANY(…)`,
- *   `workspace_id IN (…)`, or an `accessibleWorkspaceIds` /
- *   `activeWorkspaceIds` binding). It must obtain the set from the owner
- *   module: it calls a value-imported owner export, and every concrete filter
- *   (`inArray` set or SQL `ANY`/`IN` value) is wholly derived from such a call
- *   (see `derivesFromOwner`: only narrowings, never mixes; a binding derives
- *   only if every assignment does and it is never mutated in place). Values
- *   passed in from callers, shadowed names and values mutated through another
- *   function count as not proven, except the last, a documented blind spot.
+ *   matter-id set: `inArray(<table>.workspaceId | workspaces.id, …)` under any
+ *   local or namespaced name, SQL `workspace_id = ANY(` / `IN (` (literal or
+ *   with an interpolated matter column), or an `accessibleWorkspaceIds` /
+ *   `activeWorkspaceIds` binding.
  *
- * A member that does not meet its signal's rule fails the census unless the
- * allowlist names `<file>::<signal>` with a reason.
+ * Deny by default: no module meets a signal on its own except the owner module
+ * for `reads-authorization-view`. Matter reads belong in a row-policy-scoped
+ * transaction, where the policies, not the caller, decide the set. Every other
+ * member needs an allowlist entry with a reason, and the entry pins the
+ * member's SITES: the enclosing symbol of each occurrence (function, method,
+ * variable or property name path) and how many occur there. A new site, or an
+ * existing one moved into another symbol, fails the census even when the
+ * module's total stays the same; a site that disappears makes the entry stale,
+ * so entries only shrink.
  */
 
 export const AUTHORIZED_WORKSPACE_OWNER_MODULE =
@@ -44,24 +46,22 @@ export const MATTER_ACCESS_SIGNALS = [
 
 export type MatterAccessSignal = (typeof MATTER_ACCESS_SIGNALS)[number];
 
+/** Occurrences of a signal per enclosing symbol path (`<module>` at top). */
+export type MatterAccessSites = Record<string, number>;
+
 export type MatterAccessFinding = {
   file: string;
   signal: MatterAccessSignal;
   /** Whether the module meets the rule for this signal on its own. */
   screened: boolean;
-  /**
-   * How many sites in the module show the signal. An allowlist entry pins
-   * this count, so a new site in an exempted module fails instead of
-   * inheriting the exemption.
-   */
-  sites: number;
+  sites: MatterAccessSites;
 };
 
 const VIEW_IDENTIFIERS = new Set([
   "stellaAuthorizedWorkspaces",
   "WORKSPACE_ACCESS_VIEW_NAME",
 ]);
-const VIEW_SQL_NAME = "stella_authorized_workspaces";
+const VIEW_SQL_NAME = /stella_authorized_workspaces/gu;
 const ROLE_RULE_IDENTIFIERS = new Set([
   "CLIENT_MATTER_ADMIN_ROLES",
   "canWriteWorkspaceEntities",
@@ -71,28 +71,12 @@ const WORKSPACE_SET_IDENTIFIERS = new Set([
   "accessibleWorkspaceIds",
   "activeWorkspaceIds",
 ]);
-const SQL_MEMBERSHIP = /\bworkspace_members\b/u;
+const SQL_MEMBERSHIP = /\bworkspace_members\b/gu;
 const SQL_MEMBER_ROLE = /\b[a-z_]+\.role\b/u;
 const SQL_CLIENT_ID = /\bclient_id\b/u;
-const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any|in)\s*\(/iu;
-const SQL_WORKSPACE_SET_BEFORE_VALUE =
-  /\bworkspace_id\s*(?:=\s*any|in)\s*\(\s*$/iu;
-const ASSIGNMENT_OPERATORS = new Set<ts.SyntaxKind>([
-  ts.SyntaxKind.EqualsToken,
-  ts.SyntaxKind.QuestionQuestionEqualsToken,
-  ts.SyntaxKind.BarBarEqualsToken,
-]);
-
-const NARROWING_METHODS = new Set(["filter", "slice", "toSorted"]);
-const MUTATING_METHODS = new Set([
-  "push",
-  "unshift",
-  "splice",
-  "fill",
-  "copyWithin",
-  "add",
-  "set",
-]);
+const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any|in)\s*\(/giu;
+/** The literal right after an interpolated column opens a set predicate. */
+const SQL_SET_AFTER_COLUMN = /^\s*(?:=\s*any|in)\s*\(/iu;
 
 /**
  * A column that holds a matter id: any `<table>.workspaceId`, or the
@@ -104,51 +88,6 @@ const isMatterIdColumn = (column: ts.Expression): boolean =>
     (column.name.text === "id" &&
       ts.isIdentifier(column.expression) &&
       column.expression.text === "workspaces"));
-
-/** The binding at the bottom of a member chain (`a` for `a.b[0].c`). */
-const rootBinding = (expression: ts.Expression): string | undefined => {
-  let current = expression;
-  while (
-    ts.isPropertyAccessExpression(current) ||
-    ts.isElementAccessExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return ts.isIdentifier(current) ? current.text : undefined;
-};
-
-/** Every identifier a declaration binds, through destructuring. */
-const boundNames = (name: ts.BindingName): string[] => {
-  if (ts.isIdentifier(name)) {
-    return [name.text];
-  }
-  return name.elements.flatMap((element) =>
-    ts.isOmittedExpression(element) ? [] : boundNames(element.name),
-  );
-};
-
-type Facts = {
-  /** The owner module is value-imported and one of its exports is called. */
-  callsOwner: boolean;
-  /**
-   * Every concrete workspace-set filter (`inArray(x.workspaceId, set)`, or a
-   * SQL `workspace_id = ANY(${set})` / `IN (${set})`) takes a value derived
-   * from an owner call. True when the module has no concrete filter.
-   */
-  filtersDeriveFromOwner: boolean;
-  importsRootDbValue: boolean;
-  /** Sites in the module that show this signal. */
-  namesView: number;
-  /** Sites in the module that show this signal. */
-  namesMembership: number;
-  namesRoleRule: boolean;
-  namesMemberRole: boolean;
-  namesClientId: boolean;
-  /** Sites in the module that show this signal. */
-  filtersWorkspaceSet: number;
-};
 
 const literalText = (node: ts.Node): string | undefined => {
   if (
@@ -163,277 +102,152 @@ const literalText = (node: ts.Node): string | undefined => {
   return undefined;
 };
 
-type ProvenanceInput = {
-  ownerBindings: ReadonlySet<string>;
-  ownerNamespaces: ReadonlySet<string>;
-  derivations: readonly { names: string[]; from: ts.Node | null }[];
-  mutatedNames: ReadonlySet<string>;
+const declarationName = (node: ts.Node): string | undefined => {
+  if (
+    (ts.isFunctionDeclaration(node) ||
+      ts.isMethodDeclaration(node) ||
+      ts.isClassDeclaration(node) ||
+      ts.isVariableDeclaration(node) ||
+      ts.isPropertyAssignment(node) ||
+      ts.isPropertyDeclaration(node)) &&
+    node.name !== undefined &&
+    (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
+  ) {
+    return node.name.text;
+  }
+  return undefined;
 };
 
-const ownerProvenance = ({
-  ownerBindings,
-  ownerNamespaces,
-  derivations,
-  mutatedNames,
-}: ProvenanceInput) => {
-  // Provenance is conservative. A value derives from the owner only when the
-  // WHOLE value is the owner's result or a narrowing of it: the owner call
-  // itself (awaited or not), a property read on a derived value, a
-  // `filter`/`slice`/`toSorted` of one, a `map` that projects one property of
-  // each element, a spread/`Array.from`/`new Set` of exactly one derived
-  // value, or a conditional whose branches both derive. Anything that can mix
-  // in other values (array literals with other elements, concat, arbitrary
-  // calls) does not. A binding derives only when EVERY assignment to it does
-  // and it is never mutated in place; parameters never derive. Names are
-  // tracked file-wide, so shadowing errs towards "not derived".
-  const isOwnerCall = (node: ts.Node) =>
-    ts.isCallExpression(node) &&
-    ((ts.isIdentifier(node.expression) &&
-      ownerBindings.has(node.expression.text)) ||
-      (ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        ownerNamespaces.has(node.expression.expression.text)));
-  const isPropertyProjection = (node: ts.Expression | undefined) => {
-    if (node === undefined || !ts.isArrowFunction(node)) {
-      return false;
+/** `outer.inner` names of the declarations enclosing a node. */
+const enclosingSymbol = (node: ts.Node): string => {
+  const names: string[] = [];
+  for (let current = node.parent; current !== undefined;) {
+    const name = declarationName(current);
+    if (name !== undefined) {
+      names.unshift(name);
     }
-    const [parameter] = node.parameters;
-    return (
-      node.parameters.length === 1 &&
-      parameter !== undefined &&
-      ts.isIdentifier(parameter.name) &&
-      ts.isPropertyAccessExpression(node.body) &&
-      ts.isIdentifier(node.body.expression) &&
-      node.body.expression.text === parameter.name.text
-    );
-  };
-  const derived = new Set<string>();
-  const derivesFromOwner = (node: ts.Node): boolean => {
-    if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAwaitExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return derivesFromOwner(node.expression);
-    }
-    if (isOwnerCall(node)) {
-      return true;
-    }
-    if (ts.isIdentifier(node)) {
-      return derived.has(node.text);
-    }
-    if (ts.isPropertyAccessExpression(node)) {
-      return derivesFromOwner(node.expression);
-    }
-    if (ts.isConditionalExpression(node)) {
-      return (
-        derivesFromOwner(node.whenTrue) && derivesFromOwner(node.whenFalse)
-      );
-    }
-    if (ts.isArrayLiteralExpression(node)) {
-      const [only] = node.elements;
-      return (
-        node.elements.length === 1 &&
-        only !== undefined &&
-        ts.isSpreadElement(only) &&
-        derivesFromOwner(only.expression)
-      );
-    }
-    if (ts.isNewExpression(node)) {
-      const [only] = node.arguments ?? [];
-      return (
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "Set" &&
-        node.arguments?.length === 1 &&
-        only !== undefined &&
-        derivesFromOwner(only)
-      );
-    }
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const [first] = node.arguments;
-      if (
-        ts.isPropertyAccessExpression(callee) &&
-        ts.isIdentifier(callee.expression) &&
-        callee.expression.text === "Array" &&
-        callee.name.text === "from"
-      ) {
-        return node.arguments.length === 1 && first !== undefined
-          ? derivesFromOwner(first)
-          : false;
+    current = current.parent;
+  }
+  return names.length === 0 ? "<module>" : names.join(".");
+};
+
+type SiteCounter = {
+  add: (node: ts.Node, count?: number) => void;
+  sites: MatterAccessSites;
+};
+
+const siteCounter = (): SiteCounter => {
+  const sites: MatterAccessSites = {};
+  return {
+    sites,
+    add: (node, count = 1) => {
+      if (count > 0) {
+        const symbol = enclosingSymbol(node);
+        sites[symbol] = (sites[symbol] ?? 0) + count;
       }
-      if (ts.isPropertyAccessExpression(callee)) {
-        const method = callee.name.text;
-        if (NARROWING_METHODS.has(method)) {
-          return derivesFromOwner(callee.expression);
-        }
-        if (method === "map") {
-          return (
-            node.arguments.length === 1 &&
-            isPropertyProjection(first) &&
-            derivesFromOwner(callee.expression)
-          );
+    },
+  };
+};
+
+const matchCount = (pattern: RegExp, text: string) =>
+  [...text.matchAll(pattern)].length;
+
+type Facts = {
+  importsRootDbValue: boolean;
+  namesRoleRule: boolean;
+  namesMemberRole: boolean;
+  namesClientId: boolean;
+  view: SiteCounter;
+  membership: SiteCounter;
+  workspaceSet: SiteCounter;
+};
+
+/** Local names that refer to drizzle's `inArray`, direct or namespaced. */
+type InArrayNames = { direct: Set<string>; namespaces: Set<string> };
+
+const recordImport = (
+  node: ts.ImportDeclaration,
+  facts: Facts,
+  inArray: InArrayNames,
+) => {
+  if (
+    !ts.isStringLiteral(node.moduleSpecifier) ||
+    node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+  ) {
+    return;
+  }
+  const specifier = node.moduleSpecifier.text;
+  const bindings = node.importClause?.namedBindings;
+  if (bindings === undefined) {
+    return;
+  }
+  if (specifier === "drizzle-orm") {
+    if (ts.isNamespaceImport(bindings)) {
+      inArray.namespaces.add(bindings.name.text);
+    } else {
+      for (const element of bindings.elements) {
+        if (
+          !element.isTypeOnly &&
+          (element.propertyName ?? element.name).text === "inArray"
+        ) {
+          inArray.direct.add(element.name.text);
         }
       }
     }
-    return false;
-  };
-  // Least fixpoint: a name joins only once all of its assignments derive.
-  const assignmentsByName = new Map<string, (ts.Node | null)[]>();
-  for (const { names, from } of derivations) {
-    for (const name of names) {
-      assignmentsByName.set(name, [
-        ...(assignmentsByName.get(name) ?? []),
-        from,
-      ]);
-    }
   }
-  // An alias shares its source's object: `const alias = ids` (or
-  // `= holder.value`) followed by `alias.push(other)` mutates `ids` /
-  // `holder` too. Close the mutated set backwards over every alias edge.
-  const aliasRoot = (node: ts.Node | null): string | undefined => {
-    if (node === null) {
-      return undefined;
-    }
-    if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAwaitExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isNonNullExpression(node) ||
-      ts.isPropertyAccessExpression(node) ||
-      ts.isElementAccessExpression(node)
-    ) {
-      return aliasRoot(node.expression);
-    }
-    return ts.isIdentifier(node) ? node.text : undefined;
-  };
-  const mutated = new Set(mutatedNames);
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const { names, from } of derivations) {
-      const root = aliasRoot(from);
-      if (
-        root !== undefined &&
-        !mutated.has(root) &&
-        names.some((name) => mutated.has(name))
-      ) {
-        mutated.add(root);
-        grew = true;
-      }
-    }
+  if (
+    specifier === "@/api/db/root" &&
+    ts.isNamedImports(bindings) &&
+    bindings.elements.some(
+      (element) =>
+        !element.isTypeOnly &&
+        (element.propertyName ?? element.name).text === "rootDb",
+    )
+  ) {
+    facts.importsRootDbValue = true;
   }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [name, sources] of assignmentsByName) {
-      if (
-        !derived.has(name) &&
-        !mutated.has(name) &&
-        sources.every((from) => from !== null && derivesFromOwner(from))
-      ) {
-        derived.add(name);
-        changed = true;
-      }
-    }
-  }
-  return { isOwnerCall, derivesFromOwner };
 };
 
-type DataFlow = {
-  filterArguments: ts.Expression[];
-  derivations: { names: string[]; from: ts.Node | null }[];
-  mutatedNames: Set<string>;
-};
-
-/** Record filter values, assignments and in-place mutations of one node. */
-const recordDataFlow = (
+const isInArrayCall = (
   node: ts.Node,
-  { filterArguments, derivations, mutatedNames }: DataFlow,
-): void => {
-  if (ts.isTemplateExpression(node)) {
-    let preceding = node.head.text;
-    for (const span of node.templateSpans) {
-      if (SQL_WORKSPACE_SET_BEFORE_VALUE.test(preceding)) {
-        filterArguments.push(span.expression);
-      }
-      preceding = span.literal.text;
-    }
+  inArray: InArrayNames,
+): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ((ts.isIdentifier(node.expression) &&
+    inArray.direct.has(node.expression.text)) ||
+    (ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      inArray.namespaces.has(node.expression.expression.text) &&
+      node.expression.name.text === "inArray"));
+
+const recordIdentifier = (node: ts.Identifier, facts: Facts) => {
+  const name = node.text;
+  if (VIEW_IDENTIFIERS.has(name)) {
+    facts.view.add(node);
   }
-  // Names are tracked file-wide, so a parameter (whose value comes from a
-  // caller) poisons every binding of the same name: a same-named binding in
-  // another function can never borrow an owner-derived value.
-  if (ts.isParameter(node)) {
-    derivations.push({ names: boundNames(node.name), from: null });
+  if (name === "workspaceMembers") {
+    facts.membership.add(node);
   }
-  // A declaration without an initializer (`for (const ids of other)`,
-  // `let ids;`, a catch binding) takes its value from elsewhere: not derived.
-  if (ts.isVariableDeclaration(node)) {
-    derivations.push({
-      names: boundNames(node.name),
-      from: node.initializer ?? null,
-    });
+  if (ROLE_RULE_IDENTIFIERS.has(name)) {
+    facts.namesRoleRule = true;
   }
-  if (
-    ts.isBinaryExpression(node) &&
-    ts.isIdentifier(node.left) &&
-    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-  ) {
-    // `=`, `??=`, `||=` assign the right side; any other compound
-    // assignment (`+=`, …) mixes values and never derives.
-    derivations.push({
-      names: [node.left.text],
-      from: ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)
-        ? node.right
-        : null,
-    });
+  if (name === "clientId") {
+    facts.namesClientId = true;
   }
-  // In-place mutation (`ids.push(other)`, `result.value.ids.push(other)`,
-  // `set.add(other)`) can mix in any value, so the binding at the root of the
-  // receiver never derives.
-  if (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    MUTATING_METHODS.has(node.expression.name.text)
-  ) {
-    const receiverRoot = rootBinding(node.expression.expression);
-    if (receiverRoot !== undefined) {
-      mutatedNames.add(receiverRoot);
-    }
+  if (WORKSPACE_SET_IDENTIFIERS.has(name)) {
+    facts.workspaceSet.add(node);
   }
-  // A write to any member of a binding (`ids[0] = …`, `result.value = …`,
-  // `result.value.ids = …`, `delete result.value`) replaces part of what it
-  // holds, so the root binding never derives either.
-  const writtenRoot = (target: ts.Expression): string | undefined => {
-    let current: ts.Expression = target;
-    while (
-      ts.isPropertyAccessExpression(current) ||
-      ts.isElementAccessExpression(current) ||
-      ts.isParenthesizedExpression(current) ||
-      ts.isNonNullExpression(current)
-    ) {
-      current = current.expression;
-    }
-    return current !== target && ts.isIdentifier(current)
-      ? current.text
-      : undefined;
-  };
-  let written: string | undefined;
-  if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
-  ) {
-    written = writtenRoot(node.left);
-  } else if (ts.isDeleteExpression(node)) {
-    written = writtenRoot(node.expression);
+};
+
+const recordLiteral = (node: ts.Node, text: string, facts: Facts) => {
+  facts.view.add(node, matchCount(VIEW_SQL_NAME, text));
+  facts.membership.add(node, matchCount(SQL_MEMBERSHIP, text));
+  facts.workspaceSet.add(node, matchCount(SQL_WORKSPACE_SET, text));
+  if (SQL_MEMBER_ROLE.test(text)) {
+    facts.namesMemberRole = true;
   }
-  if (written !== undefined) {
-    mutatedNames.add(written);
+  if (SQL_CLIENT_ID.test(text)) {
+    facts.namesClientId = true;
   }
 };
 
@@ -445,110 +259,23 @@ const readFacts = (file: string, source: string): Facts => {
     true,
   );
   const facts: Facts = {
-    callsOwner: false,
-    filtersDeriveFromOwner: true,
     importsRootDbValue: false,
-    namesView: 0,
-    namesMembership: 0,
     namesRoleRule: false,
     namesMemberRole: false,
     namesClientId: false,
-    filtersWorkspaceSet: 0,
+    view: siteCounter(),
+    membership: siteCounter(),
+    workspaceSet: siteCounter(),
   };
-  const ownerBindings = new Set<string>();
-  const ownerNamespaces = new Set<string>();
-  /** Values handed to concrete workspace-set filters. */
-  const filterArguments: ts.Expression[] = [];
-  /** `name <- value` edges; `null` marks an assignment that never derives. */
-  const derivations: { names: string[]; from: ts.Node | null }[] = [];
-  const mutatedNames = new Set<string>();
-  const flow: DataFlow = { filterArguments, derivations, mutatedNames };
-  const inArrayNames = new Set<string>();
-  const drizzleNamespaces = new Set<string>();
-  const isInArrayCall = (node: ts.Node): node is ts.CallExpression =>
-    ts.isCallExpression(node) &&
-    ((ts.isIdentifier(node.expression) &&
-      inArrayNames.has(node.expression.text)) ||
-      (ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        drizzleNamespaces.has(node.expression.expression.text) &&
-        node.expression.name.text === "inArray"));
+  const inArray: InArrayNames = { direct: new Set(), namespaces: new Set() };
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      const specifier = node.moduleSpecifier.text;
-      const bindings = node.importClause?.namedBindings;
-      // Only value bindings can carry the owner's result; a type-only import
-      // (whole clause or one specifier) proves nothing.
-      if (
-        specifier === AUTHORIZED_WORKSPACE_OWNER_MODULE &&
-        node.importClause?.isTypeOnly !== true &&
-        bindings !== undefined
-      ) {
-        if (ts.isNamespaceImport(bindings)) {
-          ownerNamespaces.add(bindings.name.text);
-        } else {
-          for (const element of bindings.elements) {
-            if (!element.isTypeOnly) {
-              ownerBindings.add(element.name.text);
-            }
-          }
-        }
-      }
-      // `inArray` under any local name, or through a namespace import.
-      if (
-        specifier === "drizzle-orm" &&
-        node.importClause?.isTypeOnly !== true &&
-        bindings !== undefined
-      ) {
-        if (ts.isNamespaceImport(bindings)) {
-          drizzleNamespaces.add(bindings.name.text);
-        } else {
-          for (const element of bindings.elements) {
-            if (
-              !element.isTypeOnly &&
-              (element.propertyName ?? element.name).text === "inArray"
-            ) {
-              inArrayNames.add(element.name.text);
-            }
-          }
-        }
-      }
-      if (
-        specifier === "@/api/db/root" &&
-        node.importClause?.isTypeOnly !== true &&
-        bindings !== undefined &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.some(
-          (element) =>
-            !element.isTypeOnly &&
-            (element.propertyName ?? element.name).text === "rootDb",
-        )
-      ) {
-        facts.importsRootDbValue = true;
-      }
+    if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
+      recordImport(node, facts, inArray);
       return;
     }
     if (ts.isIdentifier(node)) {
-      const name = node.text;
-      if (VIEW_IDENTIFIERS.has(name)) {
-        facts.namesView += 1;
-      }
-      if (name === "workspaceMembers") {
-        facts.namesMembership += 1;
-      }
-      if (ROLE_RULE_IDENTIFIERS.has(name)) {
-        facts.namesRoleRule = true;
-      }
-      if (name === "clientId") {
-        facts.namesClientId = true;
-      }
-      if (WORKSPACE_SET_IDENTIFIERS.has(name)) {
-        facts.filtersWorkspaceSet += 1;
-      }
+      recordIdentifier(node, facts);
     }
     if (
       ts.isPropertyAccessExpression(node) &&
@@ -558,56 +285,36 @@ const readFacts = (file: string, source: string): Facts => {
     ) {
       facts.namesMemberRole = true;
     }
-    if (isInArrayCall(node)) {
-      const [column, set] = node.arguments;
+    if (isInArrayCall(node, inArray)) {
+      const [column] = node.arguments;
       if (column !== undefined && isMatterIdColumn(column)) {
-        facts.filtersWorkspaceSet += 1;
-        if (set !== undefined) {
-          filterArguments.push(set);
-        }
+        facts.workspaceSet.add(node);
       }
     }
-    recordDataFlow(node, flow);
+    // sql`${entities.workspaceId} = ANY(${ids})`: an interpolated matter
+    // column opening a set predicate.
+    if (
+      ts.isTemplateSpan(node) &&
+      isMatterIdColumn(node.expression) &&
+      SQL_SET_AFTER_COLUMN.test(node.literal.text)
+    ) {
+      facts.workspaceSet.add(node);
+    }
     const text = literalText(node);
     if (text !== undefined) {
-      if (text.includes(VIEW_SQL_NAME)) {
-        facts.namesView += 1;
-      }
-      if (SQL_MEMBERSHIP.test(text)) {
-        facts.namesMembership += 1;
-      }
-      if (SQL_MEMBER_ROLE.test(text)) {
-        facts.namesMemberRole = true;
-      }
-      if (SQL_CLIENT_ID.test(text)) {
-        facts.namesClientId = true;
-      }
-      if (SQL_WORKSPACE_SET.test(text)) {
-        facts.filtersWorkspaceSet += 1;
-      }
+      recordLiteral(node, text, facts);
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-
-  const { isOwnerCall, derivesFromOwner } = ownerProvenance({
-    ownerBindings,
-    ownerNamespaces,
-    derivations,
-    mutatedNames,
-  });
-  const findOwnerCall = (node: ts.Node): boolean =>
-    isOwnerCall(node) ||
-    (ts.forEachChild(node, (child) => findOwnerCall(child) || undefined) ??
-      false);
-  facts.callsOwner = findOwnerCall(sourceFile);
-  facts.filtersDeriveFromOwner = filterArguments.every(derivesFromOwner);
   return facts;
 };
 
 // Cheap prefilter so only candidate files are parsed.
 const CANDIDATE =
   /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb/u;
+
+const hasSites = (sites: MatterAccessSites) => Object.keys(sites).length > 0;
 
 /** Classify one module. `file` is the repository-relative path. */
 export const classifyMatterAccessModule = (
@@ -619,33 +326,31 @@ export const classifyMatterAccessModule = (
   }
   const facts = readFacts(file, source);
   const findings: MatterAccessFinding[] = [];
-  if (facts.namesView > 0) {
+  if (hasSites(facts.view.sites)) {
     findings.push({
       file,
       signal: "reads-authorization-view",
       screened: file === AUTHORIZED_WORKSPACE_OWNER_FILE,
-      sites: facts.namesView,
+      sites: facts.view.sites,
     });
   }
   if (
-    facts.namesMembership > 0 &&
+    hasSites(facts.membership.sites) &&
     (facts.namesRoleRule || (facts.namesMemberRole && facts.namesClientId))
   ) {
     findings.push({
       file,
       signal: "derives-matter-access",
       screened: false,
-      sites: facts.namesMembership,
+      sites: facts.membership.sites,
     });
   }
-  if (facts.importsRootDbValue && facts.filtersWorkspaceSet > 0) {
+  if (facts.importsRootDbValue && hasSites(facts.workspaceSet.sites)) {
     findings.push({
       file,
       signal: "owner-connection-workspace-set",
-      // An import alone proves nothing: the owner must be called, and every
-      // concrete filter must take a value derived from that call.
-      screened: facts.callsOwner && facts.filtersDeriveFromOwner,
-      sites: facts.filtersWorkspaceSet,
+      screened: false,
+      sites: facts.workspaceSet.sites,
     });
   }
   return findings;
@@ -656,13 +361,24 @@ export const allowlistKey = ({
   signal,
 }: Pick<MatterAccessFinding, "file" | "signal">) => `${file}::${signal}`;
 
-/**
- * The unscreened findings no allowlist entry covers, and the allowlist entries
- * that no longer match an unscreened finding (stale entries fail too, so the
- * allowlist shrinks as paths move onto the owner module).
- */
-export type MatterAccessAllowlistEntry = { reason: string; sites: number };
+export type MatterAccessAllowlistEntry = {
+  reason: string;
+  sites: MatterAccessSites;
+};
 
+const siteMessage = (
+  key: string,
+  symbol: string,
+  found: number,
+  allowed: number,
+) => `${key} @ ${symbol}: ${String(found)} sites, allowed ${String(allowed)}`;
+
+/**
+ * The unscreened findings no allowlist entry covers (or that exceed an
+ * entry's pinned sites), and the entries that no longer match (a finding or a
+ * pinned site gone), so the allowlist only shrinks. Messages carry measured
+ * counts so an entry can be corrected.
+ */
 export const evaluateMatterAccessCensus = (
   findings: readonly MatterAccessFinding[],
   allowlist: Readonly<Record<string, MatterAccessAllowlistEntry>>,
@@ -672,16 +388,18 @@ export const evaluateMatterAccessCensus = (
       .filter((finding) => !finding.screened)
       .map((finding) => [allowlistKey(finding), finding.sites] as const),
   );
-  // Both directions name the measured count so the entry can be corrected.
   const violations: string[] = [];
   for (const [key, sites] of unscreened) {
-    const allowed = allowlist[key]?.sites;
-    if (allowed === undefined) {
+    const entry = allowlist[key];
+    if (entry === undefined) {
       violations.push(key);
-    } else if (sites > allowed) {
-      violations.push(
-        `${key} has ${String(sites)} sites, allowed ${String(allowed)}`,
-      );
+      continue;
+    }
+    for (const [symbol, found] of Object.entries(sites)) {
+      const allowed = entry.sites[symbol] ?? 0;
+      if (found > allowed) {
+        violations.push(siteMessage(key, symbol, found, allowed));
+      }
     }
   }
   const stale: string[] = [];
@@ -689,10 +407,13 @@ export const evaluateMatterAccessCensus = (
     const sites = unscreened.get(key);
     if (sites === undefined) {
       stale.push(key);
-    } else if (sites < entry.sites) {
-      stale.push(
-        `${key} has ${String(sites)} sites, allowed ${String(entry.sites)}`,
-      );
+      continue;
+    }
+    for (const [symbol, allowed] of Object.entries(entry.sites)) {
+      const found = sites[symbol] ?? 0;
+      if (found < allowed) {
+        stale.push(siteMessage(key, symbol, found, allowed));
+      }
     }
   }
   return { violations: violations.toSorted(), stale: stale.toSorted() };

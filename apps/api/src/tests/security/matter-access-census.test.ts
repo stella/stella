@@ -73,7 +73,10 @@ describe("matter access census", () => {
   test("every allowlist entry states a reason", () => {
     for (const { reason, sites } of Object.values(allowlist)) {
       expect(reason.trim().length).toBeGreaterThan(20);
-      expect(Number.isInteger(sites) && sites > 0).toBe(true);
+      expect(Object.keys(sites).length).toBeGreaterThan(0);
+      for (const count of Object.values(sites)) {
+        expect(Number.isInteger(count) && count > 0).toBe(true);
+      }
     }
   });
 
@@ -105,22 +108,26 @@ describe("matter access census", () => {
     expect(
       Object.keys(allowlist).filter((key) => !(key in priorEntries)),
     ).toEqual([]);
-    // An entry's pinned site count may only fall, never rise.
-    const priorSites = (key: string) => {
+    // A pinned site may only fall or disappear; no new symbol may appear.
+    const priorSites = (key: string): Record<string, unknown> => {
       const entry = priorEntries[key];
       return typeof entry === "object" &&
         entry !== null &&
         "sites" in entry &&
-        typeof entry.sites === "number"
-        ? entry.sites
-        : undefined;
+        typeof entry.sites === "object" &&
+        entry.sites !== null
+        ? { ...entry.sites }
+        : {};
     };
-    expect(
-      Object.entries(allowlist).filter(([key, { sites }]) => {
-        const before = priorSites(key);
-        return before !== undefined && sites > before;
-      }),
-    ).toEqual([]);
+    const grown = Object.entries(allowlist).flatMap(([key, { sites }]) =>
+      key in priorEntries
+        ? Object.entries(sites).filter(([symbol, count]) => {
+            const before = priorSites(key)[symbol];
+            return typeof before !== "number" || count > before;
+          })
+        : [],
+    );
+    expect(grown).toEqual([]);
   });
 });
 
@@ -146,7 +153,7 @@ describe("matter access census self-test", () => {
         file: "apps/api/src/lib/example-reader.ts",
         signal: "owner-connection-workspace-set",
         screened: false,
-        sites: 1,
+        sites: { readTitles: 1 },
       },
     ]);
     expect(evaluateMatterAccessCensus(findings, {}).violations).toEqual([
@@ -165,44 +172,34 @@ describe("matter access census self-test", () => {
       evaluateMatterAccessCensus(findings, {
         "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set": {
           reason: "One reviewed projection reader.",
-          sites: 1,
+          sites: { readTitles: 1 },
         },
       }).violations,
     ).toEqual([
-      "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set has 2 sites, allowed 1",
+      "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set @ readMore: 1 sites, allowed 0",
     ]);
   });
 
-  const classifyReader = (source: string) =>
-    classifyMatterAccessModule("apps/api/src/lib/example-reader.ts", source)
-      .filter(({ signal }) => signal === "owner-connection-workspace-set")
-      .map(({ screened }) => screened);
-
-  test("the reader is screened once its filtered set comes from the owner module", () => {
-    const screened = `
+  test("an owner-connection reader needs an exemption even when its set comes from the owner module", () => {
+    const fromOwner = `
       import { inArray } from "drizzle-orm";
       import { rootDb } from "@/api/db/root";
       import { entities } from "@/api/db/schema";
       import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";
       export const readTitles = async (tx: Tx) => {
-        const authorized = await authorizedWorkspaceIds(tx);
-        const ids = authorized.value;
+        const ids = (await authorizedWorkspaceIds(tx)).value;
         return await rootDb
           .select({ title: entities.name })
           .from(entities)
           .where(inArray(entities.workspaceId, ids));
       };
     `;
-    expect(classifyReader(screened)).toEqual([true]);
     expect(
-      evaluateMatterAccessCensus(
-        classifyMatterAccessModule(
-          "apps/api/src/lib/example-reader.ts",
-          screened,
-        ),
-        {},
-      ).violations,
-    ).toEqual([]);
+      classifyMatterAccessModule(
+        "apps/api/src/lib/example-reader.ts",
+        fromOwner,
+      ).map(({ screened }) => screened),
+    ).toEqual([false]);
   });
 
   test("a module reading the authorization view outside the owner fails, a comment does not", () => {
@@ -238,7 +235,7 @@ describe("matter access census self-test", () => {
         file: "apps/api/src/lib/example-rule.ts",
         signal: "derives-matter-access",
         screened: false,
-        sites: 1,
+        sites: { table: 1 },
       },
     ]);
   });
@@ -248,7 +245,7 @@ describe("matter access census self-test", () => {
       evaluateMatterAccessCensus([], {
         "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set": {
           reason: "reason",
-          sites: 1,
+          sites: { readTitles: 1 },
         },
       }).stale,
     ).toEqual([
