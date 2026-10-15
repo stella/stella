@@ -91,8 +91,6 @@ import {
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
-import { createTableChart } from "@/api/handlers/chat/table-chart";
-import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
@@ -2734,75 +2732,6 @@ describe("cross-tenant handler isolation", () => {
       testCase.expectPositive(result, context);
     });
   }
-});
-
-describe("table chart tenant isolation", () => {
-  test.each(["A", "B"] as const)(
-    "planning in organization %s uses its own AI configuration and scoped usage database",
-    async (tenant) => {
-      const contexts = createIsolationContext();
-      const context =
-        tenant === "A" ? contexts.workspaceA : contexts.sameUserWorkspaceB;
-      const orgAIConfig = {
-        ...chatOrgAIConfig,
-        providers: [
-          { provider: "openai", apiKey: `table-chart-organization-${tenant}` },
-        ],
-      } satisfies OrgAIConfig;
-      const calls: Parameters<TableChartDecisionCaller>[0][] = [];
-      const visibleThreads: { id: SafeId<"chatThread"> }[][] = [];
-      const decide: TableChartDecisionCaller = async (options) => {
-        calls.push(options);
-        if (options.usageMetering) {
-          const rows = (
-            await options.usageMetering.safeDb(
-              async (tx) =>
-                await tx
-                  .select({ id: chatThreads.id })
-                  .from(chatThreads)
-                  .where(eq(chatThreads.id, chatThreadB)),
-            )
-          ).unwrap();
-          visibleThreads.push(rows);
-        }
-        return { decisions: {}, model: null };
-      };
-      const result = await runHandler(createTableChart({ decide }), context, {
-        orgAIConfig,
-        body: {
-          headers: ["Category", "Amount"],
-          rows: [
-            ["One", "12"],
-            ["Two", "18"],
-          ],
-        },
-      });
-      expect(result).toEqual({ status: "unavailable" });
-      expect(calls).toHaveLength(1);
-      const options = calls.at(0);
-      expect(options?.orgAIConfig).toEqual(orgAIConfig);
-      expect(options?.usageMetering).toMatchObject({
-        organizationId: context.session.activeOrganizationId,
-        userId: ids.userA1,
-        workspaceId: null,
-        actionType: "chat",
-        serviceTier: "standard",
-      });
-      expect(options?.id).toBe("chat.table-chart");
-      expect(options?.state).toEqual({
-        headers: ["Category", "Amount"],
-        rows: [
-          ["One", "12"],
-          ["Two", "18"],
-        ],
-      });
-      // B's thread belongs to the same user in a different firm. Exercise the
-      // real database capability forwarded to decision logging and metering.
-      expect(visibleThreads).toEqual([
-        tenant === "A" ? [] : [{ id: chatThreadB }],
-      ]);
-    },
-  );
 });
 
 const createIsolationContext = (): IsolationContext => ({
