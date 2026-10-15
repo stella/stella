@@ -19,6 +19,8 @@ const NON_PLUGIN_MODULES = new Set([
   "physical-properties.ts",
   "restricted-import.ts",
   "utils.ts",
+  "test-determinism-rule.ts",
+  "test-time-resolver.ts",
 ]);
 const TYPEBOX_UNSAFE_RULE_ID =
   "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";

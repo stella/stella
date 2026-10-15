@@ -5,12 +5,16 @@ import path from "node:path";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
-const BASELINE_REL = BASELINE_PATHS.testState;
+const BASELINES = {
+  state: BASELINE_PATHS.testState,
+  "ambient-time": BASELINE_PATHS.testAmbientTime,
+} as const;
 
-export const parseTestStateBaseline = (
-  text: string,
-  label: string,
-): string[] => {
+type BaselineKind = keyof typeof BASELINES;
+const isBaselineKind = (value: string): value is BaselineKind =>
+  Object.hasOwn(BASELINES, value);
+
+export const parseTestBaseline = (text: string, label: string): string[] => {
   const parsed: unknown = JSON.parse(text);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return panic(
@@ -63,17 +67,19 @@ export const parseTestStateBaseline = (
   return members;
 };
 
-type ValidateTestStateBaselineFilesOptions = {
+type ValidateTestBaselineFilesOptions = {
   members: readonly string[];
   repoRoot: string;
   trackedFiles: ReadonlySet<string>;
+  baselineRel: string;
 };
 
-export const validateTestStateBaselineFiles = ({
+export const validateTestBaselineFiles = ({
   members,
   repoRoot,
   trackedFiles,
-}: ValidateTestStateBaselineFilesOptions): void => {
+  baselineRel,
+}: ValidateTestBaselineFilesOptions): void => {
   const files = new Set(members.map((member) => member.replace(/::\d+$/u, "")));
   for (const file of files) {
     if (
@@ -81,13 +87,23 @@ export const validateTestStateBaselineFiles = ({
       !lstatSync(path.join(repoRoot, file), { throwIfNoEntry: false })?.isFile()
     ) {
       panic(
-        `${BASELINE_REL}: ${file} must exist as a regular tracked test file; delete its baseline entry`,
+        `${baselineRel}: ${file} must exist as a regular tracked test file; delete its baseline entry`,
       );
     }
   }
 };
 
 if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const kindIndex = args.indexOf("--kind");
+  const kind = kindIndex === -1 ? "state" : args.at(kindIndex + 1);
+  if (kind === undefined || !isBaselineKind(kind)) {
+    panic("--kind requires state or ambient-time");
+  }
+  if (kindIndex !== -1) {
+    args.splice(kindIndex, 2);
+  }
+  const baselineRel = BASELINES[kind];
   const repoRoot = path.resolve(import.meta.dir, "..");
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
     cwd: repoRoot,
@@ -101,18 +117,26 @@ if (import.meta.main) {
   const trackedFiles = new Set(tracked.stdout.toString().split("\0"));
   process.exit(
     runLedgerMembershipGuard({
-      ledgerRel: BASELINE_REL,
+      ledgerRel: baselineRel,
       repoRoot,
       parseLedger: (text, label) => {
-        const members = parseTestStateBaseline(text, label);
-        if (label === BASELINE_REL) {
-          validateTestStateBaselineFiles({ members, repoRoot, trackedFiles });
+        const members = parseTestBaseline(text, label);
+        if (label === baselineRel) {
+          validateTestBaselineFiles({
+            members,
+            repoRoot,
+            trackedFiles,
+            baselineRel,
+          });
         }
         return members;
       },
-      label: "test-state",
+      args,
+      label: `test-${kind}`,
       remediation:
-        "use an auto-restoring fixture instead of adding state access",
+        kind === "state"
+          ? "use an auto-restoring fixture instead of adding state access"
+          : "migrate nondeterministic test work to @stll/test-kit",
     }),
   );
 }

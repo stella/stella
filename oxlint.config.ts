@@ -1619,6 +1619,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
+    "./.oxlint-plugins/no-ambient-time-in-tests.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -5204,6 +5205,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-direct-test-state/no-direct-test-state": "error",
+        "no-ambient-time-in-tests/no-ambient-time-in-tests": "error",
       },
     },
     {
