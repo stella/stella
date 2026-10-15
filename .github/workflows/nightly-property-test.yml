@@ -4,10 +4,9 @@ defaults:
   run:
     shell: bash
 
+# Long property runs are on demand only: pull requests, pushes and the merge
+# queue run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 05:17 UTC daily, after the nightly full test suite.
-    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       round:

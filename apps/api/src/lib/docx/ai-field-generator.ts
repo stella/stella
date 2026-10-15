@@ -300,6 +300,7 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
     adapter: model.adapter,
     messages,
     outputSchema: input.outputSchema,
+    tenantWorkspaceIds: input.tenantWorkspaceIds,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
