@@ -1467,3 +1467,111 @@ test.describe("clip more button on coarse pointers", () => {
     });
   }
 });
+
+test("Cmd-click toggles ordered selection and Escape clears it before hiding", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await cards.nth(0).click({ modifiers: ["Meta"] });
+  await cards.nth(1).click({ modifiers: ["Meta"] });
+  await expect(cards.nth(0)).toHaveAttribute("aria-pressed", "true");
+  await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(cards.nth(2)).toHaveAttribute("aria-pressed", "true");
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+  await cards.nth(0).click({ modifiers: ["Meta"] });
+  await expect(cards.nth(0)).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Meta+c");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-3", "clip-2"],
+  });
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+  await cards.nth(0).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "original",
+    id: "clip-1",
+  });
+});
+
+test("click and Enter paste the selection in click order using either format", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await cards.nth(1).click({ modifiers: ["Meta"] });
+  await cards.nth(0).click({ modifiers: ["Meta"] });
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await cards.nth(0).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-2", "clip-1", "clip-3"],
+  });
+  await page.keyboard.press("Shift+Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "plainText",
+    ids: ["clip-2", "clip-1", "clip-3"],
+  });
+});
+
+test("paste footer options share hover and focus treatment and activate independently", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  const footer = page.locator("[data-clipboard-format-shortcuts]");
+  const original = footer.getByRole("button", { name: "Original formatting" });
+  const plain = footer.getByRole("button", { name: "Plain text" });
+  for (const option of [original, plain]) {
+    await option.hover();
+    const hovered = await option.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    );
+    await page.mouse.move(0, 0);
+    await option.focus();
+    expect(
+      await option.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      ),
+    ).toBe(hovered);
+  }
+  await page.keyboard.press("Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "plainText",
+    id: "clip-1",
+  });
+  await original.click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "original",
+    id: "clip-1",
+  });
+});
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`every group chip keeps its focus marker inside the rail (${colorScheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await openClipboard(page, "en");
+    const chips = page.locator(".clipboard-groups-rail button");
+    expect(await chips.count()).toBeGreaterThanOrEqual(3);
+    for (const chip of await chips.all()) {
+      await chip.focus();
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Shift+Tab");
+      await expect(chip).toBeFocused();
+      const marker = await chip.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          inset: style.getPropertyValue("--tw-ring-inset").trim(),
+          offset: style.getPropertyValue("--tw-ring-offset-width").trim(),
+          outline: Number.parseFloat(style.outlineWidth),
+          outlineOffset: Number.parseFloat(style.outlineOffset),
+        };
+      });
+      expect(marker.inset).toBe("inset");
+      expect(marker.offset).toBe("0px");
+      expect(marker.outlineOffset).toBeLessThanOrEqual(-marker.outline);
+    }
+  });
+}

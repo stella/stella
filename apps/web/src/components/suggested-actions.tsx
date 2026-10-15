@@ -123,7 +123,7 @@ export const SuggestedActions = ({
         "flex max-w-full gap-1.5",
         horizontal
           ? [
-              "scrollbar-none overflow-x-auto",
+              "scrollbar-none overflow-x-auto [&_button]:focus-visible:ring-offset-0 [&_button]:focus-visible:ring-inset",
               moreInlineEnd &&
                 "[mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] rtl:[mask-image:linear-gradient(to_left,black_calc(100%-2.5rem),transparent)]",
             ]

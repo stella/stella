@@ -1248,6 +1248,78 @@ fn text_clipboard_contents(
   Some(contents)
 }
 
+/// Builds one local pasteboard item; source clip identities and history stay intact.
+pub(crate) fn compose_clipboard_items(
+  items: &[ClipboardItem],
+  format: ClipboardCopyFormat,
+) -> Result<ClipboardItem, String> {
+  let first = items.first().ok_or("no clipboard items selected")?;
+  let mut ids = HashSet::new();
+  let mut text_items = Vec::with_capacity(items.len());
+  for item in items {
+    let plain_text = item
+      .plain_text()
+      .ok_or("clipboard images cannot be combined with other clips")?;
+    if !ids.insert(item.id()) {
+      return Err("clipboard selection contains duplicate items".to_string());
+    }
+    text_items.push((plain_text, item.html()));
+  }
+  if items.len() == 1 {
+    return Ok(first.clone());
+  }
+  let plain_text = text_items
+    .iter()
+    .map(|(plain_text, _)| *plain_text)
+    .collect::<Vec<_>>()
+    .join("\n");
+  if format == ClipboardCopyFormat::Original
+    && text_items.iter().any(|(_, html)| html.is_some())
+  {
+    let html = text_items
+      .iter()
+      .map(|(plain_text, html)| {
+        html.map(str::to_string).unwrap_or_else(|| {
+          // Text becomes markup only at this boundary; escape before adding breaks.
+          plain_text
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', "<br>")
+        })
+      })
+      .collect::<Vec<_>>()
+      .join("<br>");
+    return Ok(ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      html,
+      id: String::new(),
+      name: None,
+      plain_text,
+      retention_class: ClipboardItemRetentionClass::History,
+      // RTF documents cannot be concatenated; HTML carries combined formatting.
+      rtf: None,
+      source_app: None,
+    });
+  }
+  Ok(ClipboardItem::Text {
+    copied_at: Utc::now(),
+    group_id: None,
+    grouped_at: None,
+    id: String::new(),
+    name: None,
+    plain_text,
+    retention_class: ClipboardItemRetentionClass::History,
+    source_app: None,
+  })
+}
+
 impl ClipboardManager {
   pub fn new() -> Self {
     Self {
@@ -1700,6 +1772,25 @@ impl ClipboardManager {
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
+  }
+
+  pub fn compose_items(
+    &self,
+    ids: &[String],
+    format: ClipboardCopyFormat,
+  ) -> Result<ClipboardItem, String> {
+    if ids.len() > self.items.len() {
+      return Err("clipboard selection is invalid".to_string());
+    }
+    let items = ids
+      .iter()
+      .map(|id| {
+        self
+          .item(id)
+          .ok_or_else(|| "clipboard item no longer exists".to_string())
+      })
+      .collect::<Result<Vec<_>, _>>()?;
+    compose_clipboard_items(&items, format)
   }
 
   pub fn item(&self, id: &str) -> Option<ClipboardItem> {
@@ -4351,6 +4442,91 @@ mod tests {
       plain_text.as_slice(),
       [ClipboardContent::Text(text)] if text == "Clause"
     ));
+  }
+
+  #[test]
+  fn multi_copy_preserves_selection_order_and_escapes_plain_text_in_html() {
+    let plain = text_item(Utc::now(), "<A> & \"quoted\"\r\nnext");
+    let rich = ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      html: "<strong>Clause</strong>".to_string(),
+      id: "rich".to_string(),
+      name: None,
+      plain_text: "Clause".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      rtf: Some("{\\rtf1 Clause}".to_string()),
+      source_app: None,
+    };
+    let items = vec![rich.clone(), plain, text_item(Utc::now(), "last")];
+    let original =
+      compose_clipboard_items(&items, ClipboardCopyFormat::Original).unwrap();
+    assert_eq!(
+      original.plain_text(),
+      Some("Clause\n<A> & \"quoted\"\r\nnext\nlast")
+    );
+    assert_eq!(
+      original.html(),
+      Some(
+        "<strong>Clause</strong><br>&lt;A&gt; &amp; &quot;quoted&quot;<br>next<br>last"
+      )
+    );
+    assert_eq!(original.rtf(), None);
+    let plain =
+      compose_clipboard_items(&items, ClipboardCopyFormat::PlainText).unwrap();
+    assert_eq!(plain.plain_text(), original.plain_text());
+    assert_eq!(plain.html(), None);
+    assert_eq!(plain.rtf(), None);
+    assert_eq!(
+      compose_clipboard_items(&[rich.clone()], ClipboardCopyFormat::Original).unwrap(),
+      rich
+    );
+  }
+
+  #[test]
+  fn multi_copy_rejects_empty_duplicate_missing_and_image_selections() {
+    let item = text_item(Utc::now(), "text");
+    assert_eq!(
+      compose_clipboard_items(&[], ClipboardCopyFormat::Original),
+      Err("no clipboard items selected".to_string())
+    );
+    assert_eq!(
+      compose_clipboard_items(
+        &[item.clone(), item.clone()],
+        ClipboardCopyFormat::Original
+      ),
+      Err("clipboard selection contains duplicate items".to_string())
+    );
+    let image = image_item("image", "blob", "checksum", 10);
+    assert_eq!(
+      compose_clipboard_items(&[item.clone(), image], ClipboardCopyFormat::Original),
+      Err("clipboard images cannot be combined with other clips".to_string())
+    );
+    let mut manager = ready_manager();
+    manager.items.push(item);
+    assert_eq!(
+      manager.compose_items(&["missing".to_string()], ClipboardCopyFormat::Original),
+      Err("clipboard item no longer exists".to_string())
+    );
+  }
+
+  #[test]
+  fn multi_copy_plain_clips_keep_unicode_and_newlines_without_rich_formats() {
+    let items = vec![
+      text_item(Utc::now(), "Žluťoučký\n第一"),
+      text_item(Utc::now(), ""),
+      text_item(Utc::now(), "آخر"),
+    ];
+    for format in [
+      ClipboardCopyFormat::Original,
+      ClipboardCopyFormat::PlainText,
+    ] {
+      let combined = compose_clipboard_items(&items, format).unwrap();
+      assert_eq!(combined.plain_text(), Some("Žluťoučký\n第一\n\nآخر"));
+      assert_eq!(combined.html(), None);
+      assert_eq!(combined.rtf(), None);
+    }
   }
 
   #[test]

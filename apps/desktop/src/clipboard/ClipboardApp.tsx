@@ -150,6 +150,7 @@ import type {
   ClipboardPointerPosition,
   ClipboardSearchScope,
 } from "./clipboard-logic";
+import { clipboardSelection } from "./clipboard-selection";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -343,6 +344,8 @@ type ClipboardOpenMenuOptions = {
 
 type ClipboardCardProps = {
   active: boolean;
+  selected: boolean;
+  onToggleSelection: (id: string) => void;
   ageReferenceTime: number;
   dragging: boolean;
   groupColor: ClipboardGroupColor | null;
@@ -445,6 +448,8 @@ const ClipboardCardFooterMetadata = ({
 
 const ClipboardCard = ({
   active,
+  selected,
+  onToggleSelection,
   ageReferenceTime,
   dragging,
   groupColor,
@@ -568,6 +573,7 @@ const ClipboardCard = ({
         "motion-safe:transition-opacity motion-safe:duration-150",
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
+      data-selected={selected ? "" : undefined}
       data-clipboard-id={item.id}
       data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
@@ -581,7 +587,14 @@ const ClipboardCard = ({
         })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        onClick={() => onCopy(item, "original")}
+        aria-pressed={selected}
+        onClick={(event) => {
+          if (event.metaKey) {
+            onToggleSelection(item.id);
+            return;
+          }
+          onCopy(item, "original");
+        }}
         onContextMenu={(event) =>
           onOpenMenu({ anchor: "pointer", event, item, index })
         }
@@ -595,26 +608,33 @@ const ClipboardCard = ({
             onImagePreviewStatusChange={setImagePreviewStatus}
             query={query}
           />
-          {/* Renaming takes both keys for itself: Enter commits the name and
-              Shift+Enter is swallowed with it, so the hints would lie. */}
-          {active && !editingName && item.type === "formattedText" ? (
-            <span
-              className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-              data-clipboard-format-shortcuts=""
-            >
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">↵</kbd>
-                {t("originalFormatting")}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">⇧↵</kbd>
-                {t("plainText")}
-              </span>
-            </span>
-          ) : null}
         </div>
       </button>
+
+      {active && !editingName && item.type === "formattedText" ? (
+        <div
+          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+          data-clipboard-format-shortcuts=""
+        >
+          <button
+            type="button"
+            onClick={() => onCopy(item, "original")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">↵</kbd>
+            {t("originalFormatting")}
+          </button>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={() => onCopy(item, "plainText")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">⇧↵</kbd>
+            {t("plainText")}
+          </button>
+        </div>
+      ) : null}
 
       <Button
         aria-expanded={menuOpen}
@@ -1549,6 +1569,7 @@ const ClipboardApp = () => {
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selection, setSelection] = useState<string[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
@@ -1875,19 +1896,22 @@ const ClipboardApp = () => {
     format: ClipboardCopyFormat = "original",
   ) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { format, id: item.id }).catch(
-      (error: unknown) => {
-        // An unrecognised rejection means the clip never left the window.
-        const kind = isClipboardCopyError(error) ? error.kind : "copy";
-        const feedback = COPY_FAILURE_FEEDBACK[kind];
-        reportDesktopError({
-          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-          operation: feedback.operation,
-          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-        });
-        setError({ message: t(feedback.messageKey), source: "operation" });
-      },
-    );
+    const ids = selection;
+    const copying =
+      ids.length > 0
+        ? invoke("clipboard_copy_items", { format, ids })
+        : invoke("clipboard_copy_item", { format, id: item.id });
+    void copying.catch((error: unknown) => {
+      // An unrecognised rejection means the clip never left the window.
+      const kind = isClipboardCopyError(error) ? error.kind : "copy";
+      const feedback = COPY_FAILURE_FEEDBACK[kind];
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: feedback.operation,
+        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+      });
+      setError({ message: t(feedback.messageKey), source: "operation" });
+    });
   };
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
@@ -2453,6 +2477,10 @@ const ClipboardApp = () => {
       setDialog({ type: "closed" });
       return;
     }
+    if (selection.length > 0) {
+      setSelection((current) => clipboardSelection(current, { type: "clear" }));
+      return;
+    }
     requestHide();
   });
 
@@ -2690,6 +2718,15 @@ const ClipboardApp = () => {
                         return (
                           <ClipboardCard
                             active={index === activeIndex}
+                            selected={selection.includes(item.id)}
+                            onToggleSelection={(id) =>
+                              setSelection((current) =>
+                                clipboardSelection(current, {
+                                  type: "toggle",
+                                  id,
+                                }),
+                              )
+                            }
                             ageReferenceTime={ageReferenceTime}
                             dragging={
                               dragState.type === "dragging" &&
