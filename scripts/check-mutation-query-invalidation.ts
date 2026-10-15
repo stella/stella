@@ -22,6 +22,34 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
+const READER_SPREAD_OVERRIDES = new Set([
+  "enabled",
+  "select",
+  "staleTime",
+  "gcTime",
+  "placeholderData",
+  "refetchInterval",
+  "refetchIntervalInBackground",
+  "refetchOnMount",
+  "refetchOnReconnect",
+  "refetchOnWindowFocus",
+  "retry",
+  "retryDelay",
+  "retryOnMount",
+  "throwOnError",
+  "notifyOnChangeProps",
+  "subscribed",
+]);
+const MUTATION_SPREAD_OVERRIDES = new Set([
+  "onMutate",
+  "onSuccess",
+  "onError",
+  "onSettled",
+  "retry",
+  "retryDelay",
+  "throwOnError",
+  "scope",
+]);
 
 const baselineSchema = v.object({
   entries: v.record(v.string(), v.pipe(v.string(), v.regex(/\S/u))),
@@ -744,6 +772,79 @@ const unchangedOptionsBinding = ({
   return { binding, expression: binding.value, reference: binding.scope };
 };
 
+type TaggedSpreadStatus = "unresolved" | "untagged" | "tagged" | "invalid";
+type TaggedSpreadValidationArgs = {
+  module: ModuleIndex;
+  expression: ts.Expression;
+  reference: ts.Node;
+  allowedOverrides: ReadonlySet<string>;
+  isTaggedSpread: (expression: ts.Expression, reference: ts.Node) => boolean;
+  seen?: Set<Binding>;
+};
+
+const validateTaggedSpreadOverrides = ({
+  module,
+  expression,
+  reference,
+  allowedOverrides,
+  isTaggedSpread,
+  seen = new Set<Binding>(),
+}: TaggedSpreadValidationArgs): TaggedSpreadStatus => {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) {
+    const resolved = unchangedOptionsBinding({
+      module,
+      identifier: value,
+      reference,
+    });
+    if (!resolved || seen.has(resolved.binding)) {
+      return "unresolved";
+    }
+    return validateTaggedSpreadOverrides({
+      module,
+      expression: resolved.expression,
+      reference: resolved.reference,
+      allowedOverrides,
+      isTaggedSpread,
+      seen: new Set(seen).add(resolved.binding),
+    });
+  }
+  if (!ts.isObjectLiteralExpression(value)) {
+    return "unresolved";
+  }
+  let tagged = false;
+  for (const property of value.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      if (tagged) {
+        return "invalid";
+      }
+      const nested = validateTaggedSpreadOverrides({
+        module,
+        expression: property.expression,
+        reference: property,
+        allowedOverrides,
+        isTaggedSpread,
+        seen: new Set(seen),
+      });
+      if (nested === "invalid") {
+        return "invalid";
+      }
+      tagged =
+        nested === "tagged" || isTaggedSpread(property.expression, property);
+      continue;
+    }
+    if (
+      tagged &&
+      (!property.name ||
+        ts.isComputedPropertyName(property.name) ||
+        !allowedOverrides.has(propertyName(property.name) ?? ""))
+    ) {
+      return "invalid";
+    }
+  }
+  return tagged ? "tagged" : "untagged";
+};
+
 const mutationOptionsShape = ({
   module,
   expression,
@@ -816,6 +917,21 @@ const resolvedMutationHelper = (
     : undefined;
 };
 
+const isTaggedMutationSpread = (
+  module: ModuleIndex,
+  expression: ts.Expression,
+  reference: ts.Node,
+) => {
+  const shape = mutationOptionsShape({ module, expression, reference });
+  const mutationFunctions =
+    shape?.properties.filter(([key]) => key === "mutationFn") ?? [];
+  const finalMutationFunction = mutationFunctions.at(-1)?.[1];
+  return (
+    finalMutationFunction !== undefined &&
+    resolvedMutationHelper(module, finalMutationFunction) !== undefined
+  );
+};
+
 type MutationExecutionResult =
   | { status: "valid" }
   | { status: "invalid"; reason: string }
@@ -835,6 +951,23 @@ const inspectMutationExecution = ({
   contracts,
 }: MutationExecutionArgs): MutationExecutionResult => {
   const options = call.arguments.at(0);
+  const spreadValidation = options
+    ? validateTaggedSpreadOverrides({
+        module,
+        expression: options,
+        reference: call,
+        allowedOverrides: MUTATION_SPREAD_OVERRIDES,
+        isTaggedSpread: (spread, reference) =>
+          isTaggedMutationSpread(module, spread, reference),
+      })
+    : "unresolved";
+  if (spreadValidation === "invalid") {
+    return {
+      status: "invalid",
+      reason:
+        "Mutation option spread overrides must use an explicit allowed option key.",
+    };
+  }
   const shape = options
     ? mutationOptionsShape({ module, expression: options, reference: call })
     : undefined;
@@ -1283,29 +1416,22 @@ const isTaggedReaderValue = ({
     );
   }
   if (ts.isObjectLiteralExpression(value)) {
-    let taggedSpreadSeen = false;
-    for (const property of value.properties) {
-      if (ts.isSpreadAssignment(property)) {
-        if (
-          !isTaggedReaderValue({
-            module,
-            expression: property.expression,
-            reference,
-            names,
-            modules,
-            seen: new Set(seen),
-          })
-        ) {
-          return false;
-        }
-        taggedSpreadSeen = true;
-        continue;
-      }
-      if (taggedSpreadSeen && propertyName(property.name) === "meta") {
-        return false;
-      }
-    }
-    return taggedSpreadSeen;
+    const validation = validateTaggedSpreadOverrides({
+      module,
+      expression: value,
+      reference,
+      allowedOverrides: READER_SPREAD_OVERRIDES,
+      isTaggedSpread: (spread, spreadReference) =>
+        isTaggedReaderValue({
+          module,
+          expression: spread,
+          reference: spreadReference,
+          names,
+          modules,
+          seen: new Set(seen),
+        }),
+    });
+    return validation === "tagged";
   }
   if (!ts.isCallExpression(value)) {
     return false;

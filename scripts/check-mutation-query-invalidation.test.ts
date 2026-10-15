@@ -495,3 +495,70 @@ export const readEntities = () => useQuery(alias);
     expect(findings.map(({ id }) => id)).toEqual([`${reader?.id}:reader`]);
   }
 });
+
+test("tagged reader spreads allow only explicit non-computed overrides", () => {
+  const fixture = (overrides: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const options = resourceQueryOptions(
+  queryOptions({ queryKey: ["entities"], queryFn: async () => [] }),
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const readEntities = () => useQuery({ ...options, ${overrides} });
+`,
+    },
+  ];
+  for (const override of [
+    '["meta"]: {}',
+    '["enabled"]: false',
+    "meta: {}",
+    "retryFutureMode: true",
+    "enabled: false, ...options",
+    "...{ ...options, meta: {} }",
+  ]) {
+    const findings = violations(fixture(override));
+    expect(findings.some(({ id }) => id.endsWith(":reader"))).toBe(true);
+  }
+  expect(violations(fixture("enabled: false"))).toEqual([]);
+});
+
+test("tagged mutation spreads use the same closed override rule", () => {
+  const fixture = (overrides: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { useMutation } from "@tanstack/react-query";
+const api = { entities: (_args: { workspaceId: string }) => ({ rename: { patch: (input: unknown) => input } }) };
+const renameEntityRequest = () => api.entities({ workspaceId: "123" }).rename.patch({ entityId: "123" });
+const wrapped = resourceMutation({ mutation: "renameEntity", queryClient: {}, mutationFn: renameEntityRequest });
+const options = { mutationFn: wrapped };
+export const rename = () => useMutation({ ...options, ${overrides} });
+`,
+    },
+  ];
+  for (const override of [
+    '["onSuccess"]: () => {}',
+    '["meta"]: {}',
+    "meta: true",
+    "onSuccess: () => {}, ...options",
+    "...{ ...options, ...{} }",
+  ]) {
+    const findings = violations(fixture(override));
+    expect(
+      findings.some(
+        ({ file, disposition }) =>
+          file === "apps/web/src/features.ts" &&
+          disposition === "invalid-declaration",
+      ),
+    ).toBe(true);
+    assertInvalidCannotBeBaselined(findings);
+  }
+  expect(violations(fixture("onSuccess: () => {}"))).toEqual([]);
+});
