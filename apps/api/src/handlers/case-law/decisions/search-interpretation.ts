@@ -102,13 +102,17 @@ const NARROWING_FILTERS = {
 } as const satisfies Record<
   NarrowingOption,
   (body: SearchDecisionsBody) => boolean
-> &
-  Record<CaseLawSearchFilter, (body: SearchDecisionsBody) => boolean> &
-  Record<
-    | Exclude<NarrowingOption, CaseLawSearchFilter>
-    | Exclude<CaseLawSearchFilter, NarrowingOption>,
-    never
-  >;
+>;
+
+type SameUnion<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : never
+  : never;
+
+// The wire contract names the same filters the effect map derives, so a
+// filter reported back to a reader is always one this request can carry.
+true satisfies SameUnion<NarrowingOption, CaseLawSearchFilter>;
 
 /**
  * The narrowing filters this request carries, named as the request spells
