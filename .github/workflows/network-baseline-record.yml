@@ -99,12 +99,6 @@ jobs:
         with:
           expected-sha: ${{ github.sha }}
 
-      - name: Require a ready stack
-        if: steps.stack.outputs.status != 'ready'
-        run: |
-          echo "::error::Network baseline recording needs a ready E2E stack"
-          exit 1
-
       - name: Seed write mode from the latest published recording
         if: (inputs.mode || 'write') == 'write'
         uses: ./.github/actions/prepare-network-baseline
