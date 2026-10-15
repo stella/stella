@@ -176,7 +176,7 @@ export class ModelOutputIncompleteError extends ModelRunError {
   }
 }
 
-export const MODEL_OUTPUT_MODERATED_MESSAGE =
+const MODEL_OUTPUT_MODERATED_MESSAGE =
   "The AI provider stopped the answer under its content policy";
 
 /**
@@ -195,7 +195,7 @@ export class ModelOutputModeratedError extends ModelRunError {
   }
 }
 
-export const MODEL_RUN_UNFINISHED_MESSAGE =
+const MODEL_RUN_UNFINISHED_MESSAGE =
   "The AI model ended its run without an answer";
 
 /**

@@ -89,7 +89,7 @@ const ATTACHMENT_KINDS = Object.keys(ATTACHMENTS).filter(
 
 /** The thread's reasoning effort: none chosen, or one of the catalog's. */
 const EFFORT_CHOICES = ["default", ...REASONING_EFFORTS] as const;
-export type EffortChoice = "default" | ReasoningEffort;
+type EffortChoice = "default" | ReasoningEffort;
 
 /**
  * The tools the turn declares: Stella's tools for a chat with no extra
