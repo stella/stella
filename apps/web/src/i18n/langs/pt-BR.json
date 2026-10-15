@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella ainda está verificando se este DOCX pode ser editado com segurança. Tente novamente quando o documento terminar de carregar.",
     "checkingDocxEditTitle": "Verificando documento",
     "chooseEvidence": "Escolha um arquivo para inserir uma referência numerada de prova.",
+    "collaborationSnapshotRecovered": "Não foi possível reabrir a cópia de colaboração armazenada. A sala foi restaurada com base no último documento salvo; alterações não salvas podem ter sido perdidas.",
     "comment": "Comentário",
     "comments": {
       "addPlaceholder": "Adicione um comentário...",
@@ -4337,6 +4338,8 @@
         "yearMonthSequential": "Ano-Mês / Sequencial (2026-02/001)",
         "yearSequential": "Ano/Sequencial (2026/001)"
       },
+      "showInTitle": "Mostrar o número ao lado do nome do caso",
+      "showInTitleDescription": "Quando desligado, o título é exatamente o nome informado.",
       "title": "Numeração de casos",
       "tokenHelp": "Tokens disponíveis: '{'SEQ'}' (sequência), '{'YYYY'}' (ano), '{'YY'}' (ano de 2 dígitos), '{'MM'}' (mês)"
     },
@@ -4970,17 +4973,22 @@
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",
+    "provisionEffectiveFrom": "em vigor desde {date}",
     "provisionHistoryEarliest": "Versão mais antiga disponível.",
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
     "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
+    "provisionPartTextUnavailable": "O texto de {provisionLabel} não está disponível",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texto indisponível para esta versão",
     "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar apenas a parte citada",
+    "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
@@ -4996,7 +5004,6 @@
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
     "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redação em vigor desde {date}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
@@ -5670,7 +5677,7 @@
       "title": "Copiar para caso"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de caso",
+      "matterName": "Nome do caso",
       "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
     },
     "createNewWorkspace": "Criar novo caso",
@@ -6122,15 +6129,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "enviado"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Pessoal"
-    },
     "parties": {
       "addParty": "Adicionar parte",
       "changeClient": "Alterar cliente",
       "client": "Cliente",
       "noClient": "Nenhum cliente atribuído",
+      "noClientOptional": "Sem cliente (opcional)",
       "noParties": "Nenhuma parte adicionada a este caso.",
       "partyRoles": {
         "co_counsel": "Coadvogado",

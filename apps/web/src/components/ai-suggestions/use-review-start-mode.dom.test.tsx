@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/review" });
 const { act } = await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
@@ -13,7 +15,7 @@ const { REVIEW_START_MODE, reviewStartModeStorageKey } =
 const { useReviewStartMode } = await import("./use-review-start-mode");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ReviewMode = () => {

@@ -85,66 +85,28 @@ describe("updateWorkspace", () => {
     expect(getCallCount()).toBe(1);
   });
 
-  test("rejects promote on an already-client workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: "contact_existing",
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
+  test("looks up the contact when attaching a client to a personal matter", async () => {
+    const workspaceRow = {
+      id: "ws_test123",
+      name: "Workspace",
+      clientId: null,
+      reference: null,
+      billingReference: null,
+      color: null,
+      leadUserId: null,
+    };
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the limit the contact lookup chains
+            for: () =>
+              Object.assign(Promise.resolve([workspaceRow]), {
+                limit: async () => [],
+              }),
+          }),
         }),
       }),
-    };
-
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => workspaceSelect,
-    });
-
-    const result = await updateWorkspace.handler(
-      createContext({
-        body: {
-          promote: {
-            clientId: toSafeId<"contact">(Bun.randomUUIDv7()),
-          },
-        },
-        safeDb,
-        scopedDb,
-      }),
-    );
-
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspace is already a client matter" },
-    });
-  });
-
-  test("rejects clientId update on a personal workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: null,
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
-      }),
-    };
-
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => workspaceSelect,
     });
 
     const result = await updateWorkspace.handler(
@@ -158,10 +120,8 @@ describe("updateWorkspace", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: {
-        message: "Use promote to attach a client to a personal matter",
-      },
+      code: 404,
+      response: { message: "Client not found" },
     });
   });
 });
