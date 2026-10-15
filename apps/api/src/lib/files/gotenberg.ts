@@ -93,6 +93,51 @@ const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
 const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
   Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
 
+/**
+ * Extensions the converter's LibreOffice route accepts for each image type
+ * it renders, canonical first. The route picks its import filter by the
+ * uploaded filename's extension, so an image named without one (or with the
+ * wrong one) would fail to convert.
+ */
+const CONVERTER_IMAGE_EXTENSIONS: ReadonlyMap<
+  string,
+  readonly [string, ...string[]]
+> = new Map([
+  ["image/bmp", ["bmp"]],
+  ["image/gif", ["gif"]],
+  ["image/jpeg", ["jpg", "jpeg"]],
+  ["image/png", ["png"]],
+  ["image/tiff", ["tiff", "tif"]],
+]);
+
+/**
+ * The (unsanitized) name to upload a file to the converter under. An image
+ * keeps its extension when it is one the converter accepts for the image's
+ * type; a missing or wrong extension is replaced by the type's canonical
+ * one. Other types keep the uploaded name.
+ */
+const withConverterExtension = (fileName: string, mimeType: string): string => {
+  const accepted = CONVERTER_IMAGE_EXTENSIONS.get(mimeType);
+  if (accepted === undefined) {
+    return fileName;
+  }
+  // A dot only starts an extension inside the last path segment, and not as
+  // its first character (a dotfile name has no extension).
+  const segmentStart =
+    Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1;
+  const lastDot = fileName.lastIndexOf(".");
+  const hasExtension = lastDot > segmentStart;
+  const extension = hasExtension
+    ? fileName.slice(lastDot + 1).toLowerCase()
+    : null;
+  if (extension !== null && accepted.includes(extension)) {
+    return fileName;
+  }
+  const stem = hasExtension ? fileName.slice(0, lastDot) : fileName;
+  const [canonical] = accepted;
+  return `${stem}.${canonical}`;
+};
+
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
 
@@ -253,7 +298,9 @@ export const convertToPdf = async (
           file: {
             fieldName: "files",
             // The converter picks its import filter by extension.
-            fileName: sanitizeFilenamePreservingExtension(fileName),
+            fileName: sanitizeFilenamePreservingExtension(
+              withConverterExtension(fileName, mimeType),
+            ),
             bytes: source,
           },
           fields: { exportNotes: "true", exportNotesInMargin: "true" },

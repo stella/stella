@@ -301,6 +301,77 @@ describe("image encodings the in-process embedder cannot take", () => {
   });
 });
 
+/** The multipart filename of the one upload `convert` sends to the converter. */
+const uploadedFileName = async (
+  convert: () => ReturnType<typeof convertToPdf>,
+): Promise<string | undefined> => {
+  const bodies: string[] = [];
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+    asFetchMock(async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(await new Response(init?.body).text());
+      return new Response(new TextEncoder().encode("%PDF-1.7 converted"));
+    }),
+  );
+  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  try {
+    await convert();
+  } finally {
+    fetchSpy.mockRestore();
+    warn.mockRestore();
+  }
+  expect(bodies).toHaveLength(1);
+  return /; filename="([^"]*)"/u.exec(bodies[0] ?? "")?.[1];
+};
+
+const namedFileOf = (bytes: Uint8Array, mimeType: string, path: string) =>
+  testScannedFile({ bytes: bytes.slice().buffer, mimeType, path });
+
+describe("converter upload filenames", () => {
+  test("an image named without an extension is uploaded with its type's", async () => {
+    const png = declaredPng({ width: 8, height: 8, interlaced: true });
+    expect(
+      await uploadedFileName(
+        async () => await convertToPdf(namedFileOf(png, "image/png", "scan")),
+      ),
+    ).toBe("scan.png");
+  });
+
+  test("an image with the wrong extension has it replaced", async () => {
+    const cmyk = withJpegComponents(await splitJpeg(16, 8, 1), 4);
+    expect(
+      await uploadedFileName(
+        async () =>
+          await convertToPdf(namedFileOf(cmyk, "image/jpeg", "photo.dat")),
+      ),
+    ).toBe("photo.jpg");
+  });
+
+  test("an accepted alternative extension is kept", async () => {
+    const cmyk = withJpegComponents(await splitJpeg(16, 8, 1), 4);
+    expect(
+      await uploadedFileName(
+        async () =>
+          await convertToPdf(namedFileOf(cmyk, "image/jpeg", "Photo.JPEG")),
+      ),
+    ).toBe("Photo.JPEG");
+  });
+
+  test("other types keep the uploaded name", async () => {
+    expect(
+      await uploadedFileName(
+        async () =>
+          await convertToPdf(
+            namedFileOf(
+              new TextEncoder().encode("doc"),
+              "application/msword",
+              "brief.doc",
+            ),
+          ),
+      ),
+    ).toBe("brief.doc");
+  });
+});
+
 const TRANSCODE_FAILED_EVENT = "file_conversion.image_transcode_failed";
 
 describe("image types the converter cannot import", () => {
