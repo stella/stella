@@ -12,11 +12,18 @@
 import * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { textMarkBoxClass } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
+import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import {
+  PeekPdfViewer,
+  PeekSuspenseFallback,
+} from "@/components/pdf/peek/peek-pdf-viewer";
 import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import {
@@ -33,6 +40,7 @@ import type {
 import { originalPdfPagesOptions } from "@/features/avt/queries";
 import { STATE_COLOR } from "@/features/avt/state-chip";
 import type { VerificationClaim, VerificationRun } from "@/features/avt/types";
+import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
@@ -97,15 +105,16 @@ export const OriginalPdfView = ({
     }),
   );
 
-  // A file that cannot be read for boxes leaves every claim listed; the
-  // viewer shows its own error for a file that does not load.
+  // Page texts that cannot be read (the file, the worker, or the PDF itself)
+  // say so and offer a retry, rather than reporting every claim absent.
+  const placement = resolvePdfClaimLocations({
+    pages: pagesQuery.data,
+    failed: fileQuery.isError || pagesQuery.isError,
+    blocks: run.blocks,
+    claims: run.claims,
+  });
   const locations =
-    resolvePdfClaimLocations({
-      pages: pagesQuery.data,
-      failed: fileQuery.isError || pagesQuery.isError,
-      blocks: run.blocks,
-      claims: run.claims,
-    }) ?? NOT_YET_LOCATED;
+    placement.status === "placed" ? placement.locations : NOT_YET_LOCATED;
 
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const locatedByPage = new Map<number, LocatedPdfClaim[]>();
@@ -170,23 +179,75 @@ export const OriginalPdfView = ({
         }}
         {...{ [ROOT_ATTRIBUTE]: true }}
       >
-        <PeekPdfViewer
-          activePropertyId=""
-          entityId={run.entityId}
+        {/* The viewer and the claim boxes read the pages from this store. */}
+        <MeasuredPdfProvider
+          active
+          fallback={{
+            suspense: <PeekSuspenseFallback />,
+            error: <InspectorPdfErrorFallback />,
+          }}
           fieldId={run.fileFieldId}
-          interactionMode="preview-only"
-          pdfPageOverlay={renderClaimMarks}
-          scaleOffset={0}
-          viewId="all"
-          workspaceId={workspaceId}
-        />
+          initialScaleOffset={0}
+          surface="avt-original-pdf"
+        >
+          <PeekPdfViewer
+            activePropertyId=""
+            entityId={run.entityId}
+            fieldId={run.fileFieldId}
+            interactionMode="preview-only"
+            pdfPageOverlay={renderClaimMarks}
+            scaleOffset={0}
+            viewId="all"
+            workspaceId={workspaceId}
+          />
+        </MeasuredPdfProvider>
       </div>
-      <UnlocatedClaims
-        claims={unlocated}
-        markOf={markOf}
-        onSelect={onSelect}
-        selected={selected}
-      />
+      {placement.status === "failed" ? (
+        <PageTextFailed
+          onRetry={() => {
+            // A file that did not load is fetched again; its page texts
+            // follow. Otherwise only the page texts are read again.
+            if (fileQuery.isError) {
+              detached(fileQuery.refetch(), "avt.refetch-original-pdf-file");
+              return;
+            }
+            detached(pagesQuery.refetch(), "avt.refetch-original-pdf-pages");
+          }}
+          retrying={fileQuery.isFetching || pagesQuery.isFetching}
+        />
+      ) : (
+        <UnlocatedClaims
+          claims={unlocated}
+          markOf={markOf}
+          onSelect={onSelect}
+          selected={selected}
+        />
+      )}
+    </div>
+  );
+};
+
+/** The page texts could not be read: no claim is marked, and none is
+ *  reported absent. */
+const PageTextFailed = ({
+  onRetry,
+  retrying,
+}: {
+  onRetry: () => void;
+  retrying: boolean;
+}) => {
+  const t = useTranslations();
+  return (
+    <div
+      className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-2 text-xs"
+      role="alert"
+    >
+      <span className="min-w-0 flex-1">
+        {t("avt.verification.pdfTextFailed")}
+      </span>
+      <Button loading={retrying} onClick={onRetry} size="sm" variant="outline">
+        {t("common.retry")}
+      </Button>
     </div>
   );
 };

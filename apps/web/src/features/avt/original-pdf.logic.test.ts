@@ -225,10 +225,13 @@ describe("resolvePdfClaimLocations", () => {
         blocks,
         claims: docxOnly,
       }),
-    ).toEqual({ located: [], unlocated: [claimId(1), claimId(2)] });
+    ).toEqual({
+      status: "placed",
+      locations: { located: [], unlocated: [claimId(1), claimId(2)] },
+    });
   });
 
-  test("waits for the page texts, and lists every claim when they cannot be read", () => {
+  test("waits for the page texts, and reports a failed read instead of listing every claim", () => {
     const onPage = [pdfClaim(1, 1, 0, 4)];
     expect(
       resolvePdfClaimLocations({
@@ -237,7 +240,7 @@ describe("resolvePdfClaimLocations", () => {
         blocks,
         claims: onPage,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "reading" });
     expect(
       resolvePdfClaimLocations({
         pages: undefined,
@@ -245,7 +248,7 @@ describe("resolvePdfClaimLocations", () => {
         blocks,
         claims: onPage,
       }),
-    ).toEqual({ located: [], unlocated: [claimId(1)] });
+    ).toEqual({ status: "failed" });
   });
 });
 

@@ -136,7 +136,9 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
-const { verificationRunOptions } = await import("./queries");
+const { avtKeys, verificationRunOptions } = await import("./queries");
+const { fileOptions } = await import("@/lib/files/queries");
+const { PDF } = await import("@libpdf/core");
 const { VerificationView } = await import("./verification-view");
 const { STATE_META } = await import("./types");
 const { EMPTY_CLAIM_REVIEW } = await import("./claim-review.logic");
@@ -838,4 +840,143 @@ test("a step taken while the original is still loading scrolls the viewer once i
   await waitFor(() => {
     expect(hostScrolls).toEqual([{ blockId: "b2", fieldId: run.fileFieldId }]);
   });
+});
+
+/** The seeded run, its claims anchored on the pages of a PDF. */
+const seededPdfRun = (): VerificationRun => {
+  const run = seededRun();
+  return {
+    ...run,
+    claims: run.claims.map((claim) => ({
+      ...claim,
+      anchor: {
+        type: "pdf-page" as const,
+        pageNumber: 1,
+        start: claim.anchor.start,
+        end: claim.anchor.end,
+      },
+    })),
+    blocks: [
+      {
+        ordinal: 0,
+        blockId: "p1",
+        kind: "pdf-page" as const,
+        pageNumber: 1,
+        text: run.claims.map((claim) => claim.text).join("\n"),
+      },
+    ],
+  };
+};
+
+const seedPdfFile = async (
+  client: InstanceType<typeof QueryClient>,
+  run: VerificationRun,
+  bytes: Uint8Array,
+) => {
+  client.setQueryData(
+    fileOptions({
+      workspaceId,
+      fieldId: run.fileFieldId,
+      purpose: "display",
+    }).queryKey,
+    {
+      fileId: "0199a3c4-5b6d-7e8f-9a0b-000000009097",
+      fileName: "statement.pdf",
+      mimeType: "application/pdf",
+      originalMimeType: "application/pdf",
+      buffer: bytes.slice().buffer,
+    },
+  );
+};
+
+const onePagePdf = async () => {
+  const pdf = PDF.create();
+  pdf
+    .addPage({ size: "letter" })
+    .drawText("The parties signed the agreement in July.", {
+      x: 72,
+      y: 700,
+      size: 12,
+    });
+  return await pdf.save();
+};
+
+const openOriginal = () => {
+  fireEvent.click(
+    screen.getByRole("tab", {
+      name: messages.avt.verification.documentView.original,
+    }),
+  );
+};
+
+test("the original PDF mounts its viewer and claim boxes inside the PDF store", async () => {
+  // happy-dom lays nothing out: the pane reports a width to fit the pages to.
+  const clientWidth =
+    Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth") ??
+    panic("happy-dom defines clientWidth");
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => 640,
+  });
+  // What the viewer's error boundaries caught. PDF.js cannot draw pages
+  // under happy-dom, so the file viewer itself reports a failed load; what
+  // must never reach a boundary is a viewer part read outside its store.
+  const caught: unknown[] = [];
+  const consoleError = spyOn(console, "error").mockImplementation(
+    (...args: unknown[]) => {
+      caught.push(...args.filter((arg) => arg instanceof Error));
+    },
+  );
+  try {
+    const run = seededPdfRun();
+    const { client } = await mount(run);
+    await seedPdfFile(client, run, await onePagePdf());
+    openOriginal();
+    await nextFrame();
+    await nextFrame();
+    expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    expect(
+      caught.filter(
+        (error) =>
+          error instanceof Error && error.message.includes("PDFProvider"),
+      ),
+    ).toEqual([]);
+  } finally {
+    consoleError.mockRestore();
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidth);
+  }
+});
+
+test("page text that cannot be read shows a retryable failure, not every claim as not located", async () => {
+  const run = seededPdfRun();
+  const { client } = await mount(run);
+  // The page texts are read as soon as the original opens.
+  client.setQueryDefaults(avtKeys.all(workspaceId), { enabled: true });
+  // Bytes no PDF reader accepts: the page-text read fails.
+  await seedPdfFile(client, run, new TextEncoder().encode("not a pdf"));
+  openOriginal();
+
+  const failure = await screen.findByRole("alert");
+  expect(failure.textContent).toContain(
+    messages.avt.verification.pdfTextFailed,
+  );
+  expect(screen.queryByText(/not located in the original/u)).toBeNull();
+
+  const pagesQuery = () =>
+    client
+      .getQueryCache()
+      .findAll({
+        queryKey: [...avtKeys.all(workspaceId), "original-pdf-pages"],
+      })
+      .at(0)?.state;
+  const failuresBefore = pagesQuery()?.errorUpdateCount ?? 0;
+  fireEvent.click(
+    within(failure).getByRole("button", { name: messages.common.retry }),
+  );
+  await waitFor(() => {
+    expect(pagesQuery()?.errorUpdateCount).toBe(failuresBefore + 1);
+  });
+  expect(screen.getByRole("alert").textContent).toContain(
+    messages.avt.verification.pdfTextFailed,
+  );
 });

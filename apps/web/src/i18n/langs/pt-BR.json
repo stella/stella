@@ -357,6 +357,7 @@
         "reading": "Modo de leitura"
       },
       "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
+      "pdfTextFailed": "Não foi possível ler o texto do PDF, por isso as alegações não estão marcadas nas páginas.",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {

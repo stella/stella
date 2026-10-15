@@ -357,6 +357,7 @@
         "reading": "Vista de lectura"
       },
       "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
+      "pdfTextFailed": "No se ha podido leer el texto del PDF, por lo que las afirmaciones no están marcadas en sus páginas.",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {

@@ -357,6 +357,7 @@
         "reading": "Leseansicht"
       },
       "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
+      "pdfTextFailed": "Der Text der PDF konnte nicht gelesen werden, daher sind die Behauptungen auf den Seiten nicht markiert.",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {

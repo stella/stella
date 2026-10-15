@@ -137,27 +137,37 @@ type ResolvePdfClaimLocationsArgs = Omit<LocateClaimsOnPagesArgs, "pages"> & {
   failed: boolean;
 };
 
+/** Where the claims stand on the pages, as far as the viewer knows. */
+export type PdfClaimPlacement =
+  | { status: "reading" }
+  /** The page texts could not be read, so no claim can be placed or ruled
+   *  out: this is not the same as every claim being absent. */
+  | { status: "failed" }
+  | { status: "placed"; locations: PdfClaimLocations };
+
 /**
- * The claims' places once they are known, or null while the page texts are
- * still being read. A run with no claim on a PDF page reads no page text: every
- * claim is unlocated at once, as is every claim of a file that cannot be read.
+ * The claims' places once they are known. A run with no claim on a PDF page
+ * reads no page text: every claim is unlocated at once.
  */
 export const resolvePdfClaimLocations = ({
   pages,
   failed,
   blocks,
   claims,
-}: ResolvePdfClaimLocationsArgs): PdfClaimLocations | null => {
+}: ResolvePdfClaimLocationsArgs): PdfClaimPlacement => {
   if (claimPageNumbers(claims).length === 0) {
-    return locateClaimsOnPages({ pages: new Map(), blocks, claims });
+    return {
+      status: "placed",
+      locations: locateClaimsOnPages({ pages: new Map(), blocks, claims }),
+    };
   }
   if (pages !== undefined) {
-    return locateClaimsOnPages({ pages, blocks, claims });
+    return {
+      status: "placed",
+      locations: locateClaimsOnPages({ pages, blocks, claims }),
+    };
   }
-  if (failed) {
-    return locateClaimsOnPages({ pages: new Map(), blocks, claims });
-  }
-  return null;
+  return failed ? { status: "failed" } : { status: "reading" };
 };
 
 type LocateClaimsOnPagesArgs = {

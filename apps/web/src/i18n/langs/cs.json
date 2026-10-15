@@ -357,6 +357,7 @@
         "reading": "Text ke čtení"
       },
       "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
+      "pdfTextFailed": "Text PDF se nepodařilo přečíst, proto tvrzení nejsou na stránkách vyznačena.",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {

@@ -357,6 +357,7 @@
         "reading": "Mode lecture"
       },
       "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
