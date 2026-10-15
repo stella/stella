@@ -26,7 +26,12 @@ test("dispatch follows default, named and re-exported handler source exports", a
       "matters.get",
       "matters.get.alias",
     ]);
-    expect([...handlers].toSorted()).toEqual([
+    expect(
+      [...handlers].toSorted(([left], [right]) =>
+        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- capability ids are non-linguistic keys
+        left.localeCompare(right),
+      ),
+    ).toEqual([
       [
         "matters.get",
         { importPath: "@/api/handlers/workspaces/get", exportName: undefined },
