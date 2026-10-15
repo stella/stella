@@ -20,53 +20,36 @@ const presences: (DesktopPresence | undefined)[] = [
 describe("desktop connection card", () => {
   test("a pending approval wins over every other signal", () => {
     for (const presence of presences) {
-      for (const appRunning of [true, false]) {
-        expect(
-          desktopCardState({ appRunning, challengeWaiting: true, presence }),
-        ).toEqual({ type: "approve" });
-      }
+      expect(desktopCardState({ challengeWaiting: true, presence })).toEqual({
+        type: "approve",
+      });
     }
   });
 
   test("the server's record of a linked app decides connected or outdated", () => {
-    for (const appRunning of [true, false]) {
-      expect(
-        desktopCardState({
-          appRunning,
-          challengeWaiting: false,
-          presence: { type: "current", desktop },
-        }),
-      ).toEqual({ type: "connected", version: "1.4.0" });
-      expect(
-        desktopCardState({
-          appRunning,
-          challengeWaiting: false,
-          presence: { type: "outdated", desktop },
-        }),
-      ).toEqual({ type: "outdated", version: "1.4.0" });
-    }
+    expect(
+      desktopCardState({
+        challengeWaiting: false,
+        presence: { type: "current", desktop },
+      }),
+    ).toEqual({ type: "connected", version: "1.4.0" });
+    expect(
+      desktopCardState({
+        challengeWaiting: false,
+        presence: { type: "outdated", desktop },
+      }),
+    ).toEqual({ type: "outdated", version: "1.4.0" });
   });
 
-  test("without a link, an answering app offers connect and silence offers install", () => {
+  test("without a link or a pending approval, the card offers install or connect", () => {
     for (const presence of [
       undefined,
       { type: "none" } as const,
       { type: "not_connected", desktop } as const,
     ]) {
-      expect(
-        desktopCardState({
-          appRunning: true,
-          challengeWaiting: false,
-          presence,
-        }),
-      ).toEqual({ type: "running" });
-      expect(
-        desktopCardState({
-          appRunning: false,
-          challengeWaiting: false,
-          presence,
-        }),
-      ).toEqual({ type: "missing" });
+      expect(desktopCardState({ challengeWaiting: false, presence })).toEqual({
+        type: "missing",
+      });
     }
   });
 });

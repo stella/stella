@@ -931,8 +931,12 @@ pub async fn account_get_state(
   app: tauri::AppHandle,
   window: WebviewWindow,
   state: State<'_, AccountState>,
+  sessions: State<'_, crate::commands::AppState>,
 ) -> Result<DesktopAccountSnapshot, String> {
   require_account_window(&window)?;
+  // Name the server a new connection would really open, never a default the
+  // selected self-hosted server overrides.
+  let server = crate::commands::browser_connect_server(&*sessions.lock().await);
   let current = current(&state).await;
   set_reconnect_needed(
     &app,
@@ -941,14 +945,11 @@ pub async fn account_get_state(
   match current {
     Ok(Some(saved)) => return Ok(saved.snapshot()),
     Err(error) if error == crate::device_proof::RECONNECT => {
-      return Ok(DesktopAccountSnapshot::ReconnectRequired {
-        server: crate::config::default_connect_target().1,
-      });
+      return Ok(DesktopAccountSnapshot::ReconnectRequired { server });
     }
     Err(error) => return Err(error),
     Ok(None) => {}
   }
-  let server = crate::config::default_connect_target().1;
   if state.lock().await.expired().await? {
     return Ok(DesktopAccountSnapshot::Expired { server });
   }

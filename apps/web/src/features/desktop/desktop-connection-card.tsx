@@ -27,13 +27,10 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   captureDesktopAccountLink,
   hasDesktopAccountChallenge,
-  isDesktopAppRunning,
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
-
-const APP_PROBE_INTERVAL_MS = 3000;
 
 const serverHost = () => window.location.host;
 
@@ -58,46 +55,30 @@ export const DesktopConnectionCard = () => {
   // can see on this computer.
   const presence =
     presenceView.type === "items" ? presenceView.items : undefined;
-  const [appRunning, setAppRunning] = useState(false);
   const [challengeWaiting, setChallengeWaiting] = useState(false);
   const [host, setHost] = useState("");
 
-  // Capture the native challenge and remove its secret from browser history,
-  // then keep looking for the app so the card follows it being opened.
+  // Capture the native challenge and remove its secret from browser history.
   // Linking still requires the button's explicit user gesture.
   useMountEffect(() => {
     captureDesktopAccountLink();
     setChallengeWaiting(hasDesktopAccountChallenge());
     setHost(serverHost());
-    let disposed = false;
-    const probe = async () => {
-      const running = await isDesktopAppRunning();
-      if (!disposed) {
-        setAppRunning(running);
-      }
-    };
-    detached(probe(), "settings-account-desktop.probe-app");
-    const timer = window.setInterval(() => {
-      detached(probe(), "settings-account-desktop.probe-app");
-    }, APP_PROBE_INTERVAL_MS);
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
   });
 
   const card =
     connection.status === "connected"
       ? ({ type: "connected", version: "" } as const)
       : desktopCardState({
-          appRunning,
           challengeWaiting,
           presence,
         });
 
   const handleConnect = async () => {
     const outcome = await connect();
-    setChallengeWaiting(false);
+    // A failed approval keeps a challenge that is still valid; an expired or
+    // consumed one falls back to the install-or-connect offer.
+    setChallengeWaiting(hasDesktopAccountChallenge());
     if (outcome.status === "started" || outcome.status === "update-required") {
       return;
     }
@@ -152,16 +133,14 @@ export const DesktopConnectionCard = () => {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {card.type === "approve" || card.type === "running" ? (
+            {card.type === "approve" ? (
               <Button
                 loading={connection.status === "connecting"}
                 onClick={onConnect}
                 size="lg"
               >
                 <LinkIcon />
-                {card.type === "approve"
-                  ? t("common.approve")
-                  : t("common.connect")}
+                {t("common.approve")}
               </Button>
             ) : null}
             {card.type === "missing" ? (
@@ -215,13 +194,6 @@ const cardCopy = (card: DesktopCardState) => {
         tone: "neutral",
         titleKey: "settings.account.desktopCardApproveTitle",
         detailKey: "settings.account.desktopCardApproveDetail",
-      } as const;
-    case "running":
-      return {
-        icon: LaptopIcon,
-        tone: "neutral",
-        titleKey: "settings.account.desktopCardRunningTitle",
-        detailKey: "settings.account.desktopCardRunningDetail",
       } as const;
     case "missing":
       return {

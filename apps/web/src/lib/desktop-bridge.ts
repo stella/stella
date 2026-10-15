@@ -401,22 +401,6 @@ const waitForDesktopEditHandoffOpened = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-/**
- * Whether stella desktop answers on this computer's bridge. Only says the
- * app runs and trusts this web origin; linking still needs the challenge.
- */
-export const isDesktopAppRunning = async () => {
-  const fetched = await Result.tryPromise({
-    try: async () =>
-      await fetchWithTimeout(
-        `${DESKTOP_BRIDGE_URL}/health`,
-        loopback({ method: "GET", timeoutMs: 1000 }),
-      ),
-    catch: () => new DesktopBridgeUnavailableError(),
-  });
-  return fetched.isOk() && fetched.value.ok;
-};
-
 /** Whether the desktop app asked this tab to approve a link just now. */
 export const hasDesktopAccountChallenge = () =>
   accountAttempt?.type === "challenge" &&
