@@ -579,11 +579,7 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
-            } else if (
-              isGrantAutoApproval &&
-              !isPublicOfficialApproval &&
-              !isBrowserCommandAutoApproved
-            ) {
+            } else if (isGrantAutoApproval && !isBrowserCommandAutoApproved) {
               const answerIfGrantHeld = async () => {
                 if (await confirmStoredApprovalGrant(name)) {
                   await onApprove(approvalId, name);

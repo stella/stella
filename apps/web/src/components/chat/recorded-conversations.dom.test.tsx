@@ -448,6 +448,8 @@ const createRecordedServer = (
   };
 
   return {
+    /** The approvals the API holds now; a page opens with them loaded. */
+    grants,
     dropConnection: () => {
       (drop ?? expect.unreachable("No response is streaming"))();
     },
@@ -466,6 +468,9 @@ const createRecordedServer = (
 // --- The page ------------------------------------------------------------
 
 /** A tab on the recorded thread, loaded the way the page loads it. */
+/** The grants of the conversation on screen, as the API holds them. */
+let openGrants: StoredToolGrant[] = [];
+
 const openPage = async (
   recording: RecordedConversation,
   { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
@@ -473,6 +478,7 @@ const openPage = async (
   await openChatThreadDomPage({
     organizationId,
     threadId: recording.threadId,
+    toolGrants: [...openGrants],
   });
 
 afterEach(() => {
@@ -991,6 +997,7 @@ const replay = async (scenario: string) => {
     grantConversationTools(recording),
   );
   routeRequest = server.fetch;
+  openGrants = server.grants;
   let live = await openPage(recording);
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];

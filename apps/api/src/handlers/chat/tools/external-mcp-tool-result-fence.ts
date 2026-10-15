@@ -56,7 +56,7 @@ const neutralizeStructured = (value: unknown, depth = 0): unknown => {
     return neutralizePromptText(value);
   }
   if (depth >= STRUCTURED_NEUTRALIZE_MAX_DEPTH) {
-    return neutralizePromptText(JSON.stringify(value) ?? "");
+    return neutralizePromptText(JSON.stringify(value));
   }
   if (Array.isArray(value)) {
     return value.map((item) => neutralizeStructured(item, depth + 1));

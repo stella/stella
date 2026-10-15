@@ -13,6 +13,11 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 const provenance = { connectorSlug: "registry", toolName: "lookup" };
 
+const contentOf = (part: unknown): unknown =>
+  typeof part === "object" && part !== null
+    ? Reflect.get(part, "content")
+    : undefined;
+
 const countOccurrences = (text: string, needle: string): number =>
   text.split(needle).length - 1;
 
@@ -76,17 +81,17 @@ describe("external MCP tool result fence", () => {
     const result = fenceExternalMcpToolResult(provenance, parts);
 
     expect(Array.isArray(result)).toBe(true);
-    const fenced = result as Record<string, unknown>[];
+    const fenced: unknown[] = Array.isArray(result) ? result : [];
     expect(fenced).toHaveLength(4);
-    expect(fenced[0]?.["content"]).toContain('connector "registry"');
+    expect(contentOf(fenced[0])).toContain('connector "registry"');
     expect(fenced[2]).toEqual(image);
     for (const part of [fenced[1], fenced[3]]) {
-      const content = String(part?.["content"]);
+      const content = String(contentOf(part));
       expect(content.startsWith(UNTRUSTED_CONTENT_OPEN)).toBe(true);
       expect(countOccurrences(content, UNTRUSTED_CONTENT_CLOSE)).toBe(1);
     }
     expect(
-      unwrapUntrustedContentFence(String(fenced[1]?.["content"]))?.trim(),
+      unwrapUntrustedContentFence(String(contentOf(fenced[1])))?.trim(),
     ).toBe("first");
   });
 
@@ -134,7 +139,7 @@ describe("external MCP tool result fence", () => {
     });
     const thrown = await rejectionOf(Promise.resolve(upstream({})));
     expect(thrown).toBeInstanceOf(Error);
-    const message = (thrown as Error).message;
+    const message = thrown instanceof Error ? thrown.message : "";
     expect(message).toContain('connector "registry", tool "lookup"');
     expect(countOccurrences(message, UNTRUSTED_CONTENT_CLOSE)).toBe(1);
 

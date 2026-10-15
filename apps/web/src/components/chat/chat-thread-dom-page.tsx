@@ -14,6 +14,8 @@ import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { chatThreadOptions } from "@/features/chat/queries";
@@ -152,10 +154,13 @@ export const openChatThreadDomPage = async ({
   onRender,
   organizationId,
   threadId,
+  toolGrants = [],
 }: {
   onRender?: ProfilerOnRenderCallback | undefined;
   organizationId: string;
   threadId: string;
+  /** Stored tool approvals the API holds for this conversation. */
+  toolGrants?: ChatToolGrantsResponse["grants"];
 }) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -167,6 +172,14 @@ export const openChatThreadDomPage = async ({
     connectors: [],
     nativeTools: [],
   });
+  queryClient.setQueryData(
+    chatToolGrantsOptions({
+      activeOrganizationId: organizationId,
+      threadId,
+      userId,
+    }).queryKey,
+    { grants: toolGrants },
+  );
   queryClient.setQueryData(
     workspacesNavigationOptions({ organizationId, userId }).queryKey,
     { workspaces: [], features: { timeBilling: false } },
