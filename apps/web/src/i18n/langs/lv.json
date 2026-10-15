@@ -173,6 +173,7 @@
       "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
       "heldForReview": "Aizturēts pārskatīšanai",
       "holdOutOfScoring": "Izslēgt no vērtējuma",
+      "inScoring": "Iekļauts vērtējumā",
       "includeInScoring": "Iekļaut vērtējumā",
       "interpretationNote": "Interpretācijas piezīme",
       "interpretationNotePlaceholder": "Ja šī pierādījuma nozīme ir apstrīdēta, aprakstiet, kā. Ja nav, atstājiet lauku tukšu.",
@@ -2074,6 +2075,7 @@
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
     "website": "Vietne",
+    "whenToUse": "Kad izmantot",
     "workflow": "Darbplūsma",
     "workflows": "Darbplūsmas",
     "zoomIn": "Tuvināt",
@@ -2553,6 +2555,10 @@
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "validationInvalid": "Laukā ir vērtība, ko nevar saglabāt.",
+      "validationRequired": "Obligātais lauks ir tukšs.",
+      "validationTooLong": "Pārāk garš: izmantojiet ne vairāk kā {limit, number} rakstzīmes.",
+      "validationTooShort": "Pārāk īss: izmantojiet vismaz {limit, number} rakstzīmes.",
       "verificationActiveLimitReached": "Jūsu organizācija ir sasniegusi vienlaicīgu pārbaužu limitu. Pagaidiet, līdz kāda pārbaude beidzas, un mēģiniet vēlreiz.",
       "verificationDailyLimitReached": "Jūsu organizācija ir sasniegusi pārbaužu dienas limitu. Mēģiniet vēlreiz pēc pusnakts (Europe/Prague).",
       "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
@@ -3648,6 +3654,10 @@
       "importTitle": "Importēt prasmi",
       "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
       "invalidPath": "Ceļā drīkst izmantot tikai mazos burtus, ciparus, punktus, defises vai pasvītras",
+      "invocationAuto": "Automātiski",
+      "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
+      "invocationManual": "Tikai pēc izsaukuma",
+      "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
       "license": "Licence: {license}",
       "newFile": "Jauns fails",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4348,8 @@
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
       },
+      "showInTitle": "Rādīt numuru blakus lietas nosaukumam",
+      "showInTitleDescription": "Ja tas ir izslēgts, virsraksts ir tieši ievadītais nosaukums.",
       "title": "Lietu numerācija",
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
@@ -4507,6 +4519,25 @@
     },
     "tokenHelp": "Kā iegūt tokenu",
     "viewOnGithub": "Skatīt vietnē GitHub"
+  },
+  "readerAnswers": {
+    "budgetError": "Atbilžu budžets ir izsmelts.",
+    "citation": "¶{paragraph}",
+    "expand": "Izvērst atbildi",
+    "explain": "Izskaidrot",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Uzdot papildjautājumu",
+    "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
+    "loading": "Tiek ģenerēta atbilde…",
+    "minimise": "Sakļaut atbildi",
+    "modelError": "Modelis nevarēja pabeigt šo atbildi.",
+    "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
+    "regenerate": "Ģenerēt atbildi atkārtoti",
+    "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
+    "send": "Nosūtīt papildjautājumu",
+    "share": "Kopīgot ar komandu",
+    "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
+    "title": "Atbilde par atlasīto tekstu"
   },
   "routeError": {
     "backToMatters": "Atgriezties pie lietām",
@@ -5554,7 +5585,6 @@
     "viewVersion": "Skatīt",
     "whenNotToUse": "Kad neizmantot",
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
-    "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
   "timesheets": {
@@ -5675,7 +5705,7 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "ownerTypeToggle": "Lietas veids",
+      "matterName": "Lietas nosaukums",
       "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
@@ -6127,15 +6157,12 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
-    "ownerType": {
-      "client": "Klients",
-      "personal": "Personīga"
-    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
       "noClient": "Klients nav piešķirts",
+      "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
       "partyRoles": {
         "co_counsel": "Līdzadvokāts",

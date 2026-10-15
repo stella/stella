@@ -176,6 +176,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
@@ -2077,6 +2078,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -2556,6 +2558,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
@@ -3651,6 +3657,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -4341,6 +4351,8 @@ type Messages = {
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
       };
+      "showInTitle": "Show the number next to the matter name";
+      "showInTitleDescription": "When this is off, the title is exactly the name you entered.";
       "title": "Matter numbering";
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)";
     };
@@ -4510,6 +4522,25 @@ type Messages = {
     };
     "tokenHelp": "How to get a token";
     "viewOnGithub": "View on GitHub";
+  };
+  "readerAnswers": {
+    "budgetError": "The answer budget is exhausted.";
+    "citation": "¶{paragraph}";
+    "expand": "Expand answer";
+    "explain": "Explain";
+    "externalCitation": "{decision} · ¶{paragraph}";
+    "followUp": "Ask a follow-up";
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}";
+    "loading": "Generating answer…";
+    "minimise": "Minimise answer";
+    "modelError": "The model could not finish this answer.";
+    "networkError": "The connection was interrupted. Try again.";
+    "regenerate": "Regenerate answer";
+    "selectionError": "Select text within a single paragraph (up to 2,000 characters).";
+    "send": "Send follow-up";
+    "share": "Share with team";
+    "timeoutError": "The answer timed out. Try again.";
+    "title": "Answer about selected text";
   };
   "routeError": {
     "backToMatters": "Return to matters";
@@ -5557,7 +5588,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {
@@ -5678,7 +5708,7 @@ type Messages = {
       "title": "Copy to Matter";
     };
     "create": {
-      "ownerTypeToggle": "Matter type";
+      "matterName": "Matter name";
       "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
     };
     "createNewWorkspace": "Create new matter";
@@ -6130,15 +6160,12 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
-    "ownerType": {
-      "client": "Client";
-      "personal": "Personal";
-    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
       "client": "Client";
       "noClient": "No client assigned";
+      "noClientOptional": "No client (optional)";
       "noParties": "No parties added to this matter.";
       "partyRoles": {
         "co_counsel": "Co-counsel";

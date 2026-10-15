@@ -24,9 +24,11 @@ import {
   ownsCodeCheckPath,
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
+import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
+import { matches } from "./oxlint-config-scopes";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -127,6 +129,13 @@ export const LINT_ONLY_CACHE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.tooling.json",
 ] as const;
 export const PLUGIN_FIXTURE_INPUTS = [
+  ...Object.values(RUST_TEST_DISCOVERY_INPUTS).map(
+    (input) => `$TURBO_ROOT$/${input}`,
+  ),
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
+  "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -153,7 +162,6 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
 ] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
-const RECURSIVE_GLOB_SUFFIX = "/**";
 
 const ROOT_CHECKS = {
   assets: "assets",
@@ -215,11 +223,7 @@ const matchesTurboInput = (file: string, input: string): boolean => {
     return false;
   }
   const relativeInput = input.slice(TURBO_ROOT_INPUT_PREFIX.length);
-  if (!relativeInput.endsWith(RECURSIVE_GLOB_SUFFIX)) {
-    return file === relativeInput;
-  }
-  const directory = relativeInput.slice(0, -RECURSIVE_GLOB_SUFFIX.length);
-  return file.startsWith(`${directory}/`);
+  return matches(relativeInput, file);
 };
 
 const invalidatesAllWorkspaceChecks = (file: string): boolean =>
