@@ -22,7 +22,7 @@ type ConnectUploadAppOptions = {
   app: App;
   onContext: (context: ReturnType<App["getHostContext"]>) => void;
   onError: (message: string) => void;
-  onConnected?: () => void;
+  onConnected?: (() => void) | undefined;
 };
 export const connectUploadApp = async ({
   app,

@@ -16,7 +16,7 @@ const fakeBridge = (snapshot: Snapshot) => {
     supportsTools: () => false,
     connect: async () => {},
     call: async () => {},
-    requestTool: async () => undefined,
+    requestTool: async () => ({ content: [] }),
     requestFullscreen: async () => {},
     requestInline: async () => {},
     retry: async () => {
