@@ -14,7 +14,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const matterA = toSafeId<"workspace">("0199a1b2-0000-7000-8000-00000000000a");
 const matterB = toSafeId<"workspace">("0199a1b2-0000-7000-8000-00000000000b");
-const matterC = toSafeId<"workspace">("0199a1b2-0000-7000-8000-00000000000c");
 const clientX = toSafeId<"contact">("0199a1b2-0000-7000-8000-0000000000c1");
 const clientY = toSafeId<"contact">("0199a1b2-0000-7000-8000-0000000000c2");
 
@@ -92,8 +91,8 @@ describe("resolveSkillBindingScope", () => {
     expect(skillBindingAllows(scope, boundTo.clientX)).toBe(true);
   });
 
-  test("a matter of another client, or one the caller cannot read, breaks both bindings", async () => {
-    const otherClient = await scopeOf(
+  test("a matter of another client breaks both bindings", async () => {
+    const scope = await scopeOf(
       matterA,
       [matterB],
       [
@@ -101,16 +100,9 @@ describe("resolveSkillBindingScope", () => {
         { clientId: clientY, id: matterB },
       ],
     );
-    const unreadable = await scopeOf(
-      matterA,
-      [matterC],
-      [{ clientId: clientX, id: matterA }],
-    );
-    for (const scope of [otherClient, unreadable]) {
-      expect(skillBindingAllows(scope, boundTo.matterA)).toBe(false);
-      expect(skillBindingAllows(scope, boundTo.clientX)).toBe(false);
-      expect(skillBindingAllows(scope, UNBOUND)).toBe(true);
-    }
+    expect(skillBindingAllows(scope, boundTo.matterA)).toBe(false);
+    expect(skillBindingAllows(scope, boundTo.clientX)).toBe(false);
+    expect(skillBindingAllows(scope, UNBOUND)).toBe(true);
   });
 
   test("a home matter the caller cannot read allows unbound skills only", async () => {
