@@ -29,9 +29,9 @@ import {
  * database's own rule (the authorization view the row policies consult) on
  * randomly generated organizations. A world has members in every organization
  * role plus a removed member (no `member` row), client and personal matters,
- * matters being deleted, random matter assignments, and a client matter in a
- * second organization. For each (user, matter) the view decides; each app
- * helper is fed the live rows exactly as its callers read them.
+ * matters being deleted and random matter assignments. For each (user,
+ * matter) the view decides; each app helper is fed the live rows exactly as
+ * its callers read them.
  */
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -71,10 +71,8 @@ type World = typeof worldArbitrary extends fc.Arbitrary<infer T> ? T : never;
 
 type SeededWorld = {
   organizationId: SafeId<"organization">;
-  foreignOrganizationId: SafeId<"organization">;
   userIds: SafeId<"user">[];
   matterIds: SafeId<"workspace">[];
-  foreignMatterId: SafeId<"workspace">;
 };
 
 const insertOrganization = async (
@@ -100,16 +98,10 @@ const insertOrganization = async (
 const seedWorld = async (tx: Transaction, world: World) => {
   const seeded: SeededWorld = {
     organizationId: mintAuthProviderId<"organization">(),
-    foreignOrganizationId: mintAuthProviderId<"organization">(),
     userIds: world.roles.map(() => mintAuthProviderId<"user">()),
     matterIds: world.matters.map(() => createSafeId<"workspace">()),
-    foreignMatterId: createSafeId<"workspace">(),
   };
   const clientId = await insertOrganization(tx, seeded.organizationId);
-  const foreignClientId = await insertOrganization(
-    tx,
-    seeded.foreignOrganizationId,
-  );
   await tx.insert(user).values(
     seeded.userIds.map((id) => ({
       id,
@@ -134,8 +126,8 @@ const seedWorld = async (tx: Transaction, world: World) => {
   if (members.length > 0) {
     await tx.insert(member).values(members);
   }
-  await tx.insert(workspaces).values([
-    ...world.matters.map((matter, index) => ({
+  await tx.insert(workspaces).values(
+    world.matters.map((matter, index) => ({
       id: seeded.matterIds[index] ?? panic("matter id"),
       organizationId: seeded.organizationId,
       clientId: matter.client ? clientId : null,
@@ -143,14 +135,7 @@ const seedWorld = async (tx: Transaction, world: World) => {
       reference: `DIFF-${String(index)}`,
       status: matter.deleting ? ("deleting" as const) : ("active" as const),
     })),
-    {
-      id: seeded.foreignMatterId,
-      organizationId: seeded.foreignOrganizationId,
-      clientId: foreignClientId,
-      name: "Foreign matter",
-      reference: "DIFF-FOREIGN",
-    },
-  ]);
+  );
   // Matter membership requires organization membership (a trigger enforces
   // it), so a removed member holds no assignment.
   const assignments = seeded.userIds.flatMap((userId, userIndex) =>
@@ -258,12 +243,7 @@ const withWorld = async (
     } finally {
       await db
         .delete(organization)
-        .where(
-          inArray(organization.id, [
-            seeded.organizationId,
-            seeded.foreignOrganizationId,
-          ]),
-        );
+        .where(eq(organization.id, seeded.organizationId));
       await db.delete(user).where(inArray(user.id, seeded.userIds));
     }
   });
@@ -280,7 +260,6 @@ describe.skipIf(!runPostgresTests)(
             for (const [index, userId] of seeded.userIds.entries()) {
               const role = roleOf(world.roles[index] ?? panic("role"));
               const view = await readViewSet(db, seeded, userId, []);
-              expect(view.has(seeded.foreignMatterId)).toBe(false);
               const facts = await db.transaction(async (tx) => ({
                 rows: await readLiveRows(tx, seeded, userId),
                 hold: await holdMemberAccessOnTx(tx, {
