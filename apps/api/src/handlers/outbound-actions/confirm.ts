@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { OUTBOUND_PREVIEW_HASH_PATTERN } from "@stll/api-contract/outbound-action";
@@ -126,7 +126,8 @@ export const createConfirmOutboundActionHandler = (
                 eq(outboundActions.userId, user.id),
                 eq(outboundActions.status, "pending"),
                 eq(outboundActions.previewHash, previewHash),
-                gt(outboundActions.expiresAt, now),
+                // Expiry is judged by the database clock at the claim itself.
+                gt(outboundActions.expiresAt, sql`now()`),
               ),
             )
             .returning({ id: outboundActions.id });

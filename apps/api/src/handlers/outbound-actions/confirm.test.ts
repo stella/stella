@@ -183,6 +183,20 @@ test("an expired preview is not sent", async () => {
   expect(fixture.updates).toEqual([]);
 });
 
+test("an action that expires between the read and the claim is not sent", async () => {
+  // Unexpired when read; the claim's database-clock expiry check then matches
+  // no row.
+  const fixture = setup({
+    action: await storedAction({ expiresAt: new Date(Date.now() + 1) }),
+    executor: sends,
+    claimSucceeds: false,
+  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    code: 409,
+  });
+  expect(fixture.executed).toEqual([]);
+});
+
 test("a confirm that loses the claim to a concurrent one sends nothing", async () => {
   const fixture = setup({
     action: await storedAction(),
