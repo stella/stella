@@ -498,6 +498,7 @@ export const ToolApprovalCard = ({
     activeOrganizationId,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     blockedApprovalTools,
     handleAllowInConversation: onAllowInConversation,
     handleAlwaysAllow: onAlwaysAllow,
@@ -508,6 +509,10 @@ export const ToolApprovalCard = ({
   const name = getApprovalToolName(part);
   const submittedApprovalIdRef = useRef<string | null>(null);
   const [responded, setResponded] = useState(false);
+  // The approval a stored grant could not be confirmed for: that card asks.
+  const [unconfirmedGrantApprovalId, setUnconfirmedGrantApprovalId] = useState<
+    string | null
+  >(null);
 
   const {
     canAllowInConversation,
@@ -547,16 +552,23 @@ export const ToolApprovalCard = ({
       : null;
   const isBrowserCommandAutoApproved =
     useBrowserCommandAutoApproved(browserCommand);
-  const shouldAutoApprove =
-    !isBlocked &&
-    !requiresPerCallChatApproval(name) &&
-    (hasAutomaticApproval({
+  // A stored grant answers a card only once the API confirms it still holds;
+  // public-registry lookups and opted-in browser page reads need no grant.
+  const isGrantAutoApproval =
+    !isPublicOfficialApproval &&
+    approvalId !== unconfirmedGrantApprovalId &&
+    hasAutomaticApproval({
       alwaysApprovedTools,
       canAlwaysAllow,
       conversationApprovedTools,
       isPublicOfficialApproval,
       name,
-    }) ||
+    });
+  const shouldAutoApprove =
+    !isBlocked &&
+    !requiresPerCallChatApproval(name) &&
+    (isGrantAutoApproval ||
+      isPublicOfficialApproval ||
       isBrowserCommandAutoApproved);
   const automaticResponse =
     approvalId === null
@@ -567,6 +579,23 @@ export const ToolApprovalCard = ({
             setResponded(true);
             if (isBlocked) {
               onDeny(approvalId);
+            } else if (
+              isGrantAutoApproval &&
+              !isPublicOfficialApproval &&
+              !isBrowserCommandAutoApproved
+            ) {
+              const answerIfGrantHeld = async () => {
+                if (await confirmStoredApprovalGrant(name)) {
+                  await onApprove(approvalId, name);
+                  return;
+                }
+                setUnconfirmedGrantApprovalId(approvalId);
+                setResponded(false);
+              };
+              detached(
+                answerIfGrantHeld(),
+                "tool-approval-card.confirm-stored-grant",
+              );
             } else if (shouldAutoApprove) {
               onApprove(approvalId, name);
             }

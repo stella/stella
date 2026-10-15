@@ -13,6 +13,7 @@ export const testChatApprovalContextValue = {
   activeOrganizationId: "test-active-organization",
   alwaysApprovedTools: new Set(),
   conversationApprovedTools: new Set(),
+  confirmStoredApprovalGrant: async () => await Promise.resolve(false),
   handleAllowInConversation: ignore,
   handleAlwaysAllow: ignore,
   handleApprove: ignore,

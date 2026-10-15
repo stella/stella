@@ -42,6 +42,7 @@ import {
   isChatClientRequestActive,
   isSuggestChangesApplyOutput,
   isNonPersistentGrantChatToolName,
+  isToolApprovedByGrant,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -907,6 +908,30 @@ export const useChatSession = ({
       userId,
     ],
   );
+  const confirmStoredApprovalGrant = useCallback(
+    async (toolName: ApprovalToolName): Promise<boolean> => {
+      const fresh = await Result.tryPromise(
+        async () =>
+          await queryClient.fetchQuery({
+            ...chatToolGrantsOptions({
+              activeOrganizationId: organizationId,
+              threadId: conversationId,
+              userId,
+            }),
+            staleTime: 0,
+          }),
+      );
+      if (Result.isError(fresh)) {
+        return false;
+      }
+      const projected = projectChatToolGrants(fresh.value.grants);
+      return (
+        isToolApprovedByGrant(projected.conversation, toolName) ||
+        isToolApprovedByGrant(projected.always, toolName)
+      );
+    },
+    [conversationId, organizationId, queryClient, userId],
+  );
   const handleAllowInConversation = useCallback(
     async (id: string, toolName: ApprovalToolName) => {
       await approveAndStoreGrant(id, toolName, "conversation");
@@ -1692,6 +1717,7 @@ export const useChatSession = ({
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
+    confirmStoredApprovalGrant,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,

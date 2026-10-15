@@ -70,6 +70,14 @@ type ChatApprovalContextValue = {
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
   /**
+   * Whether the API still holds a stored grant covering `toolName`, read
+   * fresh. A card answers itself on a grant only after this confirms it, so
+   * a grant removed in another session never answers a new card.
+   */
+  confirmStoredApprovalGrant: (
+    toolName: ApprovalToolName,
+  ) => PromiseLike<boolean>;
+  /**
    * Optional set of tool names that should be auto-denied (e.g.
    * tools blocked while a specific file overlay is active). Leaves
    * read this directly so the policy stays close to the gate.

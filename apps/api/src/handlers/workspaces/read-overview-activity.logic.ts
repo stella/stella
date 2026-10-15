@@ -173,6 +173,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   chat_message: null,
   chat_thread: null,
   chat_tool_execution: null,
+  chat_tool_grant: null,
   clause: null,
   clause_category: null,
   clause_template_link: null,
