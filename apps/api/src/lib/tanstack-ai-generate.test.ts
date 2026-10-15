@@ -2372,22 +2372,30 @@ describe("model output that fails its schema", () => {
     tenantWorkspaceIds: [],
   };
 
-  for (const { name, run } of [
+  // A schema mismatch gets one repair turn, so it is queued twice; text that
+  // is not JSON fails in the engine before any repair.
+  for (const { name, runs } of [
     {
       name: "an object with an unexpected key",
-      run: objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+      runs: [
+        objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+        objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+      ],
     },
     {
       name: "a value of the wrong type",
-      run: objectRun({ answer: [SENTINEL] }),
+      runs: [
+        objectRun({ answer: [SENTINEL] }),
+        objectRun({ answer: [SENTINEL] }),
+      ],
     },
     {
       name: "text that is not JSON",
-      run: objectRun(undefined, `${SENTINEL} is not JSON`),
+      runs: [objectRun(undefined, `${SENTINEL} is not JSON`)],
     },
   ]) {
     test(`reports ${name} without quoting it`, async () => {
-      queueRun(run);
+      queuedRuns.push(...runs);
 
       const caught = await generateObjectForTestModel(objectOptions).then(
         () => undefined,
@@ -2399,6 +2407,114 @@ describe("model output that fails its schema", () => {
       expect(String(asTestRaw<Error>(caught).stack)).not.toContain(SENTINEL);
     });
   }
+});
+
+describe("a structured answer its schema rejects gets one repair turn", () => {
+  const objectOptions = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    caching: noCaching,
+    organizationId: null,
+    dataClass: "customer" as const,
+    managedAIResidency: "eu" as const,
+    orgAIConfig: null,
+    outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
+    prompt: "Extract the answer.",
+    role: "chat" as const,
+    serviceTier: "standard" as const,
+    tenantWorkspaceIds: [],
+  };
+
+  const outcomeLogs = () =>
+    logs.records
+      .filter(({ message }) => message === "ai.structured_output.outcome")
+      .map(({ attributes }) => ({
+        result: attributes?.["ai.structured_output.result"],
+        rung: attributes?.["ai.structured_output.rung"],
+        issueTypes: attributes?.["ai.structured_output.issue_types"],
+      }));
+
+  const lastUserContent = (request: CapturedProviderRequest | undefined) =>
+    JSON.stringify(request?.messages.at(-1));
+
+  test("a first answer that matches is returned without a repair turn", async () => {
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+
+    const object = await generateObjectForTestModel(objectOptions);
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(1);
+    expect(outcomeLogs()).toEqual([]);
+  });
+
+  test("the same model is shown where its answer breaks the schema and its fix is returned", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+
+    const object = await generateObjectForTestModel(objectOptions);
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(2);
+    const repairRequest = providerRequests[1];
+    expect(lastUserContent(repairRequest)).toContain("page: expected number");
+    // The repair turn names the path and the expectation, never the value.
+    expect(lastUserContent(repairRequest)).not.toContain("three");
+    expect(outcomeLogs()).toEqual([
+      { result: "ok", rung: "model_repair", issueTypes: "number" },
+    ]);
+  });
+
+  test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+
+    const caught = await generateObjectForTestModel(objectOptions).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // "3" is not converted to 3: the answer passes the schema or fails.
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(classifyAIError(caught)).toBe("output_invalid");
+    expect(providerRequests).toHaveLength(2);
+    expect(outcomeLogs()).toEqual([
+      { result: "failed", rung: "output_invalid", issueTypes: "number" },
+    ]);
+    // The outcome line carries paths and types, never the model's values.
+    expect(JSON.stringify(logs.records)).not.toContain("three");
+  });
+
+  test("a missing field is not filled in on the model's behalf", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+    queueRun(objectRun({ answer: "ok" }));
+
+    const caught = await generateObjectForTestModel(objectOptions).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(lastUserContent(providerRequests[1])).toContain("page: expected");
+  });
+
+  test("a cancelled repair turn is a cancellation, not invalid output", async () => {
+    const controller = new AbortController();
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun({
+      ...objectRun({ answer: "ok", page: 3 }),
+      abortBefore: controller,
+    });
+
+    const caught = await generateObjectForTestModel({
+      ...objectOptions,
+      abortSignal: controller.signal,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).not.toBeInstanceOf(ModelOutputInvalidError);
+    expect(classifyAIError(caught)).not.toBe("output_invalid");
+  });
 });
 
 describe("a chat run a caller consumes itself", () => {

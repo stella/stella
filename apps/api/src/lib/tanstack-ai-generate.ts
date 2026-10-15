@@ -1,3 +1,7 @@
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from "@standard-schema/spec";
 import {
   EventType,
   convertSchemaToJsonSchema,
@@ -101,6 +105,13 @@ import {
   type ModelDispatchScope,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
+import {
+  reportStructuredOutputOutcome,
+  STRUCTURED_OUTPUT_RUNG,
+  structuredOutputIssues,
+  structuredOutputRepairMessages,
+} from "@/api/lib/structured-output-repair";
+import type { StructuredOutputIssue } from "@/api/lib/structured-output-repair";
 import {
   joinLayeredSystemPrompt,
   promptCachingUsesBreakpoints,
@@ -1081,6 +1092,69 @@ const parseModelOutput = <TSchema extends v.GenericSchema>({
   return parsed.output;
 };
 
+type OwnerValidatedSchema = StandardJSONSchemaV1<unknown, unknown> &
+  StandardSchemaV1<unknown, unknown>;
+
+/**
+ * The engine validates a structured answer itself and, on a mismatch, keeps
+ * only the error: the answer is gone. It is handed a validator that always
+ * passes instead, so this owner validates the answer once against the
+ * caller's schema (`settleStructuredOutput`) and can show the model what to
+ * fix. The JSON Schema the provider is constrained with is unchanged.
+ */
+const ownerValidatedSchema = (
+  schema: OwnerValidatedSchema,
+): OwnerValidatedSchema => ({
+  "~standard": {
+    ...schema["~standard"],
+    validate: (value) => ({ value }),
+  },
+});
+
+type StructuredOutputRepairTurn = {
+  invalidOutput: unknown;
+  issues: readonly StructuredOutputIssue[];
+};
+
+/**
+ * Validates a structured answer and, when it does not match, asks the same
+ * model once to fix exactly the reported issues (`structured-output-repair`).
+ * The repaired answer passes the full schema or the run fails as
+ * `ModelOutputInvalidError`: nothing is converted, filled in or dropped. The
+ * repair runs inside the caller's deadline and abort signal.
+ */
+const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
+  model,
+  outputSchema,
+  output,
+  repair,
+  role,
+}: ParseModelOutputOptions<TSchema> & {
+  repair: (turn: StructuredOutputRepairTurn) => Promise<unknown>;
+  role: string;
+}): Promise<v.InferOutput<TSchema>> => {
+  const first = v.safeParse(outputSchema, output);
+  if (first.success) {
+    return first.output;
+  }
+  const issues = structuredOutputIssues(first.issues);
+  const repaired = await repair({ invalidOutput: output, issues });
+  const second = v.safeParse(outputSchema, repaired);
+  reportStructuredOutputOutcome({
+    outcome: second.success
+      ? { type: "ok", rung: STRUCTURED_OUTPUT_RUNG.MODEL_REPAIR }
+      : { type: "failed", kind: "output_invalid" },
+    issues,
+    modelId: model.modelId,
+    provider: model.provider,
+    role,
+  });
+  if (!second.success) {
+    throw new ModelOutputInvalidError({ model });
+  }
+  return second.output;
+};
+
 /**
  * The output allowance a structured answer that needs `budget` tokens asks
  * the resolved model for: the budget, bounded by the model's own allowance
@@ -1138,59 +1212,83 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
     ? abortControllerFromSignal(abortSignal)
     : undefined;
   guardStructuredOutputBudget({ model, outputSchema });
-  const tanStackOutputSchema = toTanStackValibotSchema(
-    outputSchema,
-    structuredOutputProjectionOptions({
-      mock: isMockTextAdapter(model.adapter),
-      provider: model.provider,
-    }),
+  const tanStackOutputSchema = ownerValidatedSchema(
+    toTanStackValibotSchema(
+      outputSchema,
+      structuredOutputProjectionOptions({
+        mock: isMockTextAdapter(model.adapter),
+        provider: model.provider,
+      }),
+    ),
   );
   const maxOutputTokens = requestedOutputTokens(options, model);
 
-  const generated = await Result.tryPromise({
-    try: async () =>
-      await withStandardServiceTierFallback({
-        abortSignal: abortController?.signal,
-        model,
-        serviceTier: options.serviceTier,
-        run: async (serviceTier) =>
-          await generateChatObject({
-            adapter: model.adapter,
-            messages: requestMessages,
-            outputSchema: tanStackOutputSchema,
-            tools: options.tools,
-            agentLoopStrategy: options.agentLoopStrategy,
-            ...systemPromptsPatch({
-              caching: options.caching,
-              model,
-              system: guardedSystemPrompt(options),
+  const run = async (
+    messages: GuardedModelMessages<ModelMessage[]>,
+  ): Promise<unknown> => {
+    const generated = await Result.tryPromise({
+      try: async () =>
+        await withStandardServiceTierFallback({
+          abortSignal: abortController?.signal,
+          model,
+          serviceTier: options.serviceTier,
+          run: async (serviceTier) =>
+            await generateChatObject({
+              adapter: model.adapter,
+              messages,
+              outputSchema: tanStackOutputSchema,
+              tools: options.tools,
+              agentLoopStrategy: options.agentLoopStrategy,
+              ...systemPromptsPatch({
+                caching: options.caching,
+                model,
+                system: guardedSystemPrompt(options),
+              }),
+              modelOptions: mergeGenerationOptions({
+                caching: options.caching,
+                model,
+                maxOutputTokens,
+                serviceTier,
+                temperature: options.temperature,
+              }),
+              ...(options.analytics
+                ? { middleware: [options.analytics.middleware] }
+                : {}),
+              ...(abortController ? { abortController } : {}),
             }),
-            modelOptions: mergeGenerationOptions({
-              caching: options.caching,
-              model,
-              maxOutputTokens,
-              serviceTier,
-              temperature: options.temperature,
-            }),
-            ...(options.analytics
-              ? { middleware: [options.analytics.middleware] }
-              : {}),
-            ...(abortController ? { abortController } : {}),
-          }),
-      }),
-    catch: (error: unknown) => error,
-  });
-  if (Result.isError(generated)) {
-    // A cancelled run ends without a structured result, and the SDK reports
-    // that as a plain error rather than an abort. The caller's signal is what
-    // tells the two apart, as for text generation.
-    if (abortSignal?.aborted === true) {
-      throw cancelledGenerationError();
+        }),
+      catch: (error: unknown) => error,
+    });
+    if (Result.isError(generated)) {
+      // A cancelled run ends without a structured result, and the SDK reports
+      // that as a plain error rather than an abort. The caller's signal is
+      // what tells the two apart, as for text generation.
+      if (abortSignal?.aborted === true) {
+        throw cancelledGenerationError();
+      }
+      throw generated.error;
     }
-    throw generated.error;
-  }
+    return generated.value;
+  };
 
-  return parseModelOutput({ model, outputSchema, output: generated.value });
+  return await settleStructuredOutput({
+    model,
+    outputSchema,
+    output: await run(requestMessages),
+    // The repair turn carries model output, so the whole list is guarded
+    // again rather than appended to the already guarded one.
+    repair: async (turn) =>
+      await run(
+        guardModelMessages({
+          messages: structuredOutputRepairMessages({
+            ...turn,
+            messages: messagesFromInput(options),
+          }),
+          workspaceIds: options.tenantWorkspaceIds,
+        }),
+      ),
+    role: options.role,
+  });
 };
 
 export const streamTanStackObjectForRole = async function* <
@@ -1303,12 +1401,16 @@ const streamTanStackStructuredOutput = async function* <
   let completed = false;
   let rawJson = "";
   guardStructuredOutputBudget({ model, outputSchema });
-  const tanStackOutputSchema = toTanStackValibotSchema(
-    outputSchema,
-    structuredOutputProjectionOptions({
-      mock: isMockTextAdapter(model.adapter),
-      provider: model.provider,
-    }),
+  // No repair turn here: the caller has already been shown the partial
+  // answer, so a mismatch ends the stream as `ModelOutputInvalidError`.
+  const tanStackOutputSchema = ownerValidatedSchema(
+    toTanStackValibotSchema(
+      outputSchema,
+      structuredOutputProjectionOptions({
+        mock: isMockTextAdapter(model.adapter),
+        provider: model.provider,
+      }),
+    ),
   );
 
   const stream = iterateWithStandardServiceTierFallback({
@@ -1923,6 +2025,8 @@ export const streamTanStackChatRun = async function* (
   }
 };
 
+type ChatObjectMessages = NonNullable<StreamChatChunksOptions["messages"]>;
+
 type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
   AdmittedChatRunOptions & {
     outputSchema: TSchema;
@@ -1942,20 +2046,36 @@ export const generateTanStackChatObject = async <
   v.InferOutput<TSchema>
 > => {
   const { model, ...options } = admittedChatRunOptions(admitted);
-  const result = await Result.tryPromise({
-    try: async () =>
-      await generateChatObject({
-        ...options,
-        outputSchema: toTanStackValibotSchema(outputSchema),
-      }),
-    catch: (error) => error,
-  });
-  if (Result.isError(result)) {
-    throw withRecoveredProviderStatus({
-      error: result.error,
-      model,
-      abortSignal: options.abortController?.signal,
+  const requestMessages: ChatObjectMessages = options.messages ?? [];
+  const run = async (messages: ChatObjectMessages): Promise<unknown> => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await generateChatObject({
+          ...options,
+          messages,
+          outputSchema: ownerValidatedSchema(
+            toTanStackValibotSchema(outputSchema),
+          ),
+        }),
+      catch: (error) => error,
     });
-  }
-  return parseModelOutput({ model, outputSchema, output: result.value });
+    if (Result.isError(result)) {
+      throw withRecoveredProviderStatus({
+        error: result.error,
+        model,
+        abortSignal: options.abortController?.signal,
+      });
+    }
+    return result.value;
+  };
+  return await settleStructuredOutput({
+    model,
+    outputSchema,
+    output: await run(requestMessages),
+    repair: async (turn) =>
+      await run(
+        structuredOutputRepairMessages({ ...turn, messages: requestMessages }),
+      ),
+    role: "chat-object",
+  });
 };
