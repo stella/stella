@@ -14,7 +14,7 @@ correspondence.workspace_id                     safeWorkspaceId     fk,not null 
 correspondence.direction                        text                not null          correspondence.ts:93
 correspondence.channel                          text                not null          correspondence.ts:96
 correspondence.source                           text                default,not null  correspondence.ts:97
-correspondence.source_entity_id                 safeUuid            null              correspondence.ts:103  The current source file.
+correspondence.source_entity_id                 safeUuid            null              correspondence.ts:103  The current uploaded source file; correspondence_sources owns its lifetime.
 correspondence.intake                           text                null              correspondence.ts:106  Delivery provenance; correspondence_provenance_check binds these columns to the source.
 correspondence.authenticated_sender_address     text                null              correspondence.ts:107
 correspondence.original_signature               jsonb               null              correspondence.ts:108
@@ -44,7 +44,7 @@ correspondence.updated_at                       timestamptz         default,not 
 
 ## correspondence_sources · `correspondenceSources` · correspondence.ts:237 · rls
 
-Each data-box source copy belongs to one deduplicated record in its matter.
+Each uploaded file belongs to one record in its matter, across both channels.
 
 ```text
 correspondence_sources.{...entityFeatureGateColumns()}  spread                        correspondence.ts:240

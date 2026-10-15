@@ -98,8 +98,8 @@ export const correspondence = p.pgTable.withRLS(
       .text("source", { enum: CORRESPONDENCE_SOURCES })
       .notNull()
       .default("delivery"),
-    // The current source file. Data-box copies live in correspondence_sources;
-    // deletion switches this pointer, removing the record only at the last copy.
+    // The current uploaded source file; correspondence_sources owns its lifetime.
+    // Removing a copy switches this pointer, deleting the record at its last source.
     sourceEntityId: safeUuid<"entity">("source_entity_id"),
     // Delivery provenance; correspondence_provenance_check binds these
     // columns to the source.
@@ -233,7 +233,7 @@ export const correspondence = p.pgTable.withRLS(
   ],
 );
 
-// Each data-box source copy belongs to one deduplicated record in its matter.
+// Each uploaded file belongs to one record in its matter, across both channels.
 export const correspondenceSources = p.pgTable.withRLS(
   "correspondence_sources",
   {

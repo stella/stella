@@ -382,6 +382,7 @@ export const createInboundMailPersistence =
                 );
               case "invalid_content":
               case "invalid_authentication":
+              case "source_changed":
                 return Result.err(
                   new InboundPersistenceError({
                     message: "Inbound correspondence failed validation",

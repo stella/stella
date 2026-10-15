@@ -21,24 +21,24 @@ ALTER TABLE "correspondence_sources" FORCE ROW LEVEL SECURITY;--> statement-brea
 -- The following migration installs this new relation's generated gate graph,
 -- policies and write trigger before application traffic can use the table.
 
-CREATE FUNCTION public.register_data_box_correspondence_source() RETURNS trigger
+CREATE FUNCTION public.register_uploaded_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
-  IF NEW.channel = 'data_box' THEN
+  IF NEW.source = 'upload' THEN
     INSERT INTO public.correspondence_sources (organization_id, workspace_id, correspondence_id, entity_id)
     VALUES (NEW.organization_id, NEW.workspace_id, NEW.id, NEW.source_entity_id);
   END IF;
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER register_data_box_correspondence_source
+CREATE TRIGGER register_uploaded_correspondence_source
 AFTER INSERT ON "correspondence" FOR EACH ROW
-EXECUTE FUNCTION public.register_data_box_correspondence_source();--> statement-breakpoint
+EXECUTE FUNCTION public.register_uploaded_correspondence_source();--> statement-breakpoint
 
 -- Source deletion is a record transition, serialized by the record row. A
 -- correspondence cascade may already have removed the parent; then no work
 -- remains. Replacing the current source preserves its envelope and attachments.
-CREATE FUNCTION public.remove_data_box_correspondence_source() RETURNS trigger
+CREATE FUNCTION public.remove_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 DECLARE
   next_source uuid;
@@ -64,46 +64,64 @@ BEGIN
   RETURN OLD;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER remove_data_box_correspondence_source
+CREATE TRIGGER remove_correspondence_source
 AFTER DELETE ON "correspondence_sources" FOR EACH ROW
-EXECUTE FUNCTION public.remove_data_box_correspondence_source();--> statement-breakpoint
+EXECUTE FUNCTION public.remove_correspondence_source();--> statement-breakpoint
 
--- A new file version may carry another message. Detach its old association
--- before the source-pointer uniqueness check, including INSERT ... ON CONFLICT
--- when the target message is already filed. Source removal applies the same
--- surviving-copy/last-copy protocol; an insertion failure rolls it all back.
-CREATE FUNCTION public.transition_data_box_correspondence_source() RETURNS trigger
+-- One transition owns every uploaded channel and retirement. Enroll persisted
+-- upload pointers lazily through the indexed source lookup before detaching.
+CREATE FUNCTION public.transition_correspondence_source(
+  source_organization_id text, source_workspace_id uuid, source_entity uuid,
+  target_dedup_key text, target_content_hash text
+) RETURNS void
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
-  IF NEW.channel = 'data_box' THEN
-    DELETE FROM public.correspondence_sources s
-    USING public.correspondence c
-    WHERE s.workspace_id = NEW.workspace_id
-      AND s.organization_id = NEW.organization_id
-      AND s.entity_id = NEW.source_entity_id
-      AND c.id = s.correspondence_id
-      AND c.workspace_id = s.workspace_id
-      AND c.organization_id = s.organization_id
-      AND c.message_id IS DISTINCT FROM NEW.message_id;
+  INSERT INTO public.correspondence_sources (organization_id, workspace_id, correspondence_id, entity_id)
+  SELECT c.organization_id, c.workspace_id, c.id, c.source_entity_id
+  FROM public.correspondence c
+  WHERE c.organization_id = source_organization_id
+    AND c.workspace_id = source_workspace_id
+    AND c.source_entity_id = source_entity
+    AND c.source = 'upload'
+  ON CONFLICT DO NOTHING;
+
+  DELETE FROM public.correspondence_sources s
+  USING public.correspondence c
+  WHERE s.organization_id = source_organization_id
+    AND s.workspace_id = source_workspace_id
+    AND s.entity_id = source_entity
+    AND c.id = s.correspondence_id AND c.workspace_id = s.workspace_id
+    AND c.organization_id = s.organization_id
+    AND (c.dedup_key IS DISTINCT FROM target_dedup_key
+      OR (target_content_hash IS NOT NULL AND c.content_hash IS DISTINCT FROM target_content_hash));
+END;
+$$;--> statement-breakpoint
+CREATE FUNCTION public.transition_uploaded_correspondence_source() RETURNS trigger
+LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
+BEGIN
+  IF NEW.source = 'upload' THEN
+    PERFORM public.transition_correspondence_source(
+      NEW.organization_id, NEW.workspace_id, NEW.source_entity_id, NEW.dedup_key,
+      CASE WHEN NEW.channel = 'email' THEN NEW.content_hash ELSE NULL END);
   END IF;
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
-CREATE TRIGGER transition_data_box_correspondence_source
+CREATE TRIGGER transition_uploaded_correspondence_source
 BEFORE INSERT ON "correspondence" FOR EACH ROW
-EXECUTE FUNCTION public.transition_data_box_correspondence_source();--> statement-breakpoint
+EXECUTE FUNCTION public.transition_uploaded_correspondence_source();--> statement-breakpoint
 
 -- Run before the entity FK checks: unlink this copy, transition its record,
--- then permit deletion. Email uploads retain their one-file lifetime. All
+-- then permit deletion. Both uploaded channels share the same lifetime. All
 -- entity deletion paths, including folder/workspace cascades, use this protocol.
 CREATE FUNCTION public.remove_entity_correspondence_sources() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
 BEGIN
+  PERFORM public.transition_correspondence_source(
+    w.organization_id, OLD.workspace_id, OLD.id, NULL, NULL)
+  FROM public.workspaces w WHERE w.id = OLD.workspace_id;
   DELETE FROM public.correspondence_sources
   WHERE entity_id = OLD.id AND workspace_id = OLD.workspace_id;
-  DELETE FROM public.correspondence
-  WHERE source_entity_id = OLD.id AND workspace_id = OLD.workspace_id
-    AND channel = 'email';
   RETURN OLD;
 END;
 $$;--> statement-breakpoint
