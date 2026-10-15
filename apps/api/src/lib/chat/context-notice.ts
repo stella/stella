@@ -60,6 +60,7 @@ export const createContextNoticeStamp = (
     },
     beginAttempt: () => {
       notice = initial;
+      stamped = false;
     },
     metadata: () =>
       notice === null ? {} : { [CONTEXT_NOTICE_METADATA_KEY]: notice },
@@ -83,8 +84,9 @@ export const createContextNoticeStamp = (
             type: EventType.TEXT_MESSAGE_START,
             messageId: chunk.parentMessageId,
             role: "assistant",
-            ...(chunk.model === undefined ? {} : { model: chunk.model }),
-            timestamp: chunk.timestamp,
+            ...(chunk.timestamp === undefined
+              ? {}
+              : { timestamp: chunk.timestamp }),
             metadata,
           },
           chunk,

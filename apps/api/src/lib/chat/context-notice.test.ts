@@ -141,4 +141,29 @@ describe("an answer's context notice", () => {
       contextNotice: HISTORY_TRIMMED_NOTICE,
     });
   });
+
+  test("streams the answering attempt's notice after an earlier attempt stamped its own", () => {
+    const stamp = createContextNoticeStamp(null);
+    stamp.beginAttempt();
+    stamp.record(HISTORY_TRIMMED_NOTICE);
+    // The first attempt opens its answer and stops before any content.
+    const first = stamp.stamp({
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: MESSAGE_ID,
+      role: "assistant",
+    });
+    expect(first.at(0)?.metadata?.["contextNotice"]).toEqual(
+      HISTORY_TRIMMED_NOTICE,
+    );
+
+    stamp.beginAttempt();
+    stamp.record(HISTORY_TRIMMED_NOTICE);
+    const streamed = answerChunks().flatMap((chunk) => stamp.stamp(chunk));
+    expect(liveAnswer(streamed).metadata?.["contextNotice"]).toEqual(
+      HISTORY_TRIMMED_NOTICE,
+    );
+    expect(stamp.metadata()).toEqual({
+      contextNotice: HISTORY_TRIMMED_NOTICE,
+    });
+  });
 });
