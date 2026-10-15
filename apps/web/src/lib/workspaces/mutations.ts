@@ -73,10 +73,6 @@ type WorkspaceUpdateValueByType = {
   color: string | null;
   leadUserId: string | null;
   name: string;
-  promote: {
-    clientId: string;
-    memberUserIds?: string[];
-  };
   reference: string;
 };
 
@@ -96,7 +92,6 @@ const WORKSPACE_UPDATE_REFRESH_SCOPE = {
   color: "query-cache",
   leadUserId: "query-cache",
   name: "route-metadata",
-  promote: "query-cache",
   reference: "query-cache",
 } as const satisfies Record<
   WorkspaceUpdate["type"],
@@ -121,16 +116,6 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
       return { leadUserId: update.value };
     case "name":
       return { name: update.value };
-    case "promote":
-      return {
-        promote: {
-          clientId: toSafeId<"contact">(update.value.clientId),
-          ...(update.value.memberUserIds &&
-            update.value.memberUserIds.length > 0 && {
-              memberUserIds: update.value.memberUserIds,
-            }),
-        },
-      };
     case "reference":
       return { reference: update.value };
     default: {
