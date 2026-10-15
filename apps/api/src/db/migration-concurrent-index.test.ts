@@ -2089,7 +2089,7 @@ const isReplaySafeBeforeSplit = (
 const isRowScanningStatement = (relativePath: string, statement: string) => {
   if (
     /^CREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\b/iu.test(statement) ||
-    /^CREATE\s+POLICY\b/iu.test(statement) ||
+    /^(?:CREATE|ALTER)\s+POLICY\b/iu.test(statement) ||
     (/^DO\b/iu.test(statement) &&
       !isUnapprovedProceduralStatement(relativePath, statement))
   ) {
@@ -2313,6 +2313,12 @@ describe("entity feature gate migration semantics", () => {
         "fixture/migration.sql",
         "CREATE POLICY gate_policy ON public.items AS RESTRICTIVE FOR ALL " +
           "USING (true) WITH CHECK (value > 0)",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER POLICY gate_policy ON public.items WITH CHECK (value > 0)",
       ),
     ).toBe(false);
     expect(
