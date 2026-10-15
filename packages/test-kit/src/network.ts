@@ -188,7 +188,16 @@ const guardedFetch =
 const guardFetch = (refuse: FetchRefusal): (() => void) => {
   const original = globalThis.fetch;
   globalThis.fetch = Object.assign(guardedFetch(original, refuse), {
-    preconnect: original.preconnect,
+    // Preconnecting opens a connection too, so it gets the same host check.
+    preconnect: (...args: Parameters<typeof original.preconnect>) => {
+      const [target] = args;
+      const href = target instanceof URL ? target.href : target;
+      const error = URL.canParse(href) ? refuse(new URL(href)) : undefined;
+      if (error !== undefined) {
+        throw error;
+      }
+      original.preconnect(...args);
+    },
   });
   return () => {
     globalThis.fetch = original;

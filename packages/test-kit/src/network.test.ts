@@ -323,6 +323,29 @@ describe("network guard", () => {
     });
   });
 
+  test("fetch.preconnect is refused for a remote host before it connects", () => {
+    const realFetch = globalThis.fetch;
+    const preconnected: string[] = [];
+    const fake = Object.assign(async () => new Response("unused"), {
+      preconnect: (target: string | URL) => {
+        preconnected.push(String(target));
+      },
+    });
+    Reflect.set(globalThis, "fetch", fake);
+    try {
+      uninstall = installNetworkGuard();
+      expect(() => fetch.preconnect("https://example.com/")).toThrow(
+        NetworkAccessError,
+      );
+      fetch.preconnect("http://127.0.0.1:1/");
+      expect(preconnected).toEqual(["http://127.0.0.1:1/"]);
+    } finally {
+      uninstall?.();
+      uninstall = undefined;
+      Reflect.set(globalThis, "fetch", realFetch);
+    }
+  });
+
   test("data and blob URLs are not network access", async () => {
     uninstall = installNetworkGuard();
     const response = await fetch("data:text/plain,hello");
