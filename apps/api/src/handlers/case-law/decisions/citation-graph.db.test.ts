@@ -1263,6 +1263,7 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
     decisionId: withheldSubjectId,
     direction: "cites",
     limit: 10,
+    surface: "search",
   });
   const summary = await withSubject(
     withheldSubjectId,
