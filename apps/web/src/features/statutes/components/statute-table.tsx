@@ -16,6 +16,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
@@ -52,17 +54,13 @@ import {
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import {
-  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MIN_SIZE,
   STATUTE_COLUMN_MODEL,
   STATUTE_VALIDITY_LABEL_KEYS,
 } from "@/features/statutes/statute-columns.logic";
-import type {
-  StatuteColumnId,
-  StatuteTableLayout,
-} from "@/features/statutes/statute-columns.logic";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
+import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
   statuteActLabel,

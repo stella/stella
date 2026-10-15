@@ -10,7 +10,7 @@ import {
   INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
-} from "@stll/ui/inspector";
+} from "@stll/ui/inspector/pane-width";
 
 import {
   decisionTableLayouts,
@@ -19,7 +19,7 @@ import {
 import {
   statuteTableLayouts,
   StoredStatuteLayoutSchema,
-} from "@/features/statutes/statute-columns.logic";
+} from "@/features/statutes/statute-table-layout.logic";
 
 export const PRESENTATION_PREFS_COOKIE = "stella-presentation";
 const MAX_COOKIE_LENGTH = 2048;

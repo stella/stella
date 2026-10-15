@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/presentation-prefs";
+import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/account/presentation-prefs/preferences";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

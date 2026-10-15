@@ -1,8 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const { render } = await import("@testing-library/react");

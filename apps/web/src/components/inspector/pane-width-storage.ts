@@ -1,6 +1,6 @@
 import { useInspectorPaneWidth } from "@stll/ui/inspector";
 
-import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 
 type UseSharedInspectorPaneWidthOptions = {
   sidebarWidth: number;

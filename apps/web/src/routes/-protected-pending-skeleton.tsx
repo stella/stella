@@ -19,8 +19,8 @@ import { cn } from "@stll/ui/utils";
 
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 // The primary entries every signed-in person sees, from the same list the
 // real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join

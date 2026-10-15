@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-start/server";
 import * as v from "valibot";
 
-import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import {
   parseVisitorPresentationPrefs,
   parseTableLayoutCookie,
@@ -19,7 +19,7 @@ import {
   presentationPrefsSchema,
   serializePresentationPrefs,
   serializeTableLayoutCookie,
-} from "@/lib/presentation-prefs/preferences";
+} from "@/lib/account/presentation-prefs/preferences";
 
 const patchSchema = v.strictObject({
   ...v.partial(corePresentationPrefsSchema).entries,

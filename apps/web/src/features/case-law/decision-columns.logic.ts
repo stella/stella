@@ -1,11 +1,13 @@
 import type { ReactElement } from "react";
 
-import type { DecisionColumnId } from "@stll/api-contract/public-law-table";
+import type {
+  DecisionColumnId,
+  TableContentMode,
+} from "@stll/api-contract/public-law-table";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 export {
   DECISION_COLUMN_IDS,

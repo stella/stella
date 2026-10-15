@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AlignJustifyIcon, WrapTextIcon, XIcon } from "@stll/ui/icons";
@@ -18,7 +19,6 @@ import type { PublicLawTableLayout } from "@/components/public-law-table/public-
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /**

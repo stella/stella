@@ -1340,10 +1340,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/statutes/statute-columns.logic.ts::STATUTE_COLUMN_IDS::domain:[\"act\",\"type\",\"validity\",\"firstVersion\",\"amendments\",\"lastAmended\",\"citedBy\"]::1",
-    "reason": "Existing STATUTE_COLUMN_IDS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/statutes/statute-compare.test.ts::listInsertion::max:12::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
@@ -1626,10 +1622,6 @@
   {
     "id": "apps/web/src/lib/workspaces/calculations.ts::NUMERIC_PROPERTY_TYPES::domain:[\"int\",\"money\"]::1",
     "reason": "Existing NUMERIC_PROPERTY_TYPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/lib/workspaces/table-store.logic.ts::TABLE_CONTENT_MODES::domain:[\"tight\",\"fit-content\"]::1",
-    "reason": "Existing TABLE_CONTENT_MODES domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/lib/workspaces/types.ts::ALL_COLUMNS::domain:[\"client\",\"team\",\"reference\",\"entityCount\",\"lastActivityAt\",\"createdAt\"]::1",

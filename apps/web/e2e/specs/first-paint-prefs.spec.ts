@@ -5,7 +5,7 @@ import {
   defaultPresentationPrefs,
   serializePresentationPrefs,
   PRESENTATION_PREFS_COOKIE,
-} from "../../src/lib/presentation-prefs";
+} from "../../src/lib/account/presentation-prefs/preferences";
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";

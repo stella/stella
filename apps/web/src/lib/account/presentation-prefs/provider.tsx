@@ -2,10 +2,10 @@ import { createContext, use, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { getTranslator } from "@/i18n/translator";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { writePresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import { writePresentationPrefs } from "@/lib/presentation-prefs/server";
 
 let browserPrefs = defaultPresentationPrefs;
 

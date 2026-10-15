@@ -23,9 +23,9 @@ import type {
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { optionalArray } from "@/lib/arrays";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
-import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 /** The per-row context a route needs to render one row of the list. */
 type TemplateRowContext = {

@@ -19,9 +19,9 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { ssrApiHeaders } from "@/lib/account/ssr-api-headers";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { browserAuthBaseUrl } from "@/lib/api-url";
-import { ssrApiHeaders } from "@/lib/api/ssr-headers";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 

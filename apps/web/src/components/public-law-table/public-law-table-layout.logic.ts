@@ -1,8 +1,9 @@
 import * as v from "valibot";
 
+import { TABLE_CONTENT_MODES } from "@stll/api-contract/public-law-table";
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
+
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-column-sizing";
-import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 /**
  * How this browser draws a public-law results table on one surface (a

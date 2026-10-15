@@ -1062,9 +1062,16 @@ describe("public law sitemap", () => {
     expect(source).toContain("locale: useI18nStore.getState().loadedLang");
     expect(source).toContain("prefs: await readPresentationPrefs()");
     expect(source).toContain(
-      "initializeDocumentUser(queryClient, presentation.localeUserId)",
+      "initializeDocumentUser(queryClient, user?.id ?? null)",
     );
-    expect(source).toContain("await loadLocaleMessages(presentation.locale)");
+    expect(source).toContain("loadLocaleMessages(presentation.locale)");
+    expect(source).not.toContain("localeUserId");
+    expect(
+      source.slice(
+        source.indexOf("dehydrate:"),
+        source.indexOf("hydrate: async (presentation)"),
+      ),
+    ).not.toContain("loadAuthContext");
     expect(source).toContain(
       "initializeBrowserPresentationPrefs(presentation.prefs)",
     );

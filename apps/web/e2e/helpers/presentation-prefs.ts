@@ -9,8 +9,8 @@ import {
   serializeTableLayoutCookie,
   PRESENTATION_PREFS_COOKIE,
   serializePresentationPrefs,
-} from "../../src/lib/presentation-prefs";
-import type { PresentationPrefs } from "../../src/lib/presentation-prefs";
+} from "../../src/lib/account/presentation-prefs/preferences";
+import type { PresentationPrefs } from "../../src/lib/account/presentation-prefs/preferences";
 
 type SetPresentationPrefsOptions = {
   context: BrowserContext;

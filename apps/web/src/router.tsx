@@ -16,6 +16,9 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { initializeBrowserPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
+import { readPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
@@ -25,9 +28,6 @@ import {
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import { initializeBrowserPresentationPrefs } from "@/lib/presentation-prefs/provider";
-import { readPresentationPrefs } from "@/lib/presentation-prefs/server";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
@@ -84,12 +84,14 @@ export function getRouter() {
     routeTree,
     dehydrate: async () => ({
       locale: useI18nStore.getState().loadedLang,
-      localeUserId: (await loadAuthContext(queryClient)).user?.id ?? null,
       prefs: await readPresentationPrefs(),
     }),
     hydrate: async (presentation) => {
-      initializeDocumentUser(queryClient, presentation.localeUserId);
-      const messages = await loadLocaleMessages(presentation.locale);
+      const [messages, { user }] = await Promise.all([
+        loadLocaleMessages(presentation.locale),
+        loadAuthContext(queryClient),
+      ]);
+      initializeDocumentUser(queryClient, user?.id ?? null);
       initializeBrowserPresentationPrefs(presentation.prefs);
       initializeRenderedLocale({
         locale: presentation.locale,

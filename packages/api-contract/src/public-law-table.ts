@@ -23,3 +23,20 @@ export const DEFAULT_HIDDEN_DECISION_COLUMN_IDS = [
   "headnote",
   "language",
 ] as const satisfies readonly DecisionColumnId[];
+
+/** How much of a table cell is visible before the reader opens its row. */
+export const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
+
+export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
+
+export const STATUTE_COLUMN_IDS = [
+  "act",
+  "type",
+  "validity",
+  "firstVersion",
+  "amendments",
+  "lastAmended",
+  "citedBy",
+] as const;
+
+export type StatuteColumnId = (typeof STATUTE_COLUMN_IDS)[number];

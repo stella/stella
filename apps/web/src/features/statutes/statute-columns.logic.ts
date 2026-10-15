@@ -1,15 +1,6 @@
-import * as v from "valibot";
-
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
-import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
 
-import {
-  NO_COLUMN_SIZING,
-  publicLawStoredLayoutEntries,
-  publicLawTableLayout,
-  publicLawTableLayouts,
-} from "@/components/public-law-table/public-law-table-layout.logic";
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 /**
@@ -17,18 +8,6 @@ import type { TranslationKey } from "@/i18n/types";
  * called, how wide they start and which of them a reader may hide. The same
  * shape the decision columns are declared in, drawn by the same table.
  */
-export const STATUTE_COLUMN_IDS = [
-  "act",
-  "type",
-  "validity",
-  "firstVersion",
-  "amendments",
-  "lastAmended",
-  "citedBy",
-] as const;
-
-export type StatuteColumnId = (typeof STATUTE_COLUMN_IDS)[number];
-
 type StatuteColumnModel = {
   /** The width the column starts at, before a stored resize. */
   size: number;
@@ -74,34 +53,3 @@ export const STATUTE_VALIDITY_LABEL_KEYS = {
   "never-in-force": "statutes.status.neverInForce",
   unknown: "statutes.status.unknown",
 } as const satisfies Record<LegislationListValidity, TranslationKey>;
-
-export type StatuteTableLayout = PublicLawTableLayout;
-
-export const DEFAULT_STATUTE_TABLE_LAYOUT: StatuteTableLayout = {
-  hidden: [],
-  order: [],
-  pinned: [],
-  sizing: NO_COLUMN_SIZING,
-  contentMode: "tight",
-};
-
-/** What storage holds, per jurisdiction. */
-export const StoredStatuteLayoutSchema = v.pipe(
-  v.unknown(),
-  v.check(
-    (value) =>
-      typeof value === "object" && value !== null && !Array.isArray(value),
-  ),
-  v.record(
-    v.picklist(PUBLIC_COUNTRIES),
-    v.strictObject(publicLawStoredLayoutEntries(STATUTE_COLUMN_IDS)),
-  ),
-);
-
-/** Every stored arrangement, read once; see `publicLawTableLayouts`. */
-export const statuteTableLayouts = (
-  stored: v.InferOutput<typeof StoredStatuteLayoutSchema>,
-): Record<string, StatuteTableLayout> =>
-  publicLawTableLayouts(stored, (value) =>
-    publicLawTableLayout(value, DEFAULT_STATUTE_TABLE_LAYOUT),
-  );

@@ -7,7 +7,7 @@ import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
 import { DECISION_COLUMN_IDS } from "@/features/case-law/decision-columns.logic";
-import { DEFAULT_STATUTE_TABLE_LAYOUT } from "@/features/statutes/statute-columns.logic";
+import { DEFAULT_STATUTE_TABLE_LAYOUT } from "@/features/statutes/statute-table-layout.logic";
 import {
   decisionLayoutsCookieSchema,
   defaultPresentationPrefs,
@@ -15,8 +15,8 @@ import {
   serializePresentationPrefs,
   serializeTableLayoutCookie,
   statuteLayoutsCookieSchema,
-} from "@/lib/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
+} from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 
 const DecisionTableSnapshot = () => {
   const { layout } = useDecisionColumnPreferences("CZE");

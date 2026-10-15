@@ -16,6 +16,7 @@ import { WebReaderPresentationProvider } from "@/components/legal-reader/web-rea
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
@@ -51,6 +52,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const calendar = useI18nStore((s) => s.calendar);
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const weekStart = useI18nStore((s) => s.weekStart);
+  const hydrated = useHydrated();
   const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
 
   const pathname = useRouterState({
@@ -82,8 +84,17 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     weekStart,
   });
 
+  // The provider can commit while nested Suspense boundaries still hold server
+  // markup. Preserve the public-page remount when browser formatting activates.
+  const hydrationPhase = onPublicSsrPath && !hydrated ? "server" : "browser";
+
   return (
-    <IntlProvider locale={locale} messages={messages} timeZone={timeZone}>
+    <IntlProvider
+      key={hydrationPhase}
+      locale={locale}
+      messages={messages}
+      timeZone={timeZone}
+    >
       <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
         <DialogTranslations>{children}</DialogTranslations>
       </FormattingProvider>

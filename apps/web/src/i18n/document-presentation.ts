@@ -7,8 +7,10 @@ import {
   initializeRenderedLocale,
   loadLocaleMessages,
 } from "@/i18n/i18n-store";
-import { getBrowserPresentationPrefs } from "@/lib/presentation-prefs/provider";
-import { readPresentationPrefs } from "@/lib/presentation-prefs/server";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { getBrowserPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
+import { readPresentationPrefs } from "@/lib/account/presentation-prefs/server";
+import { fetchSession } from "@/lib/auth-queries";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const documentUsers = new WeakMap<QueryClient, string | null>();
@@ -37,16 +39,22 @@ export const loadClientDocumentPresentation = async (
   }
   return prefs;
 };
+// Read the profile only to choose the catalogue. Public SSR must not put
+// identity into the query cache that is transported to the browser.
+export const loadServerDocumentPresentation = async (
+  prefs: PresentationPrefs,
+) => {
+  const auth = await fetchSession();
+  const locale =
+    resolveUiLocale(auth?.user.locale ?? prefs.visitorLocale) ?? "en";
+  const messages = await loadLocaleMessages(locale);
+  initializeRenderedLocale({ locale, messages, prefs });
+  return prefs;
+};
+
 export const loadDocumentPresentation = createIsomorphicFn()
-  .server(async (queryClient: QueryClient) => {
-    const [prefs, auth] = await Promise.all([
-      readPresentationPrefs(),
-      loadAuthContext(queryClient),
-    ]);
-    const locale =
-      resolveUiLocale(auth.user?.locale ?? prefs.visitorLocale) ?? "en";
-    const messages = await loadLocaleMessages(locale);
-    initializeRenderedLocale({ locale, messages, prefs });
-    return prefs;
-  })
-  .client(loadClientDocumentPresentation);
+  .client(loadClientDocumentPresentation)
+  .server(
+    async () =>
+      await loadServerDocumentPresentation(await readPresentationPrefs()),
+  );

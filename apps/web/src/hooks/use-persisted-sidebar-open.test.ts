@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 
 import { usePersistedSidebarOpen } from "./use-persisted-sidebar-open";
 

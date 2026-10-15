@@ -8,7 +8,7 @@ import {
   parseVisitorPresentationPrefs,
   presentationPrefsSchema,
   serializePresentationPrefs,
-} from "./presentation-prefs";
+} from "./preferences";
 
 describe("server-readable presentation preferences", () => {
   test("missing, malformed and non-object cookies use defaults", () => {

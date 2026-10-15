@@ -17,11 +17,11 @@ import {
   getTranslator as getBrowserTranslator,
   setTranslator,
 } from "@/i18n/translator";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { persistPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
-import { persistPresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 // UI presentation order for language pickers. The membership is enforced
 // against the shared `UiLocale` set (a stale entry fails typecheck); only the

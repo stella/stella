@@ -11,12 +11,12 @@ import {
   loadLocaleMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import { sessionOptions } from "@/lib/auth-query-options";
 import {
   parseVisitorPresentationPrefs,
   defaultPresentationPrefs,
   serializePresentationPrefs,
-} from "@/lib/presentation-prefs/preferences";
+} from "@/lib/account/presentation-prefs/preferences";
+import { sessionOptions } from "@/lib/auth-query-options";
 
 import {
   initializeDocumentUser,
@@ -113,5 +113,38 @@ test("cookie-free Czech requests render Czech HTML while an explicit cookie over
         cookie === undefined ? "Právní databáze" : "Legal database",
       );
     });
+  }
+});
+
+test("server presentation uses the profile locale without adding identity to the hydration cache", async () => {
+  const { requestHandler } = await import("@tanstack/react-start/server");
+  const { loadServerDocumentPresentation } =
+    await import("./document-presentation");
+  const originalFetch = globalThis.fetch;
+  const profile = sessionFor({ id: "presentation-user", locale: "cs" });
+  globalThis.fetch = Object.assign(async () => Response.json(profile), {
+    preconnect: () => undefined,
+  });
+  const queryClient = new QueryClient();
+  try {
+    await withRequestI18n(async () => {
+      const handle = requestHandler(async () => {
+        await loadServerDocumentPresentation(defaultPresentationPrefs);
+        return new Response(null);
+      });
+      await handle(
+        new Request("http://localhost:3000/tools", {
+          headers: { "accept-language": "en-US" },
+        }),
+      );
+      expect(useI18nStore.getState().loadedLang).toBe("cs");
+      expect(queryClient.getQueryCache().getAll()).toEqual([]);
+      expect(renderToStaticMarkup(createElement(DocumentSnapshot))).toContain(
+        "Právní databáze",
+      );
+    });
+  } finally {
+    queryClient.clear();
+    globalThis.fetch = originalFetch;
   }
 });
