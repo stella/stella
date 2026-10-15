@@ -2927,6 +2927,7 @@
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
     "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
+    "collaborationSnapshotRecovered": "تعذر إعادة فتح نسخة التعاون المخزنة. تمت استعادة الغرفة من آخر مستند محفوظ؛ وربما فُقدت التغييرات التي لم تُحفظ.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",
@@ -4341,6 +4342,8 @@
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
       },
+      "showInTitle": "إظهار الرقم بجانب اسم الملف القانوني",
+      "showInTitleDescription": "عند إيقاف هذا الخيار، يكون العنوان هو الاسم الذي أدخلته بالضبط.",
       "title": "ترقيم الملفات القانونية",
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
@@ -4974,16 +4977,21 @@
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
+    "provisionEffectiveFrom": "نافذ منذ {date}",
     "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
+    "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
+    "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
+    "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
@@ -4999,7 +5007,6 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -5673,7 +5680,7 @@
       "title": "نسخ إلى ملف قانوني"
     },
     "create": {
-      "ownerTypeToggle": "نوع الملف القانوني",
+      "matterName": "اسم الملف القانوني",
       "personalDescription": "الملفات القانونية الشخصية خاصة بك ولا تحتاج إلى عميل. يمكنك ترقيتها لاحقًا لمشاركتها مع الفريق."
     },
     "createNewWorkspace": "إنشاء ملف قانوني جديد",
@@ -6125,15 +6132,12 @@
       "upcomingTasks": "جدول الأعمال القادم",
       "uploaded": "تم الرفع"
     },
-    "ownerType": {
-      "client": "عميل",
-      "personal": "شخصية"
-    },
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
       "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
+      "noClientOptional": "بلا عميل (اختياري)",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف القانوني.",
       "partyRoles": {
         "co_counsel": "محامٍ مشارك",

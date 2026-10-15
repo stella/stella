@@ -260,7 +260,6 @@
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
-    "workspaces.ownerType.personal",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
@@ -915,12 +914,6 @@
     "workspaces.overview.activity.targets.message": [
       "fr"
     ],
-    "workspaces.ownerType.client": [
-      "fr"
-    ],
-    "workspaces.ownerType.personal": [
-      "es"
-    ],
     "workspaces.parties.client": [
       "fr"
     ],
@@ -1207,7 +1200,6 @@
     "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
     "workspaces.parties.noClient",
-    "workspaces.parties.removeClient",
     "workspaces.parties.removePartyConfirm",
     "workspaces.parties.setClient",
     "workspaces.pdf.entitySidebar",
