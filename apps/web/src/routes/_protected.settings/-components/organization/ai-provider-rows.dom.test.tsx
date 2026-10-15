@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import type { ProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
@@ -23,7 +24,7 @@ afterEach(cleanup);
 afterAll(async () => {
   cleanup();
   await act(async () => await sleep(50));
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type MountOptions = {
