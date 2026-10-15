@@ -2038,7 +2038,8 @@ export const lockMemberAccessRow = async ({
 
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];
-  where?: SQL;
+  /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */
+  where?: SQL | undefined;
 };
 
 /** Lock assignments after the caller's member and optional matter prefix. */
