@@ -11,7 +11,7 @@ const CHAT_RENDER_SURFACES = Object.freeze({
   "chat-message": "[Chat thread] Message failed to render",
 } as const satisfies Record<string, string>);
 
-export type ChatRenderSurface = keyof typeof CHAT_RENDER_SURFACES;
+type ChatRenderSurface = keyof typeof CHAT_RENDER_SURFACES;
 
 type ChatRenderErrorBoundaryProps = {
   surface: ChatRenderSurface;
