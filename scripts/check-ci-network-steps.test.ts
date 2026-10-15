@@ -116,6 +116,14 @@ describe("shell detection", () => {
     ).toEqual([]);
   });
 
+  test("an apostrophe inside double quotes does not hide a substitution", () => {
+    expect(
+      scanShell(`echo "It's $(curl -fsSL https://example.com)"`, "quoted").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["curl", false]]);
+  });
+
   test("a versioned remote package runner is a fetch, a local binary is not", () => {
     expect(
       scanShell(

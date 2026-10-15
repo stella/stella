@@ -132,6 +132,8 @@ export const liftSubstitutions = (line: string): string[] => {
   const lifted: string[] = [];
   let outer = "";
   let single = false;
+  // Inside double quotes an apostrophe is literal text, not a quote.
+  let double = false;
   for (let index = 0; index < line.length; index += 1) {
     const character = line[index] ?? "";
     if (character === "\\" && !single) {
@@ -139,7 +141,12 @@ export const liftSubstitutions = (line: string): string[] => {
       index += 1;
       continue;
     }
-    if (character === "'") {
+    if (character === '"' && !single) {
+      double = !double;
+      outer += character;
+      continue;
+    }
+    if (character === "'" && !double) {
       single = !single;
       outer += character;
       continue;
