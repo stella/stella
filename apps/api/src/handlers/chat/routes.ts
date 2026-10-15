@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
 import getModelOptions from "@/api/handlers/chat/get-model-options";
@@ -28,6 +29,7 @@ import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -79,6 +81,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
+  })
+  .get("/decision-threads/:decisionId", getDecisionChatThread.handler, {
+    params: getDecisionChatThread.config.params,
+    permissions: getDecisionChatThread.config.permissions,
   })
   .get("/model-options", getModelOptions.handler, {
     permissions: getModelOptions.config.permissions,
@@ -184,6 +190,16 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+  })
+  .get("/threads/:threadId/turns/:turnId/resume", probeChatTurn.handler, {
+    params: probeChatTurn.config.params,
+    permissions: probeChatTurn.config.permissions,
+    query: probeChatTurn.config.query,
+  })
+  .get("/threads/:threadId/turns/:turnId/join", joinChatTurn.handler, {
+    params: joinChatTurn.config.params,
+    permissions: joinChatTurn.config.permissions,
+    query: joinChatTurn.config.query,
   })
   .post("/threads/:threadId/turns/:turnId/cancel", cancelTurn.handler, {
     params: cancelTurn.config.params,

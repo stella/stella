@@ -1116,6 +1116,32 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 // occurrences that stripping comments removes.
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
+export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "PUBLIC_CORPUS_BOOKKEEPING_TABLES"
+      ) {
+        continue;
+      }
+      const initializer = declaration.initializer;
+      if (
+        initializer === undefined ||
+        !ts.isArrayLiteralExpression(initializer)
+      ) {
+        panic("Corpus membership must be an explicit array literal");
+      }
+      return initializer.elements.length;
+    }
+  }
+  return 0;
+};
+
 const countAuditSkipDirectives: FileCounter = (content, { file }) =>
   countMatches(content, AUDIT_SKIP_DIRECTIVE) -
   countCodeMatches({
@@ -3217,6 +3243,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "public-corpus-audit-membership",
+    description:
+      "Reviewed table admissions that exempt public corpus bookkeeping from mutation audit; membership growth requires an explicit budget decision",
+    include: ["apps/api/src/lib/db/public-corpus-audit/membership.ts"],
+    exclude: () => false,
+    count: countPublicCorpusMembership,
+  },
+  {
+    scope: "file",
     id: "audit-skip-directives",
     description:
       "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
@@ -4109,12 +4144,24 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
 
-const comparisonBase = (): string =>
-  resolveCommit(
-    revisionOption("--base") ??
-      process.env["RATCHET_BASE_REF"] ??
-      readGit(["merge-base", "origin/main", "HEAD"]),
+const comparisonBase = (headRef?: string): string => {
+  const explicitBase =
+    revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
+  if (explicitBase !== undefined) {
+    return resolveCommit(explicitBase);
+  }
+  if (headRef !== undefined) {
+    readGit([
+      "fetch",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    ]);
+  }
+  return resolveCommit(
+    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
   );
+};
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
 
@@ -4388,7 +4435,7 @@ const runCheck = (): number => {
   const head = scanCheckedHead(headRef);
   const current = head.snapshot;
   const headFinished = performance.now();
-  const base = comparisonBase();
+  const base = comparisonBase(headRef);
   const baseline = scanMergeBase({ ref: base, previous: head });
   console.log(
     `ratchet timing: head ${(headFinished - started).toFixed(0)}ms; base export + scan ${(performance.now() - headFinished).toFixed(0)}ms (${base})`,
@@ -5351,9 +5398,9 @@ const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
 const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
-// api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
+// api-only-helper.ts, shared-names.ts and db/ (the corpus membership fixture). The two `.test.ts` files, the
 // `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
-const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 10;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
 // companion is excluded.
@@ -6660,6 +6707,11 @@ const runSelfTest = (): number => {
     // literal, and a test-file copy the scan excludes outright.
     writeFixture(root, "apps/api/src/clone-origin.ts", SELF_TEST_CLONE_BLOCK);
     writeFixture(root, "apps/web/src/clone-copy.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(
+      root,
+      "apps/api/src/lib/db/public-corpus-audit/membership.ts",
+      "export const PUBLIC_CORPUS_BOOKKEEPING_TABLES = [{}, {}];\n",
+    );
     writeFixture(root, "apps/api/src/clone-unique.ts", SELF_TEST_UNIQUE_BLOCK);
     writeFixture(
       root,
@@ -6809,6 +6861,7 @@ const runSelfTest = (): number => {
         EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
       ],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      ["public-corpus-audit-membership", 2],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
@@ -7128,6 +7181,29 @@ const runSelfTest = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
+const USAGE = `Usage: bun scripts/ratchet.ts [mode] [options]
+
+Modes:
+  (no mode)       Report current metric counts against the comparison base.
+  --check         Exit nonzero when an increase lacks an exact allowance.
+  --self-test     Run the ratchet's counter and gate checks.
+
+Options:
+  --base <commit> Compare against this revision instead of the merge base.
+  --head <commit> Measure this revision instead of the working tree.
+  --details       Include per-file counts in report mode.
+  -h, --help      Print this usage and exit.
+
+Allowances:
+  Add scripts/ratchet-allowances/<slug>.json in the measured head with:
+  { "metric": "<metric-id>", "delta": <positive integer>, "reason": "<justification>" }
+  Per-file metrics also require "file": "<repository-relative path>".
+  The total allowance must exactly match the measured increase.`;
+
+const printUsage = (write: (message: string) => void = console.log): void => {
+  write(USAGE);
+};
+
 const main = (): number => {
   const supportedFlags = new Set([
     "--check",
@@ -7136,9 +7212,15 @@ const main = (): number => {
     "--head",
     "--details",
   ]);
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return 0;
+  }
   for (const argument of process.argv.slice(2)) {
-    if (argument.startsWith("--") && !supportedFlags.has(argument)) {
-      return panic(`unsupported ratchet option: ${argument}`);
+    if (argument.startsWith("-") && !supportedFlags.has(argument)) {
+      console.error(`unsupported ratchet option: ${argument}\n`);
+      printUsage(console.error);
+      return 1;
     }
   }
   if (process.argv.includes("--self-test")) {

@@ -166,21 +166,31 @@ export const repositoryRules = async () => {
   return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
 };
 
-export const CUSTOM_LINT_TEST_ARGS = [
-  "test",
-  "./.oxlint-plugins/__tests__",
-] as const;
+type SpawnTests = (
+  command: string[],
+  options: {
+    cwd: string;
+    env: Record<string, string | undefined>;
+    stdout: "inherit";
+    stderr: "inherit";
+  },
+) => { success: boolean };
 
-const main = async (): Promise<number> => {
+export const checkRuleCoverage = async (
+  spawnTests: SpawnTests = Bun.spawnSync,
+): Promise<number> => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rule-coverage-"));
   const coveragePath = path.join(directory, "coverage.jsonl");
   try {
-    const tests = Bun.spawnSync([process.execPath, ...CUSTOM_LINT_TEST_ARGS], {
-      cwd: repoRoot,
-      env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
-      stdout: "inherit",
-      stderr: "inherit",
-    });
+    const tests = spawnTests(
+      [process.execPath, "scripts/run-custom-lint-tests.ts"],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    );
     if (!tests.success) {
       return 1;
     }
@@ -207,5 +217,5 @@ const main = async (): Promise<number> => {
 };
 
 if (import.meta.main) {
-  process.exitCode = await main();
+  process.exitCode = await checkRuleCoverage();
 }

@@ -17,6 +17,7 @@ const decision = {
   citationsTo: [],
   country: "CZE",
   court: "Synthetic court",
+  courtId: null,
   courtAbbreviation: null,
   courtTier: "other" as const,
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -131,7 +132,7 @@ const treatmentCounts = {
 const citationSummary = {
   incoming: treatmentCounts,
   outgoing: treatmentCounts,
-  capped: { incoming: false, outgoing: false },
+  precision: { status: "exact" as const },
   incomingByYear: [],
 };
 const {

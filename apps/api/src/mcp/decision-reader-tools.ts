@@ -5,6 +5,7 @@ import {
   type DecisionParagraphRange,
   decisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
+import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -14,7 +15,6 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
-import { DECISION_READER_RESOURCE_URI } from "./apps/resource-uri";
 import type { McpRequestContext } from "./context";
 import {
   blocksDecisionOutput,
@@ -119,11 +119,11 @@ const tooLarge = () =>
 const missing = () =>
   notFoundResult(
     "Decision not found",
-    "Pass a decisionId returned by search_case_law or lookup_case_law.",
+    "Pass decisionId from search_case_law results or document.decisionId from resolve_case_law_decision.",
   );
 
 const common = {
-  consumesServices: true,
+  consumesServices: false,
   access: "read",
   readClass: "public",
   anonymized: { exposure: "passthrough" },

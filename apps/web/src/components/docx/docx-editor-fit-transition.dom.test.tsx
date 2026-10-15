@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { DocxEditorProps, DocxEditorRef } from "./app-docx-editor";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
@@ -50,14 +52,18 @@ class ResizeObserverProbe implements ResizeObserver {
   }
 }
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  // Unmount inside act so React's scheduled passive work runs before the
+  // next test or the DOM teardown, never after the window is gone.
+  await act(async () => {
+    cleanup();
+  });
   releaseUserStorage();
   ResizeObserverProbe.instances.clear();
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("numeric zoom transitions to fit-width and refits when the editor viewport shrinks", async () => {
@@ -146,7 +152,9 @@ test("numeric zoom transitions to fit-width and refits when the editor viewport 
       expect(pageWidth * editor.getZoom()).toBeLessThanOrEqual(viewportWidth);
     });
   } finally {
-    cleanup();
+    await act(async () => {
+      cleanup();
+    });
     Object.defineProperty(globalThis, "ResizeObserver", {
       configurable: true,
       value: originalResizeObserver,
@@ -277,7 +285,9 @@ test("a narrow real editor starts with a collapsed outline, fits the page, and o
       mounted.getByRole("button", { name: /^First section$/u }),
     ).toBeTruthy();
   } finally {
-    cleanup();
+    await act(async () => {
+      cleanup();
+    });
     Object.defineProperty(globalThis, "ResizeObserver", {
       configurable: true,
       value: originalResizeObserver,

@@ -11,6 +11,7 @@ import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoff
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
+  authorizeDesktopMember,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -29,6 +30,7 @@ import {
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import {
   hasMemberPermission,
+  roleForDisplay,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 
@@ -158,6 +160,7 @@ test("desktop account linking preserves document access for each supported role"
     expect(
       canWriteWorkspaceEntities({
         organizationRole: role,
+        workspaceClientId: null,
         workspaceMemberId: "member-fixture",
       }),
     ).toBe(webWriteAllowed);
@@ -184,4 +187,36 @@ test("desktop request authorization follows each operation", () => {
   expect(desktopRequestAuthorization.setDefaultFormat).toBe(
     authorizeDesktopRegistry,
   );
+});
+
+test("a role without the permission is forbidden, not disconnected", () => {
+  const deniedCases = [
+    { member: null, permission: DESKTOP_ACCOUNT_PERMISSION, status: 401 },
+    {
+      member: { role: "not-a-role" },
+      permission: DESKTOP_ACCOUNT_PERMISSION,
+      status: 401,
+    },
+    {
+      member: { role: "external" },
+      permission: DESKTOP_REGISTRY_PERMISSION,
+      status: 403,
+    },
+  ] as const;
+  for (const { member, permission, status } of deniedCases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.status).toBe(status);
+    }
+  }
+  // External members may link the desktop but not search registries.
+  const allowedCases = [
+    { member: { role: "external" }, permission: DESKTOP_ACCOUNT_PERMISSION },
+    { member: { role: "owner" }, permission: DESKTOP_REGISTRY_PERMISSION },
+  ] as const;
+  for (const { member, permission } of allowedCases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(roleForDisplay(result.unwrap())).toBe(member.role);
+  }
 });

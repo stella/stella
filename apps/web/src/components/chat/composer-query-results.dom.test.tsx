@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -15,7 +16,7 @@ const { ComposerQueryResults } = await import("./composer-query-results");
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const source of [

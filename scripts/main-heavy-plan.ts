@@ -56,6 +56,16 @@ export const mainHeavyJobs = (workflow: unknown) => {
     panic("ci-result dependencies and JOB_SCOPES disagree");
   }
   const thin = thinJobs(workflow);
+  const foldedJson = record(scopes)["FOLDED_SUITES"];
+  if (typeof foldedJson !== "string") {
+    panic("Expected FOLDED_SUITES JSON");
+  }
+  // Folded verdicts remain mandatory at full depth, including main-heavy.
+  for (const job of Object.keys(record(JSON.parse(foldedJson)))) {
+    if (!gated.includes(job) || thin.includes(job)) {
+      panic(`Folded suites require a main-heavy producer: ${job}`);
+    }
+  }
   for (const job of thin) {
     if (!gated.includes(job)) {
       panic(`Missing thin job: ${job}`);
@@ -86,9 +96,8 @@ export const prDepthJobs = (workflow: unknown) => {
   ) {
     panic("Expected FAST_REQUIRED job names");
   }
-  // ci-checks-docs replaces the package checks on docs-only changes and never
-  // runs on main, so it is neither repeated by a merge group nor checkable by
-  // the scheduled main run.
+  // Docs-only checks certify ordinary PRs and merge groups. Heavy dispatches
+  // select package checks instead, so the scheduled main run cannot prove them.
   return fastRequired.filter(
     (job) =>
       job !== "ci-checks-docs" &&
@@ -98,18 +107,23 @@ export const prDepthJobs = (workflow: unknown) => {
   );
 };
 
-/** Heavy jobs a thin merge group still runs unless the switch turns them off. */
-export const QUEUE_BROWSER_SUITES_SWITCH = "vars.QUEUE_BROWSER_SUITES";
+// These jobs cannot certify the queued tree: they either consume a different
+// revision or duplicate a producer selected for an ordinary merge group.
+export const MERGE_GROUP_EXCEPTIONS = {
+  "fix-tests-on-base":
+    "Negative proof against the pull request base, rather than the queued tree.",
+  "heavy-web-build":
+    "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
+} as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  return mainHeavyJobs(workflow).filter((name) => {
-    const condition = record(jobs[name])["if"];
-    return (
-      typeof condition === "string" &&
-      condition.includes(QUEUE_BROWSER_SUITES_SWITCH)
-    );
-  });
+  const gated = [...thinJobs(workflow), ...mainHeavyJobs(workflow)];
+  for (const exception of Object.keys(MERGE_GROUP_EXCEPTIONS)) {
+    if (!gated.includes(exception)) {
+      panic(`Stale merge-group exception: ${exception}`);
+    }
+  }
+  return gated.filter((job) => !Object.hasOwn(MERGE_GROUP_EXCEPTIONS, job));
 };
 
 if (import.meta.main) {
@@ -120,5 +134,6 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(readFileSync(source, "utf-8"));
   console.log(`thin_jobs=${JSON.stringify(thinJobs(workflow))}`);
   console.log(`heavy_jobs=${JSON.stringify(mainHeavyJobs(workflow))}`);
+  console.log(`queue_jobs=${JSON.stringify(queueAdmittedJobs(workflow))}`);
   console.log(`pr_depth_jobs=${JSON.stringify(prDepthJobs(workflow))}`);
 }

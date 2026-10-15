@@ -1,15 +1,14 @@
 // oxlint-disable-next-line typescript/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
-import type { SkillResourceKind } from "./format";
-
 import skill0 from "../skills/playbook-builder/SKILL.md" with { type: "text" };
 
+export type BuiltInSkillId = "playbook-builder";
+
 type GeneratedSkillEntry = {
-  id: string;
+  id: BuiltInSkillId;
   source: string;
   resources: readonly {
-    kind: SkillResourceKind;
     path: string;
     source: string;
   }[];

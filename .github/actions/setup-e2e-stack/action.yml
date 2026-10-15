@@ -15,11 +15,6 @@ inputs:
     required: false
     default: ""
 
-outputs:
-  status:
-    description: Whether the E2E stack is ready or Docker Hub rate-limited the pull
-    value: ${{ steps.stack.outputs.status }}
-
 runs:
   using: composite
   steps:
@@ -96,16 +91,15 @@ runs:
             | tee "$stack_log" \
             && docker compose --profile dev run --rm --no-deps rustfs-setup 2>&1 \
               | tee -a "$stack_log"; then
-            echo "status=ready" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           if grep -Eqi 'toomanyrequests:.*pull rate limit' "$stack_log"; then
-            echo "::warning::Docker Hub rate-limited E2E infrastructure pulls; skipping browser execution for this job"
-            echo "Docker Hub rate-limited E2E infrastructure pulls; browser execution was skipped." >> "$GITHUB_STEP_SUMMARY"
+            # Browser tests cannot run without the stack, so the job fails with
+            # a typed infrastructure reason instead of passing without them.
+            echo "::error title=e2e-stack-rate-limited::kind=infra class=e2e-stack-rate-limited Docker Hub rate-limited E2E infrastructure pulls; browser tests did not run"
             docker compose --profile dev down --volumes --remove-orphans || true
-            echo "status=rate-limited" >> "$GITHUB_OUTPUT"
-            exit 0
+            exit 1
           fi
 
           echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
@@ -127,12 +121,12 @@ runs:
       run: docker logout
 
     - name: Prepare API runtime sources
-      if: steps.stack.outputs.status == 'ready'
+      if: steps.stack.outcome == 'success'
       shell: bash
       run: bun --filter @stll/api generate:capability-runtime
 
     - name: Run database migrations
-      if: steps.stack.outputs.status == 'ready'
+      if: steps.stack.outcome == 'success'
       # `db:migrate` (not `db:push`) so role bootstrap migrations such as
       # `20260516000000_case_law_ingestion_role` actually execute. `db:push`
       # only diffs the declarative schema, which references `stella_ingestion`
@@ -144,21 +138,32 @@ runs:
       run: bun --filter @stll/api db:migrate
 
     - name: Seed test user
-      if: steps.stack.outputs.status == 'ready'
+      if: steps.stack.outcome == 'success'
       shell: bash
       env:
         NODE_ENV: development
         STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:seed-test-user
 
+    - name: Seed feature access fixture
+      if: steps.stack.outcome == 'success'
+      shell: bash
+      env:
+        NODE_ENV: development
+        STELLA_LOCAL_DEV: "1"
+      run: bun run --cwd apps/api scripts/seed-e2e-feature-access.ts
+
     - name: Start API server
-      if: steps.stack.outputs.status == 'ready'
+      if: steps.stack.outcome == 'success'
       # `--watch` is for local dev; CI runs the server flat. Logs land in
       # /tmp/api.log so the "Upload server logs" step can publish them on
       # failure for debugging.
       shell: bash
       run: |
         cd apps/api
+        API_FEATURE_ACCESS_GRANTS="$(bun -p 'JSON.stringify(await Bun.file("../../.playwright/feature-access.json").json().then(fixture => fixture.grants))')"
+        export API_FEATURE_ACCESS_GRANTS
+        export FEATURE_LEGAL_LISTS=true
         # --preload registers the dev/test-only mock-AI generator; .env.example
         # sets USE_MOCK_AI=true, so e2e must route through the mock rather than
         # the real provider (which would fail on the placeholder API key).
@@ -166,7 +171,7 @@ runs:
         echo $! > /tmp/api.pid
 
     - name: Wait for API
-      if: steps.stack.outputs.status == 'ready'
+      if: steps.stack.outcome == 'success'
       shell: bash
       run: |
         for i in {1..60}; do

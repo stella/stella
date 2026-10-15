@@ -54,5 +54,45 @@
   {
     "name": "Test autofix decision boundaries",
     "reason": "Replaced by Test autofix protected paths; API duration weights are no longer repository files managed by autofix."
+  },
+  {
+    "name": "Test migration identity and merge gate logic",
+    "reason": "Renamed to Test migration identity logic after removing the repository merge CLI."
+  },
+  {
+    "name": "Test merge bar freshness, arm guard and disarm",
+    "reason": "Removed with the repository merge CLI; pull requests now enter the merge queue directly."
+  },
+  {
+    "name": "Test merge queue jump-reset recovery",
+    "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
+  },
+  {
+    "name": "MCP App bundle and shared assets guard",
+    "reason": "Replaced by MCP app package bundles and shared assets guard: builds the frontend package, regenerates its API-derived contracts, checks all committed bundle assets, and enforces per-app bundle budgets."
+  },
+  {
+    "name": "Select typecheck parity coverage",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck parity (all checked projects)",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Record typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Upload typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck command rejects errors",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Dependabot group guard",
+    "reason": "Reads installed manifests, so it moved to ci-checks-policy after the install as 'Dependabot group guard (installed packages)'."
   }
 ]

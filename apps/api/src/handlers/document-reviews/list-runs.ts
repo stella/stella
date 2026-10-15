@@ -98,6 +98,7 @@ const runHistoryCursorCondition = (
 };
 
 const config = {
+  contract: "patch",
   description:
     "List review runs for one document in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },

@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "Reader-answer corpus reads reuse readDecisionReaderSource, the canonical public reader owner of source AI-text admission and published AST/storage resolution. Reimplementing these checks would split the access contract; moving its decision/provision read dependencies expands this change beyond the answer slice. Remove this boundary when the reader and its dependent read functions move together to a shared case-law owner."
+}

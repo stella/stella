@@ -18,9 +18,8 @@ export {
   normalizeResourcePath,
   readSkillResource,
 } from "./loader";
-export type { SkillResource, StellaSkill } from "./loader";
+export type { BuiltInSkillId, SkillResource, StellaSkill } from "./loader";
 export {
-  getSkillResourceKind,
   hashSkillEntrypoint,
   hashSkillPackage,
   isAllowedFirstPartySkillPackageSkip,
@@ -29,15 +28,14 @@ export {
   SKILL_NAME_PATTERN,
   SKILL_PACKAGE_LIMITS,
   SKILL_RESOURCE_EXTENSIONS,
-  SKILL_RESOURCE_FOLDER_KINDS,
-  SKILL_RESOURCE_KINDS,
+  SKILL_RESOURCE_FOLDERS,
+  isSkillResourceFolder,
   validateSkillPackage,
 } from "./format";
 export type {
   SkillPackageDiagnostic,
   SkillPackageFile,
   SkillPackageSkipReason,
-  SkillResourceKind,
   SkippedSkillPackageFile,
   ValidatedSkillPackage,
   ValidatedSkillResource,

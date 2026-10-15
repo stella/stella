@@ -1,33 +1,14 @@
 import { panic, Result } from "better-result";
 
+import { isSkillResourceFolder, SKILL_RESOURCE_EXTENSIONS } from "./format";
 import { parseSkillFile } from "./frontmatter";
 import type { ParsedSkillFile, SkillMetadata } from "./frontmatter";
 import { GENERATED_SKILLS } from "./skills.gen";
 
-type SkillResourceKind =
-  | "asset"
-  | "knowledge"
-  | "prompt"
-  | "reference"
-  | "script"
-  | "template";
-
-const RESOURCE_FOLDERS = new Map<string, SkillResourceKind>([
-  ["assets", "asset"],
-  ["knowledge", "knowledge"],
-  ["prompts", "prompt"],
-  ["reference", "reference"],
-  ["references", "reference"],
-  ["scripts", "script"],
-  ["templates", "template"],
-]);
-
-const getSkillResourceKind = (path: string): SkillResourceKind | null =>
-  RESOURCE_FOLDERS.get(path.split("/").at(0) ?? "") ?? null;
+export type { BuiltInSkillId } from "./skills.gen";
 
 export type SkillResource = {
   path: string;
-  kind: SkillResourceKind;
 };
 
 /** A skill shipped with stella: every organization has it, with no row. */
@@ -35,21 +16,6 @@ export type StellaSkill = SkillMetadata & {
   body: string;
   resources: SkillResource[];
 };
-
-const RESOURCE_EXTENSIONS = [
-  ".csv",
-  ".json",
-  ".md",
-  ".mjs",
-  ".prompt.md",
-  ".py",
-  ".sh",
-  ".ts",
-  ".tsv",
-  ".txt",
-  ".yaml",
-  ".yml",
-] as const;
 
 type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
 
@@ -76,7 +42,7 @@ export const loadSkill = (skillId: string): StellaSkill => {
 };
 
 export const listSkillResources = (skillId: string): SkillResource[] =>
-  getSkill(skillId).resources.map(({ kind, path }) => ({ kind, path }));
+  getSkill(skillId).resources.map(({ path }) => ({ path }));
 
 /**
  * One resource file of a shipped skill by its exact path, as a stored skill's
@@ -92,9 +58,7 @@ export const readSkillResource = ({
   const resource = getSkill(skillId).resources.find(
     ({ path }) => path === resourcePath,
   );
-  return resource
-    ? { content: resource.source, kind: resource.kind, path: resource.path }
-    : null;
+  return resource ? { content: resource.source, path: resource.path } : null;
 };
 
 const getSkill = (skillId: string): GeneratedSkill => {
@@ -134,11 +98,13 @@ export const normalizeResourcePath = (resourcePath: string): string => {
 };
 
 export const isAllowedResourcePath = (resourcePath: string): boolean =>
-  getSkillResourceKind(resourcePath) !== null &&
+  isSkillResourceFolder(resourcePath.split("/").at(0) ?? "") &&
   hasAllowedResourceExtension(resourcePath);
 
 const hasAllowedResourceExtension = (resourcePath: string): boolean =>
-  RESOURCE_EXTENSIONS.some((extension) => resourcePath.endsWith(extension));
+  SKILL_RESOURCE_EXTENSIONS.some((extension) =>
+    resourcePath.endsWith(extension),
+  );
 
 const normalizePosixPath = (resourcePath: string): string => {
   const segments: string[] = [];

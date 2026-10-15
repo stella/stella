@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  checkRuleCoverage,
   coverageErrors,
   coverageProblems,
   exportedRuleIds,
@@ -28,6 +29,20 @@ const inspect = (config: unknown, coverage = complete) =>
     trackedFiles: ["src/example.ts"],
     coverage,
   });
+
+test("coverage uses the bounded shared runner and propagates failure", async () => {
+  let spawned = false;
+  const status = await checkRuleCoverage((command) => {
+    spawned = true;
+    expect(command).toEqual([
+      process.execPath,
+      "scripts/run-custom-lint-tests.ts",
+    ]);
+    return Bun.spawnSync([process.execPath, "-e", "process.exit(1)"]);
+  });
+  expect(spawned).toBe(true);
+  expect(status).toBe(1);
+});
 
 test("enumerates exported keys independently of module filenames", () => {
   expect(

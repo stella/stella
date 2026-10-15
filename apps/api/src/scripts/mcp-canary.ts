@@ -2,6 +2,7 @@
  * Full mode registers a client; frequent mode uses existing client metadata.
  * Staging mints credentials from its smoke session and revokes them each run.
  */
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -25,6 +26,7 @@ import {
   DESKTOP_ACCOUNT_PROTOCOL_HEADER,
 } from "@stll/api-contract/desktop-registry";
 import { CLI_CLIENT_METADATA_PATH } from "@stll/cli/client-metadata-document";
+import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -464,7 +466,7 @@ const inspectNotificationStream = async (
         reader.read().then(
           ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
           (error: unknown) => {
-            console.error(
+            printError(
               `[mcp-canary] stream read failed: ${describeProbeFailure(error)}`,
             );
             return "read_failed" as const;
@@ -1387,7 +1389,10 @@ export const runStagingCredentialJourneys = async (
   return results;
 };
 
-const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set(MCP_ERROR_CODES);
+const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  ...MCP_ERROR_CODES,
+  ...Object.keys(BASE_ERROR_CODES),
+]);
 
 const REVIEW_JOURNEY_SCOPE = [
   "stella:read",
@@ -1447,7 +1452,6 @@ const reviewEnvelopeCode = (body: unknown): string => {
       "invalid_grant",
       "access_denied",
       "account_access_unavailable",
-      "INVALID_EMAIL_OR_PASSWORD",
       "TOO_MANY_REQUESTS",
     ].includes(code)
     ? code
@@ -2635,7 +2639,7 @@ if (import.meta.main) {
     // headers, and the token rides in one of them.
     const message =
       error instanceof Error ? error.constructor.name : "unknown error";
-    console.error(`[mcp-canary] probe run failed (${message}).`);
+    printError(`[mcp-canary] probe run failed (${message}).`);
     process.exitCode = 1;
   });
 }

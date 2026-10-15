@@ -135,7 +135,8 @@ describe("MCP country inputs are read by the shared reader", () => {
     expect(countryProperties.map(({ path }) => path).toSorted()).toEqual([
       "case_law_coverage.country",
       "check_counterparty.subject.country",
-      "lookup_case_law.country",
+      "resolve_case_law_decision.country",
+      "resolve_law_citation.country",
       "search_case_law.country",
       "search_legislation.country",
       "set_practice_jurisdictions.jurisdictions[].country_code",

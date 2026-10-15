@@ -35,6 +35,7 @@ import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -103,6 +104,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
+import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -175,7 +177,7 @@ export type RecordedExchange = {
   /** The JSON body the page posted. */
   request: unknown;
   /** The SSE body the page read, or the route's refusal. */
-  response: { body: string; status: number };
+  response: { body: string; status: number; turnId: string | null };
 };
 
 const CHAT_ROUTE_PATH = "/v1/chat";
@@ -183,7 +185,6 @@ const CHAT_ROUTE_PATH = "/v1/chat";
 const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
-const MAX_BARRIER_POLLS = 2000;
 /** The checks a hand-built send answers for: the stored thread's, the
  *  requests the provider was handed, and the run's independence from its
  *  request. */
@@ -321,6 +322,18 @@ export const createApprovalHarness = ({
       ? await operation()
       : await profile.measure(phase, operation);
   const userId = user?.id ?? ids.userA1;
+  const turnSettlementListeners = new Set<{
+    threadId: string;
+    notify: () => void;
+  }>();
+  const turnSettlementFailures = new Map<string, unknown>();
+  const notifyTurnSettlement = (threadId: string) => {
+    for (const listener of turnSettlementListeners) {
+      if (listener.threadId === threadId) {
+        listener.notify();
+      }
+    }
+  };
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
@@ -403,32 +416,36 @@ export const createApprovalHarness = ({
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
-    streamResponse:
-      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
-        ? streamChat
-        : async (props) =>
-            await streamChat({
-              ...props,
-              ...(beforeTurnSettles === undefined
-                ? {}
-                : {
-                    onFinish: async (event) => {
-                      await beforeTurnSettles({
-                        outcome: event.outcome,
-                        threadId: props.threadId,
-                      });
-                      return await props.onFinish(event);
-                    },
-                  }),
-              thirdPartyBoundary:
-                boundaryAnonymizer !== undefined &&
-                props.thirdPartyBoundary.type === "anonymized"
-                  ? {
-                      ...props.thirdPartyBoundary,
-                      anonymizeFields: boundaryAnonymizer,
-                    }
-                  : props.thirdPartyBoundary,
-            }),
+    streamResponse: async (props) => {
+      // The run owns every terminal path, including checkpoint restoration and
+      // failures that produce no onFinish event. Its notification only wakes
+      // the persisted-row oracle; it does not replace that oracle.
+      void props.run.settled.then(
+        () => notifyTurnSettlement(props.threadId),
+        (error: unknown) => {
+          turnSettlementFailures.set(props.threadId, error);
+          notifyTurnSettlement(props.threadId);
+        },
+      );
+      return await streamChat({
+        ...props,
+        onFinish: async (event) => {
+          await beforeTurnSettles?.({
+            outcome: event.outcome,
+            threadId: props.threadId,
+          });
+          return await props.onFinish(event);
+        },
+        thirdPartyBoundary:
+          boundaryAnonymizer !== undefined &&
+          props.thirdPartyBoundary.type === "anonymized"
+            ? {
+                ...props.thirdPartyBoundary,
+                anonymizeFields: boundaryAnonymizer,
+              }
+            : props.thirdPartyBoundary,
+      });
+    },
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */
@@ -528,6 +545,7 @@ export const createApprovalHarness = ({
         panic("Send contexts come from this harness's contextFromBody");
       const result = await sendMessageOf(body.threadId).handler(ctx);
       requestOf(ctx).tearDown();
+      notifyTurnSettlement(body.threadId);
       return result;
     });
 
@@ -619,31 +637,54 @@ export const createApprovalHarness = ({
 
   /**
    * Barrier: resolves once no turn on `threadId` is still accepted or
-   * running, polled on the turn rows rather than on a clock. A turn that
+   * running. Completion notifications wake a fresh persisted-state read;
+   * the notification itself is never evidence that the row settled. A turn that
    * never gets there is the `chat.persisted.turn-settles` finding.
    */
   const awaitSettledTurns = async (
     threadId: SafeId<"chatThread">,
   ): Promise<OracleViolation[]> =>
     await measure("settlement", async () => {
-      let live: { id: string; status: string }[] = [];
-      for (let poll = 0; poll < MAX_BARRIER_POLLS; poll += 1) {
-        live = await testDb
-          .select({ id: chatTurns.id, status: chatTurns.status })
-          .from(chatTurns)
-          .where(
-            and(
-              eq(chatTurns.threadId, threadId),
-              inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
-            ),
-          );
-        if (live.length === 0) {
-          return [];
+      const deadline = performance.now() + API_TEST_TIMEOUT_MS;
+      while (true) {
+        // Subscribe before reading: settlement can finish during the query.
+        const changed = Promise.withResolvers();
+        const listener = { threadId, notify: () => changed.resolve(undefined) };
+        turnSettlementListeners.add(listener);
+        const timeout = setTimeout(
+          listener.notify,
+          Math.max(0, deadline - performance.now()),
+        );
+        try {
+          profile?.recordCounter("turnBarrierReads");
+          const live = await testDb
+            .select({ id: chatTurns.id, status: chatTurns.status })
+            .from(chatTurns)
+            .where(
+              and(
+                eq(chatTurns.threadId, threadId),
+                inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
+              ),
+            );
+          if (turnSettlementFailures.has(threadId)) {
+            return panic(
+              "The chat turn run failed to release its ownership",
+              turnSettlementFailures.get(threadId),
+            );
+          }
+          if (live.length === 0) {
+            return [];
+          }
+          if (performance.now() >= deadline) {
+            return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
+          }
+          profile?.recordCounter("turnBarrierWaits");
+          await changed.promise;
+        } finally {
+          clearTimeout(timeout);
+          turnSettlementListeners.delete(listener);
         }
-        // Yield to the work settling the turn before looking again.
-        await Bun.sleep(1);
       }
-      return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
     });
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
@@ -933,11 +974,33 @@ export const createApprovalHarness = ({
    *  stop. */
   const stoppingThreads = new Set<string>();
   let inFlight = 0;
+  const inFlightListeners = new Set<() => void>();
+  const notifyInFlight = () => {
+    for (const listener of inFlightListeners) {
+      listener();
+    }
+  };
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
+  /** The execution each crashed request left running, before the reaper
+   *  settles its turn and clears the turn's execution id. */
+  const crashedExecutions = new Map<string, string>();
   /** Reads of the responses a dying process left behind, still running. */
   const abandonedReads = new Set<Promise<string>>();
+
+  const reapOwnerlessTurns = async () => {
+    await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+      asTestRaw<SchedulerTaskContext>({
+        db: testDb,
+        logger: { info: () => undefined },
+        signal: new AbortController().signal,
+      }),
+    );
+    for (const listener of turnSettlementListeners) {
+      listener.notify();
+    }
+  };
 
   /**
    * Serves `body` until the run reaches a stalling model call, then lets the
@@ -963,14 +1026,22 @@ export const createApprovalHarness = ({
     await stalled;
     prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
-    await testDb
+    const expired = await testDb
       .update(chatTurns)
       .set({
         leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
       })
       .where(
         and(eq(chatTurns.threadId, threadId), eq(chatTurns.status, "running")),
-      );
+      )
+      .returning({ executionId: chatTurns.executionId });
+    const crashedExecution = expired.at(0)?.executionId;
+    if (crashedExecution !== undefined && crashedExecution !== null) {
+      crashedExecutions.set(threadId, crashedExecution);
+    }
+    // Durable clients keep joining until the dead owner's turn settles. Run
+    // the scheduler tick explicitly instead of waiting on its wall clock.
+    await reapOwnerlessTurns();
     throw new ChatConnectionLostError({ message: "Failed to fetch" });
   };
 
@@ -1048,8 +1119,13 @@ export const createApprovalHarness = ({
     turnId: string | null;
   }) =>
     await measure("oracle", async () => {
+      // This parses the captured delivery, not a live connection. A partial
+      // capture has no server to replay from; its SSE offsets must not trigger
+      // the SDK reconnect engine while checking the chunks already received.
+      const captured =
+        ended === "complete" ? text : text.replace(/^id:.*\n/gmu, "");
       const chunks = await readClientStreamChunks({
-        response: new Response(text),
+        response: new Response(captured),
         runId: raw.runId,
         threadId: raw.threadId,
       });
@@ -1083,7 +1159,7 @@ export const createApprovalHarness = ({
         ...(await findUnstableRefs(raw.threadId, snapshot)),
       );
       delivered.set(raw.threadId, deliveredInterrupts(chunks));
-      await endRecord({ ended, response: { body: text, status: 200 } });
+      await endRecord({ ended, response: { body: text, status: 200, turnId } });
     });
 
   /**
@@ -1153,6 +1229,7 @@ export const createApprovalHarness = ({
       response: {
         body: await response.clone().text(),
         status: response.status,
+        turnId: response.headers.get(CHAT_TURN_ID_HEADER),
       },
     });
     return response;
@@ -1196,6 +1273,7 @@ export const createApprovalHarness = ({
           response: {
             body: await refused.clone().text(),
             status: refused.status,
+            turnId: refused.headers.get(CHAT_TURN_ID_HEADER),
           },
         });
         return { done: Promise.resolve(), response: refused };
@@ -1203,7 +1281,7 @@ export const createApprovalHarness = ({
         // The page reads no response: its request fails as a lost connection.
         await endRecord({
           ended: "connection-lost",
-          response: { body: "", status: 0 },
+          response: { body: "", status: 0, turnId: null },
         });
         throw error;
       }
@@ -1238,7 +1316,11 @@ export const createApprovalHarness = ({
     delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
     await endRecord({
       ended: "complete",
-      response: { body: outcome.text, status: 200 },
+      response: {
+        body: outcome.text,
+        status: 200,
+        turnId: outcome.headers.get(CHAT_TURN_ID_HEADER),
+      },
     });
     return {
       done: Promise.resolve(),
@@ -1252,6 +1334,44 @@ export const createApprovalHarness = ({
     init?: RequestInit,
   ): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);
+    const resume =
+      /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<delivery>resume|join)$/u.exec(
+        url.pathname,
+      )?.groups;
+    if (
+      resume?.["threadId"] !== undefined &&
+      resume["turnId"] !== undefined &&
+      (init?.method ?? "GET") === "GET"
+    ) {
+      const delivery = resume["delivery"] === "join" ? "join" : "resume";
+      const handler = delivery === "join" ? joinChatTurn : probeChatTurn;
+      const set = { headers: {}, status: 200 };
+      const answer: unknown = await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>({
+          memberRole: sessionMemberRole("owner"),
+          getWorkspaceAccess: async () => await Promise.resolve(null),
+          params: {
+            threadId: toSafeId<"chatThread">(resume["threadId"]),
+            turnId: toSafeId<"chatTurn">(resume["turnId"]),
+          },
+          query: Object.fromEntries(url.searchParams),
+          request: new Request(url.toString(), init),
+          route: `/v1/chat/threads/:threadId/turns/:turnId/${delivery}`,
+          safeDb,
+          scopedDb,
+          session: { activeOrganizationId: ids.orgA },
+          set,
+          user: { id: userId },
+        }),
+      );
+      if (answer instanceof Response) {
+        return answer;
+      }
+      if (typeof answer === "object" && answer !== null && "type" in answer) {
+        return Response.json(answer, { status: set.status });
+      }
+      return statusResponse(answer);
+    }
     const cancel = CHAT_TURN_CANCEL_PATH.exec(url.pathname)?.groups;
     if (
       cancel?.["threadId"] !== undefined &&
@@ -1265,6 +1385,7 @@ export const createApprovalHarness = ({
         stoppingThreads.add(cancel["threadId"]);
       }
       inFlight += 1;
+      notifyInFlight();
       try {
         const answer = await postCancelTurn({
           threadId: cancel["threadId"],
@@ -1276,6 +1397,8 @@ export const createApprovalHarness = ({
         return answer;
       } finally {
         inFlight -= 1;
+        notifyInFlight();
+        notifyTurnSettlement(cancel["threadId"]);
       }
     }
     if (url.pathname !== CHAT_ROUTE_PATH || init?.method !== "POST") {
@@ -1286,6 +1409,7 @@ export const createApprovalHarness = ({
       return panic("The web chat client posted a non-JSON body");
     }
     inFlight += 1;
+    notifyInFlight();
     let done: Promise<void> = Promise.resolve();
     try {
       const parsed: unknown = JSON.parse(raw);
@@ -1295,6 +1419,7 @@ export const createApprovalHarness = ({
     } finally {
       void done.finally(() => {
         inFlight -= 1;
+        notifyInFlight();
       });
     }
   };
@@ -1314,6 +1439,12 @@ export const createApprovalHarness = ({
         context,
         profile,
         inFlight: () => inFlight,
+        subscribeInFlight: (listener) => {
+          inFlightListeners.add(listener);
+          return () => {
+            inFlightListeners.delete(listener);
+          };
+        },
         page: await reloadPage(threadId),
         reload: async () => await reloadPage(threadId),
         threadId,
@@ -1503,16 +1634,11 @@ export const createApprovalHarness = ({
     crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
       crashingThreads.add(threadId);
     },
+    /** The execution `threadId`'s crashed request left running, if any. */
+    crashedExecutionOf: (threadId: SafeId<"chatThread">) =>
+      crashedExecutions.get(threadId),
     /** Runs the scheduler's reaper once, as its minute tick does. */
-    reapOwnerlessTurns: async () => {
-      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
-        asTestRaw<SchedulerTaskContext>({
-          db: testDb,
-          logger: { info: () => undefined },
-          signal: new AbortController().signal,
-        }),
-      );
-    },
+    reapOwnerlessTurns,
     /**
      * Ends what the test left running, then restores the model seam and
      * `fetch`; call once the test is done, before its database closes. A run
@@ -1527,6 +1653,12 @@ export const createApprovalHarness = ({
         } finally {
           globalThis.fetch = originalFetch;
           provider.restore();
+        }
+        if (turnSettlementFailures.size > 0) {
+          panic(
+            "A chat turn run failed to release its ownership",
+            turnSettlementFailures.values().next().value,
+          );
         }
         const rootPoolConnections = rootPoolConnectionCount();
         if (rootPoolConnections !== rootPoolConnectionsAtStart) {

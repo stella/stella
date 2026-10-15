@@ -11,8 +11,6 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
-  FRONTEND_ADDRESS_HEADER,
-  FRONTEND_VERIFY_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
@@ -26,6 +24,7 @@ import {
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { verificationRunCapEnvSchema } from "@/api/lib/lists/verification/run-cap-config";
+import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
@@ -71,8 +70,7 @@ export const resolveEmailProvider = ({
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
-// A header an edge sets to the viewer's address; never one the API sets,
-// verifies or reads only beside the frontend verify value.
+// A header an edge sets to the viewer's address; never one the API sets or verifies.
 const edgeAddressHeaderName = v.pipe(
   v.string(),
   v.trim(),
@@ -80,29 +78,20 @@ const edgeAddressHeaderName = v.pipe(
   v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
   v.check(
     (name) =>
-      name !== AUTH_CLIENT_ADDRESS_HEADER &&
-      name !== ORIGIN_VERIFY_HEADER &&
-      name !== FRONTEND_VERIFY_HEADER &&
-      name !== FRONTEND_ADDRESS_HEADER,
-    "must not be a header the API sets, verifies or reads from the frontend edge",
+      name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
+    "must not be a header the API sets or verifies",
   ),
 );
 
-// Comma-separated values an edge proves itself with, each long enough not to
-// be guessed.
-const edgeVerifyValues = v.pipe(
+const originVerifyValue = v.pipe(
   v.string(),
-  v.check(
-    (value) =>
-      value
-        .split(",")
-        .map((part) => part.trim())
-        .every((part) => part.length >= 32),
-    "each value must be at least 32 characters",
-  ),
+  v.trim(),
+  v.minLength(32, "must be at least 32 characters"),
+  v.check((value) => !value.includes(","), "must be a single value"),
 );
 
 export const envApiServerSchema = {
+  ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
     v.pipe(
@@ -419,20 +408,16 @@ export const envApiServerSchema = {
   ),
 
   /**
-   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
-   * first, then the next one during a rotation). When set, the client address
-   * header is read only from requests carrying one of them.
+   * Current value the edge sends in `x-stella-origin-verify`. One value of at
+   * least 32 characters; the address header accepts this or the previous value.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(edgeVerifyValues),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(originVerifyValue),
 
   /**
-   * Comma-separated values the frontend edge sends in
-   * `x-stella-frontend-verify` (current first, then the next one during a
-   * rotation). From peers in `STELLA_TRUSTED_PROXY_CIDRS` carrying one of
-   * them, the browser's bare address in `x-stella-viewer-address` is read
-   * ahead of every other source; unset, that header is never read.
+   * Optional previous origin value accepted during a rotation. One value of at
+   * least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.
    */
-  STELLA_FRONTEND_VERIFY_SECRET: v.optional(edgeVerifyValues),
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: v.optional(originVerifyValue),
 
   /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
@@ -465,7 +450,6 @@ export const envApiServerSchema = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
-  CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,

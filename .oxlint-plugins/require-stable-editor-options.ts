@@ -43,7 +43,7 @@ import {
   isAstNode,
   isIdentifier,
   isIdentifierReference,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -191,7 +191,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           CallExpression(node) {
-            const factory = resolveImportedExpression(context, node.callee);
+            const factory = resolveImportedExpressionForEnforcement(
+              context,
+              node.callee,
+            );
             if (
               factory?.source !== TIPTAP_REACT_MODULE ||
               factory.imported !== "useEditor"

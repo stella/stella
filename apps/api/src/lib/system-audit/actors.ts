@@ -103,6 +103,9 @@ export type SystemAuditCounts<A extends SystemRunActor> = Readonly<
 
 /** Actors stamped on organization audit rows no member performed. */
 export const TENANT_SYSTEM_ACTOR = {
+  serviceClientOperator: "system:service-client-operator",
+  serviceClient: "system:service-client",
+  folioCollaborationRecovery: "system:folio-collaboration-recovery",
   sanctionsMonitoringDrain: "system:sanctions-monitoring-drain",
   sanctionsMonitoringBackfill: "system:sanctions-monitoring-backfill",
   memoryCurator: "system:memory-curator",

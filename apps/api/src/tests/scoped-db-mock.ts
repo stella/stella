@@ -45,19 +45,25 @@ type ScopedDbMockOptions = {
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
 export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
+  let rowOffset = 0;
   // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
   const limit = (count: number) => {
-    const selected = rows.slice(0, count);
+    const selected = rows.slice(rowOffset, rowOffset + count);
     return Object.assign(Promise.resolve(selected), {
       for: async () => await Promise.resolve(selected),
     });
+  };
+  const offset = (count: number) => {
+    rowOffset = count;
+    return { limit };
   };
   // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its query methods
   const where = () =>
     Object.assign(Promise.resolve(rows), {
       limit,
+      offset,
       for: async () => await Promise.resolve(rows),
-      orderBy: () => ({ limit }),
+      orderBy: () => ({ limit, offset }),
     });
   return {
     from: () => ({
@@ -100,8 +106,19 @@ const fixtureSelect =
         (column) => column === user.email || column === user.emailVerified,
       )
     ) {
-      const { identity } = options.featureAccess;
-      const query = createSelectQueryMock(identity === null ? [] : [identity]);
+      const { identity, enrolments = [] } = options.featureAccess;
+      const query = createSelectQueryMock(
+        identity === null
+          ? []
+          : [
+              {
+                ...identity,
+                enrolledFeatureIds: enrolments.map(
+                  ({ featureId }) => featureId,
+                ),
+              },
+            ],
+      );
       return {
         from: (table: unknown) => {
           if (table !== member) {

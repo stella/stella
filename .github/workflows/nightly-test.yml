@@ -1,5 +1,9 @@
 name: Nightly Full Test
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 04:17 UTC daily, after nightly typecheck.
@@ -37,7 +41,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -77,18 +81,18 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright Chromium
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Start production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           cd apps/web
           NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-workspace-replay.log 2>&1 &
           echo $! > /tmp/web-workspace-replay.pid
 
       - name: Wait for production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
@@ -102,14 +106,14 @@ jobs:
           exit 1
 
       - name: Explore workspace interactions
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
           E2E_SOAK_STEPS: "200"
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:soak
 
       - name: Add replay instructions
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         run: |
           {
             echo "## Workspace replay failure"
@@ -120,7 +124,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload replay diagnostics
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-workspace-replay-${{ github.run_id }}
@@ -129,7 +133,7 @@ jobs:
           retention-days: 14
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-workspace-replay-server-logs-${{ github.run_id }}
@@ -158,7 +162,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -205,7 +209,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -261,7 +265,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -371,7 +375,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -380,6 +384,10 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply migrations to service Postgres
         working-directory: apps/api
@@ -428,7 +436,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -462,7 +470,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -535,7 +543,7 @@ jobs:
           echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -543,6 +551,11 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres-clean.id }}" stella_owner
 
       - name: Test exact-base rehearsal contracts
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts

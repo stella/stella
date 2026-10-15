@@ -2,7 +2,9 @@ import type { TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
+import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-citing-decisions";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
@@ -172,6 +174,15 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       slug: nullableBoundedString(1024),
       court: boundedString(2048),
       courtAbbreviation: nullableBoundedString(2048),
+      courtTier: t.UnionEnum(COURT_TIER_LABELS),
+      mentionCount: Type.Integer({ minimum: 1 }),
+      snippetCitation: t.Union([
+        t.Object({
+          start: Type.Integer({ minimum: 0 }),
+          end: Type.Integer({ minimum: 1 }),
+        }),
+        t.Null(),
+      ]),
       sourceUrl: nullableBoundedString(8192),
       country: boundedString(12),
       language: boundedString(32),
@@ -191,10 +202,22 @@ export const citingDecisionsSuccessResponseSchema = t.Object({
       >["items"][number],
       TSchema
     >),
-    { maxItems: LIMITS.caseLawSearchPageSizeMax },
+    {
+      maxItems: Math.max(
+        LIMITS.caseLawSearchPageSizeMax,
+        PROVISION_CITING_SNAPSHOT_LIMIT,
+      ),
+    },
   ),
   limit: t.Number(),
   nextCursor: cursor,
+  snapshot: t.Union([
+    t.Object({
+      type: t.Union([t.Literal("complete"), t.Literal("capped")]),
+      limit: t.Literal(PROVISION_CITING_SNAPSHOT_LIMIT),
+    }),
+    t.Null(),
+  ]),
 });
 
 export const citationCountsSuccessResponseSchema = t.Union([

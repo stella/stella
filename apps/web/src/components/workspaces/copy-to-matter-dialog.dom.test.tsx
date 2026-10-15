@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
@@ -50,7 +51,7 @@ afterEach(cleanup);
 afterAll(async () => {
   cleanup();
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("the mounted move dialog localizes deferred refusals for complete and partial transfers", async () => {

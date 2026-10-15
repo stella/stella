@@ -11,10 +11,12 @@ import {
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -53,7 +55,7 @@ const { CHAT_USER_ACTIONS } =
 const { isThreadPageSuspended, openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
-  await import("@/features/chat/queries");
+  await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
 const { default: messages } = await import("@/i18n/langs/en.json");
 
@@ -73,7 +75,7 @@ afterAll(async () => {
   await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // Conversations the real send pipeline served, replayed through the chat a
@@ -97,7 +99,7 @@ type RecordedExchange = {
   ended: "complete" | "connection-lost" | "disconnected" | "stopped";
   page: RecordedPage;
   request: Record<string, unknown>;
-  response: { body: string; status: number };
+  response: { body: string; status: number; turnId: string | null };
 };
 type RecordedAction =
   | { messageId: string; text: string; type: "send" }
@@ -168,9 +170,7 @@ const EXCHANGE_ENDINGS: readonly RecordedExchange["ended"][] = [
 
 /**
  * A response that stays open after what the page read: cut off, or ended by
- * the server once the page's Stop reached it. The replay serves no Stop (the
- * recording carries no turn id to stop), so the page closes the response
- * itself, as it does when it stops a turn it cannot name.
+ * the server once the page's Stop reached it.
  */
 const staysOpen = (ended: RecordedExchange["ended"]): boolean =>
   ended === "disconnected" || ended === "stopped";
@@ -199,6 +199,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
   let page = recording.initialPage;
   let revision = 0;
   let drop: (() => void) | undefined;
+  let cancel: { close: () => void; turnId: string | null } | undefined;
   /** Responses the page is still reading. */
   let streaming = 0;
   /** A cut-off response has delivered all it will. */
@@ -215,6 +216,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
       reasoningEffort: null,
       // Every settled request writes the thread, which moves its revision.
       threadRevision: `revision-${String(revision)}`,
+      activeSkill: null,
       threadExists: page.messages.length > 0,
       usedAnonymization: false,
       webSearchAvailable: false,
@@ -262,6 +264,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
         : exchange.response.body;
     const events = sse.split(/(?<=\n\n)/u).filter((event) => event !== "");
     const encoder = new TextEncoder();
+    const servedTurnId = exchange.response.turnId;
     let index = 0;
     let open = true;
     streaming += 1;
@@ -289,6 +292,17 @@ const createRecordedServer = (recording: RecordedConversation) => {
         );
         drop = () => {
           cut(new TypeError("The connection dropped"));
+        };
+        cancel = {
+          turnId: servedTurnId,
+          close: () => {
+            if (!open) {
+              return;
+            }
+            close();
+            settle(exchange);
+            controller.close();
+          },
         };
       },
       pull: async (controller) => {
@@ -323,7 +337,12 @@ const createRecordedServer = (recording: RecordedConversation) => {
       },
     });
     return new Response(stream, {
-      headers: { "content-type": "text/event-stream" },
+      headers: {
+        "content-type": "text/event-stream",
+        ...(servedTurnId === null
+          ? {}
+          : { [CHAT_TURN_ID_HEADER]: servedTurnId }),
+      },
     });
   };
 
@@ -351,6 +370,39 @@ const createRecordedServer = (recording: RecordedConversation) => {
       url.pathname === `/v1/chat/threads/${recording.threadId}/messages`
     ) {
       return threadPage();
+    }
+    const turnRoute =
+      /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<action>resume|join|cancel)$/u.exec(
+        url.pathname,
+      )?.groups;
+    if (
+      url.origin === API_ORIGIN &&
+      turnRoute?.["threadId"] === recording.threadId &&
+      exchanges
+        .slice(0, posted.length)
+        .some(({ response }) => response.turnId === turnRoute["turnId"])
+    ) {
+      if (method === "POST" && turnRoute["action"] === "cancel") {
+        if (cancel !== undefined && cancel.turnId === turnRoute["turnId"]) {
+          cancel.close();
+        }
+        return Response.json({ turn: { status: "cancelled" } });
+      }
+      if (
+        method === "GET" &&
+        (turnRoute["action"] === "resume" || turnRoute["action"] === "join")
+      ) {
+        const latest = page.messages.at(-1);
+        const metadata = isJsonObject(latest) ? latest["metadata"] : undefined;
+        const resumeSnapshot = isJsonObject(metadata)
+          ? metadata["resumeSnapshot"]
+          : undefined;
+        return Response.json({
+          type: "transcript",
+          turnId: turnRoute["turnId"],
+          ...(resumeSnapshot === undefined ? {} : { resumeSnapshot }),
+        });
+      }
     }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not recorded" }, { status: 404 });

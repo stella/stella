@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -35,6 +37,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
 const LAW_PROJECTED_TOOL_SCOPES = [
   "stella:search",
   "stella:read",
+  "stella:law_read",
 ] as const satisfies readonly ToolScope[];
 
 export const LEGAL_RESOLVE_RESOURCE_ROUTES = {
@@ -65,6 +68,8 @@ export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 export const MCP_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_HTTP_PATH}` as const;
+export const MCP_ADVANCED_DISCOVERY_PATH =
+  `/.well-known/oauth-protected-resource${MCP_ADVANCED_HTTP_PATH}` as const;
 export const MCP_DOCUMENTS_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
 export const MCP_ANONYMIZED_DISCOVERY_PATH =
@@ -73,6 +78,12 @@ export const MCP_LAW_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_LAW_HTTP_PATH}` as const;
 
 export const MCP_RESOURCE_MODE_CONFIG = {
+  advanced: {
+    discoveryPath: MCP_ADVANCED_DISCOVERY_PATH,
+    httpPath: MCP_ADVANCED_HTTP_PATH,
+    resourceName: "Stella MCP advanced",
+    resourceScopes: MCP_ADVANCED_RESOURCE_SCOPES,
+  },
   default: {
     discoveryPath: MCP_DISCOVERY_PATH,
     httpPath: MCP_HTTP_PATH,
@@ -102,6 +113,7 @@ export const MCP_RESOURCE_MODE_CONFIG = {
 export type McpMode = keyof typeof MCP_RESOURCE_MODE_CONFIG;
 
 export const MCP_MODES = [
+  "advanced",
   "default",
   "documents",
   "anonymized",
@@ -158,10 +170,9 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Contract step of an expand/contract rollout. The previous release accepts
- * both this set and the configured set at boot, so the deploy repair now
- * upgrades rows holding exactly this set to the configured set, and the boot
- * census accepts only the configured set.
+ * Databases seeded before then still hold this set. The deploy repair
+ * reconciles it to the configured set like any earlier configured scope set,
+ * and the boot census accepts only the configured set.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],

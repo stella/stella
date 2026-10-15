@@ -11,12 +11,17 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
-
 import {
-  inlinesToPlainText,
+  normalizeInlineLine,
   stripInlinePrefix,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@stll/legal-ast/inline-line";
+import {
+  assertProperty,
+  propertyConfig,
+  propertySeed,
+} from "@stll/property-testing";
+
+import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
@@ -56,6 +61,20 @@ const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
 })).node;
 
 const inlines = fc.array(inlineTree, { maxLength: 5 });
+
+test("normalized inline lines preserve a single text axis and reach a fixed point", () => {
+  assertProperty(
+    "normalized inline lines preserve a single text axis and reach a fixed point",
+    fc.property(inlines, (tree) => {
+      const normalized = normalizeInlineLine(tree);
+      expect(normalized.plainText).toBe(inlinesToPlainText(tree).trim());
+      expect(inlinesToPlainText(normalized.inlines)).toBe(normalized.plainText);
+      expect(normalizeInlineLine(normalized.inlines).inlines).toEqual(
+        normalized.inlines,
+      );
+    }),
+  );
+});
 
 /** A tree paired with a prefix length that actually bites into it. */
 const treeAndPrefix = inlines.chain((tree) =>

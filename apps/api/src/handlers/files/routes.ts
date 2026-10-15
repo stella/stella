@@ -30,6 +30,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 export const readFileEndpoint = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -72,6 +73,7 @@ export const readFileEndpoint = createSafeHandler(
 
 export const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Returns parsed email preview data rather than a file grant.",
@@ -108,6 +110,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
 
 export const printPdfEndpoint = createSafeHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
@@ -141,6 +144,7 @@ export const printPdfEndpoint = createSafeHandler(
 
 export const stampedDownloadEndpoint = createSafeHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
@@ -177,6 +181,7 @@ export const stampedDownloadEndpoint = createSafeHandler(
 
 export const readDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Returns document metadata rather than file bytes.",
@@ -246,6 +251,7 @@ const AUTHORED_PROPERTY_BODY = {
 
 export const updateDocumentPropertiesEndpoint = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Updates document metadata without delivering a file.",
@@ -292,6 +298,7 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
 
 export const scrubbedDownloadEndpoint = createSafeHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },
@@ -325,6 +332,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 
 export const ocrExportEndpoint = createSafeHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.standard,
     contentDelivery: { type: "audited" },
     permissions: { workspace: ["read"] },

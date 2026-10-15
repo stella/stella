@@ -20,18 +20,17 @@ import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
-import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,
@@ -92,16 +91,19 @@ export const requiresDurableNativeExtraction = (
   if (fileField.encrypted) {
     return false;
   }
-  if (
-    fileField.pdfFileId === null &&
-    shouldGeneratePdfDerivative({
-      encrypted: fileField.encrypted,
-      mimeType: fileField.mimeType,
-    })
-  ) {
-    return false;
-  }
-  return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
+
+  // A parser reads the original bytes (`pickExtractionSource`), so it never
+  // waits for the PDF preview: a failed conversion would otherwise leave the
+  // body out of search for good. Formats with no parser have the rendered
+  // PDF as their only text layer, so they become extractable once it exists.
+  return (
+    canExtractMimeType(
+      resolveExtractionMimeType({
+        fileName: fileField.fileName,
+        mimeType: fileField.mimeType,
+      }),
+    ) || fileField.pdfFileId !== null
+  );
 };
 
 /**
@@ -905,12 +907,15 @@ export const processExtraction = async (
   const requeued = await database
     .update(documentProcessingRuns)
     .set({
+      attemptCount: 0,
       claimedAt: null,
       claimedBy: null,
       errorAt: null,
       errorCode: null,
+      errorMessage: null,
       finishedAt: null,
       nextAttemptAt: null,
+      nextDeliveryAt: null,
       progressCompleted: 0,
       progressTotal: null,
       startedAt: null,

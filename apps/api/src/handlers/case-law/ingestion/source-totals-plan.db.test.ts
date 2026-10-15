@@ -66,9 +66,14 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
         `CREATE TABLE ${schema}.case_law_sources (LIKE public.case_law_sources INCLUDING ALL)`,
       ),
     );
+    // Temporary on purpose: VACUUM only marks pages all-visible behind the
+    // oldest snapshot held by any session in the database, so a shared table
+    // loses its index-only plan whenever another suite has a transaction open.
+    // A temporary table's horizon ignores other sessions, and the single pooled
+    // connection keeps it alive for the whole suite.
     await db.execute(
       sql.raw(
-        `CREATE TABLE ${schema}.case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL)`,
+        `CREATE TEMPORARY TABLE case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL)`,
       ),
     );
     await db.execute(sql.raw(`SET search_path TO ${schema}, public`));
@@ -160,11 +165,11 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     });
   });
 
-  test("the admitted exact count uses a bounded index-only source scan at synthetic scale", async () => {
+  test("the admitted exact count uses a bounded index-only source scan with collected fixture statistics", async () => {
+    await db.execute(sql`INSERT INTO case_law_decisions (id, case_number, country, court, language, source_id)
+      SELECT uuidv7(), id::text, 'CZE', 'Court', 'cs', CASE WHEN id <= 13300 THEN ${first}::uuid ELSE ${second}::uuid END
+      FROM generate_series(1001, 20000) id`);
     await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
-    await db.execute(
-      sql`UPDATE pg_class SET reltuples = 1000000 WHERE oid = 'case_law_decisions'::regclass`,
-    );
     const root = explainRoot(
       await db.execute(
         sql`EXPLAIN (FORMAT JSON) ${sourceStoredTotalCountQuery(second)}`,
@@ -180,7 +185,7 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     expect(corpus.at(0)?.nodeType).toBe("Index Only Scan");
     expect(corpus.at(0)?.indexCond).toContain("source_id");
     expect(corpus.at(0)?.index).toBeDefined();
-    expect(corpus.at(0)?.rows).toBeGreaterThan(200_000);
-    expect(corpus.at(0)?.rows).toBeLessThan(400_000);
+    expect(corpus.at(0)?.rows).toBeGreaterThan(6000);
+    expect(corpus.at(0)?.rows).toBeLessThan(8000);
   });
 });

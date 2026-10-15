@@ -17,6 +17,7 @@ import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { forceClosePool } from "@/api/db/sql-close";
 
 const openDatabase = (client: SQL, logger?: Logger) =>
   drizzle({ client, relations: databaseRelations, logger });
@@ -75,6 +76,8 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  /** A separately authenticated fixture login on the same test server. */
+  readonly databaseUrl?: string;
   readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
@@ -82,6 +85,7 @@ type OpenClientOptions = {
   readonly idleTimeout?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
+    readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
   };
@@ -93,11 +97,8 @@ type GatedTestClientScope = {
 };
 
 type GatedTestClientsOptions = {
-  /**
-   * Seconds each close waits for in-flight queries before it terminates
-   * them; the driver waits for them by default. `0` closes at once.
-   */
-  readonly closeTimeout?: number;
+  /** Draining waits for queries; forced cleanup terminates them through the pool owner. */
+  readonly closeMode?: "drain" | "force";
 };
 
 /**
@@ -109,16 +110,22 @@ type GatedTestClientsOptions = {
 export const withGatedTestClients = async <T>(
   databaseUrl: string,
   fn: (scope: GatedTestClientScope) => Promise<T>,
-  { closeTimeout }: GatedTestClientsOptions = {},
+  { closeMode = "drain" }: GatedTestClientsOptions = {},
 ): Promise<T> => {
   const opened: SQL[] = [];
   const openClient = ({
+    databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
+    const client = new SQL({
+      url: clientDatabaseUrl,
+      max,
+      idleTimeout,
+      connection,
+    });
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };
@@ -127,12 +134,21 @@ export const withGatedTestClients = async <T>(
     return await fn({ openClient });
   } finally {
     await Promise.all(
-      opened.map(
-        async (client) =>
-          await client.close(
-            closeTimeout === undefined ? undefined : { timeout: closeTimeout },
-          ),
-      ),
+      opened.map(async (client) => {
+        switch (closeMode) {
+          case "drain":
+            await client.close();
+            return;
+          case "force":
+            await forceClosePool(client);
+            return;
+          default:
+            panic(
+              "Unexpected test client close mode",
+              closeMode satisfies never,
+            );
+        }
+      }),
     );
   }
 };

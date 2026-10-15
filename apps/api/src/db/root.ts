@@ -6,16 +6,28 @@ import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { envBase } from "@/api/env-base";
-import type { SafeId } from "@/api/lib/branded-types";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
+import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
+import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservation";
+import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
+import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
+import {
+  createServiceOAuthClientInTransaction,
+  changeServiceOAuthClientInTransaction,
+} from "@/api/lib/db/service-client-operator";
+import type {
+  CreateServiceOAuthClientOptions,
+  ChangeServiceOAuthClientOptions,
+} from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { mayReadPublicLaw } from "@/api/lib/usage/public-law-access";
+import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -35,14 +47,32 @@ const poolRecycling = {
 
 // A transaction runs in the async context of the request that opened it, so
 // its statements count toward that request's query budget, not a neighbour's.
-const rootClient = runTransactionsInCallerContext(
-  new SQL({
-    url: envBase.DATABASE_URL,
-    max: envBase.DATABASE_ROOT_POOL_MAX,
-    ...poolRecycling,
-    ...sharedPoolConnectionSettings("root"),
-  }),
+const rootPoolWindow = createRootPoolWindow();
+const rootPoolSettings = sharedPoolConnectionSettings("root");
+const nativeRootClient = new SQL({
+  url: envBase.DATABASE_URL,
+  max: envBase.DATABASE_ROOT_POOL_MAX,
+  ...poolRecycling,
+  ...rootPoolSettings,
+  connection: {
+    ...rootPoolSettings.connection,
+    application_name: `stella-root-${Bun.randomUUIDv7()}`,
+  },
+});
+const rootClient = instrumentRootPoolTransactions(
+  nativeRootClient,
+  rootPoolWindow,
 );
+
+export const readRootPoolReport = async () => {
+  const result = await readRootPoolSnapshot(nativeRootClient);
+  return rootPoolWindow.flush(
+    envBase.DATABASE_ROOT_POOL_MAX,
+    result.isOk()
+      ? { status: "observed", ...result.value }
+      : { status: "unavailable", size: null, inUse: null, idle: null },
+  );
+};
 const rlsClient = runTransactionsInCallerContext(
   new SQL({
     url: envBase.DATABASE_URL,
@@ -108,11 +138,6 @@ export const createFencedRlsDatabase = (
 export const createPublicSanctionsReader = () =>
   createSanctionsPublicReadDb(rlsDb);
 
-/** The owner connection exposes only the organization access decision. */
-export const mayReadPublicLawForOrganization = async (
-  organizationId: SafeId<"organization">,
-) => await mayReadPublicLaw(rootDb, organizationId);
-
 /** The operator handler receives a bounded audited page, never the owner handle. */
 export const readOperatorRegistrationPage = async (query: RegistrationQuery) =>
   await readAuditedRegistrationPage(rootDb, query);
@@ -134,4 +159,30 @@ export type Transaction = TransactionOf<Database>;
 export const readOperatorActivitySummary = async (now: number) =>
   await withAggregateTransaction(rootDb, async (tx) =>
     readAuditedActivitySummary(tx, now),
+  );
+
+/** Organization-bound OAuth operations never expose the owner connection. */
+export const readServiceOAuthClientBinding = async (clientId: string) =>
+  await readOAuthClientBinding(rootDb, clientId);
+export const createServiceOAuthClient = async (
+  options: CreateServiceOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await createServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+export const changeServiceOAuthClient = async (
+  options: ChangeServiceOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await changeServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );

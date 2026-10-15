@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { appendFileSync, readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OxlintConfig } from "oxlint";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
@@ -41,6 +42,10 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Test-only wrapper for a plugin factory; production config is unchanged. */
+  pluginPath?: string;
+  /** Repository overrides projected onto the rule being exercised. */
+  overrides?: OxlintConfig["overrides"];
   /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
   builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
@@ -57,6 +62,236 @@ type LintSingleRuleOptions = {
   cwd?: "repository" | "scratch";
 };
 
+type OxlintRun = { stdout: string; stderr: string; exitCode: number };
+
+const spawnOxlint = async (
+  args: readonly string[],
+  cwd: string,
+): Promise<OxlintRun> => {
+  const spawned = Bun.spawn(
+    [
+      process.execPath,
+      "--bun",
+      path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
+      ...args,
+    ],
+    { cwd, stderr: "pipe", stdout: "pipe" },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(spawned.stdout).text(),
+    new Response(spawned.stderr).text(),
+    spawned.exited,
+  ]);
+  return { stdout, stderr, exitCode };
+};
+
+// A test process owns at most one oxlint subprocess at a time; concurrent
+// tests queue here, and cases that share a configuration join one run.
+let oxlintSlot: Promise<unknown> = Promise.resolve();
+
+const withOxlintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
+  const next = oxlintSlot.then(run);
+  oxlintSlot = next.catch(() => undefined);
+  return next;
+};
+
+/** One case's files, written to its own scratch root as for a lone run. */
+type LintCase = {
+  readonly configPath: string;
+  readonly sourceFile: string;
+  readonly fix: boolean;
+  /** The scratch root a scratch-relative case runs from. */
+  readonly directory: string | undefined;
+  readonly sourcePath: string;
+};
+
+type AloneRun = OxlintRun & { source: string };
+
+/** Lint one case in a run of its own, exactly as a lone rule test always did. */
+const lintAlone = async ({
+  configPath,
+  sourceFile,
+  fix,
+  directory,
+  sourcePath,
+}: LintCase): Promise<AloneRun> => {
+  const run = await spawnOxlint(
+    [
+      "-c",
+      configPath,
+      "-f",
+      "json",
+      ...(fix ? ["--fix"] : []),
+      directory === undefined ? sourceFile : sourcePath,
+    ],
+    directory ?? REPOSITORY_ROOT,
+  );
+  return { ...run, source: readFileSync(sourceFile, "utf-8") };
+};
+
+type SharedOutcome =
+  | { readonly shared: { lines: number[]; source: string } }
+  | { readonly alone: AloneRun };
+
+type SharedRequest = {
+  readonly lintCase: LintCase;
+  readonly resolve: (outcome: SharedOutcome) => void;
+  readonly reject: (reason: unknown) => void;
+};
+
+/**
+ * The lines `code` reports per file of a shared run, or null when the report
+ * is anything but a clean, fully attributed run of every file; each case then
+ * reruns alone so its own report decides the outcome.
+ */
+export const sharedLines = (
+  { stdout, stderr, exitCode }: OxlintRun,
+  sourceFiles: readonly string[],
+  code: string,
+): number[][] | null => {
+  const report = Result.try((): unknown => JSON.parse(stdout));
+  if (
+    stderr !== "" ||
+    Result.isError(report) ||
+    !isRecord(report.value) ||
+    !isUnknownArray(report.value.diagnostics) ||
+    report.value.number_of_files !== sourceFiles.length ||
+    report.value.number_of_rules !== 1
+  ) {
+    return null;
+  }
+  const linesByFile = new Map(
+    sourceFiles.map((sourceFile): [string, number[]] => [sourceFile, []]),
+  );
+  for (const diagnostic of report.value.diagnostics) {
+    const line = reportedLine(diagnostic, code);
+    const lines =
+      isRecord(diagnostic) && typeof diagnostic.filename === "string"
+        ? linesByFile.get(path.resolve(REPOSITORY_ROOT, diagnostic.filename))
+        : undefined;
+    if (line === null || lines === undefined) {
+      return null;
+    }
+    lines.push(line);
+  }
+  // An error-level rule exits 1 exactly when it reports something and 0 when
+  // it reports nothing; any other exit is a failed run, never clean coverage.
+  if (exitCode !== (report.value.diagnostics.length > 0 ? 1 : 0)) {
+    return null;
+  }
+  return sourceFiles.map((sourceFile) =>
+    (linesByFile.get(sourceFile) ?? []).toSorted((left, right) => left - right),
+  );
+};
+
+/** Every accepted shared run in this process, so tests can prove sharing. */
+export const sharedRuns: { readonly code: string; readonly cases: number }[] =
+  [];
+
+const lintTogether = async (
+  requests: readonly SharedRequest[],
+  code: string,
+): Promise<SharedOutcome[]> => {
+  const [first] = requests;
+  if (first === undefined) {
+    return [];
+  }
+  if (requests.length > 1) {
+    const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
+    const lines = sharedLines(
+      await spawnOxlint(
+        ["-c", first.lintCase.configPath, "-f", "json", ...sourceFiles],
+        REPOSITORY_ROOT,
+      ),
+      sourceFiles,
+      code,
+    );
+    if (lines !== null) {
+      sharedRuns.push({ code, cases: requests.length });
+      return requests.map(({ lintCase }, index) => ({
+        shared: {
+          lines: lines[index] ?? [],
+          source: readFileSync(lintCase.sourceFile, "utf-8"),
+        },
+      }));
+    }
+  }
+  const outcomes: SharedOutcome[] = [];
+  for (const { lintCase } of requests) {
+    outcomes.push({ alone: await lintAlone(lintCase) });
+  }
+  return outcomes;
+};
+
+const pendingByConfig = new Map<string, SharedRequest[]>();
+
+const nextTurn = async () =>
+  new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+/**
+ * Whether a case must lint in a run of its own. Scratch-relative paths and
+ * override globs depend on the case's own root, and a fix rewrites the file:
+ * rerunning a rejected shared --fix run would apply the fixer twice.
+ */
+export const lintsAlone = ({
+  cwd,
+  overrides,
+  fix,
+}: Pick<LintSingleRuleOptions, "cwd" | "overrides" | "fix">): boolean =>
+  cwd === "scratch" || overrides !== undefined || fix === true;
+
+/**
+ * Lint one case together with every concurrent case of the same rule
+ * configuration. Each case keeps its own scratch root and file name, so a
+ * shared run sees the same paths and source as the lone runs it replaces.
+ */
+const lintShared = async (
+  configKey: string,
+  code: string,
+  lintCase: LintCase,
+): Promise<SharedOutcome> =>
+  new Promise((resolve, reject) => {
+    const pending = pendingByConfig.get(configKey);
+    if (pending !== undefined) {
+      pending.push({ lintCase, resolve, reject });
+      return;
+    }
+    pendingByConfig.set(configKey, [{ lintCase, resolve, reject }]);
+    withOxlintSlot(async () => {
+      // Let tests that reach the same configuration this turn join the run.
+      await nextTurn();
+      const requests = pendingByConfig.get(configKey) ?? [];
+      pendingByConfig.delete(configKey);
+      const outcomes = await Result.tryPromise(async () =>
+        lintTogether(requests, code),
+      );
+      for (const [index, request] of requests.entries()) {
+        if (Result.isError(outcomes)) {
+          request.reject(outcomes.error);
+        } else {
+          const outcome = outcomes.value[index];
+          if (outcome === undefined) {
+            request.reject(new Error("Missing shared oxlint outcome"));
+          } else {
+            request.resolve(outcome);
+          }
+        }
+      }
+    }).catch(reject);
+  });
+
+const recordCoverage = (ruleId: string, lines: readonly number[]) => {
+  const { OXLINT_RULE_COVERAGE_PATH: coveragePath } = process.env;
+  if (coveragePath !== undefined) {
+    appendFileSync(
+      coveragePath,
+      `${JSON.stringify({ ruleId, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
+    );
+  }
+};
+
 /**
  * The lines one rule reports on `source`, in order, run through the
  * real oxlint CLI with only that rule enabled. Read from the JSON report, not
@@ -68,6 +303,8 @@ export const runSingleRule = async (
   {
     builtin = false,
     plugin = ruleName,
+    pluginPath,
+    overrides,
     settings,
     fix = false,
     ruleOptions,
@@ -76,65 +313,54 @@ export const runSingleRule = async (
     cwd = "repository",
   }: LintSingleRuleOptions = {},
 ) => {
-  const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  // Override globs must use the real cwd when the temporary root is a symlink.
+  const directory = await realpath(
+    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
+  );
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
-    const configPath = path.join(directory, "oxlint.config.ts");
-    await Bun.write(
-      configPath,
-      `export default ${JSON.stringify({
-        categories: { correctness: "off" },
-        settings,
-        ...(builtin
-          ? { plugins: [plugin] }
-          : {
-              jsPlugins: [
+    const config = `${JSON.stringify({
+      categories: { correctness: "off" },
+      settings,
+      overrides,
+      ...(builtin
+        ? { plugins: [plugin] }
+        : {
+            jsPlugins: [
+              pluginPath ??
                 path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
-              ],
-            }),
-        rules: {
-          [`${plugin}/${ruleName}`]:
-            options === undefined ? "error" : ["error", options],
-        },
-      })};\n`,
-    );
+            ],
+          }),
+      rules: {
+        [`${plugin}/${ruleName}`]:
+          options === undefined ? "error" : ["error", options],
+      },
+    })}\n`;
+    const configPath = path.join(directory, "oxlint.json");
+    await Bun.write(configPath, config);
     const sourceFile = path.join(directory, sourcePath);
     await Bun.write(sourceFile, source);
-    const spawned = Bun.spawn(
-      [
-        process.execPath,
-        "--bun",
-        path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
-        "-c",
-        configPath,
-        "-f",
-        "json",
-        ...(fix ? ["--fix"] : []),
-        cwd === "scratch" ? sourcePath : sourceFile,
-      ],
-      {
-        cwd: cwd === "scratch" ? directory : REPOSITORY_ROOT,
-        stderr: "pipe",
-        stdout: "pipe",
-      },
-    );
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(spawned.stdout).text(),
-      new Response(spawned.stderr).text(),
-      spawned.exited,
-    ]);
-    return {
-      stdout,
-      stderr,
-      exitCode,
-      source: readFileSync(sourceFile, "utf-8"),
+    const lintCase: LintCase = {
+      configPath,
+      sourceFile,
+      fix,
+      directory: cwd === "scratch" ? directory : undefined,
+      sourcePath,
     };
+    return lintsAlone({ cwd, overrides, fix })
+      ? { alone: await withOxlintSlot(async () => lintAlone(lintCase)) }
+      : await lintShared(config, `${plugin}(${ruleName})`, lintCase);
   });
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
     return panic(`oxlint run failed: ${lintResult.error.message}`);
   }
-  const { stdout, stderr, exitCode } = lintResult.value;
+  if ("shared" in lintResult.value) {
+    const { lines, source: linted } = lintResult.value.shared;
+    recordCoverage(`${plugin}/${ruleName}`, lines);
+    return { lines, source: linted };
+  }
+  const { stdout, stderr, exitCode } = lintResult.value.alone;
   const output = ["stdout:", stdout, "stderr:", stderr].join("\n");
   const report = Result.try((): unknown => JSON.parse(stdout));
   if (Result.isError(report)) {
@@ -179,14 +405,8 @@ export const runSingleRule = async (
       `oxlint failed without reporting the requested rule:\n${output}`,
     );
   }
-  const { OXLINT_RULE_COVERAGE_PATH: coveragePath } = process.env;
-  if (coveragePath !== undefined) {
-    appendFileSync(
-      coveragePath,
-      `${JSON.stringify({ ruleId: `${plugin}/${ruleName}`, outcome: lines.length === 0 ? "clean" : "report" })}\n`,
-    );
-  }
-  return { lines, source: lintResult.value.source };
+  recordCoverage(`${plugin}/${ruleName}`, lines);
+  return { lines, source: lintResult.value.alone.source };
 };
 
 export const lintSingleRule = async (
@@ -208,40 +428,35 @@ export const lintRuleAcrossFiles = async (
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const names = Object.keys(files).toSorted();
   const lintResult = await Result.tryPromise(async () => {
-    const configPath = path.join(directory, "oxlint.config.ts");
+    const configPath = path.join(directory, "oxlint.json");
     await Bun.write(
       configPath,
-      `export default ${JSON.stringify({
+      `${JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [
           path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
         rules: { [`${plugin}/${ruleName}`]: "error" },
-      })};\n`,
+      })}\n`,
     );
     for (const name of names) {
       await Bun.write(path.join(directory, name), files[name] ?? "");
     }
-    const spawned = Bun.spawn(
-      [
-        process.execPath,
-        "--bun",
-        path.join(REPOSITORY_ROOT, "node_modules/.bin/oxlint"),
-        "-c",
-        configPath,
-        "-f",
-        "json",
-        // One worker walks every file, so state a rule keeps between files
-        // is visible instead of split across threads.
-        "--threads=1",
-        ...names,
-      ],
-      { cwd: directory, stderr: "pipe", stdout: "pipe" },
+    const { stdout, exitCode } = await withOxlintSlot(async () =>
+      spawnOxlint(
+        [
+          "-c",
+          configPath,
+          "-f",
+          "json",
+          // One worker walks every file, so state a rule keeps between files
+          // is visible instead of split across threads.
+          "--threads=1",
+          ...names,
+        ],
+        directory,
+      ),
     );
-    const [stdout, exitCode] = await Promise.all([
-      new Response(spawned.stdout).text(),
-      spawned.exited,
-    ]);
     return { stdout, exitCode };
   });
   await rm(directory, { force: true, recursive: true });

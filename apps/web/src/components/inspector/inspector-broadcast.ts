@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 import type { StoreApi } from "zustand";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
+import { isActiveSkillContext } from "@/components/inspector/inspector-active-skill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
 import {
@@ -22,11 +22,11 @@ import {
   type InspectorTabsStore,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
-import "@/components/inspector/inspector-persistence-references";
 import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
+import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
@@ -47,6 +47,7 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
+import { createUuid } from "@/lib/uuid";
 
 export type InspectorBroadcastScope = {
   userId: string;
@@ -259,20 +260,6 @@ export const isFileFacet = (
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
 
-const isActiveSkillContext = (
-  value: unknown,
-): value is ChatTab["activeSkill"] => {
-  if (value === undefined) {
-    return true;
-  }
-  return (
-    isRecord(value) &&
-    typeof value["skillName"] === "string" &&
-    isOptionalString(value["skillId"]) &&
-    isOptionalString(value["skillDisplayName"])
-  );
-};
-
 const isInspectorTab = (value: unknown): value is InspectorBroadcastTab => {
   if (!isRecord(value)) {
     return false;
@@ -326,8 +313,10 @@ const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
   isOptionalString(value["workspaceId"]) &&
   isStringArray(value["contextMatterIds"]) &&
   isOptionalLegalDocumentChatKey(value["activeLegalKey"]) &&
+  (value["started"] === undefined || value["started"] === true) &&
   isOptionalString(value["activeDecisionId"]) &&
-  isActiveSkillContext(value["activeSkill"]);
+  (value["activeSkill"] === undefined ||
+    isActiveSkillContext(value["activeSkill"]));
 
 const isInspectorExternalTab = (
   value: Record<string, unknown>,
@@ -473,6 +462,15 @@ type PersistedInspectorState = {
 };
 
 const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
+  // A document's chat that never got a message is not worth a reload: the
+  // document finds its conversation on the server when it opens.
+  if (
+    tab.type === "chat" &&
+    tab.activeLegalKey !== undefined &&
+    tab.started !== true
+  ) {
+    return null;
+  }
   if (tab.type === "skill-resource") {
     return null;
   }
@@ -659,7 +657,7 @@ export const createInspectorBroadcastSession = (
   const channel = new window.BroadcastChannel(
     getInspectorTabsBroadcastChannelName(scope),
   );
-  const clientId = uuidv7();
+  const clientId = createUuid();
   let consumers = 1;
   let applyingRemote = false;
   let lastTabsClock: InspectorBroadcastClock | null = null;

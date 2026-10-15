@@ -227,6 +227,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListItemSource: { type: "non_resource", reason: "subresource" },
   legalListSection: { type: "non_resource", reason: "subresource" },
   legalReaderAnnotation: { type: "non_resource", reason: "subresource" },
+  // Passage-bound conversations and their messages have no portable ResourceRef.
+  legalReaderAnswer: { type: "non_resource", reason: "subresource" },
+  legalReaderAnswerMessage: { type: "non_resource", reason: "subresource" },
   matter: { type: "alias", resourceType: RESOURCE_TYPE.WORKSPACE },
   matterCounter: { type: "non_resource", reason: "projection" },
   mcpConnector: {
@@ -266,6 +269,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.SAVED_TIME_NARRATIVE,
   },
+  // One use of a search or an opened decision or statute, private to its user.
+  searchHistoryEntry: { type: "non_resource", reason: "event" },
   sellerProfile: {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,

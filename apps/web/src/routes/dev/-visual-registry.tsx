@@ -12,6 +12,27 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "oauth-consent": {
+    load: async () => {
+      const { OAuthConsentPlayground } =
+        await import("./-components/oauth-consent-playground");
+      return { default: OAuthConsentPlayground };
+    },
+  },
+  "page-crop": {
+    load: async () => {
+      const { PageCropPlayground } =
+        await import("./-components/page-crop-playground");
+      return { default: PageCropPlayground };
+    },
+  },
+  "chat-long-paste": {
+    load: async () => {
+      const { ChatLongPastePlayground } =
+        await import("./-components/chat-long-paste-playground");
+      return { default: ChatLongPastePlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =
@@ -72,6 +93,13 @@ const visualLoaders = {
       const { WorkspaceTablePlayground } =
         await import("./-components/workspace-table-playground");
       return { default: WorkspaceTablePlayground };
+    },
+  },
+  "public-law-toolbar": {
+    load: async () => {
+      const { PublicLawToolbarPlayground } =
+        await import("./-components/public-law-toolbar-playground");
+      return { default: PublicLawToolbarPlayground };
     },
   },
 } as const satisfies Record<VisualName, VisualLoader>;

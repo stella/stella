@@ -28,6 +28,10 @@ import {
   type ChatRunMode,
   type DocxEditRepresentation,
 } from "@stll/api-contract";
+import {
+  isChatPastedTextPart,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -57,6 +61,7 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   registeredChatTool,
@@ -536,7 +541,24 @@ const TOOL_RESULT_VALIDATION = {
   ChatToolResultPart["state"],
   "error" | "incomplete" | "output"
 >;
+type DeniedToolOutput = { approved: false; message: string };
+
+// AG-UI history rebuilds a denial as a decision payload, not an execution
+// error. Share its exact boundary check between call and result validation.
+const isDeniedToolOutput = (value: unknown): value is DeniedToolOutput =>
+  isRecord(value) &&
+  Object.keys(value).length === 2 &&
+  value["approved"] === false &&
+  typeof value["message"] === "string" &&
+  value["message"].length > 0;
+
 type ValidatedToolCallPart =
+  | {
+      type: "denied";
+      name: string;
+      output: DeniedToolOutput;
+      part: ChatToolCallPart;
+    }
   | {
       type: "error";
       name: string;
@@ -762,18 +784,19 @@ const validateIncomingChatParts = ({
     );
   }
 
-  const persistedParts =
+  const canonicalMessage =
     message.role === "assistant" && persistedMessage?.role === "assistant"
       ? chatMessageFromPersisted({
           id: message.id,
           role: persistedMessage.role,
           content: persistedMessage.content,
-        }).parts
-      : [];
-  if (message.role === "assistant" && persistedMessage?.role === "assistant") {
+        })
+      : null;
+  const persistedParts = arrayOrEmpty(canonicalMessage?.parts);
+  if (canonicalMessage !== null) {
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
-      persistedParts,
+      persistedMessage: canonicalMessage,
       resume,
       tools,
     });
@@ -851,6 +874,7 @@ const applyValidatedContinuationTransitions = ({
       content: part.content,
       state: part.state,
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
     });
     resultCallIds.add(part.toolCallId);
   }
@@ -877,19 +901,19 @@ type ValidatedContinuationToolCall =
 
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
-  persistedParts,
+  persistedMessage,
   resume,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
-  persistedParts: readonly ChatPart[];
+  persistedMessage: ChatMessage;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
   HandlerError<400>
 > => {
-  const canonicalCalls = persistedParts.filter(
+  const canonicalCalls = persistedMessage.parts.filter(
     (part): part is ChatToolCallPart => part.type === "tool-call",
   );
   const incomingCalls = incomingParts.filter(
@@ -918,11 +942,15 @@ const validateContinuationToolCallIntegrity = ({
     validatedCallsById.set(incomingCall.id, validatedCallResult.value);
   }
 
-  const awaitedInteractions = getAwaitingUserInteractions({
-    parts: [...persistedParts],
-    role: "assistant",
-  });
+  const awaitedInteractions = getAwaitingUserInteractions(persistedMessage);
+  const awaitedCallIds = new Set(
+    awaitedInteractions.map(({ toolCallId }) => toolCallId),
+  );
   if (
+    [...validatedCallsById.values()].some(
+      (call) =>
+        call.type === "transitioned" && !awaitedCallIds.has(call.call.id),
+    ) ||
     awaitedInteractions.some(
       ({ toolCallId }) => !incomingCallsById.has(toolCallId),
     )
@@ -1144,7 +1172,10 @@ const validateContinuationToolCallTransition = ({
       return Result.ok({ type: "transitioned", call: candidate });
     }
     case "input-complete": {
-      if (incomingCall.state !== "complete" && incomingCall.state !== "error") {
+      if (
+        isServerChatToolCall(canonicalCall) ||
+        (incomingCall.state !== "complete" && incomingCall.state !== "error")
+      ) {
         return invalidContinuationToolCall();
       }
       const output: unknown = incomingCall.output;
@@ -1428,11 +1459,13 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
 
 export const validateToolCallParts = ({
   allowPartialInput = false,
+  allowDeferredServerInput = false,
   clientAuthoredCallIds,
   message,
   tools,
 }: {
   allowPartialInput?: boolean;
+  allowDeferredServerInput?: boolean;
   /** See `ValidatedIncomingChatParts`; `undefined` validates every call. */
   clientAuthoredCallIds?: ReadonlySet<string> | undefined;
   message: ChatMessage;
@@ -1441,8 +1474,14 @@ export const validateToolCallParts = ({
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
   const serverAuthoredCallIds = new Set<string>();
   const parts: ChatPart[] = [];
+  const awaitedCallIds = new Set(
+    getAwaitingUserInteractions(message).map(({ toolCallId }) => toolCallId),
+  );
+  const firstAwaitedIndex = message.parts.findIndex(
+    (part) => part.type === "tool-call" && awaitedCallIds.has(part.id),
+  );
 
-  for (const part of message.parts) {
+  for (const [index, part] of message.parts.entries()) {
     if (part.type === "tool-call") {
       if (toolCallsById.has(part.id) || serverAuthoredCallIds.has(part.id)) {
         return Result.err(
@@ -1464,6 +1503,10 @@ export const validateToolCallParts = ({
 
       const toolCallResult = validateToolCallPart({
         allowPartialInput,
+        allowDeferredServerInput:
+          allowDeferredServerInput &&
+          firstAwaitedIndex !== -1 &&
+          index > firstAwaitedIndex,
         part,
         tools,
       });
@@ -1499,10 +1542,12 @@ export const validateToolCallParts = ({
 
 const validateToolCallPart = ({
   allowPartialInput,
+  allowDeferredServerInput,
   part,
   tools,
 }: {
   allowPartialInput: boolean;
+  allowDeferredServerInput: boolean;
   part: ChatToolCallPart;
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
@@ -1519,10 +1564,29 @@ const validateToolCallPart = ({
     );
   }
 
+  // Calls queued behind approval reach SDK input validation only on resume.
   if (
-    allowPartialInput &&
-    (part.state === "awaiting-input" || part.state === "input-streaming")
+    (allowPartialInput &&
+      (part.state === "awaiting-input" || part.state === "input-streaming")) ||
+    (allowDeferredServerInput &&
+      part.state === "input-complete" &&
+      isServerChatToolCall(part) &&
+      part.output === undefined)
   ) {
+    if (allowDeferredServerInput && part.input !== undefined) {
+      const parsed = parseToolArguments(part.arguments);
+      if (Result.isError(parsed)) {
+        return Result.err(parsed.error);
+      }
+      const agreement = validateToolInputAgreement({
+        parsedArguments: parsed.value,
+        part,
+        schema: tool.inputSchema,
+      });
+      if (Result.isError(agreement)) {
+        return Result.err(agreement.error);
+      }
+    }
     return Result.ok({
       type: "schema",
       name: part.name,
@@ -1616,7 +1680,7 @@ const validateErrorToolCallPart = ({
   if (Result.isError(errorOutputResult)) {
     return Result.err(errorOutputResult.error);
   }
-  const error = errorOutputResult.value;
+  const output = errorOutputResult.value;
   const canonicalInput =
     tool === undefined ? undefined : validateToolCallInput({ part, tool });
   const input =
@@ -1631,12 +1695,33 @@ const validateErrorToolCallPart = ({
       ),
     ),
     ...(input.type === "present" ? { input: input.value } : {}),
-    ...(error === undefined ? {} : { output: { error } }),
+    ...(output.type === "denied" ? { output: output.output } : {}),
+    ...(output.type === "error" && output.error !== undefined
+      ? { output: { error: output.error } }
+      : {}),
   };
   if (!isChatPart(candidate) || candidate.type !== "tool-call") {
     return panic("A failed chat tool call violates the tool-call contract");
   }
-  return Result.ok({ type: "error", name: part.name, error, part: candidate });
+  switch (output.type) {
+    case "denied":
+      return Result.ok({
+        type: "denied",
+        name: part.name,
+        output: output.output,
+        part: candidate,
+      });
+    case "error":
+      return Result.ok({
+        type: "error",
+        name: part.name,
+        error: output.error,
+        part: candidate,
+      });
+    default:
+      output satisfies never;
+      return panic(`Unhandled tool failure output: ${String(output)}`);
+  }
 };
 
 /** `argumentsText` as an input object, when the object's JSON is exactly
@@ -1653,12 +1738,25 @@ const verbatimToolInput = (
     : { type: "absent" };
 };
 
+type ValidatedToolFailureOutput =
+  | { type: "error"; error: string | undefined }
+  | { type: "denied"; output: DeniedToolOutput };
+
 const validateToolCallErrorOutput = (
   part: ChatToolCallPart,
-): Result<string | undefined, HandlerError<400>> => {
+): Result<ValidatedToolFailureOutput, HandlerError<400>> => {
   const output: unknown = part.output;
   if (output === undefined) {
-    return Result.ok(undefined);
+    return Result.ok({ type: "error", error: undefined });
+  }
+  // Denial is an approval decision, not a failed server execution. The SDK
+  // preserves its decision payload on the call and the paired result.
+  if (
+    "approval" in part &&
+    part.approval.approved === false &&
+    isDeniedToolOutput(output)
+  ) {
+    return Result.ok({ type: "denied", output });
   }
   if (
     typeof output !== "object" ||
@@ -1674,7 +1772,7 @@ const validateToolCallErrorOutput = (
       }),
     );
   }
-  return Result.ok(output.error);
+  return Result.ok({ type: "error", error: output.error });
 };
 
 const validateToolResultPart = ({
@@ -1707,7 +1805,7 @@ const validateToolResultPart = ({
   }
 
   if (validation === "error") {
-    if (toolCall.type !== "error") {
+    if (toolCall.type === "schema") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -1715,7 +1813,7 @@ const validateToolResultPart = ({
         }),
       );
     }
-    return validateToolErrorResult(part, toolCall.error);
+    return validateToolErrorResult(part, toolCall);
   }
 
   if (toolCall.type !== "schema" || toolCall.output.type === "absent") {
@@ -1766,16 +1864,52 @@ const validateToolResultPart = ({
 
 const validateToolErrorResult = (
   part: ChatToolResultPart,
-  toolCallError: string | undefined,
+  toolCall: Extract<ValidatedToolCallPart, { type: "error" | "denied" }>,
 ): Result<void, HandlerError<400>> => {
   const contentResult = parseToolResultContent(part.content);
   if (Result.isError(contentResult)) {
     return Result.err(contentResult.error);
   }
 
+  switch (toolCall.type) {
+    case "denied": {
+      if (
+        part.outcome === "denied" &&
+        part.error === undefined &&
+        deepEquals(contentResult.value, toolCall.output)
+      ) {
+        return Result.ok();
+      }
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Invalid chat tool denial result: ${part.toolCallId}`,
+        }),
+      );
+    }
+    case "error":
+      break;
+    default:
+      toolCall satisfies never;
+      return panic(`Unhandled tool failure: ${String(toolCall)}`);
+  }
+
+  // A denied result rebuilt from AG-UI history carries the approval decision
+  // as content, rather than the server execution error envelope.
+  const content = contentResult.value;
+  if (
+    part.outcome === "denied" &&
+    "approval" in toolCall.part &&
+    toolCall.part.approval.approved === false &&
+    isDeniedToolOutput(content) &&
+    part.error === undefined
+  ) {
+    return Result.ok();
+  }
+
   if (
     !part.error ||
-    (toolCallError !== undefined && toolCallError !== part.error)
+    (toolCall.error !== undefined && toolCall.error !== part.error)
   ) {
     return Result.err(
       new HandlerError({
@@ -1898,6 +2032,31 @@ const validateCanonicalToolInput = ({
       toolName: part.name,
     });
   }
+  const agreement = validateToolInputAgreement({
+    parsedArguments,
+    part,
+    schema,
+  });
+  if (Result.isError(agreement)) {
+    return Result.err(agreement.error);
+  }
+  return validateToolPayload({
+    payload: part.input,
+    payloadName: "input",
+    schema,
+    toolName: part.name,
+  });
+};
+
+const validateToolInputAgreement = ({
+  parsedArguments,
+  part,
+  schema,
+}: {
+  parsedArguments: unknown;
+  part: ChatToolCallPart;
+  schema: unknown;
+}): Result<void, HandlerError<400>> => {
   if (
     !deepEquals(
       withToolInputPlaceholdersOmitted(schema, parsedArguments),
@@ -1911,12 +2070,7 @@ const validateCanonicalToolInput = ({
       }),
     );
   }
-  return validateToolPayload({
-    payload: part.input,
-    payloadName: "input",
-    schema,
-    toolName: part.name,
-  });
+  return Result.ok();
 };
 
 const validateToolPayload = ({
@@ -1974,6 +2128,11 @@ export const parseMessage = ({
   const mentions: ChatMention[] = [];
 
   for (const part of message.parts) {
+    // Pasted text is plain text, rather than editor HTML; preserve it verbatim.
+    if (isChatPastedTextPart(part)) {
+      normalizedParts.push(part);
+      continue;
+    }
     if (isChatTextPart(part)) {
       const normalizedText = normalizeChatMessageHtml(
         part.content,

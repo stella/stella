@@ -11,12 +11,12 @@ import {
   timeEntryContextColumns,
   timeEntryReadColumns,
 } from "@/api/handlers/time-entries/time-entry-columns";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
-} from "@/api/handlers/time-entries/timekeeper-names";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
+} from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -152,6 +152,7 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 
 const readTimeEntries = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List time entries in a matter, optionally filtered by workItemId " +
       "(the document, folder, or task providing context), userId or scope=me, " +

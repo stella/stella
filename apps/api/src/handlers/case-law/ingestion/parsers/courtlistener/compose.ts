@@ -1,3 +1,5 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
+import { Result } from "better-result";
 /**
  * One cluster's opinions composed into one document: the rows in their
  * documented order, each row's blocks under its own ID prefix, and a citation
@@ -8,12 +10,11 @@
  * no opinion is published without the others.
  */
 
-import { Result } from "better-result";
-
 // parser-output-unchanged: imports the document AST from its package owner
 import { isApparatusRole } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   COURTLISTENER_REJECTION_REASON,
@@ -46,6 +47,7 @@ import {
 } from "./opinion-class";
 import { createTextBudget, type TextCounts, type TextUnit } from "./outcome";
 import { type OpinionTextSelection, selectOpinionText } from "./select";
+import type { PublishedTextDefect } from "./source-defects";
 
 export type CourtListenerTextOpinion = {
   readonly row: OpinionRow;
@@ -61,6 +63,7 @@ type OpinionTextReport = {
   readonly structure: string | null;
   readonly attempts: OpinionTextSelection["attempts"];
   readonly counts: TextCounts | null;
+  readonly sourceDefects: readonly PublishedTextDefect[];
   /** `block-only` where no opinion boundary inside the row is proven. */
   readonly coverage: "opinion" | "block-only" | null;
   readonly scopes: number;
@@ -82,6 +85,7 @@ export type CourtListenerTextOutcome =
       readonly status: "parsed";
       readonly blocks: readonly Block[];
       readonly sections: DecisionSection[];
+      readonly sourceDefects: readonly PublishedTextDefect[];
       readonly textFields: {
         headnotes: string;
         syllabus: string;
@@ -241,6 +245,7 @@ const report = (
   structure: selection.status === "parsed" ? selection.structure : null,
   attempts: selection.attempts,
   counts: selection.status === "parsed" ? selection.text.counts : null,
+  sourceDefects: selection.status === "parsed" ? selection.sourceDefects : [],
   coverage: scoped?.coverage ?? null,
   scopes: scoped?.scopes.length ?? 0,
   classConflicts: scoped?.classConflicts ?? 0,
@@ -460,11 +465,17 @@ export const composeCourtListenerText = (
     blocks,
     sections,
     textFields: front.textFields,
+    sourceDefects: [
+      ...front.sourceDefects,
+      ...reports.flatMap((opinionReport) => opinionReport.sourceDefects),
+    ],
     citationScopes,
     principal: {
       body,
       length: Array.from(
-        stripDangerousChars(body).normalize("NFC").replace(/\s+/gu, " ").trim(),
+        normalizeUnicode(stripDangerousChars(body), "NFC")
+          .replace(/\s+/gu, " ")
+          .trim(),
       ).length,
       bodyParagraphCount: bodyBlocks.length,
       inBodyCitationCount: Result.isError(citationCount)

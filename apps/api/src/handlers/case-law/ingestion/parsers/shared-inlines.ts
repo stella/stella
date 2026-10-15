@@ -43,6 +43,8 @@ import {
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
+import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
 
@@ -355,127 +357,6 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
     }
   }
   return text;
-};
-
-/**
- * Drop the whitespace a prefix cut exposed at the start of an inline
- * list, descending through emphasis wrappers to reach it.
- *
- * Trimming only a top-level text node made a paragraph's plain text
- * depend on where the publisher happened to open a `<b>`: `[1] Text`
- * written flat lost the space after the marker, and the same sentence
- * written as `[1]` plus a bold ` Text` kept it.
- *
- * A leading `line-break` is dropped too. The break was a separator
- * between the marker and the body; once the marker is gone it would open
- * the paragraph with an empty line, and no court paragraph begins with
- * one. The alternative — keeping it as content — would leave the same
- * markup-shape dependence this function exists to remove, since the same
- * document with the break written as `\n` inside a text node loses it.
- */
-const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
-  const result = [...nodes];
-  // Page anchors passed on the way in: zero-width on the text axis, so
-  // neither whitespace to drop nor content that ends the trim.
-  const kept: Inline[] = [];
-
-  while (result.length > 0) {
-    const first = result[0];
-    if (first === undefined) {
-      break;
-    }
-
-    if (first.type === "line-break") {
-      result.shift();
-      continue;
-    }
-
-    if (first.type === "page-anchor") {
-      kept.push(first);
-      result.shift();
-      continue;
-    }
-
-    if (first.type === "text") {
-      const trimmed = first.text.trimStart();
-      if (trimmed.length > 0) {
-        result[0] = { ...first, text: trimmed };
-        break;
-      }
-      result.shift();
-      continue;
-    }
-
-    // bold | italic | link — trim inside, and drop the wrapper entirely
-    // when nothing but whitespace was in it.
-    const children = trimLeadingWhitespace(first.children);
-    if (children.length > 0) {
-      result[0] = { ...first, children };
-      break;
-    }
-    result.shift();
-  }
-
-  kept.push(...result);
-  return kept;
-};
-
-export const stripInlinePrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const rest = node.text.slice(remaining);
-        remaining = 0;
-        if (rest) {
-          result.push({ ...node, text: rest });
-        }
-      }
-      continue;
-    }
-
-    if (node.type === "line-break") {
-      remaining -= 1;
-      continue;
-    }
-
-    if (!hasInlineChildren(node)) {
-      // Zero characters on the text axis; passes through untouched.
-      result.push(node);
-      continue;
-    }
-
-    const nodeTextLen = inlinesToPlainText(node.children).length;
-    if (nodeTextLen <= remaining) {
-      // Entire node consumed by prefix
-      remaining -= nodeTextLen;
-    } else {
-      // Partial strip inside the node
-      const stripped = stripInlinePrefix(node.children, remaining);
-      remaining = 0;
-      if (stripped.length > 0) {
-        result.push({ ...node, children: stripped });
-      }
-    }
-  }
-
-  return trimLeadingWhitespace(result);
 };
 
 /**

@@ -4,6 +4,7 @@ import {
   composeCourtListenerText,
   type CourtListenerTextOutcome,
 } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
+import { COURTLISTENER_TEXT_USABILITY } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/usability";
 import {
   absentTextField,
   checkedDecisionMetadata,
@@ -32,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 8;
+export const COURTLISTENER_PARSER_VERSION = 16;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -81,6 +82,33 @@ export const mapCourtListenerRecord = (
                 ? `scope defect: ${composed.defect}`
                 : composed.status,
           },
+          ...composed.opinions.flatMap(({ opinionId, attempts }) =>
+            attempts.flatMap(({ format, reason }) => {
+              switch (reason) {
+                case COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER:
+                case COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT:
+                case COURTLISTENER_TEXT_USABILITY.UNDECODABLE:
+                  return [
+                    { path: `opinions.${opinionId}.${format}`, detail: reason },
+                  ];
+                case "blank":
+                case "declared-dtd":
+                case "malformed-xml":
+                case "missing-opinion":
+                case "no-visible-text":
+                case "content-loss":
+                case "markup-residue":
+                case "text-not-conserved":
+                case "unclassified-page-chrome":
+                  return [];
+                default:
+                  reason satisfies never;
+                  return panic(
+                    "Unhandled CourtListener text candidate rejection",
+                  );
+              }
+            }),
+          ),
         ],
       }),
     );
@@ -121,6 +149,7 @@ export const mapCourtListenerRecord = (
         scdbPresent: plan.scdbPresent,
       },
       textSelection: composed.opinions,
+      sourceDefects: composed.sourceDefects,
       diagnostics: plan.diagnostics,
     }),
     fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),

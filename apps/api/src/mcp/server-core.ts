@@ -76,6 +76,7 @@ import {
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
+import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import {
   createMcpCorsHeaders,
@@ -224,6 +225,7 @@ const MCP_SERVER_VERSION = `${STELLA_API_CONTRACT.protocol}.${STELLA_API_CONTRAC
  * their logs off it, so each audience is named, not left to a fallback.
  */
 const MCP_SERVER_NAME_BY_MODE = {
+  advanced: "stella (advanced)",
   default: "stella",
   documents: "stella (documents)",
   anonymized: "stella (anonymized)",
@@ -288,7 +290,7 @@ export const mcpOmittedToolNamesByReason = ({
     if (
       additionalScopes !== undefined &&
       additionalScopes.length > 0 &&
-      !grantedScopes.includes(definition.scope)
+      !hasGrantedScope(grantedScopes, definition.scope)
     ) {
       scope.push(definition.name);
     }
@@ -815,7 +817,7 @@ export const createMcpHttpRequestHandler = ({
       ? getMcpToolRequiredScopesHint(toolName, mode)
       : undefined;
     const missingHintedScope = requiredScopesHint?.find(
-      (scope) => !session.scopes.includes(scope),
+      (scope) => !hasGrantedScope(session.scopes, scope),
     );
     if (missingHintedScope !== undefined && requiredScopesHint !== undefined) {
       return missingScopeResult({
@@ -870,7 +872,7 @@ export const createMcpHttpRequestHandler = ({
 
     const requiredScopes = requiredScopesForTool(definition);
     const missingScope = requiredScopes.find(
-      (scope) => !session.scopes.includes(scope),
+      (scope) => !hasGrantedScope(session.scopes, scope),
     );
     if (missingScope !== undefined) {
       return missingScopeResult({
@@ -1299,7 +1301,7 @@ export const createMcpHttpRequestHandler = ({
     {
       clientIp = null,
       mode = "default",
-    }: { clientIp?: string | null; mode?: McpMode } = {},
+    }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
   ): Promise<Response> => {
     if (incomingRequest.method === "OPTIONS") {
       return new Response(null, {

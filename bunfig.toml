@@ -16,7 +16,6 @@ publicHoistPattern = ["*"]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
-  # TanStack Charts is needed before its quarantine ends.
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
@@ -28,8 +27,6 @@ minimumReleaseAgeExcludes = [
   # Oxlint 1.82 and Ultracite 7.11.1 add branch-wise loop-condition checking.
   # Keep the plugin SDK and every native binding with the pinned release;
   # quarantined optional bindings otherwise leave the executable unavailable.
-  # TanStack AI 0.61.0 and its adapters publish as one release family; keep
-  # direct and transitive packages coherent until the normal quarantine admits them.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
@@ -71,3 +68,9 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
 ]
+
+[test]
+# Custom lint rule tests spend their time awaiting oxlint. Running each file's
+# tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
+# every waiting case of one rule configuration in a single oxlint run.
+concurrentTestGlob = "**/.oxlint-plugins/__tests__/*.test.ts"

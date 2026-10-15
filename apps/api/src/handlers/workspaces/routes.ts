@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 
 import createWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/create";
 import deleteWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/delete";
@@ -54,6 +54,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 
 const readWorkspace = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -76,17 +77,23 @@ const readWorkspace = createSafeHandler(
 
 const readOverview = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
+    query: t.Object({
+      /** The reader's local date; the agenda starts there. */
+      agendaFrom: t.Optional(t.String({ format: "date" })),
+    }),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, workspaceId }) {
+  async function* ({ scopedDb, workspaceId, query }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await readOverviewHandler({
             workspaceId,
             scopedDb,
+            agendaFrom: query.agendaFrom,
           }),
       ),
     );
@@ -97,6 +104,7 @@ const readOverview = createSafeHandler(
 
 const readWorkspaceContacts = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -112,6 +120,7 @@ const readWorkspaceContacts = createSafeHandler(
 
 const readWorkspaceMembers = createSafeHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
@@ -215,6 +224,7 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         })
         .get("/overview", readOverview.handler, {
           permissions: readOverview.config.permissions,
+          query: readOverview.config.query,
         })
         .get("/search-preview", readSearchPreview.handler, {
           permissions: readSearchPreview.config.permissions,

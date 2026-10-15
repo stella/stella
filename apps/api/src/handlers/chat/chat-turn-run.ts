@@ -1,10 +1,11 @@
 import { RUN_CANCEL_REASON, toServerSentEventsResponse } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
-import { panic, Result } from "better-result";
+import type { StreamChunk, StreamDurability } from "@tanstack/ai";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { AIProvider } from "@stll/ai-catalog";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
@@ -37,6 +38,145 @@ import type { ExecutionAdmission } from "@/api/lib/rate-limit/execution-admissio
 import { withSseHeartbeat } from "@/api/lib/sse";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { withTimeout } from "@/api/lib/with-timeout";
+
+// Delivery is ephemeral; a stalled viewer must not hold a running turn's lease.
+const CHAT_TURN_DELIVERY_BUFFER_BYTES = 1024 * 1024;
+const CHAT_TURN_DELIVERY_CHUNK_BYTES = 64 * 1024;
+const CHAT_TURN_DELIVERY_STALL_TIMEOUT_MS = 5000;
+const DELIVERY_FAILED_SINK = failureSink({
+  event: "chat.turn.delivery_failed",
+  expected: [],
+});
+
+class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
+  message: string;
+}> {}
+
+/** Bound queued bytes and wait for consumer demand before writing more.
+ *  A stalled connection detaches after a bounded wait; draining then continues
+ *  so delivery cannot indefinitely prevent the owned turn from settling. */
+const eagerlyDeliverTurn = (response: Response): Response => {
+  const upstream = response.body;
+  if (upstream === null) {
+    return panic("A chat turn response has no stream");
+  }
+  let delivery: "open" | "cancelled" | "overflowed" = "open";
+  // Cancellation can change delivery while the drain is suspended.
+  const isDeliveryOpen = () => delivery === "open";
+  let room = Promise.withResolvers<undefined>();
+  const source: {
+    current:
+      | { status: "closed" }
+      | {
+          status: "reading";
+          reader: Pick<ReadableStreamDefaultReader<Uint8Array>, "cancel">;
+        };
+  } = { current: { status: "closed" } };
+  const body = new ReadableStream<Uint8Array>(
+    {
+      start: (controller) => {
+        const drain = async () => {
+          const reader = upstream.getReader();
+          try {
+            source.current = { status: "reading", reader };
+            const drained = await Result.tryPromise(async () => {
+              while (delivery !== "cancelled") {
+                const next = await reader.read();
+                if (next.done) {
+                  if (delivery === "open") {
+                    controller.close();
+                  }
+                  return;
+                }
+                if (delivery !== "open") {
+                  continue;
+                }
+                if (!(next.value instanceof Uint8Array)) {
+                  panic("A chat response stream emitted a non-byte chunk");
+                }
+                let offset = 0;
+                while (offset < next.value.byteLength && isDeliveryOpen()) {
+                  const available = controller.desiredSize ?? 0;
+                  if (available <= 0) {
+                    // Only consumer pull (or cancellation) releases this wait.
+                    // Microtask yields cannot give a socket room to drain.
+                    const pulled = room.promise;
+                    const ready = await Result.tryPromise({
+                      try: async () =>
+                        await withTimeout(async () => await pulled, {
+                          label: "Chat delivery backpressure",
+                          timeoutMs: CHAT_TURN_DELIVERY_STALL_TIMEOUT_MS,
+                        }),
+                      catch: (error) => error,
+                    });
+                    if (!isDeliveryOpen()) {
+                      break;
+                    }
+                    if (Result.isError(ready)) {
+                      if (!(ready.error instanceof TimeoutError)) {
+                        panic(
+                          "The chat delivery room wait failed",
+                          ready.error,
+                        );
+                      }
+                      delivery = "overflowed";
+                      controller.error(
+                        new ChatTurnDeliveryOverflow({
+                          message:
+                            "Chat delivery exceeded its buffer; reload the stored turn",
+                        }),
+                      );
+                      // Cancelling fresh durable delivery detaches its pump;
+                      // the producer continues into the log without queueing
+                      // bytes for a viewer that can no longer consume them.
+                      await reader.cancel();
+                      return;
+                    }
+                    continue;
+                  }
+                  const piece = next.value.subarray(
+                    offset,
+                    offset +
+                      Math.min(CHAT_TURN_DELIVERY_CHUNK_BYTES, available),
+                  );
+                  controller.enqueue(piece);
+                  offset += piece.byteLength;
+                }
+              }
+            });
+            if (Result.isError(drained)) {
+              const { error } = drained;
+              if (delivery === "open") {
+                controller.error(error);
+              } else {
+                observeFailure(error, { sink: DELIVERY_FAILED_SINK });
+              }
+            }
+          } finally {
+            reader.releaseLock();
+            source.current = { status: "closed" };
+          }
+        };
+        detached(drain(), "chat-turn-run.delivery");
+      },
+      pull: () => {
+        room.resolve(undefined);
+        room = Promise.withResolvers<undefined>();
+      },
+      cancel: async (reason) => {
+        delivery = "cancelled";
+        room.resolve(undefined);
+        if (source.current.status === "reading") {
+          await source.current.reader.cancel(reason);
+        }
+      },
+    },
+    new ByteLengthQueuingStrategy({
+      highWaterMark: CHAT_TURN_DELIVERY_BUFFER_BYTES,
+    }),
+  );
+  return new Response(body, response);
+};
 
 // A turn's run: the part of a turn that starts at provider dispatch and ends
 // with the turn's stored outcome. The request that claimed the turn hands it
@@ -71,6 +211,7 @@ const CHAT_TURN_RUN_HEARTBEAT = {
  * or its process is shutting down. It ends the turn as `owner-lost`.
  */
 export const CHAT_TURN_OWNER_LOST_REASON = "stella.chat-turn.owner-lost";
+const CHAT_TURN_PRODUCTION_FAILED_REASON = "stella.chat-turn.production-failed";
 
 const HEARTBEAT_FAILED_SINK = failureSink({
   event: "chat.turn.stop_poll_failed",
@@ -142,7 +283,7 @@ type ChatTurnRunConnectors = { close: () => void | Promise<void> };
 
 /** What cuts a run's producer short. */
 type ChatTurnRunControl = {
-  /** The run's own abort: its deadline, a stop, or its response closing. */
+  /** The run's own abort: its deadline, a stop, or ownership loss. */
   abortController: AbortController;
   /** The SDK provider also stops on admission loss without ending the transport. */
   providerAbortController: AbortController;
@@ -455,24 +596,30 @@ export class ChatTurnRun {
 
   /**
    * Start producing `output`, built against `control`, and serve it. The
-   * response is the run's one transport: closing it aborts the run, which is
-   * how a closed connection still ends the turn.
+   * response is a viewer: closing it detaches delivery while the producer
+   * keeps draining into the log under its existing deadlines and ownership.
    */
-  produce(output: AsyncIterable<StreamChunk>): Response {
+  produce(
+    output: AsyncIterable<StreamChunk>,
+    durability: StreamDurability,
+  ): Response {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
     this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
-    const response = withSseHeartbeat(
-      toServerSentEventsResponse(
-        this.options.admission === undefined
-          ? output
-          : this.trackUpstream(output),
-        {
-          abortController: this.control.abortController,
-          headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
-        },
+    const response = eagerlyDeliverTurn(
+      withSseHeartbeat(
+        toServerSentEventsResponse(
+          this.options.admission === undefined
+            ? output
+            : this.trackUpstream(output),
+          {
+            abortController: this.control.abortController,
+            durability: { adapter: durability },
+            headers: { [CHAT_TURN_ID_HEADER]: this.execution.id },
+          },
+        ),
       ),
     );
     if (this.pendingAbort !== undefined) {
@@ -592,6 +739,35 @@ export class ChatTurnRun {
     if (status !== "handed-over") {
       return;
     }
+    await this.closeConnectors();
+    this.release();
+  }
+
+  /** The durable pump ended without a persistence event; no later iterator
+   * callback can release this producing run. */
+  async failProduction(source: "not-started" | "started"): Promise<void> {
+    if (this.state.status !== "producing") {
+      return panic(`Cannot fail a producer once ${this.state.status}`);
+    }
+    try {
+      await this.fail("internal", true);
+      if (source === "not-started") {
+        // trackUpstream prepares a completion promise before the iterator is
+        // pulled. An unused iterator has no finally to resolve that promise.
+        this.upstream = { status: "closed" };
+        await this.closeConnectors();
+      }
+    } finally {
+      // A failed durable pump can leave an iterator.next() blocked on provider
+      // output. End that source before waiting for its admission finalizers.
+      if (source === "started") {
+        this.abort(CHAT_TURN_PRODUCTION_FAILED_REASON);
+      }
+      this.release();
+    }
+  }
+
+  private async closeConnectors(): Promise<void> {
     const { connectors } = this.options;
     if (connectors !== undefined) {
       const closed = await Result.tryPromise(
@@ -600,11 +776,10 @@ export class ChatTurnRun {
       if (Result.isError(closed)) {
         observeFailure(closed.error, {
           sink: CONNECTOR_CLOSE_FAILED_SINK,
-          ctx: { threadId: owner.threadId },
+          ctx: { threadId: this.options.owner.threadId },
         });
       }
     }
-    this.release();
   }
 
   /** Stop the run as the user's cancel; resolves once it is over. */

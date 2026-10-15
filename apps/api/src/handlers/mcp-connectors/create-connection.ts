@@ -25,6 +25,7 @@ const requestBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,

@@ -31,6 +31,7 @@ import {
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
@@ -45,6 +46,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 
 // Whole conversations driven through the production path from both ends: the
 // web app's own chat runtime posts what its live view holds and answers only
@@ -57,28 +59,40 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // first tab for the same approval.
 
 let testDb: TestDatabase;
+const profile = createChatHarnessProfile(
+  "live-reload-parity.integration.test.ts",
+);
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-});
+beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+    }),
+);
 
 afterAll(async () => {
-  if (seededThreadIds.length > 0) {
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
+  try {
+    await profile.measure("close", async () => {
+      if (seededThreadIds.length > 0) {
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  await releaseRlsFixture();
 });
 
 const newThread = (): SafeId<"chatThread"> => {
@@ -190,8 +204,8 @@ type Ledger = {
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
   approvesAll: boolean;
-  /** How the latest turn ended; `cancelled` when the user stopped it, a
-   *  dropped connection cut it off, or a fork settled what it awaited. */
+  /** How the latest turn ended; `cancelled` when the user stopped it
+   *  or a fork settled what it awaited. */
   latest: "awaiting" | "cancelled" | "failed" | "none" | "text";
   /** How each turn stood when the conversation last settled. */
   outcomes: Map<number, Ledger["latest"]>;
@@ -876,6 +890,12 @@ class StopMidStream implements fc.AsyncCommand<Model, Real> {
         {
           quietUntilAborted: this.quietAt,
           text: "Checking the register",
+          // 28 text chunks plus start/end and tool start/args flush the SDK batch
+          // while the tool input is still open.
+          textChunks: [
+            "Checking the register",
+            ...Array.from({ length: 27 }, () => " "),
+          ],
           toolCalls: [
             {
               arguments: PLAIN_TOOL_ARGUMENTS,
@@ -1328,7 +1348,13 @@ const supersedeCommand = fc
   .map(([runs, text]) => new SupersedeCards(runs, text));
 
 const openConversation = async () => {
-  const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+  const harness = createApprovalHarness({
+    ids,
+    profile,
+    safeDb,
+    scopedDb,
+    testDb,
+  });
   const threadId = newThread();
   let idCount = 0;
   const real: Real = {
@@ -1792,46 +1818,76 @@ describe("a conversation's live view", () => {
     propertyTestTimeout(30_000),
   );
 
-  // A dropped connection cuts the run off before it hands out an interrupt:
-  // a server call whose input completed never ran, and nothing waits on it.
   test.each(["after-tool-end", "before-tool-end"] as const)(
-    "leaves nothing waiting when a dropped connection cuts an answer off (%s)",
-    async (quietAt) => {
+    "rejoins an answer after a dropped connection without another producer (%s)",
+    async (pauseAt) => {
       await inConversation(async (model, real) => {
         const { harness, ledger, threadId } = real;
         ledger.turn += 1;
-        const toolCallId = real.nextId();
-        ledger.calls.push({ id: toolCallId, kind: "plain", turn: ledger.turn });
-        ledger.latest = "cancelled";
+        const gate = Promise.withResolvers<undefined>();
+        const paused = Promise.withResolvers<undefined>();
+        const steps = planRun(
+          ledger,
+          [{ ...STEP, calls: ["plain"] }],
+          real.nextId,
+          "message",
+        );
+        const first = steps.at(0);
+        if (first?.type !== "step") {
+          expect.unreachable(
+            "The first planned provider step contains a plain tool call",
+          );
+        }
+        const hasPartialAnswer = (messages: readonly UIMessage[]) =>
+          messages.some(({ parts }) =>
+            parts.some(
+              (part) =>
+                part.type === "text" &&
+                part.content.includes("Checking the register"),
+            ),
+          );
         harness.streamLive(threadId);
         harness.script(threadId, [
           {
-            quietUntilAborted: quietAt,
+            ...first,
             text: "Checking the register",
-            toolCalls: [
-              {
-                arguments: PLAIN_TOOL_ARGUMENTS,
-                toolCallId,
-                toolName: PLAIN_TOOL_NAME,
-              },
+            // 28 text chunks plus start/end and tool start/args flush the SDK batch
+            // while the tool input is still open.
+            textChunks: [
+              "Checking the register",
+              ...Array.from({ length: 27 }, () => " "),
             ],
-            type: "step",
+            pause: {
+              at: pauseAt,
+              wait: async () => {
+                paused.resolve(undefined);
+                await gate.promise;
+              },
+            },
           },
+          ...steps.slice(1),
         ]);
-        await real.client.startUserMessage(
-          Bun.randomUUIDv7(),
-          "Check the register",
-          (messages) =>
-            messages.some(({ parts }) =>
-              parts.some(
-                (part) => part.type === "tool-call" && part.id === toolCallId,
-              ),
-            ),
-        );
-        harness.dropConnection(threadId);
-        await real.client.settle();
-        harness.streamWhole(threadId);
-        await new ReloadPage().run(model, real);
+        try {
+          await real.client.startUserMessage(
+            Bun.randomUUIDv7(),
+            "Check the register",
+            hasPartialAnswer,
+          );
+          await paused.promise;
+          harness.dropConnection(threadId);
+          real.client.dispose();
+          real.client = await harness.openWebClient(threadId);
+          await real.client.waitForMessages(hasPartialAnswer);
+          expect(harness.modelOptionsOf(threadId)).toHaveLength(1);
+          gate.resolve(undefined);
+          await real.client.settle();
+          expect(harness.modelOptionsOf(threadId)).toHaveLength(2);
+          await verify(model, real, { failuresBefore: ledger.failures });
+          await new ReloadPage().run(model, real);
+        } finally {
+          gate.resolve(undefined);
+          harness.streamWhole(threadId);
+        }
       });
     },
     propertyTestTimeout(30_000),
@@ -1848,6 +1904,11 @@ describe("a conversation's live view", () => {
           {
             quietUntilAborted: quietAt,
             text: "Checking the register",
+            // Flush the SDK batch with the tool's input still open.
+            textChunks: [
+              "Checking the register",
+              ...Array.from({ length: 27 }, () => " "),
+            ],
             toolCalls: [
               {
                 arguments: PLAIN_TOOL_ARGUMENTS,

@@ -15,6 +15,7 @@ export default {
     "apps/api/src/handlers/flows/runs/start.ts",
     "apps/api/src/handlers/lists/verifications/create.ts",
     "apps/api/src/handlers/reports/report-export-queue.ts",
+    "apps/api/src/handlers/templates/condition-decisions/get.ts",
     "apps/api/src/handlers/templates/fills/create.ts",
     "apps/api/src/lib/templates/template-fill-usage.ts",
     "apps/api/src/lib/flows/start-flow-run.ts",

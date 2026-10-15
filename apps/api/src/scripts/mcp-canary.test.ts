@@ -851,6 +851,11 @@ describe("restricted review-account journey", () => {
       code: "invalid_grant",
     },
     {
+      step: "sign-in",
+      body: { code: "VALIDATION_ERROR", message: REVIEW_PASSWORD },
+      code: "VALIDATION_ERROR",
+    },
+    {
       step: "initialize",
       body: {
         jsonrpc: "2.0",

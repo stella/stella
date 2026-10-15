@@ -11,6 +11,14 @@ const recordAccessState = mock(async () => {
   calls.push("recordAccessState");
   await Promise.resolve();
 });
+const recordProfessionalUse = mock<
+  Parameters<
+    typeof createOrganizationLifecycleHooks
+  >[0]["recordProfessionalUse"]
+>(async () => {
+  calls.push("recordProfessionalUse");
+  await Promise.resolve();
+});
 const seedDefaultDocumentTypes = mock(async () => {
   calls.push("seedDefaultDocumentTypes");
   await Promise.resolve();
@@ -30,6 +38,7 @@ const userId = toSafeId<"user">("member-user-1");
 const hooks = createOrganizationLifecycleHooks({
   analytics,
   recordAccessState,
+  recordProfessionalUse,
   seedDefaultDocumentTypes,
   seedMemberDefaults,
 });
@@ -39,6 +48,7 @@ describe("organization lifecycle hooks", () => {
     calls.length = 0;
     identifyOrganizationGroup.mockClear();
     recordAccessState.mockClear();
+    recordProfessionalUse.mockClear();
     seedDefaultDocumentTypes.mockClear();
     seedMemberDefaults.mockClear();
   });
@@ -50,19 +60,29 @@ describe("organization lifecycle hooks", () => {
     await hooks.afterAcceptInvitation({ member });
     await hooks.afterCreateOrganization({
       organization: { id: orgId, name: "Acme Legal" },
+      user: { id: userId },
     });
 
     expect(seedMemberDefaults.mock.calls).toEqual([[member], [member]]);
   });
 
-  test("afterCreateOrganization records the access state and seeds document types, then names the group", async () => {
+  test("afterCreateOrganization records the access state and the creator's professional-use acceptance, seeds document types, then names the group", async () => {
     await hooks.afterCreateOrganization({
       organization: { id: orgId, name: "Acme Legal" },
+      user: { id: userId },
     });
 
     expect(recordAccessState).toHaveBeenCalledWith(orgId);
+    expect(recordProfessionalUse).toHaveBeenCalledWith({
+      organizationId: orgId,
+      userId,
+    });
     expect(seedDefaultDocumentTypes).toHaveBeenCalledWith(orgId);
-    expect(calls).toEqual(["recordAccessState", "seedDefaultDocumentTypes"]);
+    expect(calls).toEqual([
+      "recordAccessState",
+      "recordProfessionalUse",
+      "seedDefaultDocumentTypes",
+    ]);
     expect(identifyOrganizationGroup).toHaveBeenCalledTimes(1);
     expect(identifyOrganizationGroup).toHaveBeenCalledWith({
       organizationId: orgId,
@@ -76,6 +96,7 @@ describe("organization lifecycle hooks", () => {
     });
 
     expect(recordAccessState).not.toHaveBeenCalled();
+    expect(recordProfessionalUse).not.toHaveBeenCalled();
     expect(seedDefaultDocumentTypes).not.toHaveBeenCalled();
     expect(identifyOrganizationGroup).toHaveBeenCalledTimes(1);
     expect(identifyOrganizationGroup).toHaveBeenCalledWith({

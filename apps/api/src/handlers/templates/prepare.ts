@@ -20,6 +20,7 @@ const prepareBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Turn a finished DOCX into a template: the model proposes which literal " +
@@ -93,6 +94,7 @@ const prepareTemplate = createSafeRootHandler(
       feature: "templates.prepare",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

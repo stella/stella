@@ -105,14 +105,22 @@ describe("routeQueryOptions", () => {
     expect(options.staleTime).toBe(ROUTE_QUERY_STALE_TIME_MS);
   });
 
-  test("preserves explicit stale time overrides", () => {
-    const options = routeQueryOptions({
-      queryKey: ["route-query", "explicit"],
-      queryFn: async () => "ok",
-      staleTime: Number.POSITIVE_INFINITY,
-    });
+  test("preserves every explicit stale time policy", () => {
+    for (const staleTime of [
+      0,
+      1000,
+      Number.POSITIVE_INFINITY,
+      "static",
+      () => Number.POSITIVE_INFINITY,
+    ]) {
+      const options = routeQueryOptions({
+        queryKey: ["route-query", "explicit"],
+        queryFn: async () => "ok",
+        staleTime,
+      });
 
-    expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
+      expect(options.staleTime).toBe(staleTime);
+    }
   });
 });
 

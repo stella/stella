@@ -1,4 +1,8 @@
 name: Visual preview
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     paths:
@@ -49,7 +53,7 @@ jobs:
             echo 'required=false' >> "$GITHUB_OUTPUT"
           fi
       - if: steps.scope.outputs.required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}

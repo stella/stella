@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { evaluate } from "./github-expression";
 import { prDepthJobs } from "./main-heavy-plan";
 
 const readWorkflow = (name: string) =>
@@ -133,6 +134,7 @@ const MAIN_SKIP = "inputs.pr_depth_only != true";
 const ORCHESTRATION_JOBS = new Set([
   "ci-plan",
   "ci-result",
+  "dated-waiver-expiry",
   "marketing-screenshots-cancel",
 ]);
 
@@ -151,7 +153,7 @@ const skipViolations = ({ jobs, depthJobs }: SkipViolationsOptions) =>
     return depth === reuseSkip && depth !== mainSkip ? [] : [job];
   });
 
-test("PR-depth jobs and only they skip on reuse; every other job stays off the main PR-depth run", () => {
+test("PR-depth jobs retain reuse guards; other jobs stay off the main PR-depth run", () => {
   const depthJobs = prDepthJobs(ci);
   expect(skipViolations({ jobs: ciJobs, depthJobs })).toEqual([]);
   const docs = ciJobs["ci-checks-docs"];
@@ -164,6 +166,43 @@ test("PR-depth jobs and only they skip on reuse; every other job stays off the m
   expect(
     skipViolations({ jobs: ciJobs, depthJobs: [...depthJobs, "ci-tests"] }),
   ).toEqual(["ci-tests"]);
+});
+
+test("reused PR-depth evidence still schedules every merge-group code check", () => {
+  for (const event of ["pull_request", "merge_group"]) {
+    for (const queueDepth of ["thin", "full"]) {
+      for (const job of prDepthJobs(ci)) {
+        const scheduled = evaluate(ciJobs[job]?.if ?? "false", {
+          values: {
+            "github.event_name": event,
+            "inputs.heavy_only": false,
+            "inputs.pr_depth_only": false,
+            "needs.ci-plan.outputs.pr_depth_reused": "true",
+            "needs.ci-plan.outputs.run_required": "true",
+            "needs.ci-plan.outputs.trusted": "true",
+            "needs.ci-plan.outputs.suite_depth": "full",
+            "needs.ci-plan.outputs.queue_depth": queueDepth,
+            "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+            "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
+          },
+          fallback: (name) =>
+            name.startsWith("needs.ci-plan.outputs.") &&
+            name.endsWith("_required")
+              ? "true"
+              : undefined,
+          status: {
+            always: true,
+            success: true,
+            failure: false,
+            cancelled: false,
+          },
+        });
+        expect(scheduled, `${event}/${queueDepth}/${job}`).toBe(
+          event === "merge_group",
+        );
+      }
+    }
+  }
 });
 
 const planSteps = v.parse(
@@ -256,8 +295,8 @@ test("the planner derives exactly prDepthJobs before any source checkout", () =>
 });
 
 test("the release gate requires heavy and PR-depth status provenance", () => {
-  expect(releaseHealth).toContain('validate_main_status "main/heavy"');
-  expect(releaseHealth).toContain('validate_main_status "main/pr-depth"');
+  expect(releaseHealth).toContain('validate_workflow_status "main/heavy"');
+  expect(releaseHealth).toContain('validate_workflow_status "main/pr-depth"');
 });
 
 test("the patch-id step leaves reuse off for an empty net change", () => {
@@ -310,4 +349,216 @@ test("the patch-id step leaves reuse off for an empty net change", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the hourly workflow never cancels a running check", () => {
+  const concurrency = v.parse(
+    v.object({ group: v.string(), "cancel-in-progress": v.literal(false) }),
+    main["concurrency"],
+  );
+  expect(concurrency.group).toContain("github.ref");
+});
+
+const statusScript = new URL("main-pr-depth-status.sh", import.meta.url)
+  .pathname;
+const statusSha = "b".repeat(40);
+type WorkflowRun = {
+  id: number;
+  event: string;
+  display_title: string;
+  status: string;
+  conclusion: string | null;
+};
+type StatusCase = {
+  results: Record<string, string>;
+  runs?: WorkflowRun[];
+};
+const publishStatus = ({ results, runs = [] }: StatusCase) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "pr-depth-status-"));
+  try {
+    const calls = path.join(directory, "calls");
+    const runsFile = path.join(directory, "runs.json");
+    writeFileSync(runsFile, JSON.stringify({ workflow_runs: runs }));
+    writeFileSync(calls, "");
+    const stub = path.join(directory, "gh-retry.sh");
+    writeFileSync(
+      stub,
+      `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> "${calls}"\ncase "$*" in *"/runs?"*) cat "${runsFile}";; esac\n`,
+    );
+    const result = Bun.spawnSync(["bash", statusScript], {
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        GH_RETRY: stub,
+        RESULTS: JSON.stringify(
+          Object.fromEntries(
+            Object.entries(results).map(([job, outcome]) => [
+              job,
+              { result: outcome },
+            ]),
+          ),
+        ),
+        SHA: statusSha,
+        RUN_ID: "100",
+        REPOSITORY: "example/repository",
+        RUN_URL: "https://example.test/run/100",
+      },
+    });
+    const posted = readFileSync(calls, "utf-8")
+      .split("\n")
+      .filter((line) => line.includes("--method POST"))
+      .map((line) => /state=(\w+)/u.exec(line)?.[1]);
+    return { exitCode: result.exitCode, posted };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+type LaterRunOptions = {
+  id?: number;
+  event?: string;
+  sha?: string;
+  status?: string;
+  conclusion?: string | null;
+};
+const laterRun = ({
+  id = 101,
+  event = "schedule",
+  sha = statusSha,
+  status = "in_progress",
+  conclusion = null,
+}: LaterRunOptions): WorkflowRun => ({
+  id,
+  event,
+  display_title: `Main PR-depth checks ${sha}`,
+  status,
+  conclusion,
+});
+
+test("the workflow publishes its status through the supersession-aware script", () => {
+  expect(JSON.stringify(main)).toContain("scripts/main-pr-depth-status.sh");
+});
+
+test("green suites publish success and red suites publish failure", () => {
+  expect(
+    publishStatus({ results: { validate: "success", suites: "success" } }),
+  ).toEqual({ exitCode: 0, posted: ["success"] });
+  expect(
+    publishStatus({ results: { validate: "success", suites: "failure" } }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
+});
+
+test("a cancelled run defers only to a later running or completed green run for the same commit", () => {
+  const cancelled = { validate: "success", suites: "cancelled" };
+  for (const run of [
+    laterRun({}),
+    laterRun({ status: "completed", conclusion: "success" }),
+  ]) {
+    // Writing nothing means a successor's terminal status can never be overwritten.
+    expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
+      exitCode: 0,
+      posted: [],
+    });
+  }
+  for (const run of [
+    laterRun({ status: "queued" }),
+    laterRun({ status: "pending" }),
+    laterRun({ status: "waiting" }),
+    laterRun({ status: "requested" }),
+    laterRun({ sha: "c".repeat(40) }),
+    laterRun({ status: "completed", conclusion: "failure" }),
+    laterRun({ status: "completed", conclusion: "cancelled" }),
+    laterRun({ id: 99 }),
+    // A dispatched run may stop before it knows its SHA, so it never owns the status.
+    laterRun({ event: "workflow_dispatch" }),
+  ]) {
+    expect(publishStatus({ results: cancelled, runs: [run] })).toEqual({
+      exitCode: 1,
+      posted: ["failure"],
+    });
+  }
+  expect(publishStatus({ results: cancelled })).toEqual({
+    exitCode: 1,
+    posted: ["failure"],
+  });
+});
+
+test("a queued same-SHA successor replaced by a different-SHA request leaves a terminal status", () => {
+  const cancelled = { validate: "success", suites: "cancelled" };
+  const pendingSuccessor = laterRun({ status: "queued" });
+  const replacement = laterRun({
+    id: 102,
+    sha: "c".repeat(40),
+    status: "queued",
+  });
+  for (const runs of [
+    [pendingSuccessor],
+    [
+      { ...pendingSuccessor, status: "completed", conclusion: "cancelled" },
+      replacement,
+    ],
+  ]) {
+    expect(publishStatus({ results: cancelled, runs })).toEqual({
+      exitCode: 1,
+      posted: ["failure"],
+    });
+  }
+});
+
+test("a cancellation next to a failed job is never treated as superseded", () => {
+  expect(
+    publishStatus({
+      results: { validate: "failure", suites: "cancelled" },
+      runs: [laterRun({})],
+    }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
+});
+
+const statusStep = v
+  .parse(
+    v.object({
+      jobs: v.object({
+        status: v.object({
+          steps: v.array(
+            v.looseObject({
+              name: v.string(),
+              env: v.optional(v.record(v.string(), v.string())),
+            }),
+          ),
+        }),
+      }),
+    }),
+    main,
+  )
+  .jobs.status.steps.find(
+    (step) => step.name === "Publish PR-depth conclusion",
+  );
+
+test("a scheduled successor publishes even when validation stops before its SHA output", () => {
+  const source = v.parse(v.string(), statusStep?.env?.["SHA"]);
+  const sha = (event: string, validated: string) =>
+    evaluate(source, {
+      values: {
+        "needs.validate.outputs.sha": validated,
+        "github.event_name": event,
+        "github.sha": statusSha,
+      },
+    });
+  expect(sha("schedule", "")).toBe(statusSha);
+  expect(sha("schedule", "d".repeat(40))).toBe("d".repeat(40));
+  expect(sha("workflow_dispatch", "")).toBe("");
+});
+
+test("cancelled validation with skipped suites defers like cancelled suites; a real failure never does", () => {
+  const runs = [laterRun({})];
+  expect(
+    publishStatus({
+      results: { validate: "cancelled", suites: "skipped" },
+      runs,
+    }),
+  ).toEqual({ exitCode: 0, posted: [] });
+  expect(
+    publishStatus({
+      results: { validate: "failure", suites: "skipped" },
+      runs,
+    }),
+  ).toEqual({ exitCode: 1, posted: ["failure"] });
 });

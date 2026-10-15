@@ -25,6 +25,7 @@ import {
   COURTLISTENER_TEXT_FORMATS,
   selectOpinionText,
   textStructureOf,
+  type TextStructure,
 } from "./select";
 import {
   parsedWords,
@@ -88,6 +89,67 @@ const RECORDED = [
 ] as const;
 
 describe("which column becomes an opinion's text", () => {
+  const unusableTexts = [
+    "Unable to extract document content",
+    "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nUnable to extract document content",
+    "Unable to extract document content\n\nUnable to extract document content",
+  ];
+  const usabilityFormats = COURTLISTENER_TEXT_FORMATS.flatMap((format) =>
+    unusableTexts.flatMap((unusableText) => {
+      const unusableSources = {
+        xml: `<opinion><p>${unusableText.replaceAll("\n\n", "</p><p>")}</p></opinion>`,
+        plain: unusableText,
+        pre: `<pre>${unusableText}</pre>`,
+        html: `<p>${unusableText.replaceAll("\n\n", "</p><p>")}</p>`,
+      } as const satisfies Record<TextStructure, string>;
+      return Object.entries(unusableSources)
+        .filter(([structure]) => {
+          if (format === "xml_harvard") {
+            return structure === "xml";
+          }
+          if (format === "plain_text") {
+            return structure === "plain";
+          }
+          return structure !== "plain";
+        })
+        .map(([structure, source]) => ({ format, structure, source }));
+    }),
+  );
+  test.each(usabilityFormats)(
+    "$format/$structure rejects placeholders and selects a later usable representation",
+    ({ format, source }) => {
+      const row = opinionRow({
+        id: "9000000001",
+        cluster_id: "9000000002",
+        xml_harvard: "",
+        [format]: source,
+      });
+      const rejected = selectOpinionText({
+        row,
+        type: "020lead",
+        budget: createTextBudget(),
+      });
+      expect(rejected.status).toBe("no-usable-text");
+      expect(rejected.attempts).toContainEqual({
+        format,
+        structure: textStructureOf(format, source),
+        reason: "source-placeholder",
+      });
+      if (format === "plain_text") {
+        return;
+      }
+      const fallback = selectOpinionText({
+        row: { ...row, plain_text: "Affirmed." },
+        type: "020lead",
+        budget: createTextBudget(),
+      });
+      expect(fallback).toMatchObject({
+        status: "parsed",
+        format: "plain_text",
+      });
+    },
+  );
+
   // Each supported structure is reached first as the winner and then as the
   // fallback, by a synthetic mutation that makes the column above it unusable.
   const matrix = [
@@ -113,14 +175,14 @@ describe("which column becomes an opinion's text", () => {
       refused: ["xml_harvard/xml:no-visible-text"],
     },
     {
-      name: "the citation column's XML stands in for Harvard XML carrying markup as text",
+      name: "Harvard XML preserves publisher-escaped literal tags",
       cluster: "5804213",
       columns: {
         xml_harvard:
           '<opinion type="majority"><p>&lt;p class="x"&gt;The judgment is affirmed.&lt;/p&gt;</p></opinion>',
       },
-      winner: "html_with_citations/xml",
-      refused: ["xml_harvard/xml:markup-residue"],
+      winner: "xml_harvard/xml",
+      refused: [],
     },
     {
       name: "a preformatted citation column wins over plain text",
@@ -199,6 +261,75 @@ describe("which column becomes an opinion's text", () => {
     expect(outcome.opinions[0]?.attempts).toHaveLength(
       COURTLISTENER_TEXT_FORMATS.length,
     );
+  });
+
+  test("holds a cluster whose text columns contain only metadata and placeholders", () => {
+    const blank = Object.fromEntries(
+      COURTLISTENER_TEXT_FORMATS.map((format) => [format, ""]),
+    );
+    const outcome = composeCourtListenerText(
+      mutated("10742675", {
+        ...blank,
+        plain_text:
+          "Case: 24-12345 Date Filed: 01/01/2024 Page: 1 of 2\n\nUnable to extract document content\n\nUnable to extract document content",
+      }),
+    );
+    expect(outcome).toMatchObject({ status: "held", reason: "no-usable-text" });
+    expect(outcome.opinions[0]?.attempts).toContainEqual({
+      format: "plain_text",
+      structure: "plain",
+      reason: "source-placeholder",
+    });
+  });
+
+  test.each([
+    "This opinion has been withdrawn.\n\nOpinion #C-729",
+    "This opinion has been\nwithdrawn.\n\nOpinion #C-729",
+    "This opinion has been withdrawn.\n\nOpinion #C-730",
+    "This opinion has been withdrawn.\n\nOpinion #730",
+  ])(
+    "rejects a split publisher message after metadata and selects the fallback: %s",
+    (message) => {
+      const outcome = composeCourtListenerText([
+        {
+          row: opinionRow({
+            xml_harvard: "",
+            html_with_citations: `<pre>Office of the Attorney General\n\n${message}</pre>`,
+            plain_text: "The court affirms the judgment.",
+          }),
+          type: "020lead",
+        },
+      ]);
+      expect(outcome.status).toBe("parsed");
+      expect(outcome.opinions.at(0)).toMatchObject({
+        selection: "parsed",
+        format: "plain_text",
+      });
+      expect(outcome.opinions.at(0)?.attempts).toContainEqual({
+        format: "html_with_citations",
+        structure: "pre",
+        reason: "source-placeholder",
+      });
+    },
+  );
+
+  test("keeps ruling prose when an author introduction is split across blocks", () => {
+    const outcome = composeCourtListenerText([
+      {
+        row: opinionRow({
+          xml_harvard: "",
+          html_with_citations:
+            "<pre>Mr. Justice Zqlrv.\n\ndelivered the opinion of the court.\n\nThis opinion has been withdrawn.\n\nOpinion #C-729</pre>",
+          plain_text: "The court affirms the judgment.",
+        }),
+        type: "020lead",
+      },
+    ]);
+    expect(outcome.status).toBe("parsed");
+    expect(outcome.opinions.at(0)).toMatchObject({
+      selection: "parsed",
+      format: "html_with_citations",
+    });
   });
 
   test("needs the page images where only scan layout is left", () => {

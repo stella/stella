@@ -8,9 +8,11 @@ import {
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,
   type AttachedTemplateTargetKind,
+  writeZipEntry,
 } from "@stll/docx-utils";
 
 import { isDocxFile } from "@/lib/consts";
+import { createUuid } from "@/lib/uuid";
 
 const MAX_INSPECTED_DOCX_BYTES = 50 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 1000;
@@ -106,7 +108,7 @@ export const prepareAttachedTemplateFile = async (
         ) {
           return null;
         }
-        zip.file(entry.name, sanitized.xml);
+        writeZipEntry(zip, entry.name, sanitized.xml);
         for (const finding of sanitized.findings) {
           targetKinds.add(finding.targetKind);
         }
@@ -145,7 +147,7 @@ export const prepareAttachedTemplateFile = async (
           ...relationshipIds,
         ]);
         if (sanitized.removed > 0) {
-          zip.file(sourcePartPath, sanitized.xml);
+          writeZipEntry(zip, sourcePartPath, sanitized.xml);
         }
       }
 
@@ -155,7 +157,7 @@ export const prepareAttachedTemplateFile = async (
           type: originalFile.type,
           lastModified: originalFile.lastModified,
         }),
-        id: crypto.randomUUID(),
+        id: createUuid(),
         originalFile,
         rule: ATTACHED_TEMPLATE_SECURITY_RULE,
         targetKinds: [...targetKinds],

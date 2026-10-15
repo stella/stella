@@ -27,6 +27,8 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/playwright-tools/src/**/*.ts",
+  "apps/web/src/features/law-search-history/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
   "apps/visual-preview/src/**/*.ts",
@@ -43,6 +45,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
@@ -70,6 +73,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/saved-searches/**/*.ts",
   "apps/api/src/handlers/sanctions/**/*.ts",
   "apps/api/src/handlers/search/**/*.ts",
+  "apps/api/src/handlers/search-history/**/*.ts",
   "apps/api/src/handlers/soft-law/**/*.ts",
   "apps/api/src/handlers/seller-profiles/**/*.ts",
   "apps/api/src/handlers/tasks/**/*.ts",
@@ -117,6 +121,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/user-files/**/*.ts",
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
+  "apps/api/src/lib/workspaces/**/*.ts",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
@@ -130,6 +135,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/inbox/**/*.{ts,tsx}",
   "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
   "apps/web/src/components/markdown/**/*.{ts,tsx}",
+  "apps/web/src/components/oauth-consent/**/*.{ts,tsx}",
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
@@ -147,15 +153,16 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
+  "apps/web/src/lib/legal/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
   "apps/web/src/queries/**/*.{ts,tsx}",
   "apps/web/src/routes/-protected-app/**/*.{ts,tsx}",
-  "apps/web/src/routes/consent/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
+  "apps/web/src/testing/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
@@ -178,8 +185,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/portable-path/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
+  "packages/scan-engine/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
@@ -192,14 +201,20 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Process startup consumes login refusals through Promise rejection before accepting work.
+  "apps/api/src/lib/db/assert-database-login-posture.ts",
   // Elysia consumes prevalidation feature denials through its error pipeline.
   "apps/api/src/lib/auth/feature-access/route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Start's SSR callback consumes Response/rejection, not Result.
+  // This server entry translates renderer errors into framework failures.
+  "apps/web/src/server.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
+  "apps/api/src/lib/auth/request-budget-hooks.ts",
   // Better Auth consumes adapter failures through Promise rejection.
   "apps/api/src/lib/auth/registration-adapter.ts",
 
@@ -255,6 +270,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack's fetch and connection adapters consume Response/rejection;
+  // this transport cannot return Result across the SDK callback boundary.
+  "packages/chat/src/durable-transport.ts",
   // TanStack AI reads a chat tool's failure only from the error its server
   // function throws; tools keep `Result`s and raise through this one module.
   "apps/api/src/handlers/chat/tools/tool-failure.ts",
@@ -277,6 +295,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",
+  // wasm-bindgen reports initialization failures and traps through rejection;
+  // this adapter converts that runtime contract to a typed Result.
+  "packages/scan-engine/src/scan-engine.ts",
+  "packages/scan-engine/src/scan-engine.worker.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so
@@ -383,7 +405,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/api/src/lib/web-search" },
   { reason: "unreviewed", unit: "apps/api/src/lib/workflow" },
   { reason: "unreviewed", unit: "apps/api/src/mcp" },
-  { reason: "unreviewed", unit: "apps/api/src/mcp/apps" },
+  { reason: "unreviewed", unit: "packages/mcp-apps/src" },
   { reason: "unreviewed", unit: "apps/api/src/mcp/gateway" },
   { reason: "unreviewed", unit: "apps/collab/src" },
   { reason: "unreviewed", unit: "apps/desktop/src/clipboard" },
@@ -488,15 +510,25 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
-const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
-const resultConventionSourceGlobs = RESULT_CONVENTION_SOURCE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
+let resultConventionExcludeGlobs: Bun.Glob[] | undefined;
+let resultConventionSourceGlobs: Bun.Glob[] | undefined;
+
+const getResultConventionExcludeGlobs = () => {
+  resultConventionExcludeGlobs ??= RESULT_CONVENTION_EXCLUDE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionExcludeGlobs;
+};
+
+const getResultConventionSourceGlobs = () => {
+  resultConventionSourceGlobs ??= RESULT_CONVENTION_SOURCE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionSourceGlobs;
+};
 
 export const isResultConventionSourceFile = (file: string): boolean =>
-  resultConventionSourceGlobs.some((glob) => glob.match(file));
+  getResultConventionSourceGlobs().some((glob) => glob.match(file));
 
 export const isResultConventionExcludedFile = (file: string): boolean =>
-  resultConventionExcludeGlobs.some((glob) => glob.match(file));
+  getResultConventionExcludeGlobs().some((glob) => glob.match(file));

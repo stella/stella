@@ -1,3 +1,4 @@
+// parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
 /**
  * Czech Supreme Administrative Court (NSS) HTML parser.
  *
@@ -27,14 +28,17 @@ import * as cheerio from "cheerio";
 import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import { collapseSpacedLetters } from "@stll/text-normalize";
+import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { normalizeUnicode, collapseSpacedLetters } from "@stll/text-normalize";
 
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
@@ -43,7 +47,6 @@ import {
   ownTableRows,
   visibleHtmlText,
   stripFurniturePrefix,
-  stripInlinePrefix,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
 
@@ -72,7 +75,11 @@ export const parseNssDecisionHtml = (
 ): ParseNssDecisionOutput => {
   const $ = cheerio.load(input.html);
   const chunks = extractChunks($);
-  const blocks = classifyChunks(chunks);
+  const blocks = courtParagraphNumbers(classifyChunks(chunks), {
+    parser: "cz-nss",
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
 
   validateAndLog(
     { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
@@ -598,7 +605,7 @@ const PAGE_FURNITURE_RE =
 /** Decorative lines carrying no content once the furniture is peeled. */
 const DECORATIVE_LINE_RE = /^(?:pokračování|ČESKÁ REPUBLIKA)$/u;
 
-type ChunkContent = { plainText: string; inlines: Inline[] };
+type ChunkContent = ReturnType<typeof normalizeInlineLine>;
 
 /**
  * Peel page furniture off a chunk, or report it as wholly decorative.
@@ -609,12 +616,12 @@ type ChunkContent = { plainText: string; inlines: Inline[] };
  * behind the emblem.
  */
 const stripPageFurniture = (chunk: PChunk): ChunkContent | null => {
-  const inlines = stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE);
-  const plainText = inlinesToPlainText(inlines).trim();
+  const normalized = normalizeInlineLine(
+    stripFurniturePrefix(chunk.inlines, PAGE_FURNITURE_RE),
+  );
+  const { plainText } = normalized;
 
-  return plainText && !DECORATIVE_LINE_RE.test(plainText)
-    ? { plainText, inlines }
-    : null;
+  return plainText && !DECORATIVE_LINE_RE.test(plainText) ? normalized : null;
 };
 
 /**
@@ -640,8 +647,7 @@ const isDecisionTitleKey = (
 const canonicalDecisionTitle = (
   plainText: string,
 ): CanonicalDecisionTitle | null => {
-  const compact = plainText
-    .normalize("NFKC")
+  const compact = normalizeUnicode(plainText, "NFKC")
     .toLocaleUpperCase("cs-CZ")
     .replace(/\s+/gu, "");
 
@@ -893,8 +899,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
+    // A line the court numbered ("[3] Věc projednal senát …") is body text,
+    // never a closing or a signature, however it reads: classifying it away
+    // would leave a gap in the court's numbering.
+    const courtNumbered = opensWithCourtParagraphMarker(plainText);
+
     // Closing: "V Brně dne ..."
-    if (CLOSING_RE.test(plainText)) {
+    if (!courtNumbered && CLOSING_RE.test(plainText)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -908,7 +919,11 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     }
 
     // Signature: judge title (short, centered lines only)
-    if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    if (
+      !courtNumbered &&
+      SIGNATURE_RE.test(plainText) &&
+      plainText.length < 80
+    ) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -1034,25 +1049,9 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Numbered paragraphs: [1], [2], ...
-    const numMatch = NUMBERED_PARA_RE.exec(plainText);
-    if (numMatch) {
-      const strippedText = plainText.slice(numMatch[0].length).trim();
-      const strippedInlines = stripInlinePrefix(inlines, numMatch[0].length);
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        inlines:
-          strippedInlines.length > 0
-            ? strippedInlines
-            : [{ type: "text", text: strippedText }],
-        plainText: strippedText,
-      });
-      continue;
-    }
-
+    // A numbered paragraph ("[1] …") stays whole here: whether its marker is
+    // the court's numbering is decided over the whole decision, by
+    // `courtParagraphNumbers` once every block is classified.
     // Default: paragraph
     blockIndex += 1;
     blocks.push({

@@ -1,4 +1,5 @@
 import { isTaggedError, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
@@ -16,6 +17,8 @@ import {
 } from "@stll/api-contract/action-admission";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
@@ -24,6 +27,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 import { getTranslator } from "@/i18n/translator";
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
+import { ClientOperationError } from "@/lib/errors/client";
 import {
   ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
@@ -37,6 +41,7 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   message: string;
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
+  providerDiagnostic?: ProviderDiagnostic | undefined;
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
@@ -98,7 +103,19 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     value: parseApiErrorValue(value),
   });
   const { code, details, rawMessage } = normalized;
+  const diagnosticValue = details?.["providerDiagnostic"];
+  const diagnostic =
+    diagnosticValue === undefined
+      ? undefined
+      : v.safeParse(providerDiagnosticSchema, diagnosticValue);
+  if (diagnostic !== undefined && !diagnostic.success) {
+    throw new ClientOperationError({
+      action: "parse-provider-diagnostic",
+      message: "Invalid provider diagnostic response",
+    });
+  }
   return new APIError({
+    ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
     ...(code === undefined ? {} : { code }),
     ...(details === undefined ? {} : { details }),
     ...(rawMessage === undefined ? {} : { rawMessage }),
@@ -248,27 +265,17 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
 };
 
 /**
- * API refusals of a chat request whose localized message says what the user
- * must change, so the chat shows it instead of the generic send failure.
- */
-const CHAT_REFUSAL_CODES: ReadonlySet<string> = new Set([
-  ENCRYPTED_CONTENT_ERROR_CODE,
-]);
-
-/**
  * The chat refusal an error carries, directly or as a cause: the API error
  * whose (already localized) message the chat should show, or `null`.
+ * HTTP refusals never expose raw diagnostics: `toAPIError` localizes their
+ * status/code before this boundary. Keep all of them through SDK wrappers.
  */
 export const chatRefusal = (error: unknown): APIError | null => {
   const seen = new Set<unknown>();
   let current = error;
   while (current instanceof Error && !seen.has(current)) {
     seen.add(current);
-    if (
-      APIError.is(current) &&
-      current.code !== undefined &&
-      CHAT_REFUSAL_CODES.has(current.code)
-    ) {
+    if (APIError.is(current)) {
       return current;
     }
     current = current.cause;

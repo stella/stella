@@ -117,6 +117,7 @@ const buildDesktopEditHandoffDeepLink = ({
 };
 
 const createConfig = {
+  contract: "patch",
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -184,6 +185,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 );
 
 const statusConfig = {
+  contract: "patch",
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

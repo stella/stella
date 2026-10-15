@@ -44,9 +44,14 @@ import {
   type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
+import type {
+  CorpusServingGenerationAbsentError,
+  ServingCorpusIndexGeneration,
+} from "@/api/lib/legal-search/corpus-index-generation-store";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -77,6 +82,7 @@ import {
 } from "@/api/lib/legal-search/index-naming";
 import {
   currentLegislationCorpusProjection,
+  legislationCorpusAppliedRevision,
   legislationCorpusWorkCanRecur,
 } from "@/api/lib/legal-search/legislation-corpus-projection";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
@@ -117,6 +123,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
   type LegislationReadDb,
@@ -452,6 +459,9 @@ export const legislationCandidateRowsStatement = (
       sourceUrl: legislationDocuments.sourceUrl,
       citationAuthority: legislationDocuments.citationAuthority,
       canRecur: legislationCorpusWorkCanRecur(generation).as("can_recur"),
+      // The copy a page's snippet is read from.
+      appliedRevision:
+        legislationCorpusAppliedRevision(generation).as("applied_revision"),
     })
     .from(legislationDocuments)
     .innerJoin(
@@ -561,6 +571,12 @@ export const rehydrateLegislationCandidates = async ({
   const authorityById = new Map(
     read.rows.map((row) => [String(row.id), row.citationAuthority]),
   );
+  const revisionById = new Map<string, CorpusProjectionRevision>();
+  for (const { id, appliedRevision } of read.rows) {
+    if (appliedRevision !== null) {
+      revisionById.set(String(id), appliedRevision);
+    }
+  }
   const rankedCandidates =
     ranking === "authority"
       ? blendStableCitationAuthority({ candidates, authorityById })
@@ -617,6 +633,7 @@ export const rehydrateLegislationCandidates = async ({
 
   return {
     context: { byId },
+    revisionById,
     ranked: collapsed.ranked,
     groups: collapsed.workTokens.filter((token) => recurringTokens.has(token)),
   };
@@ -1082,6 +1099,10 @@ const corpusIndexSearch = async ({
           }
         : {}),
       snippetFields: ["text"],
+      projectionRevisionField: requireCorpusIndexManifest(
+        "legislation",
+        generation,
+      ).projection.projectionRevisionField,
       extractId: (hit) => {
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;
@@ -1213,6 +1234,33 @@ const corpusIndexSearch = async ({
   };
 };
 
+/**
+ * The serving legislation generation, or null under the pg-fts provider. No
+ * serving generation is an error the handler answers with the retryable
+ * search_index_unavailable 503.
+ */
+const readLegislationServingGeneration = async (
+  legislationDb: LegislationReadDb,
+  dependencies: SearchLegislationDependencies,
+): Promise<
+  Result<
+    ServingCorpusIndexGeneration | null,
+    CorpusServingGenerationAbsentError
+  >
+> => {
+  if (
+    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) !== "corpus-index"
+  ) {
+    return Result.ok(null);
+  }
+  return await legislationDb(
+    async (tx) =>
+      await (
+        dependencies.readServingGeneration ?? readServingCorpusIndexGenerationTx
+      )(tx, "legislation"),
+  );
+};
+
 export const searchLegislationHandler = async (
   body: SearchLegislationBody,
   legislationDb: LegislationReadDb,
@@ -1272,16 +1320,14 @@ export const searchLegislationHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
-  const serving =
-    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) === "corpus-index"
-      ? await legislationDb(
-          async (tx) =>
-            await (
-              dependencies.readServingGeneration ??
-              readServingCorpusIndexGenerationTx
-            )(tx, "legislation"),
-        )
-      : null;
+  const servingRead = await readLegislationServingGeneration(
+    legislationDb,
+    dependencies,
+  );
+  if (Result.isError(servingRead)) {
+    return searchIndexUnavailableResponse(servingRead.error);
+  }
+  const serving = servingRead.value;
   let expectedPhase: CorpusSearchPhase = {
     type: "strict",
     fingerprint: legislationQueryFingerprint(body),
@@ -1356,6 +1402,7 @@ export const searchLegislationHandler = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Full-text search the stella legislation corpus, returning ranked results " +
     "with strict or relaxed match metadata, a highlighted snippet and each document's ELI, title, country, " +

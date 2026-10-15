@@ -39,6 +39,10 @@ impl DesktopHttpClient {
     self.0.get(url)
   }
 
+  pub fn put(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
+    self.0.put(url)
+  }
+
   pub fn post(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
     self.0.post(url)
   }
@@ -64,8 +68,8 @@ impl DeviceProofRequest {
     self.client.execute(self.request).await
   }
   #[cfg(test)]
-  pub(crate) fn build(self) -> reqwest::Result<reqwest::Request> {
-    Ok(self.request)
+  pub(crate) fn build(self) -> reqwest::Request {
+    self.request
   }
 }
 

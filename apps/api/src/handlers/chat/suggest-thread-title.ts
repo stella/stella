@@ -32,6 +32,7 @@ import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
   // The other AI reads (recap, suggested prompts, improve-prompt) require
   // chat "create" because they assist with conversing. This one requires
   // "update" — the permission of the rename PATCH it feeds — so a user who
@@ -182,25 +183,6 @@ export const createSuggestThreadTitle = ({
           parts: normalizePersistedChatMessageContent(row.content).parts,
         }));
 
-        const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          usageMetering: {
-            actionType: "chat",
-            organizationId: checked.organizationId,
-            safeDb: checked.safeDb,
-            serviceTier: "standard",
-            userId: checked.userId,
-            workspaceId: checked.workspaceId,
-          },
-          feature: "chat.suggest_title",
-          modelRole: "fast",
-          orgAIConfig: checked.orgAIConfig,
-          properties: checked.workspaceId
-            ? { workspace_id: checked.workspaceId }
-            : {},
-          traceId: Bun.randomUUIDv7(),
-        });
-
         const text = yield* Result.await(
           Result.gen(() =>
             admitFiniteAction({
@@ -208,6 +190,26 @@ export const createSuggestThreadTitle = ({
               ctx: admittedContext,
               ...(checked.admit === undefined ? {} : { admit: checked.admit }),
               async *handler({ actionSignal, modelAdmission }) {
+                const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+                  dataClass: "customer",
+                  usageMetering: {
+                    actionType: "chat",
+                    organizationId: checked.organizationId,
+                    safeDb: checked.safeDb,
+                    serviceTier: "standard",
+                    userId: checked.userId,
+                    workspaceId: checked.workspaceId,
+                  },
+                  feature: "chat.suggest_title",
+                  modelRole: "fast",
+                  orgAIConfig: checked.orgAIConfig,
+                  modelTier: modelAdmission.modelTier,
+                  properties: checked.workspaceId
+                    ? { workspace_id: checked.workspaceId }
+                    : {},
+                  traceId: Bun.randomUUIDv7(),
+                });
+
                 const generated = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>

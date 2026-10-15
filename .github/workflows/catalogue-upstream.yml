@@ -1,5 +1,9 @@
 name: Catalogue Upstream Check
 
+defaults:
+  run:
+    shell: bash
+
 # github-sourced catalogue skills pin an immutable upstream commit SHA
 # (`rev`). This weekly job checks whether each pinned repo/directory has
 # advanced on its default branch and, when it has, bumps the revs,
@@ -35,7 +39,7 @@ jobs:
           ref: ${{ github.ref == 'refs/heads/main' && github.event.repository.default_branch || github.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -82,7 +86,6 @@ jobs:
         run: bun --filter @stll/catalogue check-pinned
 
       - name: Confine refresh writes
-        shell: bash
         run: |
           set -euo pipefail
           unexpected="$(git status --porcelain --untracked-files=all -- . ":(exclude,glob)packages/catalogue/entries/**/manifest.json" ":(exclude,literal)packages/catalogue/src/catalogue.gen.ts" ":(exclude,literal)packages/catalogue/src/catalogue-install-payloads.gen.ts" ":(exclude,literal)packages/catalogue/upstream/pinned-content.gen.json")"
@@ -123,7 +126,7 @@ jobs:
       # The app token lets the signed commit trigger pull request checks.
       - name: Open or update pull request
         if: steps.app-token.outcome == 'success'
-        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

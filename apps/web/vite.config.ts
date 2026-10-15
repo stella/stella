@@ -16,10 +16,16 @@ import {
 } from "vite";
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import {
+  REACT_COMPILER_OPTIONS,
+  REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
+} from "@stll/scripts/src/react-compiler-options";
 
+import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
-import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
+
+export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -35,13 +41,6 @@ const FOLIO_LOCALE_MESSAGE_ENTRYPOINTS = readdirSync(
   .filter((file) => file.endsWith(".json"))
   .map((file) => `@stll/folio-react/messages/${path.basename(file, ".json")}`);
 const ANALYZE_MODE = "analyze";
-export const REACT_PLUGIN_EXCLUDE = [
-  /[/\\]node_modules[/\\]/u,
-  // These sanctioned wrappers accept opaque callbacks and dependency arrays.
-  // The compiler cannot validate their call-site dependencies, and their
-  // intentional exhaustive-deps suppressions otherwise emit on every load.
-  /[/\\]src[/\\]hooks[/\\]use-effect\.ts$/u,
-];
 const DEV_API_PROXY_PATHS = [
   "/api",
   "/v1",
@@ -323,6 +322,7 @@ export default defineConfig(({ mode, command }) => {
     ),
     versionManifestPlugin(),
     devRouteBuildGuard(),
+    chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `vite build` can resolve them
     // (the package computes them at runtime, which Rollup can't follow
@@ -438,7 +438,6 @@ export default defineConfig(({ mode, command }) => {
               return "vendor-react";
             }
             if (
-              id.includes("node_modules/@tanstack/ai-react/") ||
               id.includes("node_modules/@mcp-ui/client/") ||
               id.includes("node_modules/@modelcontextprotocol/ext-apps/") ||
               id.includes("node_modules/@modelcontextprotocol/sdk/")
@@ -447,6 +446,15 @@ export default defineConfig(({ mode, command }) => {
               // import. Keep it out of the eagerly preloaded TanStack vendor
               // chunk so users without MCP App output never download it.
               return "mcp-app";
+            }
+            if (
+              id.includes("node_modules/@tanstack/ai/") ||
+              id.includes("node_modules/@tanstack/ai-client/") ||
+              id.includes("node_modules/@tanstack/ai-react/")
+            ) {
+              // Let the chat boundary own its SDK graph; the eager router/query
+              // vendor must never pull the AI runtime into every route.
+              return undefined;
             }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
               return "vendor-tanstack-server-fn";

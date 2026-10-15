@@ -21,6 +21,7 @@ import type {
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
@@ -71,6 +72,9 @@ import type {
   TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
   ModelRunError,
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
@@ -181,16 +185,40 @@ export type TanStackTextFinishPolicy =
   | "allow-output-ceiling"
   | "require-complete";
 
-type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions & {
-  finishPolicy: TanStackTextFinishPolicy;
+/**
+ * A bound on one awaited model call, owned by the call rather than threaded in
+ * as an abort signal: a run that outlives it fails as a
+ * `ModelDeadlineExceededError`, never as the cancellation an abort signal
+ * reads as, so the caller can tell a slow provider from a client that left.
+ */
+type GenerationDeadlineOption = {
+  deadlineMs?: number | undefined;
 };
 
-type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  TanStackTextForRoleOptions & {
-    /** Explicit exception for a generative fallback or provider-path probe. */
-    outputMode?: "generative" | undefined;
-    outputSchema: TSchema;
+type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions &
+  GenerationDeadlineOption & {
+    finishPolicy: TanStackTextFinishPolicy;
   };
+
+/**
+ * The output a structured answer needs, in tokens. The request asks for this
+ * much, bounded by what the resolved model can emit at all (its catalog output
+ * limit, less any thinking reservation), so a caller states its own need once
+ * and no model-specific number lives at a call site. Exclusive with
+ * `maxOutputTokens`, which sends a figure as given.
+ */
+type OutputTokenBudgetOption =
+  | { outputTokenBudget?: never }
+  | { maxOutputTokens?: never; outputTokenBudget: number };
+
+type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
+  TanStackTextForRoleOptions &
+    OutputTokenBudgetOption &
+    Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
+      /** Explicit exception for a generative fallback or provider-path probe. */
+      outputMode?: "generative" | undefined;
+      outputSchema: TSchema;
+    };
 
 export type TanStackStructuredOutputPartial<TOutput> = NonNullable<
   StructuredOutputPart<TOutput>["partial"]
@@ -238,6 +266,54 @@ const cancelledGenerationError = (): HandlerError =>
     "generation_cancelled",
   );
 
+const GENERATION_DEADLINE_LABEL = "model generation deadline";
+
+/**
+ * Bounds a whole generation, model resolution included, by its caller's
+ * deadline. The run is raced rather than only signalled: a resolver or an
+ * adapter that ignores cancellation still cannot hold the caller past the
+ * deadline, which then settles as a `ModelDeadlineExceededError`. The run
+ * also receives the deadline as an abort signal, so work that does listen
+ * stops with it.
+ */
+export const withGenerationDeadline = async <T>(
+  {
+    abortSignal,
+    deadlineMs,
+  }: GenerationDeadlineOption & { abortSignal?: AbortSignal | undefined },
+  run: (abortSignal: AbortSignal | undefined) => Promise<T>,
+): Promise<T> => {
+  if (deadlineMs === undefined) {
+    return await run(abortSignal);
+  }
+  if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
+    return panic("A generation deadline must be a positive integer of ms");
+  }
+  const settled = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async (deadlineSignal) =>
+          await run(
+            abortSignal === undefined
+              ? deadlineSignal
+              : AbortSignal.any([abortSignal, deadlineSignal]),
+          ),
+        { label: GENERATION_DEADLINE_LABEL, timeoutMs: deadlineMs },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isOk(settled)) {
+    return settled.value;
+  }
+  if (
+    TimeoutError.is(settled.error) &&
+    settled.error.label === GENERATION_DEADLINE_LABEL
+  ) {
+    throw new ModelDeadlineExceededError({ deadlineMs });
+  }
+  throw settled.error;
+};
+
 const isAbortRejection = ({
   error,
   signal,
@@ -278,6 +354,15 @@ const finishAccepted = (
 };
 
 export const generateTanStackTextForRole = async (
+  options: GenerateTanStackTextForRoleOptions,
+): Promise<string> =>
+  await withGenerationDeadline(
+    options,
+    async (abortSignal) =>
+      await generateTanStackTextWithin({ ...options, abortSignal }),
+  );
+
+const generateTanStackTextWithin = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
@@ -330,6 +415,12 @@ export const generateTanStackTextForRole = async (
   }
 
   if (!finishAccepted(options.finishPolicy, run.finish)) {
+    // A run that spent its output budget is an incomplete answer and is named
+    // as one; the other refused finishes (moderated, tool-bearing, unfinished)
+    // keep the generic refusal.
+    if (run.finish.kind === "finished" && run.finish.reason === "length") {
+      throw new ModelOutputIncompleteError({ model });
+    }
     throw new HandlerError({
       status: 502,
       message: "AI generation did not complete",
@@ -705,6 +796,10 @@ const PROVIDER_OWNED_ERROR_KIND = {
   model_unavailable: true,
   provider_unavailable: true,
   provider_stream_incomplete: true,
+  // Named by this service from the run's own outcome, not by the provider.
+  output_incomplete: false,
+  output_invalid: false,
+  deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
   unknown: false,
@@ -760,6 +855,16 @@ export const withRecoveredProviderStatus = ({
       ? error
       : { cause: body, requestId: providerRequestIdFrom(error) };
   const kind = classifyAIError(evidence);
+  // An answer that arrived but cannot be used is named from the code the
+  // engine or adapter reported, whatever else the chain carries: left to the
+  // fallback below it would leave as a bare `ModelRunError` and grade as an
+  // unclassified defect.
+  if (!isOwnedRunFailure(error) && kind === "output_incomplete") {
+    return new ModelOutputIncompleteError({ model });
+  }
+  if (!isOwnedRunFailure(error) && kind === "output_invalid") {
+    return new ModelOutputInvalidError({ model });
+  }
   if (
     !hasProviderFailureInCauseChain(evidence) &&
     !PROVIDER_OWNED_ERROR_KIND[kind]
@@ -963,7 +1068,7 @@ type ParseModelOutputOptions<TSchema extends v.GenericSchema> = {
 };
 
 // A Valibot issue message can quote the received value, which here is model
-// output, so a mismatch surfaces as the fixed-message `ModelRunError`.
+// output, so a mismatch surfaces as the fixed-message `ModelOutputInvalidError`.
 const parseModelOutput = <TSchema extends v.GenericSchema>({
   model,
   outputSchema,
@@ -971,14 +1076,52 @@ const parseModelOutput = <TSchema extends v.GenericSchema>({
 }: ParseModelOutputOptions<TSchema>): v.InferOutput<TSchema> => {
   const parsed = v.safeParse(outputSchema, output);
   if (!parsed.success) {
-    throw new ModelRunError({ model });
+    throw new ModelOutputInvalidError({ model });
   }
   return parsed.output;
 };
 
+/**
+ * The output allowance a structured answer that needs `budget` tokens asks
+ * the resolved model for: the budget, bounded by the model's own allowance
+ * (`chatTurnOutputTokens`). `undefined` for a model the catalog does not list,
+ * which leaves the allowance to the provider rather than guess one.
+ */
+export const outputTokensWithinModelLimit = (
+  model: ResolvedTanStackTextModel,
+  budget: number,
+): number | undefined => {
+  if (!Number.isInteger(budget) || budget <= 0) {
+    return panic("An output token budget must be a positive integer");
+  }
+  const allowance = chatTurnOutputTokens(model);
+  return allowance === undefined ? undefined : Math.min(budget, allowance);
+};
+
+const requestedOutputTokens = (
+  options: {
+    maxOutputTokens?: number | undefined;
+    outputTokenBudget?: number | undefined;
+  },
+  model: ResolvedTanStackTextModel,
+): number | undefined =>
+  options.outputTokenBudget === undefined
+    ? options.maxOutputTokens
+    : outputTokensWithinModelLimit(model, options.outputTokenBudget);
+
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
->({
+>(
+  options: GenerateTanStackObjectForRoleOptions<TSchema> &
+    GenerationDeadlineOption,
+): Promise<v.InferOutput<TSchema>> =>
+  await withGenerationDeadline(
+    options,
+    async (abortSignal) =>
+      await generateTanStackObjectWithin({ ...options, abortSignal }),
+  );
+
+const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
   outputMode: _outputMode,
   outputSchema,
   ...options
@@ -1002,6 +1145,7 @@ export const generateTanStackObjectForRole = async <
       provider: model.provider,
     }),
   );
+  const maxOutputTokens = requestedOutputTokens(options, model);
 
   const generated = await Result.tryPromise({
     try: async () =>
@@ -1014,6 +1158,8 @@ export const generateTanStackObjectForRole = async <
             adapter: model.adapter,
             messages: requestMessages,
             outputSchema: tanStackOutputSchema,
+            tools: options.tools,
+            agentLoopStrategy: options.agentLoopStrategy,
             ...systemPromptsPatch({
               caching: options.caching,
               model,
@@ -1022,7 +1168,7 @@ export const generateTanStackObjectForRole = async <
             modelOptions: mergeGenerationOptions({
               caching: options.caching,
               model,
-              maxOutputTokens: options.maxOutputTokens,
+              maxOutputTokens,
               serviceTier,
               temperature: options.temperature,
             }),
@@ -1070,7 +1216,7 @@ export const streamTanStackObjectForRole = async function* <
     abortController,
     analytics: options.analytics,
     caching: options.caching,
-    maxOutputTokens: options.maxOutputTokens,
+    maxOutputTokens: requestedOutputTokens(options, model),
     messages: requestMessages,
     model,
     outputSchema,
@@ -1271,14 +1417,16 @@ const isStructuredOutputPartial = <TOutput>(
 
 export const resolveTanStackTextModel = async (
   options: ResolveTextModelOptions,
-  credentials = getManagedOpenRouterCredentialProvider(),
+  credentials: ReturnType<
+    typeof getManagedOpenRouterCredentialProvider
+  > = getManagedOpenRouterCredentialProvider(),
 ): Promise<ResolvedTanStackTextModel> => {
   // Every inference path resolves its model here with the proof that its
   // action was admitted; the type requires the proof, this binds it to the
   // organization the model serves.
   assertModelDispatchScope(options);
   const {
-    admission: _admission,
+    admission: { modelTier },
     modelId,
     organizationId,
     orgAIConfig,
@@ -1296,14 +1444,13 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(
-          modelId,
-          orgAIConfig,
-          role,
-          policy.dataClass,
-        )
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, role, {
+          dataClass: policy.dataClass,
+          modelTier,
+        })
       : getTanStackTextModelInfoForRole(role, orgAIConfig, {
           organizationId,
+          modelTier,
           ...policy,
         });
     if (info.provider === "openrouter") {
@@ -1337,12 +1484,14 @@ export const resolveTanStackTextModel = async (
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         role,
         organizationId,
+        modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
     : getTanStackTextModelForRole(role, orgAIConfig, {
         organizationId,
+        modelTier,
         managedOpenRouterCredential,
         ...policy,
       });

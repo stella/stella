@@ -511,7 +511,11 @@ test("only the final job can publish the main/heavy status", () => {
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
   expect(jobsWithStatusPermission).toEqual(["status"]);
-  expect(mainWorkflow.jobs.status.permissions).toEqual({ statuses: "write" });
+  expect(mainWorkflow.jobs.status.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    statuses: "write",
+  });
   expect(mainWorkflow.jobs.status.needs).toEqual(["validate", "suites"]);
   const publication = mainWorkflow.jobs.status.steps?.find(
     ({ name }) => name === "Publish heavy conclusion",
@@ -590,6 +594,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
             RESULTS: results,
             RUN_URL: runUrl,
             SHA: sha,
+            PROOF_MAIN_BASE: validatedSha,
           },
         });
         expect(process.exitCode).toBe(exit);
@@ -604,7 +609,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           "-f",
           `state=${expected}`,
           "-f",
-          `description=Main heavy suites: ${expected}`,
+          `description=Main heavy suites: ${expected}; main=${validatedSha}`,
           "-f",
           `target_url=${runUrl}`,
         ]);

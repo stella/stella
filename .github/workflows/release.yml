@@ -1,6 +1,9 @@
 name: Release Artifacts
 
 # release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 on:
   push:
@@ -176,10 +179,29 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/retry.sh
+            scripts/ci-install.ts
+            scripts/ci-install-store.ts
+            packages/sha256/src/bun.ts
+            packages/sha256/src/types.ts
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
           sparse-checkout-cone-mode: false
+
+      - name: Install smoke dependencies
+        run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Smoke the artifact that was actually pushed (with its release build
       # args baked in), not a local rebuild that could drift from it.
@@ -291,6 +313,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 

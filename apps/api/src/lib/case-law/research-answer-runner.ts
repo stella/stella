@@ -5,10 +5,13 @@ import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
@@ -48,12 +51,17 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import {
+  caseLawCorpusAppliedRevision,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusRevisionClause } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -82,6 +90,7 @@ import {
   planSystemOneAnswers,
 } from "@/api/lib/workflow/decisions/answer-questions";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionGenerationOptions } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
@@ -244,6 +253,12 @@ type DecisionTextSource =
       // Set when retrieval was attempted and failed; it is already reported,
       // so later stages fall back instead of retrying it.
       retrievalFailed: boolean;
+      /**
+       * The court's number for each numbered block of the whole decision, by
+       * anchor. Kept beside the passages, since a passage the index ranked
+       * carries only its anchor.
+       */
+      courtParagraphNumbers: ReadonlyMap<string, number>;
     }
   | { kind: "none" };
 
@@ -252,6 +267,7 @@ type SelectDecisionPassagesOptions = {
   retrieved: readonly ResearchPassage[];
   retrievalFailed: boolean;
   budgetChars: number;
+  courtParagraphNumbers: ReadonlyMap<string, number>;
 };
 
 /** Keep retrieval provenance false when the index returned no usable passage. */
@@ -260,6 +276,7 @@ export const selectDecisionPassages = ({
   retrieved,
   retrievalFailed,
   budgetChars,
+  courtParagraphNumbers,
 }: SelectDecisionPassagesOptions): DecisionTextSource => {
   const selected = selectPassagesWithinBudget(
     retrieved.length > 0 ? retrieved : fallback,
@@ -275,6 +292,7 @@ export const selectDecisionPassages = ({
         passages: selected,
         retrieved: retrieved.length > 0,
         retrievalFailed,
+        courtParagraphNumbers,
       };
 };
 
@@ -360,9 +378,57 @@ const answerDecision = async (
     return;
   }
 
-  // Always asked: without a decision model every question comes back
-  // undecided and every column falls through to the generative call.
+  const analyticsOptions = {
+    dataClass: "customer",
+    feature: "case-law.research-answers",
+    modelRole: "fast",
+    organizationId: input.organizationId,
+    orgAIConfig: input.orgAIConfig,
+    modelTier: input.admission.modelTier,
+    properties: {
+      decision_id: decisionId,
+      jurisdiction: decision.country,
+      organization_id: input.organizationId,
+      question_count: questions.length,
+    },
+    sessionId: decisionId,
+    traceId: Bun.randomUUIDv7(),
+    usageMetering: {
+      actionType: "case_law",
+      organizationId: input.organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: input.userId,
+      workspaceId: null,
+    },
+  } as const satisfies Parameters<typeof createTanStackAIAnalyticsCallbacks>[0];
+
   const tier = await answerWithSystemOne({
+    generation: (prompt, questionCount) => ({
+      dataClass: "customer",
+      role: "fast",
+      serviceTier: "standard",
+      orgAIConfig: input.orgAIConfig,
+      managedAIResidency: input.managedAIResidency,
+      organizationId: input.organizationId,
+      admission: input.admission,
+      tenantWorkspaceIds: [],
+      analytics: createTanStackAIAnalyticsCallbacks({
+        ...analyticsOptions,
+        properties: {
+          ...analyticsOptions.properties,
+          question_count: questionCount,
+        },
+      }),
+      caching: resolveCaching({
+        promptCachingEnabled: input.promptCachingEnabled,
+        role: "fast",
+        scopeKey: decisionId,
+      }),
+      system: RESEARCH_SYSTEM_PROMPT,
+      prompt,
+      deadlineMs: ANSWER_TIMEOUT_MS,
+    }),
     caseLawDb,
     decisionModel,
     orgAIConfig: input.orgAIConfig,
@@ -386,26 +452,10 @@ const answerDecision = async (
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "customer",
-    feature: "case-law.research-answers",
-    modelRole: "fast",
-    organizationId: input.organizationId,
-    orgAIConfig: input.orgAIConfig,
+    ...analyticsOptions,
     properties: {
-      decision_id: decisionId,
-      jurisdiction: decision.country,
-      organization_id: input.organizationId,
+      ...analyticsOptions.properties,
       question_count: generativeQuestions.length,
-    },
-    sessionId: decisionId,
-    traceId: Bun.randomUUIDv7(),
-    usageMetering: {
-      actionType: "case_law",
-      organizationId: input.organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId: input.userId,
-      workspaceId: null,
     },
   });
 
@@ -417,6 +467,7 @@ const answerDecision = async (
         {
           dataClass: "customer",
           organizationId: input.organizationId,
+          modelTier: input.admission.modelTier,
         },
       );
       const output = await generateTanStackObjectForRole({
@@ -508,6 +559,7 @@ const answerDecision = async (
       justification: buildAnswerJustification(
         parsedOutcome.anchorIds,
         excerptByAnchor,
+        text.courtParagraphNumbers,
       ),
     };
     outcomes.push({
@@ -605,6 +657,9 @@ const resolveDecisionText = async (
   if (passages.length === 0) {
     return { kind: "none" };
   }
+  // Flat text has no blocks, so it numbers nothing.
+  const courtParagraphNumbers: ReadonlyMap<string, number> =
+    blocks === null ? new Map() : courtParagraphNumbersByAnchor(blocks);
   const total = passages.reduce(
     (sum, passage) => sum + passage.excerpt.length,
     0,
@@ -615,6 +670,7 @@ const resolveDecisionText = async (
       passages,
       retrieved: false,
       retrievalFailed: false,
+      courtParagraphNumbers,
     };
   }
 
@@ -628,6 +684,7 @@ const resolveDecisionText = async (
     retrieved: retrieved.unwrapOr([]),
     retrievalFailed: retrieved.isErr(),
     budgetChars,
+    courtParagraphNumbers,
   });
 };
 
@@ -663,7 +720,7 @@ const readStoredPayload = async <T>({
 
 const readDecisionBlocks = async (
   decision: ResearchDecisionRow,
-): Promise<{ anchorId: string; plainText: string; type: string }[] | null> => {
+): Promise<readonly Block[] | null> => {
   const stored = await readStoredPayload({
     decision,
     key: decision.astS3Key,
@@ -696,6 +753,35 @@ type RetrieveResearchPassagesOptions = {
   clientForCluster?: typeof getCorpusIndexClient;
 };
 
+type CurrentResearchRevisionOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  generation: string;
+};
+
+/**
+ * The revision the serving generation records as applied for the decision,
+ * or null when it holds no current copy (pending, queued for erasure, or
+ * never projected). Passages are read from that revision's copy only.
+ */
+const readCurrentResearchRevisionTx = async (
+  tx: CaseLawPublicReadTransaction,
+  { decisionId, generation }: CurrentResearchRevisionOptions,
+) => {
+  const [row] = await tx
+    .select({
+      appliedRevision: caseLawCorpusAppliedRevision(generation),
+    })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        currentCaseLawCorpusProjection(generation),
+      ),
+    )
+    .limit(1);
+  return row?.appliedRevision ?? null;
+};
+
 /** The passages of one decision that match the questions, best first. */
 export const retrieveResearchPassages = async ({
   decision,
@@ -713,13 +799,22 @@ export const retrieveResearchPassages = async ({
     const target = yield* (
       await Result.tryPromise(
         async () =>
-          await caseLawDb(
-            async (tx) =>
-              await readServingCorpusIndexTargetTx(tx, {
-                family: "case_law",
-                jurisdiction: decision.country,
+          await caseLawDb(async (tx) => {
+            const serving = await readServingCorpusIndexTargetTx(tx, {
+              family: "case_law",
+              jurisdiction: decision.country,
+            });
+            if (serving.isErr()) {
+              return Result.err(serving.error);
+            }
+            return Result.ok({
+              ...serving.value,
+              appliedRevision: await readCurrentResearchRevisionTx(tx, {
+                decisionId: decision.id,
+                generation: serving.value.serving.generation,
               }),
-          ),
+            });
+          }),
       )
     )
       .andThen((result) => result)
@@ -734,15 +829,23 @@ export const retrieveResearchPassages = async ({
             cause,
           }),
       );
-    const { serving, manifest } = target;
+    const { serving, manifest, appliedRevision } = target;
+    if (appliedRevision === null) {
+      return Result.ok([]);
+    }
     const { indexId } = corpusIndexRoute(manifest, decision.country);
+    const decisionClause = corpusRevisionClause({
+      clause: `document_id:${quoteCorpusValue(decision.id)}`,
+      field: manifest.projection.projectionRevisionField,
+      revision: appliedRevision,
+    });
     const response = yield* (
       await Result.tryPromise(
         async () =>
           await clientForCluster(serving.cluster).search({
             observer: "unobserved",
             indexId,
-            query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
+            query: `${decisionClause} AND ${freeText}`,
             maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
             sortBy: "_score",
           }),
@@ -788,16 +891,24 @@ export const retrieveResearchPassages = async ({
 };
 
 type SystemOnePassOptions = {
+  generation: (
+    prompt: string,
+    questionCount: number,
+  ) => Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
   caseLawDb: CaseLawPublicReadDb;
   decisionModel: DecisionModel | null | undefined;
   usageMetering: AIUsageMetering;
   orgAIConfig: OrgAIConfig | null;
-  decision: ResearchDecisionRow;
+  decision: Pick<
+    ResearchDecisionRow,
+    "id" | "caseNumber" | "court" | "country" | "language" | "decisionType"
+  >;
   questions: readonly ResearchRunColumn[];
   text: {
     passages: readonly ResearchPassage[];
     retrieved: boolean;
     retrievalFailed: boolean;
+    courtParagraphNumbers: ReadonlyMap<string, number>;
   };
 };
 
@@ -810,11 +921,11 @@ type SystemOnePass = {
 
 /**
  * Ask one decision's closed-answer questions in a single request and keep what
- * came back settled. Nothing here fails a cell: a transport error, an
- * unplannable question or an undecided answer leaves the column to the
- * generative call, which is the behaviour of a deployment without the tier.
+ * came back settled. The decision runtime owns fallback; only unplanned
+ * questions continue to the runner's normal generation call.
  */
-const answerWithSystemOne = async ({
+export const answerWithSystemOne = async ({
+  generation,
   usageMetering,
   caseLawDb,
   decisionModel,
@@ -824,7 +935,7 @@ const answerWithSystemOne = async ({
   text,
 }: SystemOnePassOptions): Promise<SystemOnePass> => {
   const untouched: SystemOnePass = { outcomes: [], remaining: [...questions] };
-  const { asked } = splitSystemOneQuestions(questions);
+  const { asked, generative } = splitSystemOneQuestions(questions);
   if (asked.length === 0) {
     return untouched;
   }
@@ -864,7 +975,17 @@ const answerWithSystemOne = async ({
   if (plan.plans.size === 0) {
     return untouched;
   }
-  const { decisions, model } = await decideMany({
+  const plannedQuestions = questions.filter((question) =>
+    plan.plans.has(question.columnId),
+  );
+  const prompt = buildResearchUserMessage({
+    decision,
+    passages: text.passages,
+    questions: plannedQuestions,
+    retrieved: text.retrieved,
+  });
+  const { decisions } = await decideMany({
+    generation: generation(prompt, plannedQuestions.length),
     dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,
@@ -874,17 +995,12 @@ const answerWithSystemOne = async ({
     client: decisionModel,
     usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
   });
-  // No model answered, so nothing is settled and the run facts have no model
-  // to stamp: every column is the generative model's.
-  if (model === null) {
-    return untouched;
-  }
   const resolved = resolveSystemOneOutcomes({
     questions: asked,
     outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
+    courtParagraphNumbers: text.courtParagraphNumbers,
     run: {
-      model,
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
@@ -894,15 +1010,22 @@ const answerWithSystemOne = async ({
   const byColumn = new Map(
     resolved.settled.map((entry) => [entry.columnId, entry.outcome]),
   );
+  const unplannedColumnIds = new Set([
+    ...generative.map((question) => question.columnId),
+    ...plan.unplanned,
+  ]);
   const outcomes: ColumnOutcome[] = [];
   const remaining: ResearchRunColumn[] = [];
   for (const question of questions) {
-    const outcome = byColumn.get(question.columnId);
-    if (outcome === undefined) {
+    if (unplannedColumnIds.has(question.columnId)) {
       remaining.push(question);
       continue;
     }
-    outcomes.push({ columnId: question.columnId, outcome });
+    const outcome = byColumn.get(question.columnId);
+    outcomes.push({
+      columnId: question.columnId,
+      outcome: outcome ?? { state: "failed", failureReason: "missing_answer" },
+    });
   }
   return { outcomes, remaining };
 };

@@ -6,10 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import {
-  APP_LOOKUP_FIXTURE,
+  APP_RESOLVE_FIXTURE,
+  APP_RESOLVE_STATUS_FIXTURES,
   APP_SEARCH_FIXTURE,
-  APP_UNAVAILABLE_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
+
+test.use({ storageState: { cookies: [], origins: [] } });
 
 type AppFixtureHost = {
   appCalls: unknown[];
@@ -26,8 +28,8 @@ declare global {
 type HostOptions = {
   page: Page;
   locale: string;
-  tool: "search_case_law" | "lookup_case_law";
-  payload: typeof APP_SEARCH_FIXTURE | typeof APP_LOOKUP_FIXTURE;
+  tool: "search_case_law" | "resolve_case_law_decision";
+  payload: typeof APP_SEARCH_FIXTURE | typeof APP_RESOLVE_FIXTURE;
   queries?: string[];
   bundle?: "committed" | "country-fixture";
   theme?: "light" | "dark";
@@ -63,7 +65,7 @@ const mountApp = async ({
       ? countryFixtureBundle()
       : await readFile(
           new URL(
-            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            "../../../../packages/mcp-apps/src/case-law-results/generated/app.html.txt",
             import.meta.url,
           ),
           "utf-8",
@@ -73,6 +75,8 @@ const mountApp = async ({
     () =>
       `<head><meta http-equiv="Content-Security-Policy" content="${MCP_APP_SANDBOX_CONTENT_DIRECTIVES.join("; ")}">`,
   );
+  // setContent preserves host listeners across mounts in the same test.
+  await page.goto("about:blank", { waitUntil: "commit" });
   await page.setContent(
     '<iframe id="app" sandbox="allow-scripts allow-forms" style="width:100%;height:650px;border:0"></iframe>',
   );
@@ -160,7 +164,7 @@ const mountApp = async ({
                 arguments:
                   hostTool === "search_case_law"
                     ? searchInput
-                    : { identifiers: ["I. ÚS 123/24"], country: "CZE" },
+                    : { identifier: "I. ÚS 123/24", country: "CZE" },
               },
             });
             reply({
@@ -484,23 +488,39 @@ test("a selected court tier survives a later response without facets", async ({
   expect(errors).toEqual([]);
 });
 
-test("lookup app renders every lookup status and surfaces recoverable errors", async ({
+test("resolve app renders every status and surfaces recoverable errors", async ({
   page,
 }) => {
   const app = await mountApp({
     page,
     locale: "cs",
-    tool: "lookup_case_law",
-    payload: APP_LOOKUP_FIXTURE,
+    tool: "resolve_case_law_decision",
+    payload: APP_RESOLVE_FIXTURE,
   });
-  await expect(app.getByText("Choose a court.")).toBeVisible();
-  await expect(
-    app.getByText("No matching decision. Search case law."),
-  ).toBeVisible();
-  await expect(app.getByText("Lookup unavailable.")).toBeVisible();
   await expect(
     app.getByRole("cell").filter({ hasText: "I. ÚS 123/24" }),
   ).toHaveCount(1);
+  const notices = {
+    ambiguous:
+      "Odkazu odpovídá více rozhodnutí. Vyberte rozhodnutí k otevření.",
+    not_found: "Přesné rozhodnutí nenalezeno. Zkuste vyhledávání judikatury.",
+    incomplete_identifier: "Doplňte do odkazu: sheet.",
+    country_unavailable:
+      "Pro tuto zemi není dostupné dohledání rozhodnutí podle odkazu.",
+  } as const;
+  for (const fixture of APP_RESOLVE_STATUS_FIXTURES) {
+    if (fixture.status === "resolved") {
+      continue;
+    }
+    await page.evaluate(
+      (payload) => globalThis.appFixtureHost.sendAppResult(payload),
+      fixture,
+    );
+    await expect(app.getByRole("status")).toContainText(
+      notices[fixture.status],
+    );
+  }
+  expect(await hostHistory(page, "appCalls")).toEqual([]);
   await page.evaluate(() => globalThis.appFixtureHost.sendAppError());
   await expect(app.getByRole("alert")).toContainText("Read unavailable.");
   await app.getByRole("button").click();
@@ -508,22 +528,49 @@ test("lookup app renders every lookup status and surfaces recoverable errors", a
     .poll(async () => hostHistory(page, "appCalls"))
     .toEqual([
       {
-        name: "lookup_case_law",
-        arguments: { identifiers: ["I. ÚS 123/24"], country: "CZE" },
+        name: "resolve_case_law_decision",
+        arguments: { identifier: "I. ÚS 123/24", country: "CZE" },
       },
     ]);
-  await page.evaluate(
-    (payload) => globalThis.appFixtureHost.sendAppResult(payload),
-    APP_UNAVAILABLE_FIXTURE,
-  );
-  await expect(app.getByRole("status")).toContainText(
-    "Corpus unavailable. Choose another country.",
-  );
   await page.evaluate(() =>
     globalThis.appFixtureHost.sendAppResult({ unexpected: true }),
   );
   await expect(app.getByRole("alert")).toBeVisible();
 });
+
+for (const locale of ["en-GB", "ar"]) {
+  test(`resolve ambiguity opens only the chosen decision (${locale})`, async ({
+    page,
+  }) => {
+    const ambiguous = APP_RESOLVE_STATUS_FIXTURES.find(
+      (fixture) => fixture.status === "ambiguous",
+    );
+    if (ambiguous === undefined) {
+      throw new Error("Missing ambiguity fixture");
+    }
+    const app = await mountApp({
+      page,
+      locale,
+      tool: "resolve_case_law_decision",
+      payload: APP_RESOLVE_FIXTURE,
+    });
+    await page.evaluate(
+      (payload) => globalThis.appFixtureHost.sendAppResult(payload),
+      ambiguous,
+    );
+    const candidate = app.getByRole("button", {
+      name: "I. ÚS 123/24",
+      exact: true,
+    });
+    await expect(candidate).toBeVisible();
+    expect(await hostHistory(page, "appCalls")).toEqual([]);
+    await candidate.click();
+    await expect
+      .poll(async () => hostHistory(page, "appLinks"))
+      .toEqual([APP_RESOLVE_FIXTURE.document.readerUrl]);
+    expect(await hostHistory(page, "appCalls")).toEqual([]);
+  });
+}
 
 test("collapsed rows stay single-line with long references and summaries", async ({
   page,
@@ -612,39 +659,49 @@ test("filter labels align and date fields remain fixed when opened", async ({
     tool: "search_case_law",
     payload: APP_SEARCH_FIXTURE,
   });
-  const labels = app.locator('[data-slot="field-label"]');
-  await expect(labels).toHaveCount(4);
-  const labelBoxes = await labels.evaluateAll((elements) =>
-    elements.map((element) => {
-      const { x, y, height } = element.getBoundingClientRect();
-      return { x, y, height };
-    }),
-  );
-  expect(new Set(labelBoxes.map(({ y, height }) => y + height)).size).toBe(1);
   const controls = app.locator(
-    '[data-slot="field"] [data-slot="select-trigger"], [data-slot="field"] [data-slot="popover-trigger"]',
+    'form [data-slot="select-trigger"], form [data-slot="popover-trigger"]',
   );
   await expect(controls).toHaveCount(4);
-  for (let index = 0; index < 4; index++) {
-    const labelBox = await labels.nth(index).boundingBox();
-    const controlBox = await controls.nth(index).boundingBox();
-    expect(labelBox).not.toBeNull();
-    expect(controlBox).not.toBeNull();
-    if (labelBox !== null && controlBox !== null) {
-      expect(Math.abs(labelBox.x - controlBox.x)).toBeLessThanOrEqual(0.5);
-      const textLeft = await labels.nth(index).evaluate((element) => {
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        return range.getBoundingClientRect().left;
-      });
-      const controlLeft = await controls
-        .nth(index)
-        .evaluate((element) => element.getBoundingClientRect().left);
-      expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
-    }
+  const fields = await controls.evaluateAll((elements) =>
+    elements.map((element) => {
+      const labelId = element.getAttribute("aria-labelledby")?.split(" ").at(0);
+      const label = labelId
+        ? element.ownerDocument.querySelector(`#${CSS.escape(labelId)}`)
+        : element
+            .closest('[data-slot="field"]')
+            ?.querySelector('[data-slot="field-label"]');
+      if (!label) {
+        throw new Error("Missing filter label");
+      }
+      const { x, y, height } = label.getBoundingClientRect();
+      const range = element.ownerDocument.createRange();
+      range.selectNodeContents(label);
+      return {
+        label: label.textContent,
+        labelLeft: x,
+        labelBaseline: y + height,
+        textLeft: range.getBoundingClientRect().left,
+        controlLeft: element.getBoundingClientRect().left,
+      };
+    }),
+  );
+  expect(fields.map(({ label }) => label)).toEqual([
+    "Country",
+    "Court",
+    "From",
+    "To",
+  ]);
+  expect(new Set(fields.map(({ labelBaseline }) => labelBaseline)).size).toBe(
+    1,
+  );
+  for (const { labelLeft, textLeft, controlLeft } of fields) {
+    expect(Math.abs(labelLeft - controlLeft)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(textLeft - controlLeft)).toBeLessThanOrEqual(0.5);
   }
-  const trigger = app.getByRole("button", { name: /^To /u });
-  const label = labels.last();
+  const trigger = app.getByRole("button", { name: /^From /u });
+  const label = app.locator("form").getByText("From", { exact: true });
+  await expect(label).toBeVisible();
   const beforeTrigger = await trigger.boundingBox();
   const beforeLabel = await label.boundingBox();
   await trigger.click();
@@ -664,9 +721,6 @@ test("reader and publisher buttons open their own URLs only after a click", asyn
     throw new Error("Missing search fixture");
   }
   const sourceUrl = "https://example.org/fixture-publisher-decision";
-  const found = APP_LOOKUP_FIXTURE.items.filter(
-    (item) => item.status === "found",
-  );
   const scenarios = [
     {
       tool: "search_case_law" as const,
@@ -678,14 +732,6 @@ test("reader and publisher buttons open their own URLs only after a click", asyn
         ],
       },
       readers: 2,
-    },
-    {
-      tool: "lookup_case_law" as const,
-      payload: {
-        ...APP_LOOKUP_FIXTURE,
-        items: found.map((item) => ({ ...item, source_url: sourceUrl })),
-      },
-      readers: 1,
     },
   ];
   for (const { tool, payload, readers } of scenarios) {
@@ -932,11 +978,45 @@ for (const theme of ["light", "dark"] as const) {
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await page.evaluate(
         (payload) => globalThis.appFixtureHost.sendAppResult(payload),
-        APP_LOOKUP_FIXTURE,
+        APP_RESOLVE_FIXTURE,
       );
       await expect(app.locator('[data-slot="accordion-trigger"]')).toHaveCount(
         0,
       );
     });
   }
+}
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`case-law app exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountApp({
+      page,
+      locale,
+      tool: "search_case_law",
+      payload: APP_SEARCH_FIXTURE,
+    });
+    await expect(app.getByRole("heading").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    // <title> is not rendered, so read the frame document's title directly.
+    await expect
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
+      .toMatch(/\S/u);
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
+  });
 }

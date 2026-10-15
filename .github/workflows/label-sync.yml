@@ -1,5 +1,9 @@
 name: Label Sync
 
+defaults:
+  run:
+    shell: bash
+
 # Applies stella/.github/labels.yml to this repository. Manual only: labels
 # should not drift under a push, and a run that writes is a decision.
 on:
@@ -23,6 +27,6 @@ jobs:
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
-    uses: stella/.github/.github/workflows/label-sync.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+    uses: stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8
     with:
       mode: ${{ inputs.mode }}

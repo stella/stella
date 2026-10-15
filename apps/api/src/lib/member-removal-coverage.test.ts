@@ -44,12 +44,14 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 
 /** JSON columns read and found to hold no user or member id. */
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
+  "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
   "chat_message_revisions.edit",
   "agent_skills.metadata",
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
+  "case_law_analysis_failures.provider_diagnostic",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
@@ -70,6 +72,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_sources.descriptor",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
+  "chat_threads.active_skill",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",
@@ -90,6 +93,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "correspondence_filers.filed_by_display",
   "database_backfill_states.batch",
   "desktop_edit_handoffs.linked_account",
+  "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
   "document_review_parties.parties",
@@ -126,6 +130,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_reader_answer_messages.citations",
+  "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -189,6 +195,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "desktop_time_entry_batches.user_id":
+    "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
+  "account_audit_logs.user_id":
+    "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":
@@ -213,6 +223,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_professional_use_acceptances.accepted_by_user_id":
+    "Acceptance record of who created the organization; grants no membership.",
+  "user_professional_use_acceptances.user_id":
+    "Account-scoped acceptance record; organization removal does not erase the user account.",
   "agent_skill_comments.author_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "agent_skill_comments.resolved_by":
@@ -332,6 +346,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "legal_reader_answers.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "matter_inbound_addresses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -459,6 +475,12 @@ const RETAINED_MEMBER_COLUMNS = {
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
+  "search_history_entries.user_id":
+    "The person's own organization-scoped search history; they stay an organization member.",
+  "search_history_owners.user_id":
+    "Organization-scoped history ordering state outlives a matter removal.",
+  "search_history_tombstones.user_id":
+    "Organization-scoped deletion identities outlive a matter removal.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

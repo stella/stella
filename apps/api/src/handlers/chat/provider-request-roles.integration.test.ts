@@ -9,6 +9,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
+import { repoRelativePath } from "@stll/portable-path";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -49,7 +50,10 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   CACHING_SETTINGS,
   endpointKey,
@@ -273,6 +277,7 @@ const ROLE_REQUESTS = {
         promptCachingEnabled: run.caching,
         recordAuditEvent: noAudit,
         safeDb: safeDbOf(),
+        organizationStateDb: testOrganizationStateDb,
         threadId,
         threadWorkspaceId: null,
         userId: ids.userA1,
@@ -558,7 +563,6 @@ const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
   "handlers/case-law/analysis/significance-run.ts": "case-law analysis",
   "handlers/case-law/decisions/search-expand.ts": "case-law search",
   "handlers/case-law/decisions/search-refine.ts": "case-law search",
-  "handlers/case-law/polarity/llm-classifier.ts": "case-law citator",
   "handlers/clauses/rewrite.ts": "clause library",
   "handlers/contacts/extract-procuracao.ts": "contacts",
   "handlers/document-reviews/reference-positions.ts": "document review",
@@ -577,6 +581,7 @@ const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
     "AI memory (a scheduled job over compaction summaries)",
   "lib/scouts/document-deadlines.ts": "deadline scouting",
   "lib/workflow/ai-generate-batch.ts": "workflows",
+  "lib/workflow/decisions/decide.ts": "typed decisions",
   "lib/workflow/verdict-engine.ts": "workflows",
 };
 
@@ -600,7 +605,7 @@ const sourceFilesUnder = (directory: string): string[] =>
     if (!entry.isFile() || !entry.name.endsWith(".ts")) {
       return [];
     }
-    const file = path.relative(
+    const file = repoRelativePath(
       SOURCE_ROOT,
       path.join(entry.parentPath, entry.name),
     );

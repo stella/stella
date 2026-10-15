@@ -8,6 +8,10 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
+import {
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatchResponse,
+} from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
@@ -18,6 +22,7 @@ import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
   EXPENSE_CATEGORIES,
@@ -73,6 +78,7 @@ export const timeDailyTargets = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_daily_targets"),
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     p
       .foreignKey({
@@ -392,6 +398,7 @@ export const timeTimers = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timers"),
     p.foreignKey({
       columns: [table.workspaceId, table.organizationId],
       foreignColumns: [workspaces.id, workspaces.organizationId],
@@ -465,6 +472,7 @@ export const timeTimerConfirmations = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timer_confirmations"),
     p
       .index("time_timer_confirmations_owner_idx")
       .on(table.organizationId, table.userId),
@@ -501,6 +509,7 @@ export const savedTimeNarratives = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("saved_time_narratives"),
     p
       .index("saved_time_narratives_owner_name_id_idx")
       .on(table.organizationId, table.userId, table.name, table.id),
@@ -1242,6 +1251,7 @@ export const timeEntryTimerStates = p.pgTable(
     state: p.text("state", { enum: TIME_TIMER_STATES }).notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_entry_timer_states"),
     p
       .index("time_entry_timer_states_org_entry_idx")
       .on(table.organizationId, table.entryId),
@@ -1265,5 +1275,48 @@ export const timeEntryTimerStates = p.pgTable(
       using: TIMER_SIGNAL_WRITER_CHECK,
       withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
     }),
+  ],
+);
+
+// Receipts survive edits or deletion of individual drafts so a network retry
+// cannot recreate a reviewed batch. Only the authenticated owner can read it.
+export const desktopTimeEntryBatches = p.pgTable(
+  "desktop_time_entry_batches",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p.varchar("request_fingerprint", { length: 64 }),
+    status: p
+      .text({ enum: DESKTOP_TIME_ENTRY_BATCH_STATUSES })
+      .notNull()
+      .default(DESKTOP_TIME_ENTRY_BATCH_STATUSES[0]),
+    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_time_entry_batches_pkey",
+      columns: [table.organizationId, table.userId, table.idempotencyKey],
+    }),
+    p.check(
+      "desktop_time_entry_batches_key_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_status_check",
+      sql`(${table.status} = 'committed' AND ${table.requestFingerprint} IS NOT NULL AND ${table.result} IS NOT NULL) OR (${table.status} = 'cancelled' AND ${table.requestFingerprint} IS NULL AND ${table.result} IS NULL)`,
+    ),
+    ...userOrganizationPolicies(),
+    ...reviewResetOwnerPolicies("desktop_time_entry_batches"),
   ],
 );

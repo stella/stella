@@ -69,6 +69,14 @@ struct AccountPolicy {
   rotation_interval_seconds: u64,
   clock_skew_seconds: i64,
   link_protocol: u32,
+  error_codes: AccountErrorCodes,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountErrorCodes {
+  role_forbidden: String,
+  keychain_clear_failed: String,
 }
 
 fn policy() -> AccountPolicy {
@@ -76,6 +84,44 @@ fn policy() -> AccountPolicy {
     "../../../../packages/api-contract/src/desktop-account-policy.json"
   ))
   .expect("the committed desktop account policy must be valid")
+}
+
+pub(crate) fn role_forbidden_error() -> String {
+  policy().error_codes.role_forbidden
+}
+
+pub(crate) fn keychain_clear_failed() -> String {
+  policy().error_codes.keychain_clear_failed
+}
+
+/// Credentials the API rejected in this process, by SHA-256. A record whose
+/// Keychain removal failed still reads as disconnected, and its key is never
+/// sent again.
+static REJECTED_CREDENTIALS: std::sync::Mutex<Vec<[u8; 32]>> =
+  std::sync::Mutex::new(Vec::new());
+
+fn credential_fingerprint(key: &str) -> [u8; 32] {
+  use sha2::{Digest, Sha256};
+  let mut fingerprint = [0_u8; 32];
+  fingerprint.copy_from_slice(&Sha256::digest(key.as_bytes()));
+  fingerprint
+}
+
+fn mark_rejected(key: &str) {
+  let fingerprint = credential_fingerprint(key);
+  let mut rejected = REJECTED_CREDENTIALS
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  if !rejected.contains(&fingerprint) {
+    rejected.push(fingerprint);
+  }
+}
+
+fn is_rejected(key: &str) -> bool {
+  REJECTED_CREDENTIALS
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .contains(&credential_fingerprint(key))
 }
 
 /// The API stamps `expiresAt` from its own clock. A desktop clock behind the
@@ -201,6 +247,35 @@ pub enum AccountStore {
 }
 
 impl AccountStore {
+  #[cfg(test)]
+  pub(crate) fn fixture(account: LinkedAccount) -> Self {
+    Self::Fixture(AccountFixture {
+      saved: Some(account),
+      ..Default::default()
+    })
+  }
+
+  #[cfg(test)]
+  pub(crate) async fn link_fixture(
+    &mut self,
+    account: LinkedAccount,
+  ) -> Result<LinkOutcome, String> {
+    let mut pending = LinkedAccount::from_request(
+      LinkAccountRequest {
+        api_base_url: account.api_base_url,
+        credential: account.credential,
+      },
+      &account.web_origin,
+    )?;
+    pending.device_key = crate::device_proof::DeviceKey::fixture();
+    persist_link(self, pending, &account.identity).await
+  }
+
+  #[cfg(test)]
+  pub(crate) async fn disconnect_fixture(&mut self) -> Result<(), String> {
+    self.clear().await
+  }
+
   async fn load(&self) -> Result<Option<LinkedAccount>, String> {
     match self {
       Self::Keychain => {
@@ -217,6 +292,26 @@ impl AccountStore {
       #[cfg(test)]
       Self::Fixture(fixture) => Ok(fixture.saved.clone()),
     }
+  }
+
+  async fn load_usable(&mut self) -> Result<Option<LinkedAccount>, String> {
+    let saved = self.load().await?;
+    if saved
+      .as_ref()
+      .is_some_and(|saved| is_rejected(&saved.credential.key))
+    {
+      // Retried on every read until the Keychain lets go; the first failure
+      // already reached the caller of `invalidate`.
+      if self.clear().await.is_err() {
+        tracing::warn!(
+          target: crate::logging::TRAIL_TARGET,
+          event = "account.keychain_clear_failed",
+          code = "retry_on_read"
+        );
+      }
+      return Ok(None);
+    }
+    Ok(saved)
   }
 
   #[allow(
@@ -367,7 +462,7 @@ impl AccountStore {
 
 pub async fn current(state: &AccountState) -> Result<Option<LinkedAccount>, String> {
   let mut store = state.lock().await;
-  let saved = store.load().await?;
+  let saved = store.load_usable().await?;
   if saved
     .as_ref()
     .is_some_and(|saved| !is_live_expiry(&saved.credential.expires_at))
@@ -523,7 +618,10 @@ async fn recover_rotation(
             Err(RenewalFailure::Unavailable(message)) => Err(message),
             Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
             Err(RenewalFailure::Rejected) => {
-              store.clear().await?;
+              store.clear().await.map_err(|_| {
+                mark_rejected(&account.credential.key);
+                keychain_clear_failed()
+              })?;
               Err(crate::registry::not_connected())
             }
           },
@@ -541,7 +639,10 @@ async fn recover_rotation(
           Err(RenewalFailure::Throttled) => Err(crate::registry::rate_limited()),
           Err(RenewalFailure::Rejected) => {
             if is_live_expiry(&account.credential.expires_at) {
-              store.clear().await?;
+              store.clear().await.map_err(|_| {
+                mark_rejected(&account.credential.key);
+                keychain_clear_failed()
+              })?;
             } else {
               store.expire().await?;
             }
@@ -570,7 +671,10 @@ async fn rotate_account(
       Ok(account)
     }
     Err(RenewalFailure::Rejected) => {
-      store.clear().await?;
+      store.clear().await.map_err(|_| {
+        mark_rejected(&account.credential.key);
+        keychain_clear_failed()
+      })?;
       Err(crate::registry::not_connected())
     }
   }
@@ -610,7 +714,7 @@ async fn load_account_for_request(
   mode: RecoveryMode,
 ) -> Result<Option<LinkedAccount>, String> {
   let mut store = state.lock().await;
-  let Some(saved) = store.load().await? else {
+  let Some(saved) = store.load_usable().await? else {
     return Ok(None);
   };
   let saved = recover_rotation(&mut store, saved, &HttpRenewal, mode).await?;
@@ -703,7 +807,9 @@ async fn prepare_replacement(
   let Some(existing) = store.load().await? else {
     return Ok(LinkOutcome::Linked);
   };
-  if is_live_expiry(&existing.credential.expires_at) {
+  if is_live_expiry(&existing.credential.expires_at)
+    && !is_rejected(&existing.credential.key)
+  {
     if existing.credential.key != pending.credential.key {
       return Err(
         "Disconnect the current desktop account before connecting another".into(),
@@ -731,7 +837,15 @@ pub async fn link(
   // Do not publish a profile for a credential the API has not accepted.
   let mut store = state.lock().await;
   pending.device_key = crate::device_proof::required().await?;
-  let outcome = prepare_replacement(&mut store, &pending).await?;
+  persist_link(&mut store, pending, expected_identity).await
+}
+
+async fn persist_link(
+  store: &mut AccountStore,
+  pending: PendingLinkedAccount,
+  expected_identity: &DesktopAccountIdentity,
+) -> Result<LinkOutcome, String> {
+  let outcome = prepare_replacement(store, &pending).await?;
   if outcome == LinkOutcome::Unchanged {
     return Ok(outcome);
   }
@@ -755,17 +869,29 @@ pub async fn link(
   Ok(LinkOutcome::Linked)
 }
 
+/// Ends the link after the API rejected `account`'s credential. The account
+/// reads as disconnected from here on even when the Keychain removal fails;
+/// that failure is still returned so the caller can show it.
 pub async fn invalidate(
   state: &AccountState,
   account: &LinkedAccount,
 ) -> Result<(), String> {
+  mark_rejected(&account.credential.key);
+  tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.invalidated");
   let mut store = state.lock().await;
   if store
     .load()
     .await?
     .is_some_and(|current| current.credential.key == account.credential.key)
   {
-    store.clear().await?;
+    store.clear().await.map_err(|_| {
+      tracing::warn!(
+        target: crate::logging::TRAIL_TARGET,
+        event = "account.keychain_clear_failed",
+        code = "invalidate"
+      );
+      keychain_clear_failed()
+    })?;
   }
   Ok(())
 }
@@ -871,6 +997,8 @@ where
   Ok(())
 }
 
+pub const LINK_ALREADY_PENDING: &str =
+  "A desktop account connection is already pending";
 const LINK_APPROVAL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 const BRIDGE_PROOF_WINDOW_SECONDS: i64 = 30;
 
@@ -952,10 +1080,22 @@ fn new_browser_connection_with_key(
   ))
 }
 
-async fn begin_browser_connection(
+pub(crate) struct PreparedBrowserConnection {
+  connection: BrowserConnection,
+  url: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ConnectionStart {
+  Started,
+  SameOriginPending,
+  DifferentOriginPending,
+}
+
+pub(crate) async fn prepare_browser_connection(
   api_base_url: &str,
   web_origin: &str,
-) -> Result<String, String> {
+) -> Result<PreparedBrowserConnection, String> {
   let api_base_url = crate::config::normalize_self_host_api_base_url(api_base_url)?;
   let web_origin = crate::config::normalize_self_host_web_origin(web_origin)?;
   let _lease = lock_requests().await;
@@ -963,29 +1103,52 @@ async fn begin_browser_connection(
   let key = crate::device_proof::prepare(has_link).await?;
   let (connection, url) =
     new_browser_connection_with_key(&api_base_url, &web_origin, key)?;
-  let mut pending = BROWSER_CONNECTION
-    .lock()
-    .map_err(|_| "Desktop connection is unavailable")?;
-  reserve_browser_connection(&mut pending, connection, std::time::Instant::now())?;
-  Ok(url)
+  Ok(PreparedBrowserConnection { connection, url })
 }
 
 fn reserve_browser_connection(
   pending: &mut Option<BrowserConnection>,
   connection: BrowserConnection,
   now: std::time::Instant,
-) -> Result<(), String> {
-  if pending.as_ref().is_some_and(|current| {
-    now < current.expires_at
-      && matches!(
-        current.redemption,
-        LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
-      )
-  }) {
-    return Err("A desktop account connection is already pending".into());
+) -> ConnectionStart {
+  if let Some(current) = pending.as_ref()
+    && now < current.expires_at
+    && matches!(
+      current.redemption,
+      LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
+    )
+  {
+    return if current.api_base_url == connection.api_base_url {
+      ConnectionStart::SameOriginPending
+    } else {
+      ConnectionStart::DifferentOriginPending
+    };
   }
   *pending = Some(connection);
-  Ok(())
+  ConnectionStart::Started
+}
+
+impl PreparedBrowserConnection {
+  pub(crate) fn open(self, app: &tauri::AppHandle) -> Result<ConnectionStart, String> {
+    use tauri_plugin_opener::OpenerExt;
+    let mut pending = BROWSER_CONNECTION
+      .lock()
+      .map_err(|_| "Desktop connection is unavailable")?;
+    match reserve_browser_connection(
+      &mut pending,
+      self.connection,
+      std::time::Instant::now(),
+    ) {
+      ConnectionStart::Started => {}
+      outcome @ (ConnectionStart::SameOriginPending
+      | ConnectionStart::DifferentOriginPending) => return Ok(outcome),
+    }
+    if app.opener().open_url(self.url, None::<&str>).is_err() {
+      *pending = None;
+      return Err("Could not open desktop connection".into());
+    }
+    Ok(ConnectionStart::Started)
+  }
 }
 
 pub async fn open_browser_connection(
@@ -993,12 +1156,16 @@ pub async fn open_browser_connection(
   api_base_url: &str,
   web_origin: &str,
 ) -> Result<(), String> {
-  use tauri_plugin_opener::OpenerExt;
-  let url = begin_browser_connection(api_base_url, web_origin).await?;
-  app
-    .opener()
-    .open_url(url, None::<&str>)
-    .map_err(|_| "Could not open desktop connection".into())
+  match prepare_browser_connection(api_base_url, web_origin)
+    .await?
+    .open(app)?
+  {
+    ConnectionStart::Started => Ok(()),
+    ConnectionStart::SameOriginPending => Err(LINK_ALREADY_PENDING.into()),
+    ConnectionStart::DifferentOriginPending => {
+      Err(crate::i18n::t("dialog.handoffAccountMismatch").into())
+    }
+  }
 }
 
 fn valid_bridge_proof(
@@ -1458,8 +1625,7 @@ mod tests {
         bearer,
       })
       .unwrap()
-      .build()
-      .unwrap();
+      .build();
       crate::device_proof::tests::verify_request(
         &request,
         &jkt,
@@ -1491,13 +1657,25 @@ mod tests {
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
       reserve_browser_connection(&mut pending, replacement, std::time::Instant::now()),
-      Err("A desktop account connection is already pending".into())
+      ConnectionStart::SameOriginPending
+    );
+    assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
+    let (other_server, _) =
+      new_browser_connection("https://other.example.test", "https://web.example.test")
+        .unwrap();
+    assert_eq!(
+      reserve_browser_connection(&mut pending, other_server, std::time::Instant::now()),
+      ConnectionStart::DifferentOriginPending,
+      "a pending connection for another API cannot count as the requested link"
     );
     assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
     let (replacement, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     let replacement_id = replacement.correlation_id.clone();
-    assert!(reserve_browser_connection(&mut pending, replacement, expires_at).is_ok());
+    assert_eq!(
+      reserve_browser_connection(&mut pending, replacement, expires_at),
+      ConnectionStart::Started
+    );
     assert_eq!(pending.unwrap().correlation_id, replacement_id);
   }
 
@@ -1516,13 +1694,13 @@ mod tests {
       let (replacement, _) =
         new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
       let replacement_id = replacement.correlation_id.clone();
-      assert!(
+      assert_eq!(
         reserve_browser_connection(
           &mut pending,
           replacement,
           std::time::Instant::now()
-        )
-        .is_ok()
+        ),
+        ConnectionStart::Started
       );
       assert_eq!(pending.unwrap().correlation_id, replacement_id);
     }
@@ -1884,8 +2062,8 @@ mod tests {
 
   #[tokio::test]
   async fn invalidation_is_idempotent_and_cannot_disconnect_a_newer_account() {
-    let old = fixture("stella_dr_old", 60);
-    let new = fixture("stella_dr_new", 60);
+    let old = fixture("stella_dr_invalidated_old", 60);
+    let new = fixture("stella_dr_invalidated_new", 60);
     let state = Arc::new(Mutex::new(AccountStore::Memory(Some(new.clone()))));
     invalidate(&state, &old).await.unwrap();
     assert_eq!(
@@ -1895,6 +2073,24 @@ mod tests {
     invalidate(&state, &new).await.unwrap();
     invalidate(&state, &new).await.unwrap();
     assert!(current(&state).await.unwrap().is_none());
+  }
+
+  #[tokio::test]
+  async fn a_rejected_credential_reads_as_disconnected_when_the_keychain_keeps_it() {
+    let rejected = fixture("stella_dr_rejected_readonly", 60);
+    let state = Arc::new(Mutex::new(AccountStore::ReadOnly(Some(rejected.clone()))));
+    assert_eq!(
+      invalidate(&state, &rejected).await.unwrap_err(),
+      keychain_clear_failed()
+    );
+    // The record is still in the store, but nothing reads its key again.
+    assert!(matches!(
+      &*state.lock().await,
+      AccountStore::ReadOnly(Some(_))
+    ));
+    assert!(current(&state).await.unwrap().is_none());
+    assert!(request_account(&state).await.unwrap().is_none());
+    assert!(foreground_account(&state).await.unwrap().is_none());
   }
 
   #[test]

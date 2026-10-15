@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import {
@@ -13,8 +14,9 @@ import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version
 import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/" });
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -26,6 +28,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
   await import("@/features/case-law/components/case-viewer/provisions-cited");
+const { ProvisionVersionBasisLabel } =
+  await import("./provision-version-basis");
 const { CitingDecisionItem } =
   await import("@/features/statutes/components/provision-citing-decisions");
 const { decisionProvisionsInfiniteOptions } =
@@ -48,7 +52,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const decisionId = toSafeId<"caseLawDecision">(
@@ -66,6 +70,9 @@ const decision = {
   slug: "decision",
   decisionDate: "2020-01-01",
   citationAuthority: 1,
+  courtTier: "supreme",
+  mentionCount: 1,
+  snippetCitation: null,
   sentenceText: "§ 13",
   spanStart: 0,
   spanEnd: 4,
@@ -266,8 +273,10 @@ for (const [locale, messages] of [
               isHydrated
             />
             <CitingDecisionItem
+              currentVersionValidFrom={null}
               decision={{ ...decision, versionBasis: basis }}
             />
+            <ProvisionVersionBasisLabel basis={basis} />
           </>
         ),
       });
@@ -294,7 +303,16 @@ for (const [locale, messages] of [
         </QueryClientProvider>,
       );
       const chip = ui.getByRole("button", { name: reference });
-      expect(chip.getAttribute("href")).toBe(readerUrl);
+      const href = chip.getAttribute("href");
+      expect(href).not.toBeNull();
+      if (href === null) {
+        panic("Missing decision reader link");
+      }
+      expect(href).toStartWith("/");
+      const target = new URL(href, window.location.href);
+      expect(target.origin).toBe(window.location.origin);
+      expect(target.pathname).toBe(new URL(readerUrl).pathname);
+      expect(target.searchParams.get("q")).toBe(decision.sentenceText);
       expect(chip.textContent).not.toContain(label);
       const citingBasis = ui.getByText(
         (_, element) =>

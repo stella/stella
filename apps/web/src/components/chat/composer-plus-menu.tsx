@@ -1,11 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, RefObject } from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
@@ -25,6 +21,7 @@ import {
   ServerIcon,
   SkillIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -91,6 +88,7 @@ import {
 } from "@/components/chat/composer-plus-menu.logic";
 import { ComposerQueryResults } from "@/components/chat/composer-query-results";
 import {
+  COMPOSER_LIST_VIEWPORT_CLASS_NAME,
   ComposerSubmenuSearch,
   pickHighlightedItemOnTab,
   useFocusSearchOnOpen,
@@ -98,7 +96,6 @@ import {
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -111,11 +108,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
   mcpConnectorsOptions,
-  skillsOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
@@ -689,9 +686,10 @@ export const ComposerSkillsMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  const skillsQuery = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId, userId),
+  const skillsQuery = useSkillsPages({
     enabled,
+    organizationId: activeOrganizationId,
+    userId,
   });
   const skillsView = useQueryView(skillsQuery, {
     isEmpty: (data) =>
@@ -807,15 +805,17 @@ export const ComposerSkillsMenu = ({
   // Reuses the chat landing page's "Skills" section label (same value)
   // instead of adding a duplicate key.
   const label = t("chat.landing.skills");
+  const header = (
+    <ComposerSubmenuSearch
+      onChange={setSearch}
+      placeholder={t("chat.composerMenu.searchSkills")}
+      ref={searchRef}
+      trigger={searchTrigger(host, "skills")}
+      value={search}
+    />
+  );
   const content = (
     <>
-      <ComposerSubmenuSearch
-        onChange={setSearch}
-        placeholder={t("chat.composerMenu.searchSkills")}
-        ref={searchRef}
-        trigger={searchTrigger(host, "skills")}
-        value={search}
-      />
       <ComposerQueryResults
         views={{ skills: skillsView }}
         hasItems={filteredItems.length > 0}
@@ -854,6 +854,7 @@ export const ComposerSkillsMenu = ({
     return (
       <ComposerShortcutPopup
         anchor={host.anchor}
+        header={header}
         label={label}
         onOpenChange={handleOpenChange}
         open={open}
@@ -871,7 +872,12 @@ export const ComposerSkillsMenu = ({
         <SkillIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+      <MenuSubPopup
+        className="w-72"
+        header={header}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+        onKeyDown={pickHighlightedItemOnTab}
+      >
         {content}
       </MenuSubPopup>
     </MenuSub>
@@ -883,6 +889,7 @@ export const ComposerSkillsMenu = ({
 const ComposerShortcutPopup = ({
   anchor,
   children,
+  header,
   label,
   onOpenChange,
   open,
@@ -890,6 +897,7 @@ const ComposerShortcutPopup = ({
 }: {
   anchor: ShortcutAnchor;
   children: React.ReactNode;
+  header: React.ReactNode;
   label: string;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -902,7 +910,9 @@ const ComposerShortcutPopup = ({
       anchor={anchor}
       aria-label={label}
       className="w-72"
+      viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
       collisionAvoidance={SHORTCUT_POPUP_COLLISION_AVOIDANCE}
+      header={header}
       onKeyDown={pickHighlightedItemOnTab}
       side={side}
     >
@@ -1061,15 +1071,17 @@ export const ComposerContextMenu = ({
     return t("chat.composerMenu.noMatters");
   };
   const label = t("chat.composerMenu.context");
+  const header = (
+    <ComposerSubmenuSearch
+      onChange={setSearch}
+      placeholder={t("chat.composerMenu.searchMatters")}
+      ref={searchRef}
+      trigger={searchTrigger(host, "context")}
+      value={search}
+    />
+  );
   const content = (
     <>
-      <ComposerSubmenuSearch
-        onChange={setSearch}
-        placeholder={t("chat.composerMenu.searchMatters")}
-        ref={searchRef}
-        trigger={searchTrigger(host, "context")}
-        value={search}
-      />
       {mentionSearch.failures.map((failure) => (
         <div key={`${failure.sourceId}:${failure.operation}`}>
           <BidiText as="span">{t(failure.labelKey)}</BidiText>
@@ -1109,6 +1121,7 @@ export const ComposerContextMenu = ({
     return (
       <ComposerShortcutPopup
         anchor={host.anchor}
+        header={header}
         label={label}
         onOpenChange={handleOpenChange}
         open={open}
@@ -1129,7 +1142,12 @@ export const ComposerContextMenu = ({
         <AtSignIcon />
         {label}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72" onKeyDown={pickHighlightedItemOnTab}>
+      <MenuSubPopup
+        className="w-72"
+        header={header}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+        onKeyDown={pickHighlightedItemOnTab}
+      >
         {content}
       </MenuSubPopup>
     </MenuSub>
@@ -1377,13 +1395,18 @@ const ComposerContextMatterSub = ({
           {matter.name}
         </BidiText>
       </MenuSubTrigger>
-      <MenuSubPopup className="w-72">
-        <ComposerSubmenuSearch
-          onChange={setSearch}
-          placeholder={t("chat.composerMenu.searchFiles")}
-          ref={searchRef}
-          value={search}
-        />
+      <MenuSubPopup
+        className="w-72"
+        header={
+          <ComposerSubmenuSearch
+            onChange={setSearch}
+            placeholder={t("chat.composerMenu.searchFiles")}
+            ref={searchRef}
+            value={search}
+          />
+        }
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         {matterMentionOption && (
           <CapabilityAction action={{ capability: "ai" }} surface="menu">
             {(capabilityProps) => (
@@ -1565,13 +1588,17 @@ export const ComposerMcpSubmenu = ({
         <ServerIcon />
         {t("chat.composerMenu.mcpServers")}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-64">
-        <ComposerSubmenuSearch
-          onChange={setSearch}
-          placeholder={t("chat.composerMenu.searchMcpServers")}
-          ref={searchRef}
-          value={search}
-        />
+      <MenuSubPopup
+        className="w-64"
+        header={
+          <ComposerSubmenuSearch
+            onChange={setSearch}
+            placeholder={t("chat.composerMenu.searchMcpServers")}
+            ref={searchRef}
+            value={search}
+          />
+        }
+      >
         <ComposerQueryResults
           views={{ connectors: connectorsView, connections: connectionsView }}
           hasItems={rows.length > 0}

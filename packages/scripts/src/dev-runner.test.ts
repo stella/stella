@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { resolveDockerTarget } from "./dev-docker";
 import { DevProcessRegistrationError } from "./dev-process-groups";
 import {
   AUTO_INFRA_OFFSET_GRID,
@@ -25,6 +26,7 @@ import {
   createWebEnv,
   describeFailedProbes,
   dockerComposeDownCommand,
+  dockerComposeCommand,
   dockerProjectBelongsToWorktree,
   dockerProjectName,
   ensureWorktreeEnvLinks,
@@ -72,10 +74,56 @@ const createTempDir = () => {
   return dir;
 };
 
+const dockerInspection = (host: string, context = "default") =>
+  JSON.stringify({ Name: context, Endpoints: { docker: { Host: host } } });
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { force: true, recursive: true });
   }
+});
+
+test("worktree Compose commands build that checkout's Postgres image", async () => {
+  // Resolved, so Windows compares drive-qualified paths on both sides.
+  const worktree = path.resolve("/tmp/stella-worktree");
+  const command = dockerComposeCommand({
+    dockerTarget: resolveDockerTarget({
+      env: {},
+      inspect: () =>
+        Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
+    }).unwrap(),
+    args: ["up", "-d", "--build"],
+    composeFile: path.resolve(worktree, "docker-compose.yml"),
+    dockerProject: "worktree-parity",
+  }).cmd;
+  expect(command).toContain(path.resolve(worktree, "docker-compose.yml"));
+  expect(command).toContain("--build");
+  const source = await Bun.file(
+    new URL("dev-runner.ts", import.meta.url),
+  ).text();
+  expect(source).toMatch(
+    /const composeFile = path\.resolve\(\s*gitContext\.currentRoot,\s*"docker-compose\.yml",?\s*\)/u,
+  );
+  const compose: unknown = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../../../docker-compose.yml", import.meta.url),
+    ).text(),
+  );
+  if (
+    typeof compose !== "object" ||
+    compose === null ||
+    !("services" in compose)
+  ) {
+    throw new TypeError("Expected Compose services");
+  }
+  expect(compose.services).toMatchObject({
+    postgres: {
+      build: { context: ".", dockerfile: "docker/postgres/Dockerfile" },
+    },
+  });
+  expect(path.resolve(worktree, ".", "docker/postgres/Dockerfile")).toBe(
+    path.join(worktree, "docker", "postgres", "Dockerfile"),
+  );
 });
 
 describe("parseDevRunnerConfig", () => {
@@ -462,9 +510,14 @@ describe("Docker project ownership", () => {
 
   test("builds cleanup against the durable main compose file without deleting volumes", () => {
     const command = dockerComposeDownCommand({
+      dockerTarget: resolveDockerTarget({
+        env: {},
+        inspect: () =>
+          Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
+      }).unwrap(),
       composeFile: "/Users/dev/stella/docker-compose.yml",
       dockerProject: "stella-dev-44000-cafef00dbeef",
-    });
+    }).cmd;
 
     expect(command).toContain("/Users/dev/stella/docker-compose.yml");
     expect(command).toContain("stella-dev-44000-cafef00dbeef");

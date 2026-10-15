@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 
 import {
   REACHABILITY_CATEGORIES,
@@ -44,6 +51,60 @@ const git = (root: string, ...args: string[]) => {
 };
 
 describe("test subject reachability", () => {
+  test("the compiler source index and independent sibling parses give identical findings", () => {
+    const input = fixture("");
+    const sibling = path.join(input.root, "apps/example/src/widget.ts");
+    const independentSibling = (filename: string) =>
+      ts.createSourceFile(
+        filename,
+        readFileSync(filename, "utf-8"),
+        ts.ScriptTarget.Latest,
+        true,
+        filename.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+    const sources = [
+      "import { reduceWidgetState } from './widget'; test('state', () => reduceWidgetState());",
+      "import { createHandler } from './widget.js'; const reduceWidgetState = () => 'stand-in'; test('state', () => createHandler());",
+      "const reduceWidgetState = () => 'stand-in'; test('state', () => reduceWidgetState());",
+    ];
+    for (const source of sources) {
+      writeFileSync(path.join(input.root, TEST_FILE), source);
+      const options = { repoRoot: input.root, files: input.files };
+      const indexed = analyzeTestSubjectReachability(options);
+      expect(indexed).toEqual(
+        analyzeTestSubjectReachability({
+          ...options,
+          siblingSource: independentSibling,
+        }),
+      );
+      if (source.includes("stand-in")) {
+        expect(indexed).toContainEqual({
+          file: TEST_FILE,
+          kind: "local-export-collision",
+          name: "reduceWidgetState",
+        });
+      } else {
+        expect(indexed).toEqual([]);
+      }
+    }
+    // An edited export must invalidate the next scan even when the test text is identical.
+    writeFileSync(sibling, "export const replacement = () => 'real';");
+    const options = { repoRoot: input.root, files: input.files };
+    const findings = analyzeTestSubjectReachability(options);
+    expect(findings).toEqual(
+      analyzeTestSubjectReachability({
+        ...options,
+        siblingSource: independentSibling,
+      }),
+    );
+    expect(findings.some(({ kind }) => kind === "local-export-collision")).toBe(
+      false,
+    );
+    expect(
+      findings.some(({ kind }) => kind === "no-classified-reachability"),
+    ).toBe(true);
+  });
+
   test("reports a stand-in state machine and component", () => {
     const input = fixture(
       "const reduceWidgetState = () => 'stand-in';\nconst WidgetPanel = () => null;\ntest('state', () => reduceWidgetState());\n",
@@ -101,6 +162,18 @@ describe("test subject reachability", () => {
     ]);
   });
 
+  test("resolves a NodeNext .js import to its TypeScript source", () => {
+    const input = fixture(
+      "import { reduceWidgetState } from './widget.js';\ntest('state', () => expect(reduceWidgetState()).toBe('real'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({
+        repoRoot: input.root,
+        files: input.files,
+      }),
+    ).toEqual([]);
+  });
+
   test("follows a module-scope result initializer to the real subject", () => {
     const input = fixture(
       "import { reduceWidgetState } from './widget';\nconst actual = reduceWidgetState();\ntest('state', () => expect(actual).toBe('real'));\n",
@@ -123,6 +196,38 @@ describe("test subject reachability", () => {
         files: input.files,
       }),
     ).toEqual([]);
+  });
+
+  test("classifies a directly tested support factory as the real subject", () => {
+    const { root } = fixture("");
+    const helperFile = "apps/example/src/tests/helpers/test-mutants.ts";
+    const testFile = "apps/example/src/tests/helpers/test-mutants.test.ts";
+    mkdirSync(path.dirname(path.join(root, helperFile)), { recursive: true });
+    writeFileSync(
+      path.join(root, helperFile),
+      "export const createTestMutantDirectory = (prefix: string) => prefix;\n",
+    );
+    writeFileSync(
+      path.join(root, testFile),
+      "import { createTestMutantDirectory } from './test-mutants';\ntest('directory', () => expect(createTestMutantDirectory('mutant-')).toBe('mutant-'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+    ).toEqual([]);
+
+    writeFileSync(
+      path.join(root, testFile),
+      "import { createTestMutantDirectory } from './test-mutants';\nconst unused = () => createTestMutantDirectory('mutant-');\ntest('directory', () => expect('stand-in').toBe('stand-in'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+    ).toEqual([
+      {
+        file: testFile,
+        kind: "no-classified-reachability",
+        attempted: ["source-factory"],
+      },
+    ]);
   });
 
   test("does not count an imported subject hidden in an uncalled wrapper", () => {

@@ -27,7 +27,7 @@ export const isExcludedSkipSource = (file: string): boolean =>
   /\/(?:__fixtures__|fixtures|scripts|generated|specs|parsers|morphology)\//u.test(
     file,
   ) ||
-  file.startsWith("apps/api/src/mcp/apps/") ||
+  file.startsWith("packages/mcp-apps/src/") ||
   file.endsWith("/health-check.ts") ||
   file.endsWith("fixtures.ts") ||
   file.endsWith(".tsx") ||
@@ -65,6 +65,7 @@ const callName = (expression: ts.Expression): string => {
 const SIGNAL_CALLS = new Set([
   "panic",
   "observeFailure",
+  "logDocumentParseFailure",
   "captureException",
   "captureMessage",
   "captureError",

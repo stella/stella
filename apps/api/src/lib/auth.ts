@@ -11,6 +11,7 @@ import {
   createAuthMiddleware,
   getAuthoritativeSessionFromCtx,
   getOAuthState,
+  isAPIError,
 } from "better-auth/api";
 import {
   emailOTP,
@@ -30,11 +31,15 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { InferSelectModel } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import {
+  PROFESSIONAL_USE_REQUIRED_CODE,
+  PROFESSIONAL_USE_STATUS,
+} from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
+import { errorOutputLogger } from "@stll/errors";
 import {
   ac,
   assignableRoles,
@@ -50,6 +55,7 @@ import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import {
   featureEnrolments,
+  userProfessionalUseAcceptances,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -57,6 +63,7 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
@@ -72,6 +79,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
@@ -81,7 +89,10 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
+import {
+  createAuthRefusalLogPlugin,
+  markAuthRequestRoute,
+} from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -101,7 +112,10 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
-import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type {
+  MemberAuthorization,
+  MemberAuthorizationLookup,
+} from "@/api/lib/auth/member-authorization";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -113,12 +127,23 @@ import {
 } from "@/api/lib/auth/oauth-registration-policy";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
+  professionalUseColumns,
+  professionalUseStateOf,
+  readCreationAcceptance,
+  readUserProfessionalUse,
+  recordOrganizationProfessionalUse,
+  recordUserProfessionalUseAtCreation,
+  requireUserCreationOrigin,
+} from "@/api/lib/auth/professional-use";
+import type { UserProfessionalUseState } from "@/api/lib/auth/professional-use";
+import {
   admitOpenClient,
   authorizationClientId,
   requireAuthRetention,
   REGISTRATION_RETENTION_SCHEMA_PLUGIN,
   withAuthRetention,
 } from "@/api/lib/auth/registration-adapter";
+import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   checkConfiguredReviewAccountAccess,
   getReviewAccountConfig,
@@ -132,6 +157,7 @@ import {
   requireReviewAccountAccess,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
 import {
   createSessionLifetime,
@@ -163,6 +189,7 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
 import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
@@ -178,6 +205,10 @@ import {
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -211,12 +242,20 @@ import {
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  AUTH_FRAMEWORK_BUDGET_RULES,
+  observeFrameworkAuthStorage,
+} from "@/api/lib/rate-limit/auth-framework-budget";
+import {
+  AUTH_REQUEST_IP_RULE_OVERRIDES,
+  type AuthRequestBudgetFrameworkApi,
+} from "@/api/lib/rate-limit/auth-request-budget";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   createAccountAttemptBudget,
   createOtpAccountLimitPlugin,
 } from "@/api/lib/rate-limit/otp-account-budget";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";
@@ -225,6 +264,7 @@ import {
   brandPersistedUserId,
   parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
@@ -991,38 +1031,46 @@ const socialSignInOutcomePlugin = {
   },
 } satisfies BetterAuthPlugin;
 
-/**
- * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
- * error code (`describeAuthRefusal`), so a failing token refresh is visible
- * apart from every other refused call behind the catch-all auth route.
- */
-const authRefusalLogPlugin = {
-  id: "stella-auth-refusal-log",
-  hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: createAuthMiddleware(async (ctx) => {
-          const refusal = describeAuthRefusal({
-            path: ctx.path,
-            returned: ctx.context.returned,
-            body: ctx.body,
-          });
-          if (refusal.type === "refused") {
-            logger.warn("auth.request_refused", refusal.attributes);
-          }
-          await Promise.resolve();
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
-
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
+type CreateAuthOptions = {
+  rateLimitStorage?: ReturnType<typeof createAuthRateLimitStorage>;
+  rateLimitEnabled?: boolean;
+};
+
+export const createAuth = (
+  roleAssignmentPolicy = assignableRoles,
+  factoryOptions: CreateAuthOptions = {},
+) => {
+  const authRateLimitStorage =
+    factoryOptions.rateLimitStorage ?? createAuthRateLimitStorage();
+  const rateLimitEnabled =
+    factoryOptions.rateLimitEnabled ?? !env.E2E_DISABLE_AUTH_RATE_LIMIT;
+  const requestBudgetFrameworkApi = {
+    readUserId: async (ctx) =>
+      (await getAuthoritativeSessionFromCtx(ctx))?.user.id,
+    createQuotaError: (retryAfter) =>
+      new APIError(
+        "TOO_MANY_REQUESTS",
+        { message: "Try again later.", code: "TOO_MANY_REQUESTS" },
+        { "Retry-After": String(retryAfter) },
+      ),
+    isAcceptedTokenResponse: (returned) =>
+      !isAPIError(returned) &&
+      isRecord(returned) &&
+      typeof returned["access_token"] === "string" &&
+      returned["access_token"].length > 0 &&
+      (returned["token_type"] === "Bearer" ||
+        returned["token_type"] === "DPoP"),
+  } satisfies AuthRequestBudgetFrameworkApi;
+  const signInRequestBudget = createAuthRequestBudgetHook({
+    type: "authentication",
+    storage: authRateLimitStorage,
+    enabled: rateLimitEnabled,
+    frameworkApi: requestBudgetFrameworkApi,
+  });
   const sessionLifetime = createSessionLifetime({
     store: createDatabaseSessionLifetimeStore(rootDb, {
       expiresIn: SESSION_LIFETIME_SECONDS,
@@ -1267,6 +1315,23 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         organizationId,
         now: new Date(),
       }),
+    // Insert-once on the owner connection, audited in the same transaction.
+    // A creator who has not accepted yet records nothing here; the
+    // organization is recorded when an owner accepts.
+    recordProfessionalUse: async ({
+      organizationId,
+      userId,
+    }: NewMembership) => {
+      await withAggregateTransaction(
+        rootDb,
+        async (tx) =>
+          await recordOrganizationProfessionalUse({
+            tx,
+            organizationId,
+            userId,
+          }),
+      );
+    },
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
@@ -1604,6 +1669,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   });
 
   const auth = betterAuth({
+    logger: errorOutputLogger,
     trustedOrigins: [
       ...frontendOrigins({
         frontendUrl: env.FRONTEND_URL,
@@ -1692,29 +1758,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       useSecureCookies,
     },
     rateLimit: {
-      enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+      enabled: rateLimitEnabled,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
-      customStorage: createAuthRateLimitStorage(),
+      customStorage: observeFrameworkAuthStorage(authRateLimitStorage),
       customRules: {
-        "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
-        "/sign-in/email": AUTH_RATE_LIMITS.signIn,
-        "/sign-up/email": AUTH_RATE_LIMITS.signUp,
-        "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
-        "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
-        "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
-        "/reset-password": AUTH_RATE_LIMITS.resetPassword,
-        // The two-factor plugin's own built-in rate limit is a single
-        // shared bucket across every `/two-factor/*` path (10s window,
-        // max 3 — see node_modules/better-auth/dist/plugins/two-factor/index.mjs).
-        // Sustained over a minute that is weaker than this app's other
-        // brute-force-sensitive endpoints, so verify-totp/verify-backup-code
-        // (guessable 6-digit / short codes) and enable/disable (session-gated
-        // but still sensitive) get the same posture as sign-in/verifyOtp.
-        "/two-factor/verify-totp": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/verify-backup-code": AUTH_RATE_LIMITS.verifyOtp,
-        "/two-factor/enable": AUTH_RATE_LIMITS.signIn,
-        "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
+        ...AUTH_REQUEST_IP_RULE_OVERRIDES,
+        ...AUTH_FRAMEWORK_BUDGET_RULES,
       },
     },
     verification: AUTH_VERIFICATION_STORAGE_OPTIONS,
@@ -1742,6 +1792,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       user: {
         create: {
           before: async (user, ctx) => {
+            // Refuses a creation path that has not decided whether it shows
+            // the professional-use statement, before the row is written.
+            requireUserCreationOrigin(ctx?.path);
             await reviewDatabaseHooks.userCreateBefore(user, ctx);
             const data = Result.gen(function* () {
               yield* checkNewAccountEmailAllowedForCreation({
@@ -1766,6 +1819,17 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               data: detectedCountry
                 ? { ...data.value, detectedCountry }
                 : data.value,
+            });
+          },
+          // Creating the account where the professional-use statement is
+          // shown, from a request naming the current version, is the
+          // acceptance; otherwise the account accepts on its first
+          // interactive sign-in. Insert-once on the owner connection that
+          // wrote the user row.
+          after: async (user, ctx) => {
+            await recordUserProfessionalUseAtCreation(rootDb, {
+              userId: brandPersistedUserId(user.id),
+              acceptance: await readCreationAcceptance(ctx, getOAuthState),
             });
           },
         },
@@ -1815,7 +1879,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createSessionBearer(),
       createDemoSessionFilter(demoConfig),
       createOtpAccountLimitPlugin({
-        enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        enabled: rateLimitEnabled,
         context: new RedisRateLimitContext({
           failurePolicy: "fail_open_local",
         }),
@@ -1824,12 +1888,13 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       createReviewAccountPlugin({
         config: reviewConfig,
         localPasswordEnabled: isSelfhostLocalPasswordAuthEnabled(),
-        signInBudget: env.E2E_DISABLE_AUTH_RATE_LIMIT
+        signInBudget: !rateLimitEnabled
           ? undefined
           : createAccountAttemptBudget(
               new RedisRateLimitContext({ failurePolicy: "fail_open_local" }),
               {
                 counterPrefix: "password-account",
+                nameFor: () => "auth.password.account",
                 budgetFor: () => REVIEW_ACCOUNT_SIGN_IN_BUDGET,
               },
             ),
@@ -1943,7 +2008,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           clientRegistrationAllowedResources: oauthResourceIdentifiers,
           allowDynamicClientRegistration: true,
           allowUnauthenticatedClientRegistration: true,
-          rateLimit: { register: AUTH_RATE_LIMITS.oauthClientRegistration },
+          rateLimit: {
+            token: AUTH_RATE_LIMITS.oauthToken,
+            authorize: AUTH_RATE_LIMITS.oauthAuthorization,
+            register: AUTH_RATE_LIMITS.oauthClientRegistration,
+          },
           // Hosted MCP clients identify themselves by an https URL `client_id`
           // and skip per-user registration entirely. The transport resolves the
           // host once, refuses any non-public-routable answer, pins that address
@@ -1951,6 +2020,21 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           // scopes stay bound by the `clientMetadataDocument` registration rules
           // above, so such a client gets no more reach than a registered one.
           extensions: [
+            {
+              claims: {
+                accessToken: async (input) => {
+                  const claims = await getServiceOAuthClaims(input);
+                  if (Result.isError(claims)) {
+                    const error = new APIError("FORBIDDEN", {
+                      error: "unauthorized_client",
+                      message: claims.error.message,
+                    });
+                    throw error;
+                  }
+                  return claims.value;
+                },
+              },
+            },
             {
               clientDiscovery: createCimdClientDiscovery({
                 fetchClientMetadataResource: withOwnClientDocuments(
@@ -2032,7 +2116,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
               );
             }
             if (!referenceId || !user) {
-              return { org_id: referenceId };
+              return referenceId ? { org_id: referenceId } : {};
             }
             // The review account's tokens open its own organization only.
             requireReviewAccountAccess(
@@ -2065,6 +2149,11 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           },
         },
         {
+          requestBudget: {
+            storage: authRateLimitStorage,
+            enabled: rateLimitEnabled,
+            frameworkApi: requestBudgetFrameworkApi,
+          },
           verifiedOrigins: getVerifiedOAuthOrigins([
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
@@ -2074,10 +2163,12 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
-      authRefusalLogPlugin,
+      createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        markAuthRequestRoute(ctx);
+        await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
           return undefined;
@@ -2269,6 +2360,15 @@ export const getAuth = () => {
   return _auth;
 };
 
+/** Read the rate-limit subject at the session validation boundary. */
+export const resolveRateLimitSessionUserId = async (headers: Headers) => {
+  const session = await getAuth().api.getSession({
+    headers,
+    query: { disableCookieCache: true, disableRefresh: true },
+  });
+  return session ? toSafeId<"user">(session.user.id) : null;
+};
+
 export type { MemberRole } from "@/api/lib/member-roles";
 
 type AuthSessionReadOptions = {
@@ -2330,6 +2430,7 @@ const getSessionAndMemberAuthorization = async ({
             emailVerified: authorization.emailVerified,
             userDeleted: authorization.userDeleted,
             enrolledFeatureIds: authorization.enrolledFeatureIds,
+            professionalUse: authorization.professionalUse,
           };
         })
       : Result.ok(null);
@@ -2354,6 +2455,27 @@ export const AUTH_REJECTION_BODY = {
   500: { code: "internal_error", message: "Could not verify your session." },
 } as const satisfies Record<
   AuthRejectionStatus,
+  { code: string; message: string }
+>;
+
+/**
+ * The rejection a signed-in account gets until it accepts the
+ * professional-use statement; the web app answers it with the prompt.
+ */
+const PROFESSIONAL_USE_REJECTION_BODY = {
+  code: PROFESSIONAL_USE_REQUIRED_CODE,
+  message: "Accept the professional-use statement in stella to continue.",
+} as const;
+
+const VALIDATE_AUTH_REJECTION_BODY = {
+  401: AUTH_REJECTION_BODY[401],
+  403: PROFESSIONAL_USE_REJECTION_BODY,
+  500: AUTH_REJECTION_BODY[500],
+} as const satisfies Record<
+  Extract<
+    Awaited<ReturnType<typeof resolveValidateAuth>>,
+    { ok: false }
+  >["statusCode"],
   { code: string; message: string }
 >;
 
@@ -2394,57 +2516,80 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
   },
 });
 
-export type AccessibleWorkspace = {
-  id: SafeId<"workspace">;
-  status: InferSelectModel<typeof workspaces>["status"];
-};
-
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
  * pass their PGlite database without importing a test-only type here.
  */
 type MemberAuthorizationDb = Pick<typeof rootDb, "select">;
 
-/**
- * Resolve the user's organization role and, when the route already carries a
- * workspace ID, that single workspace's status. Both branches are bounded to
- * one row; request authentication never expands the full access set.
- */
-type MemberAuthorizationLookup = {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId?: SafeId<"workspace"> | undefined;
-};
-
-type MemberAuthorization = {
-  memberId: string;
-  email: string;
-  /** Raw DB value; callers validate it with isMemberRole. */
-  role: string;
-  workspace: AccessibleWorkspace | null;
-  /**
-   * Feature-access facts read in the same statement, so gated routes decide
-   * feature access without a query of their own.
-   */
-  emailVerified: boolean;
-  userDeleted: boolean;
-  enrolledFeatureIds: readonly string[];
-};
-
-// Bounded by the enrolment primary key (user, organization, feature) and the
-// feature registry. The caller is read as the table owner, which the
-// enrolment owner policy admits.
-const enrolledFeatureIdsOfMember = sql<
-  string[]
->`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
-
-const featureAccessColumns = {
-  emailVerified: authUser.emailVerified,
-  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
-  enrolledFeatureIds: enrolledFeatureIdsOfMember,
+const featureAccessColumns = (organizationId: SafeId<"organization">) => {
+  const { enrolmentFeatureIds } = featureAccessReadPlan({ organizationId });
+  return {
+    emailVerified: authUser.emailVerified,
+    userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+    // Fold enrolments into the member read only when a self-serve decision needs them.
+    enrolledFeatureIds:
+      enrolmentFeatureIds.length === 0
+        ? sql<string[]>`'{}'::text[]`
+        : sql<
+            string[]
+          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
+  };
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
+
+const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
+  const membershipExists = exists(
+    db
+      .select({ id: workspaceMembers.id })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaces.id),
+          eq(workspaceMembers.userId, member.userId),
+        ),
+      ),
+  );
+  // sql-perf-allow: bounded by one target workspace and organization membership keys
+  return or(
+    membershipExists,
+    and(
+      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
+      isNotNull(workspaces.clientId),
+    ),
+  );
+};
+
+type WorkspaceMemberLookup = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** Recheck a worker's matter membership inside its RLS transaction. */
+export const resolveWorkspaceMemberAccess = async (
+  { organizationId, userId, workspaceId }: WorkspaceMemberLookup,
+  db: MemberAuthorizationDb,
+): Promise<AccessibleWorkspace | null> => {
+  const row = await db
+    .select({ id: workspaces.id, status: workspaces.status })
+    .from(member)
+    .innerJoin(
+      workspaces,
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, member.organizationId),
+        memberWorkspaceAccess(db),
+      ),
+    )
+    .where(
+      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
+    )
+    .limit(1)
+    .then((rows) => rows.at(0));
+  return row ?? null;
+};
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -2456,10 +2601,15 @@ export const resolveMemberAuthorization = async (
         memberId: member.id,
         role: member.role,
         email: authUser.email,
-        ...featureAccessColumns,
+        ...featureAccessColumns(organizationId),
+        ...professionalUseColumns,
       })
       .from(member)
       .innerJoin(authUser, eq(authUser.id, member.userId))
+      .leftJoin(
+        userProfessionalUseAcceptances,
+        eq(userProfessionalUseAcceptances.userId, member.userId),
+      )
       .where(
         and(
           eq(member.userId, userId),
@@ -2478,21 +2628,11 @@ export const resolveMemberAuthorization = async (
           emailVerified: row.emailVerified,
           userDeleted: row.userDeleted,
           enrolledFeatureIds: row.enrolledFeatureIds,
+          professionalUse: professionalUseStateOf(row),
         }
       : null;
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const row = await db
     .select({
       memberId: member.id,
@@ -2500,23 +2640,21 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
-      ...featureAccessColumns,
+      ...featureAccessColumns(organizationId),
+      ...professionalUseColumns,
     })
     .from(member)
     .innerJoin(authUser, eq(authUser.id, member.userId))
+    .leftJoin(
+      userProfessionalUseAcceptances,
+      eq(userProfessionalUseAcceptances.userId, member.userId),
+    )
     .leftJoin(
       workspaces,
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(
@@ -2533,6 +2671,7 @@ export const resolveMemberAuthorization = async (
     emailVerified: row.emailVerified,
     userDeleted: row.userDeleted,
     enrolledFeatureIds: row.enrolledFeatureIds,
+    professionalUse: professionalUseStateOf(row),
   };
   if (row.workspaceId === null || row.workspaceStatus === null) {
     return {
@@ -2563,6 +2702,15 @@ export const resolveCredentialMemberAuthorization = async (
   lookup: MemberAuthorizationLookup,
 ): Promise<MemberAuthorization | null> =>
   await resolveMemberAuthorization(lookup, rootDb);
+
+/**
+ * The signed-in account's own professional-use state, read on the owner
+ * connection: the request role has no access to acceptances.
+ */
+export const readAccountProfessionalUse = async (
+  userId: SafeId<"user">,
+): Promise<UserProfessionalUseState> =>
+  await readUserProfessionalUse(rootDb, userId);
 
 /**
  * Whether the caller still belongs to the organization their session is
@@ -2637,17 +2785,6 @@ export const resolveWorkspaceRealtimeAudience = async (
     return new Set<SafeId<"user">>();
   }
 
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
   const rows = await db
     .select({ userId: member.userId })
     .from(member)
@@ -2657,14 +2794,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
-        or(
-          membershipExists,
-          and(
-            inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-            isNotNull(workspaces.clientId),
-          ),
-        ),
+        memberWorkspaceAccess(db),
       ),
     )
     .where(inArray(member.userId, uniqueUserIds))
@@ -2764,6 +2894,24 @@ export const featureAccessSnapshotFromAuthorization = ({
         })),
   });
 
+// Keep the concrete transaction in named declarations without expanding the
+// full database schema into every auth macro.
+type AuthScopedDb = ReturnType<
+  typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+>;
+type AuthSafeDb = ReturnType<
+  typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
+>;
+
+const createAuthDatabases = (
+  databaseIdentity: Parameters<
+    typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+  >[1],
+): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
+  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+});
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -2797,6 +2945,19 @@ const resolveValidateAuth = async ({
   const authorization = memberAuthorizationResult.value;
   if (!authorization) {
     return { ok: false as const, statusCode: 401 as const };
+  }
+  // A signed-in session uses the product only once the account has accepted
+  // the professional-use statement. An account created where it was not
+  // shown (agent provisioning, the operator command) accepts on its first
+  // interactive sign-in. MCP and machine credentials never resolve here.
+  switch (authorization.professionalUse.status) {
+    case PROFESSIONAL_USE_STATUS.accepted:
+      break;
+    case PROFESSIONAL_USE_STATUS.required:
+      return { ok: false as const, statusCode: 403 as const };
+    default:
+      authorization.professionalUse satisfies never;
+      return panic("Unhandled professional-use state");
   }
   const { role } = authorization;
   const memberRole = sessionMemberRole(role);
@@ -2848,12 +3009,12 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
   };
-  const scopedDb = createMembershipScopedDb(rlsDb, databaseIdentity);
-  const safeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+  const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
@@ -3061,7 +3222,7 @@ export const createAuthMacro = ({
         if (!result.ok) {
           return status(
             result.statusCode,
-            AUTH_REJECTION_BODY[result.statusCode],
+            VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
           );
         }
 

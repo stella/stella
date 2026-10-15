@@ -1,15 +1,13 @@
 import { Elysia } from "elysia";
 
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 import { publicCorpusConcurrencyLimit } from "@/api/lib/rate-limit/public-corpus-concurrency";
 import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
 } from "@/api/lib/rate-limit/public-corpus-rate-limits";
-import {
-  type RateLimitOptions,
-  rateLimit,
-} from "@/api/lib/rate-limit/rate-limit";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import { resolvePublicCorpusPolicy } from "@/api/public-corpus-policy";
 
@@ -32,6 +30,7 @@ export const createPublicCorpusRateLimitComposition = ({
       rateLimit({
         duration: API_RATE_LIMITS.api.duration,
         max: API_RATE_LIMITS.api.max,
+        budget: { name: "api.address", keyKind: "address" },
         ...createRedisBinding({
           failurePolicy: "fail_open_local",
           scope: "api",

@@ -25,11 +25,12 @@ import {
 } from "@/components/chat/tool-call-timing.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
+  BUILT_IN_SKILL_ORIGIN,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
+import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -339,27 +340,40 @@ const findCatalogEntry = ({
   };
 };
 
-// The skills list is cached per user; without a signed-in user (the dev
-// playground) there is no cache to read.
-const readCachedSkillPages = ({
+// A built-in's title follows the reader's language, so only an installed
+// skill's tab stores one. The chat routes load the skills list, so its title
+// is read from the cache, which is kept per user; without a signed-in user
+// (the dev playground) or the cache, the tab shows the slug.
+const skillResourceTabSource = ({
   organizationId,
   queryClient,
+  source,
   user,
 }: {
   organizationId: string;
   queryClient: QueryClient;
+  source: SkillResourceSource;
   user: AuthenticatedUser | null;
-}) =>
-  user === null
-    ? undefined
-    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
-        ?.pages;
+}) => {
+  if (source.origin === BUILT_IN_SKILL_ORIGIN || user === null) {
+    return source;
+  }
+  const skillDisplayName = findInstalledSkillDisplayName({
+    pages: queryClient.getQueryData(
+      skillsOptions(organizationId, user.id).queryKey,
+    )?.pages,
+    skillId: source.skillId,
+  });
+  return skillDisplayName === undefined
+    ? source
+    : { ...source, skillDisplayName };
+};
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
 export type ToolCallAction = { label: string; onClick: () => void };
 
-const toolFailureLabelKey = (
+export const toolFailureLabelKey = (
   rawErrorDetails: ReturnType<typeof getToolOutputError>,
   state: ToolPart["state"],
 ) => {
@@ -500,21 +514,14 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              // The chat routes load the skills list, so its title is read
-              // from the cache; without it the tab shows the slug.
-              const skillDisplayName = findSkillDisplayName({
-                pages: readCachedSkillPages({
+              useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceTabSource({
                   organizationId: activeOrganizationId,
                   queryClient,
+                  source: skillResourceOutput.source,
                   user,
                 }),
                 skillName: skillResourceOutput.skillName,
-                source: skillResourceOutput.source,
-              });
-              useInspectorTabsStore.getState().openSkillResourceTab({
-                ...skillResourceOutput.source,
-                skillName: skillResourceOutput.skillName,
-                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
@@ -668,36 +675,52 @@ export const ToolCallCard = ({
           </div>
         )}
       {hasError && errorMessage && (
-        <div className="max-w-xl py-1">
-          <p className="text-destructive text-2xs leading-relaxed">
-            {errorMessage}
-          </p>
-          {rawErrorDetails !== undefined && (
-            <details className="group">
-              <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
-                <span className="group-open:hidden">
-                  {t("common.showDetails")}
-                </span>
-                <span className="hidden group-open:inline">
-                  {t("common.hideDetails")}
-                </span>
-              </summary>
-              <ToolCallCodeBlock
-                code={rawErrorDetails}
-                label={t("chat.toolCall.output")}
-                language="text"
-                tone="result"
-              />
-            </details>
-          )}
-        </div>
+        <ToolCallFailureDetails
+          errorMessage={errorMessage}
+          rawErrorDetails={rawErrorDetails}
+        />
       )}
       <UnrestoredFieldsNotice output={part.output} />
     </div>
   );
 };
 
-const getToolOutputError = (output: unknown): string | undefined => {
+/** The short human failure line, with the raw tool error (written for the
+ *  model, not for people) behind a collapsed disclosure for debugging. */
+export const ToolCallFailureDetails = ({
+  errorMessage,
+  rawErrorDetails,
+}: {
+  errorMessage: string;
+  rawErrorDetails: string | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="max-w-xl py-1">
+      <p className="text-destructive text-2xs leading-relaxed">
+        {errorMessage}
+      </p>
+      {rawErrorDetails !== undefined && (
+        <details className="group">
+          <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
+            <span className="group-open:hidden">{t("common.showDetails")}</span>
+            <span className="hidden group-open:inline">
+              {t("common.hideDetails")}
+            </span>
+          </summary>
+          <ToolCallCodeBlock
+            code={rawErrorDetails}
+            label={t("chat.toolCall.output")}
+            language="text"
+            tone="result"
+          />
+        </details>
+      )}
+    </div>
+  );
+};
+
+export const getToolOutputError = (output: unknown): string | undefined => {
   if (typeof output === "string") {
     return undefined;
   }

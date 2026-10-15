@@ -1,11 +1,11 @@
 /**
- * What the composer floating over a document says while it is empty.
+ * What the composer floating over a document says while it is empty, and
+ * which document it names.
  *
  * One owner, because two bars ask: the live one the chat runtime mounts, and
- * the gated one a visitor without an account gets in its place. A visitor must
- * read exactly what a member reads, so neither bar may word this for itself.
- * Kept out of the overlay's own module so the gated bar can have the copy
- * without the editor bundle behind it.
+ * the sign-in offer a visitor without an account gets in its place, which
+ * names the same document. Kept out of the overlay's own module so the offer
+ * can have the copy without the editor bundle behind it.
  */
 
 import { useTranslations } from "use-intl";

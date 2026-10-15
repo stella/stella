@@ -15,6 +15,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },

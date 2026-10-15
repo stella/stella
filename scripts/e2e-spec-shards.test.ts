@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -51,6 +57,28 @@ describe("e2e spec shard selection", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test.each(["spec", "helper"])(
+    "a changed geometry %s keeps both production shards",
+    (kind) => {
+      const { root, write } = fixture();
+      try {
+        const spec = "apps/web/e2e/specs/docked-chat-geometry.spec.ts";
+        const helper = "apps/web/e2e/helpers/geometry.ts";
+        write(helper, "export const fixture = true;\n");
+        write(spec, 'import "../helpers/geometry";\n');
+        const changed = kind === "spec" ? spec : helper;
+        expect(selectE2eSpecs([changed], root)).toEqual([spec]);
+        expect(selectedE2ePlan([changed], root)).toEqual({
+          status: "full",
+          matrix: allE2eMatrix(),
+          specs: [],
+        });
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   test("every Playwright test file suffix consumes a changed helper", () => {
     const { root, write } = fixture();
@@ -348,4 +376,13 @@ test("a route-smoke-only PR runs only the dedicated network leg", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("CI executes both spec selection and the geometry shard plan guard", () => {
+  const source = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(source).toContain("run: bun test scripts/e2e-spec-shards.test.ts");
+  expect(source).toContain("run: bun test scripts/e2e-geometry-shards.test.ts");
 });

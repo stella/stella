@@ -16,6 +16,8 @@ import {
   parseBrowserExtensionResponse,
 } from "@stll/api-contract/browser-control";
 
+import { createUuid } from "@/lib/uuid";
+
 import { resetBrowserApproval } from "./browser-approval-mode";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
@@ -101,7 +103,7 @@ const postRequest = (request: BrowserExtensionRequest): void => {
 const ping = (): void => {
   postRequest({
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
     type: "ping",
   });
@@ -246,7 +248,7 @@ const postCancel = (controllerId: string, turnId: string): void => {
   postRequest({
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.web,
     turnId,
     type: "cancel",
@@ -281,7 +283,7 @@ export const executeBrowserExtensionCommand = async (
     );
   }
 
-  const requestId = crypto.randomUUID();
+  const requestId = createUuid();
   return await new Promise<BrowserControlResult>((resolve) => {
     const onStop = () => {
       clearTimeout(timeout);

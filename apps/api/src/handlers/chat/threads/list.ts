@@ -15,6 +15,7 @@ import {
   chatThreads,
   workspaces as workspacesTable,
 } from "@/api/db/schema";
+import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   chatThreadListCursorCodec,
   encodeChatThreadListCursor,
@@ -31,7 +32,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readPublicDecisionBadges } from "@/api/lib/case-law/decision-badges";
 import type { PublicDecisionBadge } from "@/api/lib/case-law/decision-badges";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -103,6 +104,7 @@ const readThreadDecisions = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "List your own chat threads, most recently active first, split into " +
     "global threads and groups per matter. Threads with no messages, and " +
@@ -110,8 +112,10 @@ const config = {
     "Each thread carries a bounded preview of its context: the matters and " +
     "files it drew on, with their total counts, and the case-law decision " +
     "the chat is about, if any. search matches the thread " +
-    "title, the matter it lives in, or a matter pinned to it; paginate with " +
-    "limit and cursor.",
+    "title, the matter it lives in, or a matter pinned to it; matterId " +
+    "keeps only the threads that live in that matter (not global threads " +
+    "that merely pinned it) and is not found when you cannot open the " +
+    "matter; paginate with limit and cursor.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -124,6 +128,7 @@ const config = {
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
+    workspaceId: t.Optional(tSafeId("workspace")),
     limit: t.Optional(
       t.Integer({
         minimum: 1,
@@ -146,7 +151,7 @@ export const createGetThreads = ({
 }: GetThreadsDependencies = GET_THREADS_DEPENDENCIES) =>
   createSafeRootHandler(
     config,
-    async function* ({ query, safeDb, session, user }) {
+    async function* ({ getWorkspaceAccess, query, safeDb, session, user }) {
       const limit = normalizeTenantPageLimit(
         query.limit ?? LIMITS.chatThreadListPageSizeDefault,
       );
@@ -172,6 +177,16 @@ export const createGetThreads = ({
         where ${chatMessages.threadId} = ${chatThreads.id}
       )`,
       ];
+      // The matter filter goes through the same access check as every other
+      // matter-scoped chat call, so a matter the caller cannot open (or one
+      // being deleted) is a 404 rather than a silently empty list.
+      const scope = yield* resolveChatScope({
+        getWorkspaceAccess,
+        workspaceId: query.workspaceId,
+      });
+      if (scope.scope === "workspace") {
+        conditions.push(eq(chatThreads.workspaceId, scope.workspaceId));
+      }
       const search = query.search?.trim();
       const searchPattern = search ? `%${escapeLike(search)}%` : null;
       // Membership-mode RLS filters workspace-scoped threads and verifies every

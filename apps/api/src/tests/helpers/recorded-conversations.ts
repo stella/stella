@@ -330,7 +330,7 @@ return { id: document.entityId, name: document.name };`;
   const step = async (
     recorder: Recorder,
     action: RecordedAction,
-    perform: () => Promise<void>,
+    perform: () => Promise<void> | void,
     { midStream = false }: { midStream?: boolean } = {},
   ) => {
     const before = recorder.exchanges.length;
@@ -448,11 +448,29 @@ return { id: document.entityId, name: document.name };`;
     };
   };
 
-  /** A tool call that has started streaming in the live view. */
-  const holdsToolCall = (messages: readonly UIMessage[]) =>
-    messages.some(({ parts }) =>
-      parts.some(({ type }) => type === "tool-call"),
-    );
+  /**
+   * The live view holds the tool call as far as the scripted model streams
+   * it before going quiet at `point`: its arguments (`before-tool-end`), or
+   * its arguments and end (`after-tool-end`). Waiting for exactly that last
+   * event, not for the call to start, keeps what the page saw before a stop
+   * or a dropped connection the same on every run.
+   */
+  const holdsToolCallUntil =
+    (point: "after-tool-end" | "before-tool-end") =>
+    (messages: readonly UIMessage[]) =>
+      messages.some(({ parts }) =>
+        parts.some((part) => {
+          if (part.type !== "tool-call") {
+            return false;
+          }
+          if (point === "before-tool-end") {
+            return part.arguments !== "";
+          }
+          return (
+            part.state !== "awaiting-input" && part.state !== "input-streaming"
+          );
+        }),
+      );
 
   /** A model call that goes quiet at `quietAt` while its tool call streams. */
   const quietTurn = (
@@ -690,11 +708,49 @@ return { id: document.entityId, name: document.name };`;
         await send(recorder, "Use the buyer's form", [answers("Drafted")]);
       },
       "connection-drop": async (recorder) => {
-        await sendUntilQuiet(recorder, "before-tool-end");
-        await step(recorder, { type: "drop-connection" }, async () => {
+        const continued = Promise.withResolvers<undefined>();
+        recorder.harness.streamLive(recorder.threadId);
+        recorder.harness.script(recorder.threadId, [
+          {
+            type: "step",
+            text: "Checking the register",
+            toolCalls: [plainCall("call-1")],
+            pause: {
+              at: "before-tool-end",
+              wait: async () => await continued.promise,
+            },
+          },
+          // Delivery can disconnect while the same producer keeps iterating.
+          answers("Checked the register"),
+        ]);
+        const messageId = Bun.randomUUIDv7();
+        await step(
+          recorder,
+          { messageId, text: "Check the register", type: "send" },
+          async () =>
+            await recorder.client.startUserMessage(
+              messageId,
+              "Check the register",
+              holdsToolCallUntil("before-tool-end"),
+            ),
+          { midStream: true },
+        );
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          1,
+        );
+        await step(recorder, { type: "drop-connection" }, () => {
           recorder.harness.dropConnection(recorder.threadId);
-          await Promise.resolve();
+          // Closing delivery leaves production alive; once its input is ready,
+          // read-only reconnection catches up to the completed transcript.
+          continued.resolve(undefined);
         });
+        await recorder.harness.expectSoundWebClient({
+          client: recorder.client,
+          threadId: recorder.threadId,
+        });
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          2,
+        );
       },
     },
   } as const satisfies Record<
@@ -715,7 +771,11 @@ return { id: document.entityId, name: document.name };`;
       recorder,
       { messageId, text, type: "send" },
       async () => {
-        await recorder.client.startUserMessage(messageId, text, holdsToolCall);
+        await recorder.client.startUserMessage(
+          messageId,
+          text,
+          holdsToolCallUntil(quietAt),
+        );
       },
       { midStream: true },
     );
@@ -776,12 +836,12 @@ return { id: document.entityId, name: document.name };`;
         ? [`step ${String(index + 1)} (${action.type})`]
         : [],
     );
-    if (process.env[WRITE_ENV] === "1" && unposted.length === 0) {
-      writeFileSync(file, recorded);
-    }
     expect(unposted).toEqual([]);
     // A scenario step that failed is the finding, not a stale file.
     expect(failure).toBeUndefined();
+    if (process.env[WRITE_ENV] === "1") {
+      writeFileSync(file, recorded);
+    }
     expect(existsSync(file)).toBe(true);
     // Regenerate with `bun run gen:chat-transcripts` in apps/api.
     expect(readFileSync(file, "utf-8")).toBe(recorded);

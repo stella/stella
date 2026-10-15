@@ -3,18 +3,22 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
+import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { professionalUseOptions } from "@/lib/auth-queries";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -112,6 +116,32 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "search-history/list.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [
+      lawHistoryKeys.list({
+        scope: { organizationId: ORG, userId: USER },
+        filter: "all",
+      }),
+    ],
+    opaqueKeys: {
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+        KEY_TYPE_HAS_USER,
+    },
+  },
+  // The caller-bound clock anchor is fetched inside the import query and
+  // spent by the import write; it is never cached on its own.
+  "search-history/import-clock.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"]["import-clock"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [lawHistoryKeys.import({ organizationId: ORG, userId: USER })],
+    opaqueKeys: {
+      "lawHistoryKeys.import(scope ?? keyScope)": KEY_TYPE_HAS_USER,
+    },
+  },
   "organization-settings/feature-access/get.ts": {
     kind: "no-web-caller",
     calls: ['api["organization-settings"]["feature-access"].get'],
@@ -266,6 +296,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [chatUnavailableSkillsOptions(ORG, USER).queryKey],
   },
+  "chat/decision-threads/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat["decision-threads"]().get'],
+    files: ["features/chat/queries.ts"],
+    keys: () => [
+      chatKeys.decisionThread(ORG, { decisionId: "decision", userId: USER }),
+    ],
+    opaqueKeys: {
+      "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
+  },
   "chat/threads/list.ts": {
     kind: "keyed",
     calls: ["api.chat.threads.get"],
@@ -324,6 +365,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
+  "legal-reader/answers/list.ts": {
+    kind: "no-web-caller",
+    calls: ["api.reader.answers.get"],
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -377,6 +422,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api.me["oauth-connections"].get'],
     files: ["routes/_protected.settings/-queries/connections.ts"],
     keys: () => [connectedAppsOptions(USER).queryKey],
+  },
+  "me/professional-use.ts": {
+    kind: "keyed",
+    calls: ['api.me["professional-use"].get'],
+    files: ["lib/auth-queries.ts"],
+    keys: () => [professionalUseOptions(USER).queryKey],
   },
   "me/pending-tasks.ts": {
     kind: "keyed",
@@ -750,7 +801,7 @@ const readHandlers = () => {
     }
   }
   for (const path of listFiles(API_HANDLERS)) {
-    const handler = nodePath.relative(API_HANDLERS, path);
+    const handler = repoRelativePath(API_HANDLERS, path);
     if (READ_HANDLER_NAME.test(`/${handler}`)) {
       reads.add(handler);
     }
@@ -966,7 +1017,7 @@ const webCallers = () => {
       if (chains.some((chain) => chain.startsWith(`${call}()`))) {
         callers.set(call, [
           ...(callers.get(call) ?? []),
-          nodePath.relative(WEB_SOURCE, path),
+          repoRelativePath(WEB_SOURCE, path),
         ]);
       }
     }

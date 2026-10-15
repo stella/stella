@@ -58,6 +58,37 @@ describe("absolute test selectors", () => {
 });
 
 describe("partitionRunnerArguments", () => {
+  test("omits owned flags without consuming identical option values or positional patterns", () => {
+    const omittedFlags = new Set(["--parallel"]);
+    expect(
+      partitionRunnerArguments(
+        ["--parallel", "-t", "--parallel", "fixture.test.ts"],
+        omittedFlags,
+      ),
+    ).toEqual({
+      bunArguments: ["-t", "--parallel"],
+      patterns: ["fixture.test.ts"],
+    });
+    expect(
+      partitionRunnerArguments(
+        ["--parallel", "--", "--parallel"],
+        omittedFlags,
+      ),
+    ).toEqual({
+      bunArguments: ["--"],
+      patterns: ["--parallel"],
+    });
+    expect(
+      partitionRunnerArguments(
+        ["--reporter-outfile", "output.xml", "fixture.test.ts"],
+        new Set(["--reporter-outfile"]),
+      ),
+    ).toEqual({
+      bunArguments: [],
+      patterns: ["fixture.test.ts"],
+    });
+  });
+
   test("keeps a value-taking flag's value with the flag, however it looks", () => {
     // Both values are shaped like the things they are not: one like a path,
     // one containing a slash. Classifying by shape would steal them from bun

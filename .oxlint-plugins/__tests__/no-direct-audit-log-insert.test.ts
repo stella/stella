@@ -6,6 +6,9 @@ const sources = [
   "await tx.insert(auditLogs).values(rows);",
   'import { auditLogs as table } from "@/api/db/schema";\nawait tx.insert(table).values(rows);',
   "function write(tx) { return tx.insert ( auditLogs ); }",
+  "await tx.insert(accountAuditLogs).values(rows);",
+  'import { accountAuditLogs as table } from "@/api/db/schema";\nawait tx.insert(table).values(rows);',
+  'import { accountAuditLogs as table } from "@/api/db/schema/contacts";\nawait tx.insert(table).values(rows);',
 ];
 
 test.each(sources)("rejects direct audit writes: %s", async (source) => {
@@ -21,7 +24,7 @@ test("allows the audit owner and unrelated inserts", async () => {
     await lintSingleRule(
       "no-direct-audit-log-insert",
       "tx.insert(auditLogs);",
-      { sourcePath: "apps/api/src/lib/audit-log.ts" },
+      { sourcePath: "apps/api/src/lib/db/audit-recording.ts" },
     ),
   ).toEqual([]);
   expect(

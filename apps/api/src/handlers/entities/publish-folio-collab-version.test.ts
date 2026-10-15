@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import { envBase } from "@/api/env-base";
@@ -73,8 +74,14 @@ describe("folio collaboration publication cut", () => {
   });
 
   test("serializes publish through the room lock and canonical writer", async () => {
-    const source = await Bun.file(
+    const endpoint = await Bun.file(
       import.meta.path.replace(".test.ts", ".ts"),
+    ).text();
+    const source = await Bun.file(
+      new URL(
+        "../../lib/entity-versions/publish-folio-collab-checkpoint.ts",
+        import.meta.url,
+      ),
     ).text();
     const lockStart = source.indexOf("const lockPublicationRoom =");
     const lockEnd = source.indexOf("type LockedPublicationRoom", lockStart);
@@ -95,7 +102,7 @@ describe("folio collaboration publication cut", () => {
     expect(transactionStart).toBeGreaterThan(-1);
     expect(roomLock).toBeGreaterThan(transactionStart);
     expect(canonicalWrite).toBeGreaterThan(roomLock);
-    expect(source).toMatch(
+    expect(endpoint).toMatch(
       /safeDb\(\s*async \(tx\) =>\s*await publishCheckpointInTransaction\(/u,
     );
     expect(source).toContain(
@@ -177,11 +184,13 @@ describe("publication validates the stored checkpoint identity", () => {
     "accepts the legacy digest of exact DOCX bytes: %j",
     async (text) => {
       const zip = new JSZip();
-      zip.file(
+      writeZipEntry(
+        zip,
         "[Content_Types].xml",
         `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
       );
-      zip.file(
+      writeZipEntry(
+        zip,
         "word/document.xml",
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
       );

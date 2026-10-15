@@ -17,6 +17,7 @@ import type {
   OnlineMigrationParam,
 } from "./online-migration-connection";
 import { ensureOnlineIndexValid } from "./online-migrations";
+import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -30,7 +31,7 @@ const connectionAdapter = (
   },
   release: () => connection.release(),
   terminate: async () => {
-    await connection.close({ timeout: 0 });
+    await terminateReserved(connection);
   },
 });
 
@@ -183,7 +184,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         blocker.release();
       }
     },
-    { closeTimeout: 0 },
+    { closeMode: "force" },
   );
 };
 
@@ -407,7 +408,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       });
       const outcome = await Result.tryPromise(
@@ -1033,7 +1034,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.connection,
         terminate: async () => {
           terminated = true;
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       };
       const gate = createOnlineIndexGate({

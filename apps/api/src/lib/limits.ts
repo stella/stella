@@ -18,6 +18,8 @@ import {
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
   SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -29,8 +31,19 @@ import {
   CHAT_CONTEXT_FILE_MAX_MEGABYTES,
 } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { env } from "@/api/env";
+import {
+  API_RATE_LIMITS,
+  MCP_RATE_LIMITS,
+  OTP_DELIVERY_RATE_LIMITS,
+} from "@/api/lib/rate-limit/budget-config";
+
+export {
+  AUTH_RATE_LIMITS,
+  API_RATE_LIMITS,
+} from "@/api/lib/rate-limit/budget-config";
 
 /** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
  *  object literal instead of restating the page size. */
@@ -277,8 +290,12 @@ export const LIMITS = {
   mcpGatewayToolNameMaxChars: 128,
   mcpGatewayToolDescriptionMaxChars: 2000,
   mcpGatewayToolSchemaMaxChars: 20_000,
-  mcpGatewayRateLimitWindowMs: 60_000,
-  mcpGatewayRateLimitMax: 60,
+  get mcpGatewayRateLimitWindowMs() {
+    return MCP_RATE_LIMITS.gateway.windowMs;
+  },
+  get mcpGatewayRateLimitMax() {
+    return MCP_RATE_LIMITS.gateway.max;
+  },
   /** Silence an event stream may carry before it writes a comment frame. The
    *  CDN and the load balancer in front of this service both cut a connection
    *  after 60 s without a byte, so the interval leaves room for three writes
@@ -314,6 +331,7 @@ export const LIMITS = {
   billingCodesPageSizeDefault: 500,
   billingCodesPageSizeMax: 1000,
   overviewRecentEntities: 10,
+  overviewUpcomingAgenda: 10,
   matterSearchPreviewAgendaItems: 3,
   matterSearchPreviewDocuments: 3,
   /** Initial number of mixed chat/entity rows shown beneath one matter in
@@ -398,6 +416,21 @@ export const LIMITS = {
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
   savedTimeNarrativesPerUser: 100,
+  /**
+   * Search history entries a list returns unless asked for more: the law
+   * page shows the latest 20. A display bound only; storage keeps every
+   * entry its user has not deleted, one row per distinct entry.
+   */
+  searchHistoryPageSizeDefault: 20,
+  searchHistoryPageSizeMax: 100,
+  /** Browser-kept entries one import call takes (three kinds of 50, twice). */
+  searchHistoryImportMax: SEARCH_HISTORY_IMPORT_MAX,
+  // Import clocks may differ by at most one day in either direction.
+  searchHistoryClockSkewMaxMs: DAY_IN_MS,
+  // Older deletion identities compact into an owner import cutoff.
+  searchHistoryTombstonesMax: 128,
+  searchHistoryTitleMaxLength: SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  searchHistoryPathMaxLength: 1024,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first
@@ -531,12 +564,6 @@ export const LIMITS = {
    */
   caseLawDecisionTextVersionMaxLength: 24,
   /**
-   * References one identifier lookup may resolve. A brief cites dozens of
-   * cases, and resolving them is what the tool is for; each one is an indexed
-   * identity read, not a ranking.
-   */
-  caseLawLookupIdentifiersMax: 50,
-  /**
    * Characters of one case reference. A docket, an ECLI or a reporter
    * citation; anything longer is prose and belongs in a text search.
    */
@@ -547,8 +574,6 @@ export const LIMITS = {
    * caller should search instead of choosing.
    */
   caseLawLookupCandidatesMax: 5,
-  /** Identity reads resolved at once while answering one lookup. */
-  caseLawLookupConcurrency: 6,
   /**
    * Publisher document fetches one batch read may trigger. A decision whose
    * document nobody has fetched yet costs a crawl, so a batch reads the
@@ -699,6 +724,8 @@ export const LIMITS = {
    * stops advertising candidates a rescan could never get back to.
    */
   corpusIndexSearchMaxRounds: 3,
+  /** Bound per-document passage searches and their per-split fan-out. */
+  corpusIndexHighlightConcurrency: 8,
   /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A
@@ -774,6 +801,15 @@ export const LIMITS = {
   chatSendHistoryWindowMax: 500,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
+  /** Staged file bytes all in-flight upload finalizations of one API process
+   *  may hold at once. Finalizing reads, scans and may rewrite the whole file,
+   *  peaking near six copies, so this keeps a burst of large uploads well
+   *  inside the task's memory. A single file above it still runs alone. */
+  uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
+  /** How long a finalization waits for that budget before it fails as
+   *  retryable. The wait comes before the upload is claimed, so it never
+   *  counts against the claim timeout. */
+  uploadFinalizeAdmissionWaitMs: 20_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
@@ -817,48 +853,18 @@ export const FILE_SIZE_LIMIT_BYTES = {
 } as const;
 
 /**
- * Rate limits for auth endpoints (better-auth built-in limiter).
- * Window is in seconds, max is the request ceiling per window.
- */
-export const AUTH_RATE_LIMITS = {
-  global: { window: 60, max: 100 },
-  signIn: { window: 60, max: 5 },
-  signUp: { window: 60, max: 3 },
-  sendOtp: { window: 60, max: 5 },
-  verifyOtp: { window: 60, max: 5 },
-  forgetPassword: { window: 60, max: 3 },
-  resetPassword: { window: 60, max: 5 },
-  /**
-   * Dynamic client registration (RFC 7591). The OAuth provider defaults this
-   * to 5 per minute, which is below what normal onboarding produces: several
-   * MCP clients register a fresh client on every user connect, some register
-   * twice per attempt, an office behind a single NAT address onboarding a team
-   * lands all of it in one minute, and a hosted registrar such as Microsoft's
-   * Enterprise token store egresses from addresses shared across tenants. A
-   * refused registration is a dead connector before authorization starts, so
-   * 30 covers a team onboarding together while still bounding an
-   * unauthenticated flood from any one address.
-   */
-  oauthClientRegistration: { window: 60, max: 30 },
-} as const;
-
-/**
  * Longer-lived limits for new-account OTP requests. Rate-limited requests are
  * acknowledged without sending an OTP, keeping account state out of the HTTP
  * response while preserving existing users' login capacity.
  */
 export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
-  email: { duration: 60 * 60 * 1000, max: 3 },
-  ip: { duration: 3 * 60 * 60 * 1000, max: 25 },
-} as const;
-
-/**
- * Sign-in codes delivered to one existing account's address per window of
- * the new-account email counter (`NEW_ACCOUNT_OTP_RATE_LIMITS.email`). The
- * same counter is consumed for every request, so this only sets a higher
- * ceiling for addresses that already have an account.
- */
-export const EXISTING_ACCOUNT_OTP_EMAIL_MAX = 10;
+  get email() {
+    return OTP_DELIVERY_RATE_LIMITS.newAccountEmail;
+  },
+  get ip() {
+    return OTP_DELIVERY_RATE_LIMITS.newAccountAddress;
+  },
+};
 
 /**
  * Fixed production response delay for sign-in email-OTP requests. Delivery and
@@ -866,71 +872,6 @@ export const EXISTING_ACCOUNT_OTP_EMAIL_MAX = 10;
  * state through the HTTP response.
  */
 export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
-
-/**
- * Rate limits for API endpoints.
- * Duration is in milliseconds, max is the request ceiling
- * per duration window.
- */
-export const API_RATE_LIMITS = {
-  /** REST API: 1000 req/min per IP. Covers normal navigation
-   *  (5-10 requests per page load × frequent workspace switching). */
-  api: { duration: 60_000, max: 1000 },
-  /** Legal identity resolution: 120 requests/minute for each credential and
-   * organization, with separate counters for decisions and legislation. */
-  legalResolve: { duration: 60_000, max: 120 },
-  /** Anonymous sanctions searches: 20 req/min per IP. Each search matches
-   *  across the shared sanctions indexes, so it has a separate CPU budget. */
-  publicSanctionsSearch: { duration: 60_000, max: 20, maxConcurrent: 2 },
-  /** Skill URL discovery/import: 10 req/min per IP. Each request performs
-   *  bounded outbound source fetches, so this separate cap prevents the
-   *  general API budget from amplifying third-party traffic. */
-  skillSource: { duration: 60_000, max: 10 },
-  /** File uploads: 500 req/min (separate budget). */
-  upload: { duration: 60_000, max: 500 },
-  /** MCP transport paths: 600 req/min per credential (bearer digest, IP
-   *  fallback). An agent turn is a handful of JSON-RPC calls, so this never
-   *  throttles normal use; it bounds a runaway loop or a stolen credential.
-   *  Discovery and preflight stay outside it: both are static and must
-   *  answer a client that has not authenticated yet. */
-  mcpTransport: { duration: 60_000, max: 600 },
-  /** MCP transport paths: 3000 req/min per client address, checked before
-   *  the per-credential budget. The credential bucket cannot bound a caller
-   *  that rotates invented bearer values (each is a fresh bucket, and each
-   *  costs a token verification); the address bucket does. It is wide enough
-   *  that a NAT full of agents fits under it. */
-  mcpTransportAddress: { duration: 60_000, max: 3000 },
-  /** Folio collaborative-edit token endpoints: 30 req/min per IP.
-   *  Each authorize/refresh/snapshot call runs a multi-table join
-   *  against unauthenticated input, so the budget is intentionally
-   *  much tighter than the general API. */
-  folioCollab: { duration: 60_000, max: 30 },
-  /** Agent-auth registration + claim-grant poll endpoints: 60 req/min
-   *  per IP. These are unauthenticated and pollable (RFC 8628 device
-   *  flow), so they get a dedicated, tight budget separate from the
-   *  general API. The poll interval is enforced server-side per
-   *  registration; this IP cap bounds an attacker registering or
-   *  polling in bulk. */
-  agentAuth: { duration: 60_000, max: 60 },
-  /** Document translation: 30 req/min per IP. Each call ships a
-   *  full document to the external translation provider and
-   *  consumes the org's paid character quota, so this stays well
-   *  below the upload budget. */
-  translate: { duration: 60_000, max: 30 },
-  /** Hosted usage webhook ingest: 300 req/min per IP. Each request
-   *  triggers HMAC verification over up to ~64 KB and a database
-   *  transaction; the cap protects the route from an
-   *  unauthenticated attacker driving CPU/DB cost. Legitimate
-   *  provider traffic peaks well below 5 req/sec for any single
-   *  source IP, so this is loose enough for production while
-   *  still bounding the worst case. */
-  hostedUsageWebhook: { duration: 60_000, max: 300 },
-  /** Delete account OTP email request limit: 5 requests per minute. */
-  deleteAccountOtp: { duration: 60_000, max: 5 },
-  /** Two-factor management (enable/disable/get-totp-uri/regenerate-backup-codes)
-   *  confirmation OTP email request limit: 5 requests per minute. */
-  twoFactorManageOtp: { duration: 60_000, max: 5 },
-} as const;
 
 export type PublicCorpusLimitsConfiguration = Pick<
   typeof env,

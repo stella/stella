@@ -21,6 +21,7 @@ export const createListPersonalApiKeysHandler = (
   access: keyof typeof listPermissions,
 ) => {
   const config = {
+    contract: "patch",
     access: "read",
     permissions: listPermissions[access],
     accountAccess: ACCOUNT_ACCESS.accountControl,

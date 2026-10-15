@@ -32,6 +32,8 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { createUuid } from "@/lib/uuid";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
 
@@ -100,6 +102,7 @@ const joinResponseSchema = v.object({
   roomName: v.string(),
   seedDownloadUrl: v.string(),
   shouldSeed: v.boolean(),
+  snapshotRecovery: v.picklist(["none", "unsaved-changes-discarded"]),
   token: v.string(),
   tokenExpiresAt: v.string(),
 });
@@ -232,6 +235,9 @@ export const useFolioCollaborationRoom = ({
   const getEditPermissionDeniedMessage = useLatestCallback(() =>
     t("folio.editPermissionDenied"),
   );
+  const getSnapshotRecoveryMessage = useLatestCallback(() =>
+    t("folio.collaborationSnapshotRecovered"),
+  );
   const [state, setState] = useState<FolioCollaborationRoomState>({
     status: "unavailable",
     room: null,
@@ -312,6 +318,9 @@ export const useFolioCollaborationRoom = ({
         );
         if (isDisposed()) {
           return;
+        }
+        if (data.snapshotRecovery === "unsaved-changes-discarded") {
+          notifyUserError(undefined, getSnapshotRecoveryMessage());
         }
 
         const roomId = data.roomId;
@@ -607,7 +616,7 @@ export const useFolioCollaborationRoom = ({
           connectedProvider.flushPendingUpdates();
           const documentMutationRevisionAtRequest = mutationRevision.document;
           const localMutationRevisionAtRequest = mutationRevision.local;
-          const requestId = crypto.randomUUID();
+          const requestId = createUuid();
           const snapshotRevision = await new Promise<number>(
             (resolve, reject) => {
               const timer = setTimeout(() => {
@@ -684,6 +693,7 @@ export const useFolioCollaborationRoom = ({
     getAwarenessUser,
     getEditOpenFailedMessage,
     getEditPermissionDeniedMessage,
+    getSnapshotRecoveryMessage,
     propertyId,
     workspaceId,
   ]);

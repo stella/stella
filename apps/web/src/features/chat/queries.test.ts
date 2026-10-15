@@ -15,6 +15,7 @@ import {
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_INTENT,
+  CHAT_TURN_ID_HEADER,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -37,12 +38,13 @@ import {
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
+} from "@/features/chat/chat-runtime-registry";
+import {
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   invalidateChatThreadLists,
-  installChatRuntimeCleanup,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
@@ -144,7 +146,24 @@ describe("chatKeys", () => {
     });
 
     expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
-    expect(searched.queryKey.at(-1)).toBe("Matter B");
+    expect(searched.queryKey.at(-2)).toBe("Matter B");
+  });
+
+  test("isolates a matter-filtered history from the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const unfiltered = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+    });
+    const inMatter = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+      workspaceId: "matter_b",
+    });
+
+    expect(inMatter.queryKey).not.toEqual(unfiltered.queryKey);
+    expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -245,6 +264,7 @@ describe("chat thread fetch failures", () => {
 
     expect(data).toMatchObject({
       messages: [],
+      activeSkill: null,
       threadExists: false,
     });
   });
@@ -1169,20 +1189,37 @@ describe("chat runtime", () => {
 
   test("latches an explicitly stopped turn until authoritative hydration", async () => {
     const threadId = toChatThreadId("thread-stopped");
-    globalThis.fetch = createFetchMock(
-      async (_input, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            "abort",
-            () => {
-              const error = new Error("aborted");
-              error.name = "AbortError";
-              reject(error);
-            },
-            { once: true },
-          );
+    const accepted = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (init?.method === "POST" && url.endsWith("/cancel")) {
+        return Response.json({
+          turn: {
+            id: "018f0000-0000-7000-8000-00000000000a",
+            reason: "user-stop",
+            status: "cancelled",
+          },
+        });
+      }
+      await accepted.promise;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          },
         }),
-    );
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            [CHAT_TURN_ID_HEADER]: "018f0000-0000-7000-8000-00000000000a",
+          },
+        },
+      );
+    });
     const runtime = createChatRuntime({
       activeTurnId: null,
       context: undefined,
@@ -1201,11 +1238,13 @@ describe("chat runtime", () => {
 
     runtime.stop();
 
+    expect(runtime.getSnapshot().turnAbandoned).toBe(true);
+    accepted.resolve(undefined);
+    await stream;
     expect(runtime.getSnapshot()).toMatchObject({
       status: "ready",
       turnAbandoned: true,
     });
-    await stream;
   });
 
   test("exposes progressive create-document source from partial arguments", async () => {
@@ -2070,7 +2109,7 @@ describe("chat runtime", () => {
     const messageId = toSafeId<"chatMessage">(
       "22222222-2222-4222-8222-222222222222",
     );
-    const started = runtime.startRouteHandoffMessage({
+    const started = await runtime.startRouteHandoffMessage({
       id: messageId,
       content: "ahoj",
     });
@@ -2667,13 +2706,11 @@ describe("chat runtime", () => {
                 part.state === "input-complete",
             ),
           );
-      const toolCallShown = new Promise<void>((resolve) => {
-        const unsubscribe = runtime.subscribe(() => {
-          if (hasCompleteToolCall()) {
-            unsubscribe();
-            resolve();
-          }
-        });
+      const toolCallShown = Promise.withResolvers<undefined>();
+      const unsubscribe = runtime.subscribe(() => {
+        if (hasCompleteToolCall()) {
+          toolCallShown.resolve(undefined);
+        }
       });
       const sent = sendThreadChatMessage(
         runtime,
@@ -2690,7 +2727,7 @@ describe("chat runtime", () => {
         toolCall: answerCase.toolCall,
       });
       pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
-      await toolCallShown;
+      await toolCallShown.promise;
       // The answer leaves while the run that asked is still open, and before
       // the page has seen the interrupt it resolves.
       expect(runtime.getSnapshot().isLoading).toBe(true);
@@ -2704,6 +2741,7 @@ describe("chat runtime", () => {
       await sent;
       await answered;
       await continuationRequested;
+      unsubscribe();
 
       expect(requests).toHaveLength(2);
       expect(requests.at(1)).toMatchObject({
@@ -3150,6 +3188,7 @@ describe("acquireChatRuntime reconcile", () => {
     contextMatterIds: [],
     lastActivityAt: null,
     threadRevision: null,
+    activeSkill: null,
     threadExists: true,
     usedAnonymization: false,
     webSearchAvailable: false,
@@ -3355,7 +3394,7 @@ describe("acquireChatRuntime reconcile", () => {
       key: threadRef,
       queryClient,
     });
-    const started = handoff.startRouteHandoffMessage(
+    const started = await handoff.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b2"),
     );
     await responseRequested;
@@ -3436,9 +3475,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    await runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222e1"),
-    ).stream;
+    );
+    await started.stream;
 
     expect(runtime.getSnapshot()).toMatchObject({ status: "error" });
     expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
@@ -3474,7 +3514,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c1"),
     );
     await started.stream;
@@ -3570,7 +3610,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c3"),
     );
     await started.stream;
@@ -3606,7 +3646,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c2"),
     );
     await started.stream;
@@ -3646,7 +3686,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
     );
     await started.stream;
@@ -3692,7 +3732,6 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const data = buildThreadData();
 
     // Both contexts map to the SAME pure-data query key: contextKind
@@ -3823,7 +3862,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(streaming).not.toBe(idlePlain);
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b3"),
     );
     await responseRequested;
@@ -3892,18 +3931,21 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    // `getActiveSkill` flips contextKind, so this surface's PURE-DATA
+    // `getActiveTemplate` flips contextKind, so this surface's PURE-DATA
     // query key differs from the plain one — the busy reattach must
     // match on thread identity, not on the query key.
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     expect(
       chatThreadOptions({
         activeOrganizationId,
         key: threadRef,
-        context: skillContext,
+        context: templateContext,
       }).queryKey,
     ).not.toEqual(
       chatThreadOptions({
@@ -3915,12 +3957,12 @@ describe("acquireChatRuntime reconcile", () => {
 
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b4"),
     );
     await responseRequested;
@@ -3959,21 +4001,24 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
 
     // No prior entry under the plain key: the mid-stream acquire hits
     // the cross-key busy scan and records an alias under it.
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b5"),
     );
     await responseRequested;
@@ -4030,7 +4075,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
@@ -4040,12 +4085,14 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("GC sweep removes only the entries of the removed query key", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     const plainOptions = chatThreadOptions({
       activeOrganizationId,
@@ -4062,7 +4109,7 @@ describe("acquireChatRuntime reconcile", () => {
     });
     const skillRuntime = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -4087,7 +4134,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,

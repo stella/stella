@@ -42,6 +42,7 @@ const PERSONAL_WRITE_SCOPES = {
   caseLawResearch: null,
   legalReaderAnnotation: ["stella:knowledge_write"],
   savedSearch: null,
+  searchHistory: ["stella:knowledge_write"],
   integration: null,
 } as const satisfies Record<
   keyof typeof statements,
@@ -49,13 +50,37 @@ const PERSONAL_WRITE_SCOPES = {
 >;
 
 const writeScopes = new Map(Object.entries(PERSONAL_WRITE_SCOPES));
+// Listing uses read consent; deletion uses knowledge-write consent. Recording
+// and browser imports are UI operations, without personal-key authority.
+const PERSONAL_SEARCH_HISTORY_ACTION_SCOPES = {
+  read: ["stella:read"],
+  create: [],
+  delete: PERSONAL_WRITE_SCOPES.searchHistory,
+} as const satisfies Record<
+  (typeof statements)["searchHistory"][number],
+  readonly PersonalApiKeyScope[]
+>;
+const historyActionScopes = new Map(
+  Object.entries(PERSONAL_SEARCH_HISTORY_ACTION_SCOPES),
+);
 const permissionScopeAllows = (
   resource: string,
   action: string,
   scopes: readonly PersonalApiKeyScope[],
-) =>
-  (resource === "workspace" && action === "read") ||
-  (writeScopes.get(resource)?.some((scope) => scopes.includes(scope)) ?? false);
+) => {
+  if (resource === "searchHistory") {
+    return (
+      historyActionScopes
+        .get(action)
+        ?.some((scope) => scopes.includes(scope)) ?? false
+    );
+  }
+  return (
+    (resource === "workspace" && action === "read") ||
+    (writeScopes.get(resource)?.some((scope) => scopes.includes(scope)) ??
+      false)
+  );
+};
 
 export const personalApiKeyPermissionsAllowed = (
   permissions: Record<string, string[]>,

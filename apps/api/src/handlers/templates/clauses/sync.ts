@@ -13,6 +13,7 @@ const syncTemplateClauseParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Re-pin one clause link of a template to its clause's current version, " +
     "so the next fill inserts the newest wording. The link's slot and " +

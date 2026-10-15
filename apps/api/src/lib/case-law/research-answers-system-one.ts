@@ -8,13 +8,11 @@
  * tier may take, how much of a decision's text fits its state, and what each
  * answer means for the cell. The runner owns the call itself.
  *
- * Nothing here fails a cell that the generative model could still answer: a
- * question the kit could not plan, a decision that was not taken, and a value
- * that no longer matches the column all come back as a fallback, and the run
- * asks the generative model for those columns instead.
+ * Typed decisions own their generative fallback. Only questions outside the
+ * typed plan are left for the runner's normal generation call.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
@@ -91,7 +89,8 @@ export const systemOneSourcesFromPassages = (
 
 type SystemOneResearchOutcome =
   | { state: "answered"; answer: FieldContent; run: CaseLawResearchAnswerRun }
-  | { state: "not_stated"; run: CaseLawResearchAnswerRun };
+  | { state: "not_stated"; run: CaseLawResearchAnswerRun }
+  | { state: "failed"; failureReason: "model_error" | "wrong_type" };
 
 type SystemOneColumnOutcome = {
   columnId: string;
@@ -101,13 +100,13 @@ type SystemOneColumnOutcome = {
 export type SystemOneResolution = {
   /** Cells the tier settled: an answer, or "not stated". */
   settled: SystemOneColumnOutcome[];
-  /** Columns the generative model has to answer after all. */
+  /** Columns outside the typed plan. */
   fallbackColumnIds: string[];
 };
 
 type SystemOneRunFacts = Pick<
   CaseLawResearchAnswerRun,
-  "completedAt" | "model" | "retrieved"
+  "completedAt" | "retrieved"
 >;
 
 type ResolveSystemOneOutcomesOptions = {
@@ -116,15 +115,18 @@ type ResolveSystemOneOutcomesOptions = {
   outcomes: ReadonlyMap<string, AnswerOutcome>;
   /** The text behind each source id, for the justification blocks. */
   excerptByAnchor: ReadonlyMap<string, string>;
+  /** The court's number for each numbered block, by anchor. */
+  courtParagraphNumbers: ReadonlyMap<string, number>;
   run: SystemOneRunFacts;
 };
 
 /**
- * One cell decision per question: written, said to be unstated, or handed on.
+ * One cell decision per question: answered, unstated, failed, or unplanned.
  * An answer becomes `FieldContent` through the same validators the generative
  * parser uses, and an empty one is `not_stated` whatever the column's kind.
  */
 export const resolveSystemOneOutcomes = ({
+  courtParagraphNumbers,
   excerptByAnchor,
   outcomes,
   questions,
@@ -134,28 +136,35 @@ export const resolveSystemOneOutcomes = ({
   const fallbackColumnIds: string[] = [];
   for (const question of questions) {
     const outcome = outcomes.get(question.id);
-    // No outcome means the kit could not plan the question (a select with no
-    // options, a date the text spells nowhere); undecided means no decision
-    // model, an answer under the floor, or a failed call.
-    if (outcome === undefined || outcome.state === "undecided") {
+    if (outcome === undefined) {
       fallbackColumnIds.push(question.id);
+      continue;
+    }
+    if (outcome.state === "undecided") {
+      settled.push({
+        columnId: question.id,
+        outcome: { state: "failed", failureReason: "model_error" },
+      });
       continue;
     }
     const validated = validateAnswerForContent({
       answer: outcome.state === "answered" ? outcome.answer : null,
       content: question.content,
     });
-    // A chosen value comes from this column's own options or from a candidate
-    // read out of its sources, so a validation error means the two drifted
-    // apart mid-run: ask the generative model rather than write the cell wrong.
     if (Result.isError(validated)) {
-      fallbackColumnIds.push(question.id);
+      settled.push({
+        columnId: question.id,
+        outcome: { state: "failed", failureReason: "wrong_type" },
+      });
       continue;
+    }
+    if (outcome.model === null) {
+      panic("An answered decision must identify its model");
     }
     const sourceId = outcome.state === "answered" ? outcome.sourceId : null;
     const cellRun: CaseLawResearchAnswerRun = {
       version: 1,
-      model: run.model,
+      model: outcome.model,
       completedAt: run.completedAt,
       retrieved: run.retrieved,
       rationale: outcome.rationale.slice(
@@ -165,6 +174,7 @@ export const resolveSystemOneOutcomes = ({
       justification: buildAnswerJustification(
         sourceId === null ? [] : [sourceId],
         excerptByAnchor,
+        courtParagraphNumbers,
       ),
     };
     const answer = statedAnswerContent(validated.value);

@@ -11,7 +11,6 @@ import type { ComponentProps } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -22,6 +21,7 @@ import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
+import { createDocumentDraftReviewId } from "@/components/ai-suggestions/file-review-session";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
@@ -66,7 +66,6 @@ import {
   buildCreateDocumentDraftPayload,
   buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftReviewId,
   createDocumentDraftTabId,
   type CreateDocumentDraft,
   findReadyCreateDocumentDraftMessageId,
@@ -82,8 +81,8 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
-import "@/components/chat/create-document-draft-inspector";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import "@/components/chat/create-document-draft-inspector";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
@@ -168,6 +167,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   workspacesKeys,
   workspacesNavigationOptions,
@@ -385,6 +385,7 @@ export const useChatSession = ({
   const {
     error: runtimeError,
     sessionGenerating,
+    reconnecting,
     status,
     stop: stopState,
     turnAbandoned,
@@ -787,7 +788,7 @@ export const useChatSession = ({
   const enqueueMessage = useCallback(
     (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       const entry: QueuedChatEntry = {
-        id: uuidv7(),
+        id: createUuid(),
         message,
         ...describeQueuedMessage(message),
         ...(options === undefined ? {} : { options }),
@@ -1618,11 +1619,18 @@ export const useChatSession = ({
       isChatTurnGenerating({
         hasError: error !== undefined,
         messages,
-        requestActive: isChatClientRequestActive(status),
+        requestActive: reconnecting || isChatClientRequestActive(status),
         sessionGenerating,
         stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status, stopState.status],
+    [
+      error,
+      messages,
+      reconnecting,
+      sessionGenerating,
+      status,
+      stopState.status,
+    ],
   );
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
@@ -1770,7 +1778,9 @@ export const useChatSession = ({
   ]);
 
   return {
+    activitySession: chat,
     clientStatus: status,
+    reconnecting,
     refreshAnswers,
     error,
     messages,

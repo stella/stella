@@ -128,6 +128,11 @@
     "orSignInWithEmail": "or sign in with email",
     "organizationNamePlaceholder": "My organization",
     "password": "Password",
+    "professionalUse": {
+      "description": "Your account was set up without showing you this statement. Accept it to continue.",
+      "title": "Confirm professional use"
+    },
+    "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.",
     "rateLimitExceeded": "Too many attempts. Please try again later.",
     "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
@@ -358,6 +363,8 @@
       "chooseList": "Choose a list",
       "createList": "Create a list",
       "evidenceList": "Facts from",
+      "loadSample": "Load sample case",
+      "loadSampleFailed": "Couldn't load the sample case",
       "noLists": "This matter has no lists",
       "pickList": "Choose the list whose facts this matter's documents are checked against."
     }
@@ -530,6 +537,16 @@
       "createInvoice": "Create invoice",
       "dueDate": "Due date",
       "editInvoice": "Edit invoice",
+      "export": {
+        "accounting": "Accounting import",
+        "eBilling": "E-billing",
+        "eso9": "ESO9 import sheet (XLSX)",
+        "exporting": "Preparing export…",
+        "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "spreadsheets": "Spreadsheets",
+        "xlsx": "Invoices (XLSX)",
+        "xlsxLines": "Invoice lines (XLSX)"
+      },
       "finalize": "Finalize",
       "invoiceDate": "Invoice date",
       "invoiceDetail": "Invoice detail",
@@ -727,6 +744,13 @@
         "procedural-history": "Procedural history",
         "reasoning": "Reasoning"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
+        "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
+        "unavailable": "AI analysis is not available for this decision."
+      },
       "generate": "Generate AI headnotes",
       "holdingAnchor": "Go to paragraph",
       "invitation": "With a free account, AI drafts working notes on this decision.",
@@ -764,6 +788,9 @@
       "none": "No citations recorded yet.",
       "openAtCitation": "Open at the citation",
       "openDecision": "Open decision",
+      "paragraphLabel": "Paragraph {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph}",
       "partialSummary": "Citation totals and timeline are partial.",
       "passageNotFound": "The citing passage was not located in the text",
       "positiveCount": "{count, plural, one {# positive} other {# positive}}",
@@ -792,7 +819,7 @@
       "courtCount": "{count, plural, one {# court} other {# courts}}",
       "newLast24Hours": "{count} in the last 24 h",
       "newLast7Days": "New in the last 7 days",
-      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}"
+      "otherCourts": "Other courts"
     },
     "courtTiers": {
       "constitutional": "Constitutional courts",
@@ -808,6 +835,7 @@
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}",
+      "gapStatusUnknown": "Gap status unknown",
       "generatedAt": "Figures from {date}",
       "globeLabel": "Countries whose case law the corpus holds, on a globe",
       "healthCurrent": "Up to date",
@@ -816,9 +844,12 @@
       "healthStalled": "Stalled",
       "healthUnknown": "Never run",
       "inPreparation": "In preparation",
+      "knownGaps": "Known gaps",
       "lastSync": "Last sync",
+      "noGapsRecorded": "No gaps recorded",
       "notCountedYet": "Not counted yet",
       "notMeasuredYet": "Not measured yet",
+      "pendingTexts": "Pending texts",
       "reportedByListing": "Counted from the publisher's listing",
       "reportedByOperator": "Recorded by hand",
       "reportedByPublisher": "Publisher's own count",
@@ -1082,6 +1113,9 @@
       "toastDescription": "Full-page chat lands with persisted threads.",
       "toastTitle": "Full view not yet available"
     },
+    "activity": {
+      "review": "Review update"
+    },
     "aiPrompt": "AI message composer",
     "aiThread": "AI conversation",
     "analyzingSources": "Analyzing sources",
@@ -1251,6 +1285,11 @@
     "greeting": "What would you like to work on?",
     "greetingSubtitle": "Start with a matter, document, or plain question.",
     "hideThread": "Hide conversation",
+    "history": {
+      "matterUnavailable": "This matter isn't available",
+      "older": "Older",
+      "previous7Days": "Previous 7 days"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {and # more} other {and # more}}"
@@ -1267,6 +1306,9 @@
       "noMatters": "No matters yet",
       "noRecentChats": "No recent chats",
       "noSkills": "No skills yet",
+      "openAllMatters": "Open all matters",
+      "openChatHistory": "Open chat history",
+      "openSkillsLibrary": "Open the skills library",
       "pinnedMatters": "Pinned matters",
       "recentChats": "Recent chats",
       "skillEditedBy": "Edited by {name} · {time}",
@@ -1326,7 +1368,9 @@
     "pastedText": {
       "expand": "Show full text",
       "fromClipboard": "Pasted {count, plural, one {# character} other {# characters}}",
-      "fromPromptFallback": "Skill"
+      "fromPromptFallback": "Skill",
+      "showInTextField": "Show in text field",
+      "title": "Pasted text"
     },
     "placeholder": "Type your question here, / for skills, @ to add context",
     "promptImprovementStrategies": {
@@ -1397,17 +1441,23 @@
     },
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
+    "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
+    "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.",
+    "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.",
     "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.",
     "sendErrorProviderCredentialsRejected": "The AI provider rejected the configured credentials. Ask your workspace admin to check the API key in organization settings.",
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.",
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.",
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
+    "sendErrorTimedOut": "The chat service did not respond in time. Try again.",
     "sendPrompt": "Send message",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
+    "signInToChat": "Sign in to chat about this document",
+    "signInToChatAbout": "Sign in to chat about",
     "skills": {
       "scope": {
         "private": "Your skills",
@@ -1738,6 +1788,8 @@
     "citations": "Citations",
     "clauses": "Clauses",
     "clearDate": "Clear date",
+    "clearFilters": "Clear filters",
+    "clearSearch": "Clear search",
     "close": "Close",
     "closeAll": "Close all",
     "closeOthers": "Close others",
@@ -1768,6 +1820,7 @@
       "nextDecade": "Next decade",
       "nextMonth": "Next month",
       "nextYear": "Next year",
+      "outOfRange": "Choose a date within the allowed range.",
       "previousDecade": "Previous decade",
       "previousMonth": "Previous month",
       "previousYear": "Previous year",
@@ -1915,6 +1968,7 @@
     "noResults": "No results",
     "noVersions": "No version history",
     "none": "None",
+    "notStated": "Not stated",
     "notes": "Notes",
     "open": "Open",
     "openInNewTab": "Open in new tab",
@@ -1984,6 +2038,7 @@
     "sort": "Sort",
     "source": "Source",
     "stale": "Stale",
+    "start": "Start",
     "status": "Status",
     "stepCount": "{count, plural, one {# step} other {# steps}}",
     "stepProgress": "{current} of {total}",
@@ -2063,11 +2118,37 @@
     "scopeSkills": "Use your saved stella skills",
     "scopeTemplates": "List, fill, and create your document templates",
     "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates",
+    "sensitiveAccess": "Includes access that can delete data or change your organization",
+    "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}",
     "signedInAs": "Signed in as <email>{accountEmail}</email>",
+    "summaryAdminRead": "audit log",
+    "summaryAdminWrite": "organization members and settings",
+    "summaryBillingWrite": "time entries",
+    "summaryChat": "chats",
+    "summaryContactsWrite": "contacts",
+    "summaryDocumentsWrite": "documents",
+    "summaryExternalMcps": "connected integrations",
+    "summaryKnowledgeWrite": "clauses and playbooks",
+    "summaryLawRead": "public statutes and case law",
+    "summaryLineChange": "<group>Create and edit:</group> {items}",
+    "summaryLineOther": "<group>Also:</group> {items}",
+    "summaryLineRead": "<group>Read:</group> {items}",
+    "summaryLineUse": "<group>Use:</group> {items}",
+    "summaryMattersWrite": "matters and tasks",
+    "summaryProfile": "profile",
+    "summaryRead": "documents, matters and contacts",
+    "summaryReadAnonymized": "anonymized documents and matters",
+    "summarySearch": "search",
+    "summarySearchAnonymized": "anonymized search",
+    "summarySkills": "skills",
+    "summaryStaySignedIn": "Stay signed in",
+    "summaryTemplates": "templates",
+    "summaryTemplatesAnonymized": "anonymized templates",
     "title": "Authorize access",
     "unverifiedApp": "Unverified app",
     "unverifiedExplanation": "stella has not verified who publishes this app.",
-    "useAnotherAccount": "Use another account"
+    "useAnotherAccount": "Use another account",
+    "verifiedPublisher": "Verified app by {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Also appears as party in {count, plural, one {# other matter} other {# other matters}}",
@@ -2771,7 +2852,6 @@
       },
       "selectFlow": "Choose a workflow",
       "sizeConfirmTitle": "Large flow run",
-      "start": "Start",
       "startFailed": "Couldn't start the workflow.",
       "started": "Workflow started",
       "stepProgress": "Step {current} of {total}",
@@ -2843,6 +2923,7 @@
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
     "checkingDocxEditTitle": "Checking document",
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.",
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.",
     "comment": "Comment",
     "comments": {
       "addPlaceholder": "Add a comment...",
@@ -2988,8 +3069,7 @@
   "guides": {
     "action": {
       "replay": "Start again",
-      "skip": "Skip",
-      "start": "Start"
+      "skip": "Skip"
     },
     "checklist": {
       "progress": "{completed} of {total} complete"
@@ -3539,6 +3619,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
+          "name": "Build a playbook"
+        }
+      },
       "builtInSection": "Built-in skills",
       "deleteFile": "Delete file",
       "deleteFileConfirm": "Delete file? This cannot be undone.",
@@ -3668,6 +3754,10 @@
         "failed": "Could not save",
         "nameMissing": "Not saved: add a name",
         "positionsNeedAttention": "Not saved: {count, plural, one {# position needs} other {# positions need}} attention"
+      },
+      "buildWithAi": {
+        "description": "Answer a few questions in a chat and the playbook is saved as you go.",
+        "title": "Build with AI"
       },
       "check": "Use an exact rule instead of AI",
       "checkHint": "For measurable conditions, such as payment term ≤ 30 days.",
@@ -3908,7 +3998,9 @@
   },
   "lawHome": {
     "clearRecent": "Clear recent",
+    "clearRecentConfirmation": "Delete all your recent searches, decisions and statutes in this organization? This cannot be undone.",
     "enteringIntoForce": "Entering into force",
+    "importFailed": "Local history could not be imported. It is still saved on this device.",
     "inForceFrom": "In force from {date}",
     "noRecent": "No recent activity",
     "noSignals": "No signals yet",
@@ -4060,7 +4152,6 @@
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.",
     "appsTitle": "Get stella everywhere",
     "catalogueAlwaysOn": "Always on",
-    "catalogueClearSearch": "Clear search",
     "catalogueCommunityHeading": "Others",
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}",
     "catalogueDetailAbout": "About",
@@ -4117,6 +4208,10 @@
     "aiConfig": {
       "addProvider": "Add provider",
       "addProviderFirst": "Add a provider first",
+      "anthropicKeyDisabled": "Create an active API key in Anthropic Console and replace this key.",
+      "anthropicNoCredits": "Add API credits in Anthropic Console billing, then retry.",
+      "anthropicOrganizationRestricted": "Ask your Anthropic organization administrator to grant access, or use a key from an allowed organization.",
+      "anthropicSubscriptionToken": "Use an API key created in Anthropic Console instead of a Claude subscription token.",
       "anthropicWorkspaceId": "Workspace ID",
       "anthropicWorkspaceRequired": "This Anthropic key needs a workspace. Enter its Workspace ID from Anthropic Console, then save again.",
       "anthropicWorkspaces": "Open Anthropic Workspaces",
@@ -4125,7 +4220,9 @@
       "apiKeyPlaceholder": "Enter your API key",
       "apiKeySaved": "Saved key {key}",
       "apiKeyUpdatePlaceholder": "Enter new key to update",
+      "azureModelNotEnabled": "Check that the model deployment exists in the selected Azure resource and region, and that this key can access it.",
       "baseUrl": "Base URL",
+      "bedrockModelNotEnabled": "Check model availability in the selected AWS region, model access and your IAM permissions. Enable or choose an accessible model, then retry.",
       "chooseModelsSubtitle": "Pick a model for each role. Prices update on the right.",
       "chooseModelsTitle": "Choose models",
       "configure": "Configure",
@@ -4133,11 +4230,16 @@
       "customModelDescription": "This model ID is not in stella’s catalog. It will be passed to the selected provider as typed.",
       "customModelHint": "No catalog match. Type any model ID; custom IDs are saved as typed.",
       "decision": {
+        "dataRegion": "Data region",
         "description": "Questions with fixed answers (document categories, citation polarity)",
         "generativeFallback": "Uses the generative model for the task.",
         "incomplete": "Enter an API key and a model for the decision model, or remove it.",
         "instanceProvided": "stella already provides a decision model; add your own only to use a different one.",
-        "label": "Decision-making"
+        "label": "Decision-making",
+        "regionEu": "European Union",
+        "regionGlobal": "Global",
+        "reuseOpenAIKey": "Use my OpenAI key",
+        "separateKey": "Use a separate key"
       },
       "defaultModel": "Default: {model}",
       "defaultModelOption": "Default",
@@ -4151,6 +4253,8 @@
       "editProviders": "Edit providers",
       "endpoint": "Endpoint",
       "endpointDescription": "Use the Azure OpenAI or Azure Foundry /openai/v1 endpoint. stella stores the normalized endpoint.",
+      "googleApiNotEnabled": "Enable the Generative Language API in the Google Cloud project that owns this key, then retry.",
+      "googleKeyRestricted": "Check this key’s API, IP address and referrer restrictions in Google Cloud. Allow the required API and your server’s requests, then retry.",
       "keepSavedKey": "Keep saved key",
       "keyFormatHint": "This key has an unusual format for {provider}. Save to check it with the provider.",
       "modelForRole": "{role} model",
@@ -4160,6 +4264,9 @@
       "newApiKey": "New API key",
       "newApiKeyDescription": "This will replace the saved key when you save changes.",
       "noModelResults": "No matching offered models",
+      "openaiInsufficientQuota": "Check your OpenAI project budget and API billing. Add credits or raise the applicable limit, then retry.",
+      "openaiProjectOrganizationMismatch": "Use an API key from the intended OpenAI project and organization. Check their access settings, then retry.",
+      "openrouterNoCredits": "Add credits in OpenRouter billing, then retry.",
       "overrideRoles": "Override roles",
       "overrideRolesDescription": "Choose which roles use this key, then choose a model for each role. Unselected roles use the platform default.",
       "prices": {
@@ -4179,6 +4286,7 @@
       "providerForRole": "{role} provider",
       "providerKeyInvalid": "{provider} rejected the key. Double-check it before saving.",
       "providerKeyInvalidShort": "Invalid",
+      "providerSetupConsole": "Open provider settings",
       "providersDescription": "Add the provider credentials you want stella to use.",
       "providersPanel": "Providers",
       "removeLastProviderConfirm": "Remove {provider}? This also resets the custom AI model choices.",
@@ -4412,6 +4520,8 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",
     "continueInChat": "Continue in chat",
     "dateFrom": "From",
     "dateTo": "To",
@@ -4796,7 +4906,17 @@
     "amendedTimes": "{count, plural, =0 {Not amended} one {Amended once} other {Amended # times}}",
     "asOf": "Text in force on",
     "backToList": "All statutes",
+    "citingDecisionHideSnippet": "Collapse passage",
+    "citingDecisionMentionCount": "cited {count}×",
+    "citingDecisionOlderVersion": "Older version",
+    "citingDecisionShowSnippet": "Show full passage",
+    "citingDecisionsCourtPlaceholder": "All courts",
     "citingDecisionsFilterPlaceholder": "Filter loaded decisions",
+    "citingDecisionsSnapshotCapped": "{count} decisions shown (the top {limit} by mentions of this provision).",
+    "citingDecisionsSortCitations": "Mentions of this provision",
+    "citingDecisionsSortDate": "Decision date",
+    "citingDecisionsYear": "Decision year",
+    "citingDecisionsYearPlaceholder": "All years",
     "columns": {
       "act": "Act",
       "amendments": "Amendments",
@@ -4838,6 +4958,7 @@
     "inForceSince": "In force since {date}",
     "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leading decisions",
+    "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
     "openProvision": "Open provision",
@@ -6045,12 +6166,30 @@
         "addPDF": "Add PDF",
         "applyCrop": "Apply crop",
         "crop": "Crop",
-        "cropBottom": "Bottom",
-        "cropDescription": "{count, plural, one {Set the crop margins for the selected page.} other {Set the crop margins for the # selected pages.}}",
-        "cropLeft": "Left",
-        "cropRight": "Right",
+        "cropAdvanced": "Advanced crop settings",
+        "cropBottom": "Bottom (mm)",
+        "cropDescription": "{count, plural, one {Set the crop margins for the selected page in millimeters.} other {Set the crop margins for the # selected pages in millimeters.}}",
+        "cropHandle": "Resize crop: {position}",
+        "cropHandleBottom": "bottom",
+        "cropHandleBottomLeft": "bottom left",
+        "cropHandleBottomRight": "bottom right",
+        "cropHandleLeft": "left",
+        "cropHandleRight": "right",
+        "cropHandleTop": "top",
+        "cropHandleTopLeft": "top left",
+        "cropHandleTopRight": "top right",
+        "cropHint": "Drag the area or its handles. Arrow keys adjust by 1 mm; Shift adjusts by 10 mm. The same margins apply to every selected page.",
+        "cropLeft": "Left (mm)",
+        "cropMove": "Move crop area",
+        "cropNextPage": "Next selected page",
+        "cropPage": "Page {page, number} of {count, number}",
+        "cropPreview": "Crop preview, page {page, number}",
+        "cropPreviewFailed": "The page preview could not be rendered.",
+        "cropPreviousPage": "Previous selected page",
+        "cropRight": "Right (mm)",
         "cropTitle": "Crop pages",
-        "cropTop": "Top",
+        "cropTooSmall": "This page is too small to crop to at least 10 mm.",
+        "cropTop": "Top (mm)",
         "delete": "Remove page",
         "deselectAll": "Deselect all",
         "discard": "Discard page edits",
@@ -6275,7 +6414,6 @@
         "year": "Year"
       },
       "cannotDeleteRequired": "At least one view of this type is required",
-      "clearFilters": "Clear filters",
       "copySuffix": "{name} (copy)",
       "deleteView": "Delete view",
       "exportCsv": "Export CSV",

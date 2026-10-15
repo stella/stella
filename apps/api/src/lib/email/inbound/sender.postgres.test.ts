@@ -10,6 +10,7 @@ import {
   matterInboundAddresses,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
@@ -48,6 +49,12 @@ if (!databaseUrl || !runPostgresTests) {
         const adminId = mintAuthProviderId<"user">();
         const firstWorkspaceId = createSafeId<"workspace">();
         const secondWorkspaceId = createSafeId<"workspace">();
+        const fixtureScoped = createScopedDb(
+          markRlsDatabase(setupDb),
+          [firstWorkspaceId, secondWorkspaceId],
+          organizationId,
+          adminId,
+        );
         const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
         const firstToken = generateInboundAddressToken();
         const secondToken = generateInboundAddressToken();
@@ -142,31 +149,37 @@ if (!databaseUrl || !runPostgresTests) {
               reference: "LOCK-2",
             },
           ]);
-          await setupDb.insert(matterInboundAddresses).values([
-            {
-              organizationId,
-              workspaceId: firstWorkspaceId,
-              token: firstToken,
-            },
-            {
-              organizationId,
-              workspaceId: secondWorkspaceId,
-              token: secondToken,
-            },
-          ]);
-          await setupDb.insert(correspondenceAllowedSenders).values({
-            id: allowedSenderId,
-            organizationId,
-            address: sender,
-            kind: "shared_mailbox",
-            scope: "organization",
-            approvedBy: adminId,
-            approvedByDisplay: {
-              status: "active",
-              name: "Mailbox approver",
-              email: approverEmail,
-            },
-          });
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(matterInboundAddresses).values([
+                {
+                  organizationId,
+                  workspaceId: firstWorkspaceId,
+                  token: firstToken,
+                },
+                {
+                  organizationId,
+                  workspaceId: secondWorkspaceId,
+                  token: secondToken,
+                },
+              ]),
+          );
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(correspondenceAllowedSenders).values({
+                id: allowedSenderId,
+                organizationId,
+                address: sender,
+                kind: "shared_mailbox",
+                scope: "organization",
+                approvedBy: adminId,
+                approvedByDisplay: {
+                  status: "active",
+                  name: "Mailbox approver",
+                  email: approverEmail,
+                },
+              }),
+          );
 
           const fileCandidate = async ({
             tx,
@@ -176,7 +189,15 @@ if (!databaseUrl || !runPostgresTests) {
           }: FileInboundCandidateOptions<Transaction>) => {
             const result = await createCorrespondence({
               safeDb: async (work) =>
-                await Result.tryPromise(async () => await work(tx)),
+                await Result.tryPromise(
+                  async () =>
+                    await createScopedDb(
+                      markRlsDatabase(tx),
+                      [workspaceId],
+                      organizationId,
+                      adminId,
+                    )(work),
+                ),
               organizationId,
               workspaceId,
               filer,
@@ -295,10 +316,13 @@ if (!databaseUrl || !runPostgresTests) {
             { status: "fulfilled", value: { status: "filed" } },
             { status: "fulfilled", value: { status: "filed" } },
           ]);
-          const rows = await setupDb
-            .select({ workspaceId: correspondence.workspaceId })
-            .from(correspondence)
-            .where(eq(correspondence.organizationId, organizationId));
+          const rows = await fixtureScoped(
+            async (tx) =>
+              await tx
+                .select({ workspaceId: correspondence.workspaceId })
+                .from(correspondence)
+                .where(eq(correspondence.organizationId, organizationId)),
+          );
           expect(rows.map(({ workspaceId }) => workspaceId).toSorted()).toEqual(
             [firstWorkspaceId, secondWorkspaceId].toSorted(),
           );

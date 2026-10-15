@@ -4,10 +4,10 @@
 // equivalent events accumulated different grouping, execution, and category
 // metadata.
 //
-// The ban is deliberately scoped to `.insert(auditLogs)` and aliases imported
-// from the canonical schema module: other Drizzle inserts are unrelated, and
+// The ban covers both audit tables and aliases imported from their schema
+// modules: other Drizzle inserts are unrelated, and
 // an arbitrary local identifier is not assumed to name the audit table.
-// `apps/api/src/lib/audit-log.ts` is the sole owner of the physical insert.
+// `apps/api/src/lib/db/audit-recording.ts` is the sole owner of the physical insert.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -20,6 +20,12 @@ import {
   isStringLiteral,
 } from "./utils.ts";
 
+const AUDIT_TABLE_NAMES = new Set(["auditLogs", "accountAuditLogs"]);
+const AUDIT_SCHEMA_MODULES = new Set([
+  "@/api/db/schema",
+  "@/api/db/schema/contacts",
+]);
+
 const isIdentifierNamed = (node: unknown, name: string): boolean =>
   isIdentifier(node, name);
 
@@ -31,36 +37,37 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           directInsert:
-            "Do not insert auditLogs directly. Use createAuditRecorder or " +
+            "Do not insert audit tables directly. Use createAuditRecorder or " +
             "createBackgroundAuditRecorder so derived audit columns stay " +
             "consistent.",
         },
       },
       createOnce(context) {
-        const auditLogBindings = new Set(["auditLogs"]);
+        const auditLogBindings = new Set(["auditLogs", "accountAuditLogs"]);
         return {
           before() {
             auditLogBindings.clear();
             auditLogBindings.add("auditLogs");
+            auditLogBindings.add("accountAuditLogs");
             const filename = filenameForContext(context);
             return (
               (filename.includes("apps/api/src/") ||
                 filename.endsWith(
                   ".oxlint-plugins/__fixtures__/no-direct-audit-log-insert.fixture.ts",
                 )) &&
-              !filename.endsWith("apps/api/src/lib/audit-log.ts")
+              !filename.endsWith("apps/api/src/lib/db/audit-recording.ts")
             );
           },
           ImportDeclaration(node) {
             if (
               !isStringLiteral(node.source) ||
-              node.source.value !== "@/api/db/schema" ||
+              !AUDIT_SCHEMA_MODULES.has(node.source.value) ||
               !Array.isArray(node.specifiers)
             ) {
               return;
             }
             for (const specifier of node.specifiers) {
-              if (getImportedName(specifier) !== "auditLogs") {
+              if (!AUDIT_TABLE_NAMES.has(getImportedName(specifier) ?? "")) {
                 continue;
               }
               const localName = getImportLocalName(specifier);

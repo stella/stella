@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 
 import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 
+import { serviceVolumeMountViolations } from "./check-railway-template-draft";
 import images from "./ci-service-images.json" with { type: "json" };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -52,6 +54,189 @@ const readComposeServices = async (): Promise<Record<string, unknown>> => {
 
 const LOOPBACK_HOST = "127.0.0.1";
 
+// The repository inventory includes new deployment directories without walking
+// dependency/build trees. Include untracked files for local authoring as well.
+const deploymentTemplates = async () => {
+  const templates = [];
+  const inventory = spawnSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    {
+      cwd: new URL("..", import.meta.url),
+      encoding: "utf-8",
+    },
+  );
+  if (inventory.status !== 0) {
+    throw new TypeError(
+      "Deployment template inventory requires a Git checkout",
+    );
+  }
+  const candidates = new Set(
+    inventory.stdout
+      .split("\0")
+      .filter(
+        (candidate) =>
+          /\.(?:json|ya?ml)$/u.test(candidate) &&
+          !candidate.startsWith(".github/") &&
+          (!/^(?:apps|packages)\//u.test(candidate) ||
+            /compose|deploy|selfhost|template|railway|render/iu.test(
+              candidate,
+            )) &&
+          !/(?:^|\/)(?:node_modules|fixtures|__fixtures__|dist|build)\//u.test(
+            candidate,
+          ),
+      ),
+  );
+  for (const candidate of candidates) {
+    const contents = await Bun.file(
+      new URL(`../${candidate}`, import.meta.url),
+    ).text();
+    if (!/(?:"services"|^services)\s*:/mu.test(contents)) {
+      continue;
+    }
+    const parsed: unknown = candidate.endsWith(".json")
+      ? JSON.parse(contents)
+      : Bun.YAML.parse(contents);
+    if (!isRecord(parsed) || parsed["services"] === undefined) {
+      continue;
+    }
+    templates.push({
+      path: candidate,
+      services: recordField(parsed, "services"),
+      contents,
+    });
+  }
+  return templates;
+};
+
+describe("deployment database login contract", () => {
+  test("requires the declared Postgres volume in the exported Railway service", () => {
+    const expectedMount = "/var/lib/postgresql";
+    for (const volumeMounts of [
+      undefined,
+      {},
+      { data: { mountPath: "/var/lib/postgresql/data" } },
+      { data: { mountPath: null } },
+      [{ mountPath: expectedMount }],
+    ]) {
+      expect(
+        serviceVolumeMountViolations({
+          draftService: { volumeMounts },
+          serviceName: "Postgres",
+          volumeMountPath: expectedMount,
+        }),
+      ).toEqual([
+        `Postgres must mount a persistent volume at ${expectedMount} in the template draft`,
+      ]);
+    }
+    expect(
+      serviceVolumeMountViolations({
+        draftService: {
+          volumeMounts: { "volume-id": { mountPath: expectedMount } },
+        },
+        serviceName: "Postgres",
+        volumeMountPath: expectedMount,
+      }),
+    ).toEqual([]);
+  });
+
+  test("every database template creates and uses the initialized owner login", async () => {
+    const templates = await deploymentTemplates();
+    expect(templates.map(({ path }) => path)).toEqual(
+      expect.arrayContaining([
+        "docker-compose.yml",
+        "docker-compose.selfhost.yml",
+        "railway/template-manifest.json",
+      ]),
+    );
+    const initialization = await Bun.file(
+      new URL("../docker/postgres/init.sql", import.meta.url),
+    ).text();
+    expect(initialization).toContain(
+      "ALTER ROLE %I NOSUPERUSER NOBYPASSRLS CREATEROLE CREATEDB",
+    );
+    expect(initialization).toContain(
+      "GRANT stella TO %I WITH ADMIN TRUE, INHERIT FALSE, SET TRUE",
+    );
+    const image = await Bun.file(
+      new URL("../docker/postgres/Dockerfile", import.meta.url),
+    ).text();
+    expect(image).toContain(
+      "COPY docker/postgres/init.sql /docker-entrypoint-initdb.d/init.sql",
+    );
+
+    for (const { path, services, contents } of templates) {
+      const databaseServices = Object.entries(services).filter(
+        ([name, service]) => {
+          if (!isRecord(service)) {
+            throw new TypeError(`${path}: ${name} must be an object`);
+          }
+          const variables = service["variables"] ?? service["environment"];
+          // Client-only setup services inherit their server's login contract.
+          const entrypoint = service["entrypoint"];
+          const isDatabaseClient =
+            Array.isArray(entrypoint) &&
+            entrypoint.some(
+              (part) =>
+                typeof part === "string" &&
+                part.includes("psql -h postgres -U postgres"),
+            ) &&
+            isRecord(service["depends_on"]) &&
+            service["depends_on"]["postgres"] !== undefined;
+          return (
+            name.toLowerCase() === "postgres" ||
+            (isRecord(variables) && variables["POSTGRES_USER"] !== undefined) ||
+            (!isDatabaseClient &&
+              typeof service["image"] === "string" &&
+              service["image"].startsWith("postgres:"))
+          );
+        },
+      );
+      for (const [name, service] of databaseServices) {
+        if (!isRecord(service)) {
+          throw new TypeError(`${path}: ${name} must be an object`);
+        }
+        const build = recordField(service, "build");
+        expect(build["dockerfilePath"] ?? build["dockerfile"]).toBe(
+          "docker/postgres/Dockerfile",
+        );
+        const variables = recordField(
+          service,
+          service["variables"] === undefined ? "environment" : "variables",
+        );
+        expect(variables["POSTGRES_USER"]).toBe("postgres");
+      }
+      if (databaseServices.length === 0) {
+        const api = recordField(services, "api");
+        expect(recordField(api, "environment")["NODE_ENV"]).toBe("production");
+        expect(contents).toContain("/ready");
+        expect(contents).toContain("STELLA_API_ENV_FILE");
+        continue;
+      }
+      if (path.endsWith(".json")) {
+        const apiVariables = recordField(
+          recordField(services, "api"),
+          "variables",
+        );
+        expect(apiVariables["DATABASE_URL"]).toBe(
+          `\${{Postgres.DATABASE_URL}}`,
+        );
+        const postgresVariables = recordField(
+          recordField(services, "Postgres"),
+          "variables",
+        );
+        expect(recordField(services, "Postgres")["volumeMountPath"]).toBe(
+          "/var/lib/postgresql",
+        );
+        expect(postgresVariables["PGUSER"]).toBe(`\${{POSTGRES_USER}}`);
+        expect(postgresVariables["DATABASE_URL"]).toStartWith(
+          `postgresql://\${{PGUSER}}:`,
+        );
+      }
+    }
+  });
+});
+
 // Compose accepts both the short "host:published:target" string and the long
 // `{ host_ip, published, target }` form.
 const isLoopbackPublish = (port: unknown): boolean =>
@@ -84,7 +269,7 @@ describe("local compose services", () => {
         new URL("../docker/postgres/Dockerfile.dockerignore", import.meta.url),
       ).text(),
     ).toBe(
-      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n",
+      "*\n!docker/\ndocker/*\n!docker/postgres/\ndocker/postgres/*\n!docker/postgres/Dockerfile\n!docker/postgres/init.sql\n!docker/postgres/prod-parity.conf\n!docker/postgres/server.conf\n",
     );
   });
 

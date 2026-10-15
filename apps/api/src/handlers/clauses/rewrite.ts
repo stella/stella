@@ -89,6 +89,7 @@ ${numbered}`;
 };
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "clauses.rewrite" },
   description:
     "Rewrite the prose of a clause body with the model, following a " +
@@ -151,6 +152,7 @@ const rewriteClause = createSafeRootHandler(
       feature: "clauses.rewrite",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
