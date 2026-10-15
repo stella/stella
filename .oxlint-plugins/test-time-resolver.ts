@@ -1,4 +1,4 @@
-import type { Variable } from "@oxlint/plugins";
+import type { Reference, Variable } from "@oxlint/plugins";
 
 import {
   getPropertyName,
@@ -38,6 +38,68 @@ const GLOBAL_CLOCKS = new Set([
   "window",
   "self",
 ]);
+
+type BindingSelector = string | Reference["identifier"];
+
+const bindingProperties = (binding: BindingSelector) => {
+  const propertiesForBinding = (
+    pattern: unknown,
+    properties: string[] = [],
+  ): string[] | null => {
+    if (!isAstNode(pattern)) {
+      return null;
+    }
+    if (isIdentifierReference(pattern) || pattern.type === "Identifier") {
+      const matches =
+        typeof binding === "string"
+          ? pattern.name === binding
+          : pattern === binding;
+      return matches ? properties : null;
+    }
+    if (pattern.type === "AssignmentPattern") {
+      return propertiesForBinding(pattern.left, properties);
+    }
+    if (
+      pattern.type !== "ObjectPattern" ||
+      !Array.isArray(pattern.properties)
+    ) {
+      return null;
+    }
+    for (const property of pattern.properties) {
+      if (!isAstNode(property) || property.type !== "Property") {
+        continue;
+      }
+      const name =
+        property.computed === true
+          ? staticStringValue(property.key)
+          : getPropertyName(property.key);
+      if (name === null) {
+        continue;
+      }
+      const found = propertiesForBinding(property.value, [...properties, name]);
+      if (found !== null) {
+        return found;
+      }
+    }
+    return null;
+  };
+  return propertiesForBinding;
+};
+
+const assignmentPatternForWrite = (reference: Reference): unknown => {
+  let child: unknown = reference.identifier;
+  let parent: unknown = reference.identifier.parent;
+  while (isAstNode(parent)) {
+    if (parent.type === "AssignmentExpression") {
+      return parent.left === child && parent.right === reference.writeExpr
+        ? parent.left
+        : reference.identifier;
+    }
+    child = parent;
+    parent = parent.parent;
+  }
+  return reference.identifier;
+};
 
 type TimeResolverOptions = {
   additionalGlobals?: ReadonlySet<string>;
@@ -121,66 +183,38 @@ export const createTimeResolver = (
     }
     const nextSeen = new Set(seen).add(variable);
     const result: string[] = [];
-    for (const definition of variable.defs) {
-      if (definition.node.type !== "VariableDeclarator") {
-        continue;
-      }
-      const { id, init } = definition.node;
-      const propertiesForBinding = (
-        pattern: unknown,
-        properties: string[] = [],
-      ): string[] | null => {
-        if (!isAstNode(pattern)) {
-          return null;
-        }
-        if (isIdentifierReference(pattern) || pattern.type === "Identifier") {
-          return pattern.name === node.name ? properties : null;
-        }
-        if (pattern.type === "AssignmentPattern") {
-          return propertiesForBinding(pattern.left, properties);
-        }
-        if (
-          pattern.type !== "ObjectPattern" ||
-          !Array.isArray(pattern.properties)
-        ) {
-          return null;
-        }
-        for (const property of pattern.properties) {
-          if (!isAstNode(property) || property.type !== "Property") {
-            continue;
-          }
-          const name =
-            property.computed === true
-              ? staticStringValue(property.key)
-              : getPropertyName(property.key);
-          if (name === null) {
-            continue;
-          }
-          const found = propertiesForBinding(property.value, [
-            ...properties,
-            name,
-          ]);
-          if (found !== null) {
-            return found;
-          }
-        }
-        return null;
-      };
-      const properties = propertiesForBinding(id);
+    type AppendPathsOptions = {
+      pattern: unknown;
+      source: unknown;
+      binding: BindingSelector;
+    };
+    const appendPaths = ({ pattern, source, binding }: AppendPathsOptions) => {
+      const properties = bindingProperties(binding)(pattern);
       if (properties === null) {
-        continue;
+        return;
       }
-      for (const base of paths(init, nextSeen)) {
+      for (const base of paths(source, nextSeen)) {
         let resolved = base;
         for (const property of properties) {
           resolved = memberPath({ base: resolved, property });
         }
         result.push(resolved);
       }
+    };
+    for (const definition of variable.defs) {
+      if (definition.node.type !== "VariableDeclarator") {
+        continue;
+      }
+      const { id, init } = definition.node;
+      appendPaths({ pattern: id, source: init, binding: node.name });
     }
     for (const reference of variable.references) {
       if (reference.isWrite() && !reference.init) {
-        result.push(...paths(reference.writeExpr, nextSeen));
+        appendPaths({
+          pattern: assignmentPatternForWrite(reference),
+          source: reference.writeExpr,
+          binding: reference.identifier,
+        });
       }
     }
     return result;

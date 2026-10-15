@@ -49,6 +49,25 @@ describe(RULE, () => {
     ).toEqual([3, 5, 7, 9, 12, 14]);
   });
 
+  test("follows property paths in later destructuring assignments", async () => {
+    expect(
+      await lint(
+        [
+          "let read; ({ now: read } = Date); read();",
+          "let nested; ({ performance: { now: nested } } = globalThis); nested();",
+          "let instant; ({ Temporal: { Now: { instant } } } = globalThis); instant();",
+          "let Clock; ({ Date: Clock } = globalThis); new Clock();",
+          'let computed; ({ ["now"]: computed } = performance); computed();',
+          "let direct; direct = Date.now; direct();",
+          "let local; ({ now: local } = { now: () => 0 }); local();",
+          "const shadowed = (Date) => { let read; ({ now: read } = Date); read(); };",
+          "const key = unknown; let dynamic; ({ [key]: dynamic } = Date); dynamic();",
+          "let repeated; ({ missing: repeated, now: repeated } = Date); repeated();",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4, 5, 6, 10]);
+  });
+
   test("recognizes node performance imports and expression wrappers", async () => {
     expect(
       await lint(

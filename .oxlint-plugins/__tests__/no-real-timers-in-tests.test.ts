@@ -87,6 +87,42 @@ test("reports each canonical imported sleep helper including renamed and namespa
   ]);
 });
 
+test("tracks later destructuring assignments to native and imported timer aliases", async () => {
+  const source = [
+    "let timer; ({ setTimeout: timer } = globalThis); timer(() => {}, 1);",
+    "let pause; ({ Bun: { sleep: pause } } = globalThis); pause(1);",
+    "let interval; ({ ['setInterval']: interval } = globalThis); interval(() => {}, 1);",
+    "let nested; ({ ['Bun']: { ['sleep']: nested } } = globalThis); nested(1);",
+    "import * as concurrency from '@stll/concurrency';",
+    "let imported; ({ sleep: imported } = concurrency); imported(1);",
+    "let computed; ({ ['sleep']: computed } = concurrency); computed(1);",
+    "let chained; ({ sleep: chained } = concurrency); const alias = chained; alias(1);",
+    "{ let setInterval; ({ setInterval } = globalThis); setInterval(() => {}, 1); }",
+    "let defaulted; ({ setTimeout: defaulted = fallback } = globalThis); defaulted(() => {}, 1);",
+    "let fallbackTimer; ({ unrelated: fallbackTimer = globalThis.setTimeout } = {}); fallbackTimer(() => {}, 1);",
+    "let repeated; ({ unrelated: repeated, setTimeout: repeated } = globalThis); repeated(() => {}, 1);",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([
+    1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12,
+  ]);
+});
+
+test("keeps unrelated and shadowed later destructuring assignments clean", async () => {
+  const source = [
+    "function shadowed(globalThis, Bun) {",
+    "let timer; ({ setTimeout: timer } = globalThis); timer();",
+    "let pause; ({ sleep: pause } = Bun); pause();",
+    "}",
+    "const custom = { setTimeout() {}, sleep() {} };",
+    "let timer; ({ setTimeout: timer } = custom); timer();",
+    "let pause; ({ sleep: pause } = custom); pause();",
+    "const key = 'unrelated'; let dynamic; ({ [key]: dynamic } = globalThis); dynamic();",
+    "import * as kit from '@stll/test-kit'; let owned; ({ sleep: owned } = kit); owned();",
+    "import * as concurrency from '@stll/concurrency'; let other; ({ unrelated: other } = concurrency); other();",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([]);
+});
+
 test("reports unbound sleep helpers without confusing local functions or shadowed native names", async () => {
   expect(
     await lintSingleRule(

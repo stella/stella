@@ -47,6 +47,21 @@ describe(RULE, () => {
     ).toEqual([9, 10, 11]);
   });
 
+  test("tracks elapsed assertions through assigned destructured clock readers", async () => {
+    expect(
+      await lint(
+        [
+          "let read; ({ now: read } = Date);",
+          "const start = read();",
+          "expect(read() - start).toBeLessThan(100);",
+          "let nested; ({ performance: { now: nested } } = globalThis);",
+          "expect(nested() - nested()).toBeGreaterThan(0);",
+          "const ratio = (read() - start) / (nested() - nested());",
+        ].join("\n"),
+      ),
+    ).toEqual([3, 5, 6]);
+  });
+
   test("follows numeric conversions of ambient Date values", async () => {
     expect(
       await lint(
