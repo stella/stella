@@ -19,7 +19,7 @@ const SUMMARY_TIMEOUT_MS = 30_000;
 
 // strictObject (not object): OpenAI strict structured output rejects
 // schema objects without `additionalProperties: false`.
-const changeSummarySchema = v.strictObject({
+export const changeSummarySchema = v.strictObject({
   summary: v.string(),
 });
 

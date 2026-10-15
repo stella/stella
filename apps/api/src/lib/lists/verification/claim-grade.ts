@@ -67,7 +67,9 @@ const rawGradeSchema = v.strictObject({
   ),
 });
 
-const gradingSchema = v.strictObject({ grades: v.array(rawGradeSchema) });
+export const gradingSchema = v.strictObject({
+  grades: v.array(rawGradeSchema),
+});
 
 type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 

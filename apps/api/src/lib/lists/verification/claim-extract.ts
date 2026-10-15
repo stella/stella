@@ -47,7 +47,7 @@ const rawClaimSchema = v.strictObject({
   framing: v.picklist(CLAIM_FRAMINGS),
 });
 
-const extractionSchema = v.strictObject({
+export const extractionSchema = v.strictObject({
   claims: v.array(rawClaimSchema),
 });
 

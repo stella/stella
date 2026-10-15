@@ -411,7 +411,7 @@ const askDecisionModel = async <TQuestions extends SystemOneQuestions>({
 };
 
 const refusalSchema = v.strictObject({ type: v.literal("refusal") });
-const generativeDecisionsSchema = (questions: SystemOneQuestions) => {
+export const generativeDecisionsSchema = (questions: SystemOneQuestions) => {
   const entries = Object.entries(questions).map(([id, question]) =>
     v.strictObject({
       id: v.literal(id),

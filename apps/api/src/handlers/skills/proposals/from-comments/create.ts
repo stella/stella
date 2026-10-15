@@ -94,7 +94,7 @@ const config = {
   },
 } satisfies HandlerConfig;
 
-const aiRevisionSchema = v.strictObject({
+export const aiRevisionSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),
     v.description(

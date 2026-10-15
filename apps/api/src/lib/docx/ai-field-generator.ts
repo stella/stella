@@ -573,7 +573,7 @@ const adaptTokenBudget = ({
 
 // strictObject (no optional members): OpenAI strict structured output rejects
 // plain objects and optional properties.
-const occurrenceRenderingsSchema = v.strictObject({
+export const occurrenceRenderingsSchema = v.strictObject({
   renderings: v.array(v.string()),
 });
 

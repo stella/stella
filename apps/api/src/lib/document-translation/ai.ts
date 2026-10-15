@@ -13,7 +13,7 @@ const TRANSLATION_ROLE = "chat" as const;
 const SERVICE_TIER = "standard" as const;
 const CALL_TIMEOUT_MS = 90_000;
 
-const translationSchema = v.object({
+export const translationSchema = v.object({
   items: v.array(
     v.object({
       id: v.string(),

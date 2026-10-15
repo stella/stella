@@ -75,7 +75,7 @@ export const normalizeParties = (
   return normalized;
 };
 
-const proposedPartiesSchema = v.strictObject({
+export const proposedPartiesSchema = v.strictObject({
   parties: v.array(proposedPartySchema),
 });
 

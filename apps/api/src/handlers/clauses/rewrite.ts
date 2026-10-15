@@ -42,7 +42,7 @@ const rewriteClauseBodySchema = t.Object({
 // strictObject + required (not optional): OpenAI strict structured output
 // rejects objects without `additionalProperties: false` / missing-from-required
 // properties. The model returns revised text per editable paragraph index.
-const rewriteOutputSchema = v.strictObject({
+export const rewriteOutputSchema = v.strictObject({
   paragraphs: v.array(
     v.strictObject({
       index: v.number(),

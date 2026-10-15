@@ -90,7 +90,7 @@ const aiResourceSchema = v.strictObject({
   ),
 });
 
-const aiGenerationSchema = v.strictObject({
+export const aiGenerationSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),
     v.description(

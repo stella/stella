@@ -88,7 +88,7 @@ const generatedSummaryAISchema = v.strictObject({
   language: v.nullable(v.string()),
 });
 
-const generatedSummariesAISchema = v.strictObject({
+export const generatedSummariesAISchema = v.strictObject({
   summaries: v.array(generatedSummaryAISchema),
 });
 
@@ -100,7 +100,7 @@ const suggestionAIOutputSchema = v.strictObject({
   documentType: v.string(),
 });
 
-const suggestionsAIOutputSchema = v.strictObject({
+export const suggestionsAIOutputSchema = v.strictObject({
   suggestions: v.array(suggestionAIOutputSchema),
   deleteFolders: v.array(
     v.strictObject({
