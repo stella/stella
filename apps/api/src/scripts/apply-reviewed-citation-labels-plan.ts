@@ -937,12 +937,15 @@ type DecideReviewedLabelsOptions = {
   tx: ExecutingTransaction;
   input: readonly unknown[];
   domain: CitationLabelDomain;
+  /** True for a write: the admitted citing decisions are held until it commits. */
+  lock: boolean;
 };
 
 const decideReviewedLabels = async ({
   tx,
   input,
   domain,
+  lock,
 }: DecideReviewedLabelsOptions): Promise<DecidedLabels> => {
   const parsed = parseEntries(input, domain);
   const citationIds = citationIdsOf(parsed.entries);
@@ -958,6 +961,7 @@ const decideReviewedLabels = async ({
   // is held until the reviews are written; a redacted one is not admitted.
   const admitted = await lockUnredactedCitingDecisions({
     tx,
+    lock,
     decisionIds: [
       ...new Set([
         ...decisionIds,
@@ -1035,10 +1039,12 @@ export const planReviewedCitationLabels = async ({
   domain = POLARITY_DOMAIN,
 }: PlanReviewedCitationLabelsOptions): Promise<ReviewedLabelPlan> =>
   await transact(async (tx) => {
+    // A plan writes nothing and may run in a read-only session: no locks.
     const { settled, planned } = await decideReviewedLabels({
       tx,
       input,
       domain,
+      lock: false,
     });
     const rows = inInputOrder([
       ...settled,
@@ -1066,6 +1072,7 @@ const applyReviewedLabelsTx = async ({
     tx,
     input,
     domain,
+    lock: true,
   });
   const toStore = planned.accepted
     .filter(({ storesReview }) => storesReview)

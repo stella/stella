@@ -474,6 +474,36 @@ describe("independent doctrinal reviews", () => {
     ).toBe(true);
   });
 
+  test("a plan of a valid doctrine review runs in a read-only transaction", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 9824/2026",
+      cited: "sp. zn. 29 Cdo 9824/2015",
+      rawHash: "doctrine-read-only-plan",
+    });
+    reviewedDecisions.push(labelled.citingDecisionId);
+    const plan = await planReviewedCitationLabels({
+      transact: async (run) =>
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SET TRANSACTION READ ONLY`);
+          return await run(tx);
+        }),
+      input: [
+        {
+          kind: "doctrine",
+          citationId: labelled.id,
+          doctrinalTreatment: "limits",
+          evidenceQuote: "does not apply",
+          passage: "The earlier ruling does not apply to these facts.",
+          reviewRef: "doctrine-read-only-plan",
+          origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+        },
+      ],
+      domain: DOCTRINE_LABEL_DOMAIN,
+    });
+    expect(plan.summary).toMatchObject({ invalid: 0 });
+    expect(plan.rows.length).toBe(1);
+  });
+
   test("a review applied after its decision was redacted is refused and stores no quote", async () => {
     const labelled = await ingestRuleLabelled({
       caseNumber: "30 Cdo 9822/2026",

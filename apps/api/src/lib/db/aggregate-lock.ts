@@ -1985,18 +1985,21 @@ type DecisionCitationStatsLocksOptions = {
 const lockedDecisionRowSchema = v.object({ id: v.string() });
 
 /**
- * The citing decisions a reviewed-label write admits: the unredacted ones
- * among `decisionIds`, held FOR SHARE in id order until the write commits. A
- * redaction updates the decision row, so it either waits for the write and
- * then erases what it stored, or commits first and the decision is not
- * returned.
+ * The citing decisions a reviewed-label run admits: the unredacted ones among
+ * `decisionIds`. A write (`lock: true`) holds them FOR SHARE in id order until
+ * it commits: a redaction updates the decision row, so it either waits for the
+ * write and then erases what it stored, or commits first and the decision is
+ * not returned. A plan writes nothing and may run read-only, so it reads them
+ * without a lock.
  */
 export const lockUnredactedCitingDecisions = async ({
   tx,
   decisionIds,
+  lock,
 }: {
   tx: ExecuteTransaction;
   decisionIds: readonly string[];
+  lock: boolean;
 }): Promise<Set<string>> => {
   if (decisionIds.length === 0) {
     return new Set();
@@ -2009,7 +2012,7 @@ export const lockUnredactedCitingDecisions = async ({
           decisionIds.map((id) => sql`${id}::uuid`),
           sql`, `,
         )})
-      ORDER BY id FOR SHARE
+      ORDER BY id${lock ? sql` FOR SHARE` : sql``}
     `),
   );
   return new Set(rows.map((row) => v.parse(lockedDecisionRowSchema, row).id));
