@@ -105,6 +105,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cargo-deny
+        timeout-minutes: 10
         uses: ./.github/actions/cargo-deny
 
       # The cache keeps each fetch incremental; the newest entry is restored and
