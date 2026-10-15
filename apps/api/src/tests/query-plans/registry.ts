@@ -381,6 +381,8 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "incoming",
@@ -397,6 +399,8 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "outgoing",

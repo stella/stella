@@ -1,8 +1,17 @@
 import { Result, TaggedError } from "better-result";
 
+/**
+ * Whether the model may pick a skill by itself (`auto`) or the skill runs only
+ * when the user invokes it (`manual`).
+ */
+export const SKILL_INVOCATIONS = ["auto", "manual"] as const;
+export type SkillInvocation = (typeof SKILL_INVOCATIONS)[number];
+
 export type SkillMetadata = {
   compatibility?: string | null;
   description: string;
+  /** Read from the file; a stored row carries it in its own column. */
+  invocation?: SkillInvocation;
   license?: string | null;
   metadata?: Record<string, string>;
   name: string;
@@ -25,10 +34,20 @@ export const CHAT_DOCUMENTED_READS_METADATA_KEY =
  * from its slug.
  */
 export const SKILL_DISPLAY_NAME_METADATA_KEY = "stella-display-name";
+/**
+ * Frontmatter `metadata` key holding a skill's invocation (`auto` or
+ * `manual`). The top-level `disable-model-invocation: true` that other Agent
+ * Skills hosts write means `manual` too, so an imported package keeps it.
+ * The parsed value moves to `SkillMetadata.invocation`; the key does not stay
+ * in `metadata`.
+ */
+export const SKILL_INVOCATION_METADATA_KEY = "stella-invocation";
+const DISABLE_MODEL_INVOCATION_KEY = "disable-model-invocation";
 
 type Frontmatter = {
   compatibility: string | undefined;
   description: string;
+  invocation: SkillInvocation;
   license: string | undefined;
   metadata: Record<string, string> | undefined;
   name: string;
@@ -40,9 +59,14 @@ export class SkillFileError extends TaggedError("SkillFileError")<{
   message: string;
 }> {}
 
+/** Metadata read from a file, which always settles the invocation. */
+export type ParsedSkillMetadata = SkillMetadata & {
+  invocation: SkillInvocation;
+};
+
 export type ParsedSkillFile = {
   body: string;
-  metadata: SkillMetadata;
+  metadata: ParsedSkillMetadata;
 };
 
 const skillFileError = (message: string) =>
@@ -74,6 +98,7 @@ export const parseSkillFile = (
       metadata: {
         compatibility: frontmatter.compatibility ?? null,
         description: frontmatter.description,
+        invocation: frontmatter.invocation,
         license:
           frontmatter.license ?? frontmatter.metadata?.["license"] ?? null,
         metadata: frontmatter.metadata ?? {},
@@ -96,16 +121,110 @@ const parseFrontmatter = (
 
     const name = yield* readRequiredString(parsed, "name");
     const description = yield* readRequiredString(parsed, "description");
+    const metadata = yield* readMetadata(parsed["metadata"]);
+    const invocation = yield* readInvocation({
+      disableModelInvocation: parsed[DISABLE_MODEL_INVOCATION_KEY],
+      metadataValue: metadata?.[SKILL_INVOCATION_METADATA_KEY],
+    });
 
     return Result.ok({
       compatibility: yield* readOptionalString(parsed, "compatibility"),
       description,
+      invocation,
       license: yield* readOptionalString(parsed, "license"),
-      metadata: yield* readMetadata(parsed["metadata"]),
+      metadata: withoutInvocationKey(metadata),
       name,
       version: yield* readOptionalString(parsed, "version"),
     });
   });
+
+/**
+ * YAML 1.1 spells booleans `yes`/`no`/`on`/`off` too, and Agent Skills files
+ * written for other hosts use them; the 1.2 parser leaves those as strings.
+ */
+const YAML_BOOLEAN_SPELLINGS: ReadonlyMap<string, boolean> = new Map([
+  ["false", false],
+  ["n", false],
+  ["no", false],
+  ["off", false],
+  ["on", true],
+  ["true", true],
+  ["y", true],
+  ["yes", true],
+]);
+
+const readLenientBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  return YAML_BOOLEAN_SPELLINGS.get(value.trim().toLowerCase());
+};
+
+const isSkillInvocation = (value: string): value is SkillInvocation =>
+  SKILL_INVOCATIONS.some((invocation) => invocation === value);
+
+/**
+ * The skill's invocation from `metadata.stella-invocation` and the top-level
+ * `disable-model-invocation`. An unknown value or a contradiction between the
+ * two is refused rather than read as `auto`, so a skill meant to run only on
+ * request never becomes one the model picks by itself.
+ */
+const readInvocation = ({
+  disableModelInvocation,
+  metadataValue,
+}: {
+  disableModelInvocation: unknown;
+  metadataValue: string | undefined;
+}): Result<SkillInvocation, SkillFileError> => {
+  let fromMetadata: SkillInvocation | undefined;
+  if (metadataValue !== undefined) {
+    const normalized = metadataValue.trim().toLowerCase();
+    if (!isSkillInvocation(normalized)) {
+      return skillFileError(
+        `Skill file metadata ${SKILL_INVOCATION_METADATA_KEY} must be one of: ${SKILL_INVOCATIONS.join(", ")}`,
+      );
+    }
+    fromMetadata = normalized;
+  }
+
+  let fromFlag: SkillInvocation | undefined;
+  if (disableModelInvocation !== undefined && disableModelInvocation !== null) {
+    const disabled = readLenientBoolean(disableModelInvocation);
+    if (disabled === undefined) {
+      return skillFileError(
+        `Skill file frontmatter ${DISABLE_MODEL_INVOCATION_KEY} must be a boolean`,
+      );
+    }
+    fromFlag = disabled ? "manual" : "auto";
+  }
+
+  if (
+    fromMetadata !== undefined &&
+    fromFlag !== undefined &&
+    fromMetadata !== fromFlag
+  ) {
+    return skillFileError(
+      `Skill file frontmatter ${DISABLE_MODEL_INVOCATION_KEY} contradicts metadata ${SKILL_INVOCATION_METADATA_KEY}`,
+    );
+  }
+  return Result.ok(fromMetadata ?? fromFlag ?? "auto");
+};
+
+const withoutInvocationKey = (
+  metadata: Record<string, string> | undefined,
+): Record<string, string> | undefined => {
+  if (metadata === undefined || !(SKILL_INVOCATION_METADATA_KEY in metadata)) {
+    return metadata;
+  }
+  return Object.fromEntries(
+    Object.entries(metadata).filter(
+      ([key]) => key !== SKILL_INVOCATION_METADATA_KEY,
+    ),
+  );
+};
 
 const parseYaml = (source: string): Result<unknown, SkillFileError> =>
   Result.try({

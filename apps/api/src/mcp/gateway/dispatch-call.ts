@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
 import {
   describeMissingSkillTools,
   SKILL_TOOL_AVAILABILITY_STATUS,
@@ -188,6 +189,19 @@ export const dispatchGatewayToolCall = async ({
         grantedScopes: context.grantedScopes,
         missingTools: resolved.availability.missingTools,
         skillName: resolved.name,
+      }),
+    };
+  }
+
+  // A `manual` skill is not a tool on this surface (`tools/list` leaves it
+  // out); it is a prompt the user starts.
+  if (!modelMayStartUninvoked(resolved)) {
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "unknown_tool",
+        message: `The skill ${resolved.name} runs only when the user invokes it, so it is not a tool.`,
+        hint: `Ask the user to start the prompt ${toolName} from their client's prompt list.`,
       }),
     };
   }
