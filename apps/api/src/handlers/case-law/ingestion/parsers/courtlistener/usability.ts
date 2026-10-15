@@ -2,7 +2,7 @@
 import { panic } from "better-result";
 
 import { DANGEROUS_CHARS } from "@stll/legal-ast/text-sanitize";
-import { normalizeUnicode } from "@stll/text-normalize/unicode";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 export const COURTLISTENER_TEXT_USABILITY = {
   USABLE: "usable",

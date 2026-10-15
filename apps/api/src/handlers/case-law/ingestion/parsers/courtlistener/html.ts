@@ -20,7 +20,7 @@ import {
   type ParentNode,
 } from "domhandler";
 
-import { normalizeUnicode } from "@stll/text-normalize/unicode";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 

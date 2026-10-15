@@ -1,4 +1,4 @@
-import { stripUnicodeMarks } from "@stll/text-normalize/unicode";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 /**
  * NFD, then every `\p{Diacritic}` removed, spacing ones (`´`, `ʼ`, `^`)

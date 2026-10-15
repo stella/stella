@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] the US parser reaches this module only through the package entry and calls normalizeUnicode, which this change leaves as it was.
 /**
  * Latin/combining-mark diacritic stripping for search keys and slugs.
  *

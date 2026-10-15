@@ -3,7 +3,7 @@
 // parser-output-unchanged: removes an unused type guard; no adapter calls it.
 /** Shared utilities for case-law ingestion adapters. */
 
-import { normalizeUnicode } from "@stll/text-normalize/unicode";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 

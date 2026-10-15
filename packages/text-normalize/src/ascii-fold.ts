@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] the US parser reaches this module only through the package entry and calls normalizeUnicode, which this change leaves as it was.
 /**
  * Latin-ASCII folding for search keys whose counterpart is a PostgreSQL
  * `unaccent()` index or a Tantivy `ascii_folding` index.
