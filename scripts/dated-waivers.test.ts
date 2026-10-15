@@ -15,6 +15,8 @@ import {
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  exceptionInventory as inventoryJson,
+  withinHours,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
@@ -429,5 +431,54 @@ test("tracked-files input rejects absolute and parent paths", () => {
     }
   } finally {
     rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("radar JSON preserves owner identity, exact expiry and unknown removal state", () => {
+  const entries = inventory();
+  const before = inventoryJson(entries, new Date("2026-10-02T01:02:02.999Z"));
+  expect(before.schemaVersion).toBe(1);
+  expect(before.entries.at(0)).toMatchObject({
+    kind: "release-age-exclusion",
+    file: "bunfig.toml",
+    entry: "new-package",
+    owner: "bunfig.toml",
+    expiryInstant: "2026-10-02T01:02:03.000Z",
+    canRemoveYet: false,
+    removal: "at-expiry",
+  });
+  expect(
+    inventoryJson(entries, new Date("2026-10-02T01:02:03.000Z")).entries.at(0)
+      ?.canRemoveYet,
+  ).toBe(true);
+  for (const entry of before.entries.filter(
+    ({ kind }) => kind !== "release-age-exclusion",
+  )) {
+    expect(entry.canRemoveYet).toBeNull();
+    expect(entry.removal).toBe("requires-probe");
+  }
+  expect(
+    before.entries.find(({ kind }) => kind === "dependency-audit")
+      ?.expiryInstant,
+  ).toBe("2026-10-04T00:00:00.000Z");
+});
+
+test("radar selects exactly the inclusive hour horizon", () => {
+  expect(withinHours("72h")).toBe(72);
+  for (const invalid of ["72", "-1h", "3d", "1.5h"]) {
+    expect(() => withinHours(invalid)).toThrow("--within requires");
+  }
+  for (const entry of inventory()) {
+    const at = Date.parse(expiryInstant(entry.expiresAt));
+    expect(
+      dueWaivers(
+        [entry],
+        new Date(at - 72 * 3_600_000),
+        withinHours("72h") / 24,
+      ),
+    ).toEqual([entry]);
+    expect(dueWaivers([entry], new Date(at - 72 * 3_600_000 - 1), 3)).toEqual(
+      [],
+    );
   }
 });

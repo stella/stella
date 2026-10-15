@@ -90,3 +90,25 @@ An adjacent `test-quarantine-expires: <exact UTC timestamp>` comment owns a
 literal `test.skip` or `it.skip` declaration. Its probe unmasks that declaration
 and runs the owning test command twenty times; zero-test and skipped-test
 receipts cannot pass. Unregistered dated owners fail the inventory census.
+
+## Inventory JSON contract
+
+Run `git ls-files -z > /tmp/dated-files`, then
+`bun scripts/dated-waivers.ts --tracked-files /tmp/dated-files --within 72h --json`.
+Omit `--within` for the complete inventory. The horizon includes overdue entries
+and the exact boundary. Invalid durations fail; durations use whole hours.
+
+The version 1 envelope is `{schemaVersion: 1, entries: [...]}`. Each entry contains
+`kind`, `file`, `entry` (semantic identity), `expiryInstant` (exact UTC instant),
+`owner` (the canonical owning registry file), `canRemoveYet`, `removal`, and `probe`
+(`command` and required `attempts`). `canRemoveYet` is a boolean for release-age
+exclusions: removal becomes eligible exactly at expiry. It is `null` for other
+kinds, whose removal needs successful probes; `removal` is respectively
+`at-expiry` or `requires-probe`. The inventory never claims a probe passed from
+the date alone. Date-only deadlines hold through their entire UTC day.
+
+Consumers must select by `kind`, `file`, and `entry`, never by array position or
+line number. The inventory uses the guard parsers and rejects unregistered dated
+policy owners. Ratchet allowances currently forbid expiry fields rather than
+creating dated exceptions. New dated kinds need an adapter and removal probe;
+they cannot silently enter the inventory as ordinary JSON dates.

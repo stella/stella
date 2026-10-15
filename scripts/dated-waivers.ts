@@ -243,6 +243,40 @@ export const dueWaivers = (
       now.getTime() + days * DAY_MS,
   );
 
+/** Versioned, read-only contract for expiry radar consumers. Probe results are
+ * deliberately not inferred from the clock for exceptions with external causes. */
+export const exceptionInventory = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+) => ({
+  schemaVersion: 1,
+  entries: entries.map((entry) => ({
+    kind: entry.kind,
+    file: entry.source,
+    entry: entry.id,
+    expiryInstant: expiryInstant(entry.expiresAt),
+    owner: entry.source,
+    canRemoveYet:
+      entry.kind === "release-age-exclusion"
+        ? now.getTime() >= Date.parse(expiryInstant(entry.expiresAt))
+        : null,
+    removal:
+      entry.kind === "release-age-exclusion" ? "at-expiry" : "requires-probe",
+    probe: entry.probe,
+  })),
+});
+
+export const withinHours = (value: string): number => {
+  if (!/^\d+h$/u.test(value)) {
+    return panic("--within requires a whole number of hours, for example 72h");
+  }
+  const hours = Number(value.slice(0, -1));
+  if (!Number.isSafeInteger(hours)) {
+    return panic("--within hours exceed the supported range");
+  }
+  return hours;
+};
+
 const escapeCommand = (value: string): string =>
   value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 export const waiverWarnings = (
@@ -533,6 +567,21 @@ if (import.meta.main) {
       console.error(failures.join("\n"));
       process.exitCode = 1;
     }
+  } else if (
+    process.argv.includes("--json") ||
+    process.argv.includes("--within")
+  ) {
+    const index = process.argv.indexOf("--within");
+    const value = process.argv.at(index + 1);
+    const now = new Date();
+    if (index !== -1 && value === undefined) {
+      panic("--within requires a duration");
+    }
+    const selected =
+      index === -1
+        ? entries
+        : dueWaivers(entries, now, withinHours(value ?? "") / 24);
+    console.log(JSON.stringify(exceptionInventory(selected, now), null, 2));
   } else if (process.argv.includes("--due")) {
     console.log(dueWaivers(entries, new Date()).length > 0);
   } else if (process.argv.includes("--warn")) {
