@@ -94,7 +94,7 @@ const REMOTE_URL =
 const PROSE = /^\s*(?:echo|printf|:)(?:\s|$)/u;
 
 // A `case` arm's pattern list (`a|b|scripts/x.sh)`) names paths, not commands.
-const CASE_PATTERN = /^\s*[^\s"'`$()=]+(?:\|[^\s"'`$()=]+)*\)/u;
+const CASE_PATTERN = /^\s*[^\s"'`$()=|]+(?:\|[^\s"'`$()=|]+)*\)/u;
 
 /** The end of a `$(...)` body starting at `start`, honoring nesting and quotes. */
 const substitutionEnd = (line: string, start: number): number => {
@@ -238,7 +238,7 @@ const segments = (line: string): string[] => {
 };
 
 const PACKAGE_RUNNER =
-  /\b(?:(?<dlx>pnpm\s+dlx|yarn\s+dlx)|npx|bunx|bun\s+x)\s+(?<rest>.*)$/u;
+  /\b(?:(?<dlx>pnpm\s+dlx|yarn\s+dlx)|npx|bunx|bun\s+x)\s(?<rest>.*)$/u;
 const RUNNER_INSTALL_FLAGS = new Set(["--yes", "-y", "--package", "-p"]);
 
 /**
