@@ -62,7 +62,7 @@ describe("network guard", () => {
     const reached: string[] = [];
     // A fake underneath the guard: nothing leaves the process.
     Reflect.set(globalThis, "fetch", (input: unknown) => {
-      reached.push(String(input));
+      reached.push(input instanceof Request ? input.url : String(input));
       return Promise.resolve(new Response("ok"));
     });
     try {
@@ -77,6 +77,67 @@ describe("network guard", () => {
       uninstall = undefined;
       Reflect.set(globalThis, "fetch", realFetch);
     }
+  });
+
+  describe("redirects", () => {
+    const serve = () =>
+      Bun.serve({
+        fetch: async (request) => {
+          const { pathname } = new URL(request.url);
+          switch (pathname) {
+            case "/away":
+              return Response.redirect("http://example.com/elsewhere", 302);
+            case "/hop":
+              return new Response(null, {
+                headers: { location: "/final" },
+                status: 307,
+              });
+            case "/see-other":
+              return new Response(null, {
+                headers: { location: "/final" },
+                status: 303,
+              });
+            case "/final":
+              return new Response(`${request.method} ${await request.text()}`);
+            default:
+              return new Response("missing", { status: 404 });
+          }
+        },
+        port: 0,
+      });
+
+    test("a loopback redirect to a remote host is refused", async () => {
+      uninstall = installNetworkGuard();
+      using server = serve();
+      const error = await rejectionOf(
+        fetch(`http://127.0.0.1:${server.port}/away`),
+      );
+      expect(error).toBeInstanceOf(NetworkAccessError);
+      expect(error).toHaveProperty("host", "example.com");
+    });
+
+    test("local redirects are followed with their method and body rules", async () => {
+      uninstall = installNetworkGuard();
+      using server = serve();
+      const base = `http://127.0.0.1:${server.port}`;
+      const kept = await fetch(`${base}/hop`, { body: "x", method: "POST" });
+      expect(await kept.text()).toBe("POST x");
+      expect(kept.url).toBe(`${base}/final`);
+      const switched = await fetch(`${base}/see-other`, {
+        body: "x",
+        method: "POST",
+      });
+      expect(await switched.text()).toBe("GET ");
+    });
+
+    test("manual redirects are left to the caller", async () => {
+      uninstall = installNetworkGuard();
+      using server = serve();
+      const response = await fetch(`http://127.0.0.1:${server.port}/away`, {
+        redirect: "manual",
+      });
+      expect(response.status).toBe(302);
+    });
   });
 
   test("data and blob URLs are not network access", async () => {

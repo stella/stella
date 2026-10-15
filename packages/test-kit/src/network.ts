@@ -44,18 +44,94 @@ export const isLoopbackHost = (host: string): boolean => {
 };
 
 const LOCAL_URL_SCHEMES = new Set(["blob:", "data:", "file:"]);
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 20;
+const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
 
-const requestUrl = (input: unknown): URL | undefined => {
-  if (input instanceof Request) {
-    return new URL(input.url);
-  }
-  if (input instanceof URL) {
-    return input;
-  }
-  if (typeof input === "string") {
-    return URL.canParse(input) ? new URL(input) : undefined;
-  }
-  return undefined;
+type FetchRefusal = (url: URL) => NetworkAccessError | undefined;
+
+/**
+ * `fetch` that checks every hop. A redirect is followed here, one checked
+ * request at a time, because the platform would otherwise follow a redirect
+ * from an allowed server to any host without asking the guard. The returned
+ * response is the last hop's (its `url` is the final URL; `redirected` is
+ * false).
+ */
+const guardedFetch =
+  (original: typeof fetch, refuse: FetchRefusal) =>
+  async (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
+    if (init !== undefined && "unix" in init) {
+      return await original(input, init); // a Unix socket stays on this machine
+    }
+    const request =
+      input instanceof Request
+        ? new Request(input, init)
+        : new Request(String(input), init);
+    let url = new URL(request.url);
+    if (LOCAL_URL_SCHEMES.has(url.protocol)) {
+      return await original(request);
+    }
+    const first = refuse(url);
+    if (first !== undefined) {
+      throw first;
+    }
+    if (request.redirect !== "follow") {
+      return await original(request);
+    }
+    let method = request.method;
+    const headers = new Headers(request.headers);
+    let body = request.body === null ? null : await request.arrayBuffer();
+    for (let hops = 0; ; hops += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each hop depends on the previous response.
+      const response = await original(
+        new Request(url.href, {
+          body,
+          headers,
+          method,
+          redirect: "manual",
+          signal: request.signal,
+        }),
+      );
+      const location = response.headers.get("location");
+      if (!REDIRECT_STATUSES.has(response.status) || location === null) {
+        return response;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- the redirect body is discarded before the next hop.
+      await response.body?.cancel();
+      if (hops >= MAX_REDIRECTS) {
+        return panic(`fetch: more than ${MAX_REDIRECTS} redirects`);
+      }
+      const next = new URL(location, url);
+      const refused = refuse(next);
+      if (refused !== undefined) {
+        throw refused;
+      }
+      if (next.origin !== url.origin) {
+        for (const name of CREDENTIAL_HEADERS) {
+          headers.delete(name);
+        }
+      }
+      if (
+        response.status === 303 ||
+        ((response.status === 301 || response.status === 302) &&
+          method === "POST")
+      ) {
+        method = method === "HEAD" ? "HEAD" : "GET";
+        body = null;
+        headers.delete("content-type");
+        headers.delete("content-length");
+      }
+      url = next;
+    }
+  };
+
+const guardFetch = (refuse: FetchRefusal): (() => void) => {
+  const original = globalThis.fetch;
+  Reflect.set(globalThis, "fetch", guardedFetch(original, refuse));
+  return () => Reflect.set(globalThis, "fetch", original);
 };
 
 type SocketTarget = {
@@ -85,14 +161,13 @@ let installed: (() => void) | undefined;
 
 type Refusal = (args: unknown[]) => NetworkAccessError | undefined;
 
-// Replaces `owner[name]` with a function that refuses first: by throwing, as
-// a socket factory does, or by rejecting, as `fetch` does. Returns the
-// function that puts the original back.
+// Replaces the socket factory `owner[name]` with one that throws, as the
+// platform does for a bad target, before connecting to a refused host.
+// Returns the function that puts the original back.
 const guardMethod = (
   owner: object,
   name: string,
   refuse: Refusal,
-  failure: "throw" | "reject",
 ): (() => void) => {
   const original: unknown = Reflect.get(owner, name);
   if (typeof original !== "function") {
@@ -100,13 +175,10 @@ const guardMethod = (
   }
   const guarded = function guarded(this: unknown, ...args: unknown[]) {
     const error = refuse(args);
-    if (error === undefined) {
-      return Reflect.apply(original, this, args);
+    if (error !== undefined) {
+      throw error;
     }
-    if (failure === "reject") {
-      return Promise.reject(error);
-    }
-    throw error;
+    return Reflect.apply(original, this, args);
   };
   Reflect.set(owner, name, guarded);
   if (Reflect.get(owner, name) !== guarded) {
@@ -136,27 +208,15 @@ export const installNetworkGuard = ({
     (via: string): Refusal =>
     (args) =>
       refusal(socketHost(args), via);
-  const refuseFetch: Refusal = ([input]) => {
-    const url = requestUrl(input);
-    return url === undefined || LOCAL_URL_SCHEMES.has(url.protocol)
-      ? undefined
-      : refusal(url.hostname, "fetch");
-  };
-
   // Bun's module-level factories open sockets without going through
   // Socket.prototype.connect, so each entry point is guarded on its own.
   const restores = [
-    guardMethod(globalThis, "fetch", refuseFetch, "reject"),
-    guardMethod(
-      net.Socket.prototype,
-      "connect",
-      refuseSocket("node:net"),
-      "throw",
-    ),
-    guardMethod(net, "connect", refuseSocket("node:net"), "throw"),
-    guardMethod(net, "createConnection", refuseSocket("node:net"), "throw"),
-    guardMethod(tls, "connect", refuseSocket("node:tls"), "throw"),
-    guardMethod(Bun, "connect", refuseSocket("Bun.connect"), "throw"),
+    guardFetch((url) => refusal(url.hostname, "fetch")),
+    guardMethod(net.Socket.prototype, "connect", refuseSocket("node:net")),
+    guardMethod(net, "connect", refuseSocket("node:net")),
+    guardMethod(net, "createConnection", refuseSocket("node:net")),
+    guardMethod(tls, "connect", refuseSocket("node:tls")),
+    guardMethod(Bun, "connect", refuseSocket("Bun.connect")),
   ];
 
   installed = () => {

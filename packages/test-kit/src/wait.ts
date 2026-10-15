@@ -150,18 +150,50 @@ export const waitFor = async <T>(
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
     panic("waitFor intervalMs must be a positive number");
   }
-  const startedAt = clock.monotonic();
-  for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- each probe observes state after the previous wait.
-    const value = await probe();
-    if (value !== undefined) {
-      return value;
+  // The hang guard covers a probe that never settles too; once it fires, the
+  // loop stops at its next step and a late probe failure is not reported twice.
+  const stop = new AbortController();
+  const poll = async (): Promise<{ value: T } | typeof SETTLED> => {
+    for (;;) {
+      // oxlint-disable-next-line no-await-in-loop -- each probe observes state after the previous wait.
+      const value = await probe();
+      if (stop.signal.aborted) {
+        return SETTLED;
+      }
+      if (value !== undefined) {
+        return { value };
+      }
+      // oxlint-disable-next-line no-await-in-loop -- the cadence is the point of the loop.
+      const woke = await clock.sleep(intervalMs, { signal: stop.signal }).then(
+        () => true,
+        (error: unknown) => {
+          if (error !== SETTLED) {
+            throw error;
+          }
+          return false;
+        },
+      );
+      if (!woke) {
+        return SETTLED;
+      }
     }
-    const remaining = timeoutMs - (clock.monotonic() - startedAt);
-    if (remaining <= 0) {
-      throw new WaitTimeoutError(description, timeoutMs);
-    }
-    // oxlint-disable-next-line no-await-in-loop -- the cadence is the point of the loop.
-    await clock.sleep(Math.min(intervalMs, remaining));
+  };
+  const polling = poll().then(
+    (outcome) => outcome,
+    (error: unknown) => {
+      if (stop.signal.aborted) {
+        return SETTLED;
+      }
+      throw error;
+    },
+  );
+  try {
+    const outcome = await guard(polling, { clock, description, timeoutMs });
+    // SETTLED is only returned after `stop` aborts, which happens below.
+    return typeof outcome === "symbol"
+      ? panic("waitFor resolved after it stopped")
+      : outcome.value;
+  } finally {
+    stop.abort(SETTLED);
   }
 };

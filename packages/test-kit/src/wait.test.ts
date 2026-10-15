@@ -131,6 +131,44 @@ describe("waitFor", () => {
     expect(probes).toBe(probesAtTimeout);
   });
 
+  test("a probe that never settles still hits the hang guard", async () => {
+    const clock = createTestClock();
+    const stuck = deferred<string | undefined>();
+    let probes = 0;
+    const waiting = waitFor(
+      () => {
+        probes += 1;
+        return stuck.promise;
+      },
+      { clock, description: "a stuck probe", timeoutMs: 500 },
+    );
+    const outcome = waiting.catch((error: unknown) => error);
+    await clock.advance(500);
+    expect(await outcome).toBeInstanceOf(WaitTimeoutError);
+    // A late answer after the deadline is ignored and polling has stopped.
+    stuck.resolve(undefined);
+    await clock.advance(1000);
+    expect(probes).toBe(1);
+    expect(clock.pendingSleepers()).toBe(0);
+  });
+
+  test("a probe failing after the deadline is not reported again", async () => {
+    const clock = createTestClock();
+    const stuck = deferred<string | undefined>();
+    const waiting = waitFor(() => stuck.promise, {
+      clock,
+      description: "a late failure",
+      timeoutMs: 100,
+    });
+    const outcome = waiting.catch((error: unknown) => error);
+    await clock.advance(100);
+    expect(await outcome).toBeInstanceOf(WaitTimeoutError);
+    // An unhandled rejection here would fail this test in the runner.
+    stuck.reject(new Error("late"));
+    await clock.advance(10);
+    expect(await outcome).toBeInstanceOf(WaitTimeoutError);
+  });
+
   test("refuses a non-positive interval", async () => {
     expect(
       String(

@@ -1319,6 +1319,7 @@
         "drizzle-orm": "catalog:",
       },
       "devDependencies": {
+        "@electric-sql/pglite": "^0.5.8",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

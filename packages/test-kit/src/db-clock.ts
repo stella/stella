@@ -9,15 +9,20 @@ import type { Clock } from "./clock.ts";
  * compares with `now()` mixes two clocks and passes or fails with the skew
  * between them. Express such values relative to the database clock instead.
  */
+
+// double precision, not integer: an integer cast overflows past ~24.8 days.
+const millisecondsInterval = (milliseconds: number): SQL =>
+  sql`${milliseconds}::double precision * interval '1 millisecond'`;
+
 export const dbClock = {
   /** The database's current transaction time. */
   now: (): SQL => sql`now()`,
   /** `milliseconds` before the database's now. */
   ago: (milliseconds: number): SQL =>
-    sql`now() - ${Math.trunc(milliseconds)}::integer * interval '1 millisecond'`,
+    sql`now() - ${millisecondsInterval(milliseconds)}`,
   /** `milliseconds` after the database's now. */
   fromNow: (milliseconds: number): SQL =>
-    sql`now() + ${Math.trunc(milliseconds)}::integer * interval '1 millisecond'`,
+    sql`now() + ${millisecondsInterval(milliseconds)}`,
 } as const;
 
 /**
