@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -200,7 +200,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -214,7 +213,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -263,6 +262,12 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -6734,7 +6739,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6744,7 +6749,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -6758,7 +6762,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -6807,6 +6811,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -14060,7 +14070,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14070,7 +14080,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -14084,7 +14093,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -14133,6 +14142,12 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -16039,7 +16054,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16049,7 +16064,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -16063,7 +16077,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -16112,6 +16126,12 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
