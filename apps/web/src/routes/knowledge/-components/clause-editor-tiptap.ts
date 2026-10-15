@@ -77,8 +77,8 @@ const paragraphToNode = (
   return { type: "paragraph", content };
 };
 
-const listLevelOf = (p: ClauseParagraph): number =>
-  p.listKind ? Math.max(0, p.listLevel ?? 0) : 0;
+const listDepthOf = (p: ClauseParagraph): number =>
+  p.listKind ? Math.max(0, p.numbering?.ilvl ?? 0) : 0;
 
 /**
  * Build the TipTap list node(s) for one run of consecutive list paragraphs
@@ -101,7 +101,7 @@ const buildList = (
     if (!p || p.isDirective || !p.listKind) {
       break;
     }
-    const pLevel = listLevelOf(p);
+    const pLevel = listDepthOf(p);
     if (pLevel < level || (pLevel === level && p.listKind !== kind)) {
       break;
     }
@@ -125,11 +125,11 @@ const buildList = (
     i += 1;
     // Pull any immediately-following deeper items into this item as a sub-list.
     const next = body[i];
-    if (next?.listKind && listLevelOf(next) > level) {
+    if (next?.listKind && listDepthOf(next) > level) {
       const child = buildList(
         body,
         i,
-        listLevelOf(next),
+        listDepthOf(next),
         next.listKind,
         override,
       );
@@ -166,7 +166,7 @@ export const clauseBodyToTipTap = (
       continue;
     }
     if (p.listKind) {
-      const built = buildList(body, i, listLevelOf(p), p.listKind, override);
+      const built = buildList(body, i, listDepthOf(p), p.listKind, override);
       content.push(built.node);
       i += built.consumed;
       continue;
@@ -258,7 +258,7 @@ const flattenList = (
     const leadBlock = blocks.find((b) => listKindOfNode(b.type) === null);
     const lead = leadBlock ? nodeToParagraph(leadBlock) : { text: "" };
     lead.listKind = kind;
-    lead.listLevel = level;
+    lead.numbering = { kind: "levelOnly", ilvl: level };
     out.push(lead);
 
     for (const block of blocks) {

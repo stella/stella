@@ -1,3 +1,4 @@
+import type { FolioAIEditOperation } from "@stll/folio-core";
 import type { BlockDirectiveKind } from "@stll/template-conditions";
 
 export type ClauseRun = {
@@ -7,6 +8,14 @@ export type ClauseRun = {
 };
 
 export type ClauseListKind = "bullet" | "ordered";
+
+export type ClauseNumbering = Extract<
+  Extract<
+    FolioAIEditOperation,
+    { type: "setBlockParagraphProperties" }
+  >["properties"]["numbering"],
+  { kind: "levelOnly" }
+>;
 
 export type ClauseParagraph = {
   text: string;
@@ -19,7 +28,7 @@ export type ClauseParagraph = {
   /** When set, this paragraph is a list item; bullet or ordered. */
   listKind?: ClauseListKind;
   /** 0-based nesting depth of the list item (0 = top level). */
-  listLevel?: number;
+  numbering?: ClauseNumbering;
 };
 
 export type ClauseBody = ClauseParagraph[];

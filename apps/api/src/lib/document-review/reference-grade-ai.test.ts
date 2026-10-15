@@ -113,7 +113,14 @@ const grade = async () =>
       fileFieldId: targetFieldId,
       fileId: "target-file-fixture",
       simplifiedName: "F0",
-      blocks: [{ id: "target-block", kind: "paragraph", text: "Alpha term" }],
+      blocks: [
+        {
+          id: "target-block",
+          kind: "paragraph",
+          statedNumbering: { kind: "inherit" },
+          text: "Alpha term",
+        },
+      ],
     },
     targetLanguage: null,
     targetEntityVersionId: toSafeId<"entityVersion">("target-version-fixture"),

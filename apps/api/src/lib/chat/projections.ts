@@ -797,7 +797,9 @@ const clauseParagraphProjection = v.strictObject({
   directiveKind: v.optional(v.string()),
   directiveExpression: v.optional(v.string()),
   listKind: v.optional(v.string()),
-  listLevel: v.optional(v.number()),
+  numbering: v.optional(
+    v.strictObject({ kind: v.literal("levelOnly"), ilvl: v.number() }),
+  ),
 });
 
 const clauseBodyProjection = v.array(clauseParagraphProjection);

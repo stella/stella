@@ -303,6 +303,9 @@ export const LIMITS = {
   sseHeartbeatMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
+  /** OOXML numbering levels are zero-based and bounded to nine levels. */
+  clauseNumberingLevelMin: 0,
+  clauseNumberingLevelMax: 8,
   clauseExpectedBodyTextChars: 10 * 1024 * 1024,
   clauseExpectedBodyParagraphs: 100_000,
   templateClausesPerTemplate: 50,
