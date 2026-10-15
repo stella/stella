@@ -130,17 +130,10 @@ export const installHandlerMcpResponseConformance = (): (() => void) => {
           return;
         }
         if (value instanceof Response) {
-          const clone = value.clone();
-          const response =
-            clone.status === status
-              ? clone
-              : new Response(clone.body, {
-                  headers: clone.headers,
-                  status,
-                });
           await assertHttpResponseConformance({
             route,
-            response,
+            response: value,
+            status,
             method,
             schema: config.response,
             models,

@@ -395,8 +395,29 @@ const installRecorder = ({
     if (exchanges.length >= MAX_REQUESTS_PER_SCENARIO) {
       return panic("The recorder's request limit is reached");
     }
+    const requestContentType = request.headers
+      .get("content-type")
+      ?.split(";")
+      .at(0)
+      ?.trim()
+      .toLowerCase();
+    if (
+      requestContentType !== "application/json" &&
+      !requestContentType?.endsWith("+json")
+    ) {
+      panic("Provider recording requires a JSON request body");
+    }
+    const requestClone = request.clone();
+    let requestBody: string;
+    try {
+      requestBody = await requestClone.text();
+    } finally {
+      // The upstream fetch still owns the other request branch.
+      // swallow-ok: cancellation cleanup must not replace the recording failure
+      void requestClone.body?.cancel().catch(() => undefined);
+    }
     const shape = wireRequestShape({
-      body: await request.clone().text(),
+      body: requestBody,
       headers: request.headers,
       prompt,
     });

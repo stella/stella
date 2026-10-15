@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { status, t } from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -24,6 +24,37 @@ afterEach(() => {
 });
 
 describe("installed handler and MCP conformance observers", () => {
+  test("leaves unconstrained streaming handler responses readable without cloning", async () => {
+    restore = installHandlerMcpResponseConformance();
+    const chunks = ["first", "second", "last"];
+    let nextChunk = 0;
+    const response = new Response(
+      new ReadableStream({
+        pull(controller) {
+          const chunk = chunks.at(nextChunk++);
+          if (chunk === undefined) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(new TextEncoder().encode(chunk));
+        },
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+    const clone = spyOn(response, "clone");
+    const handler = observeHandlerResponses(async () => response, {
+      response: t.Any(),
+    });
+    try {
+      expect(await handler()).toBe(response);
+      expect(clone).not.toHaveBeenCalled();
+      expect(await response.text()).toBe(chunks.join(""));
+      expect(nextChunk).toBe(chunks.length + 1);
+    } finally {
+      clone.mockRestore();
+    }
+  });
+
   test("validates direct handlers after JSON wire serialization", async () => {
     restore = installHandlerMcpResponseConformance();
     const handler = observeHandlerResponses(

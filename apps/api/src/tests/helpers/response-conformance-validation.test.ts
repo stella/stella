@@ -1,6 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Elysia, t } from "elysia";
-import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -189,12 +188,12 @@ describe("response conformance validation", () => {
     ).toMatchObject({ issuePath: "items.0.name" });
   });
 
-  test("reads the observer clone while preserving the original response", async () => {
+  test("borrows the original while validating its owned JSON clone", async () => {
     const original = Response.json({ count: 2 });
     expect(
       await assertHttpResponseConformance({
         route,
-        response: original.clone(),
+        response: original,
         method: "GET",
         schema: objectSchema,
       }),
@@ -266,130 +265,105 @@ describe("response conformance validation", () => {
     await response.body?.cancel();
   });
 
-  test("reads Elysia numeric and boolean responses without coercing JSON strings", async () => {
-    for (const [path, value, schema] of [
-      ["/number", 42, t.Number()],
-      ["/boolean", false, t.Boolean()],
-    ] as const) {
-      const app = new Elysia({ aot: false }).get(path, () => value, {
-        response: schema,
+  test.each(["text/plain", "text/event-stream", "application/octet-stream"])(
+    "does not clone or consume %s responses even under an object schema",
+    async (contentType) => {
+      const response = new Response("stream payload", {
+        headers: { "content-type": contentType },
       });
-      const response = await app.handle(new Request(`http://localhost${path}`));
-      expect(
-        await assertHttpResponseConformance({
-          route: path,
+      const clone = spyOn(response, "clone");
+      try {
+        expect(
+          await assertHttpResponseConformance({
+            route,
+            response,
+            method: "GET",
+            schema: objectSchema,
+          }),
+        ).toBe("valid");
+        expect(clone).toHaveBeenCalledTimes(0);
+        expect(response.bodyUsed).toBe(false);
+        expect(await response.text()).toBe("stream payload");
+      } finally {
+        clone.mockRestore();
+      }
+    },
+  );
+
+  test("does not clone unconstrained JSON or File responses", async () => {
+    for (const schema of [t.Any(), t.Unknown(), t.File()]) {
+      const response = Response.json({ private: "value" });
+      const clone = spyOn(response, "clone");
+      try {
+        expect(
+          await assertHttpResponseConformance({
+            route,
+            response,
+            method: "GET",
+            schema,
+          }),
+        ).toBe("valid");
+        expect(clone).toHaveBeenCalledTimes(0);
+        expect(response.bodyUsed).toBe(false);
+        await response.body?.cancel();
+      } finally {
+        clone.mockRestore();
+      }
+    }
+  });
+
+  test.each([true, false])(
+    "cancels its constrained JSON clone after validation success=%s",
+    async (valid) => {
+      const response = Response.json({ count: valid ? 1 : "wrong" });
+      const copy = response.clone();
+      if (copy.body === null) {
+        throw new Error("The JSON clone fixture must have a body");
+      }
+      const clone = spyOn(response, "clone").mockReturnValue(copy);
+      const cancel = spyOn(copy.body, "cancel");
+      try {
+        const checked = assertHttpResponseConformance({
+          route,
           response,
           method: "GET",
-          schema,
-        }),
-      ).toBe("valid");
-    }
+          schema: objectSchema,
+        });
+        if (valid) {
+          expect(await checked).toBe("valid");
+        } else {
+          expect(await rejectionOf(checked)).toMatchObject({
+            issuePath: "/count",
+          });
+        }
+        expect(clone).toHaveBeenCalledTimes(1);
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(response.bodyUsed).toBe(false);
+        expect(await response.json()).toEqual({ count: valid ? 1 : "wrong" });
+      } finally {
+        cancel.mockRestore();
+        clone.mockRestore();
+      }
+    },
+  );
+
+  test("checks constrained +json bodies using the effective status override", async () => {
+    const response = new Response(JSON.stringify({ count: "wrong" }), {
+      headers: { "content-type": "application/problem+json; charset=utf-8" },
+    });
     expect(
       await rejectionOf(
         assertHttpResponseConformance({
           route,
-          response: Response.json("42"),
-          method: "GET",
-          schema: t.Number(),
-        }),
-      ),
-    ).toMatchObject({ issuePath: "(root)" });
-    expect(
-      await assertHttpResponseConformance({
-        route,
-        response: new Response("42"),
-        method: "GET",
-        schema: t.Union([t.String(), t.Number()]),
-      }),
-    ).toBe("valid");
-  });
-
-  test("reads Standard Schema numeric and boolean Elysia responses", async () => {
-    for (const [path, value, schema] of [
-      ["/standard-number", 42, v.number()],
-      ["/standard-boolean", false, v.boolean()],
-    ] as const) {
-      const app = new Elysia({ aot: false }).get(path, () => value, {
-        response: schema,
-      });
-      const response = await app.handle(new Request(`http://localhost${path}`));
-      expect(
-        await assertHttpResponseConformance({
-          route: path,
           response,
+          status: 201,
           method: "GET",
-          schema,
-        }),
-      ).toBe("valid");
-    }
-    const schema = v.union([v.string(), v.number()]);
-    expect(
-      await assertHttpResponseConformance({
-        route,
-        response: new Response("42"),
-        method: "GET",
-        schema,
-      }),
-    ).toBe("valid");
-    expect(
-      await rejectionOf(
-        assertHttpResponseConformance({
-          route,
-          response: Response.json("42"),
-          method: "GET",
-          schema: v.number(),
+          schema: { 201: objectSchema },
         }),
       ),
-    ).toMatchObject({ issuePath: "(root)" });
-    expect(
-      await rejectionOf(
-        assertHttpResponseConformance({
-          route,
-          response: new Response("not a primitive"),
-          method: "GET",
-          schema: v.number(),
-        }),
-      ),
-    ).toMatchObject({ issuePath: "(root)" });
-  });
-
-  test("preserves schema runtime failures instead of retrying a primitive", async () => {
-    const schema = {
-      "~standard": {
-        validate: () => {
-          throw new Error("fixture validator failed");
-        },
-      },
-    };
-    expect(
-      await rejectionOf(
-        assertHttpResponseConformance({
-          route,
-          response: new Response("42"),
-          method: "GET",
-          schema,
-        }),
-      ),
-    ).toMatchObject({ issuePath: "(schema)" });
-  });
-
-  test("reads text and File payloads using their transport representations", async () => {
-    expect(
-      await assertHttpResponseConformance({
-        route,
-        response: new Response("ok"),
-        method: "GET",
-        schema: t.String(),
-      }),
-    ).toBe("valid");
-    expect(
-      await assertHttpResponseConformance({
-        route,
-        response: new Response(new Blob(["file"])),
-        method: "GET",
-        schema: t.File(),
-      }),
-    ).toBe("valid");
+    ).toMatchObject({ status: 201, issuePath: "/count" });
+    expect(response.bodyUsed).toBe(false);
+    expect(await response.json()).toEqual({ count: "wrong" });
   });
 
   test("uses the dedicated error type", async () => {

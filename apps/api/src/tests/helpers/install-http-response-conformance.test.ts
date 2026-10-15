@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -90,6 +90,44 @@ describe("central HTTP response conformance", () => {
       issuePath: "(root)",
     });
   });
+
+  test.each([200, 201])(
+    "SSE status %s is checked without cloning or consuming the stream",
+    async (status) => {
+      uninstall = installHttpResponseConformance();
+      const events = "data: first\n\ndata: last\n\n";
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(events));
+          controller.close();
+        },
+      });
+      const original = new Response(stream, {
+        status,
+        headers: { "content-type": "text/event-stream" },
+      });
+      const clone = spyOn(original, "clone");
+      try {
+        const app = new Elysia().get("/events", () => original, {
+          response: { 200: t.Object({ value: t.String() }) },
+        });
+        const request = app.handle(new Request("http://localhost/events"));
+        if (status === 200) {
+          expect(await (await request).text()).toBe(events);
+        } else {
+          expect(await rejectionOf(request)).toMatchObject({
+            route: "GET /events",
+            status: 201,
+            issuePath: "(status)",
+          });
+          expect(await original.text()).toBe(events);
+        }
+        expect(clone).not.toHaveBeenCalled();
+      } finally {
+        clone.mockRestore();
+      }
+    },
+  );
 
   test("rethrows a request-scoped factory defect after onError converts it", async () => {
     uninstall = installHttpResponseConformance();

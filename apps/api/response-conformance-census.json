@@ -14,7 +14,7 @@
   },
   "unresolvedCalls": {
     "handler": 1,
-    "http": 501,
+    "http": 500,
     "mcp": 50
   },
   "surfaces": [

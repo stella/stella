@@ -230,6 +230,27 @@ const statusResponse = (answer: unknown): Response => {
   });
 };
 
+/** Refusal recordings read finite JSON answers, never live chat streams. */
+const recordedRefusalBody = async (response: Response): Promise<string> => {
+  const contentType = response.headers
+    .get("content-type")
+    ?.split(";")
+    .at(0)
+    ?.trim()
+    .toLowerCase();
+  if (contentType !== "application/json" && !contentType?.endsWith("+json")) {
+    panic("Chat refusal recording requires a finite JSON response");
+  }
+  const clone = response.clone();
+  try {
+    return await clone.text();
+  } finally {
+    // Tee cancellation can wait for the page's branch, which has not read yet.
+    // swallow-ok: cancellation cleanup must not replace the recording failure
+    void clone.body?.cancel().catch(() => undefined);
+  }
+};
+
 /**
  * Where the harness's model calls are answered: the scripted provider by
  * default, or a real adapter fed recorded provider responses.
@@ -1227,7 +1248,7 @@ export const createApprovalHarness = ({
     await endRecord({
       ended: "complete",
       response: {
-        body: await response.clone().text(),
+        body: await recordedRefusalBody(response),
         status: response.status,
         turnId: response.headers.get(CHAT_TURN_ID_HEADER),
       },
@@ -1271,7 +1292,7 @@ export const createApprovalHarness = ({
         await endRecord({
           ended: "complete",
           response: {
-            body: await refused.clone().text(),
+            body: await recordedRefusalBody(refused),
             status: refused.status,
             turnId: refused.headers.get(CHAT_TURN_ID_HEADER),
           },

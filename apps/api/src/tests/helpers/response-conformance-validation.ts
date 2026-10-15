@@ -205,13 +205,15 @@ export const assertResponseConformance = async ({
   return "valid";
 };
 
-/** The response methods validation consumes, shared by Bun and undici clones. */
+/** Structural response surface shared by Bun and undici. */
 export type ConformanceHttpResponse = {
   status: number;
   headers: { get: (name: string) => string | null };
   blob: () => Promise<unknown>;
   json: () => Promise<unknown>;
   text: () => Promise<string>;
+  clone: () => ConformanceHttpResponse;
+  body: { cancel: (reason?: unknown) => Promise<void> } | null;
 };
 
 type AssertHttpResponseConformanceOptions = SchemaReferences & {
@@ -219,9 +221,10 @@ type AssertHttpResponseConformanceOptions = SchemaReferences & {
   response: ConformanceHttpResponse;
   method: string;
   schema: unknown;
+  status?: number | undefined;
 };
 
-/** The observer supplies a clone; this helper owns only that clone's body. */
+/** Borrow the original; only constrained JSON validation owns a cloned branch. */
 export const assertHttpResponseConformance = async ({
   route,
   response,
@@ -229,8 +232,9 @@ export const assertHttpResponseConformance = async ({
   schema,
   models,
   references,
+  status = response.status,
 }: AssertHttpResponseConformanceOptions): Promise<"missing" | "valid"> => {
-  const identity = { route, status: response.status };
+  const identity = { route, status };
   const resolvedReferences = collectReferences({ models, references });
   const selected = selectSchema(schema, identity, {
     models,
@@ -250,16 +254,14 @@ export const assertHttpResponseConformance = async ({
   ) {
     throw failure(identity, "(schema)");
   }
-  if (
-    method.toUpperCase() === "HEAD" ||
-    response.status === 204 ||
-    response.status === 304
-  ) {
+  if (method.toUpperCase() === "HEAD" || status === 204 || status === 304) {
     return "valid";
   }
   if (
     TypeGuard.IsSchema(bodySchema) &&
-    (bodySchema[Kind] === "Any" || bodySchema[Kind] === "Unknown")
+    (bodySchema[Kind] === "Any" ||
+      bodySchema[Kind] === "Unknown" ||
+      bodySchema[Kind] === "File")
   ) {
     return "valid";
   }
@@ -272,65 +274,34 @@ export const assertHttpResponseConformance = async ({
   const jsonBody =
     contentType === "application/json" ||
     contentType?.endsWith("+json") === true;
-  const body = await Result.tryPromise(async () => {
-    if (TypeGuard.IsSchema(bodySchema) && bodySchema[Kind] === "File") {
-      return await response.blob();
-    }
-    if (jsonBody) {
-      const value: unknown = await response.json();
-      return value;
-    }
-    return await response.text();
-  });
-  if (Result.isError(body)) {
+  if (!jsonBody) {
+    return "valid";
+  }
+  const cloned = Result.try(() => response.clone());
+  if (Result.isError(cloned)) {
     throw failure(identity, "(body)");
   }
-  // Elysia sends numeric and boolean handler results as text/plain.
-  // Preserve an accepted string before considering that encoding.
-  if (!jsonBody && typeof body.value === "string") {
-    const text = body.value;
-    const original = await Result.tryPromise(async () => {
-      await validateValue({
-        schema: bodySchema,
-        value: text,
-        ...identity,
-        references: resolvedReferences,
-      });
+  const clone = cloned.value;
+  try {
+    const body = await Result.tryPromise(async () => {
+      const value: unknown = await clone.json();
+      return value;
     });
-    if (Result.isOk(original)) {
-      return "valid";
-    }
-    const originalIssue = original.error.cause;
-    if (!ResponseConformanceError.is(originalIssue)) {
-      throw failure(identity, "(schema)");
-    }
-    if (originalIssue.issuePath === "(schema)") {
-      throw originalIssue;
-    }
-    const primitive = Result.try(() => {
-      const parsed: unknown = JSON.parse(text);
-      return parsed;
-    });
-    if (
-      Result.isError(primitive) ||
-      (typeof primitive.value !== "number" &&
-        typeof primitive.value !== "boolean")
-    ) {
-      throw originalIssue;
+    if (Result.isError(body)) {
+      throw failure(identity, "(body)");
     }
     await validateValue({
       schema: bodySchema,
-      value: primitive.value,
+      value: body.value,
       ...identity,
       references: resolvedReferences,
     });
     return "valid";
+  } finally {
+    // Tee cancellation may wait for the caller; cleanup must not delay it.
+    // swallow-ok: cleanup cannot replace the conformance failure
+    void clone.body?.cancel().catch(() => {
+      // This branch is owned by validation; consumed or locked bodies need no recovery.
+    });
   }
-  await validateValue({
-    schema: bodySchema,
-    value: body.value,
-    ...identity,
-    references: resolvedReferences,
-  });
-  return "valid";
 };

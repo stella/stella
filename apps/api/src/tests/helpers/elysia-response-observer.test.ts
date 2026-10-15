@@ -1,5 +1,4 @@
-import { panic } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Elysia } from "elysia";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -18,7 +17,10 @@ describe("Elysia response observation", () => {
     const paths: string[] = [];
     uninstall = installElysiaResponseObserver(async ({ request, response }) => {
       paths.push(new URL(request.url).pathname);
-      expect(await response.json()).toEqual({ ok: true });
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain(
+        "application/json",
+      );
     });
     const app = new Elysia().get("/value", () => ({ ok: true }));
     const response = await app.handle(new Request("http://localhost/value"));
@@ -26,27 +28,30 @@ describe("Elysia response observation", () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
-  test("unused observer clones cancel without waiting for the caller's streaming branch", async () => {
-    let sourceCancelled = false;
-    const chunk = new TextEncoder().encode("stream data");
+  test("borrows a streaming response without cloning or consuming its body", async () => {
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(chunk);
-      },
-      cancel() {
-        sourceCancelled = true;
+        controller.enqueue(new TextEncoder().encode("first\n"));
+        controller.enqueue(new TextEncoder().encode("last\n"));
+        controller.close();
       },
     });
-    uninstall = installElysiaResponseObserver(async () => undefined);
-    const app = new Elysia().get("/stream", () => new Response(stream));
-    const response = await app.handle(new Request("http://localhost/stream"));
-    if (response.body === null) {
-      panic("Streaming fixture lost its body");
+    const original = new Response(stream, {
+      headers: { "content-type": "text/event-stream" },
+    });
+    const clone = spyOn(original, "clone");
+    try {
+      uninstall = installElysiaResponseObserver(async ({ response }) => {
+        expect(response).toBe(original);
+        expect(response.headers.get("content-type")).toBe("text/event-stream");
+      });
+      const app = new Elysia().get("/stream", () => original);
+      const response = await app.handle(new Request("http://localhost/stream"));
+      expect(clone).not.toHaveBeenCalled();
+      expect(await response.text()).toBe("first\nlast\n");
+    } finally {
+      clone.mockRestore();
     }
-    const reader = response.body.getReader();
-    expect((await reader.read()).value).toEqual(chunk);
-    await reader.cancel();
-    expect(sourceCancelled).toBe(true);
   });
 
   test("observes explicit compilation once across repeated requests", async () => {
@@ -78,7 +83,7 @@ describe("Elysia response observation", () => {
       let calls = 0;
       uninstall = installElysiaResponseObserver(async ({ response }) => {
         calls += 1;
-        expect(await response.text()).toBe("dynamic");
+        expect(response.status).toBe(200);
       });
       const app = new Elysia({ aot: false }).get("/value", () => "dynamic");
       if (compile) {
@@ -120,7 +125,7 @@ describe("Elysia response observation", () => {
     )?.get;
     const originalCompile = Elysia.prototype.compile;
     uninstall = installElysiaResponseObserver(async ({ response }) => {
-      order.push(`outer:${await response.text()}`);
+      order.push(`outer:${response.headers.get("x-value")}`);
     });
     const patchedFetch = Object.getOwnPropertyDescriptor(
       Elysia.prototype,
@@ -128,11 +133,14 @@ describe("Elysia response observation", () => {
     )?.get;
     const patchedCompile = Elysia.prototype.compile;
     const stopInner = installElysiaResponseObserver(async ({ response }) => {
-      order.push(`inner:${await response.text()}`);
+      order.push(`inner:${response.headers.get("x-value")}`);
     });
     try {
       await new Elysia()
-        .get("/value", () => "both")
+        .get(
+          "/value",
+          () => new Response("both", { headers: { "x-value": "both" } }),
+        )
         .handle(new Request("http://localhost/value"));
       expect(order).toEqual(["inner:both", "outer:both"]);
       stopInner();
@@ -142,7 +150,10 @@ describe("Elysia response observation", () => {
       ).toBe(patchedFetch);
       expect(Elysia.prototype.compile).toBe(patchedCompile);
       await new Elysia()
-        .get("/value", () => "outer")
+        .get(
+          "/value",
+          () => new Response("outer", { headers: { "x-value": "outer" } }),
+        )
         .handle(new Request("http://localhost/value"));
       expect(order).toEqual(["inner:both", "outer:both", "outer:outer"]);
       uninstall();

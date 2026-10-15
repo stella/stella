@@ -13,17 +13,13 @@ export type ElysiaResponseApp = {
   models: Readonly<Record<string, unknown>>;
 };
 
-type ObservableResponse = ConformanceHttpResponse & {
-  body: { cancel: () => Promise<void> } | null;
-  clone: () => ObservableResponse;
-};
-
 export type ElysiaResponseObservation = {
   app: ElysiaResponseApp;
   request: Request;
-  response: ObservableResponse;
+  response: ConformanceHttpResponse;
 };
 
+/** Borrows the original response; observers must leave its body to the caller. */
 export type ElysiaResponseObserver = (
   observation: ElysiaResponseObservation,
 ) => Promise<void>;
@@ -45,15 +41,7 @@ const dispatchObservation = async ({
 }: ElysiaResponseObservation) => {
   // Local expectations run before an earlier process-wide conformance observer.
   for (const { observer } of Array.from(subscriptions).toReversed()) {
-    const clone = response.clone();
-    try {
-      await observer({ app, request, response: clone });
-    } finally {
-      // Tee cancellation can wait for the caller's branch. Cleanup cannot hold
-      // that branch hostage or replace the observer's original failure.
-      // swallow-ok: cancellation cleanup must not replace the observer failure
-      void clone.body?.cancel().catch(() => undefined);
-    }
+    await observer({ app, request, response });
   }
 };
 
