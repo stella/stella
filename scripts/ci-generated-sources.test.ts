@@ -337,7 +337,7 @@ test("the documentation job consumes Markdown without generated-source hydration
     run?.includes("--run-markdown-checks"),
   );
   expect(markdown).toHaveLength(1);
-  expect(markdown?.at(0)?.["if"]).toContain(
+  expect(markdown?.at(0)?.if).toContain(
     "needs.ci-plan.outputs.docs_checks_required == 'true'",
   );
   expect(
