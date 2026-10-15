@@ -3,6 +3,10 @@
 
 import { organizationDataExports } from "@/api/db/schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedDataExportId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
@@ -45,8 +49,10 @@ type ListRow = {
   ]: (typeof organizationDataExports.$inferSelect)[K];
 };
 
-type SummaryRow = ListRow & {
-  parts: (typeof organizationDataExports.$inferSelect)["parts"];
+type SummaryRow = {
+  [
+    K in keyof typeof dataExportSummaryColumns
+  ]: (typeof organizationDataExports.$inferSelect)[K];
 };
 
 const iso = (value: Date | null): string | null =>
@@ -113,3 +119,53 @@ export const toDataExportSummary = (row: SummaryRow, now = new Date()) => ({
         }))
       : [],
 });
+
+type DataExportRow = typeof organizationDataExports.$inferSelect;
+
+export const UNPROJECTED_DATA_EXPORT_COLUMNS = [
+  // The authenticated organization scopes the query; it is not response data.
+  "organizationId",
+  // The worker's immutable split plan stays internal; clients receive progress.
+  "plan",
+  // Run fencing and retry bookkeeping are worker state.
+  "attempt",
+  "failures",
+  // Heartbeats detect lost workers; clients receive lifecycle timestamps.
+  "heartbeatAt",
+] as const satisfies readonly (keyof DataExportRow)[];
+
+type UnprojectedDataExportColumn =
+  (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number];
+
+true satisfies UnprojectedColumns<
+  DataExportRow,
+  SummaryRow,
+  UnprojectedDataExportColumn
+> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  DataExportRow,
+  SummaryRow,
+  UnprojectedDataExportColumn
+> extends never
+  ? true
+  : never;
+
+// Reconcile nested response fields with their source columns. The ETA is
+// computed from progress, while scope.versions renames versionScope.
+type DataExportListItem = ReturnType<typeof toDataExportListItem>;
+type FlatDataExportListItem = Omit<DataExportListItem, "scope" | "progress"> &
+  Omit<DataExportListItem["progress"], "estimatedSecondsRemaining"> & {
+    versionScope: DataExportListItem["scope"]["versions"];
+  };
+
+true satisfies UnprojectedColumns<ListRow, FlatDataExportListItem> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  ListRow,
+  FlatDataExportListItem
+> extends never
+  ? true
+  : never;

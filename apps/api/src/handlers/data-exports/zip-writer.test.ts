@@ -27,7 +27,7 @@ const collect = async (
   onEntry?: (entry: WrittenZipEntry) => void,
 ): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
-  for await (const chunk of writeZip(entries, { onEntry })) {
+  for await (const chunk of writeZip(entries, onEntry ? { onEntry } : {})) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);

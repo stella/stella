@@ -187,31 +187,30 @@ const listMatters = async (
   { db, organizationId, readAll, readForParents }: PagedReader,
   scope: DataExportVersionScope,
 ): Promise<SourceMatterSummary[]> => {
-  const matterRows = await readAll(
-    async (afterId) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select({
-              id: workspaces.id,
-              name: workspaces.name,
-              reference: workspaces.reference,
-              status: workspaces.status,
-              createdAt: workspaces.createdAt,
-            })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.organizationId, organizationId),
-                ne(workspaces.status, DELETING_STATUS),
-                isOrganizationMatter,
-                after(workspaces.id, afterId),
-              ),
-            )
-            .orderBy(asc(workspaces.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
-      ),
-  );
+  const readMatterRowsPage = async (cursor: string | null) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select({
+            id: workspaces.id,
+            name: workspaces.name,
+            reference: workspaces.reference,
+            status: workspaces.status,
+            createdAt: workspaces.createdAt,
+          })
+          .from(workspaces)
+          .where(
+            and(
+              eq(workspaces.organizationId, organizationId),
+              ne(workspaces.status, DELETING_STATUS),
+              isOrganizationMatter,
+              after(workspaces.id, cursor),
+            ),
+          )
+          .orderBy(asc(workspaces.id))
+          .limit(DATA_EXPORT_PAGE_SIZE),
+    );
+  const matterRows = await readAll(readMatterRowsPage);
   const fileBytes = sql<number>`COALESCE(SUM((${fields.content}->>'sizeBytes')::bigint), 0)::bigint`;
   const sizeRows = await readForParents(
     matterRows.map((row) => row.id),
@@ -269,23 +268,22 @@ const readMatterEntities = async (
   workspaceId: SafeId<"workspace">,
   scope: DataExportVersionScope,
 ) => {
-  const entityRows = await readAll(
-    async (afterId) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select()
-            .from(entities)
-            .where(
-              and(
-                eq(entities.workspaceId, workspaceId),
-                after(entities.id, afterId),
-              ),
-            )
-            .orderBy(asc(entities.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
-      ),
-  );
+  const readEntityRowsPage = async (cursor: string | null) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select()
+          .from(entities)
+          .where(
+            and(
+              eq(entities.workspaceId, workspaceId),
+              after(entities.id, cursor),
+            ),
+          )
+          .orderBy(asc(entities.id))
+          .limit(DATA_EXPORT_PAGE_SIZE),
+    );
+  const entityRows = await readAll(readEntityRowsPage);
   const documentRows = entityRows.filter(
     (row) => row.kind === "document" || row.kind === "message",
   );
@@ -354,28 +352,27 @@ const readMatterRecords = async (
   workspaceId: SafeId<"workspace">,
   taskIds: readonly SafeId<"entity">[],
 ) => {
-  const contactLinks = await readAll(
-    async (afterId) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select({
-              id: workspaceContacts.id,
-              link: workspaceContacts,
-              displayName: contacts.displayName,
-            })
-            .from(workspaceContacts)
-            .innerJoin(contacts, eq(contacts.id, workspaceContacts.contactId))
-            .where(
-              and(
-                eq(workspaceContacts.workspaceId, workspaceId),
-                after(workspaceContacts.id, afterId),
-              ),
-            )
-            .orderBy(asc(workspaceContacts.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
-      ),
-  );
+  const readContactLinksPage = async (cursor: string | null) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select({
+            id: workspaceContacts.id,
+            link: workspaceContacts,
+            displayName: contacts.displayName,
+          })
+          .from(workspaceContacts)
+          .innerJoin(contacts, eq(contacts.id, workspaceContacts.contactId))
+          .where(
+            and(
+              eq(workspaceContacts.workspaceId, workspaceId),
+              after(workspaceContacts.id, cursor),
+            ),
+          )
+          .orderBy(asc(workspaceContacts.id))
+          .limit(DATA_EXPORT_PAGE_SIZE),
+    );
+  const contactLinks = await readAll(readContactLinksPage);
   const assignees = await readForParents(
     taskIds,
     async (ids) =>
@@ -392,42 +389,40 @@ const readMatterRecords = async (
             ),
       ),
   );
-  const timeEntryRows = await readAll(
-    async (afterId) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select()
-            .from(timeEntries)
-            .where(
-              and(
-                eq(timeEntries.organizationId, organizationId),
-                eq(timeEntries.workspaceId, workspaceId),
-                after(timeEntries.id, afterId),
-              ),
-            )
-            .orderBy(asc(timeEntries.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
-      ),
-  );
-  const invoiceRows = await readAll(
-    async (afterId) =>
-      await db(
-        async (tx) =>
-          await tx
-            .select()
-            .from(invoices)
-            .where(
-              and(
-                eq(invoices.organizationId, organizationId),
-                eq(invoices.workspaceId, workspaceId),
-                after(invoices.id, afterId),
-              ),
-            )
-            .orderBy(asc(invoices.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
-      ),
-  );
+  const readTimeEntryRowsPage = async (cursor: string | null) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select()
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.organizationId, organizationId),
+              eq(timeEntries.workspaceId, workspaceId),
+              after(timeEntries.id, cursor),
+            ),
+          )
+          .orderBy(asc(timeEntries.id))
+          .limit(DATA_EXPORT_PAGE_SIZE),
+    );
+  const timeEntryRows = await readAll(readTimeEntryRowsPage);
+  const readInvoiceRowsPage = async (cursor: string | null) =>
+    await db(
+      async (tx) =>
+        await tx
+          .select()
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.organizationId, organizationId),
+              eq(invoices.workspaceId, workspaceId),
+              after(invoices.id, cursor),
+            ),
+          )
+          .orderBy(asc(invoices.id))
+          .limit(DATA_EXPORT_PAGE_SIZE),
+    );
+  const invoiceRows = await readAll(readInvoiceRowsPage);
   const lineRows = await readForParents(
     invoiceRows.map((row) => row.id),
     async (invoiceIds) =>
@@ -583,13 +578,13 @@ const loadMatter = async (
       })),
     documents: assembleDocuments(entityRows),
     tasks: table(TASK_COLUMNS, taskRows, (row) => ({
-      assignees: arrayOrEmpty(assigneesByTask.get(String(row.id))).map(
+      assignees: arrayOrEmpty(assigneesByTask.get(String(row["id"]))).map(
         (assignee) => projectRecord(assignee, TASK_ASSIGNEE_COLUMNS),
       ),
     })),
     timeEntries: table(TIME_ENTRY_COLUMNS, records.timeEntryRows),
     invoices: table(INVOICE_COLUMNS, records.invoiceRows, (row) => ({
-      lines: arrayOrEmpty(linesByInvoice.get(String(row.id))).map((line) =>
+      lines: arrayOrEmpty(linesByInvoice.get(String(row["id"]))).map((line) =>
         projectRecord(line, INVOICE_LINE_COLUMNS),
       ),
     })),
@@ -609,81 +604,95 @@ const readOrganizationTable = async <Row extends { id: string }>(
 
 const readOrganizationRows = async (reader: PagedReader) => {
   const { organizationId } = reader;
-  const contactRows = await readOrganizationTable(
-    reader,
-    async (tx, afterId) =>
-      await tx
-        .select()
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.organizationId, organizationId),
-            after(contacts.id, afterId),
-          ),
-        )
-        .orderBy(asc(contacts.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
-  );
+  const readContactRowsPage = async (
+    tx: ScopedTransaction,
+    cursor: string | null,
+  ) =>
+    await tx
+      .select()
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          after(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(DATA_EXPORT_PAGE_SIZE);
+  const contactRows = await readOrganizationTable(reader, readContactRowsPage);
+  const readRelationshipRowsPage = async (
+    tx: ScopedTransaction,
+    cursor: string | null,
+  ) =>
+    await tx
+      .select()
+      .from(contactRelationships)
+      .where(
+        and(
+          eq(contactRelationships.organizationId, organizationId),
+          after(contactRelationships.id, cursor),
+        ),
+      )
+      .orderBy(asc(contactRelationships.id))
+      .limit(DATA_EXPORT_PAGE_SIZE);
   const relationshipRows = await readOrganizationTable(
     reader,
-    async (tx, afterId) =>
-      await tx
-        .select()
-        .from(contactRelationships)
-        .where(
-          and(
-            eq(contactRelationships.organizationId, organizationId),
-            after(contactRelationships.id, afterId),
-          ),
-        )
-        .orderBy(asc(contactRelationships.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+    readRelationshipRowsPage,
   );
-  const clauseRows = await readOrganizationTable(
-    reader,
-    async (tx, afterId) =>
-      await tx
-        .select()
-        .from(clauses)
-        .where(
-          and(
-            eq(clauses.organizationId, organizationId),
-            after(clauses.id, afterId),
-          ),
-        )
-        .orderBy(asc(clauses.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
-  );
+  const readClauseRowsPage = async (
+    tx: ScopedTransaction,
+    cursor: string | null,
+  ) =>
+    await tx
+      .select()
+      .from(clauses)
+      .where(
+        and(
+          eq(clauses.organizationId, organizationId),
+          after(clauses.id, cursor),
+        ),
+      )
+      .orderBy(asc(clauses.id))
+      .limit(DATA_EXPORT_PAGE_SIZE);
+  const clauseRows = await readOrganizationTable(reader, readClauseRowsPage);
+  const readTemplateRowsPage = async (
+    tx: ScopedTransaction,
+    cursor: string | null,
+  ) =>
+    await tx
+      .select()
+      .from(templates)
+      .where(
+        and(
+          eq(templates.organizationId, organizationId),
+          after(templates.id, cursor),
+        ),
+      )
+      .orderBy(asc(templates.id))
+      .limit(DATA_EXPORT_PAGE_SIZE);
   const templateRows = await readOrganizationTable(
     reader,
-    async (tx, afterId) =>
-      await tx
-        .select()
-        .from(templates)
-        .where(
-          and(
-            eq(templates.organizationId, organizationId),
-            after(templates.id, afterId),
-          ),
-        )
-        .orderBy(asc(templates.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+    readTemplateRowsPage,
   );
+  const readUnassignedRowsPage = async (
+    tx: ScopedTransaction,
+    cursor: string | null,
+  ) =>
+    await tx
+      .select()
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.organizationId, organizationId),
+          isNull(timeEntries.workspaceId),
+          after(timeEntries.id, cursor),
+        ),
+      )
+      .orderBy(asc(timeEntries.id))
+      .limit(DATA_EXPORT_PAGE_SIZE);
   const unassignedRows = await readOrganizationTable(
     reader,
-    async (tx, afterId) =>
-      await tx
-        .select()
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.organizationId, organizationId),
-            isNull(timeEntries.workspaceId),
-            after(timeEntries.id, afterId),
-          ),
-        )
-        .orderBy(asc(timeEntries.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+    readUnassignedRowsPage,
   );
   return {
     contactRows,
@@ -807,15 +816,15 @@ const loadOrganizationRecords = async (
       rows.relationshipRows,
     ),
     clauses: table(CLAUSE_COLUMNS, rows.clauseRows, (row) => ({
-      versions: arrayOrEmpty(versionsByClause.get(String(row.id))).map(
+      versions: arrayOrEmpty(versionsByClause.get(String(row["id"]))).map(
         (version) => projectRecord(version, CLAUSE_VERSION_COLUMNS),
       ),
-      variants: arrayOrEmpty(variantsByClause.get(String(row.id))).map(
+      variants: arrayOrEmpty(variantsByClause.get(String(row["id"]))).map(
         (variant) => projectRecord(variant, CLAUSE_VARIANT_COLUMNS),
       ),
     })),
     templates: table(TEMPLATE_COLUMNS, rows.templateRows, (row) => ({
-      versions: arrayOrEmpty(versionsByTemplate.get(String(row.id))).map(
+      versions: arrayOrEmpty(versionsByTemplate.get(String(row["id"]))).map(
         (version) => projectRecord(version, TEMPLATE_VERSION_COLUMNS),
       ),
     })),
