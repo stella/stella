@@ -119,6 +119,7 @@ const noCitations = {
   nextCursor: null,
   limit: 50,
   items: [],
+  doctrineAvailability: "unavailable" as const,
 };
 const noLeadingCitations = {
   items: [],

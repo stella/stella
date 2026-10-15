@@ -2081,6 +2081,7 @@
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
     "website": "Vietne",
+    "whenToUse": "Kad izmantot",
     "workflow": "Darbplūsma",
     "workflows": "Darbplūsmas",
     "zoomIn": "Tuvināt",
@@ -3655,6 +3656,10 @@
       "importTitle": "Importēt prasmi",
       "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
       "invalidPath": "Ceļā drīkst izmantot tikai mazos burtus, ciparus, punktus, defises vai pasvītras",
+      "invocationAuto": "Automātiski",
+      "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
+      "invocationManual": "Tikai pēc izsaukuma",
+      "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
       "license": "Licence: {license}",
       "newFile": "Jauns fails",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4345,6 +4350,8 @@
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
       },
+      "showInTitle": "Rādīt numuru blakus lietas nosaukumam",
+      "showInTitleDescription": "Ja tas ir izslēgts, virsraksts ir tieši ievadītais nosaukums.",
       "title": "Lietu numerācija",
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
@@ -4978,17 +4985,22 @@
     "provisionAskSummarize": "Apkopot, kā tiesas piemēro šo normu",
     "provisionAskSummarizePrompt": "Apkopo, kā tiesas piemēro {subject}, un atsaucies uz nolēmumiem, uz kuriem balsties.",
     "provisionDetailsFor": "{provision} informācija",
+    "provisionEffectiveFrom": "spēkā no {date}",
     "provisionHistoryEarliest": "Senākā zināmā redakcija.",
     "provisionHistoryEmpty": "Šai normai nav nevienas redakcijas.",
     "provisionHistoryLoadOlder": "Ielādējiet vecākas redakcijas, lai tās salīdzinātu.",
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
+    "provisionPartTextUnavailable": "{provisionLabel} teksts nav pieejams",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Šīs redakcijas teksts nav pieejams",
     "publisherWindowInconsistent": "Šai dienai spēkā esošo redakciju nevar noteikt: izdevēja dati ir pretrunīgi.",
     "resolvedAlias": "Atpazīts kā {label}",
     "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
+    "showCitedPartOnly": "Rādīt tikai citēto daļu",
+    "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
@@ -5004,7 +5016,6 @@
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}",
     "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redakcija ir spēkā kopš {date}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {
@@ -5557,7 +5568,6 @@
     "viewVersion": "Skatīt",
     "whenNotToUse": "Kad neizmantot",
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
-    "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
   "timesheets": {
@@ -5678,7 +5688,7 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "ownerTypeToggle": "Lietas veids",
+      "matterName": "Lietas nosaukums",
       "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
@@ -6130,15 +6140,12 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
-    "ownerType": {
-      "client": "Klients",
-      "personal": "Personīga"
-    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
       "noClient": "Klients nav piešķirts",
+      "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
       "partyRoles": {
         "co_counsel": "Līdzadvokāts",

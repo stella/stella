@@ -311,6 +311,9 @@ export const openProvisionLayoutInspector = async (
     )
     .waitFor({ state: "visible", timeout: 30_000 });
   await citation.click();
+  // Enter the preview before moving to its edge-aligned header action;
+  // a direct pointer jump from the citation leaves the hover corridor.
+  await page.getByText(PROVISION_LAYOUT_SENTENCE, { exact: true }).hover();
   await page
     .getByRole("button", { name: "Open provision", exact: true })
     .click();
