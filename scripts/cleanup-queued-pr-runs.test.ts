@@ -854,14 +854,14 @@ test("a protected or unresolvable pull request is never deferred", async () => {
 
 test("every steward step that cancels a run honours the ci-protect label", () => {
   const cancelling = workflow.jobs.cleanup.steps.filter((step) =>
-    /cancelWorkflowRun|force-cancel/u.test(step.with?.script ?? ""),
+    /cancelWorkflowRun|force-cancel/u.test(step.with.script),
   );
   expect(cancelling.length).toBeGreaterThan(0);
   for (const step of cancelling) {
-    expect(step.with?.script, step.name).toContain(
+    expect(step.with.script, step.name).toContain(
       'PROTECT_LABEL = "ci-protect"',
     );
-    expect(step.with?.script, step.name).toMatch(
+    expect(step.with.script, step.name).toMatch(
       /labels\?\.some\(\(label\) => label\.name === PROTECT_LABEL\)/u,
     );
   }
