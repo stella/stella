@@ -88,6 +88,12 @@ export type TemplateChatThreadKey = {
   userId: string;
 };
 
+/** A reader's one conversation about a case-law decision. */
+export type DecisionChatThreadKey = {
+  decisionId: string;
+  userId: string;
+};
+
 export type ChatThreadTitleKey = {
   threadId: string;
   workspaceId?: string | undefined;
@@ -97,6 +103,8 @@ export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
   search?: string | undefined;
   userId: string;
+  /** Only the threads that live in this matter. */
+  workspaceId?: string | undefined;
 };
 
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -191,10 +199,21 @@ export const chatKeys = {
     "template-thread",
     key.templateId,
   ],
+  decisionThread: (
+    activeOrganizationId: string,
+    key: DecisionChatThreadKey,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    key.userId,
+    "decision-thread",
+    key.decisionId,
+  ],
   groupedThreads: ({
     activeOrganizationId,
     search,
     userId,
+    workspaceId,
   }: GroupedChatThreadsKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -202,6 +221,7 @@ export const chatKeys = {
     "threads",
     "grouped",
     search ?? "",
+    workspaceId ?? "",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,

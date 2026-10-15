@@ -5,6 +5,7 @@
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
     "railway-smoke.yml/smoke": "main",
+    "autofix.yml/regenerate-requested-files": "main",
     "autofix.yml/dependabot-bun-autofix": "pr-fast",
     "autofix.yml/regenerate-scope": "pr-fast",
     "autofix.yml/regenerate-derived-files": "pr-fast",
@@ -42,11 +43,11 @@
     "nightly-typecheck.yml/full-typecheck": "main",
     "nightly-typecheck.yml/cumulative-type-cost": "main",
     "nightly-typecheck.yml/fresh-web-sources": "main",
-    "typecheck-proofs.yml/typecheck-proofs": "main",
     "quarantine-prune.yml/prune": "main",
     "dated-waiver-healing.yml/heal": "main",
     "release-pr.yml/gate": "main",
     "release-pr.yml/version": "main",
+    "release-proof.yml/dispatch": "pr-fast",
     "main-heavy.yml/validate": "main",
     "main-heavy.yml/suites": "main",
     "main-heavy.yml/status": "main",
@@ -72,7 +73,8 @@
     "provider-request-schemas-check.yml/provider-request-schemas-check": "main",
     "staging-response-policy.yml/check": "main",
     "marketing-screenshots.yml/check": "main",
-    "marketing-screenshots.yml/update": "main",
+    "marketing-screenshots-capture.yml/capture": "main",
+    "marketing-screenshots-publish.yml/publish": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/deliver": "main",
@@ -105,6 +107,9 @@
     "railway-template-source.yml/drift": "main",
     "disarm-auto-merge.yml/disarm": "pr-fast",
     "bot-refresh-auto-merge.yml/arm": "pr-fast",
+    "autofix-generated-conflicts.yml/dispatch": "main",
+    "generated-conflicts-resolve.yml/resolve": "main",
+    "generated-conflicts-publish.yml/publish": "main",
     "desktop-release-canary.yml/check-latest": "main",
     "journey-canary.yml/journeys": "main",
     "provenance-nightly.yml/provenance-update": "main",
@@ -155,6 +160,7 @@
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -163,8 +169,12 @@
     "main-pr-depth.yml/status": "main",
     "ci.yml/query-perf": "pr-fast",
     "query-perf.yml/query-perf": "pr-fast",
-    "manual-checks.yml/check": "main",
-    "bundle-size-nightly.yml/report": "main"
+    "manual-checks.yml/check": "dispatch-only",
+    "bundle-size-nightly.yml/report": "main",
+    "manual-checks.yml/install-cache-windows": "main",
+    "manual-checks.yml/install-cache-linux": "main",
+    "type-cost-measurement.yml/prepare": "main",
+    "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
     "audit-image.yml": {
@@ -188,6 +198,10 @@
       "cancelInProgress": true
     },
     "publish-npm.yml": {
+      "role": "publish",
+      "cancelInProgress": false
+    },
+    "autofix-generated-conflicts.yml": {
       "role": "publish",
       "cancelInProgress": false
     },

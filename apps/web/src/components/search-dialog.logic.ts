@@ -1,5 +1,6 @@
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import type { SearchScope } from "@/components/search-scope";
 import type {
@@ -9,7 +10,7 @@ import type {
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { getFirstSearchHighlightText } from "@/lib/search.logic";
 
 type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
@@ -201,7 +202,10 @@ export const getEntityHitLocation = (
 export const getRecentFileLocation = ({
   entityId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId">): EntityLocation => ({
+}: Pick<
+  RecentFileWithIdentity,
+  "entityId" | "workspaceId"
+>): EntityLocation => ({
   type: "tree",
   workspaceId,
   entityId,
@@ -212,7 +216,7 @@ export const getRecentFileRoute = ({
   entityId,
   fileFieldId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId"> & {
+}: Pick<RecentFileWithIdentity, "entityId" | "workspaceId"> & {
   fileFieldId: string;
 }): EntityNavigationRoute => ({
   to: "/workspaces/$workspaceId/$viewId/document",
@@ -254,7 +258,7 @@ export const createDialogCloseActionQueue = () => {
 };
 
 export const getRecentFilePreviewHit = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
   resolvedFileFieldId?: string | null,
 ) => {
   const resource = resourceRef({
@@ -285,7 +289,7 @@ export const getRecentFilePreviewHit = (
 };
 
 export const getRecentFilePreviewDateVisibility = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
 ): "hide" | "show" => (file.updatedAt ? "show" : "hide");
 
 export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>
@@ -381,3 +385,16 @@ export const rememberSelectedFacetLabels = (
   }
   return next;
 };
+
+/**
+ * The case-law facet count as words. The number counts matching decisions,
+ * capped at the global search ceiling, so a count at the ceiling is shown as
+ * "at least" rather than as an exact total.
+ */
+export const caseLawFacetCountMessage = (count: number) =>
+  count >= GLOBAL_SEARCH_RESULT_LIMIT
+    ? ({
+        key: "search.caseLawMatchingDecisionsAtLeast",
+        count: GLOBAL_SEARCH_RESULT_LIMIT,
+      } as const)
+    : ({ key: "search.caseLawMatchingDecisions", count } as const);

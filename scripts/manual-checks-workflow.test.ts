@@ -13,7 +13,10 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { MANUAL_CHECKS, validateManualCheckInput } from "./manual-check-input";
+import {
+  MANUAL_WORKFLOW_CHECKS,
+  validateManualCheckInput,
+} from "./manual-check-input";
 import { groupTestFiles } from "./run-manual-test-files";
 
 const workflowFile = new URL(
@@ -21,6 +24,21 @@ const workflowFile = new URL(
   import.meta.url,
 );
 const workflowText = readFileSync(workflowFile, "utf-8");
+
+test("manual dispatch exposes parity and seeded command proofs with no target", () => {
+  for (const check of ["typecheck-parity", "typecheck-probe"]) {
+    expect(validateManualCheckInput(check, "")).toEqual([]);
+    expect(validateManualCheckInput(check, "@stll/sha256")).toEqual([
+      `target must be empty for ${check}`,
+    ]);
+  }
+  expect(workflowText).toContain(
+    "typecheck-parity) bun run check:typecheck-parity ;;",
+  );
+  expect(workflowText).toContain(
+    "typecheck-probe) bash scripts/typecheck-command-probe.sh ;;",
+  );
+});
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   if: v.optional(v.string()),
@@ -55,7 +73,7 @@ const workflowProblems = (text: string): string[] => {
     }),
     workflow.on["workflow_dispatch"],
   ).inputs.check.options;
-  if (JSON.stringify(options) !== JSON.stringify(MANUAL_CHECKS)) {
+  if (JSON.stringify(options) !== JSON.stringify(MANUAL_WORKFLOW_CHECKS)) {
     problems.push("enum");
   }
   if (
@@ -87,11 +105,28 @@ const workflowProblems = (text: string): string[] => {
   if (upload?.with?.["name"] !== "manual-check-result") {
     problems.push("artifact");
   }
+  for (const name of [
+    "Record typecheck parity report",
+    "Upload typecheck parity report",
+  ]) {
+    const reportStep = workflow.jobs.check.steps.find(
+      (step) => step.name === name,
+    );
+    if (
+      reportStep?.if !==
+      `\${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}`
+    ) {
+      problems.push("parity-report");
+    }
+  }
   return problems;
 };
 
 test("workflow preserves the dispatch-only least-privilege contract", () => {
   expect(workflowProblems(workflowText)).toEqual([]);
+  expect(parseWorkflow(workflowText).jobs.check["if"]).toBe(
+    "inputs.check != 'install-cache-benchmark' && inputs.check != 'store-cache-save-benchmark'",
+  );
   const mutations: [string, string, string][] = [
     [
       "trigger",
@@ -128,6 +163,11 @@ test("workflow preserves the dispatch-only least-privilege contract", () => {
       "artifact",
       "name: manual-check-result\n          path:",
       "name: wrong-result\n          path:",
+    ],
+    [
+      "parity-report",
+      "inputs.check == 'typecheck-parity' && steps.run-check.outcome",
+      "inputs.check == 'lint' && steps.run-check.outcome",
     ],
   ];
   for (const [problem, before, after] of mutations) {

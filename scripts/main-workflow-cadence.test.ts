@@ -64,16 +64,19 @@ type SelectionRunOptions = {
   eventName: string;
   statuses?: unknown[];
   fail?: boolean;
+  reuseRun?: string;
 };
 const selectionRun = async ({
   eventName,
   statuses = [],
   fail = false,
+  reuseRun = "",
 }: SelectionRunOptions) => {
   const outputs: Record<string, string> = {};
   const queries: unknown[] = [];
   const summary = { addRaw: (_text: string) => summary, write: async () => {} };
   await new Script(`(async () => { ${selectionScript} })()`).runInNewContext({
+    process: { env: { REUSE_RUN: reuseRun } },
     context: {
       eventName,
       sha: currentSha,
@@ -101,6 +104,22 @@ const selectionRun = async ({
   });
   return { outputs, queries };
 };
+
+test("a refused reuse runs fresh suites even when main has a historical status", async () => {
+  const result = await selectionRun({
+    eventName: "schedule",
+    reuseRun: "true",
+    statuses: [
+      {
+        context: "main/heavy",
+        state: "failure",
+        creator: { login: "github-actions[bot]" },
+      },
+    ],
+  });
+  expect(result.outputs["run"]).toBe("true");
+  expect(result.queries).toEqual([]);
+});
 
 test("scheduled heavy runs skip only the last completed tested SHA and always allow release/manual runs", async () => {
   expect(heavy.on["schedule"]).toEqual([
@@ -183,6 +202,10 @@ test("scheduled heavy runs skip only the last completed tested SHA and always al
     actions: "write",
     contents: "read",
     statuses: "read",
+    // Reads the merge-group check-run receipt for the same SHA.
+    checks: "read",
+    "pull-requests": "read",
+    issues: "read",
   });
 });
 

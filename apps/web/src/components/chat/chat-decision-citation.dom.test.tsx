@@ -14,6 +14,7 @@ import { toSafeId } from "@stll/api-contract/safe-id";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 
@@ -52,6 +53,7 @@ const href = (decisionId: string) =>
   toChatDecisionPassageHref({
     decisionId: toSafeId<"caseLawDecision">(decisionId),
     anchorId: "p-12",
+    courtParagraphNumber: null,
   });
 const answer = (markdown: string) =>
   ({
@@ -91,7 +93,7 @@ afterEach(() => {
   clients.length = 0;
   useExternalSourceStore.setState({ sourcesByUrl: {} });
 });
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 test("same-decision repetitions stay compact while two actually cited decisions sharing a court expand", async () => {
   const client = clientWithDecisions();
@@ -300,7 +302,7 @@ test("an anchored decision chip carries its paragraph in the link native navigat
     <ChatDecisionCitation
       decisionId={first.id}
       passage={paragraph}
-      anchorId="p-12"
+      paragraph={{ anchorId: "p-12", courtParagraphNumber: null }}
       interactive
     />,
   );
@@ -315,4 +317,78 @@ test("an anchored decision chip carries its paragraph in the link native navigat
   );
   expect(target.hash).toBe("#p-12");
   expect(target.pathname).not.toContain("#");
+});
+
+test("the court's number the link carries shows at first paint, from a read or a carried source, never by fetching", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(client);
+  // The decision itself is never read here: neither the cache nor a fetch
+  // holds its document, so the number can only come from the link.
+  client.setQueryData(decisionOptions(second.id).queryKey, second);
+  const readerUrl = new URL(
+    createCaseLawDecisionPath(
+      createCaseLawDecisionRouteParams({ ...first, decisionId: first.id }),
+    ),
+    window.location.origin,
+  ).href;
+  useExternalSourceStore.getState().registerSources([
+    {
+      url: first.sourceUrl,
+      appUrl: readerUrl,
+      sourceUrl: first.sourceUrl,
+      title: first.caseNumber,
+      caseLawDecision: {
+        decisionId: first.id,
+        caseNumber: first.caseNumber,
+        citation: {
+          court: first.court,
+          courtShortCode: "NS",
+          decisionDate: first.decisionDate,
+        },
+      },
+    },
+  ]);
+  const view = mount(
+    client,
+    <ChatAnswerDecisionProvider
+      message={answer(`[First](${first.sourceUrl})`)}
+      isAwaitingUser={false}
+    >
+      <p>
+        <ChatDecisionCitation
+          decisionId={first.id}
+          passage={paragraph}
+          paragraph={{ anchorId: "p-12", courtParagraphNumber: 8 }}
+          interactive
+        />
+      </p>
+      <p>
+        <ChatDecisionCitation
+          decisionId={second.id}
+          passage={paragraph}
+          paragraph={{ anchorId: "p-14", courtParagraphNumber: 9 }}
+          interactive
+        />
+      </p>
+      <p>
+        <ChatDecisionCitation
+          decisionId={second.id}
+          passage={paragraph}
+          paragraph={{ anchorId: "h-1", courtParagraphNumber: null }}
+          interactive
+        />
+      </p>
+    </ChatAnswerDecisionProvider>,
+  );
+  const chips = view.container.querySelectorAll("[data-decision-citation]");
+  expect(chips).toHaveLength(3);
+  const [carried, read, unnumbered] = chips;
+  expect(carried?.textContent).toBe("NS¶ 8");
+  expect(carried?.getAttribute("aria-label")).toEndWith(", paragraph 8");
+  expect(read?.textContent).toBe("NS¶ 9");
+  expect(unnumbered?.textContent).toBe("NS");
+  expect(unnumbered?.getAttribute("aria-label")).not.toContain("paragraph");
+  expect(client.isFetching()).toBe(0);
 });

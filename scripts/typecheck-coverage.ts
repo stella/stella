@@ -27,6 +27,8 @@ import {
 import path from "node:path";
 import ts from "typescript";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -57,6 +59,8 @@ type ProjectBuildInfo = {
   project: string;
 };
 
+type PathApi = Pick<typeof path, "isAbsolute" | "relative" | "resolve" | "sep">;
+
 // Oxc discovers only tsconfig.json files while walking up from a source file.
 // Keep every proxy beside the source subtree that its nonstandard native project
 // covers. Root-only projects have no source subtree suitable for a proxy.
@@ -76,10 +80,6 @@ const OXC_PROJECT_PROXIES = [
   {
     config: "apps/api/evals/tsconfig.json",
     target: "apps/api/tsconfig.scripts.json",
-  },
-  {
-    config: "apps/api/src/mcp/apps/tsconfig.json",
-    target: "apps/api/tsconfig.mcp-apps.json",
   },
   {
     config: "apps/api/src/handlers/visual-sandbox/browser/tsconfig.json",
@@ -116,6 +116,8 @@ const OXC_PROJECT_PROXIES = [
 ] as const satisfies readonly OxcProjectProxy[];
 
 const OXC_NATIVE_ONLY_PROJECTS = [
+  "apps/api/tsconfig.src.json",
+  "apps/api/tsconfig.tests.json",
   "tsconfig.scripts.json",
   "tsconfig.tooling.json",
   "tsconfig.oxlint-plugins.json",
@@ -256,8 +258,19 @@ const typecheckProjects = (): string[] => {
 
       addProject(path.join(workspace, "tsconfig.json"), workspace);
 
-      for (const project of supplementalProjects(typecheck)) {
-        addProject(path.join(workspace, project), workspace);
+      for (const [name, command] of Object.entries(packageJson.scripts)) {
+        if (name !== "typecheck" && !name.startsWith("typecheck:")) {
+          continue;
+        }
+        if (
+          name === "generate:typecheck-declarations" ||
+          typeof command !== "string"
+        ) {
+          continue;
+        }
+        for (const project of supplementalProjects(command)) {
+          addProject(path.join(workspace, project), workspace);
+        }
       }
     }
   }
@@ -324,9 +337,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const readJsonObject = (file: string): Record<string, unknown> => {
   const parsed = Bun.JSONC.parse(readFileSync(file, "utf-8"));
   if (!isRecord(parsed)) {
-    panic(
-      `${normalizeRepoPath(path.relative(REPO_ROOT, file))} must contain an object`,
-    );
+    panic(`${repoRelativePath(REPO_ROOT, file)} must contain an object`);
   }
   return parsed;
 };
@@ -364,7 +375,7 @@ const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
     const owner = owners.get(buildInfoFile);
     if (owner) {
       errors.push(
-        `${project} and ${owner} share ${normalizeRepoPath(path.relative(REPO_ROOT, buildInfoFile))}`,
+        `${project} and ${owner} share ${repoRelativePath(REPO_ROOT, buildInfoFile)}`,
       );
       continue;
     }
@@ -392,7 +403,7 @@ const incrementalProjectErrors = (projects: string[]): string[] => {
       continue;
     }
     const relativeBuildInfo = normalizeRepoPath(
-      path.relative(REPO_ROOT, buildInfoFile),
+      repoRelativePath(REPO_ROOT, buildInfoFile),
     );
     if (!/(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(relativeBuildInfo)) {
       errors.push(
@@ -469,7 +480,7 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
     }
 
     const resolvedTarget = normalizeRepoPath(
-      path.relative(
+      repoRelativePath(
         REPO_ROOT,
         path.resolve(path.dirname(proxyPath), extendsPath),
       ),
@@ -527,7 +538,7 @@ const typecheckAutofixFiles = (files: readonly string[]): void => {
   const directoryProjects = new Map<string, string[]>();
   for (const rawFile of files) {
     const file = normalizeRepoPath(
-      path.relative(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
+      repoRelativePath(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
     );
     if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
       panic(`Autofix source is outside the repository: ${rawFile}`);
@@ -676,8 +687,8 @@ const coveredFilesByProject = (
       "--listFilesOnly",
     ]);
     for (const file of lines(output)) {
-      const relative = path.relative(REPO_ROOT, path.resolve(file));
-      if (relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      const relative = repositoryRelativeFile(REPO_ROOT, file, path);
+      if (relative === null) {
         continue;
       }
       projectFiles.add(normalizeRepoPath(relative));
@@ -686,6 +697,18 @@ const coveredFilesByProject = (
   }
 
   return filesByProject;
+};
+
+const repositoryRelativeFile = (
+  root: string,
+  file: string,
+  pathApi: PathApi,
+): string | null => {
+  const absolute = pathApi.resolve(file);
+  if (!isPathInside(root, absolute, pathApi)) {
+    return null;
+  }
+  return repoRelativePath(root, absolute, pathApi);
 };
 
 const coveredFiles = (
@@ -767,11 +790,44 @@ const assert = (condition: boolean, message: string): void => {
   }
 };
 
+const selfTestGeneratedProjects = (): void => {
+  const generatedProject = "packages/example/src/generated/tsconfig.json";
+  const generatedSources = new Set([
+    "packages/example/src/generated/contracts.js",
+    "packages/example/src/generated/contracts.d.ts",
+  ]);
+  assert(
+    projectAccountingErrors(
+      ["packages/example/tsconfig.json", generatedProject],
+      [],
+      [],
+    ).length === 0,
+    "must discover a supplemental conventional project without a proxy",
+  );
+  assert(
+    findSourcesWithoutDiscoverableConfig(
+      generatedSources,
+      generatedSources,
+      new Map([[generatedProject, generatedSources]]),
+      (config) => config === generatedProject,
+    ).length === 0,
+    "must cover generated runtime JS and its declaration in their nearest conventional project",
+  );
+};
+
 const selfTest = (): void => {
   assert(isTypeScriptFile("src/new-file.ts"), "must recognize .ts files");
   assert(isTypeScriptFile("src/env.d.ts"), "must recognize declaration files");
   assert(isTypeScriptFile("src/view.tsx"), "must recognize .tsx files");
   assert(!isTypeScriptFile("src/view.js"), "must ignore non-TypeScript files");
+  assert(
+    repositoryRelativeFile(
+      String.raw`C:\repository`,
+      String.raw`C:\outside\file.ts`,
+      path.win32,
+    ) === null,
+    "must reject a Windows file outside the repository before normalizing separators",
+  );
   assert(
     isOxcSourceFile("apps/web/file.js"),
     "must recognize .js files for Oxc",
@@ -903,6 +959,8 @@ const selfTest = (): void => {
     "must accept a dedicated Oxc proxy for a co-located test project",
   );
 
+  selfTestGeneratedProjects();
+
   const sourceMaskedByUnregisteredConfig = findSourcesWithoutDiscoverableConfig(
     new Set(["apps/example/scripts/unregistered.ts"]),
     new Set(["apps/example/scripts/unregistered.ts"]),
@@ -950,7 +1008,7 @@ const selfTest = (): void => {
   console.log("typecheck-coverage --self-test: PASS");
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   if (process.argv.at(2) === "--autofix") {
     typecheckAutofixFiles(process.argv.slice(3));
     return;
@@ -959,6 +1017,25 @@ const main = (): void => {
   if (options.selfTest) {
     selfTest();
     return;
+  }
+
+  run([
+    "bunx",
+    "--no-install",
+    "turbo",
+    "run",
+    "generate:typecheck-declarations",
+    "--filter=@stll/api",
+  ]);
+
+  run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
+
+  // Autofix checks supplied projects without loading the repository cache audit.
+  const { typecheckCacheContractIssues } =
+    await import("../packages/scripts/src/typecheck-cache-contract");
+  const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
+  if (cacheIssues.length > 0) {
+    panic(cacheIssues.join("\n"));
   }
 
   const projects = typecheckProjects();
@@ -1023,4 +1100,4 @@ const main = (): void => {
   );
 };
 
-main();
+await main();

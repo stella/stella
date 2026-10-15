@@ -18,6 +18,7 @@ import {
   agentInputNormalizationMetadata,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
+import { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
 import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
@@ -46,6 +47,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { writeZipEntry } from "@stll/docx-utils";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -105,6 +107,7 @@ import { COMPAT_SEARCH_CURSOR_MAX_LENGTH } from "@/api/mcp/compat-shared";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
+import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -220,7 +223,8 @@ const handleMcpToolCallWithCapturedObserver = async (
  */
 const makeDocxBytes = async () => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -239,7 +243,8 @@ const makeDocxBytes = async () => {
   <w:p><w:r><w:t>Signed below.</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -536,10 +541,16 @@ const createCitationDigest = (
   summary: {
     incoming: { ...noCitations(), positive: 1 },
     outgoing: { ...noCitations(), unclassified: 1 },
-    capped: { incoming: false, outgoing: false },
+    precision: {
+      status: "bounded",
+      capped: { incoming: false, outgoing: false },
+    },
     incomingByYear: [],
   },
-  topCiting: [createRelatedDecision(CITING_DECISION_ID, "31 Cdo 2/2025")],
+  topCiting: {
+    precision: "exact",
+    items: [createRelatedDecision(CITING_DECISION_ID, "31 Cdo 2/2025")],
+  },
   cites: [createCitationRow("29 Odo 1/2001", null)],
   citesMore: false,
   ...overrides,
@@ -722,15 +733,24 @@ const createStatuteVersionsPage = () => ({
 
 const createProvisionVersionRow = ({
   allowsDerivedAi = true,
-}: { allowsDerivedAi?: boolean } = {}) => ({
+  eli = STATUTE_ELI,
+  id = STATUTE_ID,
+  versionValidFrom = "2014-01-01",
+}: {
+  allowsDerivedAi?: boolean;
+  eli?: string;
+  id?: string;
+  versionValidFrom?: string | null;
+} = {}) => ({
   allowsDerivedAi,
   country: "CZE",
   slug: "89-2012-sb-obcansky-zakonik",
   sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
   astS3Key: null,
   documentAst: createStatuteAst(),
-  id: STATUTE_ID,
-  versionValidFrom: "2014-01-01",
+  eli,
+  id: toSafeId<"legislationDocument">(id),
+  versionValidFrom,
   versionValidTo: null,
   ...EFFECTIVE_LABEL,
 });
@@ -3788,12 +3808,25 @@ describe("OpenAI-compatible MCP tools", () => {
                 description:
                   "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it for the text in force today.",
               },
+              document_id: {
+                type: "string",
+                format: "uuid",
+                description:
+                  "Exact consolidation handle returned as documentId by read_provision_history",
+              },
               language: {
                 type: "string",
                 minLength: 2,
                 maxLength: 8,
                 description:
                   "Language of the consolidation to read. Language is part of the work key, so an act published in two languages has one consolidation in each.",
+              },
+              text_cursor: {
+                type: "string",
+                minLength: 1,
+                maxLength: 512,
+                description:
+                  "Opaque nextTextCursor from this provision and consolidation",
               },
             },
             required: ["eli", "anchor"],
@@ -4225,6 +4258,243 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("read_statute_provisions reads an open-start consolidation by document handle", async () => {
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow({
+        id: STATUTE_PRIOR_ID,
+        versionValidFrom: null,
+      }),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              document_id: STATUTE_PRIOR_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+    expect(payload).toMatchObject({
+      items: [
+        {
+          documentId: STATUTE_PRIOR_ID,
+          status: "found",
+          versionValidFrom: null,
+        },
+      ],
+    });
+  });
+
+  test("read_statute_provisions refuses a document handle from another eli", async () => {
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow({ eli: "https://example.test/eli/other" }),
+    ]);
+
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              document_id: STATUTE_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+
+    expect(payload).toMatchObject({
+      items: [
+        {
+          message: "This document_id does not belong to the requested eli.",
+          status: "not_found",
+        },
+      ],
+    });
+    expect(readVersionBlocksMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute_provisions refuses a document handle with as_of", async () => {
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          items: [
+            {
+              anchor: PROVISION_ANCHOR,
+              as_of: "2014-01-01",
+              document_id: STATUTE_ID,
+              eli: STATUTE_ELI,
+            },
+          ],
+        },
+        context: createContext(),
+        toolName: "read_statute_provisions",
+      }),
+    );
+    expect(payload).toMatchObject({ items: [{ status: "invalid" }] });
+    expect(resolveStatuteExpressionMock).not.toHaveBeenCalled();
+    expect(readLegislationProvisionVersionsMock).not.toHaveBeenCalled();
+    expect(readVersionBlocksMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute_provisions pages text to exact reconstruction", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+    const chunks: string[] = [];
+    let textCursor: string | undefined;
+    do {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            items: [
+              {
+                anchor: PROVISION_ANCHOR,
+                eli: STATUTE_ELI,
+                ...(textCursor === undefined
+                  ? {}
+                  : { text_cursor: textCursor }),
+              },
+            ],
+          },
+          context: createContext(),
+          toolName: "read_statute_provisions",
+        }),
+      );
+      const item =
+        isRecord(payload) && Array.isArray(payload["items"])
+          ? payload["items"].at(0)
+          : undefined;
+      expect(item).toMatchObject({ status: "found" });
+      if (!isRecord(item) || typeof item["text"] !== "string") {
+        throw new Error("Expected provision text");
+      }
+      expect(item["text"].length).toBeLessThanOrEqual(
+        LIMITS.legislationProvisionTextChars,
+      );
+      chunks.push(item["text"]);
+      textCursor =
+        typeof item["nextTextCursor"] === "string"
+          ? item["nextTextCursor"]
+          : undefined;
+    } while (textCursor !== undefined);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.join("")).toBe(`§ 1729\n${LONG_PROVISION_BODY}`);
+  });
+
+  test("read_statute_provisions keeps cursor failures within their entries on MCP and CLI", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    readLegislationProvisionVersionsMock.mockResolvedValue([
+      createProvisionVersionRow(),
+    ]);
+    readVersionBlocksMock.mockResolvedValue(createStatuteBlocks());
+    const stale = windowProvisionText({
+      limit: 3,
+      subject: JSON.stringify([STATUTE_ELI, PROVISION_ANCHOR, STATUTE_ID]),
+      text: "Previous provision wording",
+    });
+    if (stale.type !== "window" || stale.nextTextCursor === null) {
+      panic("Expected a stale provision continuation");
+    }
+    const entry = { anchor: PROVISION_ANCHOR, eli: STATUTE_ELI };
+    const result = await handleMcpToolCall({
+      args: {
+        items: [
+          entry,
+          { ...entry, text_cursor: "ptw1.invalid" },
+          { ...entry, text_cursor: stale.nextTextCursor },
+        ],
+      },
+      context: createContext(),
+      toolName: "read_statute_provisions",
+    });
+    expect(result.isError).not.toBe(true);
+    const payload = parseToolPayload(result);
+    const message =
+      "Invalid text_cursor. Retry this entry without text_cursor to read its current wording.";
+    expect(payload).toMatchObject({
+      items: [
+        {
+          status: "found",
+          text: `§ 1729\n${LONG_PROVISION_BODY}`.slice(
+            0,
+            LIMITS.legislationProvisionTextChars,
+          ),
+        },
+        {
+          index: 1,
+          status: "invalid",
+          message,
+          issues: [{ path: "items[].text_cursor", message }],
+        },
+        {
+          index: 2,
+          status: "invalid",
+          message,
+          issues: [{ path: "items[].text_cursor", message }],
+        },
+      ],
+    });
+    if (!isRecord(payload) || !Array.isArray(payload["items"])) {
+      panic("Expected provision batch entries");
+    }
+    expect(payload["items"]).toHaveLength(3);
+    const content = result.content.at(0);
+    if (content?.type !== "text") {
+      panic("Expected a text MCP response");
+    }
+    const cliPayload = parseCliPayload({ content: [content] });
+    expect(cliPayload).toEqual(payload);
+    const annotation = DEFAULT_MCP_CLI_ANNOTATIONS.read_statute_provisions;
+    const plan = buildCliRenderPlan({
+      payload: cliPayload,
+      itemsKey: annotation.itemsKey,
+      textPath: undefined,
+      singleReadActive: false,
+      columns: undefined,
+    });
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    renderCliResult({
+      plan,
+      format: "json",
+      writers: {
+        stdout: (text) => {
+          stdout.push(text);
+        },
+        stderr: (text) => {
+          stderr.push(text);
+        },
+      },
+      allActive: false,
+    });
+    expect(JSON.parse(stdout.join(""))).toEqual(payload);
+    expect(stderr).toEqual([]);
+    expect(cliRenderPlanExitCode(plan) ?? 0).toBe(0);
+  });
+
   test("read_statute_provisions withholds one entry's wording without failing the batch", async () => {
     resolveStatuteExpressionMock.mockResolvedValue({
       type: "expression",
@@ -4370,6 +4640,7 @@ describe("OpenAI-compatible MCP tools", () => {
           resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
           status: "found",
           text: "\u00a7 1729 as amended",
+          nextTextCursor: null,
           truncated: false,
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
@@ -4385,6 +4656,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as enacted",
           truncated: false,
           versionValidFrom: "2012-03-22",
+          nextTextCursor: null,
           versionValidTo: "2013-12-31",
           ...EFFECTIVE_LABEL,
         },
@@ -4450,6 +4722,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as amended",
           truncated: false,
           versionValidFrom: "2014-01-01",
+          nextTextCursor: null,
           versionValidTo: null,
           ...EFFECTIVE_LABEL,
         },
@@ -4470,6 +4743,58 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
     });
     expect(JSON.stringify(payload)).not.toContain("as enacted");
+  });
+
+  test("read_provision_history pages one long version to exact reconstruction", async () => {
+    resolveStatuteWorkVersionMock.mockResolvedValue({
+      type: "expression",
+      id: STATUTE_ID,
+    });
+    const text = `§ 1729\n\n${LONG_PROVISION_BODY}`;
+    readProvisionHistoryHandlerMock.mockResolvedValue({
+      items: [
+        {
+          country: "CZE",
+          slug: "89-2012-sb-obcansky-zakonik",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+          allowsDerivedAi: true,
+          documentId: STATUTE_PRIOR_ID,
+          text,
+          versionValidFrom: null,
+          versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
+        },
+      ],
+      nextCursor: null,
+    });
+    const chunks: string[] = [];
+    let textCursor: string | undefined;
+    do {
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            anchor: PROVISION_ANCHOR,
+            eli: STATUTE_ELI,
+            ...(textCursor === undefined ? {} : { text_cursor: textCursor }),
+          },
+          context: createContext(),
+          toolName: "read_provision_history",
+        }),
+      );
+      const item =
+        isRecord(payload) && Array.isArray(payload["items"])
+          ? payload["items"].at(0)
+          : undefined;
+      if (!isRecord(item) || typeof item["text"] !== "string") {
+        throw new Error("Expected history text");
+      }
+      chunks.push(item["text"]);
+      textCursor =
+        typeof item["nextTextCursor"] === "string"
+          ? item["nextTextCursor"]
+          : undefined;
+    } while (textCursor !== undefined);
+    expect(chunks.join("")).toBe(text);
   });
 
   test("read_provision_history points at the outline when the anchor is absent", async () => {
@@ -5262,6 +5587,30 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const DECISION_APP_URL = `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`;
 
+  test("read_case_law_decision preserves bounded ranking beside exact counts", async () => {
+    readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+    const digest = createCitationDigest();
+    readGatedDecisionCitationDigestMock.mockResolvedValue({
+      ...digest,
+      summary: { ...digest.summary, precision: { status: "exact" } },
+      topCiting: {
+        precision: "bounded",
+        candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+        items: digest.topCiting.items,
+      },
+    });
+    const payload = await readDecisions({ decision_ids: [DECISION_ID] });
+    expect(payload.items.at(0)?.decision?.citations).toMatchObject({
+      citedBy: {
+        count: 1,
+        top: {
+          precision: "bounded",
+          candidateWindow: CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+        },
+      },
+    });
+  });
+
   test("read_case_law_decision answers one compact decision", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -5306,15 +5655,18 @@ describe("OpenAI-compatible MCP tools", () => {
               citedBy: {
                 count: 1,
                 polarity: { positive: 1 },
-                top: [
-                  {
-                    caseNumber: "31 Cdo 2/2025",
-                    court: "Nejvyšší soud",
-                    date: "2025-01-15",
-                    decisionId: CITING_DECISION_ID,
-                    url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
-                  },
-                ],
+                top: {
+                  precision: "exact",
+                  items: [
+                    {
+                      caseNumber: "31 Cdo 2/2025",
+                      court: "Nejvyšší soud",
+                      date: "2025-01-15",
+                      decisionId: CITING_DECISION_ID,
+                      url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/ns-31-cdo-2-2025`,
+                    },
+                  ],
+                },
               },
               cites: {
                 count: 1,
@@ -5756,12 +6108,15 @@ describe("OpenAI-compatible MCP tools", () => {
     const heldId = "00000000-0000-4000-8000-0000000d0099";
     readGatedDecisionCitationDigestMock.mockResolvedValue(
       createCitationDigest({
-        topCiting: Array.from({ length: 5 }, (_, index) =>
-          createRelatedDecision(
-            `00000000-0000-4000-8000-0000000d01${String(index).padStart(2, "0")}`,
-            `${String(index)} Cdo 1/2020`,
+        topCiting: {
+          precision: "exact",
+          items: Array.from({ length: 5 }, (_, index) =>
+            createRelatedDecision(
+              `00000000-0000-4000-8000-0000000d01${String(index).padStart(2, "0")}`,
+              `${String(index)} Cdo 1/2020`,
+            ),
           ),
-        ),
+        },
         cites: [
           createCitationRow("29 Odo 1/2001", null),
           createCitationRow(

@@ -9,6 +9,7 @@ import type {
   DecisionAnalysisKey,
   AnalysisQueryResult,
 } from "@/features/case-law/queries/decision-analysis";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode } = await import("react");
@@ -36,7 +37,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const user = {

@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { TIME_ENTRY_SOURCES } from "./billing";
 import { ENTITY_CONTEXT_REFERENCE_SCHEMA } from "./entity-reference";
 import type {
   TimeEntry,
@@ -98,7 +99,7 @@ const isTimeEntryStatus = (input: unknown): input is TimeEntryStatus =>
   input === "written_off";
 
 const isTimeEntrySource = (input: unknown): input is TimeEntrySource =>
-  input === "manual" || input === "timer" || input === "suggested";
+  TIME_ENTRY_SOURCES.some((source) => source === input);
 
 const isStringArray = (input: unknown): input is string[] =>
   Array.isArray(input) && input.every((item) => typeof item === "string");

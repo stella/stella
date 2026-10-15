@@ -32,7 +32,10 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
-import { createRootMembershipSafeDb } from "@/api/lib/root-scoped-db";
+import {
+  createRootMembershipSafeDb,
+  createRootMembershipScopedDb,
+} from "@/api/lib/root-scoped-db";
 import type { MembershipSafeDb } from "@/api/lib/root-scoped-db";
 import {
   buildClaimChatCompactionQueueQuery,
@@ -327,19 +330,24 @@ const compactThread = async ({
   }
   const { orgAIConfig, managedAIResidency } = configResult.value;
 
-  const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
-    chatModelOverride: thread.chatModel ?? undefined,
-    orgAIConfig,
-    organizationId: thread.organizationId,
-  });
-
   // The thread's sends drew its actions; the drain takes a background slot.
   const admitted = await runScheduledBackgroundWork({
     actionKind: "chat.background",
     organizationId: thread.organizationId,
     userId: thread.userId,
-    run: async (leaseSignal, admission) =>
-      await runChatThreadCompaction({
+    organizationStateDb: createRootMembershipScopedDb(
+      { organizationId: thread.organizationId, userId: thread.userId },
+      database,
+    ),
+    run: async (leaseSignal, admission) => {
+      // Sized for the model the admitted tier serves.
+      const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
+        chatModelOverride: thread.chatModel ?? undefined,
+        orgAIConfig,
+        organizationId: thread.organizationId,
+        modelTier: admission.modelTier,
+      });
+      return await runChatThreadCompaction({
         abortSignal: AbortSignal.any([
           AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
           signal,
@@ -351,6 +359,7 @@ const compactThread = async ({
           feature: "chat.thread_compaction",
           modelRole: "chat",
           orgAIConfig,
+          modelTier: admission.modelTier,
           properties: { organization_id: thread.organizationId },
           sessionId: thread.threadId,
           traceId: Bun.randomUUIDv7(),
@@ -374,7 +383,8 @@ const compactThread = async ({
         safeDb,
         threadId: thread.threadId,
         triggerTokens,
-      }),
+      });
+    },
   });
   if (Result.isError(admitted)) {
     return Result.err(

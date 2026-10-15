@@ -7,9 +7,10 @@ use `bun check --no-pretty --all --project=<config>`.
 The root tsconfig has `files: []` and no references; checking it alone would
 check no code. `bun run check:typecheck-parity` discovers all 76 explicit projects
 from the actual typecheck scripts and invokes `stll-typecheck-parity` for each.
-The dispatch-only `typecheck-proofs.yml` workflow runs full parity and the
-seeded-error command probe. Every PR retains the ordinary Bun checks. It compares repository diagnostics and seeded
-classes under each project's compiler flags. Astro retains its own checker;
+Manual checks dispatch offers full parity (`typecheck-parity`) and the seeded-error
+command probe (`typecheck-probe`). Both run only on explicit dispatch; every PR
+retains Bun checks. Parity compares repository diagnostics and seeded classes
+under each project's compiler flags. Astro retains its own checker;
 TypeScript compiler APIs, declaration emitters, source-membership queries, and
 native compiler performance measurements retain their existing drivers.
 

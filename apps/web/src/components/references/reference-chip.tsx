@@ -6,13 +6,14 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { LandmarkIcon, SkillIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { skillRefDestination } from "@/components/chat/skill-ref-link";
 import { InlinePill } from "@/components/inline-pill";
-import { MatterIcon } from "@/components/matter-icon";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
   referenceFromHref,
@@ -33,7 +34,6 @@ import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { organizationOptions } from "@/lib/organization/queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -330,7 +330,9 @@ export const useReferenceActivation = (reference: ChatReference) => {
           openCaseLawDecision(
             reference.locator,
             openDecision,
-            reference.anchorId === null ? {} : { anchorId: reference.anchorId },
+            reference.paragraph === null
+              ? {}
+              : { anchorId: reference.paragraph.anchorId },
           ),
           "reference-chip.open-decision",
         );
@@ -421,6 +423,22 @@ export const ReferenceIcon = ({ reference }: { reference: ChatReference }) => {
     <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
   ) : null;
 };
+
+/**
+ * The glyph of a document known only by its file type (an inline citation
+ * into a Word file or a PDF), drawn by the same rule as a document reference,
+ * so a cited file looks like that file in the source tray. Decorative: the
+ * chip's label names the source.
+ */
+export const ReferenceFileTypeIcon = ({ mimeType }: { mimeType: string }) => (
+  <ReferenceGlyphIcon
+    glyph={{
+      type: "entity",
+      source: { type: "resolved", kind: "document", mimeType },
+    }}
+    matter={{ type: "none" }}
+  />
+);
 
 const isReactNodeArray = (node: ReactNode): node is readonly ReactNode[] =>
   Array.isArray(node);
