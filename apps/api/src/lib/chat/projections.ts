@@ -7,6 +7,8 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
+import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_WITHHELD_REASON,
@@ -1522,8 +1524,27 @@ const topCitingItemsProjection = v.array(
 
 // A citing or cited decision as the summary names it: no row ids, and an id
 // only where another tool can act on it.
+const doctrineCountsProjection = v.strictObject({
+  distinguishes: v.number(),
+  limits: v.number(),
+  not_stated: v.number(),
+  unread: v.number(),
+} satisfies Record<DoctrineTreatment | "unread", v.GenericSchema>);
+const doctrineSummaryProjection = v.variant("status", [
+  projectionBranch(v.strictObject({ status: v.literal("unavailable") })),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("available"),
+      counts: doctrineCountsProjection,
+      capped: v.boolean(),
+      candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+    }),
+  ),
+]);
+
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
+    doctrineCounts: doctrineSummaryProjection,
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
     // A lower-bound count. Ranking precision is carried independently by top.
@@ -1546,6 +1567,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
     ]),
   }),
   cites: v.strictObject({
+    doctrineCounts: doctrineSummaryProjection,
     count: v.number(),
     capped: v.optional(v.literal(true)),
     decisions: v.optional(
@@ -1730,6 +1752,7 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
  * text, withheld where the source bars derived AI use.
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
+  doctrineAvailability: v.picklist(["available", "unavailable"]),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),
@@ -1747,6 +1770,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
+      doctrine: v.nullable(v.picklist([...DOCTRINAL_TREATMENTS, "unread"])),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
@@ -1774,6 +1798,8 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           text: v.string(),
           truncated: v.boolean(),
           mention: v.picklist(CITATION_PASSAGE_MENTIONS),
+          evidenceQuote: v.optional(v.string()),
+          evidenceAnchorId: v.optional(v.nullable(passthroughId())),
         }),
       ),
     }),
@@ -2615,6 +2641,7 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
+  matterNumberingEnabled: v.optional(v.boolean()),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

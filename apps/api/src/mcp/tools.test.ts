@@ -47,6 +47,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { writeZipEntry } from "@stll/docx-utils";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -222,7 +223,8 @@ const handleMcpToolCallWithCapturedObserver = async (
  */
 const makeDocxBytes = async () => {
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -241,7 +243,8 @@ const makeDocxBytes = async () => {
   <w:p><w:r><w:t>Signed below.</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -518,6 +521,7 @@ const createCitationRow = (
   citationText,
   textWithheldReason: null,
   sectionIndex: null,
+  doctrine: "unread",
   treatment: "unclassified",
   decision,
 });
@@ -535,6 +539,7 @@ const noCitations = () => ({
 const createCitationDigest = (
   overrides: Partial<DecisionCitationDigest> = {},
 ): DecisionCitationDigest => ({
+  doctrineSummary: { status: "unavailable" },
   summary: {
     incoming: { ...noCitations(), positive: 1 },
     outgoing: { ...noCitations(), unclassified: 1 },
@@ -3505,12 +3510,14 @@ describe("OpenAI-compatible MCP tools", () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
       page: {
+        doctrineAvailability: "available",
         items: [
           {
             id: "00000000-0000-4000-8000-0000000c0001",
             citationText: "29 Cdo 123/2024",
             textWithheldReason: null,
             sectionIndex: 3,
+            doctrine: "unread",
             treatment: "negative",
             decision: {
               id: CITING_DECISION_ID,
@@ -3542,6 +3549,7 @@ describe("OpenAI-compatible MCP tools", () => {
             citationText: "Rozhodnutí, které korpus nedrží",
             textWithheldReason: null,
             sectionIndex: null,
+            doctrine: "unread",
             treatment: "unclassified",
             decision: null,
             passage: null,
@@ -3571,6 +3579,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
       direction: "cited_by",
+      doctrineAvailability: "available",
       nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
@@ -3578,6 +3587,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationText: "29 Cdo 123/2024",
           textWithheldReason: null,
           polarity: "negative",
+          doctrine: "unread",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
@@ -3601,6 +3611,7 @@ describe("OpenAI-compatible MCP tools", () => {
           citationText: "Rozhodnutí, které korpus nedrží",
           textWithheldReason: null,
           polarity: "unclassified",
+          doctrine: "unread",
           decision: null,
           passage: null,
         },
@@ -3611,7 +3622,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null },
+      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
     });
 
     await handleMcpToolCall({
@@ -5650,6 +5661,7 @@ describe("OpenAI-compatible MCP tools", () => {
             metadata: { panel: "29 Cdo" },
             citations: {
               citedBy: {
+                doctrineCounts: { status: "unavailable" },
                 count: 1,
                 polarity: { positive: 1 },
                 top: {
@@ -5666,6 +5678,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 },
               },
               cites: {
+                doctrineCounts: { status: "unavailable" },
                 count: 1,
                 decisions: [
                   { citation: "29 Odo 1/2001", textWithheldReason: null },

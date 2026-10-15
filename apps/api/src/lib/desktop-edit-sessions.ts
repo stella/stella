@@ -157,6 +157,7 @@ export const authorizeDesktopEditSessionWithDb = async (
       sessionStatus: desktopEditSessions.status,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
       tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
       workspaceId: desktopEditSessions.workspaceId,
     })
@@ -201,6 +202,7 @@ export const authorizeDesktopEditSessionWithDb = async (
   if (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
+      workspaceClientId: session.workspaceClientId,
       workspaceMemberId: session.workspaceMemberId,
     })
   ) {
@@ -245,6 +247,7 @@ export const readDesktopEditSessionEventState = async (
   const sessions = await tx
     .select({
       organizationRole: member.role,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
     })
     .from(desktopEditSessions)
@@ -276,6 +279,7 @@ export const readDesktopEditSessionEventState = async (
     !session ||
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
+      workspaceClientId: session.workspaceClientId,
       workspaceMemberId: session.workspaceMemberId,
     })
   ) {
