@@ -4363,6 +4363,8 @@
         "yearMonthSequential": "Jahr-Monat / fortlaufend (2026-02/001)",
         "yearSequential": "Jahr / fortlaufend (2026/001)"
       },
+      "showInTitle": "Nummer neben dem Namen der Akte anzeigen",
+      "showInTitleDescription": "Wenn dies aus ist, ist der Titel genau der eingegebene Name.",
       "title": "Aktennummerierung",
       "tokenHelp": "Verfügbare Platzhalter: '{'SEQ'}' (Laufnummer), '{'YYYY'}' (Jahr), '{'YY'}' (zweistelliges Jahr), '{'MM'}' (Monat)"
     },
@@ -4996,17 +4998,22 @@
     "provisionAskSummarize": "Zusammenfassen, wie Gerichte diese Vorschrift anwenden",
     "provisionAskSummarizePrompt": "Fasse zusammen, wie Gerichte {subject} anwenden, und zitiere die herangezogenen Entscheidungen.",
     "provisionDetailsFor": "Einzelheiten zu {provision}",
+    "provisionEffectiveFrom": "in Kraft seit {date}",
     "provisionHistoryEarliest": "Älteste überlieferte Fassung.",
     "provisionHistoryEmpty": "Zu dieser Vorschrift liegt keine Fassung vor.",
     "provisionHistoryLoadOlder": "Ältere Fassungen laden und vergleichen.",
     "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
+    "provisionPartTextUnavailable": "Der Wortlaut von {provisionLabel} ist nicht verfügbar",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
+    "provisionTextUnavailable": "Für diese Fassung ist kein Text verfügbar",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
     "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
+    "showCitedPartOnly": "Nur zitierten Teil anzeigen",
+    "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
@@ -5022,7 +5029,6 @@
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}",
     "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Wortlaut in Kraft seit {date}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {
@@ -5696,7 +5702,7 @@
       "title": "In Akte kopieren"
     },
     "create": {
-      "ownerTypeToggle": "Aktentyp",
+      "matterName": "Name der Akte",
       "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
     },
     "createNewWorkspace": "Neue Akte erstellen",
@@ -6148,15 +6154,12 @@
       "upcomingTasks": "Anstehende Agenda",
       "uploaded": "hochgeladen"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Persönlich"
-    },
     "parties": {
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
       "noClient": "Kein Klient zugeordnet",
+      "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
       "partyRoles": {
         "co_counsel": "Mitanwalt",

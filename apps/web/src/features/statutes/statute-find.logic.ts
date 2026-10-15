@@ -4,10 +4,11 @@
  * screen; the search box already narrowed the corpus.
  */
 
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
+
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
 import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
-import { statuteActLabel } from "@/lib/legal/statute-act-number";
 
 type StatuteFindText = (statute: StatuteListItem) => string;
 

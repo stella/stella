@@ -27,7 +27,9 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import {
   draggable,
   dropTargetForElements,
@@ -67,6 +69,8 @@ export const DocumentTypesCard = () => {
   const items = data ? data.items : [];
 
   const [newLabel, setNewLabel] = useState("");
+  // Created through a settings mutation, not a create hook: guard it here.
+  const once = useSingleFlight();
 
   const createMutation = useSettingsMutation({
     mutationFn: async (label: string) =>
@@ -108,7 +112,12 @@ export const DocumentTypesCard = () => {
     if (label.length === 0) {
       return;
     }
-    createMutation.mutate(label);
+    detached(
+      once.runSettled((settled) => {
+        createMutation.mutate(label, { onSettled: settled });
+      }),
+      "document-types-card.create",
+    );
   };
 
   if (settingsView.type === "pending" || settingsView.type === "error") {

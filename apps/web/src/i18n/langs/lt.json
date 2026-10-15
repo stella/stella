@@ -4363,6 +4363,8 @@
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
       },
+      "showInTitle": "Rodyti numerį šalia bylos pavadinimo",
+      "showInTitleDescription": "Kai išjungta, pavadinimas yra būtent tas, kurį įvedėte.",
       "title": "Bylų numeravimas",
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
@@ -4996,17 +4998,22 @@
     "provisionAskSummarize": "Apibendrinti, kaip teismai taiko šią nuostatą",
     "provisionAskSummarizePrompt": "Apibendrink, kaip teismai taiko {subject}, ir nurodyk sprendimus, kuriais remiesi.",
     "provisionDetailsFor": "{provision} informacija",
+    "provisionEffectiveFrom": "galioja nuo {date}",
     "provisionHistoryEarliest": "Seniausia žinoma redakcija.",
     "provisionHistoryEmpty": "Šios nuostatos redakcijų nėra.",
     "provisionHistoryLoadOlder": "Įkelkite senesnes redakcijas palyginimui.",
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekstas neprieinamas",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",
     "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
     "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
+    "showCitedPartOnly": "Rodyti tik cituojamą dalį",
+    "showFullProvision": "Rodyti visą nuostatą",
     "showInText": "Rodyti tekste",
     "statedWindow": "Leidėjo nurodytos datos: {range}",
     "status": {
@@ -5022,7 +5029,6 @@
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}",
     "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redakcija galioja nuo {date}",
     "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
   },
   "styleSets": {
@@ -5696,7 +5702,7 @@
       "title": "Kopijuoti į bylą"
     },
     "create": {
-      "ownerTypeToggle": "Bylos tipas",
+      "matterName": "Bylos pavadinimas",
       "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
     },
     "createNewWorkspace": "Sukurti naują bylą",
@@ -6148,15 +6154,12 @@
       "upcomingTasks": "Būsima agenda",
       "uploaded": "įkėlė"
     },
-    "ownerType": {
-      "client": "Klientas",
-      "personal": "Asmeninė"
-    },
     "parties": {
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
       "noClient": "Klientas nepriskirtas",
+      "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
       "partyRoles": {
         "co_counsel": "Bendraadvokatas",

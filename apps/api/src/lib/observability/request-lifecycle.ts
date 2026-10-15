@@ -321,7 +321,8 @@ export const completeRequest = async ({
     // Streaming responses (e.g. POST /v1/chat) settle this hook when the
     // stream object is returned, not when generation ends, so their
     // duration here understates the wall-clock. That is acceptable: the
-    // class is `ai` either way, which is excluded from the CRUD p95 SLO.
+    // declared stream class excludes setup time from the CRUD p95 SLO,
+    // even when no model has started yet.
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({
