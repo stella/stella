@@ -97,7 +97,7 @@ describe("without the Custom Highlight API", () => {
       const box = new DOMRect(100, 40, 120, 16);
       return Object.assign([box], {
         item: () => box,
-      }) as unknown as DOMRectList;
+      });
     });
     expect(claimUnderPoint(ranges, { x: 150, y: 48 })).toBe(signed);
     expect(claimUnderPoint(ranges, { x: 10, y: 48 })).toBeNull();
