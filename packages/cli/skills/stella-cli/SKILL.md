@@ -331,7 +331,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
-  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
+  - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
