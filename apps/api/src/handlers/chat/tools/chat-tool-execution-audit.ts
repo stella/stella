@@ -14,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
 export type ChatToolExecutionAuditContext = {
   recordAuditEvent: AuditRecorder;
@@ -27,7 +28,12 @@ export type ExternalMcpToolIdentity = {
   upstreamToolName: string;
 };
 
-type ChatToolExecutionOutcome = "error" | "success";
+/**
+ * `dispatched` is written before the tool runs and must persist, so an action
+ * with an effect always has a durable row even if the process stops before it
+ * finishes; `success` or `error` follows once it settles.
+ */
+type ChatToolExecutionOutcome = "dispatched" | "error" | "success";
 
 // Approval-gated kinds act outside the chat (mutations, third-party calls,
 // reads beyond the chat's scope), so every execution leaves an audit row.
@@ -40,14 +46,17 @@ const isAuditedPolicyKind = (kind: ChatToolPolicyKind): boolean =>
 const auditedExecutes = new WeakSet<object>();
 
 /**
- * Audited tools a stored grant ungated for this request. A granted call ran
- * without a per-call approval, so its row says so instead of naming one.
+ * Audited tools a stored grant ungated for this request, with that grant. A
+ * granted call ran without a per-call approval, so its row names the grant.
  */
-const grantedAuditedTools = new WeakSet<ChatTool>();
+const grantedAuditedTools = new WeakMap<ChatTool, string>();
 
-/** Record that a stored grant, not a per-call approval, lets `tool` run. */
-export const markChatToolExecutionGranted = (tool: ChatTool): void => {
-  grantedAuditedTools.add(tool);
+/** Record that stored grant `grantId`, not a per-call approval, lets `tool` run. */
+export const markChatToolExecutionGranted = (
+  tool: ChatTool,
+  grantId: string,
+): void => {
+  grantedAuditedTools.set(tool, grantId);
 };
 
 /** How the call that executed was approved. */
@@ -75,6 +84,7 @@ type RecordExecutionInput = {
   durationMs: number;
   externalMcp: ExternalMcpToolIdentity | undefined;
   approval: ChatToolExecutionApproval;
+  grantId: string | null;
   outcome: ChatToolExecutionOutcome;
   policyKind: ChatToolPolicyKind;
   toolCallId: string | null;
@@ -90,11 +100,12 @@ const recordExecution = async ({
   durationMs,
   externalMcp,
   approval,
+  grantId,
   outcome,
   policyKind,
   toolCallId,
   toolName,
-}: RecordExecutionInput): Promise<void> => {
+}: RecordExecutionInput) => {
   const result = await audit.safeDb(async (tx) => {
     await audit.recordAuditEvent(tx, {
       action: AUDIT_ACTION.EXECUTE,
@@ -109,6 +120,7 @@ const recordExecution = async ({
             ? `approval_${toolCallId}`
             : null,
         durationMs,
+        grantId,
         outcome,
         policyKind,
         threadId: audit.threadId,
@@ -129,6 +141,7 @@ const recordExecution = async ({
       policyKind,
     });
   }
+  return result;
 };
 
 type ChatToolExecute = NonNullable<ChatTool["execute"]>;
@@ -157,11 +170,21 @@ const auditedTool = ({
         durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
         externalMcp,
         approval: executionApproval(audited),
+        grantId: grantedAuditedTools.get(audited) ?? null,
         outcome,
         policyKind,
         toolCallId: toolCallIdOf(args[1]),
         toolName: tool.name,
       });
+    // Without a durable record of the dispatch the call does not run.
+    const dispatched = await record("dispatched");
+    if (Result.isError(dispatched)) {
+      throw new ChatToolError({
+        kind: "transient",
+        message: "The tool call could not be recorded; it was not run.",
+        cause: dispatched.error,
+      });
+    }
     try {
       const result: unknown = await execute(...args);
       await record("success");

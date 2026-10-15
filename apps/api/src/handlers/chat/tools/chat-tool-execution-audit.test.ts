@@ -75,8 +75,9 @@ describe("chat tool execution audit", () => {
       );
 
       expect(result).toBe(PRIVILEGED_RESULT);
+      // A dispatch row before the call, an outcome row after it.
       expect(rows).toHaveLength(
-        CHAT_TOOL_POLICY_REQUIRES_APPROVAL[kind] ? 1 : 0,
+        CHAT_TOOL_POLICY_REQUIRES_APPROVAL[kind] ? 2 : 0,
       );
     }
   });
@@ -95,23 +96,23 @@ describe("chat tool execution audit", () => {
       { toolCallId: "call_7" },
     );
 
-    expect(rows).toEqual([
-      {
-        action: AUDIT_ACTION.EXECUTE,
-        resourceType: AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION,
-        resourceId: "call_7",
-        metadata: {
-          approval: "per-call",
-          approvalId: "approval_call_7",
-          durationMs: expect.any(Number),
-          outcome: "success",
-          policyKind: CHAT_TOOL_POLICY_KIND.mutation,
-          threadId,
-          toolCallId: "call_7",
-          toolName: "save_task",
-        },
+    const row = (outcome: string) => ({
+      action: AUDIT_ACTION.EXECUTE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION,
+      resourceId: "call_7",
+      metadata: {
+        approval: "per-call",
+        approvalId: "approval_call_7",
+        durationMs: expect.any(Number),
+        grantId: null,
+        outcome,
+        policyKind: CHAT_TOOL_POLICY_KIND.mutation,
+        threadId,
+        toolCallId: "call_7",
+        toolName: "save_task",
       },
-    ]);
+    });
+    expect(rows).toEqual([row("dispatched"), row("success")]);
     const serialized = JSON.stringify(rows);
     expect(serialized).not.toContain(PRIVILEGED_ARGUMENT);
     expect(serialized).not.toContain(PRIVILEGED_RESULT);
@@ -145,15 +146,19 @@ describe("chat tool execution audit", () => {
 
     await granted["web_search"]?.execute?.({}, { toolCallId: "call_9" });
 
-    expect(rows).toEqual([
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          approval: "grant",
-          approvalId: null,
-          toolCallId: "call_9",
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toEqual(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            approval: "grant",
+            approvalId: null,
+            grantId: "grant_1",
+            toolCallId: "call_9",
+          }),
         }),
-      }),
-    ]);
+      );
+    }
   });
 
   test("a failing execution records an error outcome and rethrows", async () => {
@@ -185,6 +190,9 @@ describe("chat tool execution audit", () => {
     expect(thrown).toBe(failure);
     expect(rows).toEqual([
       expect.objectContaining({
+        metadata: expect.objectContaining({ outcome: "dispatched" }),
+      }),
+      expect.objectContaining({
         metadata: expect.objectContaining({
           connectorSlug: "registry",
           outcome: "error",
@@ -212,12 +220,13 @@ describe("chat tool execution audit", () => {
 
     await tool.execute?.({}, { toolCallId: "call_3" });
 
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     expect(getChatToolPolicy(tool).kind).toBe(CHAT_TOOL_POLICY_KIND.mutation);
   });
 
-  test("an audit write failure does not fail the tool call", async () => {
+  test("a call whose dispatch cannot be recorded does not run", async () => {
     const { audit } = auditFixture();
+    let ran = false;
     const failingAudit: ChatToolExecutionAuditContext = {
       ...audit,
       safeDb: asTestRaw<SafeDb>(async () =>
@@ -227,12 +236,23 @@ describe("chat tool execution audit", () => {
     const tools = auditChatToolExecutions({
       audit: failingAudit,
       tools: {
-        save_task: toolWithPolicy("save_task", CHAT_TOOL_POLICY_KIND.mutation),
+        save_task: toolWithPolicy(
+          "save_task",
+          CHAT_TOOL_POLICY_KIND.mutation,
+          async () => {
+            ran = true;
+            return await Promise.resolve(PRIVILEGED_RESULT);
+          },
+        ),
       },
     });
 
-    expect(
-      await tools["save_task"]?.execute?.({}, { toolCallId: "call_4" }),
-    ).toBe(PRIVILEGED_RESULT);
+    const thrown = await rejectionOf(
+      Promise.resolve(
+        tools["save_task"]?.execute?.({}, { toolCallId: "call_4" }),
+      ),
+    );
+    expect(thrown).toBeInstanceOf(Error);
+    expect(ran).toBe(false);
   });
 });
