@@ -9,6 +9,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-request-observability";
 import {
   describeOAuthTokenRefusal,
+  OAUTH_CLIENT_ID_ATTRIBUTE_MAX_LENGTH,
   OAUTH_PROTOCOL_REFUSAL_REASONS,
   OAUTH_TOKEN_REFUSAL_REASONS,
 } from "@/api/lib/auth/oauth-token-refusal";
@@ -227,6 +228,48 @@ describe("OAuth token refusal observations", () => {
         errorCode: "invalid_grant",
       }),
     ).toMatchObject({ "oauth.grant_family": "none" });
+  });
+
+  test("keeps a printable client id within the bound, including a URL", () => {
+    for (const clientId of [
+      CLIENT_ID,
+      "https://client.example.test/oauth/metadata.json",
+      "x".repeat(OAUTH_CLIENT_ID_ATTRIBUTE_MAX_LENGTH),
+    ]) {
+      expect(
+        describeOAuthTokenRefusal({
+          observation: undefined,
+          body: { grant_type: "refresh_token", client_id: clientId },
+          errorCode: "invalid_client",
+        }),
+      ).toMatchObject({ "oauth.client_id": clientId });
+    }
+  });
+
+  test("records an oversized or non-printable client id as a bounded digest", () => {
+    const attributeFor = (clientId: string) =>
+      describeOAuthTokenRefusal({
+        observation: undefined,
+        body: { grant_type: "refresh_token", client_id: clientId },
+        errorCode: "invalid_client",
+      })["oauth.client_id"];
+    const oversized = "x".repeat(OAUTH_CLIENT_ID_ATTRIBUTE_MAX_LENGTH + 1);
+    expect(attributeFor(oversized)).toBe(
+      `sha256:${sha256Hex(`stella:oauth:client-id:v1:${oversized}`)}`,
+    );
+    for (const clientId of [
+      oversized,
+      "x".repeat(100_000),
+      "client\nid",
+      "client id",
+      "klient-č",
+      "",
+    ]) {
+      const attribute = attributeFor(clientId);
+      expect(attribute).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      expect(attribute).toBe(attributeFor(clientId));
+    }
+    expect(attributeFor("client\nid")).not.toBe(attributeFor("client\rid"));
   });
 
   test("surfaces an unclassified provider observation explicitly", () => {

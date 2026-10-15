@@ -73,6 +73,25 @@ const refusalReason = (
   return "unclassified";
 };
 
+// Public client ids are opaque strings or URLs, and the token endpoint
+// accepts any submitted value. A printable id within the bound is recorded as
+// is; any other string becomes a fixed-length domain-separated digest.
+export const OAUTH_CLIENT_ID_ATTRIBUTE_MAX_LENGTH = 256;
+const PRINTABLE_CLIENT_ID = /^[!-~]+$/u;
+
+const clientIdAttribute = (clientId: unknown): string => {
+  if (typeof clientId !== "string") {
+    return "none";
+  }
+  if (
+    clientId.length <= OAUTH_CLIENT_ID_ATTRIBUTE_MAX_LENGTH &&
+    PRINTABLE_CLIENT_ID.test(clientId)
+  ) {
+    return clientId;
+  }
+  return `sha256:${sha256Hex(`stella:oauth:client-id:v1:${clientId}`)}`;
+};
+
 type DescribeOAuthTokenRefusalOptions = {
   observation: unknown;
   body: unknown;
@@ -91,7 +110,7 @@ export const describeOAuthTokenRefusal = ({
   const familyId = observed?.["familyId"];
   const attributes = {
     "oauth.refusal_reason": reason,
-    "oauth.client_id": typeof clientId === "string" ? clientId : "none",
+    "oauth.client_id": clientIdAttribute(clientId),
     // The provider stores a high-entropy authorization-code identifier and
     // carries it into every rotated refresh row. Hash that identifier with a
     // domain separator; never hash a refresh row id or a submitted credential.
