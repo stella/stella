@@ -2569,7 +2569,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       "the edition screened; or unavailable (stale, not loaded, or the " +
       "company name unreadable: NOT cleared), whose edition fields name " +
       "the latest edition on file, not one screened. Top-level status is " +
-      "clear only when every list is. Person matches rest on name and " +
+      "clear only when every list is. Clear with reason screening-incomplete " +
+      "means only a bounded subset was screened, not a full clearance. " +
+      "Person matches rest on name and " +
       "birth date: compare the record first.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {

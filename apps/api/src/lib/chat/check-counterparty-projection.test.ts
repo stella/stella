@@ -94,6 +94,24 @@ describe("check_counterparty projection", () => {
     ).toBe(true);
   });
 
+  test("preserves an incomplete clear screening in the signed-in projection", () => {
+    const partialList = {
+      ...unPossibleMatchList,
+      status: "clear",
+      reason: "screening-incomplete",
+      totalMatches: 0,
+      truncated: true,
+      possibleMatches: [],
+    } satisfies SanctionsListOutcome;
+    const result = {
+      ...sanctionsPossibleMatch,
+      status: "clear",
+      lists: [partialList],
+    } satisfies CounterpartyCheckResult;
+    const projected = v.parse(CHECK_COUNTERPARTY_PROJECTION, result);
+    expect(projected).toEqual(result);
+  });
+
   test.each(SANCTIONS_UNAVAILABLE_REASONS)(
     "accepts every list unavailable for %s, with no edition",
     (reason) => {

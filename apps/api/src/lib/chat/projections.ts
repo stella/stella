@@ -63,7 +63,7 @@ import {
   SANCTIONS_PENDING_UPDATE_CODES,
   SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_SOURCE_IDS,
-  SANCTIONS_UNAVAILABLE_REASONS,
+  SANCTIONS_LIST_REASONS,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "@/api/lib/search/pagination-outcome-projection";
 
@@ -2187,7 +2187,7 @@ const sanctionsListOutcomeProjection = v.strictObject({
   issuer: v.string(),
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
-  reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
+  reason: v.nullable(v.picklist(SANCTIONS_LIST_REASONS)),
   // The one note the budget keeps: which edition these fields name depends
   // on the list's status (the screened one when it answered).
   editionId: v.pipe(

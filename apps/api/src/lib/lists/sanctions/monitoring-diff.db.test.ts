@@ -35,7 +35,10 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
-import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
+import type {
+  SanctionsListOutcome,
+  SanctionsPossibleMatch,
+} from "@/api/lib/lists/sanctions/screening-service";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
@@ -363,6 +366,30 @@ test(
       );
       expect(await stateFor(contact.id)).toEqual(initial);
     }
+    const incompleteClear = {
+      source: outcome.source,
+      issuer: outcome.issuer,
+      classification: outcome.classification,
+      pendingUpdate: outcome.pendingUpdate,
+      editionId: outcome.editionId,
+      publishedAt: outcome.publishedAt,
+      verifiedAt: outcome.verifiedAt,
+      status: "clear",
+      reason: "screening-incomplete",
+      totalMatches: 0,
+      truncated: true,
+      possibleMatches: [],
+    } satisfies SanctionsListOutcome;
+    expect(await commit({ ...work, outcome: incompleteClear })).toEqual([
+      contact.id,
+    ]);
+    const bounded = await stateFor(contact.id);
+    expect(bounded.matches).toEqual(initial.matches);
+    expect(bounded.events).toEqual(initial.events);
+    expect(bounded.coverage).toMatchObject({
+      status: "unavailable",
+      reason: "screening-incomplete",
+    });
     await db.insert(sanctionsEditionEntries).values(
       entries.slice(2, 1000).map(({ sourceEntryId, contentHash }) => ({
         editionId,

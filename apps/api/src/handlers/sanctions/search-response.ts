@@ -13,7 +13,7 @@ import {
   SANCTIONS_PENDING_UPDATE_CODES,
   SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_SOURCE_IDS,
-  SANCTIONS_PUBLIC_UNAVAILABLE_REASONS,
+  SANCTIONS_PUBLIC_LIST_REASONS,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import {
   boundedString,
@@ -72,7 +72,7 @@ const successSchema = t.Object(
           classification: t.UnionEnum(SANCTIONS_CLASSIFICATIONS),
           status: t.UnionEnum(SANCTIONS_SCREENING_STATUSES),
           reason: t.Union([
-            t.UnionEnum(SANCTIONS_PUBLIC_UNAVAILABLE_REASONS),
+            t.UnionEnum(SANCTIONS_PUBLIC_LIST_REASONS),
             t.Null(),
           ]),
           editionId: nullableBoundedString(TEXT_BYTES.id),

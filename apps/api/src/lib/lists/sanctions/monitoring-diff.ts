@@ -640,6 +640,7 @@ export const commitSanctionsMonitoringBatch = async ({
           terminalContactIds.push(contact.id);
           continue;
         }
+
         if (
           monitoringFingerprint(contact) !== item.contactFingerprint ||
           item.outcome.source !== source
@@ -648,7 +649,7 @@ export const commitSanctionsMonitoringBatch = async ({
         }
         if (
           freshness.status === "unavailable" ||
-          item.outcome.status === "unavailable"
+          item.outcome.reason !== null
         ) {
           checkpoint.rows.push({
             organizationId,

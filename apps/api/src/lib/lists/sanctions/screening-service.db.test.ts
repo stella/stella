@@ -1526,7 +1526,7 @@ test.each(["hang", "crash"] as const)(
   },
 );
 
-test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
+test.each(["matcher-unavailable", "operation"] as const)(
   "list fallback reports %s and never reports a clear result",
   async (reason) => {
     const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
@@ -1542,7 +1542,7 @@ test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
       reportFailure: (report) => {
         reports.push(report);
       },
-      matcher: async ({ query }) => {
+      matcher: async () => {
         if (reason === "matcher-unavailable") {
           return Result.err({
             code: "load-failed",
@@ -1550,15 +1550,7 @@ test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
             reason,
           } as const);
         }
-        if (reason === "operation") {
-          throw new TypeError("Private Test Identity");
-        }
-        return Result.ok({
-          ...screen(buildScreeningIndex([]), query, {
-            cutoff: DEFAULT_CUTOFF,
-          }).unwrap(),
-          truncated: true,
-        });
+        throw new TypeError("Synthetic Company");
       },
     });
     expect(
@@ -1584,6 +1576,43 @@ test.each(["matcher-unavailable", "operation", "truncated-empty"] as const)(
     );
   },
 );
+
+test("a bounded scan with no matches retains its screened edition and incomplete annotation", async () => {
+  const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
+  const result = await screenSanctionsSubject({
+    db: requestDb,
+    subject: {
+      type: "organization",
+      name: "Synthetic Company",
+      identifiers: [],
+    },
+    practiceJurisdictions: [],
+    now: FRESH_NOW,
+    reportFailure: (report) => {
+      reports.push(report);
+    },
+    matcher: async ({ query }) =>
+      Result.ok({
+        ...screen(buildScreeningIndex([]), query, {
+          cutoff: DEFAULT_CUTOFF,
+        }).unwrap(),
+        truncated: true,
+      }),
+  });
+  expect(result.unwrap().status).toBe("clear");
+  for (const list of result.unwrap().lists) {
+    expect(list).toMatchObject({
+      status: "clear",
+      reason: "screening-incomplete",
+      truncated: true,
+      totalMatches: 0,
+      possibleMatches: [],
+    });
+    expect(list.editionId).not.toBeNull();
+    expect(list.verifiedAt).not.toBeNull();
+  }
+  expect(reports).toEqual([]);
+});
 
 test("freshness read fallback observes its cause before answering all lists unavailable", async () => {
   const fault = Object.assign(new TypeError("Private Test Identity"), {
@@ -1624,7 +1653,7 @@ test("freshness read fallback observes its cause before answering all lists unav
   ).toBe(true);
 });
 
-test("work exhaustion reports its actual list cause once rather than counting an index failure", async () => {
+test("work exhaustion returns an incomplete screened result without reporting a load failure", async () => {
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   const healthy = createSanctionsIndexCache();
   const result = await screenSanctionsSubject({
@@ -1667,15 +1696,16 @@ test("work exhaustion reports its actual list cause once rather than counting an
     },
   });
   expect(listOf(result.unwrap().lists, "eu")).toMatchObject({
-    status: "unavailable",
-    reason: "load-failed",
+    status: "clear",
+    reason: "screening-incomplete",
+    truncated: true,
+    totalMatches: 0,
+    possibleMatches: [],
   });
-  expect(reports).toEqual([
-    { stage: "list-screening", reason: "work-limit", source: "eu" },
-  ]);
+  expect(reports).toEqual([]);
 });
 
-test("public matcher work exhaustion reports the typed list cause without pool failure or warmup", async () => {
+test("public matcher work exhaustion returns incomplete without pool failure or warmup", async () => {
   const poolReports: Parameters<typeof reportSanctionsScreeningFailure>[0][] =
     [];
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
@@ -1720,22 +1750,14 @@ test("public matcher work exhaustion reports the typed list cause without pool f
       practiceJurisdictions: [],
       now: FRESH_NOW,
     });
-    expect(
-      result
-        .unwrap()
-        .lists.every(
-          (list) =>
-            list.status === "unavailable" && list.reason === "load-failed",
-        ),
-    ).toBe(true);
-    expect(reports).toEqual(
-      result.unwrap().lists.map(({ source }) => ({
-        stage: "public-matcher",
-        reason: "work-limit",
-        error: undefined,
-        source,
-      })),
-    );
+    for (const list of result.unwrap().lists) {
+      expect(list).toMatchObject({
+        status: "clear",
+        reason: "screening-incomplete",
+        truncated: true,
+      });
+    }
+    expect(reports).toEqual([]);
     expect(poolReports).toEqual([]);
     expect(leases).toBe(1);
   } finally {
@@ -1891,7 +1913,9 @@ test.each(Object.values(boundaryFaults))(
         }
       }
       const result = (await pending).unwrap();
-      expect(result.status).toBe("unavailable");
+      expect(result.status).toBe(
+        fault === "work-limit" ? "clear" : "unavailable",
+      );
       await new Promise<void>((resolve) => {
         setImmediate(resolve);
       });
@@ -1908,7 +1932,14 @@ test.each(Object.values(boundaryFaults))(
       const boundary = logs.records.filter(
         ({ message }) => message === "sanctions.screening_failed",
       );
-      expect(boundary.length).toBeGreaterThan(0);
+      if (fault === "work-limit") {
+        expect(boundary).toHaveLength(0);
+        expect(
+          result.lists.every(({ reason }) => reason === "screening-incomplete"),
+        ).toBe(true);
+      } else {
+        expect(boundary.length).toBeGreaterThan(0);
+      }
       if (
         [
           "worker-create",

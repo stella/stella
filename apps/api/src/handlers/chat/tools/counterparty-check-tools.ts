@@ -43,7 +43,9 @@ const TOOL_DESCRIPTION =
   "identity. Sanctions: per-list clear, possible-match (human review, " +
   "not a confirmed hit), unavailable (not cleared; name unchecked lists). " +
   "For screened lists cite the edition and binding/informational status; " +
-  "unavailable editions were not screened. Mention pending updates.";
+  "unavailable editions were not screened. A clear list with reason " +
+  "screening-incomplete screened only a bounded subset; do not present " +
+  "it as a full clearance. Mention pending updates.";
 
 type CreateCounterpartyCheckToolsArgs = {
   scopedDb: ScopedDb;

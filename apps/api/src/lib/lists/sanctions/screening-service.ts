@@ -31,6 +31,7 @@ import type {
   SanctionsActiveEdition,
   SanctionsIndexCache,
 } from "@/api/lib/lists/sanctions/screening-index";
+import { SANCTIONS_INCOMPLETE_REASON } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import type {
   SanctionsClassification,
   SanctionsPendingUpdateCode,
@@ -140,6 +141,14 @@ export type SanctionsListOutcome =
       })
   | (ListOutcomeBase &
       ScreenedEdition & {
+        status: "clear";
+        reason: typeof SANCTIONS_INCOMPLETE_REASON;
+        totalMatches: 0;
+        truncated: true;
+        possibleMatches: [];
+      })
+  | (ListOutcomeBase &
+      ScreenedEdition & {
         status: "possible-match";
         reason: null;
         totalMatches: number;
@@ -161,7 +170,8 @@ export type SanctionsListOutcome =
 export type SanctionsScreening = {
   /**
    * `possible-match` when any list has one; otherwise `unavailable` when any
-   * list could not answer; `clear` only when every list answered clear.
+   * list could not answer; `clear` when every list answered clear. A list
+   * with reason `screening-incomplete` only cleared its bounded scan.
    */
   status: SanctionsScreeningStatus;
   checkedAt: string;
@@ -334,6 +344,7 @@ const toPossibleMatch = (
 });
 
 type SanctionsListMatchFailure =
+  | { code: "screening-incomplete" }
   | {
       code: "load-failed";
       stage: "public-matcher" | "list-screening";
@@ -421,9 +432,7 @@ const screenList = async ({
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {
         return Result.err({
-          code: "load-failed" as const,
-          reason: "work-limit" as const,
-          stage: "list-screening" as const,
+          code: "screening-incomplete" as const,
         });
       }
       return panic("A validated sanctions query was rejected");
@@ -439,8 +448,24 @@ const screenList = async ({
     });
     return unavailableList(base, "load-failed", freshness);
   }
+  const screenedEdition: ScreenedEdition = {
+    editionId: edition.id,
+    publishedAt: edition.publishedAt,
+    verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
+  };
   if (matched.value.isErr()) {
     const failure = matched.value.error;
+    if (failure.code === "screening-incomplete") {
+      return {
+        ...base,
+        ...screenedEdition,
+        status: "clear",
+        reason: SANCTIONS_INCOMPLETE_REASON,
+        totalMatches: 0,
+        truncated: true,
+        possibleMatches: [],
+      };
+    }
     if (failure.reason !== null) {
       reportFailure({
         stage: failure.stage,
@@ -452,22 +477,20 @@ const screenList = async ({
     return unavailableList(base, failure.code, freshness);
   }
   const screened = matched.value.value;
-  const screenedEdition: ScreenedEdition = {
-    editionId: edition.id,
-    publishedAt: edition.publishedAt,
-    verifiedAt: lastSuccessfulVerifiedAt.toISOString(),
-  };
   const [first, ...rest] = screened.possibleMatches.map((match) =>
     toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
     if (screened.truncated) {
-      reportFailure({
-        stage: "list-screening",
-        reason: "truncated-empty",
-        source: freshness.source,
-      });
-      return unavailableList(base, "load-failed", freshness);
+      return {
+        ...base,
+        ...screenedEdition,
+        status: "clear",
+        reason: SANCTIONS_INCOMPLETE_REASON,
+        totalMatches: 0,
+        truncated: true,
+        possibleMatches: [],
+      };
     }
     return {
       ...base,

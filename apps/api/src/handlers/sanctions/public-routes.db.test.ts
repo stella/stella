@@ -1357,20 +1357,26 @@ describe("public sanctions search parity", () => {
           nationalityCodes: [],
         });
         expect(person.status).toBe("possible-match");
-        const incomplete = await parity({
+        const expensive = await parity({
           type: "organization",
           name: costlyName,
           companyId: null,
         });
-        expect(
-          incomplete.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
-          status: "unavailable",
-          reason: "load-failed",
-          totalMatches: 0,
-          possibleMatches: [],
+        const costlyMatches = expensive.lists.find(
+          ({ source }) => source === "eu",
+        );
+        expect(costlyMatches).toMatchObject({
+          status: "possible-match",
+          reason: null,
+          truncated: false,
+          totalMatches: 8,
         });
-        expect(incomplete.status).not.toBe("clear");
+        expect(
+          costlyMatches?.possibleMatches.map(
+            ({ sourceEntryId }) => sourceEntryId,
+          ),
+        ).toEqual(Array.from({ length: 8 }, (_, index) => `costly-${index}`));
+        expect(expensive.status).toBe("possible-match");
         const partial = await parity({
           type: "organization",
           name: "Mohammed Ali",
@@ -1379,11 +1385,12 @@ describe("public sanctions search parity", () => {
         expect(
           partial.lists.find(({ source }) => source === "eu"),
         ).toMatchObject({
-          status: "unavailable",
-          reason: "load-failed",
+          status: "clear",
+          reason: "screening-incomplete",
+          truncated: true,
           possibleMatches: [],
         });
-        expect(partial.status).not.toBe("clear");
+        expect(partial.status).toBe("clear");
       } finally {
         context.kill();
         await pool.close();

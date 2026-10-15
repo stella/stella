@@ -31,7 +31,7 @@ export const SANCTIONS_UNAVAILABLE_REASONS = [
   "access-denied",
   // The list has not been verified against its publisher within its limit.
   "stale",
-  // The stored edition could not be read or its screening could not complete.
+  // The stored edition or its screening index could not be loaded.
   "load-failed",
   // A company ID was given without a name and the register holds no company
   // under it, so there was no name to screen.
@@ -52,6 +52,19 @@ export const SANCTIONS_PUBLIC_UNAVAILABLE_REASONS = [
 
 export type SanctionsUnavailableReason =
   (typeof SANCTIONS_PUBLIC_UNAVAILABLE_REASONS)[number];
+
+/** A bounded scan found no match, but did not exhaust its candidates. */
+export const SANCTIONS_INCOMPLETE_REASON = "screening-incomplete";
+
+export const SANCTIONS_LIST_REASONS = [
+  ...SANCTIONS_UNAVAILABLE_REASONS,
+  SANCTIONS_INCOMPLETE_REASON,
+] as const;
+
+export const SANCTIONS_PUBLIC_LIST_REASONS = [
+  ...SANCTIONS_PUBLIC_UNAVAILABLE_REASONS,
+  SANCTIONS_INCOMPLETE_REASON,
+] as const;
 
 /** The reasons a signed-in screening can give: never "warming". */
 export type SanctionsSignedInUnavailableReason =
