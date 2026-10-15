@@ -28,13 +28,19 @@ import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
 } from "@/api/lib/safe-outbound-fetch";
-import type { ClientSecret, RefreshToken } from "@/api/lib/secret-brands";
+import type {
+  AccessToken,
+  ClientSecret,
+  RefreshToken,
+} from "@/api/lib/secret-brands";
 
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 export const MCP_OAUTH_BINDING_FAILURE_CODE = "mcp_oauth_binding_invalid";
 export const MCP_OAUTH_INVALID_GRANT_CODE = "mcp_oauth_invalid_grant";
 export const MCP_OAUTH_DISCOVERY_TIMEOUT_CODE = "mcp_oauth_discovery_timeout";
 const OAUTH_FETCH_MAX_BYTES = 1_000_000;
+// A revocation response carries no content worth reading (RFC 7009 §2.2).
+const OAUTH_REVOCATION_MAX_BYTES = 64_000;
 const PKCE_VERIFIER_BYTES = 48;
 
 class McpDiscoveryError extends TaggedError("McpDiscoveryError")<{
@@ -806,6 +812,103 @@ export const refreshOAuthToken = async ({
   }
 
   return Result.ok(token.value);
+};
+
+const revocationEndpointSchema = v.pipe(v.string(), v.url());
+
+/**
+ * The RFC 7009 revocation endpoint the authorization server advertises, when
+ * it is HTTPS and on the issuer's domain or an origin the connector's approval
+ * confirmed; tokens are never sent anywhere else. `null` when none qualifies.
+ */
+export const oauthRevocationEndpoint = ({
+  confirmedEndpointOrigins,
+  metadata,
+}: {
+  confirmedEndpointOrigins: readonly string[];
+  metadata: BoundOAuthMetadata;
+}): URL | null => {
+  const advertised = v.safeParse(
+    revocationEndpointSchema,
+    metadata.authorizationServer["revocation_endpoint"],
+  );
+  if (!advertised.success) {
+    return null;
+  }
+  const endpoint = new URL(advertised.output);
+  if (endpoint.protocol !== "https:") {
+    return null;
+  }
+  return oauthDomainsMatch(
+    metadata.authorizationServer.issuer,
+    endpoint.origin,
+  ) || confirmedEndpointOrigins.includes(endpoint.origin)
+    ? endpoint
+    : null;
+};
+
+type RevocableToken =
+  | { token: RefreshToken; tokenTypeHint: "refresh_token" }
+  | { token: AccessToken; tokenTypeHint: "access_token" };
+
+/**
+ * Revoke one token at an RFC 7009 endpoint, authenticating the client the way
+ * the token endpoint calls do (public client id, or `client_secret_post` when
+ * the registration issued a secret).
+ */
+export const revokeOAuthToken = async ({
+  clientId,
+  clientSecret,
+  dependencies = DEFAULT_OAUTH_DISCOVERY_DEPENDENCIES,
+  endpoint,
+  permit,
+  revocable,
+}: {
+  clientId: string;
+  clientSecret: ClientSecret | null;
+  dependencies?: OAuthDependencyOverrides;
+  endpoint: URL;
+  permit: ThirdPartyOutboundPermit;
+  revocable: RevocableToken;
+}): Promise<Result<void, HandlerError<502>>> => {
+  const body = new URLSearchParams({
+    token: revocable.token,
+    token_type_hint: revocable.tokenTypeHint,
+    client_id: clientId,
+  });
+  if (clientSecret) {
+    body.set("client_secret", clientSecret);
+  }
+
+  dependencies.signal?.throwIfAborted();
+  const response = await dependencies.safeOutboundFetchBytes({
+    body,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    maxBytes: OAUTH_REVOCATION_MAX_BYTES,
+    method: "POST",
+    permit,
+    signal: dependencies.signal,
+    timeoutMs: dependencies.timeoutMs ?? OAUTH_FETCH_TIMEOUT_MS,
+    url: endpoint,
+  });
+  if (Result.isError(response)) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: "MCP token revocation request failed",
+        cause: response.error,
+      }),
+    );
+  }
+  if (!response.value.ok) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        message: `MCP token revocation returned HTTP ${response.value.status}`,
+      }),
+    );
+  }
+  return Result.ok(undefined);
 };
 
 const discoverAuthorizationServer = async (

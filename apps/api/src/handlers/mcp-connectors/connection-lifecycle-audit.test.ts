@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import createMcpConnection from "@/api/handlers/mcp-connectors/create-connection";
-import deleteMcpConnection from "@/api/handlers/mcp-connectors/delete-connection";
+import { createDeleteMcpConnectionHandler } from "@/api/handlers/mcp-connectors/delete-connection";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -202,6 +202,11 @@ describe("per-user MCP connection audit trail", () => {
 
   test("disconnecting records a delete row", async () => {
     const audits: unknown[] = [];
+    const deleteMcpConnection = createDeleteMcpConnectionHandler({
+      loadMcpConnectionById: async () => await Promise.resolve(null),
+      revokeMcpConnectionTokens: async () =>
+        await Promise.reject(new Error("not reached without a loaded row")),
+    });
     type Context = Parameters<typeof deleteMcpConnection.handler>[0];
     const context = asTestRaw<Context>({
       ...baseContext({
