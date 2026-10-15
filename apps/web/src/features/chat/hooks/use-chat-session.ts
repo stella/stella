@@ -42,7 +42,6 @@ import {
   isChatClientRequestActive,
   isSuggestChangesApplyOutput,
   isNonPersistentGrantChatToolName,
-  isToolApprovedByGrant,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -93,6 +92,7 @@ import {
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
+  readChatToolGrantCoverage,
   storeChatToolGrant,
 } from "@/features/chat/chat-tool-grants";
 import {
@@ -910,25 +910,22 @@ export const useChatSession = ({
   );
   const confirmStoredApprovalGrant = useCallback(
     async (toolName: ApprovalToolName): Promise<boolean> => {
-      const fresh = await Result.tryPromise(
+      // The API resolves the exact tool or connector; the cached grants only
+      // decide whether to ask.
+      const coverage = await Result.tryPromise(
         async () =>
-          await queryClient.fetchQuery({
-            ...chatToolGrantsOptions({
-              activeOrganizationId: organizationId,
-              threadId: conversationId,
-              userId,
-            }),
-            staleTime: 0,
+          await readChatToolGrantCoverage({
+            threadId: conversationId,
+            toolName,
           }),
       );
-      if (Result.isError(fresh)) {
+      if (Result.isError(coverage) || !coverage.value.covered) {
+        await queryClient.invalidateQueries({
+          queryKey: chatKeys.toolGrants(organizationId, userId, conversationId),
+        });
         return false;
       }
-      const projected = projectChatToolGrants(fresh.value.grants);
-      return (
-        isToolApprovedByGrant(projected.conversation, toolName) ||
-        isToolApprovedByGrant(projected.always, toolName)
-      );
+      return true;
     },
     [conversationId, organizationId, queryClient, userId],
   );

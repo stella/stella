@@ -48,6 +48,20 @@ export type ChatToolGrantsResponse = Awaited<
   ReturnType<NonNullable<ReturnType<typeof chatToolGrantsOptions>["queryFn"]>>
 >;
 
+/** Whether the API holds a grant covering `toolName` in this conversation now. */
+export const readChatToolGrantCoverage = async ({
+  threadId,
+  toolName,
+}: {
+  threadId: string;
+  toolName: ApprovalToolName;
+}) =>
+  unwrapEden(
+    await api.chat["tool-grants"].coverage.get({
+      query: { threadId: toSafeId<"chatThread">(threadId), toolName },
+    }),
+  );
+
 export const storeChatToolGrant = async ({
   scope,
   threadId,

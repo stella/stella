@@ -4,20 +4,13 @@ import { t } from "elysia";
 
 import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
 
-import {
-  chatThreads,
-  chatToolGrants,
-  mcpConnectors,
-  mcpUserConnections,
-} from "@/api/db/schema";
-import { resolveExternalMcpGrantConnectorId } from "@/api/handlers/chat/tools/chat-tool-grants";
+import { chatThreads, chatToolGrants } from "@/api/db/schema";
+import { resolveStoredGrantSubject } from "@/api/handlers/chat/tools/chat-tool-grants";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
-import { isExternalMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 
 const config = {
   contract: "patch",
@@ -82,32 +75,17 @@ const createChatToolGrant = createSafeRootHandler(
           );
         }
 
-        let mcpConnectorId: (typeof chatToolGrants.$inferInsert)["mcpConnectorId"] =
-          null;
-        if (isExternalMcpToolName(toolName)) {
-          const connectors = await tx
-            .select({ id: mcpConnectors.id, slug: mcpConnectors.slug })
-            .from(mcpUserConnections)
-            .innerJoin(
-              mcpConnectors,
-              eq(mcpConnectors.id, mcpUserConnections.connectorId),
-            )
-            .where(
-              and(
-                eq(mcpUserConnections.organizationId, organizationId),
-                eq(mcpUserConnections.userId, user.id),
-                eq(mcpUserConnections.enabled, true),
-              ),
-            )
-            .limit(LIMITS.mcpGatewayConnectorsMax);
-          mcpConnectorId = resolveExternalMcpGrantConnectorId({
-            connectors,
-            toolName,
-          });
-          if (mcpConnectorId === null) {
-            return Result.err(notGrantable());
-          }
+        const subject = await resolveStoredGrantSubject({
+          organizationId,
+          toolName,
+          tx,
+          userId: user.id,
+        });
+        if (subject === null) {
+          return Result.err(notGrantable());
         }
+        const mcpConnectorId =
+          subject.type === "mcp-connector" ? subject.connectorId : null;
 
         const values = {
           organizationId,
