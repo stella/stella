@@ -1371,8 +1371,12 @@ const readMatterOverview = async ({
       : [{ userId: member.user.id, name: member.user.name }],
   );
 
+  // The web overview's agenda is not part of the matter detail; agents read
+  // open tasks through the task tools.
+  const { upcomingAgenda: _upcomingAgenda, ...overviewWithoutAgenda } =
+    overview;
   const overviewWithoutAvatarUrls = {
-    ...overview,
+    ...overviewWithoutAgenda,
     recentEntities: overview.recentEntities.map(
       ({
         assignedToImage: _assignedToImage,

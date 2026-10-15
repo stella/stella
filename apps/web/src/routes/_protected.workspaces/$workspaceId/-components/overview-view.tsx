@@ -92,7 +92,6 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
-import { selectUpcomingAgenda } from "./overview-agenda.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -329,9 +328,15 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
+  // The API reads the agenda on its own: open tasks due today or later,
+  // nearest first, undated last. The local date also applies here, so a
+  // cached response drops yesterday's deadlines once the day rolls over.
   const tasks = useMemo(
-    () => selectUpcomingAgenda(data.recentEntities, today),
-    [data.recentEntities, today],
+    () =>
+      data.upcomingAgenda.filter(
+        (task) => task.dueDate === null || task.dueDate >= today,
+      ),
+    [data.upcomingAgenda, today],
   );
 
   // Anchor the calculation to the tracked local date so visibility-driven day
