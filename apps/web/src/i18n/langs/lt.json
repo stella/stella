@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Užbaigta darbo sričių istorija liks priskirta jūsų ištrintai paskyrai.",
       "desktop": "Darbalaukis",
       "desktopAppDescription": "Vėl raskite viską, ką nukopijavote, ir atidarykite „stella“ dokumentus jau naudojamose kompiuterio programose.",
-      "desktopApprove": "Patvirtinti",
       "desktopCardApproveDetail": "Patvirtinkite, kad šis kompiuteris būtų susietas su <bdi>{identity}</bdi> serveryje {host}.",
       "desktopCardApproveTitle": "stella desktop prašo prisijungti",
       "desktopCardConnectedDetail": "Susieta su <bdi>{identity}</bdi> serveryje {host} · versija {version}",

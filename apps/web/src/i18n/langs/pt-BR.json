@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Enviaremos um código de verificação para o seu endereço de e-mail para confirmar esta solicitação. O histórico concluído do espaço de trabalho permanecerá atribuído à sua conta excluída.",
       "desktop": "Área de trabalho",
       "desktopAppDescription": "Recupere tudo o que copiar e abra documentos da stella nos aplicativos que você já usa no computador.",
-      "desktopApprove": "Aprovar",
       "desktopCardApproveDetail": "Aprove para vincular este computador a <bdi>{identity}</bdi> em {host}.",
       "desktopCardApproveTitle": "stella desktop está pedindo para conectar",
       "desktopCardConnectedDetail": "Vinculado a <bdi>{identity}</bdi> em {host} · versão {version}",

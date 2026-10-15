@@ -160,7 +160,7 @@ export const DesktopConnectionCard = () => {
               >
                 <LinkIcon />
                 {card.type === "approve"
-                  ? t("settings.account.desktopApprove")
+                  ? t("common.approve")
                   : t("common.connect")}
               </Button>
             ) : null}

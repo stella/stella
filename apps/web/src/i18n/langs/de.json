@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Wir senden einen Bestätigungscode an Ihre E-Mail-Adresse, um diese Anfrage zu bestätigen. Abgeschlossene Arbeitsbereichshistorie bleibt Ihrem gelöschten Konto zugeordnet.",
       "desktop": "Desktop",
       "desktopAppDescription": "Rufen Sie kopierte Inhalte wieder auf und öffnen Sie stella-Dokumente in den Desktop-Apps, die Sie bereits verwenden.",
-      "desktopApprove": "Bestätigen",
       "desktopCardApproveDetail": "Bestätigen Sie, um diesen Computer mit <bdi>{identity}</bdi> auf {host} zu verknüpfen.",
       "desktopCardApproveTitle": "stella desktop möchte sich verbinden",
       "desktopCardConnectedDetail": "Verknüpft mit <bdi>{identity}</bdi> auf {host} · Version {version}",

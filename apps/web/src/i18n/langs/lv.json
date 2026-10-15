@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atrodiet visu kopēto un atveriet stella dokumentus jau izmantotajās datora lietotnēs.",
-      "desktopApprove": "Apstiprināt",
       "desktopCardApproveDetail": "Apstipriniet, lai saistītu šo datoru ar <bdi>{identity}</bdi> serverī {host}.",
       "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
       "desktopCardConnectedDetail": "Saistīts ar <bdi>{identity}</bdi> serverī {host} · versija {version}",

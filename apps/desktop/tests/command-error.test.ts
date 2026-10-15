@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { commandErrorMessage } from "./command-error";
+import { commandErrorMessage } from "../src/mainview/command-error";
 
 describe("command error message", () => {
   test("shows the reason a native command rejected with", () => {

@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
       "desktopAppDescription": "Retrouvez tout ce que vous copiez et ouvrez les documents stella dans les applications que vous utilisez déjà.",
-      "desktopApprove": "Approuver",
       "desktopCardApproveDetail": "Approuvez pour lier cet ordinateur à <bdi>{identity}</bdi> sur {host}.",
       "desktopCardApproveTitle": "stella desktop demande à se connecter",
       "desktopCardConnectedDetail": "Lié à <bdi>{identity}</bdi> sur {host} · version {version}",

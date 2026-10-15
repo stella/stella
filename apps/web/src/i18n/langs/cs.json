@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Dokončená historie pracovních prostorů zůstane přiřazená ke smazanému účtu.",
       "desktop": "Aplikace pro počítač",
       "desktopAppDescription": "Vraťte se k čemukoli, co zkopírujete, a otevírejte dokumenty ze stelly v aplikacích, které už používáte.",
-      "desktopApprove": "Schválit",
       "desktopCardApproveDetail": "Schvalte propojení tohoto počítače s účtem <bdi>{identity}</bdi> na {host}.",
       "desktopCardApproveTitle": "stella desktop žádá o připojení",
       "desktopCardConnectedDetail": "Propojeno s účtem <bdi>{identity}</bdi> na {host} · verze {version}",

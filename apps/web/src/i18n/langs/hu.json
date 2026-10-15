@@ -4634,7 +4634,6 @@
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",
       "desktopAppDescription": "Találjon meg újra bármit, amit másolt, és nyissa meg a stella dokumentumait a már használt asztali alkalmazásokban.",
-      "desktopApprove": "Jóváhagyás",
       "desktopCardApproveDetail": "Hagyja jóvá, hogy ez a számítógép összekapcsolódjon ezzel: <bdi>{identity}</bdi> · {host}.",
       "desktopCardApproveTitle": "A stella desktop csatlakozást kér",
       "desktopCardConnectedDetail": "Összekapcsolva: <bdi>{identity}</bdi> · {host} · {version} verzió",

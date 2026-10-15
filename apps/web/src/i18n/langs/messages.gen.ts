@@ -4637,7 +4637,6 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
-      "desktopApprove": "Approve";
       "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.";
       "desktopCardApproveTitle": "stella desktop is asking to connect";
       "desktopCardConnectedDetail": "Linked to <bdi>{identity}</bdi> on {host} · version {version}";
