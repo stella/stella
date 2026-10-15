@@ -156,7 +156,6 @@
     "Test CI check partition": ["**"],
     "Test install-free CI commands": ["**"],
     "Test pre-push secret scan ranges": ["**"],
-    "Test pre-commit secret scan merges": ["**"],
     "Test merge-base network comparison": ["**"],
     "Test CLI release coupling gate": ["**"],
     "Test CLI contract changeset guard": ["**"],

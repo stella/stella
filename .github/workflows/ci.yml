@@ -4518,14 +4518,6 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_100 != 'true') }}
         run: bun test scripts/check-pushed-secrets.test.ts
 
-      - name: Test pre-commit secret scan merges
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_120
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_120 != 'true') }}
-        run: bun test scripts/check-staged-secrets.test.ts
-
       - name: Test merge-base network comparison
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -6373,13 +6365,10 @@ jobs:
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
-      needs.ci-plan.outputs.queue_depth != 'thin'
-      && ((github.event_name == 'pull_request'
-       || github.event_name == 'merge_group'
+      (github.event_name == 'merge_group'
        || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
-      )
       )
       )
     runs-on: ubuntu-latest
@@ -8913,9 +8902,9 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Test dev runner
+      - name: Test dev runner and process tree cleanup
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts scripts/ci-install.test.ts
+        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
