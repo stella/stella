@@ -25,6 +25,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
@@ -39,12 +40,23 @@ const STAGED_SCAN = [
 /** Exit status the scanner uses for findings; anything else but 0 is an error. */
 const FINDINGS_EXIT = 42;
 
-type Finding = {
-  File: string;
-  RuleID: string;
-  StartLine: number;
-  EndLine: number;
-};
+const LINE = v.pipe(v.number(), v.integer(), v.minValue(1));
+// Only the fields the merge check reads; the redacted match and secret are
+// never read.
+const FindingSchema = v.pipe(
+  v.object({
+    File: v.pipe(v.string(), v.minLength(1)),
+    RuleID: v.string(),
+    StartLine: LINE,
+    EndLine: LINE,
+  }),
+  v.check(
+    (finding) => finding.EndLine >= finding.StartLine,
+    "a finding ends before it starts",
+  ),
+);
+const ReportSchema = v.array(FindingSchema);
+type Finding = v.InferOutput<typeof FindingSchema>;
 
 type LineRange = { start: number; end: number };
 
@@ -60,27 +72,9 @@ const git = (args: string[]): string => {
     stderr: "pipe",
   });
   if (result.exitCode !== 0) {
-    fail(`git ${args[0]} failed: ${result.stderr.toString().trim()}`);
+    fail(`git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`);
   }
   return result.stdout.toString();
-};
-
-const isFinding = (value: unknown): value is Finding => {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const record = value as Record<string, unknown>;
-  const start = record["StartLine"];
-  const end = record["EndLine"];
-  return (
-    typeof record["File"] === "string" &&
-    record["File"] !== "" &&
-    typeof record["RuleID"] === "string" &&
-    Number.isInteger(start) &&
-    Number.isInteger(end) &&
-    (start as number) >= 1 &&
-    (end as number) >= (start as number)
-  );
 };
 
 /** The merge heads of an in-progress merge, or undefined outside a merge. */
@@ -151,7 +145,7 @@ const runStagedScan = (report: string): Finding[] => {
   process.stderr.write(result.stdout);
   process.stderr.write(result.stderr);
   if (result.exitCode !== 0 && result.exitCode !== FINDINGS_EXIT) {
-    fail(`${SCANNER} exited with status ${result.exitCode}`);
+    fail(`${SCANNER} exited with status ${String(result.exitCode)}`);
   }
   let parsed: unknown;
   try {
@@ -159,13 +153,14 @@ const runStagedScan = (report: string): Finding[] => {
   } catch {
     fail(`cannot read the ${SCANNER} report`);
   }
-  if (!Array.isArray(parsed) || !parsed.every(isFinding)) {
+  const findings = v.safeParse(ReportSchema, parsed);
+  if (!findings.success) {
     return fail(`the ${SCANNER} report is malformed`);
   }
-  if ((result.exitCode === FINDINGS_EXIT) !== parsed.length > 0) {
+  if ((result.exitCode === FINDINGS_EXIT) !== findings.output.length > 0) {
     fail(`the ${SCANNER} exit status disagrees with its report`);
   }
-  return parsed;
+  return findings.output;
 };
 
 const scanMerge = (heads: string[]): number => {

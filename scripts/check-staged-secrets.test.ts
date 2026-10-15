@@ -47,11 +47,11 @@ const token = (): string =>
 // The fake scanner reads the staged diff, as the real one does, reports every
 // added line holding the token shape as a JSON finding at its line in the
 // staged file, and logs its arguments. A behavior file next to it can make it
-// fail before scanning (`exit`) or write an unreadable report (`malformed`).
+// fail before scanning (`exit`) or write a given report text (`report`).
 const fakeBin = path.join(root, "fake-bin");
 const argsLog = path.join(root, "args.log");
 const fakeBehavior = path.join(fakeBin, "behavior.json");
-type FakeBehavior = { exit?: number; malformed?: boolean };
+type FakeBehavior = { exit?: number; report?: string };
 mkdirSync(fakeBin);
 writeFileSync(
   path.join(fakeBin, "gitleaks"),
@@ -83,7 +83,7 @@ for (const text of diff.stdout.toString().split("\\n")) {
   }
 }
 const report = option("--report-path");
-if (report) writeFileSync(report, behavior.malformed ? "not json" : JSON.stringify(findings));
+if (report) writeFileSync(report, behavior.report ?? JSON.stringify(findings));
 if (findings.length > 0) console.error("WRN leaks found: " + findings.length);
 process.exit(findings.length > 0 ? Number(option("--exit-code") ?? 1) : 0);
 `,
@@ -222,9 +222,18 @@ describe("staged secret scan fails closed", () => {
 
   test("a merge fails when the report is unreadable", () => {
     const repo = mergingRepo();
-    const result = scan(repo, "fake", { malformed: true });
+    const result = scan(repo, "fake", { report: "not json" });
     expect(result.exitCode).toBe(1);
-    expect(result.output).toContain("secret scanning refused");
+    expect(result.output).toContain("cannot read the gitleaks report");
+  });
+
+  test("a merge fails when a finding lacks its location", () => {
+    const repo = mergingRepo();
+    const result = scan(repo, "fake", {
+      report: JSON.stringify([{ File: "app.ts", RuleID: "github-pat" }]),
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain("the gitleaks report is malformed");
   });
 
   test("a merge fails when a merge head does not resolve", () => {
