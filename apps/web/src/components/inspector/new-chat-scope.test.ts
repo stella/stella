@@ -23,7 +23,7 @@ const NEW_THREAD = toChatThreadId("thread-new");
 /** A chat about matter B is open; the user has since navigated to matter A. */
 const storeWithChatInMatterB = () => {
   const store = createStore<InspectorTabsStore>()(
-    immer((...args) => createInspectorTabsSlice(...args)),
+    immer((set, get) => createInspectorTabsSlice(set, get)),
   );
   store.getState().openChat({
     id: THREAD_IN_B,
