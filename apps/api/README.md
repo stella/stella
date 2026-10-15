@@ -49,7 +49,8 @@ Existing web API type, CLI runtime, capability-catalog, and MCP contract generat
 checks remain the client-drift checks. PR test selection stays affected-only.
 
 Full API runs also write `response-conformance-execution.json` in their existing
-test artifact directory and print a runtime summary. Set
+test artifact directory and print a runtime summary. Nightly API shards upload
+these reports as artifacts. Set
 `RESPONSE_CONFORMANCE_REPORT` to choose another output path for a dispatch run.
 Only successful child batches contribute; incomplete reports say so. These
 observations are informational: HTTP templates include test-created Elysia apps,
