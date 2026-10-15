@@ -3034,6 +3034,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: readonly {
         decisionId: string;
         match: "all_terms" | "some_terms";
+        headline?: string;
       }[],
       queryUsed: string,
     ) => ({
@@ -3089,6 +3090,56 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(firstWarnings?.at(0)?.message).toContain("1 hit marked");
     expect(firstWarnings?.at(0)?.message).not.toContain("total and facets");
     expect(secondWarnings).toEqual([]);
+
+    // Partial at rank 0 in one phrasing and full at rank 2 in the other: the
+    // full occurrence represents it, with its own excerpt and its full-match
+    // rank, so it sorts after the full match at rank 0, not before.
+    searchDecisionsHandlerMock
+      .mockResolvedValueOnce(
+        page(
+          [
+            {
+              decisionId: PARTIAL_ID,
+              match: "some_terms",
+              headline: "<mark>partial</mark> occurrence",
+            },
+          ],
+          "shareholder dispute",
+        ),
+      )
+      .mockResolvedValueOnce(
+        page(
+          [
+            { decisionId: DECISION_ID, match: "all_terms" },
+            { decisionId: OTHER_PARTIAL_ID, match: "all_terms" },
+            {
+              decisionId: PARTIAL_ID,
+              match: "all_terms",
+              headline: "<mark>full</mark> occurrence",
+            },
+          ],
+          "spor",
+        ),
+      );
+    const promoted = parseToolPayload(
+      await handleMcpToolCall({
+        args: { country: "CZE", queries: ["shareholder dispute", "spor"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      }),
+    ) as {
+      results: { decisionId: string; match: string; snippet?: string }[];
+    };
+    const representative = promoted.results.find(
+      ({ decisionId }) => decisionId === PARTIAL_ID,
+    );
+    expect(representative?.match).toBe("all_terms");
+    expect(representative?.snippet).toContain("full occurrence");
+    expect(promoted.results.map(({ decisionId }) => decisionId)).toEqual([
+      DECISION_ID,
+      OTHER_PARTIAL_ID,
+      PARTIAL_ID,
+    ]);
   });
 
   test("pending public countries return typed unavailable through real MCP output contracts", async () => {

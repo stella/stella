@@ -2003,12 +2003,14 @@ const mergeCaseLawSearchHits = (
       }
       // Queries are walked in index order, so this stays ascending.
       seen.matchedQueries.push(queryIndex);
-      if (hit.match === "all_terms") {
-        seen.match = "all_terms";
-      }
-      if (rank < seen.rank) {
+      // A full match represents the decision over any partial one: its hit
+      // (excerpt) and rank stand, and ranks compare only within one class,
+      // so a promoted decision never sorts by its partial rank.
+      const promotes = hit.match === "all_terms" && seen.match === "some_terms";
+      if (promotes || (hit.match === seen.match && rank < seen.rank)) {
         seen.hit = hit;
         seen.rank = rank;
+        seen.match = hit.match;
       }
     }
   }
