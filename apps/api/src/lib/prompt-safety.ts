@@ -20,6 +20,11 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import {
+  UNTRUSTED_CONTENT_CLOSE,
+  UNTRUSTED_CONTENT_OPEN,
+} from "@stll/api-contract/untrusted-content-fence";
+
 const untrustedTextSchema = v.pipe(v.string(), v.brand("UntrustedText"));
 const promptSafeTextSchema = v.pipe(v.string(), v.brand("PromptSafeText"));
 
@@ -47,8 +52,8 @@ type SanitizeForPromptOptions = {
   close?: string;
 };
 
-const DEFAULT_OPEN = "<<<UNTRUSTED>>>";
-const DEFAULT_CLOSE = "<<<END_UNTRUSTED>>>";
+const DEFAULT_OPEN = UNTRUSTED_CONTENT_OPEN;
+const DEFAULT_CLOSE = UNTRUSTED_CONTENT_CLOSE;
 
 // Structural model-control tokens (ChatML, Llama [INST]/<<SYS>>). These
 // never occur in legitimate prose, so callers that store rather than wrap
