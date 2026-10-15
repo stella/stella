@@ -6,6 +6,7 @@ import { ElysiaCustomStatusResponse } from "elysia/error";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
   entities,
@@ -19,6 +20,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
@@ -33,6 +35,8 @@ import {
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -238,6 +242,81 @@ const assertSample = async ({
 };
 
 describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
+  test("document-only consent refuses sample loading without creating rows", async () => {
+    await withSampleFixture(async (fixture) => {
+      const {
+        scopedDb,
+        workspaceId,
+        organizationId,
+        userId,
+        recordAuditEvent,
+      } = fixture.first;
+      const safeDb = safeDbFromScoped(scopedDb);
+      const featureAccessSnapshot = await scopedDb(
+        async (tx) =>
+          await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
+      );
+      const context = {
+        organizationId,
+        userId,
+        userEmail: `${userId}@example.test`,
+        memberRole: "owner",
+        accessibleWorkspaceIds: [workspaceId],
+        accessibleWorkspaceIdSet: new Set([workspaceId]),
+        accessibleWorkspaceStatusById: new Map([[workspaceId, "active"]]),
+        accessibleWorkspaces: [{ id: workspaceId, status: "active" }],
+        safeDb,
+        scopedDb,
+        recordAuditEvent,
+        featureAccessSnapshot,
+        grantedScopes: ["stella:documents_write"],
+        request: new Request("https://example.test/mcp"),
+        createOperationDatabaseScope: () => ({
+          safeDb,
+          scopedDb,
+          pinServerValidatedWorkspaceId: (id) => id === workspaceId,
+        }),
+      } satisfies McpRequestContext;
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "write_capability",
+        context,
+        args: {
+          capability: "lists.sample-case.create",
+          input: {
+            params: { matterId: workspaceId },
+            body: { filePropertyName: "Documents" },
+          },
+        },
+      });
+      expect(result.isError).toBe(true);
+      const response = result.content.at(0);
+      expect(response?.type).toBe("text");
+      if (response?.type !== "text") {
+        return panic("Expected a text admission refusal");
+      }
+      expect(JSON.parse(response.text)).toMatchObject({
+        error: {
+          code: "missing_scope",
+          message: expect.stringContaining("stella:matters_write"),
+        },
+      });
+      for (const table of [
+        entities,
+        legalLists,
+        legalListItems,
+        legalListFactDetails,
+        pendingUploads,
+        auditLogs,
+      ]) {
+        expect(
+          await fixture.db.$count(table, eq(table.workspaceId, workspaceId)),
+        ).toBe(0);
+      }
+      expect(fixture.requests.requests).toHaveLength(0);
+    });
+  }, 120_000);
+
   test("concurrent callers commit one complete sample and reclaim the losing document", async () => {
     await withSampleFixture(async (fixture) => {
       let entered = 0;

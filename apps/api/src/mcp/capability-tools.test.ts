@@ -587,6 +587,40 @@ describe("list verification access grants across MCP tools", () => {
     expect(Object.keys(inputs).toSorted()).toEqual(declared.toSorted());
   });
 
+  test("every list mutation retains matter consent alongside other write consents", () => {
+    const mutations = capabilityCatalog.filter(
+      ({ id, access }) => id.startsWith("lists.") && access === "write",
+    );
+    expect(mutations.length).toBeGreaterThan(0);
+    for (const entry of mutations) {
+      expect(
+        [entry.scope, ...(entry.additionalScopes ?? [])],
+        entry.id,
+      ).toContain("stella:matters_write");
+    }
+  });
+
+  test("document consent alone refuses sample loading before mutation", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    fixture.context.grantedScopes = ["stella:documents_write"];
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "write_capability",
+      context: fixture.context,
+      args: {
+        capability: "lists.sample-case.create",
+        input: inputs["lists.sample-case.create"],
+      },
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "missing_scope",
+      message: expect.stringContaining("stella:matters_write"),
+    });
+    expect(fixture.mutations()).toBe(0);
+    expect(fixture.resourceLookups()).toBe(0);
+  });
+
   test("empty grants omit dedicated verification capabilities from discovery", async () => {
     const { context } = verificationContext();
     const listed: string[] = [];
