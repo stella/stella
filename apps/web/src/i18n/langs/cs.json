@@ -363,6 +363,8 @@
       "chooseList": "Vybrat seznam",
       "createList": "Vytvořit seznam",
       "evidenceList": "Fakta ze seznamu",
+      "loadSample": "Načíst ukázkový případ",
+      "loadSampleFailed": "Ukázkový případ se nepodařilo načíst",
       "noLists": "Tento spis nemá žádné seznamy.",
       "pickList": "Vyberte seznam, s jehož fakty se porovnávají dokumenty tohoto spisu."
     }
@@ -2921,6 +2923,7 @@
     "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte soubor pro vložení číslovaného odkazu na důkaz.",
+    "collaborationSnapshotRecovered": "Uloženou kopii pro spolupráci se nepodařilo znovu otevřít. Místnost byla obnovena z posledního uloženého dokumentu; neuložené změny mohly být ztraceny.",
     "comment": "Komentář",
     "comments": {
       "addPlaceholder": "Přidat komentář...",
@@ -4517,6 +4520,8 @@
   },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",
     "continueInChat": "Pokračovat v chatu",
     "dateFrom": "Od",
     "dateTo": "Do",

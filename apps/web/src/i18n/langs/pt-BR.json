@@ -363,6 +363,8 @@
       "chooseList": "Escolher uma lista",
       "createList": "Criar uma lista",
       "evidenceList": "Fatos de",
+      "loadSample": "Carregar caso de exemplo",
+      "loadSampleFailed": "Não foi possível carregar o caso de exemplo",
       "noLists": "Este caso não tem listas.",
       "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
     }
@@ -2921,6 +2923,7 @@
     "checkingDocxEditDescription": "stella ainda está verificando se este DOCX pode ser editado com segurança. Tente novamente quando o documento terminar de carregar.",
     "checkingDocxEditTitle": "Verificando documento",
     "chooseEvidence": "Escolha um arquivo para inserir uma referência numerada de prova.",
+    "collaborationSnapshotRecovered": "Não foi possível reabrir a cópia de colaboração armazenada. A sala foi restaurada com base no último documento salvo; alterações não salvas podem ter sido perdidas.",
     "comment": "Comentário",
     "comments": {
       "addPlaceholder": "Adicione um comentário...",
@@ -4517,6 +4520,8 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",

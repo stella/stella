@@ -1015,12 +1015,15 @@ type EvaluateOptions = {
   job?: string;
   result?: string;
   script?: string;
+  /** Release typechecks are planned only when VERSION changes. */
+  releaseTypecheck?: boolean;
 };
 const evaluate = ({
   queueDepth,
   job,
   result,
   script = outcome.run,
+  releaseTypecheck = job === "release-typecheck",
 }: EvaluateOptions) => {
   const dependencies = Object.fromEntries(
     needs.map((name) => {
@@ -1068,7 +1071,7 @@ const evaluate = ({
         ...plan,
         queue_depth: queueDepth,
         heavy_web_build_required: "false",
-        release_typecheck_required: "false",
+        release_typecheck_required: releaseTypecheck ? "true" : "false",
       }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1092,6 +1095,20 @@ test("both queue depths require every planned admitted check to succeed", () => 
         ).toBe(1);
       }
     }
+  }
+}, 30_000);
+
+test("an unplanned release typecheck may be skipped at either queue depth", () => {
+  for (const queueDepth of ["thin", "full"]) {
+    expect(
+      evaluate({
+        queueDepth,
+        job: "release-typecheck",
+        result: "skipped",
+        releaseTypecheck: false,
+      }),
+      queueDepth,
+    ).toBe(0);
   }
 }, 30_000);
 
@@ -1273,6 +1290,28 @@ test("main release and scheduled runs execute the planned version compiler in ei
     }
   }
 }, 30_000);
+
+test("a release merge group compiles the next version before it lands, at either queue depth", () => {
+  expect(admitted).toContain("release-typecheck");
+  for (const queueDepth of ["thin", "full"]) {
+    for (const required of ["true", "false"]) {
+      const value = context({
+        event: { event: "merge_group", message: "chore: release v1.2.3" },
+        variable: queueDepth,
+        queueDepth,
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["release_typecheck_required"] = required;
+      expect(
+        selected(ci.jobs["release-typecheck"]?.if, value),
+        `${queueDepth}/${required}`,
+      ).toBe(required === "true");
+    }
+  }
+});
 
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
   const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));

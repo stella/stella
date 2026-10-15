@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { DocxComments, DocxEditorRef } from "./app-docx-editor";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
@@ -25,7 +27,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("published editor echoes agent comments and saves applied operations for reopen", async () => {

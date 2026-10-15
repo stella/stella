@@ -6,7 +6,9 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
+import { builtinModules } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
@@ -548,6 +550,110 @@ export const sourceClosureProblems = (
   entries: readonly string[],
   seen = new Set<string>(),
 ): string[] => sourceClosureChecker(root, tree)(entries, seen);
+
+type InstallToolingCopiesOptions = {
+  root: string;
+  files: SourceTree;
+  entry: string;
+};
+
+export const installToolingCopies = ({
+  root,
+  files,
+  entry,
+}: InstallToolingCopiesOptions): string => {
+  const seen = new Set<string>();
+  const problems = sourceClosureProblems(root, files, [entry], seen);
+  for (const file of seen) {
+    const origin = files.get(file);
+    if (origin === undefined) {
+      continue;
+    }
+    const source = text(root, origin);
+    problems.push(...unresolvedRuntimeImports(file, source));
+    for (const specifier of runtimeImports(file, source)) {
+      if (
+        !specifier.startsWith(".") &&
+        specifier !== "bun" &&
+        !builtinModules.includes(specifier.replace(/^node:/u, ""))
+      ) {
+        problems.push(
+          `${origin}: install tooling requires a relative import or builtin: ${specifier}`,
+        );
+      }
+    }
+  }
+  if (problems.length > 0) {
+    panic(problems.join("\n"));
+  }
+  return [...seen]
+    .toSorted()
+    .map((file) => {
+      const origin = files.get(file);
+      if (origin === undefined || !/^[\w./-]+$/u.test(origin)) {
+        panic(`Invalid install tooling COPY source: ${file}`);
+      }
+      return `COPY ${origin} ${origin}`;
+    })
+    .join("\n");
+};
+
+const INSTALL_TOOLING_GENERATOR = "api-image-install-tooling";
+
+export const updateInstallToolingCopies = (root: string, write: boolean) => {
+  const generator = GENERATORS.find(
+    ({ id }) => id === INSTALL_TOOLING_GENERATOR,
+  );
+  const block = generator?.blocks?.at(0);
+  if (generator === undefined || block === undefined) {
+    panic("Missing API install tooling generator block");
+  }
+  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  if (tracked.exitCode !== 0) {
+    panic("Cannot enumerate install tooling sources");
+  }
+  const files = new Map(
+    tracked.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => [`/app/${file}`, file]),
+  );
+  const copies = installToolingCopies({
+    root,
+    files,
+    entry: "/app/scripts/ci-install.ts",
+  });
+  const undeclared = copies
+    .split("\n")
+    .map((line) => line.split(" ")[1])
+    .filter(
+      (origin): origin is string =>
+        origin !== undefined && !generator.inputs.includes(origin),
+    );
+  if (undeclared.length > 0) {
+    panic(
+      `API install tooling closure files missing from ${INSTALL_TOOLING_GENERATOR} inputs: ${undeclared.join(", ")}`,
+    );
+  }
+  const file = path.join(root, block.path);
+  const source = readFileSync(file, "utf-8");
+  const begin = source.indexOf(block.begin);
+  const end = source.indexOf(block.end, begin + block.begin.length);
+  if (begin === -1 || end === -1) {
+    panic("Missing API install tooling COPY block");
+  }
+  const generated = `${source.slice(0, begin)}${block.begin}\n${copies}\n${source.slice(end)}`;
+  if (write) {
+    writeFileSync(file, generated);
+    return;
+  }
+  if (source !== generated) {
+    panic(
+      "API install tooling COPY closure drifted; run bun scripts/docker-source-closure.ts --write-install-tooling",
+    );
+  }
+};
 
 type EnvironmentValue = { type: "known"; value: string } | { type: "unknown" };
 
@@ -1826,6 +1932,17 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
 };
 
 if (import.meta.main) {
+  const mode = process.argv.at(2);
+  if (
+    mode === "--write-install-tooling" ||
+    mode === "--check-install-tooling"
+  ) {
+    updateInstallToolingCopies(
+      path.resolve(import.meta.dir, ".."),
+      mode === "--write-install-tooling",
+    );
+    process.exit(0);
+  }
   const start = performance.now();
   const problems = checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),
