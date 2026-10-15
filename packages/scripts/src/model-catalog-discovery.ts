@@ -53,7 +53,7 @@ const MODEL_FAMILY_PARSERS = {
   },
   google: (modelId) => {
     const match =
-      /^gemini-(\d{1,3})(?:\.(\d{1,3}))?-(flash-lite|flash|pro)(?:-preview)?$/u.exec(
+      /^gemini-(\d{1,3})(?:\.(\d{1,3}))?-(flash-lite|flash|pro|argon)(?:-preview)?$/u.exec(
         modelId,
       );
     return match?.[3] !== undefined && match[1] !== undefined

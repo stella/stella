@@ -31,6 +31,7 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
+import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -574,7 +575,7 @@ const toolingScriptFiles = [
 // Product UI that renders to a reader: the web app, the desktop shell, and the
 // shared component packages they compose.
 const productUiFiles = [
-  "apps/web/src/**/*.{ts,tsx}",
+  ...PRODUCT_FRONTEND_FILES,
   "apps/desktop/src/**/*.{ts,tsx}",
   "packages/ui/src/**/*.{ts,tsx}",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -908,6 +909,10 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
+        {
+          files: "packages/mcp-apps/**",
+          use: "packages/mcp-apps/src/shared/style.css",
+        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1396,6 +1401,8 @@ const config = defineConfig({
     "**/routeTree.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
+    // Bundled API-owned schemas: validate their source and regenerate this artifact.
+    "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
@@ -1434,6 +1441,7 @@ const config = defineConfig({
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1608,6 +1616,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -1632,6 +1641,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -1669,6 +1679,16 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/api/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-sql-close.fixture.ts",
+      ],
+      rules: {
+        "confine-sql-close/confine-sql-close": "error",
+      },
+    },
     {
       files: [
         "packages/scripts/src/dev-*.ts",
@@ -2489,6 +2509,21 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Zip entry writes belong to writeZipEntry in @stll/docx-utils, which
+      // UTF-8 encodes text in one pass; JSZip's own string encoding splits
+      // surrogate pairs at its 16 KiB piece boundaries.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-string-zip-entry.fixture.ts",
+      ],
+      excludeFiles: ["packages/docx-utils/src/zip-entry.ts"],
+      rules: {
+        "no-string-zip-entry/no-string-zip-entry": "error",
       },
     },
     {
@@ -3422,7 +3457,7 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: [...PRODUCT_FRONTEND_FILES],
       rules: {
         "require-cn-for-classname-composition/require-cn-for-classname-composition":
           "error",
@@ -3490,25 +3525,6 @@ const config = defineConfig({
         // re-render surfaces that churn can interleave with ProseMirror's
         // DOMObserver and loop into "Maximum update depth exceeded".
         "require-stable-editor-options/require-stable-editor-options": "error",
-        "no-restricted-imports": [
-          "error",
-          {
-            paths: [
-              noZodImport,
-              webPragmaticDragAdapterImport,
-              ...webFolioAllLocalesImports,
-            ],
-            patterns: [
-              {
-                group: webLocalApiImportGroup,
-                message: "Use '@/lib/api-contract' instead of '@/api/'.",
-              },
-              ...webCrossWorkspaceImports,
-              webDatePickerImport,
-              pragmaticDragAdapterDeepImportBan,
-            ],
-          },
-        ],
         "no-raw-api-url/no-direct-api-env": "error",
         "no-raw-api-url/no-raw-api-url": "error",
         // Catch raw JSX copy across product UI. Use narrow disables only for
@@ -3529,7 +3545,31 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/mcp-apps/src/**/*.tsx"],
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
@@ -4640,7 +4680,7 @@ const config = defineConfig({
         "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
-        "apps/api/src/mcp/apps/**",
+        "packages/mcp-apps/src/**",
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "error",
@@ -5126,6 +5166,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      rules: {
+        "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },
     },
     {

@@ -8,6 +8,7 @@ import { Maximize2Icon } from "@stll/ui/icons";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import {
+  CASE_DECISION_PLACEMENT,
   createCaseDecisionViewTab,
   isPlainPrimaryClick,
 } from "@/components/inspector/case-decision-view";
@@ -59,8 +60,9 @@ export const DecisionMainViewAction = ({
     onMoveToMain?.();
     if (action.type === "swap-with-main") {
       const displaced = action.mainDecision;
-      inspector.open(
-        createCaseDecisionViewTab({
+      inspector.open({
+        decisionPlacement: CASE_DECISION_PLACEMENT.side,
+        ...createCaseDecisionViewTab({
           caseNumber: displaced.caseNumber,
           country: displaced.country,
           court: displaced.court,
@@ -69,7 +71,7 @@ export const DecisionMainViewAction = ({
           languageAlternates: displaced.languageAlternates,
           slug: displaced.slug,
         }),
-      );
+      });
     }
   };
 

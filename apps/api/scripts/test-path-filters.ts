@@ -63,6 +63,7 @@ export type PartitionedArguments = {
 
 export const partitionRunnerArguments = (
   runnerArguments: readonly string[],
+  omittedFlags?: ReadonlySet<string>,
 ): PartitionedArguments => {
   const bunArguments: string[] = [];
   const patterns: string[] = [];
@@ -86,7 +87,10 @@ export const partitionRunnerArguments = (
       continue;
     }
 
-    bunArguments.push(argument);
+    const omitFlag = omittedFlags?.has(argument) ?? false;
+    if (!omitFlag) {
+      bunArguments.push(argument);
+    }
     const next = runnerArguments[index + 1];
     if (next === undefined) {
       continue;
@@ -95,7 +99,9 @@ export const partitionRunnerArguments = (
       VALUE_FLAGS.has(argument) ||
       (OPTIONAL_NUMERIC_FLAGS.has(argument) && INTEGER_PATTERN.test(next));
     if (takesNext) {
-      bunArguments.push(next);
+      if (!omitFlag) {
+        bunArguments.push(next);
+      }
       index += 1;
     }
   }

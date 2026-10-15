@@ -12,6 +12,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
@@ -51,8 +52,9 @@ const parseBody = (xml: string): slimdom.Element => {
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

@@ -245,6 +245,128 @@ test("at most the first lines are kept, deduplicated", () => {
   expect(failureLines(many)).toHaveLength(MAX_LINES_PER_STEP);
 });
 
+test.each(["stall", "signal"])(
+  "typed install %s failures remain infrastructure failures through the digest",
+  (failureClass) => {
+    const lines = failureLines([
+      `::error title=install-${failureClass}::kind=infra class=install-${failureClass} restore=cold key=bun-complete-store-v4 elapsed_ms=300000 idle_ms=180000`,
+      "Error: Process completed with exit code 1.",
+    ]);
+    expect(lines.at(0)?.message).toContain(
+      `kind=infra class=install-${failureClass}`,
+    );
+    for (const step of [
+      "Install dependencies",
+      "Build API image",
+      "Test API smoke",
+    ]) {
+      const kind = classify(step, lines);
+      expect(kind).toBe("infra");
+      const output = annotations([
+        { job: "runner", step, kind, lines, url: "" },
+      ]);
+      expect(output.at(0)).toContain("[infra]");
+      expect(output.at(0)).toContain(
+        `kind=infra class=install-${failureClass}`,
+      );
+    }
+    expect(classify("Build API image", [{ message: "install-stall" }])).toBe(
+      "build",
+    );
+  },
+);
+
+test("a rate-limited E2E stack is a typed infrastructure failure", () => {
+  const message =
+    "kind=infra class=e2e-stack-rate-limited Docker Hub rate-limited E2E infrastructure pulls; browser tests did not run";
+  expect(classify("Start E2E stack", [{ message }])).toBe("infra");
+  expect(
+    classify("Run Playwright shard", [
+      { message },
+      { message: "error: expect(received).toBe(expected)" },
+    ]),
+  ).not.toBe("infra");
+});
+
+test.each(["stall", "signal"])(
+  "mixed install %s and compiler failures preserve both diagnostics as code",
+  (failureClass) => {
+    const installer = `kind=infra class=install-${failureClass} restore=cold key=test-key`;
+    const compiler =
+      "apps/api/src/example.ts(1,1): error TS2322: Type mismatch.";
+    expect(
+      classify("Build API image", [
+        { message: installer },
+        { message: compiler },
+      ]),
+    ).toBe("typecheck");
+    for (const body of [
+      [`::error title=install-${failureClass}::${installer}`, compiler],
+      [compiler, `::error title=install-${failureClass}::${installer}`],
+    ]) {
+      const records = buildDigest({
+        jobs: parseJobs({
+          jobs: [
+            {
+              id: 1,
+              name: "api-image",
+              conclusion: "failure",
+              steps: [
+                { name: "Build API image", number: 1, conclusion: "failure" },
+              ],
+            },
+          ],
+        }),
+        logFor: () =>
+          runStep(1, "build", [
+            ...body,
+            "##[error]Process completed with exit code 1.",
+          ]).join("\n"),
+      });
+      expect(records).toHaveLength(1);
+      expect(records.at(0)?.kind).toBe("typecheck");
+      expect(
+        records
+          .at(0)
+          ?.lines.map(({ message }) => message)
+          .join("\n"),
+      ).toContain(installer);
+      expect(
+        records
+          .at(0)
+          ?.lines.map(({ message }) => message)
+          .join("\n"),
+      ).toContain("TS2322");
+      const output = annotations(records).join("\n");
+      expect(output).toContain("TS2322");
+      expect(output).toContain(installer);
+    }
+  },
+);
+
+test.each(["stall", "signal"])(
+  "sole install %s evidence remains infra with only a generic exit",
+  (failureClass) => {
+    const message = `kind=infra class=install-${failureClass} restore=cold key=test-key`;
+    for (const suffix of [
+      [],
+      [{ message: "Process completed with exit code 1." }],
+      [{ message: "Error: Process completed with exit code 1." }],
+      [{ message: "Install finished; exit 1; signal SIGKILL; restore=cold" }],
+    ]) {
+      expect(classify("Build API image", [{ message }, ...suffix])).toBe(
+        "infra",
+      );
+    }
+    expect(
+      classify("Build API image", [
+        { message },
+        { message: "An unexplained build failure" },
+      ]),
+    ).toBe("build");
+  },
+);
+
 test("step kinds follow the step name, then the extracted lines", () => {
   expect(classify("Test API or rest", [])).toBe("test");
   expect(classify("Typecheck affected packages", [])).toBe("typecheck");
