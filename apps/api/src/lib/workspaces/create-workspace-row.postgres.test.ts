@@ -5,7 +5,12 @@ import { eq, inArray } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  contacts,
+  properties,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import {
   createMembershipScopedDb,
   createScopedDb,
@@ -169,12 +174,29 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
           name: "Personal matter",
           reference: "NEW-1",
         });
+        // A dependent row passes the row policies through the access rule
+        // alone; the transaction never names the matter in its pinned ids.
+        await tx.insert(properties).values({
+          workspaceId,
+          name: "Files",
+          content: { type: "file", version: 1 },
+          tool: { version: 1, type: "manual-input" },
+          status: "fresh",
+          system: true,
+          kinds: ["document"],
+        });
         return await tx
           .select({ id: workspaces.id })
           .from(workspaces)
           .where(eq(workspaces.id, workspaceId));
       });
       expect(visible).toEqual([{ id: workspaceId }]);
+      expect(
+        await db
+          .select({ name: properties.name })
+          .from(properties)
+          .where(eq(properties.workspaceId, workspaceId)),
+      ).toEqual([{ name: "Files" }]);
       expect(await assignmentsOf(db, workspaceId)).toEqual([fixture.memberId]);
       const [row] = await db
         .select({ organizationId: workspaces.organizationId })
