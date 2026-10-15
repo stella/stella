@@ -819,8 +819,10 @@ export const defineValibotMcpTool = <
     },
     inputSchema: deriveValibotMcpInputSchema({
       inputSchema,
-      inputNormalization,
-      jsonSchemaProjectionWaiver,
+      ...(inputNormalization === undefined ? {} : { inputNormalization }),
+      ...(jsonSchemaProjectionWaiver === undefined
+        ? {}
+        : { jsonSchemaProjectionWaiver }),
     }),
     inputSchemaSource: inputSchema,
     inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,

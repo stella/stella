@@ -754,8 +754,7 @@ test("browser input schemas match the input every app-callable tool declares", (
     expect(appInputSchema(mcpAppToolInputSchema(name))).toEqual(
       appInputSchema(definition?.inputSchema),
     );
-    expect(APP_INPUT_SCHEMAS[name]).toEqual(
-      appInputSchema(definition?.inputSchema),
-    );
+    const generated: unknown = APP_INPUT_SCHEMAS[name];
+    expect(generated).toEqual(appInputSchema(definition?.inputSchema));
   }
 });

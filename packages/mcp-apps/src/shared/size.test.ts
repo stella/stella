@@ -118,4 +118,5 @@ test("a second viewport mount replaces the first, and stopping restores the app 
   expect(document.querySelector("[data-app-shell]")).toBeNull();
   expect(content?.parentElement).toBe(document.body);
   expect(host.listeners.size).toBe(0);
+  document.body.replaceChildren();
 });

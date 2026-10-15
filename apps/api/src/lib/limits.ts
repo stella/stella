@@ -274,6 +274,14 @@ export const LIMITS = {
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,
   mcpSearchPageSizeMax: 20,
+  /** Smallest page an MCP list or search tool takes. */
+  mcpPageSizeMin: 1,
+  /** Shortest value a required MCP text or list input takes: not empty. */
+  mcpNonEmptyMin: 1,
+  /** Characters of a language code an MCP filter takes (`cs`, `pt-BR`). */
+  mcpLanguageCodeMaxChars: 8,
+  /** Characters of an ISO calendar date an MCP filter takes (YYYY-MM-DD). */
+  mcpIsoDateMaxChars: 10,
   /** Default page size for the OpenAI-compatible MCP search tool. */
   mcpCompatSearchPageSizeDefault: 8,
   /**
@@ -548,6 +556,12 @@ export const LIMITS = {
    * their pages; past a handful the merged page stops being one question.
    */
   caseLawSearchQueriesMax: 5,
+  /** Characters of one court name a case-law search filter takes. */
+  caseLawCourtNameMaxChars: 512,
+  /** Courts one case-law search may filter by at once. */
+  caseLawCourtsFilterMax: 16,
+  /** Characters of a publisher category or decision type filter value. */
+  caseLawFilterValueMaxChars: 128,
   /** Decisions one batch read may ask for. */
   caseLawDecisionBatchMax: 20,
   /**
@@ -669,6 +683,10 @@ export const LIMITS = {
    * legislation tools and the compat id vocabulary) reads it from here.
    */
   legislationEliMaxChars: 512,
+  /** Characters of a publisher provision anchor (`par_1729-odst_2-pism_a`). */
+  legislationAnchorMaxChars: 256,
+  /** Characters of the shortest consolidation language code (`cs`). */
+  legislationLanguageMinChars: 2,
   /**
    * Characters of one provision's text. A provision is a section, not a
    * statute, so this sits far below the document text window: a batch read

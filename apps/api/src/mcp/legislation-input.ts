@@ -12,8 +12,8 @@ import { isProvisionTextCursor } from "@/api/mcp/provision-text-window";
 
 export const eliInputSchema = v.pipe(
   v.string(),
-  v.minLength(1),
-  v.maxLength(512),
+  v.minLength(LIMITS.mcpNonEmptyMin),
+  v.maxLength(LIMITS.legislationEliMaxChars),
   v.description(
     "European Legislation Identifier of the work, as search_legislation " +
       "returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). " +
@@ -23,8 +23,8 @@ export const eliInputSchema = v.pipe(
 
 export const anchorInputSchema = v.pipe(
   v.string(),
-  v.minLength(1),
-  v.maxLength(256),
+  v.minLength(LIMITS.mcpNonEmptyMin),
+  v.maxLength(LIMITS.legislationAnchorMaxChars),
   v.description(
     "Publisher provision anchor; confirm it in read_statute's outline for " +
       "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
@@ -36,8 +36,8 @@ export const anchorInputSchema = v.pipe(
 
 export const languageInputSchema = v.pipe(
   v.string(),
-  v.minLength(2),
-  v.maxLength(8),
+  v.minLength(LIMITS.legislationLanguageMinChars),
+  v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
   v.description(
     "Language of the consolidation to read. Language is part of the work " +
       "key, so an act published in two languages has one consolidation in " +
@@ -54,7 +54,7 @@ export const readProvisionHistoryArgsSchema = nullAsAbsent(
       v.pipe(
         v.number(),
         v.integer(),
-        v.minValue(1),
+        v.minValue(LIMITS.mcpPageSizeMin),
         v.maxValue(LIMITS.legislationProvisionHistoryPageSizeMax),
         v.description(
           `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,

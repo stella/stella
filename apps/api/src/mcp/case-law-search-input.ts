@@ -69,11 +69,11 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.array(
           v.pipe(
             v.string(),
-            v.minLength(1),
+            v.minLength(LIMITS.mcpNonEmptyMin),
             v.maxLength(LIMITS.searchQueryMaxLength),
           ),
         ),
-        v.minLength(1),
+        v.minLength(LIMITS.mcpNonEmptyMin),
         v.maxLength(LIMITS.caseLawSearchQueriesMax),
         v.description(texts.queries),
       ),
@@ -81,7 +81,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.pipe(
           v.number(),
           v.integer(),
-          v.minValue(1),
+          v.minValue(LIMITS.mcpPageSizeMin),
           v.maxValue(MAX_SEARCH_LIMIT),
           v.description(texts.limit),
         ),
@@ -94,24 +94,30 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       court: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
-          v.maxLength(512),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawCourtNameMaxChars),
           v.description("Filter by court name"),
         ),
       ),
       courts: v.optional(
         v.pipe(
-          v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-          v.minLength(1),
-          v.maxLength(16),
+          v.array(
+            v.pipe(
+              v.string(),
+              v.minLength(LIMITS.mcpNonEmptyMin),
+              v.maxLength(LIMITS.caseLawCourtNameMaxChars),
+            ),
+          ),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawCourtsFilterMax),
           v.description(texts.courts),
         ),
       ),
       category: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
-          v.maxLength(128),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawFilterValueMaxChars),
           v.description(
             'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
           ),
@@ -131,16 +137,16 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       language: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
-          v.maxLength(8),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.mcpLanguageCodeMaxChars),
           v.description("Filter by language code"),
         ),
       ),
       decision_type: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
-          v.maxLength(128),
+          v.minLength(LIMITS.mcpNonEmptyMin),
+          v.maxLength(LIMITS.caseLawFilterValueMaxChars),
           v.description("Filter by decision type"),
         ),
       ),
@@ -148,14 +154,14 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       date_from: v.optional(
         v.pipe(
           ISO_DATE_SCHEMA,
-          v.maxLength(10),
+          v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
         ),
       ),
       date_to: v.optional(
         v.pipe(
           ISO_DATE_SCHEMA,
-          v.maxLength(10),
+          v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
         ),
       ),

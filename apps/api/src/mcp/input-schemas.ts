@@ -352,7 +352,7 @@ export const cursorInput = ({
   v.optional(
     v.pipe(
       v.string(),
-      v.minLength(1),
+      v.minLength(LIMITS.mcpNonEmptyMin),
       v.maxLength(maxLength),
       v.description(description),
       v.transform((value: string) => (issuedBy(value) ? value : undefined)),
