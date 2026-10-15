@@ -248,26 +248,38 @@ test("sealing accepts a populated package cache without links when the global st
   }
 });
 
-test("legitimate package directories ending in .tmp can be sealed", () => {
-  const store = mkdtempSync(path.join(tmpdir(), "bun-package-dot-tmp-"));
-  const packageDirectory = path.join(store, "@stll", "example.tmp");
-  const options = {
-    store,
-    key: "package-dot-tmp-key",
-    globalStoreMode: "disabled" as const,
-  };
-  try {
-    mkdirSync(packageDirectory, { recursive: true });
-    writeFileSync(
-      path.join(packageDirectory, "package.json"),
-      '{"name":"@stll/example.tmp"}\n',
-    );
-    sealInstallStore(options);
-    verifyInstallStore(options);
-  } finally {
-    rmSync(store, { recursive: true, force: true });
-  }
-});
+test.each(["@stll/example.tmp", "example.tmp"])(
+  "legitimate package directory %s can be sealed",
+  (packageName) => {
+    const store = mkdtempSync(path.join(tmpdir(), "bun-package-dot-tmp-"));
+    const packageDirectory = path.join(store, packageName);
+    const options = {
+      store,
+      key: "package-dot-tmp-key",
+      globalStoreMode: "disabled" as const,
+    };
+    try {
+      mkdirSync(packageDirectory, { recursive: true });
+      writeFileSync(
+        path.join(packageDirectory, "package.json"),
+        JSON.stringify({ name: packageName }),
+      );
+      sealInstallStore(options);
+      verifyInstallStore(options);
+      if (!packageName.startsWith("@")) {
+        writeFileSync(
+          path.join(packageDirectory, "package.json"),
+          JSON.stringify({ name: "different-package" }),
+        );
+        expect(() => sealInstallStore(options)).toThrow(
+          "Incomplete Bun install store",
+        );
+      }
+    } finally {
+      rmSync(store, { recursive: true, force: true });
+    }
+  },
+);
 
 for (const globalStoreMode of ["enabled", "disabled"] as const) {
   test(`only empty root scratch is accepted with the global store ${globalStoreMode}`, () => {
