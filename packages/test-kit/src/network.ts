@@ -29,6 +29,8 @@ export class NetworkAccessError extends Error {
 export type NetworkGuardOptions = {
   /** Extra host names that count as local, e.g. a CI service container. */
   allowHosts?: readonly string[];
+  /** The proxy settings fetch would follow; the process environment by default. */
+  environment?: Readonly<Record<string, string | undefined>>;
 };
 
 const LOOPBACK_NAMES = new Set(["localhost", "::1", "0:0:0:0:0:0:0:1"]);
@@ -84,6 +86,14 @@ const refuseProxy = (
     typeof proxy === "object" && proxy !== null
       ? Reflect.get(proxy, "url")
       : proxy;
+  return refuseProxyHref(href, "fetch proxy", refuse);
+};
+
+const refuseProxyHref = (
+  href: unknown,
+  via: string,
+  refuse: FetchRefusal,
+): NetworkAccessError | undefined => {
   if (href === undefined || href === null || href === "") {
     return undefined;
   }
@@ -91,9 +101,20 @@ const refuseProxy = (
     ? refuse(new URL(href))
     : new NetworkAccessError(
         typeof href === "string" ? href : "a proxy that is not a URL",
-        "fetch proxy",
+        via,
       );
 };
+
+// Bun's native fetch follows these without going through the guarded socket
+// factories, so a remote one makes the guard refuse to install.
+const PROXY_ENVIRONMENT_KEYS = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+] as const;
 
 // 303, and 301/302 after a POST, continue as a GET without the body.
 const dropsBody = (status: number, method: string) =>
@@ -285,6 +306,7 @@ const guardMethod = (
  */
 export const installNetworkGuard = ({
   allowHosts = [],
+  environment = process.env,
 }: NetworkGuardOptions = {}): (() => void) => {
   if (installed !== undefined) {
     panic("The network guard is already installed");
@@ -296,6 +318,14 @@ export const installNetworkGuard = ({
     allowed.has(host.toLowerCase())
       ? undefined
       : new NetworkAccessError(host, via);
+  for (const key of PROXY_ENVIRONMENT_KEYS) {
+    const error = refuseProxyHref(environment[key], key, (url) =>
+      refusal(url.hostname, key),
+    );
+    if (error !== undefined) {
+      throw error;
+    }
+  }
   const refuseSocket =
     (via: string): Refusal =>
     (args) =>

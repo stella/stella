@@ -323,6 +323,22 @@ describe("network guard", () => {
     });
   });
 
+  test("a remote proxy in the environment refuses the install", () => {
+    for (const environment of [
+      { HTTPS_PROXY: "http://proxy.example:3128" },
+      { http_proxy: "http://proxy.example:3128" },
+      { ALL_PROXY: "not a url" },
+    ]) {
+      expect(() => installNetworkGuard({ environment })).toThrow(
+        NetworkAccessError,
+      );
+    }
+    // A loopback proxy keeps every connection on this machine.
+    uninstall = installNetworkGuard({
+      environment: { HTTP_PROXY: "http://127.0.0.1:3128" },
+    });
+  });
+
   test("fetch.preconnect is refused for a remote host before it connects", () => {
     const realFetch = globalThis.fetch;
     const preconnected: string[] = [];
