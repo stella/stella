@@ -9,6 +9,8 @@ import {
   validateActionMetadata,
   actionlintWorkflowSource,
   validateLocalActionReferences,
+  validateWorkflowSize,
+  WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -99,6 +101,17 @@ test("archive normalization rejects ambiguous source rewrites and escaping targe
 describe("workflow YAML validation", () => {
   test("every repository workflow and action is valid", async () => {
     await checkWorkflowYaml(ROOT);
+  });
+
+  test("a workflow over the size limit is rejected with its byte count", () => {
+    expect(() =>
+      validateWorkflowSize(WORKFLOW_SIZE_LIMIT_BYTES, "ci.yml"),
+    ).not.toThrow();
+    expect(() =>
+      validateWorkflowSize(WORKFLOW_SIZE_LIMIT_BYTES + 1, "ci.yml"),
+    ).toThrow(
+      `ci.yml: ${WORKFLOW_SIZE_LIMIT_BYTES + 1} bytes exceeds the ${WORKFLOW_SIZE_LIMIT_BYTES}-byte workflow size limit`,
+    );
   });
 
   test("malformed workflow YAML reports its file", async () => {
