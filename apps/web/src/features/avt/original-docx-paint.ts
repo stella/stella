@@ -33,10 +33,23 @@ export type HighlightApi = {
   delete: (name: string) => void;
 };
 
-/** The globals the API lives on, optional because not every browser has them. */
-type HighlightEnv = {
-  Highlight?: typeof Highlight | undefined;
-  CSS?: { highlights?: HighlightRegistry | undefined } | undefined;
+/** The part of a highlight the view sets. */
+type PaintedHighlight = { priority: number };
+
+/** The part of `CSS.highlights` the view calls, for its highlight type. */
+type PaintRegistry<H extends PaintedHighlight> = {
+  set: (name: string, highlight: H) => unknown;
+  delete: (name: string) => unknown;
+};
+
+/**
+ * The globals the API lives on, optional because not every browser has them,
+ * and narrowed to the members the view uses. The registry takes the
+ * highlights its own constructor makes.
+ */
+type HighlightEnv<H extends PaintedHighlight> = {
+  Highlight?: (new (...ranges: Range[]) => H) | undefined;
+  CSS?: { highlights?: PaintRegistry<H> | undefined } | undefined;
 };
 
 /**
@@ -44,7 +57,9 @@ type HighlightEnv = {
  * constructor and the `CSS.highlights` registry), otherwise null: the
  * original then shows unmarked and stays clickable.
  */
-export const resolveHighlightApi = (env: HighlightEnv): HighlightApi | null => {
+export const resolveHighlightApi = <H extends PaintedHighlight>(
+  env: HighlightEnv<H>,
+): HighlightApi | null => {
   const HighlightConstructor = env.Highlight;
   const registry = env.CSS?.highlights;
   if (typeof HighlightConstructor !== "function" || registry === undefined) {
