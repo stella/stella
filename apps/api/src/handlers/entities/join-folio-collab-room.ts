@@ -3,13 +3,19 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { toFolioCollabRoomName } from "@stll/api-contract/folio-collab";
+import {
+  FOLIO_COLLAB_SEED_PREPARING_CODE,
+  toFolioCollabRoomName,
+} from "@stll/api-contract/folio-collab";
 import { roles } from "@stll/permissions";
+import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
   desktopEditSessions,
   folioCollabRooms,
   workspaceMembers,
@@ -21,6 +27,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BUFFER_INTENT_STALE_MS } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
@@ -30,6 +37,8 @@ import {
   readVersionDocxTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createFileKey } from "@/api/lib/files/utils";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
 import {
   canUseFolioCollabWorkspace,
@@ -126,6 +135,8 @@ const canStillEditWorkspace = async ({
 };
 
 type ClaimRoomSeedOptions = {
+  organizationId: SafeId<"organization">;
+  previousSnapshot: { fileId: SafeId<"userFile">; updatedAt: Date | null };
   expectedGeneration: number;
   expectedSeedState: "claimed" | "empty";
   now: Date;
@@ -201,6 +212,8 @@ const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
   expectedSeedState,
   now,
+  organizationId,
+  previousSnapshot,
   roomId,
   tx,
   userId,
@@ -215,6 +228,9 @@ const claimFolioCollabRoomSeed = async ({
       seedClaimedBy: userId,
       seedState: "claimed",
       yjsSnapshotFileId: createSafeId<"userFile">(),
+      savedSnapshotCut: null,
+      yjsSnapshotRevision: 0,
+      seededAt: null,
       yjsSnapshotSizeBytes: null,
       yjsSnapshotUpdatedAt: null,
     })
@@ -228,7 +244,26 @@ const claimFolioCollabRoomSeed = async ({
     )
     .returning({ generation: folioCollabRooms.generation });
 
-  return claimed.at(0) ?? null;
+  const claim = claimed.at(0);
+  if (claim && previousSnapshot.updatedAt !== null) {
+    // audit: skip — the enclosing join transaction records the seed takeover.
+    await tx.insert(bufferObjectCleanupIntents).values({
+      id: createSafeId<"pendingUpload">(),
+      nextAttemptAt: new Date(
+        Temporal.Now.instant().epochMilliseconds + BUFFER_INTENT_STALE_MS,
+      ),
+      objectKey: createFileKey({
+        fileId: previousSnapshot.fileId,
+        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+        organizationId,
+        workspaceId,
+      }),
+      organizationId,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+      workspaceId,
+    });
+  }
+  return claim ?? null;
 };
 
 const joinFolioCollabRoomHandler = async function* ({
@@ -308,6 +343,8 @@ const joinFolioCollabRoomHandler = async function* ({
           seedState: folioCollabRooms.seedState,
           snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
           yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
         })
         .from(folioCollabRooms)
         .where(
@@ -360,6 +397,8 @@ const joinFolioCollabRoomHandler = async function* ({
             seedState: folioCollabRooms.seedState,
             snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
             yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+            yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+            yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
           });
 
         await recordAuditEvent(tx, {
@@ -419,6 +458,7 @@ const joinFolioCollabRoomHandler = async function* ({
         if (seedClaimDecision === "preparing") {
           return {
             error: {
+              code: FOLIO_COLLAB_SEED_PREPARING_CODE,
               message: "Collaborative editing room is still preparing.",
               status: 409,
             },
@@ -429,6 +469,11 @@ const joinFolioCollabRoomHandler = async function* ({
           expectedGeneration: room.generation,
           expectedSeedState: room.seedState,
           now,
+          organizationId,
+          previousSnapshot: {
+            fileId: room.yjsSnapshotFileId,
+            updatedAt: room.yjsSnapshotUpdatedAt,
+          },
           roomId: room.id,
           tx,
           userId,
@@ -437,6 +482,7 @@ const joinFolioCollabRoomHandler = async function* ({
         if (!claim) {
           return {
             error: {
+              code: FOLIO_COLLAB_SEED_PREPARING_CODE,
               message: "Collaborative room seed was claimed concurrently.",
               status: 409,
             },
@@ -487,7 +533,9 @@ const joinFolioCollabRoomHandler = async function* ({
         token,
         tokenExpiresAt,
         snapshotRecovered: room.snapshotRecoveredAt !== null,
-        yjsSnapshotRevision: room.yjsSnapshotRevision,
+        // Pending receipts never enabled edits, so a stale claim contains only its pristine seed.
+        yjsSnapshotRevision:
+          room.seedState === "claimed" ? 0 : room.yjsSnapshotRevision,
       } as const;
     }),
   );
@@ -497,6 +545,7 @@ const joinFolioCollabRoomHandler = async function* ({
       new HandlerError({
         message: joined.error.message,
         status: joined.error.status,
+        ...("code" in joined.error ? { code: joined.error.code } : {}),
       }),
     );
   }

@@ -21,6 +21,11 @@ export const aggregateFences = () => {
   const userId = mintAuthProviderId<"user">();
   const answerId = createSafeId<"legalReaderAnswer">();
   return {
+    folioCollabRoom: {
+      aggregate: "folioCollabRoom",
+      id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
+      mode: "update",
+    },
     signingSession: {
       aggregate: "signingSession",
       id: {

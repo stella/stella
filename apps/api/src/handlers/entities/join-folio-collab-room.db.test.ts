@@ -7,20 +7,55 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
-import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
+import { readFileSync } from "node:fs";
+import * as yProseMirror from "y-prosemirror";
+import * as yjs from "yjs";
 
+import { createHiddenEditorState } from "@stll/folio-core/controller/hiddenEditorManager";
+import {
+  createDocx,
+  createEmptyDocument,
+  extractDocxText,
+  materializeYjsDocx,
+  parseDocx,
+} from "@stll/folio-core/server";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
-import { folioCollabRooms, folioCollabRoomTokens } from "@/api/db/schema";
+import { safeDbFromScoped } from "@/api/db/safe-db";
+import {
+  bufferObjectCleanupIntents,
+  entityVersions,
+  fields,
+  folioCollabRooms,
+  folioCollabPublications,
+  folioCollabRoomTokens,
+} from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
+import { resetFolioCollabUserState } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { reserveObjectCleanupIntent } from "@/api/lib/buffer-intent-reconciliation";
+import {
+  loadPublicationPreliminary,
+  publishCheckpointInTransaction,
+} from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
+import { createFileKey } from "@/api/lib/file-key";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { decideFolioSnapshotRecoveryState } from "@/api/lib/files/folio-collab-snapshot-loader";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
 import {
+  acknowledgeFolioCollabSeed,
+  authorizeFolioCollabRoom,
   cleanupExpiredFolioCollabRoomTokens,
   folioCollabSeedClaimLeaseOnHeartbeat,
   issueFolioCollabToken,
   loadFolioCollabSnapshot,
+  storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -32,7 +67,7 @@ import type {
   TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
-import {
+import joinFolioCollabRoom, {
   decideFolioCollabSeedClaim,
   decideFolioCollabSnapshotRecovery,
   folioCollabSeedClaimPredicate,
@@ -41,14 +76,16 @@ import {
 let testDb: TestDatabase;
 let ids: TestIds;
 let scopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["scopedQuery"];
+let dryScopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["dryScopedQuery"];
 const roomIds: SafeId<"folioCollabRoom">[] = [];
-const UNSUPPORTED_FOLIO_ATTR_SCHEMA_VERSION = 11;
+const recoveryVersionIds: SafeId<"entityVersion">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedQuery = fixture.scopedQuery;
+  dryScopedQuery = fixture.dryScopedQuery;
 });
 
 afterEach(async () => {
@@ -59,6 +96,12 @@ afterEach(async () => {
     .delete(folioCollabRooms)
     .where(inArray(folioCollabRooms.id, roomIds));
   roomIds.length = 0;
+  if (recoveryVersionIds.length > 0) {
+    await testDb
+      .delete(entityVersions)
+      .where(inArray(entityVersions.id, recoveryVersionIds));
+    recoveryVersionIds.length = 0;
+  }
 });
 
 afterAll(async () => {
@@ -110,20 +153,15 @@ const insertRoom = async ({
   return roomId;
 };
 
-const unsupportedSnapshot = () => {
-  const doc = new Doc();
-  doc
-    .getMap("folio:document-metadata")
-    .set("attrSchemaVersion", UNSUPPORTED_FOLIO_ATTR_SCHEMA_VERSION);
-  const paragraph = new XmlElement("paragraph");
-  const text = new XmlText();
-  text.insert(0, "1", { footnoteRef: { id: 1 } });
-  paragraph.insert(0, [text]);
-  doc.getXmlFragment("prosemirror").insert(0, [paragraph]);
-  const update = encodeStateAsUpdate(doc);
-  doc.destroy();
-  return update;
-};
+const deployedSnapshot = (state: "clean" | "dirty") =>
+  new Uint8Array(
+    readFileSync(
+      new URL(
+        `../../lib/files/fixtures/folio-core-0.58.5/${state}.yjs`,
+        import.meta.url,
+      ),
+    ),
+  );
 
 const claimConcurrently = async ({
   expectedGeneration,
@@ -315,127 +353,645 @@ describe("folio collaboration room seed generation CAS", () => {
     });
   });
 
-  test("refused seeded snapshots reset persisted state once", async () => {
-    const snapshotBytes = unsupportedSnapshot();
-    const roomId = await insertRoom({
-      generation: 4,
-      seedClaimedBy: ids.userA1,
-      seedState: "seeded",
-      yjsSnapshotRevision: 7,
-      yjsSnapshotSizeBytes: snapshotBytes.byteLength,
-    });
-    const beforeRows = await testDb
-      .select({
-        baseVersionId: folioCollabRooms.baseVersionId,
-        generation: folioCollabRooms.generation,
-        seedClaimedAt: folioCollabRooms.seedClaimedAt,
-        seedState: folioCollabRooms.seedState,
-        seededAt: folioCollabRooms.seededAt,
-        snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-        snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
-        snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
-        snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-      })
-      .from(folioCollabRooms)
-      .where(eq(folioCollabRooms.id, roomId))
-      .limit(1);
-    const before = beforeRows.at(0);
-    expect(before).toBeDefined();
-    if (!before) {
-      throw new Error("Expected the seeded room to be stored");
-    }
-    expect(before).toMatchObject({
-      generation: 4,
-      seedState: "seeded",
-      snapshotRevision: 7,
-      snapshotSizeBytes: snapshotBytes.byteLength,
-    });
-    expect(before.seedClaimedAt).toBeInstanceOf(Date);
-    expect(before.seededAt).toBeInstanceOf(Date);
-    expect(before.snapshotUpdatedAt).toBeInstanceOf(Date);
+  test.each([
+    { state: "clean", receiptOrder: "before-store", hashCut: "exact" },
+    { state: "clean", receiptOrder: "after-store", hashCut: "exact" },
+    { state: "dirty", receiptOrder: "before-store", hashCut: "exact" },
+    { state: "dirty", receiptOrder: "after-store", hashCut: "exact" },
+    { state: "clean", receiptOrder: "before-store", hashCut: "historical" },
+    { state: "dirty", receiptOrder: "after-store", hashCut: "historical" },
+    { state: "clean", receiptOrder: "before-store", hashCut: "stale-version" },
+  ] as const)(
+    "refused deployed $state snapshots with $hashCut cut reseed with receipt $receiptOrder",
+    async ({ state, receiptOrder, hashCut }) => {
+      const snapshotBytes = deployedSnapshot(state);
+      const expectDiscardNotice = state === "dirty" || hashCut !== "exact";
+      const seededAt = new Date(Date.now() + 1000);
+      const snapshotAt = new Date(
+        seededAt.getTime() + (state === "dirty" ? 1000 : 0),
+      );
+      const roomId = await insertRoom({
+        generation: 4,
+        seedClaimedBy: ids.userA1,
+        seedState: "seeded",
+        yjsSnapshotRevision: state === "dirty" ? 7 : 1,
+        yjsSnapshotSizeBytes: snapshotBytes.byteLength,
+        seededAt,
+        yjsSnapshotUpdatedAt: snapshotAt,
+      });
+      const staleVersionId = createSafeId<"entityVersion">();
+      const staleFileId = createSafeId<"userFile">();
+      recoveryVersionIds.push(staleVersionId);
+      await testDb.insert(entityVersions).values({
+        id: staleVersionId,
+        entityId: ids.entityA1,
+        workspaceId: ids.wsA1,
+        versionNumber: 2,
+      });
+      await testDb.insert(fields).values({
+        id: createSafeId<"field">(),
+        entityVersionId: staleVersionId,
+        workspaceId: ids.wsA1,
+        propertyId: ids.filePropertyA1,
+        content: {
+          version: 1,
+          type: "file",
+          id: staleFileId,
+          fileName: "outdated.docx",
+          mimeType: DOCX_MIME_TYPE,
+          sizeBytes: 1,
+        },
+      });
+      const oldCheckpointFileId = createSafeId<"userFile">();
+      const oldCheckpointHash = "c".repeat(64);
+      await testDb
+        .update(folioCollabRooms)
+        .set({
+          docxCheckpointFileId: oldCheckpointFileId,
+          docxCheckpointSha256Hex: oldCheckpointHash,
+          docxCheckpointSnapshotSha256Hex: legacyHex(deployedSnapshot("clean")),
+          docxCheckpointSizeBytes: 1,
+          docxCheckpointUpdatedAt: new Date(),
+          sourceVersionId:
+            hashCut === "historical" ? ids.entityVersionA1 : staleVersionId,
+          savedSnapshotCut:
+            hashCut === "historical"
+              ? null
+              : {
+                  versionId:
+                    hashCut === "stale-version"
+                      ? staleVersionId
+                      : ids.entityVersionA1,
+                  sha256Hex: legacyHex(deployedSnapshot("clean")),
+                },
+        })
+        .where(eq(folioCollabRooms.id, roomId));
+      const beforeRows = await testDb
+        .select({
+          baseVersionId: folioCollabRooms.baseVersionId,
+          generation: folioCollabRooms.generation,
+          seedClaimedAt: folioCollabRooms.seedClaimedAt,
+          seedState: folioCollabRooms.seedState,
+          seededAt: folioCollabRooms.seededAt,
+          snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
+          snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(eq(folioCollabRooms.id, roomId))
+        .limit(1);
+      const before = beforeRows.at(0);
+      expect(before).toBeDefined();
+      if (!before) {
+        throw new Error("Expected the seeded room to be stored");
+      }
+      expect(before).toMatchObject({
+        generation: 4,
+        seedState: "seeded",
+        snapshotRevision: state === "dirty" ? 7 : 1,
+        snapshotSizeBytes: snapshotBytes.byteLength,
+      });
+      expect(before.seedClaimedAt).toBeInstanceOf(Date);
+      expect(before.seededAt).toBeInstanceOf(Date);
+      expect(before.snapshotUpdatedAt).toBeInstanceOf(Date);
 
-    let readCount = 0;
-    const scopedDb = asTestRaw<
-      Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
-    >(
-      async <T>(fn: (tx: TestDatabaseTransaction) => Promise<T>) =>
-        await scopedQuery([ids.wsA1], ids.orgA, fn, ids.userA1),
-    );
-    const loadTarget = {
-      organizationId: ids.orgA,
-      roomId,
-      scopedDb,
-      workspaceId: ids.wsA1,
-    };
-    const readObject = async (_key: string, _signal: AbortSignal) => {
-      readCount += 1;
-      return new Uint8Array(snapshotBytes).buffer;
-    };
+      let readCount = 0;
+      const scopedDb = asTestRaw<
+        Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+      >(
+        async <T>(fn: (tx: TestDatabaseTransaction) => Promise<T>) =>
+          await scopedQuery([ids.wsA1], ids.orgA, fn, ids.userA1),
+      );
+      const loadTarget = {
+        organizationId: ids.orgA,
+        roomId,
+        scopedDb,
+        workspaceId: ids.wsA1,
+      };
+      const readObject = async (_key: string, _signal: AbortSignal) => {
+        readCount += 1;
+        return new Uint8Array(snapshotBytes).buffer;
+      };
 
-    expect(
-      (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap(),
-    ).toEqual({
-      generation: 5,
-      loadOutcome: "rematerialize-from-docx",
-      resetGeneration: 4,
-      snapshotBase64: null,
-      snapshotRevision: 0,
-    });
+      expect(
+        (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap()
+          ?.snapshot,
+      ).toEqual({
+        generation: 5,
+        loadOutcome: "rematerialize-from-docx",
+        resetGeneration: 4,
+        snapshotBase64: null,
+        snapshotRevision: 0,
+      });
 
-    const resetRows = await testDb
-      .select({
-        baseVersionId: folioCollabRooms.baseVersionId,
-        generation: folioCollabRooms.generation,
-        seedClaimedAt: folioCollabRooms.seedClaimedAt,
-        seedClaimedBy: folioCollabRooms.seedClaimedBy,
-        seedState: folioCollabRooms.seedState,
-        seededAt: folioCollabRooms.seededAt,
-        sourceVersionId: folioCollabRooms.sourceVersionId,
-        snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
-        snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
-        snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
-        snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
-        snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
-      })
-      .from(folioCollabRooms)
-      .where(eq(folioCollabRooms.id, roomId))
-      .limit(1);
-    const reset = resetRows.at(0);
-    expect(reset?.snapshotRecoveredAt).toBeInstanceOf(Date);
-    // The reset revision is 0, so only the recovery marker can tell the
-    // client that seeds the room next that unsaved changes were discarded.
-    expect(
-      decideFolioCollabSnapshotRecovery({
-        shouldSeed: true,
-        snapshotRecovered: reset?.snapshotRecoveredAt instanceof Date,
-        yjsSnapshotRevision: reset?.snapshotRevision ?? -1,
-      }),
-    ).toBe("unsaved-changes-discarded");
-    expect(reset).toMatchObject({
-      baseVersionId: before.baseVersionId,
-      generation: 5,
-      seedClaimedAt: null,
-      seedClaimedBy: null,
-      seedState: "empty",
-      seededAt: null,
-      sourceVersionId: before.baseVersionId,
-      snapshotRevision: 0,
-      snapshotSizeBytes: null,
-      snapshotUpdatedAt: null,
-    });
-    expect(reset?.snapshotFileId).not.toBe(before.snapshotFileId);
-    expect(readCount).toBe(1);
+      const resetRows = await testDb
+        .select({
+          baseVersionId: folioCollabRooms.baseVersionId,
+          generation: folioCollabRooms.generation,
+          seedClaimedAt: folioCollabRooms.seedClaimedAt,
+          seedClaimedBy: folioCollabRooms.seedClaimedBy,
+          seedState: folioCollabRooms.seedState,
+          seededAt: folioCollabRooms.seededAt,
+          sourceVersionId: folioCollabRooms.sourceVersionId,
+          checkpointFileId: folioCollabRooms.docxCheckpointFileId,
+          checkpointSha256Hex: folioCollabRooms.docxCheckpointSha256Hex,
+          checkpointSnapshotSha256Hex:
+            folioCollabRooms.docxCheckpointSnapshotSha256Hex,
+          checkpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
+          snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+          snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+          snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
+          snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+          snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+        })
+        .from(folioCollabRooms)
+        .where(eq(folioCollabRooms.id, roomId))
+        .limit(1);
+      const reset = resetRows.at(0);
+      if (expectDiscardNotice) {
+        expect(reset?.snapshotRecoveredAt).toBeInstanceOf(Date);
+      } else {
+        expect(reset?.snapshotRecoveredAt).toBeNull();
+      }
+      // The reset revision is 0, so only the recovery marker can tell the
+      // client that seeds the room next that unsaved changes were discarded.
+      expect(
+        decideFolioCollabSnapshotRecovery({
+          shouldSeed: true,
+          snapshotRecovered: reset?.snapshotRecoveredAt instanceof Date,
+          yjsSnapshotRevision: reset?.snapshotRevision ?? -1,
+        }),
+      ).toBe(expectDiscardNotice ? "unsaved-changes-discarded" : "none");
+      expect(reset).toMatchObject({
+        baseVersionId: before.baseVersionId,
+        generation: 5,
+        seedClaimedAt: null,
+        seedClaimedBy: null,
+        seedState: "empty",
+        seededAt: null,
+        sourceVersionId: before.baseVersionId,
+        snapshotRevision: 0,
+        snapshotSizeBytes: null,
+        snapshotUpdatedAt: null,
+      });
+      expect(reset?.snapshotFileId).not.toBe(before.snapshotFileId);
+      expect(reset?.checkpointFileId).not.toBe(oldCheckpointFileId);
+      expect(reset).toMatchObject({
+        checkpointSha256Hex: null,
+        checkpointSnapshotSha256Hex: null,
+        checkpointUpdatedAt: null,
+      });
+      expect(
+        await scopedDb(
+          async (tx) =>
+            await publishCheckpointInTransaction({
+              body: {
+                roomId,
+                expectedGeneration: 5,
+                expectedSha256Hex: oldCheckpointHash,
+                idempotencyKey: Bun.randomUUIDv7(),
+              },
+              checkpointKey: createFileKey({
+                fileId: oldCheckpointFileId,
+                mimeType: DOCX_MIME_TYPE,
+                organizationId: ids.orgA,
+                workspaceId: ids.wsA1,
+              }),
+              checkpointRoom: {
+                checkpointFileId: oldCheckpointFileId,
+                checkpointSha256Hex: oldCheckpointHash,
+                checkpointSnapshotSha256Hex: legacyHex(
+                  deployedSnapshot("clean"),
+                ),
+                checkpointSizeBytes: 1,
+                checkpointScanWarnings: null,
+                checkpointUpdatedAt: new Date(),
+                entityId: ids.entityA1,
+                fileName: "contract.docx",
+                generation: 4,
+                propertyId: ids.filePropertyA1,
+              },
+              organizationId: ids.orgA,
+              recordAuditEvent: async () => undefined,
+              source: {
+                cleanupIntentId: createSafeId<"pendingUpload">(),
+                fileId: allocateFileObject(),
+                key: "unused",
+                organizationId: ids.orgA,
+              },
+              storedSha256Hex: oldCheckpointHash,
+              storedSizeBytes: 1,
+              tx,
+              userId: ids.userA1,
+              workspaceId: ids.wsA1,
+            }),
+        ),
+      ).toEqual({ status: "checkpoint-changed" });
+      expect(readCount).toBe(1);
 
-    expect(
-      (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap(),
-    ).toEqual({
-      generation: 5,
-      loadOutcome: "loaded",
-      snapshotBase64: null,
-      snapshotRevision: 0,
-    });
-    expect(readCount).toBe(1);
+      expect(
+        (await loadFolioCollabSnapshot(loadTarget, readObject)).unwrap()
+          ?.snapshot,
+      ).toEqual({
+        generation: 5,
+        loadOutcome: "loaded",
+        snapshotBase64: null,
+        snapshotRevision: 0,
+      });
+      expect(readCount).toBe(1);
+
+      const savedDocx = new Uint8Array(
+        readFileSync(
+          new URL(
+            "../../lib/files/fixtures/folio-core-0.58.5/saved.docx",
+            import.meta.url,
+          ),
+        ),
+      );
+      const fake = startFakeS3();
+      try {
+        const sourceKey = (fileId: string) =>
+          createFileKey({
+            fileId,
+            mimeType: DOCX_MIME_TYPE,
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA1,
+          });
+        fake.put(
+          envBase.S3_BUCKET,
+          sourceKey(ids.fileObjectA1),
+          savedDocx,
+          DOCX_MIME_TYPE,
+        );
+        fake.put(
+          envBase.S3_BUCKET,
+          sourceKey(staleFileId),
+          new Uint8Array(
+            await createDocx(
+              createEmptyDocument({ initialText: "Outdated source." }),
+            ),
+          ),
+          DOCX_MIME_TYPE,
+        );
+        const noAudit = async () => undefined;
+        const join = async () =>
+          await joinFolioCollabRoom.handler(
+            asTestRaw<Parameters<typeof joinFolioCollabRoom.handler>[0]>({
+              body: { entityId: ids.entityA1, propertyId: ids.filePropertyA1 },
+              safeDb: safeDbFromScoped(scopedDb),
+              session: { activeOrganizationId: ids.orgA },
+              user: { id: ids.userA1, email: "editor@example.test" },
+              workspaceId: ids.wsA1,
+              memberRole: sessionMemberRole("owner"),
+              request: new Request("https://example.test/join"),
+              route:
+                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+              recordAuditEvent: noAudit,
+              createAuditRecorder: () => noAudit,
+            }),
+          );
+        const joined = await join();
+        expect(joined).toMatchObject({
+          roomId,
+          generation: 6,
+          shouldSeed: true,
+          snapshotRecovery: expectDiscardNotice
+            ? "unsaved-changes-discarded"
+            : "none",
+        });
+        if (!("shouldSeed" in joined)) {
+          throw new Error("Recovered room did not return a successful join");
+        }
+        const authorization = await authorizeFolioCollabRoom({
+          roomId,
+          token: joined.token,
+          db: asTestRaw<
+            NonNullable<Parameters<typeof authorizeFolioCollabRoom>[0]["db"]>
+          >(testDb),
+          createScopedDb: asTestRaw<
+            NonNullable<
+              Parameters<typeof authorizeFolioCollabRoom>[0]["createScopedDb"]
+            >
+          >(() => scopedDb),
+        });
+        if (authorization.status !== "authorized") {
+          throw new Error("Recovered room token was not authorized");
+        }
+        expect(await join()).toMatchObject({ code: 409 });
+        const download = await fetch(joined.seedDownloadUrl);
+        expect(download.status).toBe(200);
+        const seedBytes = new Uint8Array(await download.arrayBuffer());
+        expect(seedBytes).toEqual(savedDocx);
+        const reseeded = new yjs.Doc();
+        const editorState = createHiddenEditorState({
+          document: await parseDocx(seedBytes),
+          collaboration: {
+            shouldSeed: joined.shouldSeed,
+            yXmlFragment: reseeded.getXmlFragment("prosemirror"),
+          },
+          collaborationModules: { yjs, yProseMirror },
+        });
+        expect(editorState.doc.textContent).toBe(
+          "Saved contract. Článek první.",
+        );
+        const snapshot = yjs.encodeStateAsUpdate(reseeded);
+        reseeded.destroy();
+        const materialized = await materializeYjsDocx({
+          sourceDocx: seedBytes,
+          yjsUpdate: snapshot,
+        });
+        expect(await extractDocxText(materialized)).toEqual(
+          await extractDocxText(savedDocx),
+        );
+        const receipt = {
+          value: authorization.value,
+          snapshotSha256Hex: legacyHex(snapshot),
+        };
+        expect(
+          await acknowledgeFolioCollabSeed({
+            ...receipt,
+            value: {
+              ...authorization.value,
+              generation: joined.generation - 1,
+            },
+          }),
+        ).toEqual({ status: "seed-changed" });
+        expect(
+          await acknowledgeFolioCollabSeed({
+            ...receipt,
+            value: { ...authorization.value, userId: ids.userA2 },
+          }),
+        ).toEqual({ status: "seed-changed" });
+        if (receiptOrder === "before-store") {
+          expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+            status: "acknowledged",
+          });
+          expect(await join()).toMatchObject({ code: 409 });
+        }
+        expect(
+          (
+            await storeFolioCollabSnapshot({
+              authority: { type: "participant", userId: ids.userA1 },
+              expectedGeneration: joined.generation,
+              expectedSnapshotRevision: 0,
+              snapshotBytes: snapshot,
+              value: loadTarget,
+            })
+          ).unwrap(),
+        ).toMatchObject({ status: "stored", snapshotRevision: 1 });
+        if (receiptOrder === "after-store") {
+          expect(await join()).toMatchObject({ code: 409 });
+          expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+            status: "acknowledged",
+          });
+        }
+        expect(await acknowledgeFolioCollabSeed(receipt)).toEqual({
+          status: "acknowledged",
+        });
+        expect(
+          await acknowledgeFolioCollabSeed({
+            ...receipt,
+            snapshotSha256Hex: "0".repeat(64),
+          }),
+        ).toEqual({ status: "seed-changed" });
+        expect(await join()).toMatchObject({
+          roomId,
+          shouldSeed: false,
+          snapshotRecovery: "none",
+        });
+        expect(
+          (
+            await storeFolioCollabSnapshot({
+              authority: { type: "collab-service" },
+              expectedGeneration: joined.generation,
+              expectedSnapshotRevision: 1,
+              snapshotBytes: snapshot,
+              value: loadTarget,
+            })
+          ).unwrap(),
+        ).toMatchObject({ status: "stored", snapshotRevision: 2 });
+        const seededRooms = await testDb
+          .select({
+            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+            savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+          })
+          .from(folioCollabRooms)
+          .where(eq(folioCollabRooms.id, roomId));
+        expect(seededRooms.at(0)).toEqual({
+          snapshotRecoveredAt: null,
+          savedSnapshotCut: {
+            versionId: ids.entityVersionA1,
+            sha256Hex: legacyHex(snapshot),
+          },
+        });
+      } finally {
+        fake.stop();
+      }
+    },
+  );
+});
+
+test("edits in the first durable snapshot remain unsaved after the pristine seed receipt", async () => {
+  const roomId = await insertRoom({
+    generation: 4,
+    seedState: "claimed",
+    seedClaimedBy: ids.userA1,
+    seedClaimedAt: new Date(),
   });
+  const scopedDb = asTestRaw<
+    Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
+  >(
+    async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+      await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA1),
+  );
+  const value = {
+    canEdit: true,
+    entityId: ids.entityA1,
+    fileName: "contract.docx",
+    generation: 4,
+    organizationId: ids.orgA,
+    propertyId: ids.filePropertyA1,
+    roomId,
+    scopedDb,
+    tokenExpiresAt: new Date(Date.now() + 60_000),
+    tokenId: createSafeId<"folioCollabRoomToken">(),
+    userId: ids.userA1,
+    userName: "Editor",
+    workspaceId: ids.wsA1,
+  };
+  const fake = startFakeS3();
+  try {
+    expect(
+      (
+        await storeFolioCollabSnapshot({
+          authority: { type: "collab-service" },
+          expectedGeneration: 4,
+          expectedSnapshotRevision: 0,
+          snapshotBytes: deployedSnapshot("dirty"),
+          value,
+        })
+      ).unwrap(),
+    ).toMatchObject({ status: "stored", snapshotRevision: 1 });
+    const pending = await testDb
+      .select({
+        seedState: folioCollabRooms.seedState,
+        savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+        seededAt: folioCollabRooms.seededAt,
+      })
+      .from(folioCollabRooms)
+      .where(eq(folioCollabRooms.id, roomId));
+    expect(pending.at(0)).toEqual({
+      seedState: "claimed",
+      savedSnapshotCut: null,
+      seededAt: null,
+    });
+    expect(
+      await acknowledgeFolioCollabSeed({
+        value,
+        snapshotSha256Hex: legacyHex(deployedSnapshot("clean")),
+      }),
+    ).toEqual({ status: "acknowledged" });
+    expect(
+      (await loadFolioCollabSnapshot(value)).unwrap()?.snapshot,
+    ).toMatchObject({ generation: 5, loadOutcome: "rematerialize-from-docx" });
+    const recovered = await testDb
+      .select({ snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt })
+      .from(folioCollabRooms)
+      .where(eq(folioCollabRooms.id, roomId));
+    expect(recovered.at(0)?.snapshotRecoveredAt).toBeInstanceOf(Date);
+  } finally {
+    fake.stop();
+  }
+});
+
+test("publishing a checkpoint retains its snapshot cut when later edits already exist", async () => {
+  const roomId = await insertRoom({
+    generation: 4,
+    seedState: "seeded",
+    seedClaimedBy: ids.userA1,
+  });
+  await dryScopedQuery(
+    [ids.wsA1],
+    ids.orgA,
+    async (tx) => {
+      const publicationTx =
+        asTestRaw<Parameters<typeof publishCheckpointInTransaction>[0]["tx"]>(
+          tx,
+        );
+      const checkpointHash = "c".repeat(64);
+      const savedSnapshotHash = legacyHex(deployedSnapshot("clean"));
+      const newerSnapshotHash = legacyHex(deployedSnapshot("dirty"));
+      const checkpointFileId = createSafeId<"userFile">();
+      const sourceFileId = allocateFileObject();
+      const sourceKey = createFileKey({
+        fileId: sourceFileId,
+        mimeType: DOCX_MIME_TYPE,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+      });
+      const safeDb = safeDbFromScoped(async (run) => await run(publicationTx));
+      const cleanupIntentId = (
+        await reserveObjectCleanupIntent({
+          objectKey: sourceKey,
+          organizationId: ids.orgA,
+          safeDb,
+          workspaceId: ids.wsA1,
+        })
+      ).unwrap();
+      await tx
+        .update(folioCollabRooms)
+        .set({
+          docxCheckpointFileId: checkpointFileId,
+          docxCheckpointSha256Hex: checkpointHash,
+          docxCheckpointSnapshotSha256Hex: savedSnapshotHash,
+          docxCheckpointSizeBytes: 1,
+          docxCheckpointUpdatedAt: new Date(),
+          savedSnapshotCut: {
+            versionId: ids.entityVersionA1,
+            sha256Hex: savedSnapshotHash,
+          },
+          yjsSnapshotRevision: 2,
+          yjsSnapshotSizeBytes: deployedSnapshot("dirty").byteLength,
+          yjsSnapshotUpdatedAt: new Date(),
+        })
+        .where(eq(folioCollabRooms.id, roomId));
+      const cut = {
+        roomId,
+        expectedGeneration: 4,
+        expectedSha256Hex: checkpointHash,
+        idempotencyKey: Bun.randomUUIDv7(),
+      };
+      const preliminary = await loadPublicationPreliminary({
+        cut,
+        tx: publicationTx,
+        workspaceId: ids.wsA1,
+      });
+      if (preliminary.status !== "checkpoint") {
+        throw new Error("Expected the captured checkpoint before publication");
+      }
+      const published = await publishCheckpointInTransaction({
+        body: cut,
+        checkpointKey: createFileKey({
+          fileId: checkpointFileId,
+          mimeType: DOCX_MIME_TYPE,
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+        }),
+        checkpointRoom: preliminary.room,
+        organizationId: ids.orgA,
+        recordAuditEvent: async () => undefined,
+        source: {
+          cleanupIntentId,
+          fileId: sourceFileId,
+          key: sourceKey,
+          organizationId: ids.orgA,
+        },
+        storedSha256Hex: checkpointHash,
+        storedSizeBytes: 1,
+        tx: publicationTx,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+      expect(published.status).toBe("created");
+      if (published.status !== "created") {
+        throw new Error("Expected the captured checkpoint to publish");
+      }
+      const rooms = await tx
+        .select({
+          savedSnapshotCut: folioCollabRooms.savedSnapshotCut,
+          snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
+        })
+        .from(folioCollabRooms)
+        .where(eq(folioCollabRooms.id, roomId));
+      expect(rooms.at(0)).toEqual({
+        savedSnapshotCut: {
+          versionId: published.versionId,
+          sha256Hex: savedSnapshotHash,
+        },
+        snapshotRevision: 2,
+      });
+      const publications = await tx
+        .select({
+          snapshotSha256Hex: folioCollabPublications.snapshotSha256Hex,
+        })
+        .from(folioCollabPublications)
+        .where(eq(folioCollabPublications.roomId, roomId));
+      expect(publications).toEqual([{ snapshotSha256Hex: savedSnapshotHash }]);
+      expect(
+        decideFolioSnapshotRecoveryState({
+          savedSnapshotCut: rooms.at(0)?.savedSnapshotCut ?? null,
+          savedVersionId: published.versionId,
+          snapshotSha256Hex: newerSnapshotHash,
+          snapshotUpdatedAt: new Date(1),
+          savedVersionCreatedAt: new Date(3),
+          seededAt: new Date(0),
+          historicalBaseline: "publication",
+        }),
+      ).toBe("unsaved");
+    },
+    ids.userA1,
+  );
 });
 
 describe("folio collaboration snapshot recovery notice", () => {
@@ -514,4 +1070,72 @@ test("issued collaboration tokens store the legacy createHash digest", async () 
     .from(folioCollabRoomTokens)
     .where(eq(folioCollabRoomTokens.roomId, roomId));
   expect(stored).toEqual([{ tokenHash: legacyHex(token) }]);
+});
+
+test("deleting a pending seed claimant retires its stored snapshot under the room tenant", async () => {
+  const roomId = await insertRoom({
+    generation: 4,
+    seedState: "claimed",
+    seedClaimedAt: new Date(),
+    seedClaimedBy: ids.userA1,
+    yjsSnapshotRevision: 1,
+    yjsSnapshotSizeBytes: 10,
+    yjsSnapshotUpdatedAt: new Date(),
+  });
+  await testDb
+    .update(folioCollabRooms)
+    .set({
+      savedSnapshotCut: {
+        versionId: ids.entityVersionA1,
+        sha256Hex: "a".repeat(64),
+      },
+    })
+    .where(eq(folioCollabRooms.id, roomId));
+  const [before] = await testDb
+    .select()
+    .from(folioCollabRooms)
+    .where(eq(folioCollabRooms.id, roomId));
+  if (!before) {
+    throw new TypeError("Seed fixture room is missing");
+  }
+  const oldKey = createFileKey({
+    fileId: before.yjsSnapshotFileId,
+    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+  });
+  await testDb.transaction(
+    async (tx) =>
+      await resetFolioCollabUserState(
+        asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]>(tx),
+        ids.userA1,
+      ),
+  );
+  const [after] = await testDb
+    .select()
+    .from(folioCollabRooms)
+    .where(eq(folioCollabRooms.id, roomId));
+  expect(after).toMatchObject({
+    generation: 5,
+    seedState: "empty",
+    seededAt: null,
+    savedSnapshotCut: null,
+    yjsSnapshotRevision: 0,
+    yjsSnapshotSizeBytes: null,
+    yjsSnapshotUpdatedAt: null,
+  });
+  expect(after?.yjsSnapshotFileId).not.toBe(before.yjsSnapshotFileId);
+  const retired = await testDb
+    .select()
+    .from(bufferObjectCleanupIntents)
+    .where(eq(bufferObjectCleanupIntents.objectKey, oldKey));
+  expect(retired).toHaveLength(1);
+  expect(retired.at(0)).toMatchObject({
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    status: "orphaned",
+  });
+  await testDb
+    .delete(bufferObjectCleanupIntents)
+    .where(eq(bufferObjectCleanupIntents.objectKey, oldKey));
 });

@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { LIMITS } from "@/api/lib/limits";
 
 import { clauseBodySchema, clauseExpectedBodySchema } from "./body-schema";
+import { normalizeClauseBody } from "./types";
 
 const expectedBody = TypeCompiler.Compile(clauseExpectedBodySchema);
 
@@ -44,11 +45,9 @@ test("clause numbering accepts every supported level and rejects invalid levels"
     ).toBe(true);
   }
   for (const ilvl of [-1, 0.5, 9]) {
-    expect(
-      writtenBody.Check([
-        { text: "Item", numbering: { kind: "levelOnly", ilvl } },
-      ]),
-    ).toBe(false);
+    const imported = [{ text: "Item", numbering: { kind: "levelOnly", ilvl } }];
+    expect(writtenBody.Check(imported)).toBe(false);
+    expect(normalizeClauseBody(imported)).toEqual([{ text: "Item" }]);
   }
 });
 

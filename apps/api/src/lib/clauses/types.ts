@@ -4,6 +4,7 @@ import {
   type BlockDirectiveKind,
 } from "@stll/template-conditions";
 
+import { LIMITS } from "@/api/lib/limits";
 import { includes, isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 export type ClauseRun = {
@@ -90,7 +91,9 @@ export const normalizeClauseBody = (
       ...(isRecord(numbering) &&
       numbering["kind"] === "levelOnly" &&
       typeof numbering["ilvl"] === "number" &&
-      Number.isInteger(numbering["ilvl"])
+      Number.isInteger(numbering["ilvl"]) &&
+      numbering["ilvl"] >= LIMITS.clauseNumberingLevelMin &&
+      numbering["ilvl"] <= LIMITS.clauseNumberingLevelMax
         ? { numbering: { kind: "levelOnly", ilvl: numbering["ilvl"] } as const }
         : {}),
       ...(typeof isDirective === "boolean" ? { isDirective } : {}),

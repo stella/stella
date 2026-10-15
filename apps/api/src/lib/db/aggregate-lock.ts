@@ -63,6 +63,7 @@ export const AGGREGATE_LOCKS = {
   run: { rank: 200, kind: "row" },
   currentStep: { rank: 300, kind: "row" },
   obligation: { rank: 400, kind: "row" },
+  folioCollabRoom: { rank: 450, kind: "row" },
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
@@ -125,6 +126,14 @@ export const AGGREGATE_CHAINS = {
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
     "workspace",
+    "entity",
+    "entityVersion",
+    "field",
+    "processingClaim",
+  ],
+  folioPublication: [
+    "workspace",
+    "folioCollabRoom",
     "entity",
     "entityVersion",
     "field",
@@ -246,6 +255,10 @@ type AggregateIdentities = {
   run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
   currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
   obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
+  folioCollabRoom: {
+    id: SafeId<"folioCollabRoom">;
+    workspaceId: SafeId<"workspace">;
+  };
   entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
   entityVersion: {
     id: SafeId<"entityVersion">;
@@ -729,6 +742,13 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["workspace_id"],
         scopeValues: [options.id.workspaceId],
       };
+    case "folioCollabRoom":
+      return byIdWithin(
+        "folio_collab_rooms",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "entity":
       return byIdWithin(
         "entities",
