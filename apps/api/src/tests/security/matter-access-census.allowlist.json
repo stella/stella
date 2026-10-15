@@ -72,6 +72,12 @@
       "resolveValidateAuth.orgSettings#rootDb": 1
     }
   },
+  "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
+    "reason": "The role condition selects only the existing unassigned-client-matter row lock scope. The later statement decides access with the database rule; lock-order unification is a separate follow-up.",
+    "sites": {
+      "holdMemberAccessOnTx.reachesClientMatters": 1
+    }
+  },
   "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
     "reason": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
     "sites": {

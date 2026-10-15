@@ -2038,6 +2038,7 @@ export const lockMemberAccessRow = async ({
 
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];
+  where?: SQL;
 };
 
 /** Call after locking the member; assignments precede matter rows. */
@@ -2047,6 +2048,7 @@ export const lockMatterAccessAssignments = async ({
   userId,
   workspaceIds,
   mode,
+  where,
 }: MatterAccessRowsLockOptions) => {
   if (workspaceIds.length === 0) {
     return [];
@@ -2060,6 +2062,7 @@ export const lockMatterAccessAssignments = async ({
         eq(workspaceMembers.userId, userId),
         inArray(workspaceMembers.workspaceId, workspaceIds),
         eq(workspaces.organizationId, organizationId),
+        where,
       ),
     )
     .orderBy(workspaceMembers.workspaceId, workspaceMembers.id)
@@ -2070,9 +2073,7 @@ export const lockMatterAccessAssignments = async ({
 type MatterAccessWorkspaceRowsLockOptions = Omit<
   MatterAccessRowsLockOptions,
   "userId"
-> & {
-  where?: SQL;
-};
+>;
 
 /**
  * Lock after assignments, in stable matter order. A narrowing predicate can

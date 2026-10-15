@@ -1,4 +1,6 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+
+import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
@@ -28,8 +30,8 @@ export type MemberAccessHold =
  * Hold a member's current access for the rest of `tx`.
  *
  * Locks the organization member and requested matter assignments `FOR SHARE`.
- * Unassigned matters reached through the database rule also hold their matter
- * row. The final reach decision uses a later statement and only identities
+ * Unassigned client matters hold their matter row for the administrative
+ * roles. The final reach decision uses a later statement and only identities
  * covered by those locks, so it sees changes committed before acquisition.
  *
  * Reads the rows directly rather than through the RLS access view, so the
@@ -52,18 +54,27 @@ export const holdMemberAccessOnTx = async (
   const assigned = await lockMatterAccessAssignments({
     ...scope,
     workspaceIds: requested,
+    where: ne(workspaces.status, "deleting"),
   });
   const covered = new Set(assigned.map((row) => row.workspaceId));
-  const matterRows = await lockMatterAccessWorkspaceRows({
-    ...scope,
-    workspaceIds: requested.filter((id) => !covered.has(id)),
-    where: and(
-      ne(workspaces.status, "deleting"),
-      memberReachesMatterSql({ organizationId, userId }, workspaces.id),
-    ),
-  });
-  for (const { id } of matterRows) {
-    covered.add(id);
+  // This role condition only preserves the lock scope: assigned matters hold
+  // assignment rows, and only unassigned client matters hold matter rows for
+  // these roles. The later database query alone decides reach.
+  const reachesClientMatters = CLIENT_MATTER_ADMIN_ROLES.some(
+    (role) => role === organizationMember.role,
+  );
+  if (reachesClientMatters) {
+    const matterRows = await lockMatterAccessWorkspaceRows({
+      ...scope,
+      workspaceIds: requested.filter((id) => !covered.has(id)),
+      where: and(
+        ne(workspaces.status, "deleting"),
+        isNotNull(workspaces.clientId),
+      ),
+    });
+    for (const { id } of matterRows) {
+      covered.add(id);
+    }
   }
   const candidates = requested.filter((id) => covered.has(id));
   if (candidates.length === 0) {
