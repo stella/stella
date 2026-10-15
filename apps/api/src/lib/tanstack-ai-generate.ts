@@ -1165,7 +1165,7 @@ type StructuredOutputRung =
 
 type StructuredOutputOutcome =
   | { type: "ok"; rung: StructuredOutputRung }
-  | { type: "failed"; kind: "output_invalid" };
+  | { type: "failed"; kind: "output_invalid" | "repair_failed" };
 
 /**
  * One line per structured run that needed or tried a repair, so the repair
@@ -1248,17 +1248,30 @@ const settleStructuredOutput = async <TSchema extends v.GenericSchema>({
     return first.output;
   }
   const issues = structuredOutputIssues(first.issues);
-  const repaired = await repair({ invalidOutput: output, issues });
-  const second = v.safeParse(outputSchema, repaired);
-  reportStructuredOutputOutcome({
-    outcome: second.success
+  const report = (outcome: StructuredOutputOutcome) =>
+    reportStructuredOutputOutcome({
+      outcome,
+      issues,
+      modelId: model.modelId,
+      provider: model.provider,
+      role,
+    });
+  // A repair call that is cancelled, times out or fails at the provider still
+  // counts as a tried repair; its own error is what the caller sees.
+  const repaired = await Result.tryPromise({
+    try: async () => await repair({ invalidOutput: output, issues }),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(repaired)) {
+    report({ type: "failed", kind: "repair_failed" });
+    throw repaired.error;
+  }
+  const second = v.safeParse(outputSchema, repaired.value);
+  report(
+    second.success
       ? { type: "ok", rung: STRUCTURED_OUTPUT_RUNG.MODEL_REPAIR }
       : { type: "failed", kind: "output_invalid" },
-    issues,
-    modelId: model.modelId,
-    provider: model.provider,
-    role,
-  });
+  );
   if (!second.success) {
     throw new ModelOutputInvalidError({ model });
   }
@@ -2140,6 +2153,8 @@ type ChatObjectMessages = NonNullable<StreamChatChunksOptions["messages"]>;
 type GenerateTanStackChatObjectOptions<TSchema extends v.GenericSchema> =
   AdmittedChatRunOptions & {
     outputSchema: TSchema;
+    /** Tenant set the repair turn is guarded with; it carries model output. */
+    tenantWorkspaceIds: readonly SafeId<"workspace">[];
   };
 
 /**
@@ -2151,6 +2166,7 @@ export const generateTanStackChatObject = async <
   TSchema extends v.GenericSchema,
 >({
   outputSchema,
+  tenantWorkspaceIds,
   ...admitted
 }: GenerateTanStackChatObjectOptions<TSchema>): Promise<
   v.InferOutput<TSchema>
@@ -2185,7 +2201,13 @@ export const generateTanStackChatObject = async <
     output: await run(requestMessages),
     repair: async (turn) =>
       await run(
-        structuredOutputRepairMessages({ ...turn, messages: requestMessages }),
+        guardModelMessages({
+          messages: structuredOutputRepairMessages({
+            ...turn,
+            messages: requestMessages,
+          }),
+          workspaceIds: tenantWorkspaceIds,
+        }),
       ),
     role: "chat-object",
   });

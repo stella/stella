@@ -2499,10 +2499,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
   test("a cancelled repair turn is a cancellation, not invalid output", async () => {
     const controller = new AbortController();
     queueRun(objectRun({ answer: "ok", page: "three" }));
-    queueRun({
-      ...objectRun({ answer: "ok", page: 3 }),
-      abortBefore: controller,
-    });
+    queueRun(cancelledObjectRun({ answer: "ok", page: 3 }, controller));
 
     const caught = await generateObjectForTestModel({
       ...objectOptions,
@@ -2512,8 +2509,17 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
       (error: unknown) => error,
     );
 
-    expect(caught).not.toBeInstanceOf(ModelOutputInvalidError);
-    expect(classifyAIError(caught)).not.toBe("output_invalid");
+    expect(caught).toMatchObject({ status: 502 });
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({ reason: "generation_cancelled" });
+    // The tried repair is still counted.
+    expect(outcomeLogs()).toEqual([
+      { result: "failed", rung: "repair_failed", issueTypes: "number" },
+    ]);
   });
 });
 
