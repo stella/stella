@@ -145,6 +145,9 @@ export const readerTargetCitation = ({
         decisionType: target.decisionType,
         ecli: target.ecli,
         name: target.name,
+        // The reader's locator is a reporter page; its selection does not
+        // carry the court's paragraph number.
+        paragraph: null,
         pincite: locator,
       });
     }

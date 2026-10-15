@@ -27,6 +27,8 @@ export const visualRegistry = {
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
+  "chat-status": { label: "Chat status motion", layout: "plain" },
+  "chat-citations": { label: "Chat case-law citations", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },

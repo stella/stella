@@ -1137,6 +1137,11 @@
       "stale": "Ez a válasz megváltozott. Jelölje ki újra a szöveget.",
       "submit": "Módosítás kérése"
     },
+    "answerQuote": {
+      "showInDecision": "Megjelenítés a határozatban",
+      "verified": "Ellenőrzött idézet",
+      "verifiedHint": "Szó szerint: {source}"
+    },
     "applyMode": {
       "description": "A Word rögzíti, ki végezte az egyes módosításokat. Megjegyezzük a választását.",
       "direct": "Nem, közvetlen alkalmazás",
@@ -1373,6 +1378,12 @@
       "title": "Beillesztett szöveg"
     },
     "placeholder": "Írja ide a kérdését, / a készségekhez, @ kontextus hozzáadásához",
+    "processSummary": {
+      "analyses": "{count, plural, one {# elemzés} other {# elemzés}}",
+      "changesSaved": "{count, plural, one {# mentett módosítás} other {# mentett módosítás}}",
+      "documentEdits": "{count, plural, one {# dokumentummódosítás} other {# dokumentummódosítás}}",
+      "sourcesChecked": "{count, plural, one {# ellenőrzött forrás} other {# ellenőrzött forrás}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Az összetett feladatot sorrendbe rendezett részfeladatokra bontja.",
@@ -1604,6 +1615,9 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
+      "statusDone": "Kész",
+      "statusRunning": "Folyamatban",
+      "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"
     },

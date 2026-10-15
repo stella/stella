@@ -16,9 +16,9 @@ type IntlFormatter = ReturnType<typeof createFormatter>;
  * legal copy modes. The convention follows the COURT's jurisdiction, never
  * the UI language: a Czech decision is cited in Czech form everywhere.
  *
- * v1 limits, deliberate: pincites are emitted only where the convention
- * uses reporter pages (USA); paragraph-number pincites (EU, CZ "bod N")
- * need the block's ¶ number threaded through and come later. Czech and
+ * Pincites: reporter pages where the convention uses them (USA), and the
+ * court's paragraph number for Czech and Slovak decisions ("bod N") when the
+ * caller located the passage; EU paragraph pincites are not emitted yet. Czech and
  * Slovak court names are inflected to the genitive by a suffix rule that
  * covers the standing court names; an unrecognized name passes through
  * unchanged rather than guessing.
@@ -37,6 +37,12 @@ export type CitationInput = {
   name: string | null;
   /** Reporter page the quotation starts on (USA convention only). */
   pincite: string | null;
+  /**
+   * The number the court printed on the cited paragraph, when the quotation
+   * was located in a numbered block (Czech and Slovak "bod N"); null when the
+   * passage is unlocated or the court numbered none.
+   */
+  paragraph: number | null;
 };
 
 export const parseDecisionDate = (
@@ -124,12 +130,17 @@ const genitiveCourt = (court: string, language: "cs" | "sk"): string => {
   return inflected.join(" ");
 };
 
+// Czech and Slovak practice pinpoints a passage by the court's own numbered
+// paragraph: "…, sp. zn. III. ÚS 2429/24, bod 12".
+const paragraphPincite = (input: CitationInput): string =>
+  input.paragraph === null ? "" : `, bod ${String(input.paragraph)}`;
+
 const czechCitation = (input: CitationInput): string => {
   const type = input.decisionType ?? "rozhodnutí";
   const court = genitiveCourt(input.court, "cs");
   const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` ze dne ${dottedDate(date)}`;
-  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
+  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}${paragraphPincite(input)}`;
 };
 
 const slovakCitation = (input: CitationInput): string => {
@@ -137,7 +148,7 @@ const slovakCitation = (input: CitationInput): string => {
   const court = genitiveCourt(input.court, "sk");
   const date = parseDecisionDate(input.decisionDate);
   const dated = date === null ? "" : ` zo dňa ${dottedDate(date)}`;
-  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}`;
+  return `${type} ${court}${dated}, sp. zn. ${input.caseNumber}${paragraphPincite(input)}`;
 };
 
 /**

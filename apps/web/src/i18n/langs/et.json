@@ -1137,6 +1137,11 @@
       "stale": "See vastus on muutunud. Valige tekst uuesti.",
       "submit": "Taotle muudatust"
     },
+    "answerQuote": {
+      "showInDecision": "Näita lahendis",
+      "verified": "Kontrollitud tsitaat",
+      "verifiedHint": "Sõna-sõnalt: {source}"
+    },
     "applyMode": {
       "description": "Word salvestab, kes iga muudatuse tegi. Jätame sinu valiku meelde.",
       "direct": "Ei, rakenda otse",
@@ -1373,6 +1378,12 @@
       "title": "Kleebitud tekst"
     },
     "placeholder": "Kirjutage oma küsimus siia, / oskuste jaoks, @ konteksti lisamiseks",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analüüs} other {# analüüsi}}",
+      "changesSaved": "{count, plural, one {# salvestatud muudatus} other {# salvestatud muudatust}}",
+      "documentEdits": "{count, plural, one {# dokumendi muudatus} other {# dokumendi muudatust}}",
+      "sourcesChecked": "{count, plural, one {# kontrollitud allikas} other {# kontrollitud allikat}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Jagab keeruka töö järjestatud alamülesanneteks.",
@@ -1604,6 +1615,9 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
+      "statusDone": "Valmis",
+      "statusRunning": "Käimas",
+      "statusWaiting": "Ootel",
       "toggleDetails": "Üksikasjade lülitamine",
       "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },

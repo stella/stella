@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
+import { locateQuote } from "./quote-locate";
 
 const words = fc.array(
   fc.constantFrom("částka", "עברית", "العربية", "😀", "e\u0301"),

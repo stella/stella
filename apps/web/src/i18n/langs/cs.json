@@ -1137,6 +1137,11 @@
       "stale": "Odpověď se změnila. Vyberte text znovu.",
       "submit": "Požádat o úpravu"
     },
+    "answerQuote": {
+      "showInDecision": "Zobrazit v rozhodnutí",
+      "verified": "Ověřená citace",
+      "verifiedHint": "Doslovně v {source}"
+    },
     "applyMode": {
       "description": "Word ukládá, kdo provedl každou změnu. Vaši volbu si zapamatujeme.",
       "direct": "Ne, použít přímo",
@@ -1373,6 +1378,12 @@
       "title": "Vložený text"
     },
     "placeholder": "Zde napište svůj dotaz, / pro dovednosti, @ pro přidání kontextu",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz}}",
+      "changesSaved": "{count, plural, one {# uložená změna} few {# uložené změny} other {# uložených změn}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# prověřený zdroj} few {# prověřené zdroje} other {# prověřených zdrojů}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Rozdělí složitý úkol na seřazené dílčí kroky.",
@@ -1604,6 +1615,9 @@
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
+      "statusDone": "Hotovo",
+      "statusRunning": "Probíhá",
+      "statusWaiting": "Čeká",
       "toggleDetails": "Přepnout detaily",
       "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
     },

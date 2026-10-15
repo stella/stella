@@ -1,7 +1,8 @@
-import { panic } from "better-result";
-import type { OrbState } from "thinking-orbs";
-
-import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatMessage,
+  ChatUIPart,
+  ChatUITools,
+} from "@/components/chat/chat-ui-tools";
 
 export type ChatToolActivityCategory =
   | "artifact"
@@ -155,32 +156,6 @@ export const getChatToolActivityCategory = (
   return "computation";
 };
 
-type ChatToolActivityState = Extract<
-  OrbState,
-  "searching" | "shaping" | "working"
->;
-
-export const getChatToolActivityState = (
-  toolName: string,
-): ChatToolActivityState | null => {
-  const category = getChatToolActivityCategory(toolName);
-
-  switch (category) {
-    case "artifact":
-      return "shaping";
-    case "computation":
-    case "mutation":
-      return "working";
-    case "research":
-      return "searching";
-    case "user-input":
-      return null;
-    default:
-      category satisfies never;
-      return panic(`Unhandled category: ${String(category)}`);
-  }
-};
-
 const isFailedToolOutput = (output: unknown): boolean =>
   typeof output === "object" &&
   output !== null &&
@@ -210,6 +185,39 @@ export const getLatestCompletedResearchPartIndex = (
   return null;
 };
 
+/** The kinds of work the model does itself; a person answers the rest. */
+export type ProcessSummaryKind = Exclude<
+  ChatToolActivityCategory,
+  "user-input"
+>;
+
+/**
+ * What a run of process steps accomplished, counted by kind: completed tool
+ * calls that succeeded. A failed call is left out on purpose; the model
+ * works around it, so it is not news to the reader. Steps that wait on a
+ * person (ask-user) are not work the model did. Kinds with nothing to count
+ * are absent.
+ */
+export const countProcessWork = (
+  parts: readonly ChatUIPart[],
+): ReadonlyMap<ProcessSummaryKind, number> => {
+  const counts = new Map<ProcessSummaryKind, number>();
+  for (const part of parts) {
+    if (
+      part.type !== "tool-call" ||
+      part.state !== "complete" ||
+      isFailedToolOutput(part.output)
+    ) {
+      continue;
+    }
+    const category = getChatToolActivityCategory(part.name);
+    if (category !== "user-input") {
+      counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+  }
+  return counts;
+};
+
 type ResolveChatActivityIndicatorStateOptions = {
   hasCompletedResearch: boolean;
   hasRunningTool: boolean;
@@ -217,7 +225,9 @@ type ResolveChatActivityIndicatorStateOptions = {
   hasVisibleContent: boolean;
 };
 
-type ChatActivityIndicatorState = Extract<OrbState, "solving" | "working">;
+/** `solving` once research came back (the answer is being composed from
+ *  sources); `working` before that. */
+export type ChatActivityIndicatorState = "solving" | "working";
 
 export const resolveChatActivityIndicatorState = ({
   hasCompletedResearch,

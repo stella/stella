@@ -1137,6 +1137,11 @@
       "stale": "Šis atsakymas pasikeitė. Pasirinkite tekstą iš naujo.",
       "submit": "Prašyti pakeitimo"
     },
+    "answerQuote": {
+      "showInDecision": "Rodyti sprendime",
+      "verified": "Patikrinta citata",
+      "verifiedHint": "Pažodžiui: {source}"
+    },
     "applyMode": {
       "description": "Word įrašo, kas atliko kiekvieną pakeitimą. Įsiminsime jūsų pasirinkimą.",
       "direct": "Ne, taikyti tiesiogiai",
@@ -1373,6 +1378,12 @@
       "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
+    "processSummary": {
+      "analyses": "{count, plural, one {# analizė} few {# analizės} many {# analizės} other {# analizių}}",
+      "changesSaved": "{count, plural, one {# išsaugotas pakeitimas} few {# išsaugoti pakeitimai} many {# išsaugoto pakeitimo} other {# išsaugotų pakeitimų}}",
+      "documentEdits": "{count, plural, one {# dokumento pakeitimas} few {# dokumento pakeitimai} many {# dokumento pakeitimo} other {# dokumento pakeitimų}}",
+      "sourcesChecked": "{count, plural, one {# patikrintas šaltinis} few {# patikrinti šaltiniai} many {# patikrinto šaltinio} other {# patikrintų šaltinių}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Sudėtingą darbą suskaido į nuoseklias smulkesnes užduotis.",
@@ -1604,6 +1615,9 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
+      "statusDone": "Atlikta",
+      "statusRunning": "Vykdoma",
+      "statusWaiting": "Laukiama",
       "toggleDetails": "Perjungti detales",
       "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },

@@ -18,6 +18,7 @@ describe("decision citation jurisdiction", () => {
         decisionType: "rozsudek",
         ecli: null,
         name: null,
+        paragraph: null,
         pincite: null,
       };
 
@@ -38,10 +39,32 @@ describe("decision citation jurisdiction", () => {
         decisionType: "rozsudek",
         ecli: null,
         name: null,
+        paragraph: null,
         pincite: null,
       }),
     ).toBe(
       "rozsudek Krajského soudu v Plzni ze dne 18. 3. 2026, sp. zn. 56 Co 24/2026",
+    );
+  });
+});
+
+describe("a Czech or Slovak citation pinpoints the court's paragraph", () => {
+  test("a located paragraph is cited as bod N", () => {
+    expect(
+      formatDecisionCitation({
+        caseNumber: "III.ÚS 2429/24",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        country: "CZE",
+        court: "Ústavní soud",
+        decisionDate: "2026-04-15",
+        decisionType: "nález",
+        ecli: null,
+        name: null,
+        paragraph: 27,
+        pincite: null,
+      }),
+    ).toBe(
+      "nález Ústavního soudu ze dne 15. 4. 2026, sp. zn. III.ÚS 2429/24, bod 27",
     );
   });
 });
@@ -62,6 +85,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
         decisionDate: "1954-05-17",
         name: "Brown v. Board of Education",
+        paragraph: null,
         pincite: "495",
       }),
     ).toBe("Brown v. Board of Education, 347 U.S. 483, 495 (1954)");
@@ -75,6 +99,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: "2020-06-15",
         name: "Bostock v. Clayton County",
+        paragraph: null,
         pincite: "12",
       }),
     ).toBe("Bostock v. Clayton County, No. 17-1618 (U.S. June 15, 2020)");
@@ -88,6 +113,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: "2024-09-03",
         name: null,
+        paragraph: null,
         pincite: null,
       }),
     ).toBe("No. 22-451 (U.S. Sept. 3, 2024)");
@@ -101,6 +127,7 @@ describe("a USA citation follows what the primary reference is", () => {
         caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         decisionDate: null,
         name: "Loper Bright Enterprises v. Raimondo",
+        paragraph: null,
         pincite: null,
       }),
     ).toBe("Loper Bright Enterprises v. Raimondo, No. 22-451 (U.S.)");

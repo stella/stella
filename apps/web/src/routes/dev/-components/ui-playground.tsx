@@ -176,6 +176,7 @@ import {
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 import { SplitButton } from "@stll/ui/split-button";
+import { StatusMark } from "@stll/ui/status-mark";
 import {
   Table,
   TableBody,
@@ -192,7 +193,6 @@ import { stellaToast } from "@stll/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -1768,20 +1768,20 @@ function ToolActivityPlayground() {
     <div className="flex flex-col">
       <div className="bg-muted/25 mb-3 flex flex-wrap gap-x-5 gap-y-2 rounded-lg px-3 py-2.5">
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="working" />
+          <StatusMark status="pending" />
+          <span>{t("chat.toolCall.statusWaiting")}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <StatusMark status="running" />
           <span>{t("chat.thinking")}</span>
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="searching" />
-          <span>{t("chat.tool.infosoud_lookup_case")}</span>
+          <StatusMark status="done" />
+          <span>{t("chat.toolCall.statusDone")}</span>
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="solving" />
-          <span>{t("chat.analyzingSources")}</span>
-        </div>
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="shaping" />
-          <span>{t("chat.tool.suggest_changes")}</span>
+          <StatusMark status="failed" />
+          <span>{t("chat.toolCall.interrupted")}</span>
         </div>
       </div>
       <ToolCallCard
