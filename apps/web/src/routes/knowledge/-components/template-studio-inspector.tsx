@@ -206,7 +206,7 @@ function TemplateStudioInspectorView({
 
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
-    guidance: t("templates.whenToUse"),
+    guidance: t("common.whenToUse"),
     history: t("common.history"),
     fill: t("templates.fill"),
   };
@@ -1511,7 +1511,7 @@ const GuidanceFields = ({
   return (
     <div className="flex flex-col gap-4 p-4">
       <GuidanceNote
-        label={t("templates.whenToUse")}
+        label={t("common.whenToUse")}
         onBlur={() => detached(commit(), "template-studio-inspector.commit")}
         onChange={setUseText}
         placeholder={t("templates.whenToUsePlaceholder")}
