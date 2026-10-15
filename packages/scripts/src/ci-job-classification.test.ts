@@ -94,6 +94,33 @@ test("committed classifications cover the repository and its pinned metadata cal
   // Parses every reachable workflow and action document in a child process.
 }, 60_000);
 
+test("committed classifications declare every local action", () => {
+  const manifest = v.parse(
+    PUBLIC_METADATA,
+    JSON.parse(
+      readFileSync(
+        path.join(repositoryRoot, ".github/ci-job-classification.json"),
+        "utf-8",
+      ),
+    ),
+  );
+  const declared = manifest.nodes
+    .flatMap((node) =>
+      node.type === "metadata" && node.repository === "candidate"
+        ? [node.path]
+        : [],
+    )
+    .filter((file) => file.startsWith(".github/actions/"))
+    .toSorted();
+  const actions = [
+    ...new Bun.Glob(".github/actions/*/action.{yml,yaml}").scanSync({
+      cwd: repositoryRoot,
+    }),
+  ].toSorted();
+  expect(actions.length).toBeGreaterThan(0);
+  expect(declared).toEqual(actions);
+});
+
 test("the policy check invokes classification after a successful install", () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(
