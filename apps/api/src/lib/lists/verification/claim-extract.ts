@@ -47,6 +47,7 @@ const rawClaimSchema = v.strictObject({
   framing: v.picklist(CLAIM_FRAMINGS),
 });
 
+/** Read by the structured-output role contract test. @public */
 export const extractionSchema = v.strictObject({
   claims: v.array(rawClaimSchema),
 });

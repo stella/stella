@@ -411,6 +411,7 @@ const askDecisionModel = async <TQuestions extends SystemOneQuestions>({
 };
 
 const refusalSchema = v.strictObject({ type: v.literal("refusal") });
+/** Read by the structured-output role contract test. @public */
 export const generativeDecisionsSchema = (questions: SystemOneQuestions) => {
   const entries = Object.entries(questions).map(([id, question]) =>
     v.strictObject({

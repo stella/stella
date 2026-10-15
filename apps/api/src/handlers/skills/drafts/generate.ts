@@ -90,6 +90,7 @@ const aiResourceSchema = v.strictObject({
   ),
 });
 
+/** Read by the structured-output role contract test. @public */
 export const aiGenerationSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),

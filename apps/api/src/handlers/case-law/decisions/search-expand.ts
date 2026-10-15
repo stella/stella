@@ -63,6 +63,7 @@ const EXPANSION_DEADLINE_MS = 4000;
 const EXPANSION_CACHE_TTL_MS = 60 * 60_000;
 const EXPANSION_CACHE_MAX_ENTRIES = 2000;
 
+/** Read by the structured-output role contract test. @public */
 export const EXPANSION_SYSTEM = `You propose legal-vocabulary alternatives for a case-law search.
 
 The search runs over court decisions of one jurisdiction and requires every word of the query. For each word that is an everyday or colloquial term, give the words the statutes and courts of that jurisdiction use for the same concept, in corpusLanguage (or in the query's language when corpusLanguage is null).
@@ -81,6 +82,7 @@ Example (CZE, cs): "vrácení kauce" gives {"alternatives":[{"term":"kauce","alt
  * enforces every bound, dropping what exceeds it, and `maxOutputTokens` caps
  * what can arrive at all.
  */
+/** Read by the structured-output role contract test. @public */
 export const expansionOutputSchema = v.strictObject({
   alternatives: v.array(
     v.strictObject({

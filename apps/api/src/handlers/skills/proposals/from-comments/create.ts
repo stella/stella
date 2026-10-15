@@ -94,6 +94,7 @@ const config = {
   },
 } satisfies HandlerConfig;
 
+/** Read by the structured-output role contract test. @public */
 export const aiRevisionSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),

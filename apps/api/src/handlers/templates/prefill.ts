@@ -71,6 +71,7 @@ const prefillBodySchema = t.Object({
 
 // strictObject + nullable-required members: OpenAI strict structured output
 // rejects plain objects and optional properties.
+/** Read by the structured-output role contract test. @public */
 export const prefillOutputSchema = v.strictObject({
   fields: v.array(
     v.strictObject({

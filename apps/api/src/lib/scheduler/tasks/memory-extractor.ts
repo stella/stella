@@ -81,6 +81,7 @@ const candidateSchema = v.strictObject({
   content: v.pipe(v.string(), v.trim(), v.minLength(1)),
 });
 
+/** Read by the structured-output role contract test. @public */
 export const extractionSchema = v.strictObject({
   candidates: v.array(candidateSchema),
 });

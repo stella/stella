@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 
 const SPAN_EDIT_TIMEOUT_MS = 45_000;
+/** Read by the structured-output role contract test. @public */
 export const outputSchema = v.strictObject({ replacement: v.string() });
 
 const config = {

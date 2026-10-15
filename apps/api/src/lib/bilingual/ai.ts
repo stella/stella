@@ -180,6 +180,7 @@ export const buildBilingualDocumentRequest = (
 // Dispositions
 // ----------------------------------------------------------------------------
 
+/** Read by the structured-output role contract test. @public */
 export const dispositionSchema = v.object({
   rows: v.array(
     v.object({
@@ -313,6 +314,7 @@ export const decideDispositions = async (
 // Glossary
 // ----------------------------------------------------------------------------
 
+/** Read by the structured-output role contract test. @public */
 export const glossarySchema = v.object({
   terms: v.array(
     v.object({
@@ -426,6 +428,7 @@ export const proposeGlossary = async (
 // Translation
 // ----------------------------------------------------------------------------
 
+/** Read by the structured-output role contract test. @public */
 export const translationSchema = v.object({
   items: v.array(
     v.object({
@@ -518,6 +521,7 @@ export const translateBatch = async (
   return result;
 };
 
+/** Read by the structured-output role contract test. @public */
 export const formattedTranslationSchema = v.object({
   items: v.array(
     v.object({
