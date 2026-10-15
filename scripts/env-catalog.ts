@@ -1353,6 +1353,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Invocation-local handoff values are removed before test/native entry points run.
+  "STELLA_TEST_PROCESS_STARTUP_GATE",
+  "STELLA_TEST_NATIVE_COMMAND",
   // Windows dry-run receipts bind the build profile and executed workflow revision.
   "WINDOWS_BUILD_PROFILE",
   "WINDOWS_WORKFLOW_SHA",
@@ -1365,6 +1368,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // Scoped install-store ownership and phase measurement.
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
+  "CACHE_WRITE",
+  // Native cache action state is restored only for its own post hook.
+  "STATE_key",
+  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
@@ -1627,6 +1634,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Queue proof outcomes and resolved hosted-runner image for static receipts.
+  "CHECK_OUTCOMES",
+  "ImageOS",
+  "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.
   "CODE_QUALITY_PROCESS_GROUP",
   // CI installer budget selected from restored package-cache contents.

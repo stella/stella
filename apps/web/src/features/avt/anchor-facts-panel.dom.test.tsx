@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { FactDetails, ListItem } from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -70,7 +72,7 @@ afterEach(async () => {
     spy.mockRestore();
   }
 });
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 type MountFactOptions = {
   factDetails?: ListItem["factDetails"];

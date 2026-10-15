@@ -14,6 +14,15 @@ describe("citation probe candidates", () => {
     expect(residual("č.j.: KUJCK 987/2019")).toBe(false);
   });
 
+  test("an enforcement-officer or arbitration file is benign, a docket is not", () => {
+    expect(residual("sp. zn. EX 1234/23")).toBe(false);
+    expect(residual("sp.zn. EX 567/07")).toBe(false);
+    expect(residual("sp. zn. SR 01234/08 zo dňa 1.2.2008")).toBe(false);
+    expect(residual("sp. zn. EX 1234/23-5")).toBe(true);
+    expect(residual("sp. zn. 12 Er 345/2020")).toBe(true);
+    expect(residual("sp. zn. 3 EXE 1234/2015")).toBe(true);
+  });
+
   test("a court docket followed by an authority number stays a residual", () => {
     const match = "sp. zn. 12 C 345/2020 č. j. KUAB 12345/2020";
     expect(standaloneCandidate(match)).toBe("sp. zn. 12 C 345/2020");

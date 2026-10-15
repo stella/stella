@@ -12,6 +12,7 @@ import { UI_LOCALES } from "@stll/locales";
 
 import arabic from "@/i18n/langs/ar.json";
 import english from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { RegisteredChatUIToolCallPart } from "./chat-ui-tools";
 
@@ -34,7 +35,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   globalThis.fetch = originalFetch;
 });
 
