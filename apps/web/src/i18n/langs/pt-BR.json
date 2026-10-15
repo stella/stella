@@ -2074,6 +2074,7 @@
     "versionLabel": "Versão {version}",
     "viewSource": "Ver fonte",
     "website": "Site",
+    "whenToUse": "Quando usar",
     "workflow": "Fluxo de trabalho",
     "workflows": "Fluxos de trabalho",
     "zoomIn": "Ampliar",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importar habilidade",
       "importedSkills": "{count, plural, one {# habilidade importada} other {# habilidades importadas}}",
       "invalidPath": "O caminho deve usar letras minúsculas, dígitos, pontos, hifens ou sublinhados",
+      "invocationAuto": "Automaticamente",
+      "invocationAutoHelp": "A IA pode usar esta habilidade por conta própria quando ela se encaixar no pedido.",
+      "invocationManual": "Somente quando invocada",
+      "invocationManualHelp": "Usada somente quando você a chama com / ou a adiciona à sua mensagem.",
       "license": "Licença: {license}",
       "newFile": "Novo arquivo",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4343,8 @@
         "yearMonthSequential": "Ano-Mês / Sequencial (2026-02/001)",
         "yearSequential": "Ano/Sequencial (2026/001)"
       },
+      "showInTitle": "Mostrar o número ao lado do nome do caso",
+      "showInTitleDescription": "Quando desligado, o título é exatamente o nome informado.",
       "title": "Numeração de casos",
       "tokenHelp": "Tokens disponíveis: '{'SEQ'}' (sequência), '{'YYYY'}' (ano), '{'YY'}' (ano de 2 dígitos), '{'MM'}' (mês)"
     },
@@ -4971,17 +4978,22 @@
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",
+    "provisionEffectiveFrom": "em vigor desde {date}",
     "provisionHistoryEarliest": "Versão mais antiga disponível.",
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
     "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
+    "provisionPartTextUnavailable": "O texto de {provisionLabel} não está disponível",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texto indisponível para esta versão",
     "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar apenas a parte citada",
+    "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
@@ -4997,7 +5009,6 @@
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
     "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redação em vigor desde {date}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
@@ -5550,7 +5561,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Quando não usar",
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
-    "whenToUse": "Quando usar",
     "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
   },
   "timesheets": {
@@ -5671,7 +5681,7 @@
       "title": "Copiar para caso"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de caso",
+      "matterName": "Nome do caso",
       "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
     },
     "createNewWorkspace": "Criar novo caso",
@@ -6123,15 +6133,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "enviado"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Pessoal"
-    },
     "parties": {
       "addParty": "Adicionar parte",
       "changeClient": "Alterar cliente",
       "client": "Cliente",
       "noClient": "Nenhum cliente atribuído",
+      "noClientOptional": "Sem cliente (opcional)",
       "noParties": "Nenhuma parte adicionada a este caso.",
       "partyRoles": {
         "co_counsel": "Coadvogado",
