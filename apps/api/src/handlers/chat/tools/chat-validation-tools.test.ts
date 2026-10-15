@@ -49,6 +49,7 @@ import {
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RunToolsProps = Parameters<typeof getChatTools>[0];
@@ -110,15 +111,15 @@ const activeDocxFile = {
 } as const;
 
 const SKILL_CATALOGS = {
-  empty: [],
-  installed: [
+  empty: offeredSkillCatalog([]),
+  installed: offeredSkillCatalog([
     {
       description: "Installed workflow.",
       name: "installed-workflow",
       version: "1.0",
     },
-  ],
-} as const;
+  ]),
+};
 
 const DOCX_SURFACES = {
   none: {
