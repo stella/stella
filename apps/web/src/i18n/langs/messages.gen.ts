@@ -2077,6 +2077,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -3651,6 +3652,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -5559,7 +5564,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {

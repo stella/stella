@@ -2074,6 +2074,7 @@
     "versionLabel": "Versão {version}",
     "viewSource": "Ver fonte",
     "website": "Site",
+    "whenToUse": "Quando usar",
     "workflow": "Fluxo de trabalho",
     "workflows": "Fluxos de trabalho",
     "zoomIn": "Ampliar",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importar habilidade",
       "importedSkills": "{count, plural, one {# habilidade importada} other {# habilidades importadas}}",
       "invalidPath": "O caminho deve usar letras minúsculas, dígitos, pontos, hifens ou sublinhados",
+      "invocationAuto": "Automaticamente",
+      "invocationAutoHelp": "A IA pode usar esta habilidade por conta própria quando ela se encaixar no pedido.",
+      "invocationManual": "Somente quando invocada",
+      "invocationManualHelp": "Usada somente quando você a chama com / ou a adiciona à sua mensagem.",
       "license": "Licença: {license}",
       "newFile": "Novo arquivo",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Quando não usar",
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
-    "whenToUse": "Quando usar",
     "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
   },
   "timesheets": {
