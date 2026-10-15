@@ -315,11 +315,7 @@ const recordImport = (
  * local alias of it, or `<anything>.inArray`. Over-matching a same-named
  * helper only adds a finding.
  */
-const isInArrayCall = (
-  node: ts.Node,
-  aliases: Aliases,
-): node is ts.CallExpression =>
-  ts.isCallExpression(node) &&
+const isInArrayCall = (node: ts.CallExpression, aliases: Aliases): boolean =>
   aliasTarget(node.expression, aliases) === "inArray";
 
 /** Names of the functions a module declares itself (hoisting included). */
