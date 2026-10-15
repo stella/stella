@@ -24,9 +24,8 @@ export const SEARCH_CASE_LAW_TOOL = "search_case_law";
 
 /**
  * The corpus countries `search_case_law` answers for. Rendered into both the
- * input description and the rejection hint, so a model reading either knows
- * the spelling: asked for German case law, a model wrote `DEU` where the
- * orientation eval expected `DE`, and the corpus admits neither.
+ * input description and the rejection hint, so a caller reading either sees
+ * the exact country codes the corpus admits.
  */
 export const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
 
