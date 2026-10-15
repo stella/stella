@@ -232,6 +232,7 @@ describe("skill gateway mode boundary", () => {
             compatibility: null,
             metadata: {},
             body: "Fixture body",
+            invocation: "auto",
             origin: "authored",
           },
         ],
