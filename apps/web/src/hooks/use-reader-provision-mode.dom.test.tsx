@@ -1,8 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs-provider";
+import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
 
 const { render } = await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");

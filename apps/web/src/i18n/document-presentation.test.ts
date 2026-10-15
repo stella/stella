@@ -16,7 +16,7 @@ import {
   parseVisitorPresentationPrefs,
   defaultPresentationPrefs,
   serializePresentationPrefs,
-} from "@/lib/presentation-prefs";
+} from "@/lib/presentation-prefs/preferences";
 
 import {
   initializeDocumentUser,

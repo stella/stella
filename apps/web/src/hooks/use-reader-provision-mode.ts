@@ -1,4 +1,4 @@
-import { usePresentationPrefs } from "@/lib/presentation-prefs-provider";
+import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 export const useReaderProvisionMode = () => {
   const { prefs, setPrefs } = usePresentationPrefs();

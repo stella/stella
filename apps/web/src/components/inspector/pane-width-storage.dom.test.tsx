@@ -4,8 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs-provider";
+import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
 
 import { useSharedInspectorPaneWidth } from "./pane-width-storage";
 

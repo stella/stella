@@ -8,9 +8,9 @@ import type { PropsWithChildren } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { THEMES, PALETTES } from "@/lib/presentation-prefs";
-import type { PresentationPrefs } from "@/lib/presentation-prefs";
-import { usePresentationPrefs } from "@/lib/presentation-prefs-provider";
+import { THEMES, PALETTES } from "@/lib/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 import { forceReflow } from "@/lib/utils";
 
 type Theme = PresentationPrefs["theme"];

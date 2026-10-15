@@ -7,8 +7,8 @@ import {
   initializeRenderedLocale,
   loadLocaleMessages,
 } from "@/i18n/i18n-store";
-import { getBrowserPresentationPrefs } from "@/lib/presentation-prefs-provider";
-import { readPresentationPrefs } from "@/lib/presentation-prefs-server";
+import { getBrowserPresentationPrefs } from "@/lib/presentation-prefs/provider";
+import { readPresentationPrefs } from "@/lib/presentation-prefs/server";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const documentUsers = new WeakMap<QueryClient, string | null>();

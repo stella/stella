@@ -1,7 +1,7 @@
 import { layoutForSurface } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
-import type { PresentationPrefs } from "@/lib/presentation-prefs";
-import { usePresentationPrefs } from "@/lib/presentation-prefs-provider";
+import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 const layoutStoreBrand = Symbol("public-law-table-layout-store");
 

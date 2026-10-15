@@ -1,4 +1,4 @@
-import { APIError } from "better-auth/api";
+import { APIError } from "@better-auth/core/error";
 import { Result } from "better-result";
 
 import { isUiLocale } from "@stll/locales";

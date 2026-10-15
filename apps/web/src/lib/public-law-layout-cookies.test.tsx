@@ -15,8 +15,8 @@ import {
   serializePresentationPrefs,
   serializeTableLayoutCookie,
   statuteLayoutsCookieSchema,
-} from "@/lib/presentation-prefs";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs-provider";
+} from "@/lib/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
 
 const DecisionTableSnapshot = () => {
   const { layout } = useDecisionColumnPreferences("CZE");

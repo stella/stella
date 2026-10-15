@@ -3,8 +3,8 @@ import { posthog } from "posthog-js";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
+import { ssrApiHeaders } from "@/lib/api/ssr-headers";
 import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
-import { ssrApiHeaders } from "@/lib/ssr-api-headers";
 
 const FORMATTING_LOCALE_HEADER = "x-stella-formatting-locale";
 

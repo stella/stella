@@ -21,9 +21,9 @@ import {
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { ssrApiHeaders } from "@/lib/api/ssr-headers";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
-import { ssrApiHeaders } from "@/lib/ssr-api-headers";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
 
@@ -141,7 +141,7 @@ const customFetchImpl = async (
       ...init,
       headers,
       signal: init?.signal ?? undefined,
-      timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+      timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
     });
   }
   if (method === "GET") {
@@ -162,7 +162,7 @@ const customFetchImpl = async (
   return await fetchWithTimeout(input, {
     ...init,
     signal: init?.signal ?? undefined,
-    timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+    timeout: { type: "idle", ms: AUTH_REQUEST_TIMEOUT_MS },
   });
 };
 

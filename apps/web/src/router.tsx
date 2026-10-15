@@ -25,9 +25,9 @@ import {
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs";
-import { initializeBrowserPresentationPrefs } from "@/lib/presentation-prefs-provider";
-import { readPresentationPrefs } from "@/lib/presentation-prefs-server";
+import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { initializeBrowserPresentationPrefs } from "@/lib/presentation-prefs/provider";
+import { readPresentationPrefs } from "@/lib/presentation-prefs/server";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";

@@ -37,8 +37,8 @@ import {
   isPublicKnowledgeCrawlAllowed,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
-import type { PresentationPrefs } from "@/lib/presentation-prefs";
-import { PresentationPrefsProvider } from "@/lib/presentation-prefs-provider";
+import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";

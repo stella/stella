@@ -182,8 +182,8 @@ const RESTRICTED_IMPORT_RULES = {
         hit: EXPORT_HIT.binding,
       },
       owners: [
-        "apps/web/src/lib/ssr-api-headers.ts",
-        "apps/web/src/lib/presentation-prefs-server.ts",
+        "apps/web/src/lib/api/ssr-headers.ts",
+        "apps/web/src/lib/presentation-prefs/server.ts",
       ],
     },
   ],

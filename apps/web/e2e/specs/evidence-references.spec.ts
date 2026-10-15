@@ -4,11 +4,13 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  E2E_API_ORIGIN,
   apiDownloadFileField,
   apiGet,
   apiStatus,
   apiUploadDocx,
 } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -140,24 +142,47 @@ for (const locale of ["cs", "en", "ar"] as const) {
   test.describe(`DOCX evidence references (${locale})`, () => {
     test.use({ locale });
     let workspace: TestWorkspace | null = null;
+    let profileSession: Awaited<
+      ReturnType<typeof createProfileTestSession>
+    > | null = null;
 
-    test.beforeEach(async ({ request }) => {
-      workspace = await createTestWorkspace(request, "evidence-references");
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "evidence-references",
+        webUrl: baseURL ?? "http://localhost:3000",
+      });
+      const updated = await page.request.post(
+        `${E2E_API_ORIGIN}/api/auth/update-user`,
+        {
+          data: { locale },
+          headers: { Origin: baseURL ?? "http://localhost:3000" },
+        },
+      );
+      expect(updated.ok(), await updated.text()).toBe(true);
+      workspace = await createTestWorkspace(
+        page.request,
+        "evidence-references",
+      );
     });
 
-    test.afterEach(async ({ page, request }) => {
-      if (workspace === null) {
-        return;
+    test.afterEach(async ({ page }) => {
+      try {
+        if (workspace !== null) {
+          await page.goto("about:blank", { waitUntil: "commit" });
+          await deleteTestWorkspace(page.request, workspace.id);
+          workspace = null;
+        }
+      } finally {
+        await profileSession?.cleanup();
+        profileSession = null;
       }
-      await page.goto("about:blank", { waitUntil: "commit" });
-      await deleteTestWorkspace(request, workspace.id);
-      workspace = null;
     });
 
     test("persists references, resolves the source, and renumbers after reload", async ({
       page,
-      request,
     }) => {
+      const request = page.request;
       const messages = await readEvidenceMessages(locale);
       const testWorkspace = workspace;
       if (testWorkspace === null) {

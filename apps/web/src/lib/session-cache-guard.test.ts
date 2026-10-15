@@ -1,10 +1,22 @@
 import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
-import { afterAll, describe, expect, test } from "bun:test";
+import { requestHandler } from "@tanstack/react-start/server";
+import { afterAll, describe, expect, test as bunTest } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { sleep } from "@stll/concurrency/sleep";
+
+// Bun executes the server half of isomorphic functions. Give each scenario
+// its own real request context while its fake network models session changes.
+const test = (name: string, scenario: () => void | Promise<void>) =>
+  bunTest(name, async () => {
+    const handle = requestHandler(async () => {
+      await scenario();
+      return new Response(null);
+    });
+    await handle(new Request("http://localhost:3000/chat"));
+  });
 
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";

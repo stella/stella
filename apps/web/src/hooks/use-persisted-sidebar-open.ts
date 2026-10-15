@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { usePresentationPrefs } from "@/lib/presentation-prefs-provider";
+import { usePresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 type PersistedSidebarOpenOptions = {
   defaultOpen: boolean;

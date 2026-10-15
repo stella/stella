@@ -19,9 +19,9 @@ import {
 } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs";
-import type { PresentationPrefs } from "@/lib/presentation-prefs";
-import { persistPresentationPrefs } from "@/lib/presentation-prefs-provider";
+import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { persistPresentationPrefs } from "@/lib/presentation-prefs/provider";
 
 // UI presentation order for language pickers. The membership is enforced
 // against the shared `UiLocale` set (a stale entry fails typecheck); only the

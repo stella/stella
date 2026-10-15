@@ -1,10 +1,10 @@
-import { APIError } from "better-auth/api";
+import { APIError } from "@better-auth/core/error";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { UI_LOCALES } from "@stll/locales";
 
-import { validateUserLocale } from "@/api/lib/auth-user-locale";
+import { validateUserLocale } from "@/api/lib/auth/user-locale";
 
 test("accepts every exact UI locale", () => {
   for (const locale of UI_LOCALES) {

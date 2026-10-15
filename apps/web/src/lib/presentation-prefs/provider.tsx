@@ -3,9 +3,9 @@ import type { PropsWithChildren } from "react";
 
 import { getTranslator } from "@/i18n/translator";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { defaultPresentationPrefs } from "@/lib/presentation-prefs";
-import type { PresentationPrefs } from "@/lib/presentation-prefs";
-import { writePresentationPrefs } from "@/lib/presentation-prefs-server";
+import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/presentation-prefs/preferences";
+import { writePresentationPrefs } from "@/lib/presentation-prefs/server";
 
 let browserPrefs = defaultPresentationPrefs;
 
