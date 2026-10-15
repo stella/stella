@@ -17,6 +17,7 @@ bun scripts/check-swallowed-item-error-ledger.ts
 bun scripts/check-test-state-baseline.ts --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/check-test-state-baseline.ts --kind ambient-time --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/check-test-state-baseline.ts --kind real-timers --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind wallclock-assertion --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/check-concurrency-exceptions.ts
 bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test

@@ -1,0 +1,167 @@
+{
+  "apps/api/scripts/test-db-snapshot-cache.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/citation-extractor.property.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/parsers/validate-ast.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/pipeline.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/us-citation-scanner.property.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/corpus-index/chunking.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/email/inbound/authentication.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/file-scan/scan.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/health/database-login-probe.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-query-features.contract.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/oauth-client-registration.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/oauth-issuer-responses.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/oauth-public-refresh.db.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/observability/failure-evidence.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/auth-storage.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/subprocess.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/tanstack-ai-generate.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/tests/postgres-test-maintenance.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/collab/src/server.test.ts": {
+    "count": 1,
+    "owner": "collab",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/e2e/containment.spec.ts": {
+    "count": 1,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/src/lib/tab-executor.test.ts": {
+    "count": 1,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/visual-preview/browser/render.test.ts": {
+    "count": 1,
+    "owner": "visual-preview",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/auth/login.test.ts": {
+    "count": 1,
+    "owner": "cli",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/legal-atlas/src/document-stage-observer.test.ts": {
+    "count": 1,
+    "owner": "legal-atlas",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/legal-atlas/src/provision-citation-grammars.property.test.ts": {
+    "count": 1,
+    "owner": "legal-atlas",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/mojibake/src/detect.test.ts": {
+    "count": 2,
+    "owner": "mojibake",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/template-conditions/src/parse.test.ts": {
+    "count": 1,
+    "owner": "template-conditions",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/ci-failure-digest.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/code-quality-task-budget.test.ts": {
+    "count": 3,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  }
+}

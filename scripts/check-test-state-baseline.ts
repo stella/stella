@@ -7,6 +7,7 @@ import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const BASELINES = {
   state: BASELINE_PATHS.testState,
+  "wallclock-assertion": BASELINE_PATHS.testWallclockAssertion,
   "real-timers": BASELINE_PATHS.testRealTimers,
   "ambient-time": BASELINE_PATHS.testAmbientTime,
 } as const;
@@ -99,7 +100,9 @@ if (import.meta.main) {
   const kindIndex = args.indexOf("--kind");
   const kind = kindIndex === -1 ? "state" : args.at(kindIndex + 1);
   if (kind === undefined || !isBaselineKind(kind)) {
-    panic("--kind requires state, ambient-time or real-timers");
+    panic(
+      "--kind requires state, ambient-time, real-timers or wallclock-assertion",
+    );
   }
   if (kindIndex !== -1) {
     args.splice(kindIndex, 2);
