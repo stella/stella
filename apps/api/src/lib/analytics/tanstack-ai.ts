@@ -497,6 +497,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // The AI boundary: naming the failure also classifies it for the shadow
     // grade the record carries.
     const kind = classifyAIBoundaryFailure(error);
+    const providerStatus = providerStatusFields(error)["error.provider.status"];
     const finishReason = context?.run?.finishReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
@@ -572,6 +573,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
         error_message_kind: "non_standard",
         error_type: errorTag(error),
         failure_reason: "provider",
+        failure_kind: kind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
         feature: config.feature,
         latency_bucket: bucketLatency(
           (performance.now() - startedAt) / ONE_SECOND_MS,

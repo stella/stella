@@ -8,7 +8,7 @@ import {
   readExcludedChatTools,
   readSkillDisplayName,
 } from "./frontmatter";
-import type { SkillMetadata } from "./frontmatter";
+import type { ParsedSkillMetadata, SkillMetadata } from "./frontmatter";
 import {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_MAX,
@@ -101,7 +101,7 @@ export type SkippedSkillPackageFile = {
 
 export type ValidatedSkillPackage = {
   body: string;
-  metadata: SkillMetadata;
+  metadata: ParsedSkillMetadata;
   resources: readonly ValidatedSkillResource[];
   skipped: readonly SkippedSkillPackageFile[];
   source: string;

@@ -1582,6 +1582,33 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result.isError).toBe(true);
   });
 
+  test("translates an unavailable prompt into an invalid-params protocol error", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ grantedScopes: [] });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "prompts/get",
+        params: { name: "skill__unavailable" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await readTestJson<McpJsonRpcError>(response)).toMatchObject({
+      error: { code: -32_602, message: "Unknown prompt: skill__unavailable" },
+      id: 1,
+      jsonrpc: "2.0",
+    });
+  });
+
   test("lists static resources for the request mode", async () => {
     const context = { type: "mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue(

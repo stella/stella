@@ -142,12 +142,28 @@ jobs:
               }
               return false;
             };
-            // A busy queue may never drain, so a deferral is bounded: heads deferred
-            // this long resume anyway, and at least one head resumes every tick.
-            const MAX_DEFER_MS = 30 * 60 * 1000;
+            // A busy queue may never drain, so deferred heads keep resuming while it
+            // waits, but one at a time: a resumed run never yields again and holds
+            // dozens of runners, so several at once starve the merge queue. The
+            // oldest deferral goes first, so every head still resumes in turn.
+            // Every unfinished run state counts, including runs held by
+            // concurrency (pending) or approval (waiting). States are read in
+            // lifecycle order: a run only moves forward, so one that changes
+            // state between two reads shows up in a later read.
+            const resumedRunInFlight = async () => {
+              for (const status of ["requested", "waiting", "pending", "queued", "in_progress"]) {
+                const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                  ...repo, workflow_id: "ci.yml", event: "pull_request", status, per_page: 100,
+                });
+                if (runs.some((run) => run.run_attempt > 1)) return true;
+              }
+              return false;
+            };
             const busy = await waiting();
             // Open pull requests whose head carries a pending yield status are the
             // durable record of deferred work, however long the queue stayed busy.
+            // Runs cancelled for runner relief carry the same record
+            // (scripts/relief-cancel-pr-runs.ts), so they resume here too.
             const deferredPulls = [];
             let after = null;
             do {
@@ -181,14 +197,12 @@ jobs:
               after = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
             } while (after);
             deferredPulls.sort((left, right) => left.deferredAt - right.deferredAt);
-            const overdue = deferredPulls.filter((pull) => Date.now() - pull.deferredAt >= MAX_DEFER_MS);
-            const candidates = busy && overdue.length > 0 ? overdue : deferredPulls;
-            const budget = busy && overdue.length === 0 ? 1 : RESUMES_PER_TICK;
+            const budget = !busy ? RESUMES_PER_TICK : (await resumedRunInFlight()) ? 0 : 1;
             if (busy) {
               core.info(`Merge queue still has waiting work; resuming at most ${budget} deferred run(s), oldest first.`);
             }
             let resumed = 0;
-            for (const pull of candidates) {
+            for (const pull of deferredPulls) {
               if (resumed >= budget) break;
               const { data } = await github.rest.actions.listWorkflowRuns({
                 ...repo, workflow_id: "ci.yml", head_sha: pull.headRefOid, per_page: 1,

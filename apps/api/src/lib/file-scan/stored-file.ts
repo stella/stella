@@ -36,7 +36,13 @@ const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
       maxBytes: input.maxBytes,
       signal: input.signal,
     });
-    return bytes.slice().buffer;
+    // The read is the only holder of `bytes`, so an exact-fit buffer is
+    // handed on as-is rather than copied a second time.
+    return bytes.buffer instanceof ArrayBuffer &&
+      bytes.byteOffset === 0 &&
+      bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
   }
   return input.signal === undefined
     ? await readS3ArrayBuffer(input.key)
