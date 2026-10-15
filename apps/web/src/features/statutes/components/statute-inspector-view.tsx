@@ -195,7 +195,7 @@ export const StatuteInspectorView = ({
           blocks={preparedReader.blocks}
           content={contentElement}
           viewport={viewportElement}
-          textScale={textScale}
+          zoomControls={textScale}
           key={payload.documentId}
         />
       </LegalReaderAIChat>

@@ -304,7 +304,7 @@ export const CaseDecisionInspectorView = ({
           content={contentElement}
           fallbackBreadcrumb={fallbackBreadcrumb}
           viewport={viewportElement}
-          textScale={textScale}
+          zoomControls={textScale}
           key={decisionId}
         />
       </LegalReaderAIChat>

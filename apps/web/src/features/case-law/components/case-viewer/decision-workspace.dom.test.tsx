@@ -116,6 +116,9 @@ test.each([400, 580, 1440])(
     for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
       expect(screen.getAllByRole("button", { name })).toHaveLength(1);
       expect(
+        within(screen.getByRole("banner")).getByRole("button", { name }),
+      ).toBeTruthy();
+      expect(
         view.baseElement.querySelectorAll(`button[aria-label="${name}"]`),
       ).toHaveLength(1);
     }

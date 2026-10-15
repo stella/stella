@@ -97,7 +97,7 @@ test("scrolling keeps the breadcrumb and zoom controls in one pinned row outside
       ]}
       content={content}
       viewport={viewport}
-      textScale={useReaderTextScale()}
+      zoomControls={useReaderTextScale()}
     />
   );
   try {
