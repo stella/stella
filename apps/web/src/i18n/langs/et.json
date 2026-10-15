@@ -2074,6 +2074,7 @@
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
     "website": "Veebisait",
+    "whenToUse": "Millal kasutada",
     "workflow": "Töövoog",
     "workflows": "Töövood",
     "zoomIn": "Suumi sisse",
@@ -3648,6 +3649,10 @@
       "importTitle": "Impordi oskus",
       "importedSkills": "{count, plural, one {Imporditi # oskus} other {Imporditi # oskust}}",
       "invalidPath": "Tee tohib sisaldada ainult väiketähti, numbreid, punkte, sidekriipse või allkriipse",
+      "invocationAuto": "Automaatselt",
+      "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
+      "invocationManual": "Ainult käivitamisel",
+      "invocationManualHelp": "Kasutatakse ainult siis, kui käivitate selle märgiga / või lisate selle oma sõnumisse.",
       "license": "Litsents: {license}",
       "newFile": "Uus fail",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4343,8 @@
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
       },
+      "showInTitle": "Kuva number toimiku nime kõrval",
+      "showInTitleDescription": "Kui see on väljas, on pealkiri täpselt sisestatud nimi.",
       "title": "Toimikute nummerdamine",
       "tokenHelp": "Saadaolevad märgendid: '{'SEQ'}' (järjekorranumber), '{'YYYY'}' (aasta), '{'YY'}' (2-kohaline aasta), '{'MM'}' (kuu)"
     },
@@ -5554,7 +5561,6 @@
     "viewVersion": "Vaata",
     "whenNotToUse": "Millal mitte kasutada",
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
-    "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
   },
   "timesheets": {
@@ -5675,7 +5681,7 @@
       "title": "Kopeeri toimikusse"
     },
     "create": {
-      "ownerTypeToggle": "Toimiku tüüp",
+      "matterName": "Toimiku nimi",
       "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
     },
     "createNewWorkspace": "Loo uus toimik",
@@ -6127,15 +6133,12 @@
       "upcomingTasks": "Tulevane agenda",
       "uploaded": "laadis üles"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Isiklik"
-    },
     "parties": {
       "addParty": "Lisa osapool",
       "changeClient": "Muuda klienti",
       "client": "Klient",
       "noClient": "Klienti pole määratud",
+      "noClientOptional": "Klient puudub (valikuline)",
       "noParties": "Sellele toimikule pole osapooli lisatud.",
       "partyRoles": {
         "co_counsel": "Kaasadvokaat",

@@ -704,7 +704,9 @@ const manageOrganizationArgsSchema = nullAsAbsent(
     v.strictObject({
       action: v.pipe(
         v.picklist(MANAGE_ORG_ACTIONS),
-        v.description("Administrative action to perform"),
+        v.description(
+          "Administrative action; the settings fields apply only to update_org_settings",
+        ),
       ),
       matter_id: v.optional(
         uuidInputSchema("Matter ID for add_member and remove_member."),
@@ -731,7 +733,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(128),
           v.description(
-            "Matter-number pattern (update_org_settings); send with matter_number_padding",
+            "Matter-number pattern; send with matter_number_padding",
           ),
         ),
       ),
@@ -742,22 +744,25 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.minValue(1),
           v.maxValue(6),
           v.description(
-            "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+            "Matter-number zero-padding width; send with matter_number_pattern",
+          ),
+        ),
+      ),
+      matter_numbering_enabled: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Show the matter number beside the matter name in titles",
           ),
         ),
       ),
       prompt_caching_enabled: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description("Toggle AI prompt caching (update_org_settings)"),
-        ),
+        v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
       ),
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
-          v.description(
-            "Set automatic PDF searchable-text extraction (update_org_settings)",
-          ),
+          v.description("Set automatic PDF searchable-text extraction"),
         ),
       ),
       time_minimum_unit_minutes: v.optional(
@@ -766,9 +771,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(1),
           v.maxValue(60),
-          v.description(
-            "Minimum time increment in minutes; must divide 60 (update_org_settings)",
-          ),
+          v.description("Minimum time increment in minutes; must divide 60"),
         ),
       ),
       time_edit_window_days: v.optional(
@@ -776,25 +779,21 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(0),
-          v.description(
-            "Days a timekeeper may edit an entry (update_org_settings)",
-          ),
+          v.description("Days a timekeeper may edit an entry"),
         ),
       ),
       time_locked_through_month: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.isoDate())),
           v.description(
-            "Last day of the latest locked month, or null to unlock (update_org_settings)",
+            "Last day of the latest locked month, or null to unlock",
           ),
         ),
       ),
       time_narrative_required: v.optional(
         v.pipe(
           v.boolean(),
-          v.description(
-            "Require a narrative on time entries (update_org_settings)",
-          ),
+          v.description("Require a narrative on time entries"),
         ),
       ),
       time_zone: v.optional(
@@ -857,6 +856,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["matter_numbering_enabled"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -869,6 +869,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action === "update_org_settings" ||
         (i.matter_number_pattern === undefined &&
           i.matter_number_padding === undefined &&
+          i.matter_numbering_enabled === undefined &&
           i.prompt_caching_enabled === undefined &&
           i.document_processing_mode === undefined &&
           i.time_minimum_unit_minutes === undefined &&
@@ -892,6 +893,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["matter_numbering_enabled"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -904,6 +906,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action !== "update_org_settings" ||
         i.matter_number_pattern !== undefined ||
         i.matter_number_padding !== undefined ||
+        i.matter_numbering_enabled !== undefined ||
         i.prompt_caching_enabled !== undefined ||
         i.document_processing_mode !== undefined ||
         i.time_minimum_unit_minutes !== undefined ||
@@ -1105,6 +1108,9 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.matter_number_padding === undefined
           ? {}
           : { matterNumberPadding: input.matter_number_padding }),
+        ...(input.matter_numbering_enabled === undefined
+          ? {}
+          : { matterNumberingEnabled: input.matter_numbering_enabled }),
         ...(input.prompt_caching_enabled === undefined
           ? {}
           : { promptCachingEnabled: input.prompt_caching_enabled }),
