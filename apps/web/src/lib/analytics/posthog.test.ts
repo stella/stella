@@ -47,12 +47,18 @@ const captureMock = mock((_event: string, _properties?: unknown) => undefined);
 const captureExceptionMock = mock(
   (_error: unknown, _properties?: Record<string, unknown>) => undefined,
 );
-const identifyMock = mock(
-  (id: string, _properties?: Record<string, unknown>) => {
-    distinctId = id;
-    identified = true;
-  },
-);
+// The `$identify` events the SDK sends, with the anonymous id each links.
+let identifyEvents: { distinctId: string; anonymousId: string }[] = [];
+// Mirrors posthog-js: identifying from an anonymous state sends `$identify`
+// with the previous id as `$anon_distinct_id`; from an identified state it
+// only switches the id.
+const identifyMock = mock((id: string) => {
+  if (!identified && id !== distinctId) {
+    identifyEvents.push({ distinctId: id, anonymousId: distinctId });
+  }
+  distinctId = id;
+  identified = true;
+});
 const initMock = mock((_key: string, options: PostHogInitOptions) => {
   initOptions = options;
   return posthogMock;
@@ -100,6 +106,7 @@ const {
   createPostHogAnalytics,
   isNoiseException,
   sanitizeFrame,
+  signedInAnonymousId,
   UNKNOWN_FRAME_FUNCTION,
 } = await import("./posthog");
 const { redactTelemetryStack } = await import("./stack-redaction");
@@ -110,6 +117,7 @@ describe("PostHog browser analytics adapter", () => {
   beforeEach(() => {
     distinctId = "anonymous";
     identified = false;
+    identifyEvents = [];
     initOptions = null;
     captureMock.mockClear();
     captureExceptionMock.mockClear();
@@ -644,6 +652,82 @@ describe("PostHog browser analytics adapter", () => {
       in_app: true,
       filename: "app.js",
     });
+  });
+
+  // The tracker finds an uploaded source map only through the chunk id the
+  // release build injected; without it, frames stay minified.
+  test("a sanitized frame keeps the injected chunk id and nothing shaped otherwise", () => {
+    const chunkId = "0199f2a4-5d1e-7c3a-9b2f-1e4d5c6b7a80";
+    expect(
+      sanitizeFrame({ filename: "app.js", lineno: 3, chunk_id: chunkId }),
+    ).toMatchObject({ chunk_id: chunkId });
+    expect(
+      sanitizeFrame({ filename: "app.js", chunk_id: "Smith v Example" }),
+    ).not.toHaveProperty("chunk_id");
+    expect(
+      sanitizeFrame({ filename: "app.js", chunk_id: 7 }),
+    ).not.toHaveProperty("chunk_id");
+  });
+
+  test("an exception carries its session and route template, never the resolved URL", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test/law/cze/cases/nss/a-1"),
+    });
+    analytics.capturePageViewed({ path: "/law/$country/cases/$court/$slug" });
+
+    const exception = (url: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $current_url: url,
+          $session_id: "session-1",
+          $window_id: "window-1",
+          $exception_list: [{ type: "TypeError", value: "secret" }],
+        },
+      })?.properties;
+
+    expect(
+      exception("https://app.example.test/law/cze/cases/nss/a-1?q=secret"),
+    ).toMatchObject({
+      $session_id: "session-1",
+      $window_id: "window-1",
+      $current_url: "https://app.example.test/law/$country/cases/$court/$slug",
+      $pathname: "/law/$country/cases/$court/$slug",
+    });
+    const unknown = exception("https://app.example.test/workspaces/ws_1");
+    expect(unknown).toMatchObject({ $session_id: "session-1" });
+    expect(unknown).not.toHaveProperty("$current_url");
+    expect(unknown).not.toHaveProperty("$pathname");
+  });
+
+  test("placement gaps are a counted event, not an exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.captureProvisionPlacementGaps({
+      surface: "full-reader",
+      kind: "expected",
+      reason: "work-unresolved",
+      count: 3,
+    });
+
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.provisionPlacementGaps,
+      {
+        surface: "full-reader",
+        kind: "expected",
+        reason: "work-unresolved",
+        count: 3,
+      },
+    );
+    expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
   test("captureError ignores null and undefined", () => {
@@ -1620,59 +1704,82 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  const bootstrapped = (userId: string) => ({
-    bootstrap: { distinctID: userId, isIdentifiedID: true },
-  });
+  const newAdapter = () =>
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" })
+      .analytics;
 
-  test("binds the signed-in user by stable id without an identify merge", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+  // A new page load: persistence is off, so it starts anonymous.
+  const pageLoad = (anonymousId: string) => {
+    distinctId = anonymousId;
+    identified = false;
+    return newAdapter();
+  };
+
+  test("a page load that already holds a session sends one identify", () => {
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(resetMock).toHaveBeenCalledWith(bootstrapped("user_123"));
-    expect(identifyMock).not.toHaveBeenCalled();
+    expect(identifyEvents).toEqual([
+      {
+        distinctId: "user_123",
+        anonymousId: signedInAnonymousId("user_123"),
+      },
+    ]);
+    expect(isIdentifiedMock()).toBe(true);
     expect(groupMock).toHaveBeenCalledWith("organization", "org_1");
+    // Only the opaque id is sent: no person properties.
+    expect(identifyMock).toHaveBeenCalledWith("user_123");
   });
 
-  test("two page loads of the same user produce one distinct id", () => {
-    const distinctIds: string[] = [];
-    for (const pageLoad of [1, 2]) {
-      // Persistence is off: every load starts with a new anonymous id.
-      distinctId = `anonymous_load_${String(pageLoad)}`;
-      identified = false;
-      const { analytics } = createPostHogAnalytics({
-        host: "https://posthog.test",
-        key: "phc_test",
-      });
+  test("an in-app sign-in links the signed-out pages of the same load", () => {
+    const analytics = pageLoad("anonymous_load_1");
+
+    analytics.reset({ onlyIfIdentified: true });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+
+    expect(resetMock).not.toHaveBeenCalled();
+    expect(identifyEvents).toEqual([
+      { distinctId: "user_123", anonymousId: "anonymous_load_1" },
+    ]);
+  });
+
+  test("every page load identifies while a person's distinct ids stay bounded", () => {
+    // Twenty loads with a session plus three in-app sign-ins.
+    for (let load = 0; load < 23; load += 1) {
+      const analytics = pageLoad(`anonymous_load_${String(load)}`);
+      if (load % 8 === 0) {
+        analytics.reset({ onlyIfIdentified: true });
+      }
       analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
-      distinctIds.push(getDistinctIdMock());
     }
 
-    expect(new Set(distinctIds)).toEqual(new Set(["user_123"]));
-    // No load links its anonymous id to the person.
-    expect(identifyMock).not.toHaveBeenCalled();
+    expect(identifyEvents).toHaveLength(23);
+    const linkedAnonymousIds = new Set(
+      identifyEvents.map(({ anonymousId }) => anonymousId),
+    );
+    // One stable id for loads with a session, one per in-app sign-in.
+    expect(linkedAnonymousIds).toEqual(
+      new Set([
+        signedInAnonymousId("user_123"),
+        "anonymous_load_0",
+        "anonymous_load_8",
+        "anonymous_load_16",
+      ]),
+    );
   });
 
-  test("binds the same user only once per browser app session", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+  test("binds the same user only once per page load", () => {
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(resetMock).toHaveBeenCalledTimes(1);
+    expect(identifyEvents).toHaveLength(1);
   });
 
   test("rebinds the organization group on a same-user organization switch", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
@@ -1680,29 +1787,45 @@ describe("PostHog browser analytics adapter", () => {
     // The identity guard still suppresses a second bind, but the group must
     // follow the active organization or later events attribute to the
     // previous organization across an ownership boundary.
-    expect(resetMock).toHaveBeenCalledTimes(1);
+    expect(identifyEvents).toHaveLength(1);
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
-  test("binds a different user in place of the previous one", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+  test("binds a different user without linking it to the previous one", () => {
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_456", activeOrganizationId: "org_2" });
 
-    expect(resetMock).toHaveBeenNthCalledWith(2, bootstrapped("user_456"));
+    expect(identifyEvents).toEqual([
+      {
+        distinctId: "user_123",
+        anonymousId: signedInAnonymousId("user_123"),
+      },
+      {
+        distinctId: "user_456",
+        anonymousId: signedInAnonymousId("user_456"),
+      },
+    ]);
     expect(getDistinctIdMock()).toBe("user_456");
     expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
+  test("a sign-out then sign-in as another user never links the two", () => {
+    const analytics = pageLoad("anonymous_load_1");
+
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.reset();
+    analytics.identifyUser({ id: "user_456", activeOrganizationId: "org_2" });
+
+    expect(identifyEvents.map(({ anonymousId }) => anonymousId)).toEqual([
+      signedInAnonymousId("user_123"),
+      "anonymous_after_reset",
+    ]);
+  });
+
   test("every identity change keeps the build metadata on later events", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset();
@@ -1718,10 +1841,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("reset can be limited to identified sessions", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.reset({ onlyIfIdentified: true });
 
@@ -1730,15 +1850,13 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset({ onlyIfIdentified: true });
 
-    expect(resetMock).toHaveBeenNthCalledWith(2, undefined);
+    expect(resetMock).toHaveBeenCalledTimes(1);
+    expect(resetMock).toHaveBeenLastCalledWith(undefined);
     expect(isIdentifiedMock()).toBe(false);
   });
 
   test("reset clears anonymous sessions by default", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.reset();
 
@@ -1746,17 +1864,14 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("reset clears the in-memory identity guard", () => {
-    const { analytics } = createPostHogAnalytics({
-      host: "https://posthog.test",
-      key: "phc_test",
-    });
+    const analytics = pageLoad("anonymous_load_1");
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset();
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
-    expect(resetMock).toHaveBeenNthCalledWith(3, bootstrapped("user_123"));
-    expect(identifyMock).not.toHaveBeenCalled();
+    expect(identifyEvents).toHaveLength(2);
+    expect(getDistinctIdMock()).toBe("user_123");
   });
 
   test("sanitizer keeps a validated API response identity and groups by it", () => {

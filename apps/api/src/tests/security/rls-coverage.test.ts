@@ -1428,6 +1428,46 @@ describe("policy coverage", () => {
     expect(privilegesForTable(privileges, "service_oauth_clients")).toEqual([]);
   });
 
+  test("doctrine reviews retain owner writes and ingestion reads and erasure", async () => {
+    const policies = await fetchStellaIngestionPolicies(testDb);
+    const ingestionPolicy = policies.find(
+      (policy) =>
+        policy.table_name === "case_law_citation_doctrine_reviews" &&
+        policy.policy_name === "case_law_ingestion_access",
+    );
+    expect(ingestionPolicy?.command).toBe("*");
+    expect(ingestionPolicy?.using_expr).toBe("true");
+    expect(ingestionPolicy?.check_expr).toBe("true");
+    const ingestionGrants = await fetchStellaIngestionTablePrivileges(testDb);
+    expect(
+      privilegesForTable(ingestionGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual(["DELETE", "SELECT"]);
+    const requestGrants = await fetchStellaTablePrivileges(testDb);
+    expect(
+      privilegesForTable(requestGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual([]);
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      rls_forced: boolean;
+      owner_using: string;
+      owner_check: string;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled, rel.relforcerowsecurity AS rls_forced,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.case_law_citation_doctrine_reviews'::regclass
+        AND policy.polname = 'citation_doctrine_reviews_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
+    expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+  });
+
   test("case-law ingestion role has explicit narrow write boundaries", async () => {
     const policies = await fetchStellaIngestionPolicies(testDb);
     const tablePrivileges = await fetchStellaIngestionTablePrivileges(testDb);

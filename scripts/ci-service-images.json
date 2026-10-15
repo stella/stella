@@ -1,6 +1,6 @@
 [
   {
-    "source": "docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+    "source": "docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
     "name": "postgres"
   },
   {
@@ -12,15 +12,15 @@
     "name": "valkey"
   },
   {
-    "source": "docker.io/quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd",
+    "source": "docker.io/quickwit/quickwit:0.9.1@sha256:3e0f079eb57dd5563f36a457e9a7a2963ff882316d6c77e3180ac3c59767a68f",
     "name": "quickwit"
   },
   {
-    "source": "docker.io/rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff",
+    "source": "docker.io/rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c",
     "name": "rustfs"
   },
   {
-    "source": "docker.io/amazon/aws-cli:2.36.47@sha256:b94fc7612d131f1a3cb76145ba3385c813ad7561ef2c2b60c89fbd5dfee93d39",
+    "source": "docker.io/amazon/aws-cli:2.37.12@sha256:ce44b800602264c12298bbf3399055a4cefdb9ed4a098abe564afe26e7071bce",
     "name": "aws-cli"
   },
   {

@@ -499,6 +499,28 @@ export const installPgliteReaderAnswerRls = async (
 };
 
 /** Apply the committed setting omitted by schema push. */
+export const installPgliteCitationDoctrineRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261014174500_case_law_citation_doctrine",
+      "migration.sql",
+    ),
+  );
+  const statement = statements.find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "case_law_citation_doctrine_reviews" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Citation doctrine FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
+/** Apply the committed setting omitted by schema push. */
 export const installPgliteChatSecretRls = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {

@@ -40,7 +40,6 @@
     "Test remaining repository scripts": ["**"],
     "Test release image CI gate": ["**"],
     "Workspace hygiene": ["**"],
-    "Dependabot group guard": ["**"],
     "Lockfile workspace-version guard": ["**"],
     "Resolution range guard": ["**"],
     "Quarantine-exclude guards": ["**"],
@@ -155,6 +154,7 @@
     "Test local workflow verification": ["**"],
     "Typecheck cache contract": ["**"],
     "Test CI check partition": ["**"],
+    "Task result cache contract": ["**"],
     "Test install-free CI commands": ["**"],
     "Test pre-push secret scan ranges": ["**"],
     "Test merge-base network comparison": ["**"],
@@ -205,6 +205,7 @@
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],
-    "Knip dead-export budget (all workspaces)": ["**"]
+    "Knip dead-export budget (all workspaces)": ["**"],
+    "Dependabot group guard (installed packages)": ["**"]
   }
 }

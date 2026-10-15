@@ -331,6 +331,7 @@ export const LIMITS = {
   billingCodesPageSizeDefault: 500,
   billingCodesPageSizeMax: 1000,
   overviewRecentEntities: 10,
+  overviewUpcomingAgenda: 10,
   matterSearchPreviewAgendaItems: 3,
   matterSearchPreviewDocuments: 3,
   /** Initial number of mixed chat/entity rows shown beneath one matter in
@@ -469,6 +470,33 @@ export const LIMITS = {
   imageDerivativeSourcePixelsMax: 40_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
+  /** Largest stored source (bytes) a PDF or thumbnail derivative is built
+   *  from. Checked against the recorded size before the object is read and
+   *  again against the store's declared length, so a refused file is never
+   *  held. The worker keeps one copy of the source; the converter's own
+   *  working set grows with it, so this bounds both. Larger files keep their
+   *  original as the preview and record `failed`/`too-large`. */
+  fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
+  /** Derivative jobs one API process runs at once. Each conversion holds a
+   *  whole source plus its output and, for images, a decoded surface: the
+   *  largest single allocations the process makes. Running them one at a time
+   *  keeps that peak to one file's worth. */
+  fileDerivativeWorkerConcurrency: 1,
+  /** Fraction of the process's effective memory limit (the smallest finite
+   *  cgroup limit on its group and ancestors, read once at startup) at or
+   *  above which the derivative worker defers a job instead of starting it.
+   *  Relative, so it follows the memory actually available; the rest is
+   *  headroom for request traffic and the conversion itself. */
+  fileDerivativeDeferMemoryFraction: 0.7,
+  /** The defer threshold (process RSS) where no finite memory limit applies
+   *  or none can be read. */
+  fileDerivativeDeferRssFallbackBytes: 1280 * 1024 * 1024,
+  /** How long after the operating system's last memory-pressure signal the
+   *  derivative worker keeps deferring jobs. */
+  fileDerivativeMemoryPressureHoldMs: 60_000,
+  /** Delay before a deferred derivative job is offered again. Deferral does
+   *  not consume one of the job's attempts. */
+  fileDerivativeDeferDelayMs: 30_000,
   /** Hard timeout for adding a searchable text layer to one PDF. */
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
@@ -800,6 +828,15 @@ export const LIMITS = {
   chatSendHistoryWindowMax: 500,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
+  /** Staged file bytes all in-flight upload finalizations of one API process
+   *  may hold at once. Finalizing reads, scans and may rewrite the whole file,
+   *  peaking near six copies, so this keeps a burst of large uploads well
+   *  inside the task's memory. A single file above it still runs alone. */
+  uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
+  /** How long a finalization waits for that budget before it fails as
+   *  retryable. The wait comes before the upload is claimed, so it never
+   *  counts against the claim timeout. */
+  uploadFinalizeAdmissionWaitMs: 20_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
