@@ -16,11 +16,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
-import {
-  correspondence,
-  correspondenceAttachments,
-  entities,
-} from "@/api/db/schema";
+import { correspondenceAttachments, entities } from "@/api/db/schema";
 import {
   createBackgroundAuditRecorder,
   type AuditRecorder,
@@ -311,26 +307,6 @@ const readSourceFolder = async ({ scopedDb, scope }: UploadedFiling) =>
     return file?.parentId ?? null;
   });
 
-// The record's own file stores the message's files; another file of the same
-// message only adds its uploader as a filer.
-const isRecordSource = async (
-  { scopedDb, scope }: UploadedFiling,
-  correspondenceId: SafeId<"correspondence">,
-) =>
-  await scopedDb(async (tx) => {
-    const [record] = await tx
-      .select({ sourceEntityId: correspondence.sourceEntityId })
-      .from(correspondence)
-      .where(
-        and(
-          eq(correspondence.id, correspondenceId),
-          eq(correspondence.workspaceId, scope.workspaceId),
-        ),
-      )
-      .limit(1);
-    return record?.sourceEntityId === scope.entityId;
-  });
-
 type FileUploadedDataBoxMessageOptions = {
   filing: UploadedFiling;
   createDocument: typeof createEntityFromBuffer;
@@ -390,16 +366,6 @@ const fileUploadedDataBoxMessage = async ({
     return outcome;
   }
   const { correspondenceId } = outcome.value;
-  const ownsRecord = await Result.tryPromise({
-    try: async () => await isRecordSource(filing, correspondenceId),
-    catch: unavailable,
-  });
-  if (ownsRecord.isErr()) {
-    return ownsRecord;
-  }
-  if (!ownsRecord.value) {
-    return outcome;
-  }
   const parentId = await Result.tryPromise({
     try: async () => await readSourceFolder(filing),
     catch: unavailable,

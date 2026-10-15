@@ -477,6 +477,32 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([0, 1]);
     });
 
+    test("a copy resumes missing attachments after the initial source is deleted", async () => {
+      const bytes = await zfoFile();
+      const first = await storeZfoFile({ createdBy: uploaderId });
+      const copy = await storeZfoFile({ createdBy: uploaderId });
+      const writes = { failAfter: 1, written: 0 };
+      const failed = await processUpload({ entityId: first, bytes, writes });
+      expect(failed.isErr()).toBe(true);
+      const copyPending = await processUpload({
+        entityId: copy,
+        bytes,
+        writes: { failAfter: 0, written: 0 },
+      });
+      expect(copyPending.isErr()).toBe(true);
+      await db.delete(entities).where(eq(entities.id, first));
+      const resumed = await processUpload({ entityId: copy, bytes });
+      expect(resumed.isOk() && resumed.value.status).toBe("duplicate");
+      const [record] = await records();
+      expect(record?.sourceEntityId).toBe(copy);
+      if (record === undefined) {
+        throw new TypeError("Expected surviving data-box correspondence");
+      }
+      expect(await attachmentsOf(record.id)).toHaveLength(
+        FIXTURE_MESSAGE.files.length,
+      );
+    });
+
     test("an unreadable or rejected message files nothing", async () => {
       const unreadable = await storeZfoFile({ createdBy: uploaderId });
       const unreadableOutcome = await processUpload({

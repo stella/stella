@@ -98,8 +98,8 @@ export const correspondence = p.pgTable.withRLS(
       .text("source", { enum: CORRESPONDENCE_SOURCES })
       .notNull()
       .default("delivery"),
-    // An upload reads its message from this matter file; deleting the file
-    // deletes the record.
+    // The current source file. Data-box copies live in correspondence_sources;
+    // deletion switches this pointer, removing the record only at the last copy.
     sourceEntityId: safeUuid<"entity">("source_entity_id"),
     // Delivery provenance; correspondence_provenance_check binds these
     // columns to the source.
@@ -153,7 +153,7 @@ export const correspondence = p.pgTable.withRLS(
         columns: [table.sourceEntityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
-      .onDelete("cascade"),
+      .onDelete("restrict"),
     p.unique("correspondence_id_ws_unq").on(table.id, table.workspaceId),
     p
       .uniqueIndex("correspondence_ws_dedup_uidx")
@@ -228,6 +228,60 @@ export const correspondence = p.pgTable.withRLS(
       columns: table,
       references: new Map([
         [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+  ],
+);
+
+// Each data-box source copy belongs to one deduplicated record in its matter.
+export const correspondenceSources = p.pgTable.withRLS(
+  "correspondence_sources",
+  {
+    ...entityFeatureGateColumns(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    correspondenceId: safeUuid<"correspondence">("correspondence_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+  },
+  (table) => [
+    ...reviewResetOwnerPolicies("correspondence_sources"),
+    ...entityFeatureGateChecks(table),
+    p.primaryKey({
+      name: "correspondence_sources_pkey",
+      columns: [table.workspaceId, table.entityId],
+    }),
+    p
+      .foreignKey({
+        name: "correspondence_sources_workspace_organization_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_record_workspace_fk",
+        columns: [table.correspondenceId, table.workspaceId],
+        foreignColumns: [correspondence.id, correspondence.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_entity_workspace_fk",
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .index("correspondence_sources_ws_record_entity_idx")
+      .on(table.workspaceId, table.correspondenceId, table.entityId),
+    ...wsOrganizationPolicies("correspondence_sources", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
       ]),
     }),
   ],

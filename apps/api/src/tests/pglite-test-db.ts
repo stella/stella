@@ -41,6 +41,7 @@ import {
   installPglitePlaybookDocumentTypeKey,
   installPgliteSchemaPrerequisites,
   installPgliteEntityFeatureGateMaintenance,
+  installPgliteCorrespondenceSources,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteDecisionCitationStats,
@@ -682,6 +683,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
+  await installPgliteCorrespondenceSources(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);

@@ -18,6 +18,7 @@ import {
   correspondence,
   correspondenceAttachments,
   correspondenceFilers,
+  correspondenceSources,
   organizationSettings,
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -252,6 +253,27 @@ export const createCorrespondence = async ({
       return access;
     }
 
+    if (parsed.channel === "data_box" && parsed.source === "upload") {
+      // Hold the copy before touching the record: entity deletion must not
+      // race a deduplicated upload into attaching a disappearing source.
+      const source = await withAggregateLock({
+        tx,
+        aggregate: "entity",
+        id: { id: parsed.sourceEntityId, workspaceId },
+        mode: "key share",
+      });
+      switch (source.status) {
+        case "locked":
+          break;
+        case "missing":
+          return Result.ok({ type: "invalid_content" as const });
+        case "busy":
+          return Result.err(source.error);
+        default:
+          source satisfies never;
+          return panic("Unhandled correspondence source lock");
+      }
+    }
     let direction = parsed.direction;
     let dataBox = parsed.dataBox;
     if (parsed.channel === "data_box") {
@@ -319,6 +341,20 @@ export const createCorrespondence = async ({
       return tx.rollback();
     }
 
+    const sources =
+      parsed.channel === "data_box" && parsed.source === "upload"
+        ? await tx
+            .insert(correspondenceSources)
+            .values({
+              organizationId,
+              workspaceId,
+              correspondenceId,
+              entityId: parsed.sourceEntityId,
+            })
+            .onConflictDoNothing()
+            .returning({ entityId: correspondenceSources.entityId })
+        : [];
+
     const filers = await tx
       .insert(correspondenceFilers)
       .values({
@@ -343,14 +379,14 @@ export const createCorrespondence = async ({
       });
     }
 
-    if (created !== undefined || filers.length > 0) {
+    if (created !== undefined || filers.length > 0 || sources.length > 0) {
       await recordAuditEvent(tx, {
         action:
           created !== undefined ? AUDIT_ACTION.CREATE : AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.CORRESPONDENCE,
         resourceId: correspondenceId,
         workspaceId,
-        metadata: { subject: parsed.subject },
+        metadata: { subject: parsed.subject, sourceAdded: sources.length > 0 },
       });
     }
     return Result.ok({

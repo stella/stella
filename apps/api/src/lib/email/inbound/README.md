@@ -157,8 +157,11 @@ over the message XML, takes the same path and files a `data_box` record.
   rejected file refuses the whole message; a replay resumes missing ordinals.
 - The message ID keys the record in the matter: another file of the same
   message, in a batch or later, adds its uploader as a filer and stores no
-  second set of documents. Deleting the record's own `.zfo` file deletes the
-  record; another copy does not file it again.
+  second set of documents. `correspondence_sources` retains every source copy.
+  Deleting the current `.zfo` source switches the record to a surviving copy;
+  only deleting its last source removes the record and attachment links. Each
+  matter owns its record and sources independently. Any copy can resume missing
+  attachment ordinals, including when the initial source was deleted.
 - The detail read lists the organization's contacts whose data boxes include
   the sender or recipient box ID. Matching only reads contacts.
 

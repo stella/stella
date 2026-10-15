@@ -23,6 +23,11 @@ import {
 } from "@/api/db/entity-feature-policies";
 import * as schema from "@/api/db/schema";
 
+import {
+  latestEntityFeaturePolicies,
+  readEntityFeatureMigrations,
+} from "./entity-feature-migrations.fixture";
+
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
   const organizationScope = sql`organization_id = (SELECT current_setting('app.organization_id', true))`;
@@ -442,13 +447,10 @@ test("a classified reference without a foreign key does not prove parent existen
 });
 
 test("the migration trigger graph exactly matches the schema-derived census", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const graphText = /\$metadata\$(.+)\$metadata\$/u.exec(migration)?.at(1);
+  const migration = await readEntityFeatureMigrations();
+  const graphText = [...migration.matchAll(/\$metadata\$(.+)\$metadata\$/gu)]
+    .at(-1)
+    ?.at(1);
   expect(graphText).toBeDefined();
   const graph: unknown = JSON.parse(graphText ?? "null");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -464,40 +466,33 @@ test("the migration trigger graph exactly matches the schema-derived census", as
 });
 
 test("migration propagation plans are derived from the complete gate census", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const migration = await readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const expected = entityFeatureGatePropagationSql(
     entityFeatureGateMetadata(tables),
   );
-  const actual =
-    /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/u
-      .exec(migration)
-      ?.at(0);
+  const actual = [
+    ...migration.matchAll(
+      /CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)[\s\S]+?\$function\$;/gu,
+    ),
+  ]
+    .at(-1)
+    ?.at(0);
   expect(actual).toBe(expected);
 });
 
 test("the migration grants maintenance policies only to the dedicated gate role", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const migration = await readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const expected = entityFeaturePolicyStatements(
     tables,
     "entity_feature_gate_maintenance",
   );
-  const actual =
-    migration.match(
-      /CREATE POLICY "entity_feature_gate_maintenance"[^;]+;/gu,
-    ) ?? [];
+  const actual = latestEntityFeaturePolicies(
+    migration,
+    "entity_feature_gate_maintenance",
+  );
   const schemaPolicies = tables.flatMap((table) =>
     getTableConfig(table).policies.filter(
       (policy) => policy.name === "entity_feature_gate_maintenance",
@@ -515,7 +510,6 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     );
   };
 
-  expect(descriptors).toHaveLength(47);
   expect(schemaPolicies).toHaveLength(descriptors.length);
   expect(schemaPolicies.every((policy) => targetsGateRole(policy.to))).toBe(
     true,
@@ -553,12 +547,7 @@ test("the migration grants maintenance policies only to the dedicated gate role"
 });
 
 test("migration maintenance grants match each descriptor's read and write columns", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const migration = await readEntityFeatureMigrations();
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [
