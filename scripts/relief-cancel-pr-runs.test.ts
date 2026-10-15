@@ -1,10 +1,17 @@
 import { expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   RELIEF_DESCRIPTION,
   YIELD_CONTEXT,
   reliefCancel,
 } from "./relief-cancel-pr-runs";
+
+const statusBody = v.object({
+  state: v.string(),
+  context: v.string(),
+  description: v.string(),
+});
 
 type Run = {
   id: number;
@@ -48,11 +55,7 @@ const fake = (
     calls.push(endpoint ?? "");
     const status = endpoint?.match(/statuses\/(.+)$/u);
     if (status) {
-      const body = input as {
-        state: string;
-        context: string;
-        description: string;
-      };
+      const body = v.parse(statusBody, input);
       expect(body.context).toBe(YIELD_CONTEXT);
       statuses.push({
         sha: status[1] ?? "",
