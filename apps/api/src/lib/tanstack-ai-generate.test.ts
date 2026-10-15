@@ -2433,8 +2433,11 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
         issueTypes: attributes?.["ai.structured_output.issue_types"],
       }));
 
-  const lastUserContent = (request: CapturedProviderRequest | undefined) =>
-    JSON.stringify(request?.messages.at(-1));
+  const lastUserContent = (request: CapturedProviderRequest | undefined) => {
+    const messages = request?.messages;
+    const last: unknown = Array.isArray(messages) ? messages.at(-1) : undefined;
+    return JSON.stringify(last);
+  };
 
   test("a first answer that matches is returned without a repair turn", async () => {
     queueRun(objectRun({ answer: "ok", page: 3 }));
