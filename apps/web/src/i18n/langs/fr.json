@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella vérifie encore si ce DOCX peut être modifié en toute sécurité. Réessayez une fois le document chargé.",
     "checkingDocxEditTitle": "Vérification du document",
     "chooseEvidence": "Choisissez un fichier pour insérer une référence numérotée à un élément de preuve.",
+    "collaborationSnapshotRecovered": "La copie collaborative enregistrée n’a pas pu être rouverte. La salle a été restaurée à partir du dernier document enregistré ; les modifications non enregistrées ont peut-être été perdues.",
     "comment": "Commenter",
     "comments": {
       "addPlaceholder": "Ajouter un commentaire...",

@@ -548,24 +548,30 @@ const coveringArray = <Combination>(
 const COVERING_SAMPLES = 2000;
 
 /**
- * The combinations a run takes: the all-pairs cover by default (pull
- * requests), the all-triples cover with `mode` `three-wise`, or every
- * combination with `all` (both nightly), the latter two split by `shard`
- * (`<index>/<count>`).
+ * The combinations a run takes: by default (pull requests) the cover of
+ * `pullRequestStrength`, all-pairs unless a suite asks for each value; the
+ * all-triples cover with `mode` `three-wise`, or every combination with
+ * `all` (both nightly), the latter two split by `shard` (`<index>/<count>`).
  */
 export const planCombinationRun = <Combination>({
   included,
   mode,
+  pullRequestStrength = 2,
   shard,
   valuesOf,
 }: {
   included: readonly Combination[];
   mode: string | undefined;
+  /** 1: every value of every dimension runs at least once; 2: every pair. */
+  pullRequestStrength?: 1 | 2;
   shard: string | undefined;
   valuesOf: (combination: Combination) => readonly string[];
 }): { mode: string; runs: Combination[] } => {
   if (mode !== "all" && mode !== "three-wise") {
-    return { mode: "all-pairs", runs: coveringArray(included, valuesOf, 2) };
+    return {
+      mode: pullRequestStrength === 1 ? "each-value" : "all-pairs",
+      runs: coveringArray(included, valuesOf, pullRequestStrength),
+    };
   }
   const parsed = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(shard ?? "0/1")?.groups;
   const index = Number(parsed?.["index"] ?? "0");

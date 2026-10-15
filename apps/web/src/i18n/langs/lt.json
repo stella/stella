@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella vis dar tikrina, ar šį DOCX galima saugiai redaguoti. Bandykite dar kartą, kai dokumentas baigs krautis.",
     "checkingDocxEditTitle": "Tikrinamas dokumentas",
     "chooseEvidence": "Pasirinkite failą, kad įterptumėte sunumeruotą įrodymo nuorodą.",
+    "collaborationSnapshotRecovered": "Nepavyko iš naujo atverti išsaugotos bendradarbiavimo kopijos. Kambarys atkurtas iš paskutinio išsaugoto dokumento; neišsaugoti pakeitimai galėjo būti prarasti.",
     "comment": "Komentaras",
     "comments": {
       "addPlaceholder": "Pridėti komentarą…",
