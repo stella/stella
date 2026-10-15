@@ -8,6 +8,7 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatToolGrants, mcpConnectors } from "@/api/db/schema";
+import { markChatToolExecutionGranted } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import type { LoadedExternalMcpConnector } from "@/api/handlers/chat/tools/external-mcp-tools";
 import {
   copyChatToolPolicy,
@@ -218,6 +219,8 @@ const withGrantDecision = ({
   ) {
     return toolDefinition;
   }
+  // The execution audit reads this to record the call as granted.
+  markChatToolExecutionGranted(toolDefinition);
   if (subject.type === "mcp-connector") {
     delete toolDefinition.needsApproval;
     return toolDefinition;

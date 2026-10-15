@@ -39,6 +39,27 @@ const isAuditedPolicyKind = (kind: ChatToolPolicyKind): boolean =>
 // tool-set builder is audited once per call.
 const auditedExecutes = new WeakSet<object>();
 
+/**
+ * Audited tools a stored grant ungated for this request. A granted call ran
+ * without a per-call approval, so its row says so instead of naming one.
+ */
+const grantedAuditedTools = new WeakSet<ChatTool>();
+
+/** Record that a stored grant, not a per-call approval, lets `tool` run. */
+export const markChatToolExecutionGranted = (tool: ChatTool): void => {
+  grantedAuditedTools.add(tool);
+};
+
+/** How the call that executed was approved. */
+type ChatToolExecutionApproval = "per-call" | "grant" | "none";
+
+const executionApproval = (tool: ChatTool): ChatToolExecutionApproval => {
+  if (grantedAuditedTools.has(tool)) {
+    return "grant";
+  }
+  return tool.needsApproval === true ? "per-call" : "none";
+};
+
 const toolCallIdOf = (context: unknown): string | null => {
   if (typeof context !== "object" || context === null) {
     return null;
@@ -53,7 +74,7 @@ type RecordExecutionInput = {
   audit: ChatToolExecutionAuditContext;
   durationMs: number;
   externalMcp: ExternalMcpToolIdentity | undefined;
-  needsApproval: boolean;
+  approval: ChatToolExecutionApproval;
   outcome: ChatToolExecutionOutcome;
   policyKind: ChatToolPolicyKind;
   toolCallId: string | null;
@@ -68,7 +89,7 @@ const recordExecution = async ({
   audit,
   durationMs,
   externalMcp,
-  needsApproval,
+  approval,
   outcome,
   policyKind,
   toolCallId,
@@ -82,8 +103,9 @@ const recordExecution = async ({
       metadata: {
         // The runtime names an approval after the call it gates; a gated tool
         // only executes once that approval resolved as approved.
+        approval,
         approvalId:
-          needsApproval && toolCallId !== null
+          approval === "per-call" && toolCallId !== null
             ? `approval_${toolCallId}`
             : null,
         durationMs,
@@ -134,7 +156,7 @@ const auditedTool = ({
         audit,
         durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
         externalMcp,
-        needsApproval: audited.needsApproval === true,
+        approval: executionApproval(audited),
         outcome,
         policyKind,
         toolCallId: toolCallIdOf(args[1]),

@@ -200,6 +200,20 @@ export const sanitizePromptLine = ({
 };
 
 /**
+ * Untrusted text with everything stripped that could act on the prompt around
+ * it (the same cleaning `sanitizeForPrompt` applies), without wrapping it.
+ * For values that keep their place inside structured data, such as a string
+ * field of a connector's JSON result.
+ */
+export const neutralizePromptText = (text: string): string => {
+  let cleaned = stripPromptUnsafeChars(text);
+  for (const pattern of ROLE_MARKERS) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+  return cleaned.replaceAll(DEFAULT_OPEN, " ").replaceAll(DEFAULT_CLOSE, " ");
+};
+
+/**
  * Promote untrusted input to text safe for prompt interpolation.
  *
  * Stripped: ASCII control chars, Unicode bidi/zero-width overrides

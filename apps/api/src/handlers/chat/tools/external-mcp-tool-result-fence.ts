@@ -1,4 +1,5 @@
 import {
+  neutralizePromptText,
   sanitizeForPrompt,
   sanitizePromptLine,
   untrustedText,
@@ -39,6 +40,35 @@ const fenceWithNotice = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** Deeper structure than this is passed through as one neutralized string. */
+const STRUCTURED_NEUTRALIZE_MAX_DEPTH = 32;
+
+/**
+ * The same JSON shape with every string value (and object key) neutralized,
+ * so no value inside a structured result can close a fence or forge a role
+ * line in the prompt it is serialized into.
+ */
+const neutralizeStructured = (value: unknown, depth = 0): unknown => {
+  if (typeof value === "string") {
+    return neutralizePromptText(value);
+  }
+  if (depth >= STRUCTURED_NEUTRALIZE_MAX_DEPTH) {
+    return neutralizePromptText(JSON.stringify(value) ?? "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => neutralizeStructured(item, depth + 1));
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        neutralizePromptText(key),
+        neutralizeStructured(item, depth + 1),
+      ]),
+    );
+  }
+  return value;
+};
+
 type TextContentPart = { type: "text"; content: string };
 
 const isTextContentPart = (value: unknown): value is TextContentPart =>
@@ -57,8 +87,8 @@ const isContentPart = (value: unknown): value is Record<string, unknown> =>
  *   fences each text part, and leads with the provenance notice.
  * - A structured result (an MCP `structuredContent` object, or any other JSON
  *   value) is preserved inside an envelope that carries the provenance and the
- *   untrusted-data notice; JSON string escaping keeps payload values from
- *   ending the envelope early.
+ *   untrusted-data notice, with every string value neutralized so none can
+ *   close a fence or forge a role line once the result is serialized.
  */
 export const fenceExternalMcpToolResult = (
   provenance: ExternalMcpToolProvenance,
@@ -87,7 +117,7 @@ export const fenceExternalMcpToolResult = (
       tool: provenance.toolName,
       notice: provenanceNotice(provenance),
     },
-    structuredContent: result ?? null,
+    structuredContent: neutralizeStructured(result ?? null),
   };
 };
 
