@@ -26,9 +26,9 @@ import {
 const BASELINE_REL = BASELINE_PATHS.rustTestDeterminism;
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-const moduleDirectory = (file: string) => {
+const moduleDirectory = (file: string, targetRoots: ReadonlySet<string>) => {
   const basename = path.posix.basename(file, ".rs");
-  return ["lib", "main", "mod"].includes(basename)
+  return basename === "mod" || targetRoots.has(file)
     ? path.posix.dirname(file)
     : file.slice(0, -3);
 };
@@ -37,15 +37,34 @@ export const discoverRustTestFiles = (
   repoRoot: string,
   trackedFiles: readonly string[],
 ) => {
+  const targetRoots = new Set<string>();
+  const integrationRoots = new Set<string>();
   const crates = trackedFiles
     .filter((file) => file === "Cargo.toml" || file.endsWith("/Cargo.toml"))
-    .filter((file) => {
+    .flatMap((file) => {
       const manifest: unknown = Bun.TOML.parse(
         readFileSync(path.join(repoRoot, file), "utf-8"),
       );
-      return isRecord(manifest) && isRecord(manifest["package"]);
+      if (!isRecord(manifest) || !isRecord(manifest["package"])) {
+        return [];
+      }
+      const directory = path.posix.dirname(file);
+      for (const kind of ["lib", "bin", "test", "bench", "example"]) {
+        const configured = manifest[kind];
+        const targets = Array.isArray(configured) ? configured : [configured];
+        for (const target of targets) {
+          if (!isRecord(target) || typeof target["path"] !== "string") {
+            continue;
+          }
+          const filename = path.posix.join(directory, target["path"]);
+          targetRoots.add(filename);
+          if (kind === "test") {
+            integrationRoots.add(filename);
+          }
+        }
+      }
+      return [directory];
     })
-    .map((file) => path.posix.dirname(file))
     .toSorted((a, b) => b.length - a.length);
   const sources = trackedFiles
     .filter((file) => file.endsWith(".rs"))
@@ -57,8 +76,21 @@ export const discoverRustTestFiles = (
         return [];
       }
       const relative = crate === "." ? file : file.slice(crate.length + 1);
+      if (
+        /^src\/(?:lib|main)\.rs$/u.test(relative) ||
+        /^(?:src\/bin|tests|benches|examples)\/[^/]+(?:\.rs|\/main\.rs)$/u.test(
+          relative,
+        )
+      ) {
+        targetRoots.add(file);
+      }
       return [
-        { file, crate, integrationTest: relative.split("/").includes("tests") },
+        {
+          file,
+          crate,
+          integrationTest:
+            integrationRoots.has(file) || relative.split("/").includes("tests"),
+        },
       ];
     });
   const byFile = new Map(sources.map((source) => [source.file, source]));
@@ -75,7 +107,10 @@ export const discoverRustTestFiles = (
       if (!source.integrationTest && !module.test) {
         continue;
       }
-      const prefix = path.posix.join(moduleDirectory(source.file), module.name);
+      const prefix = path.posix.join(
+        moduleDirectory(source.file, targetRoots),
+        module.name,
+      );
       for (const filename of [`${prefix}.rs`, `${prefix}/mod.rs`]) {
         const child = byFile.get(filename);
         if (

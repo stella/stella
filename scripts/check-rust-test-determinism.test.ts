@@ -529,3 +529,92 @@ fn production() { SystemTime::now(); }`;
     { line: 4, kind: "sleep", escaped: false },
   ]);
 });
+
+test.each([
+  ["automatic binary", "src/bin/worker.rs", "", false],
+  ["automatic directory binary", "src/bin/worker/main.rs", "", false],
+  [
+    "custom library",
+    "custom/worker.rs",
+    '[lib]\npath = "custom/worker.rs"',
+    false,
+  ],
+  [
+    "custom binary",
+    "custom/worker.rs",
+    '[[bin]]\nname = "worker"\npath = "custom/worker.rs"',
+    false,
+  ],
+  [
+    "custom integration test",
+    "custom/worker.rs",
+    '[[test]]\nname = "worker"\npath = "custom/worker.rs"',
+    true,
+  ],
+  [
+    "custom benchmark",
+    "custom/worker.rs",
+    '[[bench]]\nname = "worker"\npath = "custom/worker.rs"',
+    false,
+  ],
+  [
+    "custom example",
+    "custom/worker.rs",
+    '[[example]]\nname = "worker"\npath = "custom/worker.rs"',
+    false,
+  ],
+] as const)(
+  "resolves test modules beside the %s target root",
+  (_name, rootPath, targetManifest, wholeFileTest) => {
+    const repoRoot = mkdtempSync(path.join(tmpdir(), "rust-target-discovery-"));
+    const crate = "crates/target-root";
+    const rootFile = `${crate}/${rootPath}`;
+    const sibling = `${crate}/${path.posix.dirname(rootPath)}/checks.rs`;
+    const wrongChild = `${crate}/${rootPath.slice(0, -3)}/checks.rs`;
+    const childSource = "fn helper() { Instant::now(); }";
+    const sources = {
+      [`${crate}/Cargo.toml`]: `[package]\nname = "target-root"\nversion = "0.1.0"\n${targetManifest}`,
+      [rootFile]: `${wholeFileTest ? "" : "#[cfg(test)] "}mod checks;\nfn main() {}`,
+      [sibling]: childSource,
+      [wrongChild]: childSource,
+    };
+    try {
+      for (const [file, source] of Object.entries(sources)) {
+        mkdirSync(path.dirname(path.join(repoRoot, file)), { recursive: true });
+        writeFileSync(path.join(repoRoot, file), source);
+      }
+      const files = discoverRustTestFiles(repoRoot, Object.keys(sources));
+      expect(files).toHaveLength(3);
+      expect(files).toContainEqual({
+        file: rootFile,
+        crate,
+        integrationTest: wholeFileTest,
+      });
+      expect(files).toContainEqual({
+        file: sibling,
+        crate,
+        integrationTest: true,
+      });
+      expect(files).toContainEqual({
+        file: wrongChild,
+        crate,
+        integrationTest: false,
+      });
+      for (const { file, integrationTest } of files) {
+        if (file === rootFile) {
+          continue;
+        }
+        expect(
+          scanRustTestDeterminism({ source: childSource, integrationTest }),
+        ).toEqual(
+          file === sibling ? [{ line: 1, kind: "clock", escaped: false }] : [],
+        );
+      }
+      expect(
+        discoverRustTestFiles(repoRoot, Object.keys(sources).toReversed()),
+      ).toEqual(files);
+    } finally {
+      rmSync(repoRoot, { recursive: true, force: true });
+    }
+  },
+);
