@@ -225,6 +225,7 @@
     "@playwright/test": "^1.63.0",
     "@standard-schema/spec": "^1.1.0",
     "@stll/property-testing": "workspace:*",
+    "@stll/test-kit": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/d3-scale": "catalog:",
     "ajv": "catalog:",

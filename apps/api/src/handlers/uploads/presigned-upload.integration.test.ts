@@ -4,6 +4,7 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
@@ -411,7 +412,7 @@ describe("presigned upload mutation flow", () => {
     expect(finalized).toMatchObject({ code: 422 });
     expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
 
-    // The stored result replays at once even while the budget is full.
+    // A stored result bypasses admission even while the budget is full.
     const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
       LIMITS.uploadFinalizeInFlightBytes,
       0,
@@ -419,8 +420,8 @@ describe("presigned upload mutation flow", () => {
     if (holdAgain === null) {
       throw new Error("Expected the idle admission budget to admit the hold.");
     }
+    const replayAdmissions = spyOn(UPLOAD_FINALIZE_ADMISSION, "acquire");
     try {
-      const startedAt = performance.now();
       const replayed = await finalizeUpload.handler(
         asTestRaw<FinalizeCtx>(
           createContext({
@@ -432,10 +433,9 @@ describe("presigned upload mutation flow", () => {
         ),
       );
       expect(replayed).toEqual(finalized);
-      expect(performance.now() - startedAt).toBeLessThan(
-        LIMITS.uploadFinalizeAdmissionWaitMs,
-      );
+      expect(replayAdmissions).not.toHaveBeenCalled();
     } finally {
+      replayAdmissions.mockRestore();
       holdAgain();
     }
   });

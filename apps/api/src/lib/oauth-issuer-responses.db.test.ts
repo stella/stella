@@ -10,6 +10,10 @@ import {
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
 import { signInHuman } from "@/api/tests/helpers/human-session";
@@ -45,12 +49,14 @@ const requestHeaders = () => {
 };
 
 beforeAll(async () => {
-  await initAgentAuthTestDb();
-  const discoveredAt = performance.now();
-  const metadataResponse = await getAuth().handler(
-    new Request(getAuthEndpointUrl(".well-known/oauth-authorization-server")),
-  );
-  expect(performance.now() - discoveredAt).toBeLessThan(10_000);
+  await initAgentAuthTestDb({ logger: queryCountLogger });
+  const metadataResponse = await runWithQueryCounter(async (counter) => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl(".well-known/oauth-authorization-server")),
+    );
+    expect(counter.count).toBe(0);
+    return response;
+  });
   expect(metadataResponse.status).toBe(200);
   const metadata = v.parse(metadataSchema, await metadataResponse.json());
   issuer = metadata.issuer;

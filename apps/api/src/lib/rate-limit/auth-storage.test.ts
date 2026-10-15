@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
+import { type Deferred, deferred } from "@stll/test-kit";
 
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 
 let redisDown = false;
-let commandLatencyMs = 0;
+let stalledCommand: Deferred<unknown> | undefined;
 let invalidResponse = false;
 const redisCounters = new Map<string, { count: number; expiresAt: number }>();
 
@@ -35,11 +35,7 @@ class FakeRedisClient {
           entry.count <= max ? 1 : 0,
           Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)),
         ];
-    if (commandLatencyMs === 0) {
-      return result;
-    }
-    await sleep(commandLatencyMs);
-    return result;
+    return stalledCommand === undefined ? result : await stalledCommand.promise;
   }
 }
 
@@ -51,7 +47,7 @@ const RULE = { max: 3, window: 60 } as const;
 describe("auth rate-limit storage", () => {
   beforeEach(() => {
     redisDown = false;
-    commandLatencyMs = 0;
+    stalledCommand = undefined;
     invalidResponse = false;
     redisCounters.clear();
   });
@@ -135,16 +131,37 @@ describe("auth rate-limit storage", () => {
     ).toMatchObject({ allowed: false });
   });
 
-  test("falls back within a bounded time when a Redis command hangs", async () => {
-    const storage = createStorage();
-    await storage.consume("ip:slow", RULE);
-    commandLatencyMs = 5000;
-
-    const start = Date.now();
-    const decision = await storage.consume("ip:slow", RULE);
-
-    expect(decision).toMatchObject({ allowed: true });
-    expect(Date.now() - start).toBeLessThan(1500);
+  test("falls back only when the command deadline fires while Redis stays pending", async () => {
+    const timerId = setTimeout(() => {}, 0);
+    clearTimeout(timerId);
+    const scheduled = deferred<{ callback: () => void; delayMs: number }>();
+    const cleared: ReturnType<typeof setTimeout>[] = [];
+    const storage = createAuthRateLimitStorage({
+      redis: new FakeRedisClient(),
+      commandTimer: {
+        set: (callback, delayMs) => {
+          scheduled.resolve({ callback, delayMs });
+          return timerId;
+        },
+        clear: (id) => {
+          cleared.push(id);
+        },
+      },
+    });
+    stalledCommand = deferred<unknown>();
+    let settled = false;
+    const pending = storage.consume("ip:slow", RULE).then((decision) => {
+      settled = true;
+      return decision;
+    });
+    const deadline = await scheduled.promise;
+    expect(deadline.delayMs).toBe(500);
+    expect(settled).toBe(false);
+    expect(stalledCommand.settled()).toBe(false);
+    deadline.callback();
+    expect(await pending).toMatchObject({ allowed: true });
+    expect(stalledCommand.settled()).toBe(false);
+    expect(cleared).toEqual([timerId]);
   });
 
   test("clears command timeout timers after Redis resolves", async () => {

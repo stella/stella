@@ -524,21 +524,21 @@ describe("stopping a command", () => {
 
   test("a stop after the click reports an unknown outcome at once", async () => {
     const { emit, handlers } = installFakeChrome();
+    const stop = new AbortController();
+    let dispatched = 0;
     handlers["action"] = () => {
       // The click starts a navigation that never finishes.
+      dispatched += 1;
       emit(CONTROLLED_TAB_ID, { status: "loading" });
+      stop.abort();
       return [{ frameId: 0, result: { ok: true } }];
     };
-    const stop = new AbortController();
-    setTimeout(() => stop.abort(), 50);
-    const started = Date.now();
-
     const result = await run(click(), { signal: stop.signal });
     expect(result).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
     expect(JSON.stringify(result)).toContain("stopped");
-    expect(Date.now() - started).toBeLessThan(2000);
+    expect(dispatched).toBe(1);
   });
 });
 

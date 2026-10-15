@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import type { SQL } from "bun";
 /**
  * The provision-citation state behaviour PGlite cannot show, on real
@@ -24,6 +25,7 @@ import {
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withReservedSession } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -545,37 +547,63 @@ if (!databaseUrl || !runPostgresTests) {
      */
     test("an abort stops the statement in flight and discards its connection", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const pool = openClient({ max: 2 }).sql;
+        const STATEMENT_BACKSTOP_MS = 10_000;
+        const pool = openClient({
+          max: 2,
+          connection: { statement_timeout: STATEMENT_BACKSTOP_MS },
+        }).sql;
         const observer = openClient().sql;
+        const holder = await openClient().sql.reserve();
+        const lockKey = `provision-abort-${Bun.randomUUIDv7()}`;
         const controller = new AbortController();
         let reservedPid: unknown;
-        const started = Date.now();
-        const outcome = await withReservedSession({
-          reserve: async () => await pool.reserve(),
-          cancelBackend: async (pid) =>
-            await observer`SELECT pg_cancel_backend(${pid})`,
-          signal: controller.signal,
-          work: async (session) => {
-            const [row] = await session.query("SELECT pg_backend_pid() AS pid");
-            reservedPid =
-              row !== null && typeof row === "object" && "pid" in row
-                ? row.pid
-                : undefined;
-            setTimeout(() => {
+        try {
+          await holder`SELECT pg_advisory_lock(hashtextextended(${lockKey}, 0))`;
+          const outcome = await withReservedSession({
+            reserve: async () => await pool.reserve(),
+            cancelBackend: async (pid) =>
+              await observer`SELECT pg_cancel_backend(${pid})`,
+            signal: controller.signal,
+            work: async (session) => {
+              const [row] = await session.query(
+                "SELECT pg_backend_pid() AS pid",
+              );
+              reservedPid =
+                row !== null && typeof row === "object" && "pid" in row
+                  ? row.pid
+                  : undefined;
+              const blocked = Result.tryPromise(
+                async () =>
+                  await session.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                    [lockKey],
+                  ),
+              );
+              await waitUntilBlocked(observer, Number(reservedPid));
               controller.abort();
-            }, 200);
-            return await session.query("SELECT pg_sleep(30)").then(
-              () => "finished",
-              () => "cancelled",
-            );
-          },
-        });
-        expect(outcome).toBe("cancelled");
-        expect(Date.now() - started).toBeLessThan(10_000);
-        const [alive] = await observer`
+              return await blocked;
+            },
+          });
+          // The held lock prevents success; the error identity distinguishes
+          // explicit cancellation from the statement timeout's failure backstop.
+          expect(outcome.isErr()).toBe(true);
+          if (outcome.isErr()) {
+            expect(getPgErrorCode(outcome.error)).toBe(PG_ERROR.QUERY_CANCELED);
+            expect(outcome.error).toMatchObject({
+              message: "canceling statement due to user request",
+            });
+          }
+          const [alive] = await observer`
           SELECT count(*)::int AS count FROM pg_stat_activity
           WHERE pid = ${Number(reservedPid)}`;
-        expect(alive?.count).toBe(0);
+          expect(alive?.count).toBe(0);
+        } finally {
+          try {
+            await holder`SELECT pg_advisory_unlock(hashtextextended(${lockKey}, 0))`;
+          } finally {
+            holder.release();
+          }
+        }
       });
     }, 30_000);
   });

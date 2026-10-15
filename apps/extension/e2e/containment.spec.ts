@@ -1,7 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
-import { sleep } from "@stll/concurrency/sleep";
 
 import {
   createCommandSender,
@@ -24,22 +23,27 @@ import {
 } from "./fixtures/pages";
 
 const CONTROLLER_ID = "controller-containment";
-const SLOW_RESPONSE_MS = 20_000;
 
 type Harness = Awaited<ReturnType<typeof launchExtensionHarness>>;
 
 /** Serves the fixtures, a never-quick page and a binary, and records intranet traffic. */
-const routeFixtures = async ({ context }: Harness) => {
+const routeFixtures = async (
+  { context }: Harness,
+  waitForSlowResponse?: () => Promise<void>,
+) => {
   const intranetRequests: string[] = [];
   const serve = async (
     route: Parameters<Parameters<typeof context.route>[1]>[0],
   ) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === "/slow.html") {
-      await sleep(SLOW_RESPONSE_MS);
+      if (waitForSlowResponse === undefined) {
+        throw new TypeError("Slow fixture requires an explicit response gate");
+      }
+      await waitForSlowResponse();
       await route
         .fulfill({ body: "<p>Slow page</p>", contentType: "text/html" })
-        // swallow-ok: delayed response races deliberate navigation cancellation in the containment stop test
+        // swallow-ok: releasing the response races deliberate navigation cancellation in the containment stop test
         .catch(() => undefined);
       return;
     }
@@ -159,7 +163,12 @@ const openContainmentPage = async (
 test("stop and popup changes end a running command at once", async () => {
   test.setTimeout(120_000);
   const harness = await launchExtensionHarness();
-  await routeFixtures(harness);
+  const releaseSlowResponses = Promise.withResolvers<undefined>();
+  let slowResponsesReleased = 0;
+  await routeFixtures(harness, async () => {
+    await releaseSlowResponses.promise;
+    slowResponsesReleased += 1;
+  });
   try {
     // Pairing through the worker proves the stella tab's URL is readable
     // without the activeTab permission.
@@ -207,34 +216,40 @@ test("stop and popup changes end a running command at once", async () => {
 
     // Chat Stop: the extension answers right away instead of waiting out
     // the navigation, and cannot claim the page did not change.
-    const started = Date.now();
+    const slowRequest = harness.context.waitForEvent("request", {
+      predicate: (request) => request.url() === `${FIXTURE_ORIGIN}/slow.html`,
+    });
     const stopped = await sender.post({
       action: "open",
       url: `${FIXTURE_ORIGIN}/slow.html`,
     });
-    await harness.stella.waitForTimeout(500);
+    await slowRequest;
     await sender.cancel();
     expect(await sender.result(stopped)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
-    expect(Date.now() - started).toBeLessThan(8000);
+    expect(slowResponsesReleased).toBe(0);
 
     // The session still works after a stop.
     await openContainmentPage(harness, sender.send);
 
     // Disconnecting from the popup stops a running command the same way,
     // and nothing runs under the old pairing afterwards.
+    const interruptedRequest = harness.context.waitForEvent("request", {
+      predicate: (request) => request.url() === `${FIXTURE_ORIGIN}/slow.html`,
+    });
     const interrupted = await sender.post({
       action: "open",
       url: `${FIXTURE_ORIGIN}/slow.html`,
     });
-    await harness.stella.waitForTimeout(500);
+    await interruptedRequest;
     expect(await popup.request({ type: "disconnect" })).toEqual({
       status: "done",
     });
     expect(await sender.result(interrupted)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
+    expect(slowResponsesReleased).toBe(0);
     expect(await latestPong(harness.stella)).toMatchObject({
       controlledTabId: null,
       controllerId: null,
@@ -243,6 +258,7 @@ test("stop and popup changes end a running command at once", async () => {
       code: BROWSER_CONTROL_ERROR_CODE.staleController,
     });
   } finally {
+    releaseSlowResponses.resolve(undefined);
     await harness.close();
   }
 });

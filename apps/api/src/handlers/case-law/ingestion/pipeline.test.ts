@@ -1401,9 +1401,14 @@ describe("runIngestionPipeline — document observer failures", () => {
     ];
 
     for (const { name, observe } of failures) {
-      const startedAt = performance.now();
-      const actual = await run({ observe });
-      expect(performance.now() - startedAt, name).toBeLessThan(2500);
+      let observerCalls = 0;
+      const actual = await run({
+        observe: async (observation) => {
+          observerCalls += 1;
+          await observe(observation);
+        },
+      });
+      expect(observerCalls, name).toBe(1);
       expect(actual.result, name).toEqual(baseline.result);
       expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
       expect(actual.finalCursor, name).toBe(baseline.finalCursor);
