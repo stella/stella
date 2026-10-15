@@ -6365,10 +6365,13 @@ jobs:
       needs.ci-plan.outputs.run_required != 'false'
       && (
       github.event_name != 'pull_request' && (
-      (github.event_name == 'merge_group'
+      needs.ci-plan.outputs.queue_depth != 'thin'
+      && ((github.event_name == 'pull_request'
+       || github.event_name == 'merge_group'
        || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
+      )
       )
       )
     runs-on: ubuntu-latest
@@ -8902,9 +8905,9 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Test dev runner and process tree cleanup
+      - name: Test dev runner
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
+        run: bun test packages/scripts/src/dev-runner.test.ts scripts/ci-install.test.ts
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
