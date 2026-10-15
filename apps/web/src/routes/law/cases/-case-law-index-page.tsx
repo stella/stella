@@ -22,7 +22,6 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -49,14 +48,18 @@ import {
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
+import { shouldAutoRewrite } from "@/features/case-law/case-law-empty-results.logic";
 import {
   activeCaseLawFilterCount,
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   decisionDateRange,
   decisionSortOrder,
+  isStrictSearch,
   STRICT_SEARCH_VALUE,
   validDecisionDate,
+  withAutoRewrite,
+  withOriginalWords,
   withPendingQuery,
   withQuery,
 } from "@/features/case-law/case-law-index-search.logic";
@@ -70,7 +73,15 @@ import {
   caseLawPageNumber,
   caseLawPageRest,
 } from "@/features/case-law/case-law-pages.logic";
-import { CaseLawSearch } from "@/features/case-law/components/case-law-search";
+import {
+  CaseLawAutoRewrite,
+  CaseLawNoResults,
+  RewrittenSearchLine,
+} from "@/features/case-law/components/case-law-no-results";
+import {
+  CaseLawSearch,
+  useCaseLawAskScope,
+} from "@/features/case-law/components/case-law-search";
 import { useDecisionColumnGroups } from "@/features/case-law/components/decision-column-groups";
 import { DecisionFilterPopover } from "@/features/case-law/components/decision-filter-popover";
 import { languageLabel } from "@/features/case-law/components/decision-language-select";
@@ -80,6 +91,7 @@ import {
   DecisionExcerptControl,
   DecisionSortControl,
 } from "@/features/case-law/components/decision-toolbar-controls";
+import { SearchWidenedLine } from "@/features/case-law/components/search-widened-line";
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
 import {
@@ -103,10 +115,7 @@ import {
   useQuestionColumns,
 } from "@/features/case-law/research/question-columns-controller";
 import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logic";
-import type {
-  CaseLawEmptyState,
-  CaseLawResultsLine,
-} from "@/features/case-law/search-warnings.logic";
+import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
@@ -254,6 +263,10 @@ export function PublicCaseLawIndex({
   // rows, the canonical link or a decision opened from here describe.
   const shownQuestionIds = Route.useSearch({
     select: ({ questions }) => questions ?? NO_SHOWN_QUESTIONS,
+  });
+  // Also read apart: which words a rewrite replaced does not change the rows.
+  const rewriteState = Route.useSearch({
+    select: ({ rewrite, rewrittenFrom }) => ({ rewrite, rewrittenFrom }),
   });
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
@@ -633,6 +646,28 @@ export function PublicCaseLawIndex({
       "cases.refine-navigate",
     );
   };
+  const {
+    autoRewrite,
+    autoRewriteKey,
+    onAutoRefine,
+    refine,
+    searchOriginalWords,
+  } = useCaseLawRewriteFlow({
+    country: countryParam,
+    isTextSearch: intent.type === "text",
+    query: queryInput,
+    resultCount: decisions.length,
+    isFirstPage: pager.currentPage === 1,
+    rowsAnswerQuery: rows === "rows",
+    search: { ...search, ...rewriteState },
+    searchNavigation,
+    searchRefinedQuery,
+    setQuery: (next) => {
+      setQueryInput(next);
+      setRequestedQuery(next);
+    },
+  });
+  const askScope = useCaseLawAskScope(countryParam);
 
   // No sort control where no order applies: a browse listing is newest-first
   // by definition, and an identifier lookup is answered by the identity path,
@@ -659,10 +694,13 @@ export function PublicCaseLawIndex({
         country={countryParam}
         maxLength={SEARCH_QUERY_MAX_LENGTH}
         onQueryChange={handleQueryChange}
-        onRefined={searchRefinedQuery}
         onSubmit={openSingleMatch}
         query={queryInput}
+        refine={refine}
       />
+      {autoRewrite && (
+        <CaseLawAutoRewrite key={autoRewriteKey} onAutoRefine={onAutoRefine} />
+      )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
         <PublicLawResultsToolbar
@@ -726,6 +764,14 @@ export function PublicCaseLawIndex({
                 page={pager.currentPage}
                 total={searchTotal}
               />
+              {rewriteState.rewrittenFrom === undefined ||
+              isSearchUnavailable ? null : (
+                <RewrittenSearchLine
+                  onSearchOriginal={searchOriginalWords}
+                  original={rewriteState.rewrittenFrom}
+                  rewritten={search.q ?? ""}
+                />
+              )}
               {warnings.resultsLine === null || isSearchUnavailable ? null : (
                 <SearchWidenedLine
                   line={warnings.resultsLine}
@@ -767,9 +813,20 @@ export function PublicCaseLawIndex({
             <DecisionTable
               decisions={find.rows}
               emptyState={
-                warnings.emptyState === null ? undefined : (
-                  <NoResultsReason state={warnings.emptyState} />
-                )
+                intent.type === "text" ? (
+                  <CaseLawNoResults
+                    askScope={askScope}
+                    onSearchEveryWord={
+                      warnings.resultsLine !== null &&
+                      rowsAnswerRequestedSearch(rows)
+                        ? searchEveryWord
+                        : null
+                    }
+                    query={search.q ?? ""}
+                    reason={warnings.emptyState}
+                    refine={refine}
+                  />
+                ) : undefined
               }
               expectedRowCount={pageSize}
               findHighlight={find.highlight}
@@ -807,71 +864,94 @@ export function PublicCaseLawIndex({
   );
 }
 
-type SearchWidenedLineProps = {
-  line: CaseLawResultsLine;
-  /** Null while the rows below answer an earlier search than the URL does. */
-  onSearchEveryWord: (() => void) | null;
+type CaseLawRewriteFlowOptions = {
+  country: string;
+  isTextSearch: boolean;
+  /** What the box holds now. */
+  query: string;
+  resultCount: number;
+  isFirstPage: boolean;
+  rowsAnswerQuery: boolean;
+  search: CaseLawIndexSearch;
+  searchNavigation: (
+    nextSearch: (previous: CaseLawIndexSearch) => CaseLawIndexSearch,
+  ) => Promise<void>;
+  searchRefinedQuery: (refined: string) => void;
+  /** Put words in the box and make them the search the rows wait on. */
+  setQuery: (query: string) => void;
 };
 
 /**
- * What the search required, when it required less than the reader typed: no
- * judgment is written the way a question is asked, so the words that carry
- * the grammar of the question are not required of it.
- *
- * One muted line above the results and the way back to a search that does
- * require them. The results below are the answer, so the line stays chrome.
+ * The AI rewrite as this page runs it: from the wand, from the empty results,
+ * or by itself once when a question found nothing; and the way back to the
+ * reader's own words, which the page then leaves alone.
  */
-function SearchWidenedLine({
-  line,
-  onSearchEveryWord,
-}: SearchWidenedLineProps) {
-  const t = useTranslations();
-
-  return (
-    <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-2 text-xs">
-      {/*
-        The sentence reads in the interface's own direction; only the query is
-        isolated, because it is the reader's text and may run the other way.
-        Isolating the whole line instead would let a Latin query set the
-        direction of an Arabic sentence.
-      */}
-      <p className="min-w-0">
-        {t.rich(line.messageKey, {
-          bdi: (chunks) => <BidiText>{chunks}</BidiText>,
-          query: line.query,
-        })}
-      </p>
-      {onSearchEveryWord === null ? null : (
-        <Button onClick={onSearchEveryWord} size="xs" variant="link">
-          {t(line.actionKey)}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-type NoResultsReasonProps = {
-  state: CaseLawEmptyState;
+const useCaseLawRewriteFlow = ({
+  country,
+  isTextSearch,
+  query,
+  resultCount,
+  isFirstPage,
+  rowsAnswerQuery,
+  search,
+  searchNavigation,
+  searchRefinedQuery,
+  setQuery,
+}: CaseLawRewriteFlowOptions) => {
+  const refine = useCaseLawRefine({
+    country,
+    query,
+    strict: isStrictSearch(search.strict),
+    onRefined: searchRefinedQuery,
+    onAutoRefined: (refined, original) => {
+      setQuery(refined);
+      detached(
+        searchNavigation((previous) =>
+          withAutoRewrite(previous, refined, original),
+        ),
+        "cases.auto-refine-navigate",
+      );
+    },
+  });
+  const searchOriginalWords = () => {
+    if (search.rewrittenFrom === undefined) {
+      return;
+    }
+    setQuery(search.rewrittenFrom);
+    detached(
+      searchNavigation((previous) => withOriginalWords(previous)),
+      "cases.original-words-navigate",
+    );
+  };
+  // Held here, not in the component that runs the rewrite: that unmounts
+  // whenever the box stops matching the search, and must not try again when
+  // it mounts back for the same search.
+  const searchKey = `${country}:${search.q ?? ""}`;
+  const [attemptedSearch, setAttemptedSearch] = useState<string | null>(null);
+  const onAutoRefine = () => {
+    setAttemptedSearch(searchKey);
+    refine.onAutoRefine();
+  };
+  const autoRewrite = shouldAutoRewrite({
+    isTextSearch,
+    query: search.q ?? "",
+    typedQuery: query,
+    resultCount,
+    isFirstPage,
+    rowsAnswerQuery,
+    rewrittenFrom: search.rewrittenFrom,
+    rewriteOff: search.rewrite === "off",
+    alreadyAttempted: attemptedSearch === searchKey,
+    strict: isStrictSearch(search.strict),
+  });
+  return {
+    autoRewrite,
+    autoRewriteKey: searchKey,
+    onAutoRefine,
+    refine,
+    searchOriginalWords,
+  };
 };
-
-/**
- * Why the table is empty, where its rows would be. Two readings a blank table
- * cannot tell apart: the words matched nothing, or the filters cut away what
- * they matched. Only the second is something the reader can undo, so each
- * says which one it is and what to do about it.
- */
-function NoResultsReason({ state }: NoResultsReasonProps) {
-  const t = useTranslations();
-
-  return (
-    <div className="max-w-prose p-4">
-      <p className="text-sm">{t(state.messageKey)}</p>
-      <p className="text-foreground-strong-muted mt-1 text-xs">
-        {t(state.hintKey)}
-      </p>
-    </div>
-  );
-}
 
 type SearchUnavailableProps = {
   onRetry: () => void;

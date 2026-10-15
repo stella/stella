@@ -912,6 +912,9 @@
       "saved": "Do spisu {matter} {count, plural, one {bylo uloženo # rozhodnutí} few {byla uložena # rozhodnutí} other {bylo uloženo # rozhodnutí}}"
     },
     "newestDecisions": "Nejnovější rozhodnutí",
+    "noResults": {
+      "hint": "Zkuste jiná slova, vylepšete dotaz pomocí AI, nebo se zeptejte v chatu."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Lidské"
@@ -984,6 +987,10 @@
         "medium": "Střední",
         "short": "Krátký"
       }
+    },
+    "rewritten": {
+      "line": "Pro <bdi>{original}</bdi> nic přesně neodpovídá; zobrazujeme výsledky pro <bdi>{query}</bdi>",
+      "searchOriginal": "Hledat moje původní slova"
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutí nese} few {# rozhodnutí nesou} other {# rozhodnutí nese}} tuto spisovou značku. Vyberte soud.",
     "searchLabel": "Hledat v judikatuře",

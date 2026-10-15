@@ -912,6 +912,9 @@
       "saved": "{count, plural, one {# decisão salva} many {# decisões salvas} other {# decisões salvas}} em {matter}"
     },
     "newestDecisions": "Decisões mais recentes",
+    "noResults": {
+      "hint": "Tente outras palavras, melhore a consulta com IA ou faça a pergunta no chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -984,6 +987,10 @@
         "medium": "Médio",
         "short": "Curto"
       }
+    },
+    "rewritten": {
+      "line": "Nenhuma correspondência exata para <bdi>{original}</bdi>; mostrando resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Pesquisar minhas palavras originais"
     },
     "sameCaseNumber": "{count, plural, one {# decisão tem} other {# decisões têm}} este número de processo. Escolha o tribunal.",
     "searchLabel": "Pesquisar jurisprudência",

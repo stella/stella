@@ -29,6 +29,17 @@ export type CaseLawIndexSearch = {
    * part of the result set, so the canonical address leaves it out.
    */
   questions?: string[] | undefined;
+  /**
+   * The reader went back to their own words after the page rewrote them: the
+   * page does not rewrite this query again. Dropped by the next query edit.
+   */
+  rewrite?: "off" | undefined;
+  /**
+   * The words the reader searched before the page rewrote them, while `q`
+   * holds the rewrite. Not part of the result set, so the canonical address
+   * leaves it out.
+   */
+  rewrittenFrom?: string | undefined;
   sort?: SearchSort | undefined;
   sourceId?: string | undefined;
   /**
@@ -197,7 +208,14 @@ export const withQuery = (
   if (q === previous.q) {
     return previous;
   }
-  const next = { ...previous, q, strict: undefined, questions: undefined };
+  const next = {
+    ...previous,
+    q,
+    strict: undefined,
+    questions: undefined,
+    rewrite: undefined,
+    rewrittenFrom: undefined,
+  };
   if (q !== undefined) {
     return next;
   }
@@ -238,6 +256,27 @@ export const activeCaseLawFilterCount = (search: CaseLawIndexSearch): number =>
 
 export const hasActiveCaseLawFilter = (search: CaseLawIndexSearch): boolean =>
   activeCaseLawFilterCount(search) > 0;
+
+/**
+ * The URL a rewrite the page ran by itself lands on: the rewrite, and the
+ * reader's own words to go back to.
+ */
+export const withAutoRewrite = (
+  previous: CaseLawIndexSearch,
+  rewritten: string,
+  original: string,
+): CaseLawIndexSearch => ({
+  ...withQuery(previous, rewritten),
+  rewrittenFrom: original,
+});
+
+/** Back to the words the reader typed, which the page leaves alone now. */
+export const withOriginalWords = (
+  previous: CaseLawIndexSearch,
+): CaseLawIndexSearch =>
+  previous.rewrittenFrom === undefined
+    ? previous
+    : { ...withQuery(previous, previous.rewrittenFrom), rewrite: "off" };
 
 /**
  * The sort as the URL carries it: absent while it is the default, so the same

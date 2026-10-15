@@ -912,6 +912,9 @@
       "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
     },
     "newestDecisions": "Naujausi sprendimai",
+    "noResults": {
+      "hint": "Išbandykite kitus žodžius, patobulinkite užklausą su DI arba užduokite klausimą pokalbyje."
+    },
     "notesFilter": {
       "ai": "DI",
       "human": "Žmonių"
@@ -984,6 +987,10 @@
         "medium": "Vidutinė",
         "short": "Trumpa"
       }
+    },
+    "rewritten": {
+      "line": "Tikslių atitikmenų <bdi>{original}</bdi> nėra; rodomi rezultatai pagal <bdi>{query}</bdi>",
+      "searchOriginal": "Ieškoti mano pradinių žodžių"
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
     "searchLabel": "Ieškoti teismų praktikoje",

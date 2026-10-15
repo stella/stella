@@ -912,6 +912,9 @@
       "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
     },
     "newestDecisions": "Uusimad lahendid",
+    "noResults": {
+      "hint": "Proovige teisi sõnu, parandage päringut tehisintellektiga või esitage küsimus vestluses."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Inimeste"
@@ -984,6 +987,10 @@
         "medium": "Keskmine",
         "short": "Lühike"
       }
+    },
+    "rewritten": {
+      "line": "Päringule <bdi>{original}</bdi> täpseid vasteid pole; kuvatakse tulemused päringule <bdi>{query}</bdi>",
+      "searchOriginal": "Otsi minu algseid sõnu"
     },
     "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
     "searchLabel": "Otsi kohtupraktikast",

@@ -912,6 +912,9 @@
       "saved": "{count, plural, one {# resolución guardada} other {# resoluciones guardadas}} en {matter}"
     },
     "newestDecisions": "Resoluciones más recientes",
+    "noResults": {
+      "hint": "Pruebe otras palabras, mejore la consulta con IA o haga la pregunta en el chat."
+    },
     "notesFilter": {
       "ai": "IA",
       "human": "Humanas"
@@ -984,6 +987,10 @@
         "medium": "Medio",
         "short": "Corto"
       }
+    },
+    "rewritten": {
+      "line": "No hay coincidencias exactas para <bdi>{original}</bdi>; se muestran resultados para <bdi>{query}</bdi>",
+      "searchOriginal": "Buscar mis palabras originales"
     },
     "sameCaseNumber": "{count, plural, one {# resolución lleva} other {# resoluciones llevan}} este número de asunto. Elija el tribunal.",
     "searchLabel": "Buscar jurisprudencia",

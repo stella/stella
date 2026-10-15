@@ -915,6 +915,9 @@ type Messages = {
       "saved": "{count, plural, one {# decision} other {# decisions}} saved into {matter}";
     };
     "newestDecisions": "Newest decisions";
+    "noResults": {
+      "hint": "Try other words, improve the query with AI, or ask the question in chat.";
+    };
     "notesFilter": {
       "ai": "AI";
       "human": "Human";
@@ -987,6 +990,10 @@ type Messages = {
         "medium": "Medium";
         "short": "Short";
       };
+    };
+    "rewritten": {
+      "line": "No exact matches for <bdi>{original}</bdi>; showing results for <bdi>{query}</bdi>";
+      "searchOriginal": "Search my original words";
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
     "searchLabel": "Search case law";

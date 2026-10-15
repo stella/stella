@@ -912,6 +912,9 @@
       "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
     },
     "newestDecisions": "Najnowsze orzeczenia",
+    "noResults": {
+      "hint": "Spróbuj innych słów, popraw zapytanie za pomocą AI lub zadaj pytanie na czacie."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Ludzkie"
@@ -984,6 +987,10 @@
         "medium": "Średni",
         "short": "Krótki"
       }
+    },
+    "rewritten": {
+      "line": "Brak dokładnych wyników dla <bdi>{original}</bdi>; wyniki dla <bdi>{query}</bdi>",
+      "searchOriginal": "Szukaj moich oryginalnych słów"
     },
     "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
     "searchLabel": "Szukaj w orzecznictwie",

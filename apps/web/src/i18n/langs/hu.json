@@ -912,6 +912,9 @@
       "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
     },
     "newestDecisions": "Legújabb határozatok",
+    "noResults": {
+      "hint": "Próbáljon más szavakat, javítsa a keresést AI-val, vagy tegye fel a kérdést a csevegésben."
+    },
     "notesFilter": {
       "ai": "AI",
       "human": "Emberi"
@@ -984,6 +987,10 @@
         "medium": "Közepes",
         "short": "Rövid"
       }
+    },
+    "rewritten": {
+      "line": "Nincs pontos találat erre: <bdi>{original}</bdi>; találatok erre: <bdi>{query}</bdi>",
+      "searchOriginal": "Az eredeti szavaim keresése"
     },
     "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
     "searchLabel": "Keresés a joggyakorlatban",
