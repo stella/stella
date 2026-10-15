@@ -1712,7 +1712,8 @@ mod tests {
     assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
     assert_eq!(pending.as_ref().unwrap().browser_url, original_url);
     let (other_web, _) =
-      new_browser_connection("https://api.stll.app", "https://web.example.test").unwrap();
+      new_browser_connection("https://api.stll.app", "https://web.example.test")
+        .unwrap();
     assert_eq!(
       reserve_browser_connection(&mut pending, other_web, std::time::Instant::now()),
       ConnectionStart::SameOriginPending,
@@ -1723,7 +1724,11 @@ mod tests {
     let (while_redeeming, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
-      reserve_browser_connection(&mut pending, while_redeeming, std::time::Instant::now()),
+      reserve_browser_connection(
+        &mut pending,
+        while_redeeming,
+        std::time::Instant::now()
+      ),
       ConnectionStart::SameOriginPending,
       "a redemption in flight is not shown again"
     );

@@ -4,6 +4,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import { Temporal } from "@stll/time";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { captureDesktopAccountLink, stashDesktopAccountLink } =
@@ -16,7 +18,7 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const STORAGE_KEY = "stella.desktop-account-link";
