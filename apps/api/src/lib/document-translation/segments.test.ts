@@ -2,6 +2,8 @@ import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import {
   applyDocxTranslationSegments,
   DocxTranslationError,
@@ -22,7 +24,7 @@ const createDocx = async (
 ): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   for (const [path, value] of Object.entries(parts)) {
-    zip.file(path, value);
+    writeZipEntry(zip, path, value);
   }
   return await zip.generateAsync({ type: "arraybuffer" });
 };

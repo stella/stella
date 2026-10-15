@@ -11,9 +11,10 @@ import {
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -27,7 +28,6 @@ import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotatio
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -63,6 +63,7 @@ import { useDecisionAnnotationSurface } from "@/features/case-law/components/cas
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
@@ -99,6 +100,8 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
+  /** A repeated citation is a fresh landing on the same passage. */
+  landingSessionId?: string | undefined;
 };
 
 /**
@@ -145,9 +148,8 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId } = props;
+  const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
-  const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
@@ -167,6 +169,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
+  const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
@@ -253,7 +256,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
   const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
@@ -270,6 +273,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    sessionId: landingSessionId,
   });
 
   const jumpToAnchor = (anchorId: string) => {
@@ -421,17 +425,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           onReset={textScale.reset}
           onZoom={textScale.zoom}
         />
-        <Button
-          aria-label={t("caseLaw.reader.expandProvisions")}
-          aria-pressed={provisions.expandProvisions}
-          data-pressed={provisions.expandProvisions ? "" : undefined}
-          onClick={provisions.toggle}
-          size="icon-sm"
-          tooltip={t("caseLaw.reader.expandProvisions")}
-          variant="ghost"
-        >
-          <BookTextIcon aria-hidden="true" className="size-4" />
-        </Button>
+        <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
@@ -701,6 +695,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     decisionId={decisionId}
                     expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
+                    landingSessionId={landingSessionId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
                     provisionAnchors={provisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}

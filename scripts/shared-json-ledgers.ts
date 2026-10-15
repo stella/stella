@@ -6,6 +6,7 @@ export const SHARED_LEDGER_PATHS = [
   "apps/api/capability-description-ledger.json",
   "apps/api/src/mcp/write-tool-authority-ledger.json",
   "apps/api/src/tests/export-dropping-mock-ledger.json",
+  "apps/api/src/tests/security/matter-access-census.allowlist.json",
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
   "packages/property-testing/property-seeds.json",
   "scripts/app-boundary-exceptions.json",
@@ -21,6 +22,7 @@ export const SHARED_LEDGER_PATHS = [
   "scripts/sha256-migration-ledger.json",
   "scripts/suppression-waivers.json",
   "scripts/swallowed-item-error-ledger.json",
+  "scripts/test-source-write-exceptions.json",
 ] as const;
 
 export const ORDER_MEANINGFUL_JSON = {

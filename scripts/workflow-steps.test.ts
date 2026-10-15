@@ -9,7 +9,33 @@ import {
   synchronizeWorkflowBackgroundSteps,
   workflowJobSteps,
   workflowStepByName,
+  workflowCiInstallFlags,
 } from "./workflow-steps";
+
+test("shared install flag extraction keeps order and refuses unowned or malformed inputs", () => {
+  const flags = [
+    "--frozen-lockfile",
+    "--ignore-scripts",
+    "--filter",
+    "@stll/api",
+    "--filter",
+    "stella",
+  ];
+  const step = {
+    uses: "$/.github/actions/ci-install",
+    with: { flags: JSON.stringify(flags) },
+  };
+  expect(workflowCiInstallFlags(step)).toEqual(flags);
+  expect(() =>
+    workflowCiInstallFlags({ ...step, uses: "other/action@revision" }),
+  ).toThrow("Expected the shared CI install action");
+  expect(() => workflowCiInstallFlags({ uses: step.uses })).toThrow(
+    "Missing CI install flags",
+  );
+  expect(() =>
+    workflowCiInstallFlags({ ...step, with: { flags: "[1]" } }),
+  ).toThrow("CI install flags must be strings");
+});
 
 test("named command selection survives intervening and nested workflow steps", () => {
   assertProperty(

@@ -91,13 +91,47 @@ repeated call shows up. It is a dev build, so compare runs with
 each other, never with production numbers. Committed CI budgets stay with
 the route-smoke suite (`/conventions-perf`).
 
-## 5. Report evidence
+## 5. What counts as proof
+
+A change is verified when the state it touches was driven the way a user
+reaches it. Most fixes that reached main after a green check had been
+exercised in an easier state than the one that broke. In a `run` flow:
+
+- **Real input.** Click, hover and type through locators. Never set a store,
+  call a handler through `page.evaluate`, or create the screen's state
+  through the API when the change is in how the screen gets there. Drive the
+  real sequence: hover then click, the same action twice, again after
+  scrolling away or cancelling.
+- **Fresh load.** Open the resulting URL directly with `page.goto` and
+  `page.reload()` it. A client-side navigation hides server-render, loader
+  and URL-state bugs; the URL you land on is part of the result.
+- **The persisted state.** Confirm what was saved through `agent:cli` or the
+  API, and reload streamed or optimistic UI to check it renders the same
+  from the server.
+- **The user's state.** Repeat in every state the change affects: signed out
+  (`page.context().clearCookies()`), narrow (`--viewport 390x844`), `ar`,
+  empty, long content.
+- **The failure path.** Fail the request at the network boundary with
+  `page.route` and check the message the user sees. Do not throw from inside
+  the component. The report lists the injected response, and an injected 5xx
+  makes the run exit 1; that is the expected result when it is the only
+  finding. `page.route` sees only requests the browser makes: a request made
+  during server render cannot be failed from the page, so prove that failure
+  in a server-render test and say the browser state was not driven.
+
+If the seed lacks a precondition, or the stack will not start, the change is
+unverified: say which state was not driven and why. Never weaken the flow
+until it passes. When a drive fails unexpectedly, run `bun run agent:status`
+first; a stack that is down or belongs to another checkout is not a finding.
+
+## 6. Report evidence
 
 When handing work back, say what you ran and what it showed: the command,
 the report's findings, and the screenshot or measurement paths. A before and
-after pair is the evidence for a performance claim.
+after pair is the evidence for a performance claim. Name any state from §5
+that was not driven.
 
-## 6. Screenshots in pull requests
+## 7. Screenshots in pull requests
 
 Screenshots of changed web UI use an entry in the shared `/dev` visual
 registry (`apps/web/src/routes/dev/-visual-metadata.ts`). Add a named entry

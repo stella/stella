@@ -1,7 +1,16 @@
+import { createElement } from "react";
+
+import { defineHandlerCallback } from "@tanstack/react-router/ssr/server";
+import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
+import { createSsrErrorReporter } from "@/ssr-error-reporter";
+import { renderSsrResponse } from "@/ssr-renderer";
+import { isSsrDocumentRequest } from "@/ssr-request";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
+import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
 // wasm32-wasip1-threads binding (shared memory), which browsers only
@@ -16,9 +25,38 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 } as const;
 
+const reportSsrError = createSsrErrorReporter({
+  captureError: (error) => getAnalytics().captureError(error),
+  writeDiagnostic: (line) => {
+    process.stderr.write(line);
+  },
+});
+
 export default createServerEntry({
   async fetch(request) {
-    const response = await handler.fetch(request);
+    const response = isSsrDocumentRequest(request)
+      ? await fetchBoundedSsrResponse({
+          request,
+          fetchResponse: async (renderRequest, rendererSignal) =>
+            await createStartHandler(
+              defineHandlerCallback(async ({ router, responseHeaders }) => {
+                const rendered = await renderSsrResponse({
+                  request: renderRequest,
+                  rendererSignal,
+                  router,
+                  responseHeaders,
+                  children: createElement(StartServer, { router }),
+                  reportError: reportSsrError,
+                });
+                if (rendered.isErr()) {
+                  throw rendered.error;
+                }
+                return rendered.value;
+              }),
+            )(renderRequest),
+          reportError: reportSsrError,
+        })
+      : await handler.fetch(request);
     const headers = new Headers(response.headers);
     for (const [name, value] of Object.entries(
       CROSS_ORIGIN_ISOLATION_HEADERS,

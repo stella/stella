@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { discoverPlaceholders } from "./discover-placeholders";
 
 const SPA_FIXTURE = new URL(
@@ -11,8 +13,9 @@ const SPA_FIXTURE = new URL(
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

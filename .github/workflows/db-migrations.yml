@@ -143,7 +143,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280' }}
+        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
         credentials: ${{ startsWith(needs.scope.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
@@ -173,11 +173,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test Postgres owner replacement and helper replay
-        run: |
-          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
@@ -189,6 +184,11 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api

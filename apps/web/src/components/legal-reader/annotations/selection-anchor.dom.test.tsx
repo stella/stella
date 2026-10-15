@@ -7,6 +7,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/inline";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { selectionAnchorsFrom } from "./selection-anchor";
 
 GlobalRegistrator.register();
@@ -17,7 +19,7 @@ afterEach(() => {
   document.getSelection()?.removeAllRanges();
   document.body.replaceChildren();
 });
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 const fixture = (inlines: Inline[]) => {
   const root = document.createElement("article");
