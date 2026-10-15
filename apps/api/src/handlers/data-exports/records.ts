@@ -8,6 +8,7 @@
 // locations, scanner state, derived search data and feature-gate
 // bookkeeping: nothing a person typed or an importer needs.
 
+import { panic } from "better-result";
 import type { InferSelectModel, Table } from "drizzle-orm";
 
 import type {
@@ -378,7 +379,19 @@ const csvCell = (value: unknown): string => {
   if (typeof value === "object") {
     return JSON.stringify(value);
   }
-  return String(value);
+  switch (typeof value) {
+    case "string":
+      return value;
+    case "number":
+    case "boolean":
+    case "bigint":
+      return String(value);
+    case "function":
+    case "object":
+    case "symbol":
+    case "undefined":
+      return panic("Unsupported CSV cell value");
+  }
 };
 
 /**

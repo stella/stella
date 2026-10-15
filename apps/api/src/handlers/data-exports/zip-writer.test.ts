@@ -118,7 +118,9 @@ describe("export ZIP writer", () => {
           },
         },
       ],
-      (entry) => written.push(entry),
+      (entry) => {
+        written.push(entry);
+      },
     );
     expect(written).toEqual([
       {

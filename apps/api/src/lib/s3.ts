@@ -1,10 +1,13 @@
 import {
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
+  UploadPartCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
 import { panic, Result, TaggedError } from "better-result";
@@ -32,6 +35,7 @@ import {
   isUsableStaticCredential,
   type OptionalS3Credentials,
 } from "@/api/lib/s3/credentials";
+import { createMultipartSink } from "@/api/lib/s3/multipart-sink";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -1178,7 +1182,7 @@ export type S3ObjectStream = {
 };
 
 const readableChunks = async function* (
-  stream: ReadableStream<Uint8Array>,
+  stream: ReadableStream<unknown>,
 ): AsyncGenerator<Uint8Array> {
   const reader = stream.getReader();
   try {
@@ -1186,6 +1190,11 @@ const readableChunks = async function* (
       const { done, value } = await reader.read();
       if (done) {
         return;
+      }
+      if (!(value instanceof Uint8Array)) {
+        throw new S3ObjectReadError({
+          message: "S3 returned an invalid response chunk",
+        });
       }
       yield value;
     }
@@ -1238,8 +1247,6 @@ const MULTIPART_MAX_PART_BYTES = 5 * 1024 ** 3;
 const STREAMING_UPLOAD_MIN_PART_BYTES = 16 * 1024 * 1024;
 /** An object's real size may exceed its estimate; parts leave room for it. */
 const STREAMING_UPLOAD_SIZE_HEADROOM = 2;
-const STREAMING_UPLOAD_QUEUE_SIZE = 4;
-const STREAMING_UPLOAD_PART_RETRIES = 3;
 
 /**
  * The part size that fits an object of about `expectedBytes` (with
@@ -1254,6 +1261,10 @@ export const multipartPartBytes = (expectedBytes: number): number | null => {
   }
   return Math.max(needed, STREAMING_UPLOAD_MIN_PART_BYTES);
 };
+
+class S3MultipartResponseError extends TaggedError("S3MultipartResponseError")<{
+  message: string;
+}> {}
 
 export type S3StreamingUpload = {
   /** Resolves once the chunk is accepted; waits while a part is in flight. */
@@ -1272,15 +1283,9 @@ type OpenS3StreamingUploadOptions = {
 };
 
 /**
- * Stream an object too large to hold in memory to `key` as a multipart
- * upload (at most 4 parts in flight, each part retried). Nothing is visible
- * at `key` until `end()` resolves; an upload that never ends leaves only
- * incomplete parts, which the bucket lifecycle aborts.
- *
- * Bun's writer may accept a chunk synchronously (`write` returns a number)
- * without waiting for the upload, so it is not a reliable backpressure
- * signal: this flushes and awaits after each part's worth of bytes, which
- * bounds what is buffered to about one part.
+ * Upload one part at a time with bounded buffering. Every SDK request reads
+ * the current client through the credential guard, including completion after
+ * a long upload. Incomplete uploads belong to the bucket lifecycle.
  */
 export const openS3StreamingUpload = ({
   key,
@@ -1291,26 +1296,72 @@ export const openS3StreamingUpload = ({
   if (!key.startsWith(ownership.prefix)) {
     return panic("Object key is outside its cleanup lifecycle prefix");
   }
-  const writer = getS3().file(key).writer({
-    type: contentType,
-    partSize: partBytes,
-    queueSize: STREAMING_UPLOAD_QUEUE_SIZE,
-    retry: STREAMING_UPLOAD_PART_RETRIES,
+  return createMultipartSink({
+    partBytes,
+    start: async () =>
+      await documentsCredentials.run(async () => {
+        const response = await getAbortableS3().send(
+          new CreateMultipartUploadCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            ContentType: contentType,
+          }),
+        );
+        if (!response.UploadId) {
+          throw new S3MultipartResponseError({
+            message: "S3 returned no multipart upload ID",
+          });
+        }
+        return response.UploadId;
+      }),
+    uploadPart: async ({ uploadId, partNumber, data }) =>
+      await documentsCredentials.run(async () => {
+        if (partNumber > MULTIPART_MAX_PARTS) {
+          throw new S3MultipartResponseError({
+            message: "Object exceeds the multipart part limit",
+          });
+        }
+        const response = await getAbortableS3().send(
+          new UploadPartCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            UploadId: uploadId,
+            PartNumber: partNumber,
+            Body: data,
+          }),
+        );
+        if (!response.ETag) {
+          throw new S3MultipartResponseError({
+            message: "S3 returned no multipart part ETag",
+          });
+        }
+        return response.ETag;
+      }),
+    complete: async ({ uploadId, parts }) => {
+      await documentsCredentials.run(async () => {
+        await getAbortableS3().send(
+          new CompleteMultipartUploadCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            UploadId: uploadId,
+            MultipartUpload: { Parts: parts },
+          }),
+        );
+      });
+    },
+    putEmpty: async () => {
+      await documentsCredentials.run(async () => {
+        await getAbortableS3().send(
+          new PutObjectCommand({
+            Bucket: envBase.S3_BUCKET,
+            Key: key,
+            ContentType: contentType,
+            Body: new Uint8Array(),
+          }),
+        );
+      });
+    },
   });
-  let unflushedBytes = 0;
-  return {
-    write: async (chunk) => {
-      await writer.write(chunk);
-      unflushedBytes += chunk.byteLength;
-      if (unflushedBytes >= partBytes) {
-        unflushedBytes = 0;
-        await writer.flush();
-      }
-    },
-    end: async () => {
-      await writer.end();
-    },
-  };
 };
 
 type ListS3ObjectKeysOptions = {

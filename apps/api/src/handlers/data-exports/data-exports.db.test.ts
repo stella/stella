@@ -640,9 +640,7 @@ describe("starting an export", () => {
     expect(started).toHaveLength(1);
     expect(new Set(results.map((result) => result.row?.id)).size).toBe(1);
     for (const result of started) {
-      if (result.row !== null) {
-        createdExportIds.push(result.row.id);
-      }
+      createdExportIds.push(result.row.id);
     }
     await finishActive();
   });

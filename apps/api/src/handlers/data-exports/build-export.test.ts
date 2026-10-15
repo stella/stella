@@ -376,7 +376,11 @@ describe("organisation data export builder", () => {
     const { zips, partManifests } = await run(basicWorld());
     const zip = zips[0];
     const tasksRef = partManifests[0]?.matters[0]?.records.tasks;
-    if (zip === undefined || tasksRef === undefined || tasksRef.csv === null) {
+    if (
+      zip === undefined ||
+      tasksRef?.csv === undefined ||
+      tasksRef.csv === null
+    ) {
       throw new Error("expected task records");
     }
     const json = JSON.parse(
@@ -413,6 +417,49 @@ describe("organisation data export builder", () => {
         manifest.parts[index]?.matterIds ?? [],
       );
     }
+  });
+
+  test("records the archived byte length for buffered files despite stale storage sizes", async () => {
+    const world = basicWorld();
+    for (const matter of world.matters) {
+      for (const document of matter.matter.documents) {
+        for (const version of document.versions) {
+          for (const file of version.files) {
+            file.mimeType = "text/plain";
+          }
+        }
+      }
+    }
+    const source = fakeSource(world);
+    const { zips, partManifests } = await run(world, {
+      source: {
+        ...source,
+        readFile: async (ref) => {
+          const read = await source.readFile(ref);
+          return ref.type === "document" && read.type === "found"
+            ? { ...read, sizeBytes: read.sizeBytes + 100 }
+            : read;
+        },
+      },
+    });
+    let checkedFiles = 0;
+    for (const [index, part] of partManifests.entries()) {
+      for (const matter of part.matters) {
+        for (const document of matter.documents) {
+          for (const version of document.versions) {
+            for (const file of version.files) {
+              const bytes = await zips[index]
+                ?.file(file.path)
+                ?.async("uint8array");
+              expect(bytes).toBeDefined();
+              expect(file.sizeBytes).toBe(bytes?.byteLength);
+              checkedFiles += 1;
+            }
+          }
+        }
+      }
+    }
+    expect(checkedFiles).toBeGreaterThan(0);
   });
 
   test("lists unreadable files as absent and corrupted files as checksum mismatches", async () => {

@@ -397,12 +397,14 @@ const fileEntry = async function* ({
       return panic("Unhandled file read");
   }
   const hasher = createSha256();
+  let sizeBytes = read.sizeBytes;
   const compression = compressionForMimeType(mimeType);
   if (
     compression === ZIP_COMPRESSION.DEFLATE &&
     read.sizeBytes <= DEFLATE_IN_MEMORY_MAX_BYTES
   ) {
     const data = await collect(hashing(read.chunks, hasher, context.signal));
+    sizeBytes = data.byteLength;
     yield bytesEntry(path, data, modifiedAt, compression);
   } else {
     // The writer drains the stream before asking for the next entry, so
@@ -428,7 +430,7 @@ const fileEntry = async function* ({
   }
   context.fileCount += 1;
   await context.pace();
-  return { sha256, sizeBytes: read.sizeBytes };
+  return { sha256, sizeBytes };
 };
 
 type FolderDirectoriesArgs = {

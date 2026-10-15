@@ -16,7 +16,8 @@
 // field (APPNOTE 6.3.10, sections 4.3.14 to 4.3.16 and 4.5.3).
 
 import { panic, TaggedError } from "better-result";
-import { crc32 as zlibCrc32, deflateRawSync } from "node:zlib";
+import { promisify } from "node:util";
+import { crc32 as zlibCrc32, deflateRaw } from "node:zlib";
 
 import { Temporal } from "@stll/time";
 
@@ -184,15 +185,17 @@ const encodeName = (name: string): Uint8Array => {
   return nameBytes;
 };
 
-const encodeBytesEntry = (
+const deflate = promisify(deflateRaw);
+
+const encodeBytesEntry = async (
   name: string,
   modifiedAt: Date,
   { data, compression }: { data: Uint8Array; compression: ZipCompression },
-): { encoded: EncodedEntry; payload: Uint8Array } => {
+): Promise<{ encoded: EncodedEntry; payload: Uint8Array }> => {
   let method = METHOD_STORE;
   let payload = data;
   if (compression === ZIP_COMPRESSION.DEFLATE) {
-    const deflated = deflateRawSync(data);
+    const deflated = await deflate(data);
     // Incompressible input stays STORED: never ship an entry larger than its
     // own content.
     if (deflated.byteLength < data.byteLength) {
@@ -390,14 +393,14 @@ export const writeZip = async function* (
   let offset = 0;
   for await (const entry of entries) {
     if (names.has(entry.name)) {
-      return panic(`Duplicate ZIP entry name: ${entry.name}`);
+      panic(`Duplicate ZIP entry name: ${entry.name}`);
     }
     names.add(entry.name);
     const localHeaderOffset = offset;
     const { source } = entry;
     switch (source.type) {
       case "bytes": {
-        const { encoded, payload } = encodeBytesEntry(
+        const { encoded, payload } = await encodeBytesEntry(
           entry.name,
           entry.modifiedAt,
           source,
@@ -471,7 +474,7 @@ export const writeZip = async function* (
       }
       default:
         source satisfies never;
-        return panic("Unhandled ZIP entry source");
+        panic("Unhandled ZIP entry source");
     }
   }
   const centralDirectoryOffset = offset;

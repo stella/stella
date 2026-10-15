@@ -19,6 +19,7 @@ import {
 } from "@/api/lib/data-export-queue";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { transition } from "@/api/lib/db/transitions";
 import {
   brandPersistedDataExportId,
@@ -30,8 +31,9 @@ import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
 
-/** Rows handled per state per tick; the next tick takes the rest. */
+/** Rows handled per state per tick; a continuation takes the rest. */
 const BATCH_SIZE = 50;
+const CONTINUATION_DELAY_MS = 1000;
 /** A queued export older than this has lost its queue handoff. */
 const QUEUED_HANDOFF_SETTLE_MS = 5 * 60 * 1000;
 const STALE_RUN_ERROR =
@@ -48,6 +50,7 @@ type MaintenanceSummary = {
   resumed: number;
   failedStale: number;
   requeued: number;
+  hasMore: boolean;
   errors: unknown[];
 };
 
@@ -143,17 +146,24 @@ const moveEach = async (
 // the lifecycle could remove its files and no link is ever signed for a
 // removed object.
 const expireReady = async ({ db, summary, now }: StepArgs) => {
-  const due = await db
-    .select(sweepColumns)
-    .from(organizationDataExports)
-    .where(
-      and(
-        eq(organizationDataExports.status, "ready"),
-        atOrBefore(organizationDataExports.expiresAt, now),
+  const duePage = await readCursorPage(
+    db
+      .select(sweepColumns)
+      .from(organizationDataExports)
+      .where(
+        and(
+          eq(organizationDataExports.status, "ready"),
+          atOrBefore(organizationDataExports.expiresAt, now),
+        ),
+      )
+      .orderBy(
+        asc(organizationDataExports.expiresAt),
+        asc(organizationDataExports.id),
       ),
-    )
-    .orderBy(asc(organizationDataExports.expiresAt))
-    .limit(BATCH_SIZE);
+    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+  );
+  const due = duePage.items;
+  summary.hasMore ||= duePage.nextCursor !== null;
   summary.expired += await moveEach(
     db,
     due,
@@ -171,17 +181,24 @@ const expireReady = async ({ db, summary, now }: StepArgs) => {
 
 const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   const staleBefore = new Date(now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS);
-  const stale = await db
-    .select({ ...sweepColumns, failures: organizationDataExports.failures })
-    .from(organizationDataExports)
-    .where(
-      and(
-        eq(organizationDataExports.status, "running"),
-        before(organizationDataExports.heartbeatAt, staleBefore),
+  const stalePage = await readCursorPage(
+    db
+      .select({ ...sweepColumns, failures: organizationDataExports.failures })
+      .from(organizationDataExports)
+      .where(
+        and(
+          eq(organizationDataExports.status, "running"),
+          before(organizationDataExports.heartbeatAt, staleBefore),
+        ),
+      )
+      .orderBy(
+        asc(organizationDataExports.heartbeatAt),
+        asc(organizationDataExports.id),
       ),
-    )
-    .orderBy(asc(organizationDataExports.heartbeatAt))
-    .limit(BATCH_SIZE);
+    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+  );
+  const stale = stalePage.items;
+  summary.hasMore ||= stalePage.nextCursor !== null;
   // A worker that vanished (crash, killed deploy) leaves its checkpoints:
   // hand the run back so the next attempt resumes. A lost worker counts as
   // a failure (a graceful stop hands itself back without one); an export
@@ -240,12 +257,19 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
     before(organizationDataExports.createdAt, settledBefore),
   );
   // An export whose requester's account was deleted cannot run as anyone.
-  const abandoned = await db
-    .select(sweepColumns)
-    .from(organizationDataExports)
-    .where(and(settled, isNull(organizationDataExports.requestedBy)))
-    .orderBy(asc(organizationDataExports.createdAt))
-    .limit(BATCH_SIZE);
+  const abandonedPage = await readCursorPage(
+    db
+      .select(sweepColumns)
+      .from(organizationDataExports)
+      .where(and(settled, isNull(organizationDataExports.requestedBy)))
+      .orderBy(
+        asc(organizationDataExports.createdAt),
+        asc(organizationDataExports.id),
+      ),
+    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+  );
+  const abandoned = abandonedPage.items;
+  summary.hasMore ||= abandonedPage.nextCursor !== null;
   await moveEach(
     db,
     abandoned,
@@ -264,17 +288,24 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
       }),
     summary,
   );
-  const queued = await db
-    .select({
-      id: organizationDataExports.id,
-      organizationId: organizationDataExports.organizationId,
-      requestedBy: organizationDataExports.requestedBy,
-      attempt: organizationDataExports.attempt,
-    })
-    .from(organizationDataExports)
-    .where(and(settled, isNotNull(organizationDataExports.requestedBy)))
-    .orderBy(asc(organizationDataExports.createdAt))
-    .limit(BATCH_SIZE);
+  const queuedPage = await readCursorPage(
+    db
+      .select({
+        id: organizationDataExports.id,
+        organizationId: organizationDataExports.organizationId,
+        requestedBy: organizationDataExports.requestedBy,
+        attempt: organizationDataExports.attempt,
+      })
+      .from(organizationDataExports)
+      .where(and(settled, isNotNull(organizationDataExports.requestedBy)))
+      .orderBy(
+        asc(organizationDataExports.createdAt),
+        asc(organizationDataExports.id),
+      ),
+    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+  );
+  const queued = queuedPage.items;
+  summary.hasMore ||= queuedPage.nextCursor !== null;
   // Idempotent: the job id derives from the export and its attempt count,
   // so a row still waiting for a free slot is not queued twice.
   const handoffs = await Promise.all(
@@ -314,7 +345,7 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
  */
 export const createMaintainDataExportsTask =
   (deps: DataExportMaintenanceDependencies): SchedulerTask =>
-  async ({ db, dueAt, logger, signal }) => {
+  async ({ db, dueAt, logger, signal, scheduleContinuation }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
@@ -323,12 +354,21 @@ export const createMaintainDataExportsTask =
       resumed: 0,
       failedStale: 0,
       requeued: 0,
+      hasMore: false,
       errors: [],
     };
     const step = { db, deps, summary, now: dueAt.toDate() };
     await expireReady(step);
     await resumeStaleRuns(step);
     await requeueQueued(step);
+    // Transitions remove handled rows from the next scan; queue workers
+    // remove handed-off rows when they claim them. The sentinel requests
+    // another bounded pass without treating a full batch as complete.
+    if (summary.hasMore) {
+      scheduleContinuation(
+        new Date(dueAt.claimedAtDate().getTime() + CONTINUATION_DELAY_MS),
+      );
+    }
     logger.info("scheduler.data_exports_maintained", {
       "dataExports.expired": summary.expired,
       "dataExports.resumed": summary.resumed,
