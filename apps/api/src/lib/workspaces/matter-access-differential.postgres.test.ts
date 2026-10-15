@@ -17,7 +17,10 @@ import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-w
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
-import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
+import {
+  memberReachesMatterSql,
+  readAuthorizedWorkspaces,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -155,38 +158,27 @@ const seedWorld = async (tx: Transaction, world: World) => {
 
 type LiveRow = {
   workspaceId: SafeId<"workspace">;
-  clientId: string | null;
   status: string;
-  workspaceMemberId: string | null;
+  /** The database access function's answer for this member. */
+  reachesMatter: boolean;
 };
 
 const readLiveRows = async (
   tx: Transaction,
   seeded: SeededWorld,
   userId: SafeId<"user">,
-): Promise<LiveRow[]> => {
-  const matters = await tx
+): Promise<LiveRow[]> =>
+  await tx
     .select({
       workspaceId: workspaces.id,
-      clientId: workspaces.clientId,
       status: workspaces.status,
+      reachesMatter: memberReachesMatterSql(
+        { organizationId: seeded.organizationId, userId },
+        workspaces.id,
+      ),
     })
     .from(workspaces)
     .where(inArray(workspaces.id, seeded.matterIds));
-  const assignments = await tx
-    .select({
-      id: workspaceMembers.id,
-      workspaceId: workspaceMembers.workspaceId,
-    })
-    .from(workspaceMembers)
-    .where(eq(workspaceMembers.userId, userId));
-  return matters.map((matter) => ({
-    ...matter,
-    workspaceMemberId:
-      assignments.find((row) => row.workspaceId === matter.workspaceId)?.id ??
-      null,
-  }));
-};
 
 const readViewSet = async (
   db: Parameters<typeof markRlsDatabase>[0],
@@ -287,10 +279,10 @@ describe.skipIf(!runPostgresTests)(
               for (const [matterIndex, row] of facts.rows.entries()) {
                 const label = `${String(role)} on matter ${String(matterIndex)}`;
                 const reaches = view.has(row.workspaceId);
+                expect(row.reachesMatter, label).toBe(reaches);
                 const input = {
                   organizationRole: role,
-                  workspaceClientId: row.clientId,
-                  workspaceMemberId: row.workspaceMemberId,
+                  reachesMatter: row.reachesMatter,
                 };
                 expect(canUseFolioCollabWorkspace(input), label).toBe(reaches);
                 expect(canWriteWorkspaceEntities(input), label).toBe(

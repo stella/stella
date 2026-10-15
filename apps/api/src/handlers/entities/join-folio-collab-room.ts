@@ -12,7 +12,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   folioCollabRooms,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -37,6 +36,7 @@ import {
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const joinFolioCollabRoomBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -80,8 +80,10 @@ const canStillEditWorkspace = async ({
   const memberships = await tx
     .select({
       organizationRole: member.role,
-      workspaceClientId: workspaces.clientId,
-      workspaceMemberId: workspaceMembers.id,
+      reachesMatter: memberReachesMatterSql(
+        { organizationId, userId },
+        workspaceId,
+      ),
       workspaceStatus: workspaces.status,
     })
     .from(member)
@@ -90,13 +92,6 @@ const canStillEditWorkspace = async ({
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, member.userId),
-        eq(workspaceMembers.workspaceId, workspaceId),
       ),
     )
     .where(
@@ -115,8 +110,7 @@ const canStillEditWorkspace = async ({
 
   const canUseWorkspace = canUseFolioCollabWorkspace({
     organizationRole: membership.organizationRole,
-    workspaceClientId: membership.workspaceClientId,
-    workspaceMemberId: membership.workspaceMemberId,
+    reachesMatter: membership.reachesMatter,
   });
   return (
     canUseWorkspace &&

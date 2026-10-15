@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -112,9 +112,11 @@ export const activeAuthorizedWorkspaceQuery = (
 export const authorizedWorkspaceIdSubquery = (): SQL =>
   sql`SELECT aw.authorized_workspace_id FROM ${stellaAuthorizedWorkspaces} aw`;
 
+type SqlValue = SQLWrapper | string;
+
 type MemberScope = {
-  organizationId: SQL | SafeId<"organization">;
-  userId: SQL | string;
+  organizationId: SqlValue;
+  userId: SqlValue;
 };
 
 /**
@@ -126,6 +128,6 @@ type MemberScope = {
  */
 export const memberReachesMatterSql = (
   { organizationId, userId }: MemberScope,
-  workspaceId: SQL | SafeId<"workspace">,
+  workspaceId: SqlValue,
 ): SQL<boolean> =>
   sql<boolean>`public.stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;
