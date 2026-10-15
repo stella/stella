@@ -78,7 +78,7 @@ import type {
 import { logger } from "@/api/lib/observability/logger";
 import {
   derivativeDeferRssBytes,
-  readCgroupMemoryLimitBytes,
+  readProcessMemoryLimit,
 } from "@/api/lib/process-memory-limit";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -373,9 +373,9 @@ export const initFileDerivativeWorker = () => {
     storeClass: "durable-coordination",
   });
 
-  // The limit is read once: it is fixed for the life of the task.
-  const memoryLimitBytes = readCgroupMemoryLimitBytes();
-  const rssHighBytes = derivativeDeferRssBytes(memoryLimitBytes);
+  // The limit is read once: it is fixed for the life of the process.
+  const memoryLimit = readProcessMemoryLimit();
+  const rssHighBytes = derivativeDeferRssBytes(memoryLimit);
   const memory = createMemoryPressureGate({
     holdMs: LIMITS.fileDerivativeMemoryPressureHoldMs,
     now: () => Temporal.Now.instant().epochMilliseconds,
@@ -482,7 +482,8 @@ export const initFileDerivativeWorker = () => {
   logger.info("file_derivative.worker_started", {
     concurrency: String(FILE_DERIVATIVE_WORKER_CONCURRENCY),
     "memory.defer_rss_bytes": rssHighBytes,
-    "memory.limit_bytes": memoryLimitBytes ?? "unlimited",
+    "memory.limit_bytes":
+      memoryLimit.type === "limited" ? memoryLimit.bytes : memoryLimit.type,
   });
 
   return {

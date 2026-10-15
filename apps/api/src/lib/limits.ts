@@ -476,17 +476,19 @@ export const LIMITS = {
    *  working set grows with it, so this bounds both. Larger files keep their
    *  original as the preview and record `failed`/`too-large`. */
   fileDerivativeSourceMaxBytes: 25 * 1024 * 1024,
-  /** Derivative jobs one API process runs at once. Conversions are the
-   *  process's largest allocations and share the task with the converter, so
-   *  they run one at a time. */
+  /** Derivative jobs one API process runs at once. Each conversion holds a
+   *  whole source plus its output and, for images, a decoded surface: the
+   *  largest single allocations the process makes. Running them one at a time
+   *  keeps that peak to one file's worth. */
   fileDerivativeWorkerConcurrency: 1,
-  /** Fraction of the process's enforced memory limit (its cgroup limit, read
-   *  once at startup) at or above which the derivative worker defers a job
-   *  instead of starting it. Relative, so it follows the task size; the rest
-   *  is headroom for request traffic and the conversion itself. */
+  /** Fraction of the process's effective memory limit (the smallest finite
+   *  cgroup limit on its group and ancestors, read once at startup) at or
+   *  above which the derivative worker defers a job instead of starting it.
+   *  Relative, so it follows the memory actually available; the rest is
+   *  headroom for request traffic and the conversion itself. */
   fileDerivativeDeferMemoryFraction: 0.7,
-  /** The defer threshold (process RSS) where no memory limit is readable or
-   *  the process is unlimited. */
+  /** The defer threshold (process RSS) where no finite memory limit applies
+   *  or none can be read. */
   fileDerivativeDeferRssFallbackBytes: 1280 * 1024 * 1024,
   /** How long after the operating system's last memory-pressure signal the
    *  derivative worker keeps deferring jobs. */
