@@ -33,9 +33,10 @@ export type ContextNoticeStamp = {
   metadata: () => { contextNotice?: ChatContextNotice };
   /**
    * `chunk`, carrying the notice when it is the first event since the notice
-   * was recorded that the browser's stream processor merges into the
-   * answer's metadata (answer text or reasoning), so the notice reads the
-   * same live as it does from the stored answer. A tool call carries its
+   * changed that the browser's stream processor merges into the answer's
+   * metadata (answer text or reasoning), so the notice reads the same live as
+   * it does from the stored answer. A notice an earlier attempt streamed and
+   * the answering attempt does not have is withdrawn with `null`. A tool call carries its
    * metadata on its own part, so a step that opens with one is preceded by
    * an empty text start for the same answer that carries the notice.
    */
@@ -53,24 +54,26 @@ export const createContextNoticeStamp = (
   initial: ChatContextNotice | null,
 ): ContextNoticeStamp => {
   let notice = initial;
-  let stamped = false;
+  // What the browser's live answer shows, as the stream last told it. An
+  // attempt replaced after it streamed a notice leaves that notice there, so
+  // the answering attempt states its own, `null` withdrawing it.
+  let shown: ChatContextNotice | null = null;
   return {
     record: (next) => {
       notice ??= next;
     },
     beginAttempt: () => {
       notice = initial;
-      stamped = false;
     },
     metadata: () =>
       notice === null ? {} : { [CONTEXT_NOTICE_METADATA_KEY]: notice },
     stamp: (chunk) => {
-      if (notice === null || stamped) {
+      if (notice?.type === shown?.type) {
         return [chunk];
       }
       const metadata = { [CONTEXT_NOTICE_METADATA_KEY]: notice };
       if (MESSAGE_METADATA_EVENTS.has(chunk.type)) {
-        stamped = true;
+        shown = notice;
         return [{ ...chunk, metadata: { ...chunk.metadata, ...metadata } }];
       }
       if (
@@ -78,7 +81,7 @@ export const createContextNoticeStamp = (
         chunk.parentMessageId !== undefined &&
         chunk.parentMessageId !== ""
       ) {
-        stamped = true;
+        shown = notice;
         return [
           {
             type: EventType.TEXT_MESSAGE_START,

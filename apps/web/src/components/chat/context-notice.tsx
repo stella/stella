@@ -20,8 +20,9 @@ export const ContextNotice = ({
   metadata: ChatMessageMetadata | undefined;
 }) => {
   const t = useTranslations();
+  // `null` is the live stream withdrawing a replaced attempt's notice.
   const notice = metadata?.contextNotice;
-  if (notice === undefined) {
+  if (notice === undefined || notice === null) {
     return null;
   }
   return (

@@ -26,4 +26,8 @@ describe("an answer's context notice", () => {
     expect(render(undefined)).toBe("");
     expect(render({})).toBe("");
   });
+
+  test("stays hidden once the live stream withdraws a replaced attempt's notice", () => {
+    expect(render({ contextNotice: null })).toBe("");
+  });
 });

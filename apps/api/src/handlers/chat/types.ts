@@ -175,8 +175,10 @@ export type ChatMessageMetadata = {
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;
   anonRestorations?: ChatAnonRestorationsData | undefined;
   /** Server-owned: what the answer's context left out (`context-notice.ts`).
-   * Incoming client metadata deliberately does not accept this field. */
-  contextNotice?: ChatContextNotice | undefined;
+   * `null` only on the live stream, withdrawing a notice a replaced attempt
+   * streamed; never stored. Incoming client metadata deliberately does not
+   * accept this field. */
+  contextNotice?: ChatContextNotice | null | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;

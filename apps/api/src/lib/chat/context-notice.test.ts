@@ -142,28 +142,40 @@ describe("an answer's context notice", () => {
     });
   });
 
-  test("streams the answering attempt's notice after an earlier attempt stamped its own", () => {
+  // Both attempts stream into one browser answer: the first opens it and
+  // stops before any content, then the fallback answers.
+  const twoAttempts = (fallbackTrims: boolean) => {
     const stamp = createContextNoticeStamp(null);
     stamp.beginAttempt();
     stamp.record(HISTORY_TRIMMED_NOTICE);
-    // The first attempt opens its answer and stops before any content.
     const first = stamp.stamp({
       type: EventType.TEXT_MESSAGE_START,
       messageId: MESSAGE_ID,
       role: "assistant",
     });
-    expect(first.at(0)?.metadata?.["contextNotice"]).toEqual(
-      HISTORY_TRIMMED_NOTICE,
-    );
-
     stamp.beginAttempt();
-    stamp.record(HISTORY_TRIMMED_NOTICE);
-    const streamed = answerChunks().flatMap((chunk) => stamp.stamp(chunk));
-    expect(liveAnswer(streamed).metadata?.["contextNotice"]).toEqual(
-      HISTORY_TRIMMED_NOTICE,
-    );
-    expect(stamp.metadata()).toEqual({
-      contextNotice: HISTORY_TRIMMED_NOTICE,
-    });
+    if (fallbackTrims) {
+      stamp.record(HISTORY_TRIMMED_NOTICE);
+    }
+    const fallback = answerChunks()
+      .slice(1)
+      .flatMap((chunk) => stamp.stamp(chunk));
+    return {
+      live: liveAnswer([answerChunks()[0], ...first, ...fallback]),
+      stored: stamp.metadata(),
+    };
+  };
+
+  test("keeps the notice live when the answering attempt also trimmed", () => {
+    const { live, stored } = twoAttempts(true);
+    expect(live.metadata?.["contextNotice"]).toEqual(HISTORY_TRIMMED_NOTICE);
+    expect(stored).toEqual({ contextNotice: HISTORY_TRIMMED_NOTICE });
+  });
+
+  test("withdraws a replaced attempt's notice when the answering attempt did not trim", () => {
+    const { live, stored } = twoAttempts(false);
+    // Withdrawn live (`null`), absent once stored: neither shows a notice.
+    expect(live.metadata?.["contextNotice"]).toBeNull();
+    expect(stored).toEqual({});
   });
 });
