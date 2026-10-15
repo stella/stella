@@ -246,6 +246,29 @@ test("non-Rust changes avoid Cargo manifest discovery", () => {
   });
 });
 
+test("desktop Rust packages are skipped before reaching the hosted runner", () => {
+  withFixture((root) => {
+    const file = "apps/desktop/src-tauri/src/feature.rs";
+    write(
+      root,
+      "apps/desktop/src-tauri/Cargo.toml",
+      '[package]\nname = "stella-desktop"\nversion = "0.1.0"\n',
+    );
+    write(root, "apps/desktop/src-tauri/src/lib.rs", "mod feature;\n");
+    write(root, file, "#[test] fn example() {}\n");
+    expect(selectRustTargets(root, [file])).toEqual({
+      targets: [],
+      unsupported: [
+        {
+          file,
+          reason:
+            "desktop Rust tests require platform system dependencies unavailable in the report job",
+        },
+      ],
+    });
+  });
+});
+
 test.each([
   ["src/main.rs", "Rust main tests need an explicit Cargo binary target"],
   ["src/lib.rs", "custom Rust test harnesses need an explicit runner"],

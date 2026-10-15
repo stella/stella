@@ -276,13 +276,10 @@ export const reportExitCode = (report: Report, blocking: boolean) =>
     report.results.some(({ failures }) => failures > 0))
     ? 1
     : 0;
-const annotation = (value: string) =>
-  value
-    .replaceAll("%", "%25")
-    .replaceAll("\r", "%0D")
-    .replaceAll("\n", "%0A")
-    .replaceAll(",", "%2C")
-    .replaceAll(":", "%3A");
+export const annotationData = (value: string) =>
+  value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+export const annotationProperty = (value: string) =>
+  annotationData(value).replaceAll(",", "%2C").replaceAll(":", "%3A");
 
 type RunOptions = { target: Target; seed: number; timeoutMs: number };
 export type RunOutcome =
@@ -538,11 +535,11 @@ if (import.meta.main) {
     ({ failures }) => failures > 0,
   )) {
     console.log(
-      `::warning file=${annotation(result.file)}::${result.failures}/${result.runs} runs failed`,
+      `::warning file=${annotationProperty(result.file)}::${result.failures}/${result.runs} runs failed`,
     );
   }
   for (const error of finalReport.errors) {
-    console.log(`::warning::${annotation(error)}`);
+    console.log(`::warning::${annotationData(error)}`);
   }
   process.exitCode = reportExitCode(
     finalReport,

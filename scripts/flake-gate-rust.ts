@@ -113,8 +113,8 @@ export const rustExactCommand = ({
   ...names,
 ];
 
-const unsupportedLibrary = (manifest: Record<string, unknown>, cwd: string) => {
-  const library = manifest["lib"];
+const unsupportedLibrary = (manifest: object, cwd: string) => {
+  const library = "lib" in manifest ? manifest.lib : undefined;
   if (typeof library === "object" && library !== null) {
     if ("harness" in library && library.harness === false) {
       return "custom Rust test harnesses need an explicit runner";
@@ -123,7 +123,7 @@ const unsupportedLibrary = (manifest: Record<string, unknown>, cwd: string) => {
       return "custom Rust library roots need an explicit module mapping";
     }
   }
-  const pkg = manifest["package"];
+  const pkg = "package" in manifest ? manifest.package : undefined;
   if (
     library === undefined &&
     typeof pkg === "object" &&
@@ -258,6 +258,14 @@ export const selectRustTargets = (
     const owner = packageFor(absolute);
     if (owner === undefined) {
       unsupported.push({ file: changedFile, reason: "no package Cargo.toml" });
+      continue;
+    }
+    if (repoRelativePath(rootPath, owner.cwd).startsWith("apps/desktop/")) {
+      unsupported.push({
+        file: changedFile,
+        reason:
+          "desktop Rust tests require platform system dependencies unavailable in the report job",
+      });
       continue;
     }
     const relative = repoRelativePath(owner.cwd, absolute);

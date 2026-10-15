@@ -12,6 +12,8 @@ import { planTestRuns } from "../apps/web/scripts/test-run-plan";
 import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
 import {
   BUDGET_MS,
+  annotationData,
+  annotationProperty,
   executeGate,
   planRepeats,
   renderReport,
@@ -25,6 +27,25 @@ import {
 
 // Markdown reads consume temporary CLI output only.
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
+test.each([
+  [
+    "file.ts: first, second",
+    "file.ts: first, second",
+    "file.ts%3A first%2C second",
+  ],
+  [
+    "100%\r\n::warning::",
+    "100%25%0D%0A::warning::",
+    "100%25%0D%0A%3A%3Awarning%3A%3A",
+  ],
+])(
+  "workflow warnings escape data and properties separately: %s",
+  (input, data, property) => {
+    expect(annotationData(input)).toBe(data);
+    expect(annotationProperty(input)).toBe(property);
+  },
+);
 
 const withFixture = async (run: (root: string) => void | Promise<void>) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-"));
