@@ -388,6 +388,8 @@
       "chooseList": "Vali loend",
       "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
+      "loadSample": "Laadi näidisjuhtum",
+      "loadSampleFailed": "Näidisjuhtumi laadimine ebaõnnestus",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
@@ -2946,6 +2948,7 @@
     "checkingDocxEditDescription": "stella kontrollib veel, kas seda DOCX-i saab turvaliselt muuta. Proovige uuesti, kui dokument on laadimise lõpetanud.",
     "checkingDocxEditTitle": "Dokumendi kontrollimine",
     "chooseEvidence": "Valige fail, et lisada nummerdatud tõendiviide.",
+    "collaborationSnapshotRecovered": "Salvestatud koostöökoopiat ei saanud uuesti avada. Ruum taastati viimati salvestatud dokumendist; salvestamata muudatused võisid kaduma minna.",
     "comment": "Kommenteeri",
     "comments": {
       "addPlaceholder": "Lisa kommentaar…",
@@ -4542,6 +4545,8 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",

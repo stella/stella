@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
@@ -155,7 +157,7 @@ export const applyFitToPage = async (
     if (xml === null) {
       continue;
     }
-    zip.file(path, patchSheetXml(xml));
+    writeZipEntry(zip, path, patchSheetXml(xml));
   }
 
   return await zip.generateAsync({ type: "arraybuffer" });

@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { acceptAnswerEdit, AnswerEditProposal } from "./answer-edit-api";
 
@@ -42,7 +44,7 @@ afterEach(async () => {
   await act(async () => cleanup());
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("asks for instructions, previews the exact span diff and accepts the anchored revision", async () => {

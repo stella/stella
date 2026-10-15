@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { listTimeBillingRoutes } from "../../e2e/helpers/time-billing-routes";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
@@ -70,7 +72,7 @@ const redirectDestination = (routePath: string) => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("server enrollment admission across dedicated billing routes", () => {
