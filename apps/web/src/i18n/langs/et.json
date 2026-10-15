@@ -363,6 +363,8 @@
       "chooseList": "Vali loend",
       "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
+      "loadSample": "Laadi näidisjuhtum",
+      "loadSampleFailed": "Näidisjuhtumi laadimine ebaõnnestus",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
