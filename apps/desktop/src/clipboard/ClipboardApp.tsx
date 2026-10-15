@@ -151,7 +151,7 @@ import type {
   ClipboardPointerPosition,
   ClipboardSearchScope,
 } from "./clipboard-logic";
-import { clipboardSelection } from "./clipboard-selection";
+import { clipboardHistory } from "./clipboard-selection";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -590,11 +590,28 @@ const ClipboardCard = ({
         data-clipboard-card-trigger=""
         aria-pressed={selected}
         onClick={(event) => {
-          if (event.metaKey) {
+          if (
+            hasClipboardPrimaryModifier({
+              altKey: event.altKey,
+              altGraphKey: event.getModifierState("AltGraph"),
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            })
+          ) {
             onToggleSelection(item.id);
             return;
           }
           onCopy(item, "original");
+        }}
+        aria-keyshortcuts="Space"
+        onKeyDown={(event) => {
+          if (event.key !== " " || event.nativeEvent.isComposing) {
+            return;
+          }
+          event.preventDefault();
+          if (!event.repeat) {
+            onToggleSelection(item.id);
+          }
         }}
         onContextMenu={(event) =>
           onOpenMenu({ anchor: "pointer", event, item, index })
@@ -1561,7 +1578,6 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
-  const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1570,10 +1586,13 @@ const ClipboardApp = () => {
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [selection, dispatchSelection] = useReducer(clipboardSelection, {
-    ids: [],
-    session: 0,
-  });
+  const [{ snapshot, selection }, dispatchClipboard] = useReducer(
+    clipboardHistory,
+    {
+      snapshot: EMPTY_SNAPSHOT,
+      selection: { ids: [], session: 0 },
+    },
+  );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
@@ -1622,7 +1641,7 @@ const ClipboardApp = () => {
             setError({ message: errorReadHistory, source: "read" });
             return undefined;
           }
-          setSnapshot(value);
+          dispatchClipboard({ type: "snapshotReceived", snapshot: value });
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1786,7 +1805,7 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     const handleWindowFocus = () => {
-      dispatchSelection({ type: "sessionStarted" });
+      dispatchClipboard({ type: "sessionStarted" });
       setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
@@ -1857,7 +1876,7 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
-            setSnapshot(value);
+            dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
           }
@@ -1907,7 +1926,7 @@ const ClipboardApp = () => {
         ? invoke("clipboard_copy_items", { format, ids })
         : invoke("clipboard_copy_item", { format, id: item.id });
     void copying
-      .then(() => dispatchSelection({ type: "copySucceeded", session }))
+      .then(() => dispatchClipboard({ type: "copySucceeded", session }))
       .catch((error: unknown) => {
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
@@ -2485,7 +2504,7 @@ const ClipboardApp = () => {
       return;
     }
     if (selection.ids.length > 0) {
-      dispatchSelection({ type: "clear" });
+      dispatchClipboard({ type: "clear" });
       return;
     }
     requestHide();
@@ -2727,7 +2746,7 @@ const ClipboardApp = () => {
                             active={index === activeIndex}
                             selected={selection.ids.includes(item.id)}
                             onToggleSelection={(id) =>
-                              dispatchSelection({ type: "toggle", id })
+                              dispatchClipboard({ type: "toggle", id })
                             }
                             ageReferenceTime={ageReferenceTime}
                             dragging={

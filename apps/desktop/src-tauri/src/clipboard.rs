@@ -4479,7 +4479,11 @@ mod tests {
     assert_eq!(plain.html(), None);
     assert_eq!(plain.rtf(), None);
     assert_eq!(
-      compose_clipboard_items(&[rich.clone()], ClipboardCopyFormat::Original).unwrap(),
+      compose_clipboard_items(
+        std::slice::from_ref(&rich),
+        ClipboardCopyFormat::Original
+      )
+      .unwrap(),
       rich
     );
   }

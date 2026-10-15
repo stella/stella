@@ -120,6 +120,14 @@ const installNativeBoundary = async (
             window.dispatchEvent(new FocusEvent("blur"));
             return undefined;
           }
+          if (command === "clipboard_delete_item") {
+            return {
+              ...clipboardSnapshot,
+              items: clipboardSnapshot.items.filter(
+                (item) => item.id !== args["id"],
+              ),
+            };
+          }
           if (command === "clipboard_get_snapshot") {
             return clipboardSnapshot;
           }
@@ -1460,7 +1468,16 @@ for (const language of ["en", "ar"] as const) {
     );
     await expect(more).toHaveAttribute("aria-haspopup", "menu");
     await expect(more).toHaveCSS("opacity", "1");
-    await cards.first().press(browserName === "webkit" ? "Alt+Tab" : "Tab");
+    const tab = browserName === "webkit" ? "Alt+Tab" : "Tab";
+    const pasteOptions = page.locator(
+      "[data-clipboard-format-shortcuts] button",
+    );
+    await expect(pasteOptions).toHaveCount(2);
+    await cards.first().press(tab);
+    await expect(pasteOptions.first()).toBeFocused();
+    await page.keyboard.press(tab);
+    await expect(pasteOptions.last()).toBeFocused();
+    await page.keyboard.press(tab);
     await expect(more).toBeFocused();
     await more.press("Enter");
     await expect(page.getByRole("menu")).toBeVisible();
@@ -1795,3 +1812,61 @@ for (const language of ["en", "ar"] as const) {
     });
   }
 }
+
+test("Control-click builds an ordered selection on Windows and Linux", async ({
+  page,
+}) => {
+  test.skip(
+    process.platform === "darwin",
+    "macOS reserves Control-click for its native context menu",
+  );
+  const cards = await openClipboard(page, "en");
+  await cards.nth(2).click({ modifiers: ["Control"] });
+  await cards.first().click({ modifiers: ["Control"] });
+  await expect(cards.nth(2)).toHaveAttribute("aria-pressed", "true");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+  await page.keyboard.press("Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-3", "clip-1"],
+  });
+});
+
+test("Space toggles the focused card once per press without copying", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await page.keyboard.down("Space");
+  await page.keyboard.down("Space");
+  await page.keyboard.up("Space");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Space");
+  await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+  await cards.nth(2).focus();
+  await page.keyboard.press("Space");
+  await cards.first().focus();
+  await page.keyboard.press("Space");
+  expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
+  await page.keyboard.press("Enter");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-3", "clip-1"],
+  });
+});
+
+test("deleting a selected clip removes it from the next ordered paste", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await cards.first().click({ modifiers: ["Meta"] });
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await cards.first().focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator('[data-clipboard-id="clip-1"]')).toHaveCount(0);
+  await page.keyboard.press("Meta+c");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-3"],
+  });
+});

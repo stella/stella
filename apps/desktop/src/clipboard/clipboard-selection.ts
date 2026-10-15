@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { ClipboardSnapshot } from "./clipboard-types";
+
 export type ClipboardSelectionState = {
   ids: string[];
   session: number;
@@ -7,6 +9,7 @@ export type ClipboardSelectionState = {
 
 export type ClipboardSelectionAction =
   | { type: "toggle"; id: string }
+  | { type: "historyChanged"; ids: readonly string[] }
   | { type: "clear" }
   | { type: "sessionStarted" }
   | { type: "copySucceeded"; session: number };
@@ -17,6 +20,13 @@ export const clipboardSelection = (
   action: ClipboardSelectionAction,
 ): ClipboardSelectionState => {
   switch (action.type) {
+    case "historyChanged": {
+      const existingIds = new Set(action.ids);
+      return {
+        ids: selection.ids.filter((id) => existingIds.has(id)),
+        session: selection.session,
+      };
+    }
     case "sessionStarted":
       return { ids: [], session: selection.session + 1 };
     case "copySucceeded":
@@ -38,4 +48,39 @@ export const clipboardSelection = (
       return panic("Unknown clipboard selection action.");
     }
   }
+};
+
+type ClipboardHistoryState = {
+  snapshot: ClipboardSnapshot;
+  selection: ClipboardSelectionState;
+};
+
+type ClipboardHistoryAction =
+  | Exclude<ClipboardSelectionAction, { type: "historyChanged" }>
+  | { type: "snapshotReceived"; snapshot: ClipboardSnapshot };
+
+/** Snapshots and their selection projection commit together for every history update. */
+export const clipboardHistory = (
+  state: ClipboardHistoryState,
+  action: ClipboardHistoryAction,
+): ClipboardHistoryState => {
+  if (action.type === "snapshotReceived") {
+    return {
+      snapshot: action.snapshot,
+      selection: clipboardSelection(state.selection, {
+        type: "historyChanged",
+        ids: action.snapshot.items.map((item) => item.id),
+      }),
+    };
+  }
+  if (
+    action.type === "toggle" &&
+    !state.snapshot.items.some((item) => item.id === action.id)
+  ) {
+    return state;
+  }
+  return {
+    snapshot: state.snapshot,
+    selection: clipboardSelection(state.selection, action),
+  };
 };

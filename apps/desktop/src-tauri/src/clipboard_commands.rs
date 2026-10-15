@@ -525,14 +525,14 @@ pub fn clipboard_copy_item(
 
 #[tauri::command]
 pub fn clipboard_copy_items(
-  _caller: ClipboardCaller,
+  caller: ClipboardCaller,
   format: ClipboardCopyFormat,
   ids: Vec<String>,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<(), ClipboardCopyError> {
   if let [id] = ids.as_slice() {
-    return clipboard_copy_item(_caller, format, id.clone(), state, window);
+    return clipboard_copy_item(caller, format, id.clone(), state, window);
   }
   let copy_error = |message| ClipboardCopyError::Copy { message };
   {
