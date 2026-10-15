@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { DataTag } from "@tanstack/react-query";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 // A DOM for this file only: the guard's modules read browser globals.
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
@@ -12,7 +14,7 @@ const { sessionOptions } = await import("@/lib/auth-queries");
 const { loadProtectedContext } = await import("@/routes/-protected-guard");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type SessionData =

@@ -3,6 +3,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { ChatSourceCitationTarget } from "@stll/api-contract";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
@@ -31,7 +33,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const identity = {
