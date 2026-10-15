@@ -485,7 +485,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/entities/join-folio-collab-room.db.test.ts": {
-    "count": 4,
+    "count": 5,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -720,7 +720,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts": {
-    "count": 2,
+    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1240,7 +1240,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/folio-collab-rooms.test.ts": {
-    "count": 6,
+    "count": 9,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2065,6 +2065,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/scripts/src/generation-lock.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-stderr.test.ts": {
     "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"

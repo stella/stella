@@ -20,7 +20,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-process-supervisor.test.ts": {
-    "count": 3,
+    "count": 5,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -170,6 +170,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/search-history/import-clock.integration.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -461,6 +466,11 @@
   },
   "apps/api/src/lib/subprocess.test.ts": {
     "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/uploads/finalize-admission.test.ts": {
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -891,6 +901,31 @@
   },
   "packages/scripts/src/generation-lock.test.ts": {
     "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-memory.test.ts": {
+    "count": 3,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-shutdown.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-spawn.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-stderr.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/windows-process-ownership.test.ts": {
+    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
