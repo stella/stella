@@ -22,6 +22,8 @@ const paragraph = (text: string): Block => {
 const renderedText = (markup: string) =>
   markup.replaceAll(/<[^>]*>/gu, "").replaceAll("&nbsp;", " ");
 
+const ELIDED = "data-reader-elided";
+
 const renderBlock = (text: string) => (
   <BlockRenderer
     activeMatchIndex={-1}
@@ -33,21 +35,17 @@ const renderBlock = (text: string) => (
 );
 
 describe("display elision policy", () => {
-  test("a court document reads with the publisher's spaced letters joined", () => {
-    expect(
-      renderedText(renderToStaticMarkup(renderBlock(SPACED_LETTERS))),
-    ).toBe("The choices are ABCD.");
+  test("a court document marks the publisher's letter spacing as elided", () => {
+    const markup = renderToStaticMarkup(renderBlock(SPACED_LETTERS));
+    expect(markup).toContain(ELIDED);
+    expect(renderedText(markup)).toBe(SPACED_LETTERS);
   });
 
-  test("literal text keeps every stored character", () => {
-    expect(
-      renderedText(
-        renderToStaticMarkup(
-          <LiteralTextProvider>
-            {renderBlock(SPACED_LETTERS)}
-          </LiteralTextProvider>,
-        ),
-      ),
-    ).toBe(SPACED_LETTERS);
+  test("literal text keeps every stored character visible", () => {
+    const markup = renderToStaticMarkup(
+      <LiteralTextProvider>{renderBlock(SPACED_LETTERS)}</LiteralTextProvider>,
+    );
+    expect(markup).not.toContain(ELIDED);
+    expect(renderedText(markup)).toBe(SPACED_LETTERS);
   });
 });
