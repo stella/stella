@@ -288,10 +288,15 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {
-  if (!isStaticRecord(value) || value.reason !== NO_LLMS_TXT_REASON) {
+  if (!isStaticRecord(value)) {
     return null;
   }
-  const { checkedAt, dependency, explanation, expiresAt } = value;
+  // Destructured, not dotted: the typecheck rejects dotted index-signature
+  // reads and the lint autofix rewrites bracketed ones back to dots.
+  const { checkedAt, dependency, explanation, expiresAt, reason } = value;
+  if (reason !== NO_LLMS_TXT_REASON) {
+    return null;
+  }
   if (
     typeof checkedAt !== "string" ||
     typeof dependency !== "string" ||
@@ -316,8 +321,13 @@ const fixturePolicy = (
   if (!isStaticRecord(value)) {
     return null;
   }
-  const dependencies = staticStrings(value.dependencies);
-  const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
+  const {
+    dependencies: dependencyEntries,
+    exclusions: exclusionEntries,
+    now,
+    sources: sourceEntries,
+  } = value;
+  const dependencies = staticStrings(dependencyEntries);
   if (
     dependencies === null ||
     typeof now !== "string" ||
