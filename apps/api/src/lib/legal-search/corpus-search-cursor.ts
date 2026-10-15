@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 /**
  * The wire format of a corpus-index search cursor: its one owner.
  *
@@ -80,7 +82,6 @@ import * as v from "valibot";
  *
  * One metadata segment therefore means a window rank and nothing else.
  */
-
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
@@ -236,7 +237,9 @@ const parseExcludedGroups = (value: string): string[] | null => {
 };
 
 const parseWindowStart = (value: string): number | null =>
-  WINDOW_RANK_PATTERN.test(value) ? Number(value) : null;
+  WINDOW_RANK_PATTERN.test(value)
+    ? parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null)
+    : null;
 
 /** The order segment, read against the declared list rather than a pattern. */
 const parseSearchSort = (value: string): SearchSort | null =>

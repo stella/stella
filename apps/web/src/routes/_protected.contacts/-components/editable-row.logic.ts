@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { tryToMinorUnits } from "@stll/money";
 
 import {
@@ -72,8 +73,6 @@ type NumericContactPayloadResult =
   | { status: "valid"; payload: NumericContactPayload }
   | { status: "invalid" };
 
-const NON_NEGATIVE_INTEGER_TOKEN = /^[0-9]+$/u;
-
 const NUMERIC_PAYLOAD_BUILDERS = {
   paymentTermDays: (value) => ({ paymentTermDays: value }),
 } as const satisfies Record<
@@ -97,13 +96,12 @@ export const buildNumericContactPayload = (
     };
   }
 
-  if (!NON_NEGATIVE_INTEGER_TOKEN.test(trimmedInput)) {
-    return { status: "invalid" };
-  }
-
-  const value = Number(trimmedInput);
   const policy = EDITABLE_FIELD_POLICY[field];
-  if (!Number.isSafeInteger(value) || value < 0 || value > policy.maximum) {
+  const value = parseIntegerToken(trimmedInput, {
+    sign: "unsigned",
+    max: policy.maximum,
+  }).unwrapOr(null);
+  if (value === null) {
     return { status: "invalid" };
   }
 

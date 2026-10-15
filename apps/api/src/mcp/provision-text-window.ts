@@ -1,3 +1,4 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 type TextCursorPayload = {
@@ -40,8 +41,10 @@ const decodePayload = (cursor: string): TextCursorPayload | null => {
     return null;
   }
 
-  const offset = Number(offsetText);
-  if (!Number.isSafeInteger(offset) || offset < 0) {
+  const offset = parseIntegerToken(offsetText, { sign: "unsigned" }).unwrapOr(
+    null,
+  );
+  if (offset === null) {
     return null;
   }
   return {

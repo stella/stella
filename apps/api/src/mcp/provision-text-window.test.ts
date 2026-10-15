@@ -140,6 +140,32 @@ describe("provision text windows", () => {
     );
   });
 
+  test.each(["1e0", "+1", " 1", "0x1"])(
+    "refuses a rechecksummed non-decimal offset %s",
+    (offset) => {
+      const first = windowProvisionText({
+        limit: 1,
+        subject: "subject",
+        text: "abc",
+      });
+      expect(first.type).toBe("window");
+      if (first.type !== "window" || first.nextTextCursor === null) {
+        throw new Error("Expected another text window");
+      }
+      const [prefix, , binding] = first.nextTextCursor.split(".");
+      const payload = `${offset}.${binding}`;
+      const cursor = `${prefix}.${payload}.${sha256Base64Url(payload)}`;
+      expect(
+        windowProvisionText({
+          cursor,
+          limit: 1,
+          subject: "subject",
+          text: "abc",
+        }),
+      ).toEqual({ type: "invalid-cursor" });
+    },
+  );
+
   test("refuses tampered and foreign cursors", () => {
     const first = windowProvisionText({ limit: 1, subject: "one", text: "ab" });
     if (first.type !== "window" || first.nextTextCursor === null) {

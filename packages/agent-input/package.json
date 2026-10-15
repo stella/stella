@@ -29,7 +29,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./numeric-token": "./src/numeric-token.ts"
   },
   "publishConfig": {
     "access": "public"
