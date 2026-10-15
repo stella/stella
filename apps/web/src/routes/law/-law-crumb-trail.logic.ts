@@ -1,12 +1,10 @@
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 
 import { decisionYear } from "@/features/case-law/citation-format";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
-import {
-  statuteActLabel,
-  statuteDocumentIdentity,
-} from "@/lib/legal/statute-act-number";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 export const statuteLawCrumbTrailOf = ({
   eli,
