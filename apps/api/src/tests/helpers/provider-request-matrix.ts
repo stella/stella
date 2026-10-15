@@ -88,7 +88,7 @@ const ATTACHMENT_KINDS = Object.keys(ATTACHMENTS).filter(
 );
 
 /** The thread's reasoning effort: none chosen, or one of the catalog's. */
-export const EFFORT_CHOICES = ["default", ...REASONING_EFFORTS] as const;
+const EFFORT_CHOICES = ["default", ...REASONING_EFFORTS] as const;
 export type EffortChoice = "default" | ReasoningEffort;
 
 /**

@@ -62,6 +62,7 @@ export const FAILURE_REASON_GRADE = {
   model_output_invalid: "anticipated",
   // The provider filtered the model's answer under its content policy: its
   // decision about the content, not a fault of this service.
+  // parser-output-unchanged: a failure grade for moderated model output; no parser output depends on it.
   model_output_moderated: "anticipated",
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",

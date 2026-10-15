@@ -525,6 +525,65 @@ type CompletedTurnFollowUps = {
 };
 
 /**
+ * What a streamed turn's persistence left: nothing when another execution or
+ * the reaper settled the turn first, the failure to report when storing
+ * failed, else the stored outcome and, for a completed turn, what its
+ * follow-ups read.
+ */
+const persistedTurnSettlement = ({
+  messages,
+  persistResult,
+  resolvedResponseMessage,
+  threadId,
+}: {
+  messages: ApplyAssistantPersistencePlanProps["messages"];
+  persistResult: Awaited<ReturnType<typeof finalizeAssistantTurn>>;
+  resolvedResponseMessage: ChatMessage;
+  threadId: SafeId<"chatThread">;
+}): Result<
+  {
+    followUps: CompletedTurnFollowUps | null;
+    settlement: ChatTurnStoredSettlement;
+  },
+  AssistantTurnFailure
+> => {
+  if (
+    Result.isError(persistResult) &&
+    isChatTurnNotOwned(persistResult.error)
+  ) {
+    // Another execution or the reaper settled the turn first: its outcome
+    // stands, and this run has nothing left to store or count.
+    return Result.ok({ followUps: null, settlement: { type: "not-owned" } });
+  }
+  if (Result.isError(persistResult)) {
+    captureError(persistResult.error, { threadId });
+    return Result.err({
+      code: "persistence",
+      error: new HandlerError({
+        status: 500,
+        message: "Failed to persist assistant turn",
+        cause: persistResult.error,
+      }),
+    });
+  }
+  const { outcome: storedOutcome, persistencePlan } = persistResult.value;
+  return Result.ok({
+    // A stop that won the race stored `cancelled`, whatever the run proposed.
+    followUps:
+      storedOutcome.type === "completed"
+        ? {
+            messagesAfterAssistantPersist: applyAssistantPersistencePlan({
+              messages,
+              persistencePlan,
+            }),
+            resolvedResponseMessage,
+          }
+        : null,
+    settlement: { type: "stored", outcome: storedOutcome },
+  });
+};
+
+/**
  * A streamed turn's `onFinish` boundary. The response is already streaming,
  * so no outer catch settles the turn: without this it stays `running` until
  * its lease lapses and the thread is dead. One boundary for every failure,
@@ -3150,50 +3209,11 @@ export const createSendMessage = (
                     workspaceId,
                     indexThread: dependencies.indexThread,
                   });
-                  if (
-                    Result.isError(persistResult) &&
-                    isChatTurnNotOwned(persistResult.error)
-                  ) {
-                    // Another execution or the reaper settled the turn
-                    // first: its outcome stands, and this run has nothing
-                    // left to store or count.
-                    return Result.ok({
-                      followUps: null,
-                      settlement: { type: "not-owned" },
-                    });
-                  }
-                  if (Result.isError(persistResult)) {
-                    captureError(persistResult.error, {
-                      threadId: body.threadId,
-                    });
-                    return Result.err({
-                      code: "persistence",
-                      error: new HandlerError({
-                        status: 500,
-                        message: "Failed to persist assistant turn",
-                        cause: persistResult.error,
-                      }),
-                    });
-                  }
-
-                  const { outcome: storedOutcome, persistencePlan } =
-                    persistResult.value;
-                  const messagesAfterAssistantPersist =
-                    applyAssistantPersistencePlan({
-                      messages: latestMessagePlan.messages,
-                      persistencePlan,
-                    });
-                  return Result.ok({
-                    // A stop that won the race stored `cancelled`, whatever
-                    // the run proposed.
-                    followUps:
-                      storedOutcome.type === "completed"
-                        ? {
-                            messagesAfterAssistantPersist,
-                            resolvedResponseMessage,
-                          }
-                        : null,
-                    settlement: { type: "stored", outcome: storedOutcome },
+                  return persistedTurnSettlement({
+                    messages: latestMessagePlan.messages,
+                    persistResult,
+                    resolvedResponseMessage,
+                    threadId: body.threadId,
                   });
                 };
 

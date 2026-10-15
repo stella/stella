@@ -9,8 +9,14 @@ import {
 
 const MESSAGE_ID = "answer";
 
+const RUN_STARTED: StreamChunk = {
+  type: EventType.RUN_STARTED,
+  runId: "run",
+  threadId: "thread",
+};
+
 const answerChunks = (): StreamChunk[] => [
-  { type: EventType.RUN_STARTED, runId: "run", threadId: "thread" },
+  RUN_STARTED,
   {
     type: EventType.TEXT_MESSAGE_START,
     messageId: MESSAGE_ID,
@@ -75,12 +81,14 @@ describe("an answer's context notice", () => {
       });
       // Stamped once: the answer's text events do not all carry it.
       expect(
-        streamed.filter(
-          (chunk) =>
-            "metadata" in chunk &&
-            chunk.metadata !== undefined &&
-            "contextNotice" in chunk.metadata,
-        ),
+        streamed.filter((chunk) => {
+          const metadata: unknown = Reflect.get(chunk, "metadata");
+          return (
+            typeof metadata === "object" &&
+            metadata !== null &&
+            "contextNotice" in metadata
+          );
+        }),
       ).toHaveLength(1);
     });
   }
@@ -161,7 +169,7 @@ describe("an answer's context notice", () => {
       .slice(1)
       .flatMap((chunk) => stamp.stamp(chunk));
     return {
-      live: liveAnswer([answerChunks()[0], ...first, ...fallback]),
+      live: liveAnswer([RUN_STARTED, ...first, ...fallback]),
       stored: stamp.metadata(),
     };
   };
