@@ -7,12 +7,15 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
 import {
+  canEmbedInProcess,
   imageToPdf,
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 export {
@@ -48,10 +51,12 @@ class ImagePdfError extends TaggedError("ImagePdfError")<{
   cause?: unknown;
 }> {}
 
-type ConvertToPdfError =
-  | DerivativeAdmissionError
-  | GotenbergError
-  | ImagePdfError;
+type ConvertToPdfError = DerivativeAdmissionError | GotenbergError;
+
+const IMAGE_EMBED_FAILED_SINK = failureSink({
+  event: "file_conversion.image_embed_failed",
+  expected: [],
+});
 
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
@@ -85,9 +90,10 @@ const toArrayBuffer = (view: Uint8Array): ArrayBuffer =>
 
 /**
  * Convert a scanned file to PDF. Images are admitted by the pixel count
- * their header declares before anything decodes them; JPEG and PNG are then
- * embedded directly into a one-page PDF in-process, and every other type
- * goes to Gotenberg's LibreOffice route.
+ * their header declares before anything decodes them. JPEG and PNG whose
+ * header shows an encoding the in-process embedder handles become a
+ * one-page PDF directly; every other image, an embed that fails anyway, and
+ * every other type go to Gotenberg's LibreOffice route.
  */
 export const convertToPdf = async (
   file: ScannedFile,
@@ -100,15 +106,28 @@ export const convertToPdf = async (
     return Result.err(admission.error);
   }
 
-  if (admission.header !== null && isEmbeddableImageMimeType(mimeType)) {
-    const header = admission.header;
-    return await Result.tryPromise({
+  const { header } = admission;
+  if (
+    header !== null &&
+    isEmbeddableImageMimeType(mimeType) &&
+    canEmbedInProcess(header)
+  ) {
+    const embedded = await Result.tryPromise({
       try: async () => {
         const pdf = await imageToPdf({ bytes, header, mimeType });
         return { buffer: toArrayBuffer(pdf), sizeBytes: pdf.byteLength };
       },
       catch: (cause) =>
         new ImagePdfError({ message: "Failed to embed image", cause }),
+    });
+    if (Result.isOk(embedded)) {
+      return embedded;
+    }
+    // The header promised an encoding the embedder then refused: observe
+    // it and let the converter render the image instead.
+    observeFailure(embedded.error, {
+      sink: IMAGE_EMBED_FAILED_SINK,
+      ctx: { operation: "image-to-pdf" },
     });
   }
 

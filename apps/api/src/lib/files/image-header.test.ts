@@ -152,7 +152,7 @@ describe("image header dimensions", () => {
   test.each(CASES)(
     "reads $mimeType dimensions from the header alone",
     ({ bytes, expected, mimeType }) => {
-      expect(readImageHeader(bytes, mimeType)).toEqual({
+      expect(readImageHeader(bytes, mimeType)).toMatchObject({
         width: expected[0],
         height: expected[1],
         orientation: expected[2],
@@ -276,7 +276,7 @@ describe("malformed image headers", () => {
     // resynchronises at the next marker.
     const shrunk = withUint16(bytes, 4, 4);
     shrunk.fill(0xff, 8, 39);
-    expect(readImageHeader(shrunk, "image/jpeg")).toEqual({
+    expect(readImageHeader(shrunk, "image/jpeg")).toMatchObject({
       width: 10,
       height: 20,
       orientation: 1,

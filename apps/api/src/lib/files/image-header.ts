@@ -11,12 +11,33 @@
 /** EXIF orientation 1-8; 1 is "stored as displayed". */
 export type ImageOrientation = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
+/**
+ * How the pixels are encoded, for the formats whose decoders support only
+ * some encodings: enough to choose a decoder before handing it the bytes.
+ */
+type ImageEncoding =
+  | {
+      format: "png";
+      bitDepth: number;
+      colorType: number;
+      interlaced: boolean;
+    }
+  | {
+      format: "jpeg";
+      /** The start-of-frame marker (0xC0 baseline, 0xC2 progressive, ...). */
+      frameMarker: number;
+      precision: number;
+      components: number;
+    };
+
 export type ImageHeader = {
   /** Stored (pre-orientation) width in pixels. */
   width: number;
   /** Stored (pre-orientation) height in pixels. */
   height: number;
   orientation: ImageOrientation;
+  /** Present for PNG and JPEG. */
+  encoding?: ImageEncoding;
 };
 
 /** TIFF directories one file may chain before it counts as unreadable. */
@@ -39,8 +60,15 @@ const header = (
   width: number,
   height: number,
   orientation: ImageOrientation = 1,
-): ImageHeader | null =>
-  width > 0 && height > 0 ? { width, height, orientation } : null;
+  encoding?: ImageEncoding,
+): ImageHeader | null => {
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+  return encoding === undefined
+    ? { width, height, orientation }
+    : { width, height, orientation, encoding };
+};
 
 const view = (bytes: Uint8Array) =>
   new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -187,11 +215,13 @@ const readTiffHeader = (bytes: Uint8Array): ImageHeader | null => {
 // ── Format readers ──────────────────────────────────────
 
 const PNG_IHDR_LENGTH = 13;
+/** Signature (8) + chunk length and type (8) + IHDR data (13). */
+const PNG_IHDR_END = 29;
 
 /** PNG: IHDR is always the first chunk. */
 const readPngHeader = (bytes: Uint8Array): ImageHeader | null => {
   if (
-    bytes.length < 24 ||
+    bytes.length < PNG_IHDR_END ||
     bytes[0] !== 0x89 ||
     !startsWith(bytes, 1, "PNG") ||
     !startsWith(bytes, 12, "IHDR")
@@ -202,7 +232,12 @@ const readPngHeader = (bytes: Uint8Array): ImageHeader | null => {
   if (data.getUint32(8) !== PNG_IHDR_LENGTH) {
     return null;
   }
-  return header(data.getUint32(16), data.getUint32(20));
+  return header(data.getUint32(16), data.getUint32(20), 1, {
+    format: "png",
+    bitDepth: data.getUint8(24),
+    colorType: data.getUint8(25),
+    interlaced: data.getUint8(28) !== 0,
+  });
 };
 
 /** Start-of-frame markers that carry dimensions (excludes DHT, JPG, DAC). */
@@ -250,13 +285,20 @@ const readJpegHeader = (bytes: Uint8Array): ImageHeader | null => {
       return null;
     }
     if (isJpegFrameMarker(marker)) {
-      if (length < 7) {
+      // Length (2), precision (1), height (2), width (2), components (1).
+      if (length < 8) {
         return null;
       }
       return header(
         data.getUint16(offset + 5),
         data.getUint16(offset + 3),
         orientation,
+        {
+          format: "jpeg",
+          frameMarker: marker,
+          precision: data.getUint8(offset + 2),
+          components: data.getUint8(offset + 7),
+        },
       );
     }
     // `length` counts its own two bytes; the segment ends at offset + length,

@@ -20,6 +20,41 @@ export const isEmbeddableImageMimeType = (
 ): mimeType is EmbeddableImageMimeType =>
   Object.hasOwn(EMBEDDABLE_IMAGE_MIME_TYPES, mimeType);
 
+/** PNG colour types the embedder decodes: grey, RGB, palette, grey+alpha, RGBA. */
+const EMBEDDABLE_PNG_COLOR_TYPES: ReadonlySet<number> = new Set([
+  0, 2, 3, 4, 6,
+]);
+/** Baseline, extended sequential and progressive Huffman JPEG frames. */
+const EMBEDDABLE_JPEG_FRAMES: ReadonlySet<number> = new Set([0xc0, 0xc1, 0xc2]);
+/** Grey and YCbCr/RGB; four-component (CMYK, often Adobe-inverted) is not. */
+const EMBEDDABLE_JPEG_COMPONENTS: ReadonlySet<number> = new Set([1, 3]);
+
+/**
+ * Whether the in-process embedder handles this encoding. It decodes only
+ * non-interlaced 8-bit PNG (including 8-bit palette), and stores JPEG data
+ * as-is under a colour space it derives from the component count, so only
+ * 8-bit grey or colour Huffman JPEGs render correctly. Everything else goes
+ * to the converter.
+ */
+export const canEmbedInProcess = (header: ImageHeader): boolean => {
+  const { encoding } = header;
+  if (encoding === undefined) {
+    return false;
+  }
+  if (encoding.format === "png") {
+    return (
+      !encoding.interlaced &&
+      encoding.bitDepth === 8 &&
+      EMBEDDABLE_PNG_COLOR_TYPES.has(encoding.colorType)
+    );
+  }
+  return (
+    EMBEDDABLE_JPEG_FRAMES.has(encoding.frameMarker) &&
+    encoding.precision === 8 &&
+    EMBEDDABLE_JPEG_COMPONENTS.has(encoding.components)
+  );
+};
+
 /**
  * One image pixel in PDF points. Pages are sized as a browser would print the
  * image at CSS resolution (96 px per inch), so a preview keeps the physical

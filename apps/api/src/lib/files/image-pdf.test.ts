@@ -55,7 +55,7 @@ describe("image to PDF without a browser", () => {
   test("a PNG becomes one page sized to the image, pixels intact", async () => {
     const png = splitPng(64, 32);
     const header = readImageHeader(png, "image/png");
-    expect(header).toEqual({ width: 64, height: 32, orientation: 1 });
+    expect(header).toMatchObject({ width: 64, height: 32, orientation: 1 });
     if (header === null) {
       return;
     }
@@ -72,7 +72,7 @@ describe("image to PDF without a browser", () => {
   test("a JPEG is stored as-is (DCT) in a one-page PDF sized to the image", async () => {
     const jpeg = await splitJpeg(64, 32, 1);
     const header = readImageHeader(jpeg, "image/jpeg");
-    expect(header).toEqual({ width: 64, height: 32, orientation: 1 });
+    expect(header).toMatchObject({ width: 64, height: 32, orientation: 1 });
     if (header === null) {
       return;
     }

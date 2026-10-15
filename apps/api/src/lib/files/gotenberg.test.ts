@@ -12,15 +12,18 @@ import {
   pdfDerivativeStateForFile,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
+import { logger } from "@/api/lib/observability/logger";
 import {
   DOCX_MIME_TYPE,
   PPTX_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import {
+  declaredPng,
   declaredSizePng,
   splitJpeg,
   splitPng,
+  withJpegComponents,
 } from "@/api/tests/helpers/image-fixtures";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -198,5 +201,100 @@ describe("PDF conversion routes", () => {
 
     expect(Result.isError(result)).toBe(true);
     expect(urls).toHaveLength(1);
+  });
+});
+
+const EMBED_FAILED_EVENT = "file_conversion.image_embed_failed";
+
+/** Run `convert` with the converter answering a PDF; returns its calls and the embed failures observed. */
+const convertWithConverterStub = async (
+  convert: () => ReturnType<typeof convertToPdf>,
+) => {
+  const events: string[] = [];
+  const record = (event: string) => {
+    events.push(event);
+  };
+  const warn = spyOn(logger, "warn").mockImplementation(record);
+  const error = spyOn(logger, "error").mockImplementation(record);
+  try {
+    const { result, urls } = await withConverterFetch(
+      () => new Response(new TextEncoder().encode("%PDF-1.7 converted")),
+      convert,
+    );
+    return {
+      embedFailures: events.filter((event) => event === EMBED_FAILED_EVENT),
+      result,
+      urls,
+    };
+  } finally {
+    warn.mockRestore();
+    error.mockRestore();
+  }
+};
+
+const LIBREOFFICE_ROUTE = "/forms/libreoffice/convert";
+
+describe("image encodings the in-process embedder cannot take", () => {
+  test.each([
+    [
+      "an interlaced PNG",
+      () => declaredPng({ width: 8, height: 8, interlaced: true }),
+    ],
+    ["a 16-bit PNG", () => declaredPng({ width: 8, height: 8, bitDepth: 16 })],
+    [
+      "a 4-bit palette PNG",
+      () => declaredPng({ width: 8, height: 8, bitDepth: 4, colorType: 3 }),
+    ],
+  ] as const)(
+    "%s goes to LibreOffice without trying the embedder",
+    async (_name, build) => {
+      const { embedFailures, result, urls } = await convertWithConverterStub(
+        async () => await convertToPdf(fileOf(build(), "image/png")),
+      );
+
+      expect(embedFailures).toEqual([]);
+      expect(urls).toHaveLength(1);
+      expect(urls[0]).toEndWith(LIBREOFFICE_ROUTE);
+      expect(Result.isOk(result)).toBe(true);
+    },
+  );
+
+  test("a four-component (CMYK) JPEG goes to LibreOffice", async () => {
+    const cmyk = withJpegComponents(await splitJpeg(16, 8, 1), 4);
+    const { embedFailures, urls } = await convertWithConverterStub(
+      async () => await convertToPdf(fileOf(cmyk, "image/jpeg")),
+    );
+
+    expect(embedFailures).toEqual([]);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toEndWith(LIBREOFFICE_ROUTE);
+  });
+
+  test.each(["rgb", "rgba", "palette"] as const)(
+    "an 8-bit %s PNG still embeds in-process",
+    async (color) => {
+      const { embedFailures, result, urls } = await convertWithConverterStub(
+        async () =>
+          await convertToPdf(fileOf(splitPng(16, 8, color), "image/png")),
+      );
+
+      expect(urls).toEqual([]);
+      expect(embedFailures).toEqual([]);
+      expect(Result.isOk(result)).toBe(true);
+    },
+  );
+
+  test("an embed that fails anyway falls back to LibreOffice, observed once", async () => {
+    // The header declares an embeddable 8-bit RGB image, but there is no
+    // image data, so the embedder itself refuses it.
+    const { embedFailures, result, urls } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(fileOf(declaredSizePng(8, 8), "image/png")),
+    );
+
+    expect(embedFailures).toEqual([EMBED_FAILED_EVENT]);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toEndWith(LIBREOFFICE_ROUTE);
+    expect(Result.isOk(result)).toBe(true);
   });
 });
