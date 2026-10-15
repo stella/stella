@@ -30,6 +30,15 @@ export type OutboundTransportCensusEntry = {
   transports: readonly string[];
 };
 
+/** Consumers of verified favicon byte transport, confined by ownership. */
+export const LINK_ICON_TRANSPORT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/origin.ts",
+    reason:
+      "Fetches only bounded favicon bytes through safeOutboundFetchBytes, revalidating and pinning every redirect hop.",
+  },
+] as const;
+
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "packages/start-runtime/src/local-module-loader.ts",
@@ -1283,6 +1292,10 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/get.ts",
+    reason: "Authenticated direct boundary for verified public favicon bytes.",
+  },
   {
     path: "apps/api/src/handlers/chat/tools/secret-tools.ts",
     reason: "Native chat tool boundary for a scoped connector request.",
