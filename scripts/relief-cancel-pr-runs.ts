@@ -41,7 +41,7 @@ export type ReliefOutcome =
 
 type Request = (args: readonly string[], input?: unknown) => Promise<unknown>;
 
-const setYieldStatus = (
+const setYieldStatus = async (
   request: Request,
   run: { head_sha: string; html_url: string },
   state: "pending" | "success",
