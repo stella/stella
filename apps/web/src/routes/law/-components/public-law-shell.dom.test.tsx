@@ -10,6 +10,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   statuteLawCrumbTrailOf,
@@ -24,7 +25,7 @@ const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { PublicLawBreadcrumbs } = await import("./public-law-shell");
 
 afterEach(cleanup);
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => await unregisterDomEnvironment());
 
 const statute = {
   status: "current",
