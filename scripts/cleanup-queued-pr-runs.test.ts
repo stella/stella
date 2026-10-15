@@ -524,7 +524,7 @@ test("while the merge queue waits, only the oldest deferred head resumes each ti
   expect(result.reruns).toEqual([20]);
 });
 
-test.each(["in_progress", "queued"])(
+test.each(["in_progress", "queued", "pending", "waiting", "requested"])(
   "while the merge queue waits, nothing resumes until the resumed run (%s) finishes",
   async (status) => {
     const result = await resume({

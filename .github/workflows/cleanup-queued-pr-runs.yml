@@ -146,8 +146,10 @@ jobs:
             // waits, but one at a time: a resumed run never yields again and holds
             // dozens of runners, so several at once starve the merge queue. The
             // oldest deferral goes first, so every head still resumes in turn.
+            // Every unfinished run state counts, including runs held by
+            // concurrency (pending) or approval (waiting).
             const resumedRunInFlight = async () => {
-              for (const status of ["in_progress", "queued"]) {
+              for (const status of ["in_progress", "queued", "pending", "waiting", "requested"]) {
                 const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
                   ...repo, workflow_id: "ci.yml", event: "pull_request", status, per_page: 100,
                 });
