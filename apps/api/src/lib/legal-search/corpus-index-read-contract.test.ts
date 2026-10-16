@@ -370,7 +370,7 @@ test("the target serving a jurisdiction answers whether it has provision keys", 
     provisionKeysField: "provision_keys",
   });
   expect(caseLawJurisdictionReadContract("case_law_v9", "cze")).toEqual({
-    provisionKeysField: "provision_keys",
+    provisionKeysField: null,
   });
   // Until the flip Czech decisions are read through v8, whose group has none.
   expect(caseLawJurisdictionReadContract("case_law_v8", "CZE")).toEqual({
