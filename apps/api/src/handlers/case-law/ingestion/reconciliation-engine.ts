@@ -11,9 +11,10 @@ import { panic, Result } from "better-result";
  *
  * The hunt has to end. An item the publisher lists but never serves would
  * otherwise keep its slice short forever and be re-fetched on every visit, so
- * a repeatedly failing item is parked on a widening schedule and finally
- * retired; a retired item counts as accounted for, which is what lets a slice
- * settle and stay settled.
+ * an unavailable item is parked on a widening schedule with capped backoff.
+ * Only an explicit unkeyable outcome retires an item; repeated failure never
+ * proves a listed document permanently absent. A retired item counts as
+ * accounted for, which is what lets a slice settle and stay settled.
  *
  * Everything here runs under the source's ingestion lease, because it writes
  * through the same `processDecision` a crawl feeds and must not interleave
@@ -1290,7 +1291,7 @@ const ingestListedItem = async ({
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
-          errorTag: "unkeyable",
+          errorTag: built.type,
           now,
         });
         if (retired.outcome === "recorded") {

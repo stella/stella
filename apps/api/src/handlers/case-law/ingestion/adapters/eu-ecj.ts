@@ -2370,8 +2370,7 @@ const isEcjCelexVariant = (value: unknown): value is EcjCelexVariant =>
  * A variant Cellar lists but does not serve — no manifestation for the
  * language, or nothing behind the one it names — is reported as unavailable
  * rather than written. It is an ordinary outcome, not a failure: the loop
- * parks such an item, widens its schedule and eventually retires it, and a
- * retired item is what lets its slice settle. Writing a detail-less row
+ * parks such an item and widens its schedule up to the capped backoff. Writing a detail-less row
  * instead would make the identity held and take the document out of every
  * later reconciliation.
  */

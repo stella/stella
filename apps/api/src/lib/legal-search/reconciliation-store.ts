@@ -4,10 +4,10 @@ import { panic } from "better-result";
  *
  * The loop's job is a difference: what a publisher lists for a slice against
  * what is held. An item that cannot be ingested keeps that difference open,
- * and re-listing it every visit would make the hunt loop forever over the same
- * unservable document. A row here closes it, in two stages — a bounded retry
- * schedule, then a terminal disposition that counts the item as accounted for
- * rather than missing, which is what lets a slice reach a fixed point.
+ * and re-listing it every visit would repeatedly fetch an unavailable document.
+ * A parked row keeps a durable retry with widening, capped backoff. Repeated
+ * failures do not prove that a real document is permanently unavailable:
+ * only an explicit unkeyable outcome may retire it and close the difference.
  *
  * Every read is bounded and scoped to one source. Nothing here contacts a
  * publisher; the payload is stored verbatim so a retry needs no listing walk.
@@ -29,6 +29,7 @@ import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import type { ReconciliationBuildOutcome } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 import { fingerprintReconciliationPayload } from "./reconciliation-payload";
@@ -66,9 +67,8 @@ const HOUR_IN_MS = 60 * 60 * 1000;
  * Delay before attempt N+1, indexed by the attempt that just failed.
  *
  * Widening on purpose: the first failures are usually a publisher having a
- * bad minute, so an hour is enough; by the fifth the item is more likely to
- * be one the publisher will never serve, and asking weekly costs nothing
- * while leaving room for it to appear.
+ * bad minute, so an hour is enough. Later retries stay weekly: a publisher
+ * refusal or missing payload may recover regardless of the attempt count.
  */
 export const RECONCILIATION_RETRY_DELAYS_MS = [
   HOUR_IN_MS,
@@ -77,22 +77,6 @@ export const RECONCILIATION_RETRY_DELAYS_MS = [
   3 * DAY_IN_MS,
   7 * DAY_IN_MS,
 ] as const;
-
-/**
- * Attempts after which an item stops being retried. One past the schedule:
- * every delay has been served, and the item still could not be built.
- */
-export const RECONCILIATION_TERMINAL_ATTEMPTS =
-  RECONCILIATION_RETRY_DELAYS_MS.length + 1;
-
-/**
- * What the next attempt looks like, or that there is none. A union rather
- * than a nullable date: "no next attempt" is a disposition the caller has to
- * record, not a missing value it may ignore.
- */
-type ReconciliationSchedule =
-  | { type: "parked"; nextAttemptAt: Date }
-  | { type: "terminal" };
 
 type ReconciliationScheduleInput = {
   /** Attempt count including the failure being recorded. */
@@ -103,14 +87,12 @@ type ReconciliationScheduleInput = {
 const reconciliationSchedule = ({
   attempts,
   now,
-}: ReconciliationScheduleInput): ReconciliationSchedule => {
-  if (attempts >= RECONCILIATION_TERMINAL_ATTEMPTS) {
-    return { type: "terminal" };
-  }
+}: ReconciliationScheduleInput): Date => {
   const delayMs =
-    RECONCILIATION_RETRY_DELAYS_MS[attempts - 1] ??
-    RECONCILIATION_RETRY_DELAYS_MS[0];
-  return { type: "parked", nextAttemptAt: new Date(now.getTime() + delayMs) };
+    RECONCILIATION_RETRY_DELAYS_MS[
+      Math.min(attempts, RECONCILIATION_RETRY_DELAYS_MS.length) - 1
+    ] ?? panic("A reconciliation retry needs a backoff delay");
+  return new Date(now.getTime() + delayMs);
 };
 
 export type ParkedReconciliationItem = {
@@ -145,8 +127,8 @@ export type ReconciliationMutationOutcome = {
 };
 
 /**
- * Record one failed attempt against an item, advancing it along the retry
- * schedule and retiring it to `terminal` once the schedule is exhausted.
+ * Record one failed attempt with durable capped backoff. Failure count alone
+ * cannot retire a listed document; only the explicit retirement path can.
  *
  * The schedule is applied in TypeScript and written as a literal, rather than
  * recomputed in SQL: a second copy of the backoff in the statement would be
@@ -199,14 +181,18 @@ export const parkReconciliationItem = async (
     ) {
       return { outcome: "superseded" as const };
     }
+    // Historical terminal dispositions require an explicit operator reset or
+    // a changed listing revision; an in-flight failure must not reopen them.
+    if (existing?.status === RECONCILIATION_ITEM_STATUS.TERMINAL) {
+      return {
+        outcome: "recorded" as const,
+        status: existing.status,
+        attempts: existing.attempts,
+      };
+    }
     const attempts = (existing?.attempts ?? 0) + 1;
-    const schedule = reconciliationSchedule({ attempts, now });
-    const status =
-      schedule.type === "terminal"
-        ? RECONCILIATION_ITEM_STATUS.TERMINAL
-        : RECONCILIATION_ITEM_STATUS.PARKED;
-    const nextAttemptAt =
-      schedule.type === "terminal" ? null : schedule.nextAttemptAt;
+    const status = RECONCILIATION_ITEM_STATUS.PARKED;
+    const nextAttemptAt = reconciliationSchedule({ attempts, now });
 
     // audit: skip — ingestion bookkeeping for public source data
     const written = await tx
@@ -252,26 +238,11 @@ export const parkReconciliationItem = async (
       outcome: "recorded" as const,
       status,
       attempts,
-      becameTerminal:
-        status === RECONCILIATION_ITEM_STATUS.TERMINAL &&
-        existing?.status !== RECONCILIATION_ITEM_STATUS.TERMINAL,
     };
   });
 
   if (result.outcome === "superseded") {
     return result;
-  }
-  if (result.becameTerminal) {
-    // Once, on the transition: an item leaving the hunt is a decision the
-    // publisher lists and the corpus will not hold, and it must not happen
-    // silently.
-    logger.warn("case_law.reconciliation.item_terminal", {
-      sourceId,
-      slice,
-      identityKey,
-      attempts: result.attempts,
-      "error.type": errorTag,
-    });
   }
 
   return {
@@ -286,7 +257,10 @@ export type RetireReconciliationItemInput = ReconciliationLease &
     slice: string;
     identityKey: string;
     payload: unknown;
-    errorTag: string;
+    errorTag: Extract<
+      ReconciliationBuildOutcome,
+      { type: "unkeyable" }
+    >["type"];
     now: Date;
   };
 
@@ -342,6 +316,9 @@ export const retireReconciliationItem = async (
       return { outcome: "superseded" as const };
     }
 
+    if (existing?.status === RECONCILIATION_ITEM_STATUS.TERMINAL) {
+      return { outcome: "recorded" as const, becameTerminal: false as const };
+    }
     // audit: skip — ingestion bookkeeping for public source data
     const written = await tx
       .insert(caseLawReconciliationItems)
@@ -353,7 +330,7 @@ export const retireReconciliationItem = async (
         payload,
         payloadHash,
         status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-        attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
+        attempts: 1,
         nextAttemptAt: null,
         lastError: errorTag,
         lastAttemptAt: now,
@@ -369,20 +346,24 @@ export const retireReconciliationItem = async (
           payload,
           payloadHash,
           status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-          attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
+          attempts: sql`${caseLawReconciliationItems.attempts} + 1`,
           nextAttemptAt: null,
           lastError: errorTag,
           lastAttemptAt: now,
         },
       })
-      .returning({ id: caseLawReconciliationItems.id });
+      .returning({
+        id: caseLawReconciliationItems.id,
+        attempts: caseLawReconciliationItems.attempts,
+      });
     if (written.length === 0) {
       return { outcome: "superseded" as const };
     }
 
     return {
       outcome: "recorded" as const,
-      becameTerminal: existing?.status !== RECONCILIATION_ITEM_STATUS.TERMINAL,
+      attempts: written[0].attempts,
+      becameTerminal: true as const,
     };
   });
 
@@ -394,7 +375,7 @@ export const retireReconciliationItem = async (
       sourceId,
       slice,
       identityKey,
-      attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
+      attempts: result.attempts,
       "error.type": errorTag,
     });
   }
@@ -908,8 +889,8 @@ export type ResetTerminalReconciliationItemsInput = {
 /**
  * Put retired items back into the hunt, bounded.
  *
- * Terminal means "the schedule proved this cannot be ingested", which is a
- * statement about the publisher and the adapter at the time it was made. A
+ * A terminal disposition reflects the adapter and publisher at the time it
+ * was made, including historical retirements after retry exhaustion. A
  * fixed adapter or a publisher that finally serves the document changes that,
  * and nothing else in the loop will ever look at these rows again.
  */

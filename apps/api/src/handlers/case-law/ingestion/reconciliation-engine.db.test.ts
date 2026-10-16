@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -25,7 +26,10 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
+import { plTkAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readSourceContract } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
@@ -68,6 +72,7 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
@@ -1523,6 +1528,120 @@ const seedDocumentIdentityRows = async (
   }
 };
 
+// Use the registered builders themselves: a newly registered source enters
+// this census automatically, including adapters that share one implementation.
+test.each(
+  listAdapters().map(
+    ({ key, reconciliation }) => [key, reconciliation] as const,
+  ),
+)(
+  "%s: an explicit unkeyable build retires malformed input",
+  async (key, reconciliation) => {
+    const sourceId = await seedSource();
+    const identityKey = `document:${key}-malformed-fixture`;
+    await seedItem(sourceId, identityKey, {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 8,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: "invalid retained listing payload",
+    });
+    expect(
+      await reconciliation.buildDecision("invalid retained listing payload"),
+    ).toEqual({ type: "unkeyable" });
+    const outcome = await runUnit(sourceId, reconciliation);
+    expect(outcome).toMatchObject({
+      type: "worked",
+      summary: { unit: "parked-retries", terminal: 1, parked: 0 },
+    });
+    const rows = await db
+      .select({
+        status: caseLawReconciliationItems.status,
+        lastError: caseLawReconciliationItems.lastError,
+        nextAttemptAt: caseLawReconciliationItems.nextAttemptAt,
+      })
+      .from(caseLawReconciliationItems)
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    expect(rows).toEqual([
+      {
+        status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+        lastError: "unkeyable",
+        nextAttemptAt: null,
+      },
+    ]);
+  },
+);
+
+test("a real publisher session refusal never retires a listed document after repeated due retries", async () => {
+  const sourceId = await seedSource();
+  const payload = {
+    stage: "merits",
+    documentId: "25564",
+    caseId: "29150",
+    caseNumber: "K 2/26",
+    decisionForm: "Wyrok",
+    decisionDate: "2026-06-25",
+    subject: undefined,
+    rowHtml: undefined,
+    defect: undefined,
+  } satisfies PlTkListingRow;
+  const identityKey = "document:25564";
+  await seedItem(sourceId, identityKey, {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 5,
+    nextAttemptAt: new Date(NOW.getTime() - 1),
+    payload,
+  });
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = asFetchMock(async () => {
+    requests += 1;
+    return new Response("publisher session refused", {
+      status: 429,
+      headers: { "Retry-After": "60" },
+    });
+  });
+  try {
+    let now = NOW;
+    const clock = () => now;
+    for (let retry = 1; retry <= 8; retry += 1) {
+      const outcome = await runUnitWith({
+        sourceId,
+        reconciliation: plTkAdapter.reconciliation,
+        now: clock,
+      });
+      expect(outcome).toMatchObject({
+        type: "worked",
+        summary: { unit: "parked-retries", failed: 1, parked: 1, terminal: 0 },
+      });
+      const row = (
+        await db
+          .select()
+          .from(caseLawReconciliationItems)
+          .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+          .limit(1)
+      ).at(0);
+      expect(row).toMatchObject({
+        status: RECONCILIATION_ITEM_STATUS.PARKED,
+        attempts: 5 + retry,
+        lastError: "AdapterFetchError",
+      });
+      const next =
+        row?.nextAttemptAt ??
+        panic("A refused session must retain its durable retry");
+      expect(next.getTime() - now.getTime()).toBe(7 * DAY_IN_MS);
+      now = next;
+    }
+    expect(requests).toBeGreaterThan(0);
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "case_law.reconciliation.item_terminal",
+      ),
+    ).toEqual([]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("due held identities resolve without fetching while listing-only identities retry", async () => {
   const sourceId = await seedSource();
   await seedFreshTip(sourceId);
@@ -1541,7 +1660,13 @@ test("due held identities resolve without fetching while listing-only identities
   });
   expect(outcome).toMatchObject({
     type: "worked",
-    summary: { unit: "parked-retries", keyable: 2, heldBefore: 1, terminal: 1 },
+    summary: {
+      unit: "parked-retries",
+      keyable: 2,
+      heldBefore: 1,
+      parked: 1,
+      terminal: 0,
+    },
   });
   expect(builds).toEqual([LISTING_ITEMS[0]]);
   expect(listed).toEqual([]);
@@ -1556,7 +1681,7 @@ test("due held identities resolve without fetching while listing-only identities
   expect(remaining).toEqual([
     {
       identityKey: DOCUMENT_KEYS[0] ?? "",
-      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
       attempts: 6,
     },
   ]);
