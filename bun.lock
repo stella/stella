@@ -1215,6 +1215,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
+        "oxfmt": "catalog:",
         "typescript": "catalog:",
       },
       "devDependencies": {
