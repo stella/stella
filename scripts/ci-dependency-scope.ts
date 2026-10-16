@@ -210,6 +210,10 @@ const affectedWorkspaces = (
     if (
       oldClosure === undefined ||
       newClosure === undefined ||
+      // A changed edge can resolve to packages that stay reachable elsewhere,
+      // leaving the closure's package records unchanged.
+      JSON.stringify(before.workspaces[directory]) !==
+        JSON.stringify(workspace) ||
       fingerprint(before, oldClosure.packageKeys) !==
         fingerprint(after, newClosure.packageKeys)
     ) {

@@ -220,10 +220,17 @@ test("dependency metadata selects tooling, runtime consumers, shared base, and u
     };
     writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
     const switched = commit("switch core to the already-locked package");
+    // Both versions stay in the lockfile, so only the edge changed: the
+    // workspace and its consumer are selected.
     expect(
-      dependencyScope({ base: locked, head: switched, changed: ["bun.lock"] })
-        .type,
-    ).not.toBe("dev-tooling");
+      dependencyScope({ base: locked, head: switched, changed: ["bun.lock"] }),
+    ).toEqual({
+      type: "runtime",
+      files: [
+        "apps/a/src/__dependency_scope__.ts",
+        "packages/core/src/__dependency_scope__.ts",
+      ],
+    });
     const rootManifest = JSON.parse(
       readFileSync(path.join(root, "package.json"), "utf-8"),
     );
