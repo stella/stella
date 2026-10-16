@@ -44,6 +44,7 @@ const page = {
     blockFragments: [],
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     nextCursor: null,
     limit: 60_000,
   },

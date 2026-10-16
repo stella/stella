@@ -44,6 +44,7 @@ import {
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import {
   timestampCasToken,
@@ -159,6 +160,9 @@ await runScriptWithErrorOutput(async () => {
               )
               .where(ownerPredicate)
               .returning({ id: caseLawDecisions.id });
+            if (recorded.length > 0) {
+              await runDecisionWriteExtension(tx, row.id);
+            }
             if (recorded.length > 0 && projectionLock !== null) {
               await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
                 lock: projectionLock,

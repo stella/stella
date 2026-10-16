@@ -13,8 +13,8 @@ import {
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 
 import {
-  isPublicCaseLawCountry,
-  publicCaseLawCountryFromParam,
+  isPublicCaseLawPageCountry,
+  publicCaseLawPageCountryFromParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
@@ -214,7 +214,7 @@ const ensureRouteCountryDecision = <T extends { country: string }>(
   routeCountry: string,
 ): T => {
   if (
-    !isPublicCaseLawCountry(decision.country) ||
+    !isPublicCaseLawPageCountry(decision.country) ||
     decision.country !== routeCountry
   ) {
     return launchReadinessNotFound();
@@ -318,7 +318,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   queryClient,
   search,
 }: PublicDecisionRouteLoaderOptions): Promise<PublicCaseLawDecision> => {
-  const routeCountry = publicCaseLawCountryFromParam(params.country);
+  const routeCountry = publicCaseLawPageCountryFromParam(params.country);
   if (routeCountry === null) {
     return launchReadinessNotFound();
   }

@@ -106,6 +106,8 @@ const olderStatute = {
 };
 
 const noProvisions = {
+  capability: { type: "supported" as const, languages: ["cs"] },
+  pendingSince: null,
   status: { type: "current" as const },
   generation: "synthetic-dock",
   publishedProjectionDigest: null,

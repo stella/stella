@@ -30,6 +30,7 @@ import { FOLIO_COLLAB_REDIS_SCOPE } from "@stll/api-contract/folio-collab";
  * key outlives its writes on purpose and must say why.
  */
 export const COORDINATION_KEY_EXPIRY = {
+  "link-icons": "ttl",
   "api-ratelimit": "ttl",
   "case-law-publisher-gate": "ttl",
   "auth-ratelimit": "ttl",

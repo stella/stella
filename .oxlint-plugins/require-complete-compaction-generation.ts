@@ -1,11 +1,14 @@
-// Keep chat compaction generation on its complete-output policy.
+// Keep chat compaction generation on its shared request policy.
 //
 // A compaction summary replaces a durable source window and advances its
 // checkpoint. Calling generateTanStackTextForRole directly without spreading
-// COMPACTION_GENERATION_POLICY can therefore persist an output-ceiling prefix
-// and permanently skip the missing suffix. This rule inventories every direct
-// TanStack text-generation call in production modules whose filename owns a
-// compaction flow, including aliased imports, and requires the shared policy.
+// compactionGenerationRequest(prompt) can therefore persist an output-ceiling
+// prefix and permanently skip the missing suffix, or send a summary prompt
+// with no length bound under a ceiling it cannot meet. This rule inventories
+// every direct TanStack text-generation call in production modules whose
+// filename owns a compaction flow, including aliased imports, and requires the
+// shared request: its completion policy, ceiling, reasoning effort and bounded
+// prompt.
 //
 // Known boundary: compaction entry points must retain "compaction" in their
 // filename. The vertical slice already uses that ownership convention; a new
@@ -27,9 +30,14 @@ import {
 
 const GENERATE_TEXT_EXPORT = "generateTanStackTextForRole";
 const GENERATE_TEXT_MODULE = "@/api/lib/tanstack-ai-generate";
-const POLICY_EXPORT = "COMPACTION_GENERATION_POLICY";
+const POLICY_EXPORT = "compactionGenerationRequest";
 const POLICY_MODULE = "@/api/lib/chat/compaction-tokens";
-const POLICY_KEYS = ["finishPolicy", "maxOutputTokens"] as const;
+const POLICY_KEYS = [
+  "finishPolicy",
+  "maxOutputTokens",
+  "prompt",
+  "reasoningEffort",
+] as const;
 const POLICY_KEY_SET = new Set<string>(POLICY_KEYS);
 const FIXTURE_SUFFIX =
   ".oxlint-plugins/__fixtures__/require-complete-compaction-generation.fixture.ts";
@@ -42,14 +50,26 @@ const isTargetFile = (filename: string): boolean =>
     !filename.endsWith(".test.ts") &&
     !filename.endsWith(".integration.test.ts"));
 
+/** `...compactionGenerationRequest(prompt)`, by any local name. */
+const isPolicyRequest = (
+  expression: unknown,
+  policyBindings: ReadonlySet<string>,
+): boolean => {
+  const call = unwrapExpression(expression);
+  return (
+    call?.type === "CallExpression" &&
+    isIdentifier(call.callee) &&
+    policyBindings.has(call.callee.name)
+  );
+};
+
 const isPolicySpread = (
   property: unknown,
   policyBindings: ReadonlySet<string>,
 ): boolean =>
   isAstNode(property) &&
   property.type === "SpreadElement" &&
-  isIdentifier(property.argument) &&
-  policyBindings.has(property.argument.name);
+  isPolicyRequest(property.argument, policyBindings);
 
 // An inline object can prove that it does not contain either policy key. An
 // opaque expression or nested unknown spread may contain one, so reject it.
@@ -71,7 +91,7 @@ const spreadCanOverridePolicy = (
   }
 
   const argument = unwrapExpression(property.argument);
-  if (isIdentifier(argument) && policyBindings.has(argument.name)) {
+  if (isPolicyRequest(argument, policyBindings)) {
     return false;
   }
   if (argument?.type !== "ObjectExpression") {
@@ -105,9 +125,9 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingPolicy:
-            "Spread COMPACTION_GENERATION_POLICY into every compaction generateTanStackTextForRole call; a truncated summary must not advance a durable checkpoint.",
+            "Spread compactionGenerationRequest(prompt) into every compaction generateTanStackTextForRole call; a truncated summary must not advance a durable checkpoint.",
           policyOverride:
-            "Do not override COMPACTION_GENERATION_POLICY after spreading it; the complete-output policy must remain effective for the compaction call.",
+            "Do not override compactionGenerationRequest(prompt) after spreading it; its completion policy, ceiling, reasoning effort and bounded prompt must remain effective for the compaction call.",
         },
         schema: [],
       },

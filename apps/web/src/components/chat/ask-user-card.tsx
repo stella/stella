@@ -2,9 +2,10 @@ import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
 import { defaultRehypePlugins, Streamdown } from "streamdown";
-import type { PluggableList } from "unified";
+import type { Pluggable } from "unified";
 import { useTranslations } from "use-intl";
 
+import { rehypeChatLinks } from "@stll/chat/link-markdown";
 import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
@@ -21,6 +22,7 @@ import type {
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -163,6 +165,7 @@ export const AskUserCard = ({
   restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   // Stable empty fallback so useMemo deps don't churn when the
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
@@ -177,11 +180,14 @@ export const AskUserCard = ({
   );
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo<PluggableList | undefined>(
-    () =>
-      pairs.length > 0
-        ? [...Object.values(defaultRehypePlugins), [rehypeAnonSpans, pairs]]
-        : undefined,
+  const analysisRehypePlugins = useMemo(
+    () => [
+      ...Object.values(defaultRehypePlugins),
+      ...(pairs.length > 0
+        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
+        : []),
+      rehypeChatLinks,
+    ],
     [pairs],
   );
   const answeredOutput = part.state === "complete" ? part.output : null;
@@ -381,22 +387,13 @@ export const AskUserCard = ({
       {/* Analysis */}
       {input.analysis && (
         <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-          {analysisRehypePlugins ? (
-            <Streamdown
-              allowedTags={{ "stll-anon": ["ph"] }}
-              components={analysisComponents}
-              rehypePlugins={analysisRehypePlugins}
-            >
-              {input.analysis}
-            </Streamdown>
-          ) : (
-            <Streamdown
-              allowedTags={{ "stll-anon": ["ph"] }}
-              components={analysisComponents}
-            >
-              {input.analysis}
-            </Streamdown>
-          )}
+          <Streamdown
+            allowedTags={{ "stll-anon": ["ph"] }}
+            components={analysisComponents}
+            rehypePlugins={analysisRehypePlugins}
+          >
+            {input.analysis}
+          </Streamdown>
         </div>
       )}
 
@@ -407,8 +404,8 @@ export const AskUserCard = ({
             const hasOptions = (q.options?.length ?? 0) > 0;
             return (
               <div className="space-y-1.5" key={q.question}>
-                <p className="text-xs font-medium">
-                  {i + 1}. {renderAnonPills(q.question, pairs)}
+                <p className="text-xs font-medium" dir="auto">
+                  {format.number(i + 1)}. {renderAnonPills(q.question, pairs)}
                 </p>
 
                 {!isDone && hasOptions && !customMode[i] && (

@@ -168,8 +168,9 @@ const wireSchemaValidator = createWireSchemaValidator();
  * tool's executable output source. The schema a client is shown is a
  * projection of that source, so each successful result of a tool with an
  * output contract must carry structured content, and that content is read
- * against the advertised output schema by an independent validator. A relayed
- * third-party tool resolves no contract and is exempt.
+ * against the advertised output schema by an independent validator and must
+ * exclude request receipts. A relayed third-party tool resolves no contract
+ * and is exempt.
  */
 const handleMcpToolCall = async (
   call: Parameters<typeof dispatchMcpToolCall>[0],
@@ -180,6 +181,10 @@ const handleMcpToolCall = async (
     call.mode,
   )?.outputSchema;
   if (result.isError !== true && outputSchema !== undefined) {
+    expect(
+      JSON.stringify(result.structuredContent),
+      `${call.toolName} success result includes a request receipt`,
+    ).not.toContain('"requestId"');
     expect(
       result.structuredContent,
       `${call.toolName} succeeded without structured content`,
@@ -409,6 +414,8 @@ const searchProviderSearchMock = mock(
   },
 );
 const searchDecisionsHandlerMock = mock();
+const listCaseLawProvisionDecisionsMock = mock();
+const readCaseLawProvisionScopeMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
@@ -1148,6 +1155,8 @@ const createContext = ({
     readWorkspaceHandler: readWorkspaceHandlerMock,
     readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
     searchDecisionsHandler: searchDecisionsHandlerMock,
+    listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
+    readCaseLawProvisionScope: readCaseLawProvisionScopeMock,
     readCaseLawCourtNames: async () => STORED_CZ_COURTS,
     searchLegislationHandler: searchLegislationHandlerMock,
     resolveStatuteExpression: resolveStatuteExpressionMock,
@@ -1231,6 +1240,12 @@ describe("OpenAI-compatible MCP tools", () => {
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
     searchDecisionsHandlerMock.mockReset();
+    listCaseLawProvisionDecisionsMock.mockReset();
+    readCaseLawProvisionScopeMock.mockReset();
+    readCaseLawProvisionScopeMock.mockResolvedValue({
+      type: "decisions",
+      decisionIds: [],
+    });
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
     resolveStatuteWorkVersionMock.mockReset();
@@ -1325,7 +1340,7 @@ describe("OpenAI-compatible MCP tools", () => {
         queries: {
           type: "array",
           description:
-            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.",
+            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.",
           items: { type: "string", minLength: 1, maxLength: 500 },
           minItems: 1,
           maxItems: 5,
@@ -1381,6 +1396,13 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           FILTER_KIND,
         ),
+        provision: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description:
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+        },
         has_legal_sentence: {
           type: "boolean",
           description:
@@ -1454,7 +1476,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
         },
       },
-      required: ["queries", "country"],
+      required: ["country"],
       additionalProperties: false,
     });
   });
@@ -1532,12 +1554,18 @@ describe("OpenAI-compatible MCP tools", () => {
       "stella:documents_write",
       "stella:templates",
     ]);
-    expect(getMcpToolRequiredScopesHint("mcp__registry__lookup")).toEqual([
-      "stella:external_mcps",
-    ]);
-    expect(getMcpToolRequiredScopesHint("skill__research")).toEqual([
-      "stella:skills",
-    ]);
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "advanced"),
+    ).toEqual(["stella:external_mcps"]);
+    expect(getMcpToolRequiredScopesHint("skill__research", "advanced")).toEqual(
+      ["stella:skills"],
+    );
+    expect(
+      getMcpToolRequiredScopesHint("skill__research", "default"),
+    ).toBeUndefined();
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "default"),
+    ).toBeUndefined();
     expect(
       getMcpToolRequiredScopesHint("mcp__registry__lookup", "anonymized"),
     ).toBe(undefined);
@@ -3578,6 +3606,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cited_by",
       limit: 5,
+      surface: "search",
     });
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
@@ -3646,6 +3675,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cites",
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
+      surface: "search",
     });
   });
 
@@ -4063,6 +4093,11 @@ describe("OpenAI-compatible MCP tools", () => {
       asOf: "2020-06-01",
       eli: STATUTE_ELI,
     });
+    // An agent read answers for search-admitted countries only.
+    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(2)).toBe("search");
+    expect(readPublicLegislationHandlerMock.mock.calls.at(0)?.at(2)).toBe(
+      "search",
+    );
     const expectedText = `\u00a7 1729\n\n${LONG_PROVISION_BODY}`;
     expect(parseToolPayload(result)).toEqual({
       nextCursor: encodePaginationCursor([8000]),
@@ -4237,7 +4272,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(resolveStatuteExpressionMock).toHaveBeenCalledTimes(3);
     expect(
       readLegislationProvisionVersionsMock.mock.calls.at(0)?.at(0),
-    ).toMatchObject({ documentIds: [STATUTE_ID] });
+    ).toMatchObject({ documentIds: [STATUTE_ID], surface: "search" });
     expect(readVersionBlocksMock).toHaveBeenCalledTimes(1);
     expect(readVersionBlocksMock.mock.calls.at(0)?.at(0)).toMatchObject({
       purpose: "derived-ai",
@@ -5107,6 +5142,185 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     );
 
+    test.each([
+      [
+        "§ 316 odst. 2 ZP",
+        {
+          work: "262/2006 Sb.",
+          unit: "section",
+          section: 316,
+          subsection: "2",
+        },
+      ],
+      [
+        "§ 52 písm. g) zákoníku práce",
+        { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
+      ],
+      ["čl. 10 Listiny", { unit: "article", section: 10 }],
+    ])(
+      "reads the provision %s onto every phrasing's search",
+      async (provision, expected) => {
+        const result = await handleMcpToolCall({
+          args: {
+            queries: ["kamerový systém na pracovišti", "monitorování"],
+            country: "CZE",
+            provision,
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).toBeUndefined();
+        expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(2);
+        for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+          expect(body.provision).toMatchObject(expected);
+        }
+        // A level the caller left out is absent, so it matches every value.
+        const body = searchedBody();
+        if (!("subsection" in expected)) {
+          expect(body["provision"]).not.toHaveProperty("subsection");
+        }
+      },
+    );
+
+    test.each([
+      ["kamerový systém", "names no section"],
+      ["§ 316 odst. 2", "names no act"],
+      ["§ 10 Listiny", "is not divided into the units"],
+      ["§ 316 odst. 2 a 3 ZP", "several provisions or a range"],
+      ["§ 316–318 ZP", "several provisions or a range"],
+    ])(
+      "refuses the provision %s before any search, naming the fix",
+      async (provision, message) => {
+        const result = await handleMcpToolCall({
+          args: { queries: ["kamera"], country: "CZE", provision },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).toBe(true);
+        expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+        const payload = parseToolPayload(result);
+        expect(payload).toMatchObject({
+          error: { code: "validation_error" },
+        });
+        expect(JSON.stringify(payload)).toContain(message);
+        expect(JSON.stringify(payload)).toContain('"hint"');
+      },
+    );
+
+    test("a provision cited too widely for one search says so on every phrasing, with its count", async () => {
+      readCaseLawProvisionScopeMock.mockResolvedValue({
+        type: "broad",
+        citingDecisions: 4037,
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["odpovědnost lékaře", "újma na zdraví"],
+          country: "CZE",
+          provision: "§ 2910 OZ",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBeUndefined();
+      // Read once for the call, handed to every phrasing's search.
+      expect(readCaseLawProvisionScopeMock).toHaveBeenCalledTimes(1);
+      for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+        expect(body.provisionScope).toEqual({
+          type: "broad",
+          citingDecisions: 4037,
+        });
+      }
+      const warnings = searchWarnings(result).filter(
+        ({ code }) => code === "provision_cited_widely",
+      );
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0]?.message).toContain("4037");
+      expect(warnings[0]?.message).toContain("§ 2910 OZ");
+      expect(warnings[0]?.hint).toContain("subsection");
+    });
+
+    test("a provision whose citing set fits raises no breadth warning", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["kamera"],
+          country: "CZE",
+          provision: "§ 316 odst. 2 ZP",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(
+        searchWarnings(result).some(
+          ({ code }) => code === "provision_cited_widely",
+        ),
+      ).toBe(false);
+    });
+
+    test("a provision without queries lists its citing decisions, with an exact total", async () => {
+      const listCursor = encodePaginationCursor(["list", 21, "next"]);
+      listCaseLawProvisionDecisionsMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [],
+        nextCursor: "next-page",
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 21),
+        queryUsed: "",
+        warnings: [],
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          country: "CZE",
+          provision: "§ 316 odst. 2 ZP",
+          courts: ["NS"],
+          sort: "newest",
+          cursor: listCursor,
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBeUndefined();
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(readCaseLawProvisionScopeMock).not.toHaveBeenCalled();
+      expect(listCaseLawProvisionDecisionsMock).toHaveBeenCalledTimes(1);
+      const [{ body }] = listCaseLawProvisionDecisionsMock.mock.calls[0] ?? [];
+      expect(body).toMatchObject({
+        country: "CZE",
+        courts: ["Nejvyšší soud"],
+        sort: "newest",
+        // The list's own cursor is passed through, not split per phrasing.
+        cursor: listCursor,
+        provision: {
+          work: "262/2006 Sb.",
+          unit: "section",
+          section: 316,
+          subsection: "2",
+        },
+      });
+      expect(parseToolPayload(result)).toMatchObject({
+        total: { type: "exact", count: 21 },
+        nextCursor: "next-page",
+        searches: [{ query: "§ 316 odst. 2 ZP" }],
+      });
+    });
+
+    test("neither queries nor a provision is refused with the fix", async () => {
+      const result = await handleMcpToolCall({
+        args: { country: "CZE" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBe(true);
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(listCaseLawProvisionDecisionsMock).not.toHaveBeenCalled();
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          message: "Pass queries, a provision, or both",
+          hint: expect.stringContaining("provision"),
+        },
+      });
+    });
+
     test("placeholder filters, a zero id and open bounds narrow nothing", async () => {
       const result = await handleMcpToolCall({
         args: {
@@ -5636,10 +5850,12 @@ describe("OpenAI-compatible MCP tools", () => {
       caller: "attributed",
       citationsCursor: null,
       documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
+      surface: "search",
     });
     expect(readGatedDecisionCitationDigestMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
       decisionId: DECISION_ID,
+      surface: "search",
     });
     const text = "29 Cdo 123/2024\n\nThe court dismissed the appeal.";
     expect(payload).toEqual({
@@ -10322,49 +10538,45 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("mixed destructive tools reach their handler without blanket confirmation", async () => {
+  test("organization settings reach validation without confirmation", async () => {
     const result = await handleMcpToolCall({
-      args: { action: "update_org_settings" },
+      args: {},
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
 
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "Provide at least one setting to change for update_org_settings",
-    );
+    expect(error["message"]).toBe("Provide at least one setting to change");
   });
 
-  test("mixed destructive tools require confirmation for the destructive action", async () => {
+  test("member removal requires human confirmation", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0001",
         user_id: "user_2",
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {
       code: "confirmation_required",
       message:
-        "manage_organization is an irreversible operation and was called without confirmation",
+        "remove_matter_member is an irreversible operation and was called without confirmation",
       hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
     });
   });
 
-  test("mixed destructive tools clear the selected-action gate with confirmation", async () => {
+  test("confirmed member removal reaches the handler", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0404",
         user_id: "user_2",
         confirm: true,
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {

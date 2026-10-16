@@ -60,6 +60,27 @@ export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
 
+/**
+ * Expansion release: tolerate these future public census grants without
+ * requiring the relation or reading it. Deploy this declaration before the
+ * follow-up migration grants the columns and its readers require them.
+ */
+export const CENSUS_COLUMN_GRANTS_BY_RELATION = {
+  case_law_completeness_census: {
+    source_id: "permitted",
+    slice: "permitted",
+    year: "permitted",
+    outcome: "permitted",
+    scope_status: "permitted",
+    publisher_count: "permitted",
+    stored_count: "permitted",
+    text_count: "permitted",
+    observed_at: "permitted",
+    expected_slices: "permitted",
+    evidence_ref: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /** Expanded before the follow-up release grants the reviewed doctrine capability. */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
@@ -104,6 +125,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   case_law_provision_extractions: {
     decision_id: PROVISION_LINK_STATUS_GRANT,
     desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    pending_since: PROVISION_LINK_STATUS_GRANT,
     work_status: PROVISION_LINK_STATUS_GRANT,
     generation: PROVISION_LINK_STATUS_GRANT,
     outcome: PROVISION_LINK_STATUS_GRANT,
@@ -138,6 +160,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * the two steps are apart.
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  ...CENSUS_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {

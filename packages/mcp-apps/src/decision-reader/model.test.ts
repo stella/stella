@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -50,6 +51,7 @@ const page = (
     blockFragments: [],
     citationAnchors: [],
     provisionAnchors: [],
+    provisionStatus: null,
     nextCursor: null,
     limit: 60_000,
     ...content,
@@ -349,3 +351,24 @@ describe("MCP decision reader paging", () => {
     ).toBeDefined();
   });
 });
+
+test.each(PROVISION_LINK_STATUS_TYPES)(
+  "preserves %s status on an empty provision page",
+  (type) => {
+    let state = accept(
+      createReaderPager(metadata),
+      page({ nextCursor: "citations" }),
+    );
+    state = accept(
+      state,
+      page({ phase: "citations", nextCursor: "provisions" }),
+    );
+    state = accept(
+      state,
+      page({ phase: "provisions", provisionStatus: { type } }),
+    );
+    expect(state.provisionAnchors).toEqual([]);
+    expect(state.provisionStatus).toEqual({ type });
+    expect(state.complete).toBe(true);
+  },
+);

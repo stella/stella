@@ -790,6 +790,96 @@ describe("Docker source closure", () => {
     }
   });
 
+  test("cached generators require their declared inputs and expand output globs", () => {
+    for (const includeInput of [true, false]) {
+      const fixtureRoot = mkdtempSync(path.join(root, "cached-generator-"));
+      const files = {
+        "scripts/prepare-mcp-apps.ts": "export {};",
+        "apps/api/package.json": JSON.stringify({
+          name: "@stll/api",
+          scripts: {
+            "generate:mcp-app-contracts":
+              "bun scripts/generate-mcp-app-contracts.ts",
+          },
+        }),
+        "apps/api/scripts/generate-mcp-app-contracts.ts": "export {};",
+        "packages/mcp-apps/package.json": JSON.stringify({
+          name: "@stll/mcp-apps",
+          scripts: { build: "bun ../../scripts/prepare-mcp-apps.ts" },
+        }),
+        "packages/mcp-apps/scripts/build-mcp-apps.ts": "export {};",
+        "apps/web/src/fonts.css": "body {}",
+        "entry.ts":
+          'import "./packages/mcp-apps/src/example/generated/app.html.txt";',
+      };
+      for (const [file, source] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(fixtureRoot, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(fixtureRoot, file), source);
+      }
+      const generator = GENERATORS.find(({ id }) => id === "mcp-app-bundles");
+      if (generator === undefined) {
+        panic("Missing MCP app generator");
+      }
+      for (const pattern of GENERATORS.filter(
+        ({ id }) => id === "mcp-app-contracts" || id === generator.id,
+      ).flatMap(({ outputs }) => outputs)) {
+        const file = pattern.replace("*", "example");
+        mkdirSync(path.dirname(path.join(fixtureRoot, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(fixtureRoot, file), "{}");
+      }
+      const context: SourceTree = new Map(
+        Object.keys(files).map((file) => [`/${file}`, file]),
+      );
+      const source = [
+        "FROM bun AS builder",
+        "WORKDIR /app",
+        ...Object.keys(files)
+          .filter((file) => includeInput || file !== "apps/web/src/fonts.css")
+          .map((file) => `COPY ${file} ${file}`),
+        "RUN bun scripts/prepare-mcp-apps.ts",
+        "RUN bun entry.ts",
+      ].join("\n");
+      const problems = checkDockerSource(
+        fixtureRoot,
+        source,
+        context,
+        new Map(),
+      );
+      if (includeInput) {
+        expect(problems).toEqual([]);
+      } else {
+        expect(problems.join("\n")).toContain(
+          "Generator input is unavailable: mcp-app-bundles//apps/web/src/fonts.css",
+        );
+      }
+    }
+  });
+
+  test("the API image generates MCP bundles in production", () => {
+    const source = readFileSync(
+      new URL("../apps/api/Dockerfile", import.meta.url),
+      "utf-8",
+    );
+    const instructions = dockerInstructions(source);
+    const builder = instructions.slice(
+      instructions.indexOf("FROM deps AS builder"),
+    );
+    const generation = builder.findIndex((line) =>
+      line.includes("bun packages/mcp-apps/scripts/build-mcp-apps.ts"),
+    );
+    expect(generation).toBeGreaterThan(0);
+    expect(builder.slice(0, generation)).toContain("ENV NODE_ENV=production");
+    expect(builder.slice(0, generation + 1).join("\n")).not.toMatch(
+      /NODE_ENV=development|STELLA_LOCAL_DEV=1/u,
+    );
+    expect(builder.join("\n")).not.toContain("/app/apps/web/ /app/apps/web/");
+    expect(builder.join("\n")).not.toContain("/app/scripts/ /app/scripts/");
+  });
+
   test.each([
     {
       kind: "direct",
@@ -1376,7 +1466,7 @@ describe("Docker source closure", () => {
     put(
       helper,
       actual.replace(
-        '"./generated-files"',
+        '"./generated-file-inventory"',
         '"../../../scripts/generated-files"',
       ),
     );

@@ -18,6 +18,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
@@ -334,6 +335,8 @@ export type ReadDecisionCitationsOptions = {
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
   limit: number;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -348,9 +351,11 @@ export const readGatedDecisionCitations = async ({
   decisionId,
   direction,
   limit,
+  surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
   const gated = await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) => {
       const page = await listDecisionCitationsHandler({

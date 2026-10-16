@@ -407,6 +407,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             tx,
             cursor: citationPageCursor(citationCursors.from),
             decisionId,
+            countries: subject.countries,
           }),
       citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
         ? emptyCitationPage()
@@ -414,6 +415,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             tx,
             cursor: citationPageCursor(citationCursors.to),
             decisionId,
+            countries: subject.countries,
           }),
     ]);
 
