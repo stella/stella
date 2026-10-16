@@ -32,11 +32,13 @@ import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
+import { sourceIdFor } from "./seed-case-law";
 import { seedId } from "./seed-utils";
 
 const RECORDED_AT = new Date("2026-01-15T09:00:00Z");
 const FIXTURE_FILES = ["cz-ns", "cz-us"] as const;
 const fixtureSchema = v.object({
+  source: v.looseObject({ adapter_key: v.string() }),
   decisions: v.array(
     v.looseObject({
       case_number: v.string(),
@@ -65,7 +67,31 @@ const seedCorpusAnalyses = async () => {
       ),
     ),
   );
-  const recorded = fixtures.flatMap(({ decisions }) => decisions);
+  const recorded = fixtures.flatMap(({ source, decisions }) =>
+    decisions.map((decision) => ({
+      ...decision,
+      sourceId: sourceIdFor(source.adapter_key),
+    })),
+  );
+  // A decision's identity is its source plus case number and language
+  // (`case_law_decisions` unique index), so each scene resolves to exactly one
+  // recorded fixture and is then looked up under that fixture's source.
+  const resolvedScenes = scenes.map((scene) => {
+    const matches = recorded.filter(
+      (row) =>
+        row.case_number === scene.caseNumber &&
+        row.country === scene.country &&
+        row.language === scene.language,
+    );
+    const [fixture, ...others] = matches;
+    if (!fixture) {
+      panic(`Marketing fixture is missing: ${scene.caseNumber}`);
+    }
+    if (others.length > 0) {
+      panic(`Marketing fixture is ambiguous: ${scene.caseNumber}`);
+    }
+    return { scene, fixture };
+  });
   const lane = await enterCaseLawMaintenanceLane();
   try {
     const rows = await withAggregateTransaction(
@@ -74,6 +100,7 @@ const seedCorpusAnalyses = async () => {
         await tx
           .select({
             id: caseLawDecisions.id,
+            sourceId: caseLawDecisions.sourceId,
             caseNumber: caseLawDecisions.caseNumber,
             country: caseLawDecisions.country,
             court: caseLawDecisions.court,
@@ -84,32 +111,25 @@ const seedCorpusAnalyses = async () => {
           .from(caseLawDecisions)
           .where(
             or(
-              ...scenes.map(({ caseNumber, country, language }) =>
+              ...resolvedScenes.map(({ fixture }) =>
                 and(
-                  eq(caseLawDecisions.caseNumber, caseNumber),
-                  eq(caseLawDecisions.country, country),
-                  eq(caseLawDecisions.language, language),
+                  eq(caseLawDecisions.sourceId, fixture.sourceId),
+                  eq(caseLawDecisions.caseNumber, fixture.case_number),
+                  eq(caseLawDecisions.language, fixture.language),
                 ),
               ),
             ),
           )
           .limit(scenes.length),
     );
-    const stories = scenes.map((scene) => {
+    const stories = resolvedScenes.map(({ scene, fixture }) => {
       const decision =
         rows.find(
           (row) =>
-            row.caseNumber === scene.caseNumber &&
-            row.country === scene.country &&
-            row.language === scene.language,
+            row.sourceId === fixture.sourceId &&
+            row.caseNumber === fixture.case_number &&
+            row.language === fixture.language,
         ) ?? panic(`Marketing decision is missing: ${scene.caseNumber}`);
-      const fixture =
-        recorded.find(
-          (row) =>
-            row.case_number === scene.caseNumber &&
-            row.country === scene.country &&
-            row.language === scene.language,
-        ) ?? panic(`Marketing fixture is missing: ${scene.caseNumber}`);
       const ast = v.parse(persistedDocumentAstSchema, fixture.document_ast);
       const highlight =
         ast.blocks.find((block) => block.anchorId === scene.highlightAnchor) ??

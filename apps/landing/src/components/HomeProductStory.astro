@@ -236,7 +236,6 @@ const proofItems = [
                       {
                         storyShots.map((shot, shotIndex) => (
                           <div
-                            aria-hidden={shotIndex === 0 ? undefined : "true"}
                             class="story-shot-layer"
                             style={`animation-duration: ${STORY_SHOT_TOTAL_SECONDS}s; animation-delay: ${(shotIndex - storyShots.length) * STORY_SHOT_SEGMENT_SECONDS}s`}
                           >

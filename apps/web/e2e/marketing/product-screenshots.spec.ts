@@ -117,14 +117,6 @@ const captures = [
     // the shot never ships mid-render.
     readyText: MARKETING_AGENT_FIRST_QUESTION,
   },
-  {
-    name: "public-data",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "27 Cdo 59/2022",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
   { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
   {
     name: "anonymization",
@@ -180,9 +172,7 @@ test("capture landing product screenshots", async ({
       : undefined;
 
   const decisionPaths =
-    !requestedCapture ||
-    requestedCapture === "public-data" ||
-    requestedCapture.startsWith("story-public-data-")
+    !requestedCapture || requestedCapture.startsWith("story-public-data-")
       ? await resolveDecisionPaths(page.request)
       : new Map<string, string>();
 
@@ -243,9 +233,13 @@ test("capture landing product screenshots", async ({
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      await page.goto(capturePath, {
-        waitUntil: "decisionText" in capture ? "commit" : "domcontentloaded",
-      });
+      // The navigation policy reads `waitUntil` as a literal, so the two
+      // lifecycles are separate calls.
+      if ("decisionText" in capture) {
+        await page.goto(capturePath, { waitUntil: "commit" });
+      } else {
+        await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      }
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
@@ -513,12 +507,36 @@ const resolveAgentThreadPath = async (request: APIRequestContext) => {
   return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
 };
 
+const DECISION_THREAD_PAGE_LIMIT = 100;
+
+// The threads endpoint lists newest first, so the seeded readers can sit
+// beyond the first page on a busy dev account: follow its cursor to the end.
 const resolveDecisionPaths = async (request: APIRequestContext) => {
-  const response = await request.get(
-    `${MARKETING_URLS.apiUrl}/v1/chat/threads?limit=50`,
+  const global: unknown[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < DECISION_THREAD_PAGE_LIMIT; page++) {
+    const query: string =
+      cursor === null
+        ? "limit=50"
+        : `limit=50&cursor=${encodeURIComponent(cursor)}`;
+    const response = await request.get(
+      `${MARKETING_URLS.apiUrl}/v1/chat/threads?${query}`,
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+    const payload: unknown = await response.json();
+    const parsed = v.safeParse(threadPageSchema, payload);
+    if (!parsed.success) {
+      throw new Error("Chat thread list response is malformed");
+    }
+    global.push(...parsed.output.global);
+    if (parsed.output.nextCursor === null) {
+      return getMarketingDecisionPaths({ global });
+    }
+    cursor = parsed.output.nextCursor;
+  }
+  throw new Error(
+    `Chat thread list exceeded ${String(DECISION_THREAD_PAGE_LIMIT)} pages`,
   );
-  expect(response.ok(), await response.text()).toBe(true);
-  return getMarketingDecisionPaths(await response.json());
 };
 
 // Reads the timestamp the inspector's version caption formats, from the same

@@ -1305,7 +1305,6 @@
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/api/src/**",
-        "$TURBO_ROOT$/packages/playwright-tools/src/marketing-case-law.json",
         "$TURBO_ROOT$/apps/desktop/src/**",
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
