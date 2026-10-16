@@ -75,7 +75,8 @@ export const normalizeParties = (
   return normalized;
 };
 
-const proposedPartiesSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const proposedPartiesSchema = v.strictObject({
   parties: v.array(proposedPartySchema),
 });
 

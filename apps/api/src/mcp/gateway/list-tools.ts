@@ -31,10 +31,7 @@ import type {
   ExternalGatewayDependencies,
   ResolvedExternalMcpTool,
 } from "@/api/mcp/gateway/external-tools";
-import {
-  GATEWAY_TOOL_KIND,
-  modeAllowsGatewayTools,
-} from "@/api/mcp/gateway/mode-policy";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   loadVisibleSkillTools,
   resolveSkillTool,
@@ -176,12 +173,12 @@ export const listGatewayMcpToolDefinitions = async ({
   // connector discovery runs only on the advanced surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
   // receives tenant-specific connector metadata.
-  if (!modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill)) {
+  if (!modeAllowsGatewayTools(mode)) {
     return definitions;
   }
 
   if (
-    modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) &&
+    modeAllowsGatewayTools(mode) &&
     hasGrantedScope(scopes, "stella:external_mcps")
   ) {
     for (const tool of await listGatewayExternalMcpTools({
@@ -252,7 +249,7 @@ export const getGatewayMcpToolDefinition = async ({
       : undefined;
   }
   if (
-    !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill) ||
+    !modeAllowsGatewayTools(mode) ||
     !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
   ) {
     return undefined;
@@ -260,7 +257,7 @@ export const getGatewayMcpToolDefinition = async ({
 
   if (isExternalMcpToolName(toolName)) {
     if (
-      !modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.externalMcp) ||
+      !modeAllowsGatewayTools(mode) ||
       !hasGrantedScope(context.grantedScopes, "stella:external_mcps")
     ) {
       return undefined;

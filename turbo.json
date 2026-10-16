@@ -1,18 +1,16 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "remoteCache": { "timeout": 20, "uploadTimeout": 20 },
-  // Turbo runs tasks in strict env mode, which strips undeclared variables from
-  // the task environment. propertyConfig reads these at run time: the nightly
-  // factor that scales property numRuns, the pinned seed a replay command
-  // sets, and CI to enable fast-check verbose reporting. Without passing them
-  // through, the nightly sweep would silently run at factor 1 and a replay
-  // would silently run the default seed.
-  "globalPassThroughEnv": [
+  // These values change the proof itself, so pass-through alone is unsafe.
+  // Runner identity separates native toolchains and platform-specific checks.
+  "globalEnv": [
     "CI",
-    "CI_GENERATED_SOURCES_MANIFEST",
     "PROPERTY_TEST_NUM_RUNS_FACTOR",
-    "PROPERTY_TEST_SEED"
+    "PROPERTY_TEST_SEED",
+    "RUNNER_OS",
+    "RUNNER_ARCH"
   ],
+  "globalPassThroughEnv": ["CI_GENERATED_SOURCES_MANIFEST"],
   // A patched dependency changes installed code for every task that resolves
   // it, but editing a patch file moves neither bun.lock (which records the
   // patch path, not its contents) nor package.json, so nothing Turbo hashes by
@@ -594,7 +592,7 @@
       "cache": false
     },
     "test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
     "@stll/cli#codegen:runtime": {
@@ -707,14 +705,14 @@
     // pass cannot replay over it. scripts/check-test-input-coverage.ts holds
     // these lists and the tests in sync in both directions.
     "@stll/cli#test": {
-      "dependsOn": ["codegen:runtime"],
+      "dependsOn": ["transit", "codegen:runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
       ]
     },
     "@stll/agent-engine#test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
@@ -1313,7 +1311,11 @@
       "cache": false
     },
     "@stll/api#test": {
-      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
+      "dependsOn": [
+        "transit",
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime"
+      ],
       "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
@@ -1352,7 +1354,7 @@
       ]
     },
     "@stll/web#test": {
-      "dependsOn": ["generate:api-types", "generate:route-tree"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/cli/capabilities/**",
@@ -1395,7 +1397,7 @@
     // Repository-wide tooling guards: these suites walk apps/*, packages/* and
     // the workflows themselves, so any of those files can break them.
     "@stll/property-testing#test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/**",
@@ -1405,14 +1407,14 @@
       ]
     },
     "@stll/api-contract#test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
       ]
     },
     "@stll/catalogue#test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/catalogue-upstream.yml",
@@ -1421,7 +1423,7 @@
       ]
     },
     "@stll/scripts#test": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/docker-compose.yml",

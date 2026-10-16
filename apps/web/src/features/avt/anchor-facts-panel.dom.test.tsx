@@ -75,11 +75,15 @@ afterEach(async () => {
 afterAll(async () => await unregisterDomEnvironment());
 
 type MountFactOptions = {
+  name?: string;
+  statement?: string;
   factDetails?: ListItem["factDetails"];
   role?: "owner" | "intern";
 };
 
 const mountFact = ({
+  name = fact.name,
+  statement = name,
   factDetails = null,
   role = "owner",
 }: MountFactOptions = {}) => {
@@ -98,7 +102,7 @@ const mountFact = ({
   }).queryKey;
   client.setQueryData(itemsKey, {
     pages: [
-      { items: [{ ...fact, factDetails }], nextCursor: null, limit: 100 },
+      { items: [{ ...fact, name, factDetails }], nextCursor: null, limit: 100 },
     ],
     pageParams: [null],
   });
@@ -159,34 +163,44 @@ const mountFact = ({
   expect(
     client.getQueryData(itemsKey)?.pages.at(0)?.items.at(0)?.factDetails,
   ).toEqual(factDetails);
-  expect(screen.getByText(fact.name)).toBeTruthy();
+  expect(screen.getByText(statement)).toBeTruthy();
   return requests;
 };
 
-const mountUndescribedFact = () => {
+/** Opens the fact row's actions menu and returns the named item. */
+const factAction = async (name: string) => {
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.actions }),
+    );
+  });
+  return await screen.findByRole("menuitem", { name });
+};
+
+const mountUndescribedFact = async () => {
   const requests = mountFact();
+  expect(screen.getByText(messages.avt.anchorFacts.inScoring)).toBeTruthy();
+  const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
+  expect(hold.getAttribute("aria-disabled")).not.toBe("true");
   expect(
     screen
-      .getByRole("button", { name: messages.avt.anchorFacts.holdOutOfScoring })
-      .hasAttribute("disabled"),
-  ).toBe(false);
-  expect(
-    screen
-      .getByRole("button", {
+      .getByRole("menuitem", {
         name: messages.avt.anchorFacts.addInterpretationNote,
       })
-      .hasAttribute("disabled"),
-  ).toBe(false);
+      .getAttribute("aria-disabled"),
+  ).not.toBe("true");
   return requests;
 };
 
 test("a new fact can be held out of scoring without assigning confidence", async () => {
-  const requests = mountUndescribedFact();
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.avt.anchorFacts.holdOutOfScoring,
-    }),
-  );
+  const requests = await mountUndescribedFact();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: messages.avt.anchorFacts.holdOutOfScoring,
+      }),
+    );
+  });
   await waitFor(() => {
     expect(requests).toEqual([
       {
@@ -208,12 +222,14 @@ test("a new fact can be held out of scoring without assigning confidence", async
 });
 
 test("a new fact can receive an interpretation note without assigning confidence", async () => {
-  const requests = mountUndescribedFact();
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: messages.avt.anchorFacts.addInterpretationNote,
-    }),
-  );
+  const requests = await mountUndescribedFact();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("menuitem", {
+        name: messages.avt.anchorFacts.addInterpretationNote,
+      }),
+    );
+  });
   fireEvent.change(
     screen.getByRole("textbox", {
       name: messages.avt.anchorFacts.interpretationNote,
@@ -257,25 +273,33 @@ for (const scenario of [
     role: "intern",
     factDetails: null,
     reason: messages.errors.api.forbidden,
+    status: messages.avt.anchorFacts.inScoring,
     name: "a reviewer without update permission cannot edit a new fact",
   },
   {
     role: "owner",
     factDetails: describedFact,
     reason: messages.errors.actionAdmission.notEnabled,
+    status: null,
     name: "a fact with scoring omitted cannot be edited even by an owner",
   },
 ] as const) {
-  test(scenario.name, () => {
+  test(scenario.name, async () => {
     const requests = mountFact(scenario);
-    const hold = screen.getByRole("button", {
-      name: messages.avt.anchorFacts.holdOutOfScoring,
-    });
-    const note = screen.getByRole("button", {
+    for (const label of [
+      messages.avt.anchorFacts.inScoring,
+      messages.avt.anchorFacts.heldForReview,
+    ]) {
+      expect(screen.queryByText(label) !== null).toBe(
+        label === scenario.status,
+      );
+    }
+    const hold = await factAction(messages.avt.anchorFacts.holdOutOfScoring);
+    const note = screen.getByRole("menuitem", {
       name: messages.avt.anchorFacts.addInterpretationNote,
     });
-    expect(hold.hasAttribute("disabled")).toBe(true);
-    expect(note.hasAttribute("disabled")).toBe(true);
+    expect(hold.getAttribute("aria-disabled")).toBe("true");
+    expect(note.getAttribute("aria-disabled")).toBe("true");
     expect(
       screen
         .getByRole("combobox", {
@@ -327,6 +351,59 @@ test("Not stated clears an existing confidence while preserving scoring", async 
           evidenceKind: null,
           medium: null,
           confidence: null,
+          interpretationNote: null,
+          scoring: "included",
+        },
+      },
+    ]);
+  });
+});
+
+test("an imported fact reads as reference, statement and one meta line", () => {
+  mountFact({
+    name: "CAL-01: 9 Mar 2021 (Outlook export p.14): Calendar invitation shown as accepted.",
+    statement: "Calendar invitation shown as accepted.",
+    factDetails: {
+      ...describedFact,
+      occurredOn: "2021-03-09",
+      occurredOnPrecision: "day",
+      evidenceKind: "Calendar",
+      medium: "Outlook export p.14",
+    },
+  });
+  expect(screen.getByText("CAL-01")).toBeTruthy();
+  expect(screen.getByText("Calendar")).toBeTruthy();
+  expect(screen.getAllByText("Outlook export p.14")).toHaveLength(1);
+  expect(screen.queryByText(/9 Mar 2021 \(/u)).toBeNull();
+});
+
+test("a held fact shows its status and is included in one click", async () => {
+  const requests = mountFact({
+    factDetails: { ...describedFact, scoring: "held" },
+  });
+  expect(
+    screen.getAllByText(messages.avt.anchorFacts.heldForReview),
+  ).not.toHaveLength(0);
+  expect(screen.queryByText(messages.avt.anchorFacts.inScoring)).toBeNull();
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: messages.avt.anchorFacts.includeInScoring,
+      }),
+    );
+  });
+  await waitFor(() => {
+    expect(requests).toEqual([
+      {
+        method: "PUT",
+        pathname: `/v1/lists/${workspaceId}/item-fact-details`,
+        body: {
+          listId,
+          itemEntityId: fact.id,
+          occurredOn: null,
+          evidenceKind: null,
+          medium: null,
+          confidence: "high",
           interpretationNote: null,
           scoring: "included",
         },

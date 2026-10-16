@@ -211,7 +211,6 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/resource-tree.ts",
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
-      "chatgpt-app-submission.json",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
     ],
     inputs: [
