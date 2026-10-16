@@ -51,6 +51,7 @@ import {
   caseLawAnalysisFailures,
   caseLawBrowseFacetCounts,
   caseLawCitationAuthoritySweep,
+  caseLawCitationDoctrineReviews,
   caseLawCitationResolutionCensus,
   caseLawCitationResolutionCensusRuns,
   caseLawCitationResolutionProgress,
@@ -109,6 +110,7 @@ import {
   chatMessageRevisions,
   chatMessageSearchDocuments,
   chatMessages,
+  chatContentV3BackfillReceipts,
   chatRunLogEntries,
   chatRunLogs,
   chatSecrets,
@@ -354,6 +356,13 @@ const messageThread = (messageId: SQL) => sql`(
 
 /** Sources used by scoped owners; every descriptor reads ownership from its row. */
 export const ORG_SCOPE_TABLES = {
+  chatContentV3BackfillReceipts: {
+    identityKind: "primary-key",
+    table: chatContentV3BackfillReceipts,
+    organizationId: sql`${chatContentV3BackfillReceipts.organizationId}`,
+    workspaceId: sql`NULL::uuid`,
+    rowId: sql`ROW(${chatContentV3BackfillReceipts.source}, ${chatContentV3BackfillReceipts.rowId})::text`,
+  },
   chatThreadSearchDocuments: {
     identityKind: "primary-key",
     table: chatThreadSearchDocuments,
@@ -2175,6 +2184,11 @@ export const GLOBAL_SCOPE_TABLES = {
   },
   caseLawCitationReviews: {
     table: caseLawCitationReviews,
+    ownership: "public-corpus",
+    reason: "Public corpus rows admitted by the declared corpus policy.",
+  },
+  caseLawCitationDoctrineReviews: {
+    table: caseLawCitationDoctrineReviews,
     ownership: "public-corpus",
     reason: "Public corpus rows admitted by the declared corpus policy.",
   },
