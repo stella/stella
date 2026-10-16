@@ -11,6 +11,7 @@ const MEMORY_CHILD = fileURLToPath(
 );
 const MEMORY_BUDGET_BYTES = 1024 * 1024 * 1024;
 const MEMORY_WORKLOAD_TIMEOUT_MS = 180_000;
+const ATTRIBUTE_FLOOD_DEADLINE_MS = 10_000;
 const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, PL_KIO_HTML_BUDGET.maxBytes];
 
 const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
@@ -24,6 +25,11 @@ const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
       workload,
     ],
     {
+      timeout:
+        workload === "attributes"
+          ? ATTRIBUTE_FLOOD_DEADLINE_MS
+          : MEMORY_WORKLOAD_TIMEOUT_MS,
+      killSignal: "SIGKILL",
       cwd: API_ROOT,
       stdout: "pipe",
       stderr: "pipe",

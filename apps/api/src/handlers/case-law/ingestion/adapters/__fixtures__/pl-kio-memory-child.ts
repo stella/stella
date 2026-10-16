@@ -63,7 +63,7 @@ const documentHtmlOf = (kind: string) => {
     case "svg":
       return `<svg><script>${"<g></g>".repeat(100_000)}</script></svg>`;
     case "attributes":
-      return `<div ${Array.from({ length: 30_000 }, (_, index) => `a${index}`).join(" ")}></div>`;
+      return `<div ${Array.from({ length: 200_000 }, (_, index) => `a${index}`).join(" ")}></div>`;
     case "plaintext":
       return "x\n\n".repeat(100_000);
     default:

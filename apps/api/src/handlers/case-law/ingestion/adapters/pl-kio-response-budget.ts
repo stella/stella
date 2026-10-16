@@ -4,9 +4,14 @@ import { isText } from "domhandler";
 import { Buffer } from "node:buffer";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
 
+import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
+
 export const PL_KIO_HTML_BUDGET = {
   maxBytes: 2 * 1024 * 1024,
   maxDomAllocations: 20_000,
+  maxAttributesPerTag: 512,
+  maxAttributesTotal: 20_000,
+  maxScanStepsPerCharacter: 8,
 } as const;
 
 export const PL_KIO_DOCUMENT_REJECTION = {
@@ -21,10 +26,16 @@ export class PlKioHtmlBudgetError extends TaggedError("PlKioHtmlBudgetError")<{
 
 /** Bound allocations in the same parse5 tree builder that Cheerio consumes. */
 export const loadPlKioHtml = (html: string) => {
+  let rejection: PlKioHtmlBudgetError["reason"] | undefined;
   if (Buffer.byteLength(html, "utf-8") > PL_KIO_HTML_BUDGET.maxBytes) {
+    rejection = PL_KIO_DOCUMENT_REJECTION.OVERSIZED;
+  } else if (!hasPlKioAttributeBudget(html, PL_KIO_HTML_BUDGET)) {
+    rejection = PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED;
+  }
+  if (rejection !== undefined) {
     throw new PlKioHtmlBudgetError({
-      message: "KIO HTML exceeds byte budget",
-      reason: PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+      message: "KIO HTML exceeds input budget",
+      reason: rejection,
     });
   }
   let allocations = 0;
