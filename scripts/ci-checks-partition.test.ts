@@ -167,7 +167,7 @@ const processBudgetWorkflowSchema = v.looseObject({
       steps: v.optional(
         v.pipe(
           v.unknown(),
-          v.transform(flattenWorkflowSteps),
+          v.transform((steps) => flattenWorkflowSteps(steps)),
           v.array(v.looseObject({ env: processBudgetEnvSchema })),
         ),
       ),

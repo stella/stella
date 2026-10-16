@@ -14,7 +14,7 @@ const configured = v.parse(
         if: v.string(),
         steps: v.pipe(
           v.unknown(),
-          v.transform(flattenWorkflowSteps),
+          v.transform((steps) => flattenWorkflowSteps(steps)),
           v.array(
             v.object({
               id: v.optional(v.string()),

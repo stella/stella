@@ -17,6 +17,7 @@ import {
   openSync,
   readFileSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { availableParallelism } from "node:os";
 import path from "node:path";
@@ -378,6 +379,29 @@ export const summaryTable = (results: readonly CheckResult[]) =>
     ),
   ].join("\n");
 
+// One synchronous writer: a large asynchronous stdout write could otherwise
+// interleave with the next check's lines.
+const pause = new Int32Array(new SharedArrayBuffer(4));
+const writeOut = (text: string) => {
+  const bytes = Buffer.from(text);
+  for (let offset = 0; offset < bytes.length;) {
+    try {
+      offset += writeSync(1, bytes, offset);
+    } catch (error) {
+      // A non-blocking pipe that is full: wait briefly and retry.
+      if (
+        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
+      ) {
+        throw error;
+      }
+      Atomics.wait(pause, 0, 0, 5);
+    }
+  }
+};
+const print = (...parts: string[]) => {
+  writeOut(`${parts.join(" ")}\n`);
+};
+
 const isPoolJob = (job: string): job is CheckPoolJob =>
   CHECK_POOL_JOBS.some((known) => known === job);
 
@@ -413,7 +437,7 @@ const main = async () => {
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   const concurrency = override ? Number(override) : availableParallelism();
   const selected = planned.filter(({ status }) => status === "selected").length;
-  console.log(
+  print(
     `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,
   );
   const stop = () => {
@@ -431,30 +455,26 @@ const main = async () => {
     launch: processLauncher({ root, directory }),
     report: (index, result) => {
       if (result.outcome === "skipped") {
-        console.log(`Skipped: ${result.name} (${result.detail})`);
+        print(`Skipped: ${result.name} (${result.detail})`);
         return;
       }
       const label = result.outcome === "success" ? "passed" : "FAILED";
-      console.log(
-        `::group::${result.name}: ${label} in ${seconds(result.seconds)}`,
-      );
+      print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
       if (planned[index]?.status === "selected") {
         const output = readFileSync(logPath(directory, index), "utf-8");
-        process.stdout.write(output.replace(NESTED_GROUP, " $1"));
-        if (output !== "" && !output.endsWith("\n")) {
-          process.stdout.write("\n");
-        }
+        const text = output.replace(NESTED_GROUP, " $1");
+        writeOut(text === "" || text.endsWith("\n") ? text : `${text}\n`);
       }
-      console.log("::endgroup::");
+      print("::endgroup::");
       if (result.outcome === "failure") {
-        console.log(
+        print(
           `::error title=${escapeProperty(result.name)}::${escapeData(`${result.name} failed: ${result.detail}`)}`,
         );
       }
     },
   });
   const table = summaryTable(results);
-  console.log(
+  print(
     `\n${table}\n\nWall time: ${seconds((performance.now() - started) / 1000)}`,
   );
   const summary = process.env["GITHUB_STEP_SUMMARY"];
@@ -473,7 +493,7 @@ const main = async () => {
   );
   const failed = results.filter(({ outcome }) => outcome === "failure");
   if (failed.length > 0) {
-    console.log(
+    print(
       `${failed.length} check(s) failed: ${failed.map(({ name }) => name).join("; ")}`,
     );
     process.exitCode = 1;

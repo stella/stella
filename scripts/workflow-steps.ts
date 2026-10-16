@@ -55,7 +55,7 @@ export const flattenWorkflowSteps = (
     throw new WorkflowStepsInvariantError("Workflow steps must be an array");
   }
   const leaves: Record<string, unknown>[] = [];
-  for (const step of steps) {
+  for (const [index, step] of steps.entries()) {
     if (typeof step !== "object" || step === null || Array.isArray(step)) {
       throw new WorkflowStepsInvariantError("Workflow step must be an object");
     }
@@ -70,10 +70,23 @@ export const flattenWorkflowSteps = (
     }
     leaves.push(step);
     const pool = checkPoolJob(step);
-    if (pool !== undefined) {
-      leaves.push(
-        ...readCheckPool(pool, readPool).map((check) => ({ ...check.step })),
+    if (pool === undefined) {
+      continue;
+    }
+    const checks = readCheckPool(pool, readPool);
+    // Flattening is idempotent: steps flattened before already carry the
+    // pool's checks right after the pool step.
+    const expanded = checks.every((check, offset) => {
+      const next: unknown = steps[index + 1 + offset];
+      return (
+        typeof next === "object" &&
+        next !== null &&
+        "name" in next &&
+        next.name === check.name
       );
+    });
+    if (!expanded) {
+      leaves.push(...checks.map((check) => ({ ...check.step })));
     }
   }
   return leaves;

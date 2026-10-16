@@ -25,7 +25,7 @@ import {
   type PoolCheck,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
-import { workflowJobSteps } from "./workflow-steps";
+import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
 const workflow: unknown = Bun.YAML.parse(
@@ -64,7 +64,8 @@ test("every pooled check declares its classification and selection inputs", () =
     const inputs = ROOT_CHECK_INPUTS[job];
     for (const pooled of readCheckPool(job)) {
       expect(inputs[pooled.name], `${job}/${pooled.name}`).toBeArray();
-      expect(["STATIC", "CONTEXTUAL"]).toContain(pooled.env["CI_CHECK_KIND"]);
+      const kind = pooled.env["CI_CHECK_KIND"] ?? "";
+      expect(["STATIC", "CONTEXTUAL"], pooled.name).toContain(kind);
     }
   }
 });
@@ -272,5 +273,14 @@ test("a launched check runs as a bash step with its env, output and timeout", as
     expect(readFileSync(path.join(directory, "001.log"), "utf-8")).toBe("");
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("flattening steps that already carry their pooled checks adds none", () => {
+  for (const job of CHECK_POOL_JOBS) {
+    const steps = workflowJobSteps(workflow, job);
+    expect(flattenWorkflowSteps(steps).map(({ name }) => name)).toEqual(
+      steps.map(({ name }) => name),
+    );
   }
 });

@@ -19,7 +19,7 @@ class GitHubExpressionError extends Error {
   override name = "GitHubExpressionError";
   readonly _tag = "GitHubExpressionError";
 }
-const panic = (message: string): never => {
+const panic: (message: string) => never = (message) => {
   throw new GitHubExpressionError(message);
 };
 
