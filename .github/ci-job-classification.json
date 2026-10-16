@@ -447,10 +447,7 @@
       },
       "path": ".github/actions/desktop-windows-build/action.yml",
       "digest": "506333150e0cbff537ed67f3c72511139a8a3842bd3f03a3431701a59ed2abf0",
-      "references": [
-        "./.github/actions/desktop-windows-build",
-        "./.release-tooling/desktop-windows-build"
-      ],
+      "references": ["./.github/actions/desktop-windows-build"],
       "jobs": [],
       "edges": {
         "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82": "n0124",
@@ -2493,7 +2490,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-desktop.yml",
-      "digest": "05d6c3241a0998093922bcc1e917cbf8384a82bd12229f3effe2b38f14abe55a",
+      "digest": "b0528029b890c2a60a2ccd294eface5b70d9ba2267fa1391bd675ce9b0d58b30",
       "references": [],
       "jobs": [
         {
@@ -2506,7 +2503,7 @@
           "id": "build",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "f48e70160bfec0fb3d190e5f9de24186d3e9a1723dfb22cd4a7a00613da63663"
+          "digest": "380c11756f62eb29b4ee37fdd7c28373160e82256a11ee7233cded8912ed70d2"
         },
         {
           "id": "verify-production",
@@ -2534,7 +2531,7 @@
         }
       ],
       "edges": {
-        "./.release-tooling/desktop-windows-build": "n0008",
+        "./.github/actions/desktop-windows-build": "n0008",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
         "apple-actions/import-codesign-certs@77ba2a2a8f5cfc8c405ebf3159f767c323e238f9": "supplier-96ce9df5e3f2b347515e646356f7b9712f52d1ba79b5e3392e247a94b6799afd",
         "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd": "n0127",

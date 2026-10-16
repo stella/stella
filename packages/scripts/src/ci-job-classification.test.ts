@@ -617,6 +617,19 @@ test("same-repository aliases cannot redirect source-relative action metadata", 
     "local metadata path, repository or origin mismatch",
   );
 });
+test("checkout-local action references cannot redirect metadata without a verified relocation", () => {
+  failure(
+    verifyPublicMetadata(
+      reboundReference({
+        original: "$/.github/actions/local",
+        replacement: "./.github/actions/local",
+        target: "action",
+        targetPath: ".github/actions/different/action.yml",
+      }),
+    ),
+    "local metadata path, repository or origin mismatch",
+  );
+});
 const relocatedActionFixture = ({
   checkoutRepository,
   targetPath = ".github/actions/local/action.yml",

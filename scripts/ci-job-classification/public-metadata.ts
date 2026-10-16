@@ -122,8 +122,7 @@ const verifyReference = ({
         kind === "reusable-workflow"
           ? target.path === localPath
           : target.path === `${localPath}/action.yml` ||
-            target.path === `${localPath}/action.yaml` ||
-            (reference.startsWith("./") && relocations.length === 0);
+            target.path === `${localPath}/action.yaml`;
       const relocatedPath = relocations.some(
         (relocation) =>
           (relocation.repository === null ||

@@ -304,8 +304,9 @@ jobs:
 
       - name: Restore desktop build action
         run: |
-          mkdir -p .release-tooling
-          cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .release-tooling/desktop-windows-build
+          rm -rf .github/actions/desktop-windows-build
+          mkdir -p .github/actions
+          cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -350,7 +351,7 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
-        uses: ./.release-tooling/desktop-windows-build
+        uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "false"
           target: ${{ matrix.target }}
