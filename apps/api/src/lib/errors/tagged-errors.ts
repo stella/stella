@@ -7,7 +7,11 @@ import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
-import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
+import {
+  declareFailureClass,
+  FetchBoundaryError,
+  type FailureReason,
+} from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
@@ -580,7 +584,8 @@ const ingestionFailureStopKind = (
       return failure.stopKind;
     case "publisher-response": {
       const { httpStatus } = failure;
-      if (httpStatus >= 500 || httpStatus === 408) {
+      // A successful HTTP response rejected at the fetch boundary supplied no data.
+      if (httpStatus >= 500 || httpStatus === 408 || httpStatus < 300) {
         return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
       }
       if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) {
@@ -602,10 +607,25 @@ const ingestionFailureStopKind = (
   }
 };
 
+const INGESTION_FAILURE_REASON = {
+  source_unreachable: "upstream_unavailable",
+  publisher_refusal: "publisher_refused",
+  adapter_error: "tagged_failure",
+  deadline: "timeout_unbounded",
+  internal_error: "tagged_failure",
+} as const satisfies Record<IngestionStopKind, FailureReason>;
+
 /** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
 export class AdapterFetchError extends TaggedError(
   "AdapterFetchError",
 )<AdapterFetchErrorOptions> {
+  static {
+    declareFailureClass(
+      this,
+      ({ stopKind }) => INGESTION_FAILURE_REASON[stopKind],
+    );
+  }
+
   override readonly stopKind: IngestionStopKind;
 
   constructor(options: AdapterFetchErrorOptions) {
@@ -619,6 +639,7 @@ const ingestionFailureOf = (
   fallback: "adapter" | "internal",
 ): IngestionFailure => {
   const visited = new Set<unknown>();
+  let fetchBoundary = false;
   let current = cause;
   while (current instanceof Error && !visited.has(current)) {
     visited.add(current);
@@ -635,11 +656,11 @@ const ingestionFailureOf = (
       return { type: "deadline" };
     }
     if (fallback === "adapter") {
-      if (
-        current instanceof FetchBoundaryError &&
-        current.status !== undefined
-      ) {
-        return { type: "publisher-response", httpStatus: current.status };
+      if (current instanceof FetchBoundaryError) {
+        if (current.status !== undefined) {
+          return { type: "publisher-response", httpStatus: current.status };
+        }
+        fetchBoundary = true;
       }
       if (isConnectionFailure(current)) {
         return { type: "connection" };
@@ -647,7 +668,7 @@ const ingestionFailureOf = (
     }
     current = current.cause;
   }
-  return { type: fallback };
+  return { type: fetchBoundary ? "connection" : fallback };
 };
 
 /** Ingestion entry points classify operational exceptions without changing their identity. */

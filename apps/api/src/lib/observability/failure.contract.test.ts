@@ -377,7 +377,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a HandlerError 502 carrying a provider 429 code",
     error: () =>
       new HandlerError({ status: 502, code: "429", message: SENTINEL }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -422,7 +422,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -431,7 +431,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
       new Error("wrap", {
         cause: new HandlerError({ status: 404, message: SENTINEL }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -473,7 +473,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
         }),
       }),
-    reason: "unclassified",
+    reason: "tagged_failure",
     grade: "defect",
   },
   {
@@ -785,7 +785,7 @@ describe("wrapper properties", () => {
     });
     const evidence = readEvidence(deep);
 
-    expect(gradeFailure(evidence, SINK).reason).toBe("unclassified");
+    expect(gradeFailure(evidence, SINK).reason).toBe("tagged_failure");
     expect(errorFields(evidence)["error.chain.1.brand"]).toBe(
       "chat_empty_completion",
     );
@@ -914,7 +914,7 @@ describe("sink expectations", () => {
     });
 
     expect(gradeFailure(readEvidence(error), shallow).reason).toBe(
-      "unclassified",
+      "tagged_failure",
     );
     expect(gradeFailure(readEvidence(error), deep).reason).toBe(
       "optional_file_absent",
@@ -1277,7 +1277,7 @@ describe("observeFailure channels", () => {
     expect(logs.at("ERROR")).toEqual([]);
   });
 
-  test("a legacy pin keeps the site's output whatever the grade", () => {
+  test("a legacy severity pin cannot capture a non-defect grade", () => {
     const pinned = failureSink({
       event: "pinned",
       expected: [],
@@ -1295,7 +1295,7 @@ describe("observeFailure channels", () => {
         }),
       }),
     ]);
-    expect(analytics.exceptions()).toHaveLength(1);
+    expect(analytics.exceptions()).toEqual([]);
   });
 
   test("a sustained transient episode raises the severity, not the capture", () => {

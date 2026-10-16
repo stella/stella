@@ -10,8 +10,7 @@ import { panic, Result } from "better-result";
  */
 import type { AIErrorKind } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { classifyFailure } from "@stll/errors";
-import type { FailureReason } from "@stll/errors";
+import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
@@ -26,6 +25,7 @@ import {
   ModelOutputModeratedError,
   ModelRunUnfinishedError,
   ProviderCallError,
+  PROVIDER_CALL_FAILURE_REASON,
 } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
@@ -39,6 +39,7 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import type { AwsExceptionName } from "@/api/lib/observability/failure";
 import {
+  NETWORK_ERROR_CODE_REASON,
   providerStatusFieldsOf,
   shadowGradeFields,
 } from "@/api/lib/observability/failure";
@@ -50,6 +51,15 @@ import {
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
+
+// Derive transport recovery from the failure owner's policy. A refused
+// connection or socket that never opened can indicate a bad endpoint, so it
+// remains unknown unless the destination owner explicitly classifies it.
+const TRANSIENT_PROVIDER_NETWORK_CODES = new Set(
+  Object.entries(NETWORK_ERROR_CODE_REASON)
+    .filter(([, reason]) => FAILURE_REASON_GRADE[reason] === "transient")
+    .map(([code]) => code),
+);
 
 // The run error codes of a stream that ended before its terminal event: the
 // provider stream contract's own, and the one TanStack's adapters report
@@ -144,8 +154,17 @@ const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
  * The rule lives with the failure snapshot, so the status a failure is graded
  * and logged with is the one it is answered with.
  */
-export const providerStatusCode = (error: unknown): number | null =>
-  readProviderStatus(error)?.status ?? null;
+export const providerStatusCode = (error: unknown): number | null => {
+  const status = readProviderStatus(error)?.status;
+  if (status !== undefined) {
+    return status;
+  }
+  // Some adapters rethrow an SDK exception as a plain Error, preserving only
+  // its structured message. Use the same recovered envelope as RUN_ERROR.
+  return error instanceof Error
+    ? (readProviderStatus(providerErrorBody(error.message))?.status ?? null)
+    : null;
+};
 
 const isProviderCredentialRejection = (error: unknown): boolean => {
   if (!isNonNullObject(error)) {
@@ -224,16 +243,24 @@ const isProviderError = (error: unknown): boolean =>
 export const providerErrorBody = (
   message: string,
 ): Record<string, unknown> | undefined => {
-  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
-  // body an adapter passed through verbatim would be dropped over a newline.
-  if (!message.trimStart().startsWith("{")) {
+  const trimmed = message.trimStart();
+  // TanStack's OpenAI-compatible adapters prefix an in-stream HTTP error
+  // rather than forwarding rawEvent. Only this complete envelope is accepted;
+  // arbitrary prose containing JSON is not provider status evidence.
+  const prefixed = /^got status: ([1-5]\d{2})\.\s*(\{[\s\S]*\})\s*$/u.exec(
+    trimmed,
+  );
+  const body = prefixed?.[2] ?? trimmed;
+  if (!body.startsWith("{")) {
     return undefined;
   }
-  const parsed = Result.try((): unknown => JSON.parse(message));
-  if (Result.isError(parsed)) {
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isNonNullObject(parsed.value)) {
     return undefined;
   }
-  return isNonNullObject(parsed.value) ? parsed.value : undefined;
+  return prefixed === null
+    ? parsed.value
+    : { ...parsed.value, status: Number(prefixed[1]) };
 };
 
 const errorCause = (error: unknown): unknown => {
@@ -241,6 +268,48 @@ const errorCause = (error: unknown): unknown => {
     return undefined;
   }
   return error["cause"];
+};
+
+const providerResponseKind = (error: unknown): AIErrorKind => {
+  if (isProviderError(error)) {
+    const statusCode = providerStatusCode(error);
+    if (statusCode === 429) {
+      return "quota_exhausted";
+    }
+    // A provider 402 is the upstream account's billing/credit problem,
+    // distinct from Stella's own usage preflight, which returns a
+    // structured 402 before the model call and never reaches this
+    // classifier.
+    if (statusCode === 402) {
+      return "provider_billing";
+    }
+    // A provider 401 means it rejected the credentials it was called with:
+    // the configured key is missing, revoked, or expired. Like a retired
+    // model, that is a config problem an administrator has to fix, so
+    // retrying won't help.
+    //
+    // Only a provider status or explicit provider-owned credential marker
+    // counts, which is what keeps a 401 this service raised itself out of
+    // here: its curated copy would otherwise be replaced by the provider's.
+    // A provider 403 stays unmapped because it is ambiguous (permission,
+    // region, or account state) where a 401 is not.
+    if (
+      statusCode === 401 ||
+      (statusCode === null && isProviderCredentialRejection(error))
+    ) {
+      return "provider_credentials_rejected";
+    }
+    // A 404 on a generate/stream call means the provider no longer
+    // serves the configured model (retired or renamed upstream) — a
+    // config problem, not a transient outage, so retrying won't help.
+    if (statusCode === 404) {
+      return "model_unavailable";
+    }
+    if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
+      return "provider_unavailable";
+    }
+  }
+  return "unknown";
 };
 
 const classifyAIErrorInternal = (
@@ -298,47 +367,29 @@ const classifyAIErrorInternal = (
       return causeKind;
     }
   }
+  if (error instanceof Error) {
+    const body = providerErrorBody(error.message);
+    if (body !== undefined) {
+      const bodyKind = classifyAIErrorInternal(body, seen);
+      if (bodyKind !== "unknown") {
+        return bodyKind;
+      }
+    }
+  }
   const awsKind = awsExceptionKind(error);
   if (awsKind !== null) {
     return awsKind;
   }
-  if (isProviderError(error)) {
-    const statusCode = providerStatusCode(error);
-    if (statusCode === 429) {
-      return "quota_exhausted";
-    }
-    // A provider 402 is the upstream account's billing/credit problem,
-    // distinct from Stella's own usage preflight, which returns a
-    // structured 402 before the model call and never reaches this
-    // classifier.
-    if (statusCode === 402) {
-      return "provider_billing";
-    }
-    // A provider 401 means it rejected the credentials it was called with:
-    // the configured key is missing, revoked, or expired. Like a retired
-    // model, that is a config problem an administrator has to fix, so
-    // retrying won't help.
-    //
-    // Only a provider status or explicit provider-owned credential marker
-    // counts, which is what keeps a 401 this service raised itself out of
-    // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
-    if (
-      statusCode === 401 ||
-      (statusCode === null && isProviderCredentialRejection(error))
-    ) {
-      return "provider_credentials_rejected";
-    }
-    // A 404 on a generate/stream call means the provider no longer
-    // serves the configured model (retired or renamed upstream) — a
-    // config problem, not a transient outage, so retrying won't help.
-    if (statusCode === 404) {
-      return "model_unavailable";
-    }
-    if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
-      return "provider_unavailable";
-    }
+  const providerKind = providerResponseKind(error);
+  if (providerKind !== "unknown") {
+    return providerKind;
+  }
+  if (
+    isNonNullObject(error) &&
+    typeof error["code"] === "string" &&
+    TRANSIENT_PROVIDER_NETWORK_CODES.has(error["code"])
+  ) {
+    return "provider_unavailable";
   }
   // Walk through any wrapper that carries the original provider error
   // on `cause` (e.g. our own `WorkflowIntegrationError`, or generic
@@ -473,20 +524,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-export const AI_ERROR_KIND_FAILURE_REASON = {
-  quota_exhausted: "quota_exhausted",
-  provider_billing: "provider_billing",
-  provider_credentials_rejected: "provider_credentials_rejected",
-  model_unavailable: "model_unavailable",
-  provider_unavailable: "provider_unavailable",
-  provider_stream_incomplete: "provider_stream_incomplete",
-  output_incomplete: "model_output_incomplete",
-  output_invalid: "model_output_invalid",
-  output_moderated: "model_output_moderated",
-  deadline_exceeded: "model_deadline_exceeded",
-  loop_detected: "chat_loop_detected",
-  empty_completion: "chat_empty_completion",
-} as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
+export const AI_ERROR_KIND_FAILURE_REASON = PROVIDER_CALL_FAILURE_REASON;
 
 /**
  * Name a failure at the AI boundary, and classify it for every sink that

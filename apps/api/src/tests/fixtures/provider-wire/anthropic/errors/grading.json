@@ -1,0 +1,319 @@
+{
+  "provider": "anthropic",
+  "source": "synthetic",
+  "basis": "SDK error envelopes and Stella model-run boundary outcomes; no live provider requests.",
+  "cases": [
+    {
+      "name": "provider_credentials_rejected",
+      "origin": "sdk",
+      "evidence": {
+        "status": 401,
+        "error": {
+          "type": "authentication_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "provider_credentials_rejected",
+        "status": 401,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "provider_billing",
+      "origin": "sdk",
+      "evidence": {
+        "status": 402,
+        "error": {
+          "type": "billing_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "provider_billing",
+        "status": 402,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "model_unavailable",
+      "origin": "sdk",
+      "evidence": {
+        "status": 404,
+        "error": {
+          "type": "not_found_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "model_unavailable",
+        "status": 404,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "quota_exhausted",
+      "origin": "sdk",
+      "evidence": {
+        "status": 429,
+        "error": {
+          "type": "rate_limit_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "quota_exhausted",
+        "status": 429,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "provider_unavailable",
+      "origin": "sdk",
+      "evidence": {
+        "status": 503,
+        "error": {
+          "type": "overloaded_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": 503,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "unknown",
+      "origin": "sdk",
+      "evidence": {
+        "status": 403,
+        "error": {
+          "type": "permission_error",
+          "message": "Provider rejected the request."
+        }
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": 403,
+        "grade": "defect"
+      }
+    },
+    {
+      "name": "provider_stream_incomplete",
+      "origin": "unfinished",
+      "expected": {
+        "kind": "provider_stream_incomplete",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "output_incomplete",
+      "origin": "parse",
+      "expected": {
+        "kind": "output_incomplete",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "output_invalid",
+      "origin": "schema",
+      "expected": {
+        "kind": "output_invalid",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "output_moderated",
+      "origin": "moderation",
+      "expected": {
+        "kind": "output_moderated",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "deadline_exceeded",
+      "origin": "deadline",
+      "expected": {
+        "kind": "deadline_exceeded",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "loop_detected",
+      "origin": "loop",
+      "expected": {
+        "kind": "loop_detected",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "empty_completion",
+      "origin": "empty",
+      "expected": {
+        "kind": "empty_completion",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "transport-ECONNRESET",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ECONNRESET",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-EPIPE",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "EPIPE",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ConnectionClosed",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ConnectionClosed",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-UND_ERR_SOCKET",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "UND_ERR_SOCKET",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ETIMEDOUT",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ETIMEDOUT",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-UND_ERR_CONNECT_TIMEOUT",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "UND_ERR_CONNECT_TIMEOUT",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-EAI_AGAIN",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "EAI_AGAIN",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ECONNREFUSED",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ECONNREFUSED",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": null,
+        "grade": "defect"
+      }
+    },
+    {
+      "name": "transport-FailedToOpenSocket",
+      "origin": "transport",
+      "evidence": {
+        "name": "APIConnectionError",
+        "message": "Connection error.",
+        "cause": {
+          "code": "FailedToOpenSocket",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": null,
+        "grade": "defect"
+      }
+    }
+  ]
+}
