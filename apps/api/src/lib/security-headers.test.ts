@@ -19,6 +19,25 @@ describe("raw document response security", () => {
   });
 });
 
+test("private icon caching survives finalization while late errors remain uncacheable", () => {
+  const set = { headers: {}, status: 200 };
+  const response = new Blob([new Uint8Array([1])], { type: "image/png" });
+  applyResponseCachePolicy({
+    cache: { kind: "private", maxAge: 3600 },
+    response,
+    set,
+  });
+  finalizeResponseCachePolicy({ response, set });
+  expect(new Headers(set.headers).get("cache-control")).toBe(
+    "private, max-age=3600",
+  );
+  set.status = 500;
+  finalizeResponseCachePolicy({ response, set });
+  expect(new Headers(set.headers).get("cache-control")).toBe(
+    "private, no-store",
+  );
+});
+
 describe("response cookies prevent public caching", () => {
   test.each(["pending", "response", "cookie"] as const)(
     "keeps an otherwise public response private when a late cookie comes from %s",

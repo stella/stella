@@ -47,6 +47,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-link-icons": {
+    load: async () => {
+      const { ChatLinkIconsPlayground } =
+        await import("./-components/chat-link-icons-playground");
+      return { default: ChatLinkIconsPlayground };
+    },
+  },
   "reader-answers": {
     load: async () => {
       const { ReaderAnswersPlayground } =
