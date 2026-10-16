@@ -3,10 +3,9 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import type { AggregateName } from "@/api/lib/db/aggregate-lock";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-
-import { withAggregateLock } from "./aggregate-lock";
-import type { AggregateName } from "./aggregate-lock";
 
 type Options = Parameters<typeof withAggregateLock>[0];
 type FenceFixtures = {
@@ -157,6 +156,7 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

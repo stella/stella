@@ -2559,13 +2559,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       "records), not-registered (no record; not a clearance), unavailable " +
       "(no answer: NOT cleared) or not-covered (cannot screen this " +
       "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, with whether it binds the firm: clear " +
-      "or possible-match (resembling entries with score and conflicting " +
-      "fields; each needs human review, none is confirmed), naming " +
-      "the edition screened; or unavailable (stale, not loaded, or the " +
-      "company name unreadable: NOT cleared), whose edition fields name " +
-      "the latest edition on file, not one screened. Top-level status is " +
-      "clear only when every list is. Person matches rest on name and " +
+      "outcome per list in `lists`, with whether it binds the firm: clear; " +
+      "possible-match (resembling entries with score and conflicting " +
+      "fields; each needs human review, none confirmed); incomplete (only " +
+      "a bounded subset screened, nothing matched: NOT cleared); or " +
+      "unavailable (stale, not loaded, or company name unreadable: NOT " +
+      "cleared, edition not screened). Top level is clear only if every " +
+      "list was fully screened clear. Person matches rest on name and " +
       "birth date: compare the record first.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {

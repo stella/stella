@@ -299,7 +299,11 @@ export const withGenerationDeadline = async <T>(
     abortSignal,
     deadlineMs,
   }: GenerationDeadlineOption & { abortSignal?: AbortSignal | undefined },
-  run: (abortSignal: AbortSignal | undefined) => Promise<T>,
+  run: (
+    abortSignal: AbortSignal | undefined,
+    /** When the deadline falls, on the `performance.now()` clock. */
+    deadlineAt?: number,
+  ) => Promise<T>,
 ): Promise<T> => {
   if (deadlineMs === undefined) {
     return await run(abortSignal);
@@ -307,6 +311,7 @@ export const withGenerationDeadline = async <T>(
   if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
     return panic("A generation deadline must be a positive integer of ms");
   }
+  const deadlineAt = performance.now() + deadlineMs;
   const settled = await Result.tryPromise({
     try: async () =>
       await withTimeout(
@@ -315,6 +320,7 @@ export const withGenerationDeadline = async <T>(
             abortSignal === undefined
               ? deadlineSignal
               : AbortSignal.any([abortSignal, deadlineSignal]),
+            deadlineAt,
           ),
         { label: GENERATION_DEADLINE_LABEL, timeoutMs: deadlineMs },
       ),
@@ -445,12 +451,15 @@ const rateLimitRetryDelayMs = (error: unknown): number | undefined => {
  * for a rate limit whose stated delay fits `PROVIDER_RETRY_WAIT_CAP_MS` runs
  * again after that delay; a longer delay, no stated delay, any other failure
  * and a second refusal all reach the caller unchanged, the delay still on the
- * error so the caller can say when to retry. The wait honours the deadline
- * signal, so it never outlives the call's own budget.
+ * error so the caller can say when to retry. A wait the call's deadline
+ * cannot cover is not started: the refusal reaches the caller with its delay
+ * rather than ending as a timeout that forgot it. The wait also honours the
+ * abort signal.
  */
 export const withProviderRetryWait = async <T>(
   abortSignal: AbortSignal | undefined,
   run: () => Promise<T>,
+  deadlineAt?: number,
 ): Promise<T> => {
   const first = await Result.tryPromise({
     try: run,
@@ -460,7 +469,11 @@ export const withProviderRetryWait = async <T>(
     return first.value;
   }
   const delay = rateLimitRetryDelayMs(first.error);
-  if (delay === undefined || delay > PROVIDER_RETRY_WAIT_CAP_MS) {
+  if (
+    delay === undefined ||
+    delay > PROVIDER_RETRY_WAIT_CAP_MS ||
+    (deadlineAt !== undefined && performance.now() + delay >= deadlineAt)
+  ) {
     throw first.error;
   }
   const waited = await Result.tryPromise({
@@ -487,11 +500,12 @@ export const generateTanStackTextForRole = async (
 ): Promise<string> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
+    async (abortSignal, deadlineAt) =>
       await withProviderRetryWait(
         abortSignal,
         async () =>
           await generateTanStackTextWithin({ ...options, abortSignal }),
+        deadlineAt,
       ),
   );
 
@@ -1435,11 +1449,12 @@ export const generateTanStackObjectForRole = async <
 ): Promise<v.InferOutput<TSchema>> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
+    async (abortSignal, deadlineAt) =>
       await withProviderRetryWait(
         abortSignal,
         async () =>
           await generateTanStackObjectWithin({ ...options, abortSignal }),
+        deadlineAt,
       ),
   );
 
