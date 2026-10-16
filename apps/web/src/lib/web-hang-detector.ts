@@ -18,7 +18,7 @@ export const HANG_HEARTBEAT_MS = 3000;
 export const HANG_STALE_MS = 15_000;
 export const LOAF_SAMPLE_RATE = 0.1;
 export const LOAF_SESSION_LIMIT = 5;
-export const HANG_TAB_KEY = "stella:web-hang-tab";
+export const MAX_HANG_MARKERS = 32;
 export const HANG_MARKER_PREFIX = "stella:web-hang:";
 
 const markerSchema = v.strictObject({
@@ -40,6 +40,56 @@ const markerSchema = v.strictObject({
   recovery: v.boolean(),
 });
 type Marker = v.InferOutput<typeof markerSchema>;
+const readHangMarkers = (storage: Storage | null) =>
+  Result.try(() => {
+    if (storage === null) {
+      return [];
+    }
+    const keys = Array.from({ length: storage.length }, (_, index) =>
+      storage.key(index),
+    ).filter(
+      (key): key is string => key?.startsWith(HANG_MARKER_PREFIX) === true,
+    );
+    return keys.map((key) => {
+      const raw = storage.getItem(key);
+      const parsed = Result.try((): unknown =>
+        raw === null ? null : JSON.parse(raw),
+      ).unwrapOr(null);
+      const decoded = v.safeParse(markerSchema, parsed);
+      return { key, marker: decoded.success ? decoded.output : null };
+    });
+  }).unwrapOr([]);
+
+type WriteHangMarkerOptions = {
+  storage: Storage | null;
+  key: string;
+  marker: Marker;
+};
+
+const writeHangMarker = ({ storage, key, marker }: WriteHangMarkerOptions) =>
+  Result.try(() => {
+    if (storage === null) {
+      return false;
+    }
+    storage.setItem(key, JSON.stringify(marker));
+    const records = readHangMarkers(storage);
+    const excess = records.length - MAX_HANG_MARKERS;
+    if (excess <= 0) {
+      return true;
+    }
+    const oldest = records
+      .filter((record) => record.key !== key)
+      .toSorted(
+        (left, right) =>
+          (left.marker?.started ?? 0) - (right.marker?.started ?? 0),
+      )
+      .slice(0, excess);
+    for (const record of oldest) {
+      storage.removeItem(record.key);
+    }
+    return true;
+  }).unwrapOr(false);
+
 type HangAnalytics = Pick<
   Analytics,
   "capturePageHangSuspected" | "captureLongAnimationFrame"
@@ -117,59 +167,25 @@ export const createWebHangDetector = ({
   report,
 }: HangDetectorOptions) => {
   const local = browserStorage("local");
-  const session = browserStorage("session");
-  const read = (storage: Storage | null, key: string) =>
-    Result.try(() => storage?.getItem(key) ?? null).unwrapOr(null);
-  const tab = read(session, HANG_TAB_KEY) ?? browser.crypto.randomUUID();
-  const storageReady = Result.try(() => {
-    if (!local || !session) {
-      return false;
-    }
-    session.setItem(HANG_TAB_KEY, tab);
-    return true;
-  }).unwrapOr(false);
-  const key = `${HANG_MARKER_PREFIX}${tab}`;
-  const markerKeys = storageReady
-    ? Result.try(() =>
-        Array.from(
-          { length: local?.length ?? 0 },
-          (_, index) => local?.key(index) ?? null,
-        ).filter(
-          (name): name is string =>
-            name?.startsWith(HANG_MARKER_PREFIX) === true,
-        ),
-      ).unwrapOr([])
-    : [];
+  // sessionStorage is copied by duplicate/opener tabs: identity belongs to
+  // this document, so another document can never erase its evidence.
+  const key = `${HANG_MARKER_PREFIX}${browser.crypto.randomUUID()}`;
   let previous: { key: string; marker: Marker } | undefined;
-  for (const candidate of markerKeys) {
-    const raw = read(local, candidate);
-    const parsed = Result.try((): unknown =>
-      raw === null ? null : JSON.parse(raw),
-    ).unwrapOr(null);
-    const decoded = v.safeParse(markerSchema, parsed);
+  for (const { key: candidate, marker: stored } of readHangMarkers(local)) {
     if (
-      !decoded.success ||
-      !decoded.output.visible ||
-      now() - decoded.output.heartbeat <= HANG_STALE_MS
+      !stored ||
+      !stored.visible ||
+      now() - stored.heartbeat <= HANG_STALE_MS
     ) {
       continue;
     }
-    if (!previous || decoded.output.heartbeat > previous.marker.heartbeat) {
-      previous = { key: candidate, marker: decoded.output };
+    if (!previous || stored.heartbeat > previous.marker.heartbeat) {
+      previous = { key: candidate, marker: stored };
     }
   }
   const prior = previous?.marker ?? null;
-  const suspected = prior !== null;
-  // A new tab must also recover a stale boot left by a terminated tab.
-  // Consuming that record prevents later loads from replaying the report.
-  if (previous && previous.key !== key) {
-    Result.try(() => local?.removeItem(previous.key));
-  }
-  const safeMode = suspected && prior.phase === "boot" && !prior.recovery;
+  const recovery = prior?.phase === "boot" && !prior.recovery;
   const restoredState = persistedUiStateFingerprint(local);
-  if (safeMode) {
-    resetPersistedUiState(local);
-  }
   let marker: Marker = {
     routeTemplate: resolveWebRouteTemplate(browser.location.pathname),
     started: now(),
@@ -178,8 +194,17 @@ export const createWebHangDetector = ({
     build,
     restoredState,
     visible: browser.document.visibilityState === "visible",
-    recovery: safeMode,
+    recovery,
   };
+  const storageReady = writeHangMarker({ storage: local, key, marker });
+  const suspected = storageReady && prior !== null;
+  const safeMode = storageReady && recovery;
+  if (suspected && previous) {
+    Result.try(() => local?.removeItem(previous.key));
+  }
+  if (safeMode) {
+    resetPersistedUiState(local);
+  }
   let stopped = false;
   let reported = false;
   let notified = false;
@@ -189,7 +214,7 @@ export const createWebHangDetector = ({
     if (!storageReady || stopped) {
       return;
     }
-    Result.try(() => local?.setItem(key, JSON.stringify(marker)));
+    writeHangMarker({ storage: local, key, marker });
   };
   const pulse = () => {
     if (browser.document.visibilityState !== "visible") {
@@ -214,7 +239,6 @@ export const createWebHangDetector = ({
     stopped = false;
     onVisibility();
   };
-  persist();
   if (suspected) {
     report?.(prior.phase);
   }

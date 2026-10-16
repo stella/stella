@@ -8,7 +8,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat/private-id" });
 const {
   createWebHangDetector,
   HANG_MARKER_PREFIX,
-  HANG_TAB_KEY,
+  MAX_HANG_MARKERS,
   HANG_STALE_MS,
   HANG_HEARTBEAT_MS,
   LOAF_SESSION_LIMIT,
@@ -38,7 +38,7 @@ afterEach(() => {
 afterAll(unregisterDomEnvironment);
 const key = `${HANG_MARKER_PREFIX}test-tab`;
 const seed = (phase: "boot" | "session", overrides = {}) => {
-  session.setItem(HANG_TAB_KEY, "test-tab");
+  session.setItem("stella:web-hang-tab", "test-tab");
   local.setItem("stella:inspector-state", "privileged document content");
   local.setItem(
     key,
@@ -55,20 +55,38 @@ const seed = (phase: "boot" | "session", overrides = {}) => {
     }),
   );
 };
-const setup = (random = () => 1) => {
+const markerKeys = () =>
+  Array.from({ length: local.length }, (_, index) => local.key(index)).filter(
+    (name): name is string => name?.startsWith(HANG_MARKER_PREFIX) === true,
+  );
+
+type SetupOptions = {
+  random?: () => number;
+  now?: () => number;
+  browser?: Window & Partial<Pick<typeof globalThis, "PerformanceObserver">>;
+};
+
+const setup = ({
+  random = () => 1,
+  now = () => HANG_STALE_MS + 10,
+  browser = window,
+}: SetupOptions = {}) => {
+  const existingKeys = new Set(markerKeys());
   const hangs: Parameters<Analytics["capturePageHangSuspected"]>[0][] = [];
   const frames: Parameters<Analytics["captureLongAnimationFrame"]>[0][] = [];
   const requests: string[] = [];
   const detector = createWebHangDetector({
-    window,
+    window: browser,
     build: "current",
-    now: () => HANG_STALE_MS + 10,
+    now,
     random,
     report: (phase) => {
       requests.push(phase);
     },
   });
   disposers.push(detector.dispose);
+  const markerKey = markerKeys().find((name) => !existingKeys.has(name));
+
   const attach = () =>
     detector.attach({
       analytics: {
@@ -82,7 +100,7 @@ const setup = (random = () => 1) => {
       routeTemplates: new Set(["/chat/$threadId"]),
     });
   attach();
-  return { detector, hangs, frames, requests, attach };
+  return { detector, hangs, frames, requests, attach, markerKey };
 };
 test("a stale boot reports once and resets layout before restoration, with a visible recovery toast", async () => {
   seed("boot");
@@ -134,6 +152,75 @@ test("a new tab consumes a stale terminated-tab boot while live tabs remain isol
   expect(liveNeighbour.detector.safeMode).toBe(false);
   expect(liveNeighbour.requests).toEqual([]);
 });
+test("duplicated session ids cannot share document markers or erase a neighbor's hang evidence", () => {
+  const firstFrame = document.createElement("iframe");
+  const secondFrame = document.createElement("iframe");
+  document.body.append(firstFrame, secondFrame);
+  const firstBrowser = firstFrame.contentWindow;
+  const secondBrowser = secondFrame.contentWindow;
+  if (!firstBrowser || !secondBrowser) {
+    throw new DOMException("Document windows required");
+  }
+  Object.defineProperty(firstBrowser.document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+  Object.defineProperty(secondBrowser.document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+  let clock = 100;
+  try {
+    session.setItem("stella:web-hang-tab", "copied-tab");
+    const first = setup({ browser: firstBrowser, now: () => clock });
+    session.setItem("stella:web-hang-tab", "copied-tab");
+    const second = setup({ browser: secondBrowser, now: () => clock });
+    expect(first.markerKey).toBeDefined();
+    expect(second.markerKey).toBeDefined();
+    if (first.markerKey === undefined || second.markerKey === undefined) {
+      throw new DOMException("Distinct document markers required");
+    }
+    expect(second.markerKey).not.toBe(first.markerKey);
+    expect(markerKeys()).toHaveLength(2);
+    secondBrowser.dispatchEvent(new Event("pagehide"));
+    expect(markerKeys()).toEqual([first.markerKey]);
+    first.detector.dispose();
+    clock += HANG_STALE_MS + 1;
+    const recovery = setup({ now: () => clock });
+    expect(recovery.requests).toEqual(["boot"]);
+    expect(recovery.hangs.at(0)?.phase).toBe("boot");
+    const next = setup({ now: () => clock });
+    expect(next.requests).toEqual([]);
+    expect(next.hangs).toEqual([]);
+  } finally {
+    firstFrame.remove();
+    secondFrame.remove();
+  }
+});
+test("document marker retention stays bounded and prunes the oldest entries first", () => {
+  seed("session", { heartbeat: 100 });
+  const template = local.getItem(key);
+  if (template === null) {
+    throw new DOMException("Marker fixture required");
+  }
+  for (let index = 0; index < MAX_HANG_MARKERS + 2; index += 1) {
+    local.setItem(
+      `${HANG_MARKER_PREFIX}old-${index}`,
+      template.replace('"started":1', () => `"started":${index + 2}`),
+    );
+  }
+  const { markerKey } = setup({ now: () => 100 });
+  if (markerKey === undefined) {
+    throw new DOMException("Document marker required");
+  }
+  expect(markerKeys()).toHaveLength(MAX_HANG_MARKERS);
+  expect(markerKeys()).toContain(markerKey);
+  expect(local.getItem(key)).toBeNull();
+  expect(local.getItem(`${HANG_MARKER_PREFIX}old-0`)).toBeNull();
+  expect(local.getItem(`${HANG_MARKER_PREFIX}old-1`)).toBeNull();
+  expect(local.getItem(`${HANG_MARKER_PREFIX}old-2`)).toBeNull();
+  expect(local.getItem(`${HANG_MARKER_PREFIX}old-3`)).not.toBeNull();
+});
 test("a clean pagehide followed by reload emits nothing", () => {
   const first = setup();
   window.dispatchEvent(new Event("pagehide"));
@@ -156,12 +243,10 @@ test("boot markers contain a template immediately and complete only after router
     },
   });
   try {
-    const { detector } = setup();
-    const tab = session.getItem(HANG_TAB_KEY);
-    if (tab === null) {
-      throw new DOMException("Tab marker required");
+    const { detector, markerKey } = setup();
+    if (markerKey === undefined) {
+      throw new DOMException("New document marker required");
     }
-    const markerKey = `${HANG_MARKER_PREFIX}${tab}`;
     expect(local.getItem(markerKey)).toContain(
       '"routeTemplate":"/chat/$threadId"',
     );
@@ -196,11 +281,14 @@ test("a successful safe boot clears its marker before monitoring the healthy ses
     },
   });
   try {
-    const { detector } = setup();
-    expect(local.getItem(key)).toContain('"recovery":true');
+    const { detector, markerKey } = setup();
+    if (markerKey === undefined) {
+      throw new DOMException("New document marker required");
+    }
+    expect(local.getItem(markerKey)).toContain('"recovery":true');
     detector.routeReady("/chat/$threadId");
     onIdle?.();
-    expect(local.getItem(key)).toBeNull();
+    expect(local.getItem(markerKey)).toBeNull();
   } finally {
     if (descriptor) {
       Object.defineProperty(window, "requestIdleCallback", descriptor);
@@ -241,11 +329,10 @@ test("heartbeats run every three seconds only while visible and refresh on visib
     random: () => 1,
   });
   try {
-    const tab = session.getItem(HANG_TAB_KEY);
-    if (tab === null) {
-      throw new DOMException("Tab marker required");
+    const markerKey = markerKeys().at(0);
+    if (markerKey === undefined) {
+      throw new DOMException("Document marker required");
     }
-    const markerKey = `${HANG_MARKER_PREFIX}${tab}`;
     expect(delay).toBe(HANG_HEARTBEAT_MS);
     clock = 200;
     onHeartbeat?.();
@@ -328,10 +415,10 @@ test("only slow frames from sampled sessions are reported up to the session cap"
     value: FrameObserver,
   });
   try {
-    const excluded = setup(() => 1);
+    const excluded = setup({ random: () => 1 });
     expect(observers).toBe(0);
     excluded.detector.dispose();
-    const { frames } = setup(() => 0);
+    const { frames } = setup({ random: () => 0 });
     expect(observers).toBe(1);
     const entries = [
       999,

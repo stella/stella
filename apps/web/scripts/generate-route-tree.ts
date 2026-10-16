@@ -1,13 +1,13 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import { panic } from "better-result";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { ROUTE_TREE_OPTIONS, routeTreeOptions } from "../route-tree.config.ts";
 import {
-  routeTemplateManifest,
+  refreshRouteTemplateManifest,
   routeTemplateManifestPlugin,
 } from "./route-template-manifest.ts";
 
@@ -31,6 +31,7 @@ export const generateRouteTree = async (
     webRoot,
   );
   await new Generator({ config, root: webRoot }).run();
+  refreshRouteTemplateManifest(generatedRouteTree);
 };
 
 export const checkRouteTreeDeterminism = async (
@@ -80,9 +81,6 @@ if (import.meta.main) {
     await generateRouteTree(output);
   } else {
     // Keep direct prepared invocations derived from the verified route tree.
-    await writeFile(
-      path.join(srcRoot, "route-templates.gen.ts"),
-      routeTemplateManifest(await readFile(output, "utf-8")),
-    );
+    refreshRouteTemplateManifest(output);
   }
 }

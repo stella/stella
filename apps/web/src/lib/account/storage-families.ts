@@ -320,7 +320,6 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
 ];
 
 export const DEVICE_STORAGE_FAMILIES = [
-  { area: "session", prefix: "stella:web-hang-tab", restoration: "data" },
   { area: "local", prefix: "stella:web-hang:", restoration: "data" },
   { area: "local", prefix: "statute_table_layout", restoration: "layout" },
   { area: "local", prefix: "case_law_hidden_columns", restoration: "layout" },
