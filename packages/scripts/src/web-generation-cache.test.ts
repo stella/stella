@@ -147,6 +147,7 @@ test("web sources generate once across compiler tasks and restore until source i
         scripts: {
           "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
           "generate:route-tree": "bun scripts/generate-route-tree.ts",
+          "generate:messages": "bun scripts/generate-messages.ts",
           typegen: "bun scripts/typegen.ts",
           ...Object.fromEntries(
             consumers.map((consumer) => [
@@ -189,7 +190,7 @@ test("web sources generate once across compiler tasks and restore until source i
     );
     write(
       ".gitignore",
-      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\nruns.log\ntask-hash\n${apiTask[
+      `node_modules/\n.turbo/\napps/web/src/generated/api-routes.gen.ts\napps/web/src/routeTree.gen.ts\napps/web/src/i18n/langs/messages.gen.ts\nruns.log\ntask-hash\n${apiTask[
         "outputs"
       ]
         .map((output) => `apps/api/${output}\n`)
@@ -199,6 +200,17 @@ test("web sources generate once across compiler tasks and restore until source i
     write("apps/web/src/routes/index.tsx", "export const route = '/';\n");
     write("apps/web/route-tree.config.ts", "export const options = {};\n");
     write("apps/web/vite.config.ts", "export default {};\n");
+    // The message declarations are a prerequisite of every web compiler task;
+    // they are not counted below, which covers the API types and route tree.
+    write("apps/web/src/i18n/langs/en.json", "{}\n");
+    write(
+      "apps/web/scripts/generate-messages.ts",
+      [
+        "import { mkdirSync, writeFileSync } from 'node:fs';",
+        "mkdirSync('src/i18n/langs', { recursive: true });",
+        "writeFileSync('src/i18n/langs/messages.gen.ts', 'export {};\\n');",
+      ].join("\n"),
+    );
     const generator = (output: string) =>
       [
         "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
@@ -228,6 +240,7 @@ test("web sources generate once across compiler tasks and restore until source i
           "@stll/web#generate:api-types": tasks["@stll/web#generate:api-types"],
           "@stll/web#generate:route-tree":
             tasks["@stll/web#generate:route-tree"],
+          "@stll/web#generate:messages": tasks["@stll/web#generate:messages"],
           transit: {},
           ...consumerTasks,
         },
