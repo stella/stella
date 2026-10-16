@@ -28,6 +28,8 @@ const validResponse = {
       documentType: null,
       status: "status",
       effectiveDate: null,
+      versionValidFrom: null,
+      versionValidTo: null,
       sourceUrl: null,
       headline: null,
       score: 0,
@@ -36,7 +38,7 @@ const validResponse = {
   nextCursor: null,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   total: SEARCH_TOTAL_NOT_COUNTED,
-} satisfies Static<typeof searchLegislationSuccessResponseSchema>;
+} satisfies SearchLegislationSuccess;
 
 describe("legislation search response schema", () => {
   test("matches the handler's complete success payload", () => {

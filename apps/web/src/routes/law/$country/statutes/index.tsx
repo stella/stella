@@ -265,7 +265,9 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const country = Route.useParams({
     select: ({ country: routeCountry }) => routeCountry,
   });
-  const search = Route.useSearch({ select: ({ type }) => ({ type }) });
+  const search = Route.useSearch({
+    select: ({ asOf, type }) => ({ asOf, type }),
+  });
   const navigate = Route.useNavigate();
   const [input, setInput] = useState(query);
   const [requestedQuery, setRequestedQuery] = useState(query);
@@ -288,6 +290,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   }, 300);
   const dataQuery = useInfiniteQuery({
     ...statuteSearchInfiniteOptions({
+      ...(search.asOf === undefined ? {} : { asOf: search.asOf }),
       country: country.toUpperCase(),
       query,
       ...(search.type === undefined ? {} : { documentType: search.type }),

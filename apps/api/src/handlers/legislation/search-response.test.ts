@@ -50,6 +50,8 @@ const hitWithText = (text: string, headline: string) =>
     documentType: text,
     status: text,
     effectiveDate: text,
+    versionValidFrom: text,
+    versionValidTo: text,
     sourceUrl: text,
     headline,
     score: -Number.MAX_VALUE,
