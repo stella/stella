@@ -2771,23 +2771,48 @@ if (packageScopeStart === -1 || packageScopeEnd <= packageScopeStart) {
 }
 const packageScope = workflow.slice(packageScopeStart, packageScopeEnd);
 
+// Runs the workflow's package scope with its detector call served in process:
+// the shim accepts only the exact CLI and changed files, and any other call
+// writes to stderr, which fails the plan. The selector test that spawns the
+// real detector CLIs proves the CLI answers as requiresPackageChecks does.
+const PACKAGE_CHECKS_BUN_SHIM = `bun() {
+  if [[ "\${1-}" != scripts/ci-package-scope.ts || "\${2-}" != --package-checks ]]; then
+    printf 'unserved bun call: %s\\n' "$*" >&2; return 127
+  fi
+  shift 2
+  [[ $# -eq \${#changed_files[@]} ]] || { printf 'unserved package-checks files\\n' >&2; return 127; }
+  local index=0 file
+  for file in "$@"; do
+    [[ "$file" == "\${changed_files[index]}" ]] || { printf 'unserved package-checks files\\n' >&2; return 127; }
+    index=$((index + 1))
+  done
+  printf '%s\\n' "$SERVED_PACKAGE_CHECKS"
+}`;
+
 const packageChecksPlan = (files: readonly string[]) => {
   const process = Bun.spawnSync({
     cmd: [
       "bash",
       "-e",
       "-c",
-      `changed_files=("$@"); desktop_rust_checks_required=false
+      `${PACKAGE_CHECKS_BUN_SHIM}
+changed_files=("$@"); desktop_rust_checks_required=false
 ${packageScope}
 printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
+    env: {
+      PATH: Bun.env["PATH"] ?? "",
+      EVENT_NAME: "pull_request",
+      SERVED_PACKAGE_CHECKS: String(requiresPackageChecks({ changed: files })),
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
-  expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
+  const stderr = new TextDecoder().decode(process.stderr);
+  expect(process.exitCode, stderr).toBe(0);
+  expect(stderr).toBe("");
   return new TextDecoder().decode(process.stdout).trim();
 };
 
@@ -2835,9 +2860,9 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
-// Two subprocesses prove the workflow hands its changed files to the scope
-// script; every case is classified in process, because each subprocess is a
-// cold Bun start that runs for seconds while CI checks run in parallel.
+// Two workflow runs prove the scope hands its changed files to the detector
+// and reads both answers; every case is classified in process, because a
+// spawned detector is a cold Bun start that runs for seconds under CI load.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(selector).toContain(packageScope);
@@ -2896,7 +2921,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       );
     }
   }
-}, 15_000);
+});
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>
@@ -6173,7 +6198,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
         throw new Error("Merge API files must not be narrowed");
       },
     }).matrix.shard,
-  ).toEqual(["api-1", "api-2", "api-3", "api-4", "rest-web"]);
+  ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -6183,7 +6208,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=4");
+  expect(planner?.run).toContain("api_test_shards=3");
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
@@ -6225,9 +6250,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}',
     );
-    expect(values).toContain("api_test_shards=4");
+    expect(values).toContain("api_test_shards=3");
     expect(values).toContain("api_test_files=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -6392,10 +6417,10 @@ test("API planning only loads dependencies after installation and emits install-
   try {
     for (const [event, packages, unknown, selected, shards, expected] of [
       ["pull_request", "false", "false", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "4"],
-      ["pull_request", "false", "true", "", "", "4"],
-      ["merge_group", "true", "false", "", "", "4"],
-      ["workflow_dispatch", "true", "false", "", "", "4"],
+      ["pull_request", "true", "false", "", "", "3"],
+      ["pull_request", "false", "true", "", "", "3"],
+      ["merge_group", "true", "false", "", "", "3"],
+      ["workflow_dispatch", "true", "false", "", "", "3"],
       [
         "pull_request",
         "true",

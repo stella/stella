@@ -11,11 +11,11 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
+  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
-  toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
@@ -2192,34 +2192,30 @@ describe("anonymization placeholders across a thread's requests", () => {
 });
 
 describe("the restorations a request's history holds", () => {
-  test("are read from current and legacy stored turns, oldest first", () => {
+  test("are read from stored turns, oldest first", () => {
     const pairs = storedRestorationsOf([
       {
         id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000001"),
         role: "assistant",
-        content: {
-          version: 1,
-          data: [
-            {
-              type: "data-stella-anon-restorations",
-              data: {
-                pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }],
-              },
+        content: toPersistedChatMessageContentV3({
+          data: [],
+          metadata: {
+            anonRestorations: {
+              pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }],
             },
-          ],
-        },
+          },
+        }),
       },
       {
         id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000002"),
         role: "assistant",
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Noted." }],
           metadata: {
             anonRestorations: {
               pairs: [{ placeholder: "[PERSON_2]", original: "Bob" }],
             },
           },
-          version: 2,
         }),
       },
     ]);

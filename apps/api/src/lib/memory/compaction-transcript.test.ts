@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   renderTranscript,
   TRANSCRIPT_MAX_CHARS,
@@ -11,8 +11,7 @@ import {
 // tests pin delimiter escaping at the final trust boundary.
 
 const textMessage = (content: string) =>
-  proveTextOnlyPersistedChatMessageContent({
-    version: 2,
+  toPersistedChatMessageContentV3({
     data: [{ type: "text", content }],
     metadata: {},
   });
@@ -55,8 +54,7 @@ describe("renderTranscript", () => {
     const rendered = renderTranscript([
       {
         role: "user",
-        content: proveTextOnlyPersistedChatMessageContent({
-          version: 2,
+        content: toPersistedChatMessageContentV3({
           data: [],
           metadata: {},
         }),
@@ -65,19 +63,5 @@ describe("renderTranscript", () => {
     ]);
 
     expect(rendered).toBe("assistant: real content");
-  });
-
-  test("keeps legacy text messages available for extraction", () => {
-    const rendered = renderTranscript([
-      {
-        role: "user",
-        content: {
-          version: 1,
-          data: [{ type: "text", text: "legacy preference" }],
-        },
-      },
-    ]);
-
-    expect(rendered).toBe("user: legacy preference");
   });
 });
