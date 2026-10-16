@@ -179,7 +179,7 @@ test("retains the current and most recently used successful identities", async (
 
 test("excluded inputs may change during generation while sources may not", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
-  const run = (generate: () => Promise<void>) =>
+  const run = async (generate: () => Promise<void>) =>
     withGeneratedOutputCache({
       root,
       name: "fixture",
@@ -224,7 +224,7 @@ test("excluded inputs may change during generation while sources may not", async
 test("a caller that waited for the lock hashes the inputs it finds", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
   const output = path.join(root, "generated/value.txt");
-  const run = () =>
+  const run = async () =>
     withGeneratedOutputCache({
       root,
       name: "fixture",
