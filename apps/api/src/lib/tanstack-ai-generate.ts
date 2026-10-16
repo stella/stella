@@ -401,7 +401,22 @@ export const withProviderRetryWait = async <T>(
   if (delay === undefined || delay > PROVIDER_RETRY_WAIT_CAP_MS) {
     throw first.error;
   }
-  await sleep(delay, abortSignal === undefined ? {} : { signal: abortSignal });
+  const waited = await Result.tryPromise({
+    try: async () =>
+      await sleep(
+        delay,
+        abortSignal === undefined ? {} : { signal: abortSignal },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(waited)) {
+    // A cancellation during the wait ends the run as one during the call
+    // would; a deadline settles in `withGenerationDeadline` either way.
+    if (isAbortRejection({ error: waited.error, signal: abortSignal })) {
+      throw cancelledGenerationError();
+    }
+    throw waited.error;
+  }
   return await run();
 };
 
