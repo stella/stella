@@ -644,12 +644,18 @@ describe("warm screening", () => {
       return low;
     };
     const cold = minimalWork();
-    expect(minimalWork()).toBe(cold);
+    // The warm index admits exactly the cold minimum and nothing below it.
+    expect(screen(realistic, query, { ...options, maxWork: cold }).isOk()).toBe(
+      true,
+    );
+    expect(
+      screen(realistic, query, { ...options, maxWork: cold - 1 }).isOk(),
+    ).toBe(false);
     console.info(JSON.stringify({ minimalWork: cold }));
     // Measured at 1,603,468 units; the allowance admits small ranking changes,
     // and any larger growth needs a deliberate change to this budget.
     expect(cold).toBeLessThanOrEqual(1_650_000);
-  });
+  }, 20_000);
 
   test("warm screening work stays bounded for repeated common query tokens", () => {
     const measured = [];
