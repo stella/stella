@@ -202,7 +202,7 @@ const sameDocxEditorDocument = (
 
 /** Whether two claims ask the hosted editor for the same thing. Bindings are
  *  compared by reference: they are stable for a tab's lifetime. */
-export const sameDocxEditorClaim = (
+const sameDocxEditorClaim = (
   left: DocxEditorClaim,
   right: DocxEditorClaim,
 ): boolean =>
