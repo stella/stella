@@ -126,6 +126,11 @@ const isAncestorWalkProbe = (fromAncestor: string) =>
   fromAncestor.startsWith("node_modules/");
 
 const toPortablePath = (value: string, base: string, token: string) => {
+  // Directory child names and readDirectory globs are relative answers, not
+  // paths to resolve against the generator's current working directory.
+  if (!path.isAbsolute(value)) {
+    return value;
+  }
   const relative = repoRelativePath(base, value);
   if (relative === "") {
     return token;

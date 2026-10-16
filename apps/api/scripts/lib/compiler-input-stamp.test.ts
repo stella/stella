@@ -1,5 +1,13 @@
+import { panic } from "better-result";
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
@@ -10,6 +18,7 @@ import {
   compilerInputStampSchema,
   createCompilerInputRecorder,
   isCompilerInputStampCurrent,
+  localizeStamp,
   scriptSourceHash,
 } from "./compiler-input-stamp";
 
@@ -32,12 +41,12 @@ const recordProgram = (): CompilerInputStamp => {
     recorder.wrap({
       ...ts.sys,
       onUnRecoverableConfigFileDiagnostic: () => {
-        throw new Error("unreadable tsconfig");
+        panic("unreadable tsconfig");
       },
     }),
   );
   if (config === undefined) {
-    throw new Error("tsconfig not parsed");
+    panic("tsconfig not parsed");
   }
   const host = recorder.wrap(ts.createCompilerHost(config.options));
   const program = ts.createProgram({
@@ -141,4 +150,43 @@ test("a script's source hash is the same for checkouts at other paths", () => {
   expect(scriptSourceHash(path.join(directory, "tool/main.ts"))).not.toBe(
     original,
   );
+});
+
+test("portable stamps preserve directory names and relative compiler globs", async () => {
+  // The generator runs inside the checkout. Relative names must keep their
+  // meaning even when cwd could resolve them into paths under the root.
+  const recorded = Bun.spawnSync(
+    [
+      "bun",
+      "-e",
+      `
+      import ts from ${JSON.stringify(Bun.resolveSync("typescript", import.meta.dir))};
+      import { createCompilerInputRecorder } from ${JSON.stringify(path.join(import.meta.dir, "compiler-input-stamp.ts"))};
+      const root = process.cwd();
+      const recorder = createCompilerInputRecorder();
+      const host = recorder.wrap({ getDirectories: ts.sys.getDirectories, readDirectory: ts.sys.readDirectory });
+      host.getDirectories(root);
+      host.readDirectory(root, [".ts"], ["node_modules"], ["src/**/*"]);
+      console.log(JSON.stringify(recorder.portableStamp("context", root)));
+    `,
+    ],
+    { cwd: directory },
+  );
+  expect(recorded.exitCode).toBe(0);
+  const portable = v.parse(
+    compilerInputStampSchema,
+    JSON.parse(recorded.stdout.toString()),
+  );
+  expect(Object.values(portable.subdirectories)).toContainEqual(["src"]);
+  expect(portable.listings.at(0)?.[0].slice(1, 4)).toEqual([
+    [".ts"],
+    ["node_modules"],
+    ["src/**/*"],
+  ]);
+  const localized = localizeStamp(portable, realpathSync(directory));
+  expect(localized).toBeDefined();
+  if (localized === undefined) {
+    panic("portable fixture cannot be localized");
+  }
+  expect(await isCompilerInputStampCurrent(localized, CONTEXT)).toBe(true);
 });
