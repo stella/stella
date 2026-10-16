@@ -62,6 +62,8 @@ type CleanupOptions = {
   pullState?: string;
   draft?: boolean;
   labels?: string[];
+  // Pull requests found by the run's commit when it has no association.
+  commitPulls?: { labels: string[] }[] | "error";
 };
 const cleanup = async ({
   run,
@@ -75,6 +77,7 @@ const cleanup = async ({
   pullState = "open",
   draft = false,
   labels = [],
+  commitPulls = [],
 }: CleanupOptions) => {
   const cancelled: number[] = [];
   const forced: number[] = [];
@@ -112,6 +115,18 @@ const cleanup = async ({
                 status: cancelFailure.status,
               });
             }
+          },
+        },
+        repos: {
+          listPullRequestsAssociatedWithCommit: async () => {
+            if (commitPulls === "error") {
+              throw Object.assign(new Error("Unavailable"), { status: 500 });
+            }
+            return {
+              data: commitPulls.map((pull) => ({
+                labels: pull.labels.map((name) => ({ name })),
+              })),
+            };
           },
         },
         pulls: {
@@ -243,6 +258,22 @@ test("an old run whose pull request labels cannot be read is not cancelled", asy
     const result = await cleanup({ run, metadataStatus });
     expect(result.cancelled, String(metadataStatus)).toEqual([]);
     expect(result.forced, String(metadataStatus)).toEqual([]);
+  }
+});
+
+test("an old run without an association is matched to its pull requests by commit", async () => {
+  const run = {
+    ...queued("pull_request"),
+    pull_requests: [],
+    created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+  };
+  for (const commitPulls of [[{ labels: ["ci-protect"] }], "error"] as const) {
+    const result = await cleanup({
+      run,
+      commitPulls: commitPulls === "error" ? "error" : [...commitPulls],
+    });
+    expect(result.cancelled, JSON.stringify(commitPulls)).toEqual([]);
+    expect(result.forced, JSON.stringify(commitPulls)).toEqual([]);
   }
 });
 

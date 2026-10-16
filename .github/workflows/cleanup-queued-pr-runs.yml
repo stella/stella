@@ -58,7 +58,21 @@ jobs:
                 ? run.pull_requests
                 : context.payload.pull_request ? [context.payload.pull_request] : [];
               // A protected pull request is never cancelled, whatever the
-              // reason, including the six-hour rule below.
+              // reason, including the six-hour rule below. A run without an
+              // association is matched to pull requests by its commit; if that
+              // lookup fails, protection is unknown and the run is left alone.
+              if (associated.length === 0) {
+                let byCommit;
+                try {
+                  ({ data: byCommit } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                    ...repo, commit_sha: run.head_sha,
+                  }));
+                } catch {
+                  core.warning(`Cleanup skipped for ${run.id}: pull requests of ${run.head_sha} unavailable`);
+                  return null;
+                }
+                if (byCommit.some((pull) => pull.labels?.some((label) => label.name === PROTECT_LABEL))) return null;
+              }
               for (const pull of associated) {
                 if (!pull.number) continue;
                 const current = await currentPull(pull.number).catch((error) => {
