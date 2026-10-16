@@ -301,7 +301,7 @@ describe("MCP link sign-in", () => {
       ).at(0);
       expect(receipt).toEqual({ consumedAt: null });
     }
-    const trusted = await redeem(code);
+    const trusted = await redeem(code, { confirmation: "confirmed" });
     expect(trusted.status).toBe(200);
     expect(await trusted.json()).toEqual({ status: "redeemed" });
     expect(trusted.headers.getSetCookie().length).toBeGreaterThan(0);
@@ -368,7 +368,11 @@ describe("MCP link sign-in", () => {
       new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
         method: "POST",
         headers: { origin: baseURL, "content-type": "application/json" },
-        body: JSON.stringify({ code, path: "/law/example" }),
+        body: JSON.stringify({
+          code,
+          path: "/law/example",
+          confirmation: "confirmed",
+        }),
       });
     const before = await db.$count(session);
     const incomplete = await retryAuth.handler(request());
@@ -401,7 +405,9 @@ describe("MCP link sign-in", () => {
     } finally {
       handoffEnabled = true;
     }
-    expect((await redeem(code)).status).toBe(200);
+    expect((await redeem(code, { confirmation: "confirmed" })).status).toBe(
+      200,
+    );
   });
   test("turning off text links refuses an outstanding text link", async () => {
     const code = await mint("text");
@@ -476,8 +482,32 @@ describe("MCP link sign-in", () => {
       403,
     );
   });
-  test("click links create a normal-lifetime session without confirmation", async () => {
-    const response = await redeem(await mint("click"));
+  test("a click link opened in another signed-out browser confirms the account before any session", async () => {
+    // Minted for the fixture account, then opened in a browser with no session.
+    const code = await mint("click");
+    const sessionsBefore = await db.$count(session);
+    const first = await redeem(code, { address: "198.51.100.7" });
+    expect(first.status).toBe(200);
+    expect(v.parse(mcpHandoffRedeemResultSchema, await first.json())).toEqual({
+      status: "needs_confirmation",
+      email: "handoff@example.test",
+      organizationName: "Organization",
+    });
+    expect(cookieOf(first)).not.toContain("session_token=");
+    expect(await db.$count(session)).toBe(sessionsBefore);
+    expect((await service.inspect(code))?.handoff.consumedAt).toBeNull();
+    const confirmed = await redeem(code, {
+      confirmation: "confirmed",
+      address: "198.51.100.7",
+    });
+    expect(confirmed.status).toBe(200);
+    expect(cookieOf(confirmed)).toContain("session_token=");
+    expect(await db.$count(session)).toBe(sessionsBefore + 1);
+  });
+  test("confirmed click links create a normal-lifetime session", async () => {
+    const response = await redeem(await mint("click"), {
+      confirmation: "confirmed",
+    });
     expect(response.status).toBe(200);
     const read = await auth.api.getSession({
       headers: { cookie: cookieOf(response) },
@@ -547,7 +577,9 @@ describe("MCP link sign-in", () => {
       .where(eq(account.id, "handoff-credential"));
   });
   test("email OTP completion from a handoff cookie creates an ordinary session", async () => {
-    const handedOff = await redeem(await mint("click"));
+    const handedOff = await redeem(await mint("click"), {
+      confirmation: "confirmed",
+    });
     const handoffCookie = cookieOf(handedOff);
     expect(
       (await auth.api.getSession({ headers: { cookie: handoffCookie } }))
@@ -619,7 +651,9 @@ describe("MCP link sign-in", () => {
     }
   });
   test("Google callback from a handoff cookie creates an ordinary session", async () => {
-    const handedOff = await redeem(await mint("click"));
+    const handedOff = await redeem(await mint("click"), {
+      confirmation: "confirmed",
+    });
     const handoffCookie = cookieOf(handedOff);
     const socialAuth = makeAuth(service, {
       google: {
@@ -857,6 +891,7 @@ describe("MCP link sign-in", () => {
   );
   test("an incomplete replacement preserves the prior session and unused link", async () => {
     const priorResponse = await redeem(await mint("click"), {
+      confirmation: "confirmed",
       address: "192.0.2.20",
     });
     expect(priorResponse.status).toBe(200);

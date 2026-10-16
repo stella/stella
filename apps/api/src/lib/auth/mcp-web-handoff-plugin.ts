@@ -187,9 +187,11 @@ export const createMcpWebHandoffPlugin = ({
                 return await refuse("path");
               }
               const existing = await getAuthoritativeSessionFromCtx(ctx);
+              const sameUser = existing?.user.id === grant.userId;
+              // A click link opens without a prompt only where its account is
+              // already signed in; any other browser confirms the account first.
               if (
-                (grant.handoff.kind === "text" ||
-                  (existing && existing.user.id !== grant.userId)) &&
+                (grant.handoff.kind === "text" || !sameUser) &&
                 confirmation !== "confirmed"
               ) {
                 await currentService.recordConfirmation(code, request);
@@ -199,7 +201,6 @@ export const createMcpWebHandoffPlugin = ({
                   organizationName: grant.organizationName,
                 });
               }
-              const sameUser = existing?.user.id === grant.userId;
               const consumed = await currentService.consume({
                 code,
                 path: canonical,
