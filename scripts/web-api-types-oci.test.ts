@@ -276,10 +276,11 @@ describe("web API types OCI payload", () => {
       sourceText,
     );
     expect(recorder.readFile(sourceDependency)).toBe(dependencyText);
+    const resolveRealpath = ts.sys.realpath ?? ((file: string) => file);
     const host = recorder.wrap({
       getDirectories: ts.sys.getDirectories,
       readDirectory: ts.sys.readDirectory,
-      realpath: ts.sys.realpath,
+      realpath: resolveRealpath,
     });
     expect(host.realpath(sourceDependency)).toBe(sourceDependency);
     host.getDirectories(sourceRoot);

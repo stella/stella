@@ -1505,7 +1505,7 @@ const main = async () => {
   }
   if (requireCached) {
     panic(
-      `generate-web-api-types: no valid cache or generated store entry for base ${baseSha}; cold generation is disabled${unrecordedAncestor === undefined ? "" : ` because ${unrecordedAncestor} contains an unrecorded TypeScript module-resolution path`}`,
+      `generate-web-api-types: no valid cache or generated store entry for base ${String(baseSha)}; cold generation is disabled${unrecordedAncestor === undefined ? "" : ` because ${unrecordedAncestor} contains an unrecorded TypeScript module-resolution path`}`,
     );
   }
   const recorder = createCompilerInputRecorder();

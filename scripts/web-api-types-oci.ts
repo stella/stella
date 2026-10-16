@@ -275,10 +275,10 @@ export const pullApiTypes = async ({
   destination,
 }: PullApiTypesOptions) => {
   const base =
-    process.env.STELLA_API_TYPES_REGISTRY ??
+    process.env["STELLA_API_TYPES_REGISTRY"] ??
     "https://ghcr.io/v2/stella/stella-web-api-types";
   const authorization =
-    process.env.STELLA_API_TYPES_REGISTRY === undefined
+    process.env["STELLA_API_TYPES_REGISTRY"] === undefined
       ? `Bearer ${v.parse(v.object({ token: v.string() }), await (await fetch("https://ghcr.io/token?scope=repository%3Astella%2Fstella-web-api-types%3Apull")).json()).token}`
       : undefined;
   const headers = {
