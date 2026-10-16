@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { getTableName, sql } from "drizzle-orm";
+import { getTableName, isTable, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -309,6 +309,14 @@ const grantedPublicLawColumns = (
       ),
   );
 
+// Expansion releases may declare permitted grants before their tables exist.
+// The harness pushes only this checkout's schema, so it cannot grant those yet.
+const schemaTableNames = new Set<string>(
+  Object.values(schema)
+    .filter((value) => isTable(value))
+    .map((table) => getTableName(table)),
+);
+
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
  * the migrations (`applyStellaTablePrivileges`). Table-level privileges of
@@ -569,6 +577,7 @@ export const ROLE_GRANT_STATEMENTS = [
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
       ([relation, columns]) =>
+        schemaTableNames.has(relation) &&
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
         relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
