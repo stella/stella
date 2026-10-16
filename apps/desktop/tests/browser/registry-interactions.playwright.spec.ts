@@ -223,8 +223,9 @@ const installNativeBoundary = async (
             organizationId: "synthetic-organization",
           },
           expiresAt: CONNECTED_EXPIRES_AT,
+          server: ACCOUNT_SERVER,
         }
-      : { status: connection.status }
+      : { status: connection.status, server: ACCOUNT_SERVER }
   ) satisfies DesktopAccountSnapshot;
   await page.addInitScript(
     ({
@@ -442,6 +443,10 @@ const readInvocations = async (page: Page) =>
       return { args: invocation.args, command: invocation.command };
     });
   });
+const ACCOUNT_SERVER = "https://web.example.test";
+const ACCOUNT_HOST = "web.example.test";
+const withHost = (template: string) =>
+  template.replace("{host}", () => ACCOUNT_HOST);
 const searches = async (page: Page) =>
   (await readInvocations(page)).filter(
     ({ command }) => command === "registry_search",
@@ -1382,19 +1387,19 @@ for (const language of ["en", "ar"] as const) {
         page.getByText(messages.settings.connectionExpired, { exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByText(messages.settings.connectionExpiredDescription, {
+        page.getByText(withHost(messages.settings.reconnectHostDescription), {
           exact: true,
         }),
       ).toHaveCount(1);
       await expect(
         page.getByRole("button", {
-          name: messages.settings.connectToStella,
+          name: withHost(messages.settings.connectToHost),
           exact: true,
         }),
       ).toHaveCount(0);
       await page
         .getByRole("button", {
-          name: messages.settings.reconnectToStella,
+          name: messages.settings.reconnect,
           exact: true,
         })
         .click();
@@ -1455,12 +1460,17 @@ for (const language of ["en", "ar"] as const) {
           const area = surface === "welcome" ? page.getByRole("dialog") : page;
           if (surface === "settings") {
             await expect(
-              page.getByText(messages.settings.notConnected, { exact: true }),
+              page.getByText(messages.settings.reconnectNeeded, {
+                exact: true,
+              }),
             ).toBeVisible();
           }
           await area
             .getByRole("button", {
-              name: messages.settings.reconnectToStella,
+              name:
+                surface === "settings"
+                  ? messages.settings.reconnect
+                  : messages.settings.reconnectToStella,
               exact: true,
             })
             .click();
@@ -1492,7 +1502,10 @@ for (const language of ["en", "ar"] as const) {
             ]);
             await expect(
               area.getByRole("button", {
-                name: messages.settings.reconnectToStella,
+                name:
+                  surface === "settings"
+                    ? messages.settings.reconnect
+                    : messages.settings.reconnectToStella,
                 exact: true,
               }),
             ).toBeVisible();
@@ -1689,7 +1702,7 @@ for (const language of ["en", "ar"] as const) {
         const subtitle = page.getByText(
           status === "connected"
             ? "member@example.test"
-            : messages.settings.desktopBenefit,
+            : withHost(messages.settings.connectToHostDescription),
           { exact: true },
         );
         await expect(subtitle).toHaveCount(1);
@@ -1700,7 +1713,8 @@ for (const language of ["en", "ar"] as const) {
           ).toBeVisible();
         } else {
           await expect(
-            page.getByText(messages.settings.connectToStellaDescription, {
+            page.getByRole("button", {
+              name: withHost(messages.settings.connectToHost),
               exact: true,
             }),
           ).toHaveCount(1);

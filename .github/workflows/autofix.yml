@@ -4,8 +4,8 @@ defaults:
   run:
     shell: bash
 
-# No `paths` filter: each job scopes itself. Dependency updates and ordinary
-# same-repository PRs share the Tauri alignment fixer and existing App push.
+# Each job scopes itself. Dependency updates and ordinary same-repository
+# PRs share the Tauri alignment fixer and existing App push.
 on:
   workflow_dispatch:
     inputs:
@@ -19,6 +19,15 @@ on:
         type: string
   pull_request:
     types: [opened, synchronize, reopened]
+    # Workflow files are never fixed (the App cannot push them); only those a
+    # generator or the Tauri alignment reads stay in scope. A test derives
+    # this list from both.
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - ".github/workflows/autofix.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
@@ -311,9 +320,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      # The merge-queue yield reads workflow runs and their jobs.
+      actions: read
       contents: read
       pull-requests: read
     outputs:
+      deferred: ${{ steps.merge-queue.outputs.result == 'skip' }}
       ready: ${{ steps.planner.outputs.ready }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
@@ -326,8 +338,38 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/merge-queue-waiting.mjs
           sparse-checkout-cone-mode: false
+
+      # Autofix is a convenience; CI's format, lint and drift guards still
+      # enforce. While the merge queue has waiting work, a first attempt
+      # skips the fixer instead of taking a runner; a re-run never skips.
+      - name: Yield to the merge queue
+        id: merge-queue
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
+        with:
+          retries: 0
+          result-encoding: string
+          script: |
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { mergeQueueGate } = await import(pathToFileURL(
+              resolve(".gh-retry/scripts/merge-queue-waiting.mjs")).href);
+            return mergeQueueGate({
+              github,
+              context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
+              polls: 0,
+              intervalMs: 0,
+              sleep: async () => {},
+              notice: (message) => core.notice(message),
+            });
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
@@ -400,6 +442,7 @@ jobs:
     if: >-
       needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
+      && needs.regenerate-scope.outputs.deferred != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:

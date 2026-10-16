@@ -93,6 +93,24 @@ describe("createCaseLawDecisionRouteParams", () => {
     });
   });
 
+  test("routes Hungarian accents and docket punctuation through stable slugs", () => {
+    const params = routeParams({
+      caseNumber: "Pfv.21.123/2019/5.",
+      country: "HUN",
+      court: "Fővárosi Ítélőtábla",
+      language: "hu",
+      slug: "pfv-21-123-2019-5",
+    });
+    expect(params).toEqual({
+      country: "hun",
+      court: "fovarosi-itelotabla",
+      slug: "pfv-21-123-2019-5",
+    });
+    expect(parseCaseLawDecisionPath(createCaseLawDecisionPath(params))).toEqual(
+      params,
+    );
+  });
+
   test("uses the unknown-court segment for a blank court", () => {
     expect(routeParams({ country: "SVK", court: "   " })).toMatchObject({
       country: "svk",

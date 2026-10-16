@@ -11,12 +11,14 @@ import { panic } from "better-result";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
+import { analysisRetryAt } from "@/features/case-law/components/case-viewer/analysis/analysis-error.logic";
 import {
   type AnalysisError,
   type AnalysisQueryResult,
   type DecisionAnalysisKey,
   decisionAnalysisOptions,
 } from "@/features/case-law/queries/decision-analysis";
+import { useTimePassed } from "@/hooks/use-time-passed";
 import { detached } from "@/lib/detached";
 
 export type AnalysisState =
@@ -68,14 +70,19 @@ export const analysisStateFromQuery = ({
 /**
  * How Retry answers an error: a failed run asks the server for a new one (a
  * plain read keeps answering the failure), an unreadable answer reads again,
- * and a decision the server will never analyse offers no retry at all.
+ * and a decision the server will never analyse offers no retry at all, nor
+ * does a failed run before the retry time its provider named.
  */
 export type AnalysisRetry = "new-run" | "read-again" | "none";
 
-export const analysisRetryOf = (error: AnalysisError): AnalysisRetry => {
+export const analysisRetryOf = (
+  error: AnalysisError,
+  /** Whether the clock has passed the failure's retry time (`useTimePassed`). */
+  retryTimePassed: boolean,
+): AnalysisRetry => {
   switch (error.kind) {
     case "failed":
-      return "new-run";
+      return retryTimePassed ? "new-run" : "none";
     case "unreadable":
       return "read-again";
     case "unavailable":
@@ -131,11 +138,15 @@ export const useDecisionAnalysis = ({
     });
   })();
 
+  const retryTimePassed = useTimePassed(
+    state.status === "error" ? analysisRetryAt(state.error) : undefined,
+  );
+
   const generate = () => {
     if (!enabled || state.status !== "error") {
       return;
     }
-    const action = analysisRetryOf(state.error);
+    const action = analysisRetryOf(state.error, retryTimePassed);
     switch (action) {
       case "new-run":
         retry.mutate();

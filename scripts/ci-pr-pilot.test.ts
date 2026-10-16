@@ -235,9 +235,45 @@ const DECLARED_NORMAL_PLAN_CHANGES = new Set([
   "scan-engine-wasm-drift",
 ]);
 
+// Jobs that became parts of one shared job: the part's steps, under the
+// shared job's condition, keep the job's former plan.
+const FOLDED_PARTS = new Map([
+  ["parser-version-guard", "ci-quick-checks"],
+  ["ci-checks-docs", "ci-quick-checks"],
+  ["dated-waiver-expiry", "ci-quick-checks"],
+]);
+const partSelected = (
+  name: string,
+  context: ReturnType<typeof conditionContext>,
+) => {
+  const host = FOLDED_PARTS.get(name);
+  if (host === undefined) {
+    return evaluate(workflow.jobs[name]?.if ?? "true", context);
+  }
+  const installed = {
+    ...context,
+    values: { ...context.values, "steps.install.outcome": "success" },
+  };
+  const parts = (workflow.jobs[host]?.steps ?? []).filter((step) =>
+    step.name.startsWith(`${name}: `),
+  );
+  expect(parts.length, name).toBeGreaterThan(0);
+  return (
+    evaluate(workflow.jobs[host]?.if ?? "true", installed) === true &&
+    parts.every((step) => evaluate(step.if ?? "true", installed) === true)
+  );
+};
+
 test("off and unset preserve today's job plan across every event and depth", async () => {
   expect(
-    [...Object.keys(original.jobs), "postgres-service-suites"].toSorted(),
+    [
+      ...new Set([
+        ...Object.keys(original.jobs).map(
+          (job) => FOLDED_PARTS.get(job) ?? job,
+        ),
+        "postgres-service-suites",
+      ]),
+    ].toSorted(),
   ).toEqual(
     Object.keys(workflow.jobs)
       .filter((job) => job !== "query-perf")
@@ -276,10 +312,9 @@ test("off and unset preserve today's job plan across every event and depth", asy
               );
               continue;
             }
-            expect(
-              evaluate(workflow.jobs[name]?.if ?? "true", context),
-              name,
-            ).toEqual(evaluate(job.if ?? "true", context));
+            expect(partSelected(name, context), name).toEqual(
+              evaluate(job.if ?? "true", context),
+            );
           }
         }
       }
@@ -342,12 +377,20 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
     }
     context.values["needs.ci-plan.outputs.run_required"] = "true";
     context.values["needs.ci-plan.outputs.docs_checks_required"] = "true";
-    expect(fastJobs(workflow)).toContain("ci-checks-docs");
+    context.values["steps.install.outcome"] = "success";
     const scheduled = Object.entries(workflow.jobs)
       .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
-    expect(scheduled).toEqual(["ci-checks-docs", ...PILOT_ALWAYS]);
+    expect(scheduled).toEqual([...PILOT_ALWAYS]);
+    // The Markdown checks are a part of the always-run quick checks.
+    const docs = (workflow.jobs["ci-quick-checks"]?.steps ?? []).filter(
+      (step) => step.name.startsWith("ci-checks-docs: "),
+    );
+    expect(docs).toHaveLength(1);
+    for (const step of docs) {
+      expect(evaluate(step.if ?? "true", context), profile).toBe(true);
+    }
   }
 });
 
@@ -475,7 +518,7 @@ test("main and queue ignore the pilot switch", async () => {
 });
 
 test("the prerequisite census rejects every undecided new job and every deferred dependency", () => {
-  expect(fastJobs(workflow)).toContain("ci-generated-sources");
+  expect(fastJobs(workflow)).toContain("ci-checks-generated");
   expect(
     pilotFastJobs({ jobs: { ...workflow.jobs, future: {} } }),
   ).toMatchObject({
