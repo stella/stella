@@ -1326,6 +1326,7 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "messageUnavailable": "Ez az üzenet nem jeleníthető meg.",
     "mockModel": {
       "description": "Előre megírt válaszok a helyi szimulált modelltől",
       "label": "Szimulált AI"

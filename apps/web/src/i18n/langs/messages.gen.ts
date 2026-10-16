@@ -1329,6 +1329,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";

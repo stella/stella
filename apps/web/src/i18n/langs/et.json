@@ -1326,6 +1326,7 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "messageUnavailable": "Seda sõnumit ei saa kuvada.",
     "mockModel": {
       "description": "Valmisvastused kohalikult simuleeritud mudelilt",
       "label": "Simuleeritud AI"

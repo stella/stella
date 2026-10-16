@@ -1326,6 +1326,7 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "messageUnavailable": "Este mensaje no se puede mostrar.",
     "mockModel": {
       "description": "Respuestas predefinidas del modelo simulado local",
       "label": "IA simulada"

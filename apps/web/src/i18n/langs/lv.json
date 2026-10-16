@@ -1326,6 +1326,7 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "messageUnavailable": "Šo ziņojumu nevar parādīt.",
     "mockModel": {
       "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
       "label": "Simulēts AI"
