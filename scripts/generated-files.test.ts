@@ -930,10 +930,23 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   const bundle = ciGeneratedStepRun(
     "MCP app package bundles and shared assets guard",
   );
-  const bundleOutputs = generator("mcp-app-bundles")
-    .outputs.map((glob) => `"${glob}"`)
-    .join(" ");
-  expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
+  // Derived outputs are untracked, so a diff would pass on anything: the
+  // guard instead requires every declared output to exist after the build
+  // and runs the tracking check.
+  const declared = (bundle.split("outputs=(\n")[1] ?? "")
+    .split("\n)")[0]
+    ?.split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  expect(declared?.toSorted()).toEqual(
+    [
+      ...generator("mcp-app-contracts").outputs,
+      ...generator("mcp-app-bundles").outputs,
+    ].toSorted(),
+  );
+  expect(bundle).not.toContain("git diff --exit-code");
+  expect(bundle).toContain('test -s "$output"');
+  expect(bundle).toContain("bun scripts/check-mcp-generated-tracking.ts");
   const preparation = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
     "utf-8",
