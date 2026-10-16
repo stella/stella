@@ -10,6 +10,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -127,10 +128,9 @@ const seedMessages = async (
       threadId,
       workspaceId,
       userId: fixture.userId,
-      content: {
-        version: 1 as const,
-        data: [{ type: "text" as const, text: "Synthetic timing message" }],
-      },
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "Synthetic timing message" }],
+      }),
     })),
   );
   return { threadId, userMessageId, assistantMessageId, workspaceId };

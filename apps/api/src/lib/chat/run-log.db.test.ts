@@ -508,7 +508,9 @@ describe("chat run log database contract", () => {
         userId: ids.userA1,
         workspaceId: ids.wsA1,
         role: "assistant",
-        content: { data: [{ text: "Partial", type: "text" }], version: 1 },
+        content: toPersistedChatMessageContentV3({
+          data: [{ type: "text", content: "Partial" }],
+        }),
       });
       const terminal = {
         type: EventType.RUN_ERROR,

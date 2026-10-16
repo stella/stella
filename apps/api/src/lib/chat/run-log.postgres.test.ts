@@ -155,7 +155,9 @@ if (!databaseUrl || !runPostgresTests) {
         threadId: racedThreadId,
         userId,
         role: "user",
-        content: { version: 1, data: [{ type: "text", text: "Race" }] },
+        content: toPersistedChatMessageContentV3({
+          data: [{ type: "text", content: "Race" }],
+        }),
       });
       await db.insert(chatTurns).values({
         id: execution.id,
