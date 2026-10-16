@@ -70,11 +70,15 @@ const lockAuthorizedActorRole = async ({
   organizationId: SafeId<"organization">;
   tx: Transaction;
 }): Promise<MemberRole | null> => {
+  // NO KEY UPDATE still waits for member-first access holds (FOR SHARE), role
+  // changes and member removal, but stays compatible with the FOR KEY SHARE a
+  // matter-first path (adding this user to the matter) takes after locking
+  // the matter row; FOR UPDATE would deadlock against such a path.
   const actor = await lockMemberAccessRow({
     tx,
     organizationId,
     userId: actorUserId,
-    mode: "update",
+    mode: "no key update",
   });
   if (
     !actor ||

@@ -2070,7 +2070,7 @@ type MemberAccessRowLockOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  mode: "share" | "update";
+  mode: "share" | "no key update" | "update";
 };
 
 /** Lock the member within the caller's lifecycle or access-hold sequence. */
