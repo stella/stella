@@ -113,12 +113,24 @@ describe("marketing readers resolve from publicly available thread badges", () =
     ).toThrow("received 0");
   });
 
-  test("rejects unavailable badges", () => {
+  test("reports missing scenarios when every badge is unavailable", () => {
     expect(() =>
       getMarketingDecisionPaths({
         global: [{ decision: { type: "unavailable" } }],
       }),
-    ).toThrow("badges are unavailable");
+    ).toThrow("received 0");
+  });
+
+  test("ignores an unrelated unavailable badge", () => {
+    const payload = response();
+    const paths = getMarketingDecisionPaths({
+      ...payload,
+      global: [
+        ...payload.global,
+        { id: "unrelated-thread", decision: { type: "unavailable" } },
+      ],
+    });
+    expect(paths).toEqual(getMarketingDecisionPaths(payload));
   });
 
   test("resolves when several threads reference the same decision", () => {

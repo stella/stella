@@ -25,7 +25,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/story-public-data-1-dark.png" />
-    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the two-turn chat on the right answers whether a creditor must first demand compensation from the company, citing the decision." width="100%" />
+    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the two-turn chat on the right answers whether a creditor must first make the company demand compensation from its director, citing the decision." width="100%" />
   </picture>
   <br /><sub><b>Case law</b> from public sources: read the decision, mark it up, and ask questions answered from its own paragraphs.</sub>
 </p>

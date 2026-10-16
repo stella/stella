@@ -50,9 +50,9 @@ export const getMarketingDecisionPaths = (payload: unknown) => {
       case "present":
         return [decision.badge];
       case "unavailable":
-        throw new MarketingDecisionPathError({
-          message: "Marketing decision badges are unavailable",
-        });
+        // An unrelated conversation's badge; a required decision that is
+        // missing is reported by the scenario matching below.
+        return [];
       default:
         decision satisfies never;
         return panic("Marketing decision badge has an unknown state");
