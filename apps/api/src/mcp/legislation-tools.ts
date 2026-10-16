@@ -567,7 +567,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
-  const unavailable = publicCountryUnavailable(country, "search");
+  const unavailable = publicCountryUnavailable(country, {
+    domain: "legislation",
+    surface: "search",
+  });
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }

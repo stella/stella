@@ -76,7 +76,7 @@ const MenuPopup = ({
         {header}
         <div
           className={cn(
-            "min-h-0 w-full flex-1 overflow-y-auto p-1",
+            "min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-1",
             viewportClassName,
           )}
         >
