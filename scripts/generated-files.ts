@@ -602,7 +602,7 @@ const GENERATOR_DECLARATIONS = [
     check: null,
     unchecked:
       "derived on demand; the web i18n check validates the source catalogs",
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
