@@ -10,12 +10,7 @@
     "Published package lists match the release policy": ["**"],
     "Changeset packages match changed files": ["**"],
     "Validate AI skills": ["**"],
-    "Standalone lockfile guard": [
-      "**/bun.lock",
-      "**/package.json",
-      "**/bunfig.toml",
-      "**/*.sh"
-    ],
+    "Standalone lockfile guard": ["**"],
     "Standalone negated shell statement guard": ["**"],
     "Tauri package alignment": ["@stll/desktop"],
     "Tauri counterpart autofix tests": ["@stll/desktop"],

@@ -151,6 +151,25 @@ test("all root workflow commands have declarations and narrow gates use the same
   );
 });
 
+test("steps whose success or outputs later steps consume cannot be deselected", () => {
+  const source = readFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const job = "ci-checks-rest";
+  const name = "Standalone lockfile guard";
+  const id = "id: standalone_lockfiles\n        if: ${{ !cancelled()";
+  expect(source).toContain(id);
+  const broken = structuredClone(ROOT_CHECK_INPUTS);
+  broken[job][name] = ["**/bun.lock"];
+  expect(() =>
+    validateRootCheckCensus(
+      source.replace(id, () => `${id} && ${rootCheckGate({ job, name })}`),
+      broken,
+    ),
+  ).toThrow(`Root check gate skips a consumed step: ${job}/${name}`);
+});
+
 test("global configuration and structural path changes retain full root scope", () => {
   for (const changed of [
     ["bun.lock"],

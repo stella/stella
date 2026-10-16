@@ -2774,7 +2774,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: standalone_lockfiles
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Standalone lockfile guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
         # Bun reads only the installing directory's bunfig.toml, so a lockfile
         # outside the root workspace skips the root's release-age quarantine,
         # and an npm, Yarn or pnpm lockfile skips it entirely. Needs no

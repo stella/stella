@@ -15,6 +15,7 @@ import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };
 const root = path.resolve(import.meta.dir, "..");
 const stepSchema = v.looseObject({
   name: v.string(),
+  id: v.optional(v.string()),
   run: v.optional(v.string()),
   if: v.optional(v.string()),
 });
@@ -84,6 +85,23 @@ export const validateRootCheckCensus = (
       const gated = step.if?.includes(gate) === true;
       if (gated === paths.includes("**")) {
         panic(`Root check selection gate differs: ${job}/${step.name}`);
+      }
+      // A deselected step reports `skipped`: a later step that requires its
+      // success or reads its outputs would silently skip or misread.
+      const { id } = step;
+      const consumed =
+        id !== undefined &&
+        steps.some(
+          (other) =>
+            other !== step &&
+            [
+              `steps.${id}.outputs.`,
+              `steps.${id}.outcome == 'success'`,
+              `steps.${id}.conclusion == 'success'`,
+            ].some((use) => JSON.stringify(other).includes(use)),
+        );
+      if (gated && consumed) {
+        panic(`Root check gate skips a consumed step: ${job}/${step.name}`);
       }
     }
   }
