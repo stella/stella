@@ -180,6 +180,35 @@ const stopOutcomeOf = (
  *  provider's own value goes to the logs only. */
 export const UNRECOGNIZED_STOP_REASON = "unknown";
 
+/**
+ * The metadata key a decided terminal event records the provider's stop
+ * reason under: the provider's own value when its table lists it,
+ * `UNRECOGNIZED_STOP_REASON` for a finish whose reason no table lists. A
+ * value no table lists never enters the run.
+ */
+const RECORDED_STOP_REASON_KEY = "stopReason";
+
+/** The stop reason a decided terminal event recorded, if it recorded one. */
+export const recordedStopReasonOf = (chunk: {
+  metadata?: unknown;
+}): string | undefined => {
+  const metadata: unknown = chunk.metadata;
+  if (!isRecord(metadata)) {
+    return undefined;
+  }
+  const reason = metadata[RECORDED_STOP_REASON_KEY];
+  return typeof reason === "string" ? reason : undefined;
+};
+
+/** `terminal` recording `reason`, a value its provider's table lists. */
+const withRecordedStopReason = (
+  terminal: TerminalChunk,
+  reason: string,
+): TerminalChunk => ({
+  ...terminal,
+  metadata: { ...terminal.metadata, [RECORDED_STOP_REASON_KEY]: reason },
+});
+
 /** The longest provider value a log line carries. */
 const LOGGED_REASON_MAX = 64;
 
@@ -343,6 +372,11 @@ const sharedFields = (chunk: TerminalChunk) => ({
   ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
 });
 
+/** The message of a run error for a response the provider stopped before
+ *  it finished; `null` when it reported no stop reason at all. */
+export const unfinishedStopMessage = (reason: string | null): string =>
+  `The provider stopped before the response finished (${reason ?? "no stop reason"}).`;
+
 const stoppedError = (
   chunk: TerminalChunk,
   code: string,
@@ -413,11 +447,7 @@ const decidedTerminal = ({
       return finished(outcome);
     }
     case "unfinished": {
-      return stoppedError(
-        chunk,
-        unfinishedCode,
-        `The provider stopped before the response finished (${reason ?? "no stop reason"}).`,
-      );
+      return stoppedError(chunk, unfinishedCode, unfinishedStopMessage(reason));
     }
     case "failed": {
       return failed(
@@ -437,7 +467,10 @@ const decidedTerminal = ({
       const answer = finished("stop");
       return {
         ...answer,
-        metadata: { ...answer.metadata, stopReason: UNRECOGNIZED_STOP_REASON },
+        metadata: {
+          ...answer.metadata,
+          [RECORDED_STOP_REASON_KEY]: UNRECOGNIZED_STOP_REASON,
+        },
       };
     }
     default: {
@@ -502,7 +535,7 @@ export const withDecidedStopReasons = async function* (
     if (outcome === "unrecognized" && reason !== null) {
       reportUnrecognizedStopReason(provider, reason);
     }
-    yield decidedTerminal({
+    const decided = decidedTerminal({
       answered,
       calledTools,
       chunk,
@@ -512,5 +545,8 @@ export const withDecidedStopReasons = async function* (
       run,
       unfinishedCode,
     });
+    yield outcome === "unrecognized" || reason === null
+      ? decided
+      : withRecordedStopReason(decided, reason);
   }
 };

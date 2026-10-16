@@ -17,7 +17,8 @@ const config = {
   contract: "patch",
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
-    "version, license, compatibility, source URL, slash command, and every " +
+    "version, license, compatibility, source URL, slash command, invocation " +
+    "(`auto` or `manual`: whether the assistant may use it on its own), and every " +
     "resource file with its content. A team skill is readable by every " +
     "member of the organization; a private one only by its author.",
   permissions: { chat: ["create"] },
@@ -52,6 +53,7 @@ const getSkill = createSafeRootHandler(
             sourceUrl: agentSkills.sourceUrl,
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
             body: agentSkills.body,
             command: agentSkills.command,
             createdAt: agentSkills.createdAt,

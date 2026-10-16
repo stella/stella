@@ -13,7 +13,8 @@
 //   bun scripts/run-unlisted-script-tests.ts
 
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 type ScriptTestArguments =
@@ -54,25 +55,69 @@ export const parseScriptTestArguments = (
 type UnlistedTestCommandOptions = {
   readonly files: readonly string[];
   readonly timeout: number | undefined;
+  /** Bun processes the test files are spread over; they run at once. */
+  readonly groups?: number;
+  /** A file's expected cost (its size); the heaviest are placed first. */
+  readonly weightOf?: (file: string) => number;
+};
+
+/**
+ * `files` spread over at most `groups` lists, heaviest first onto the
+ * lightest list, so each list costs about the same. Ties break by path, so
+ * the split is the same on every run.
+ */
+export const balanceTestFiles = (
+  files: readonly string[],
+  groups: number,
+  weightOf: (file: string) => number,
+): string[][] => {
+  const lists = Array.from(
+    { length: Math.max(1, Math.min(groups, files.length)) },
+    () => ({ files: [] as string[], weight: 0 }),
+  );
+  const ordered = files
+    .map((file) => ({ file, weight: weightOf(file) }))
+    .toSorted((a, b) => {
+      if (a.weight !== b.weight) {
+        return b.weight - a.weight;
+      }
+      // Repository paths, compared by code unit: the order only has to be
+      // stable, not linguistic.
+      if (a.file === b.file) {
+        return 0;
+      }
+      return a.file < b.file ? -1 : 1;
+    });
+  for (const { file, weight } of ordered) {
+    let lightest = lists[0] ?? panic("A balance has a group");
+    for (const list of lists) {
+      if (list.weight < lightest.weight) {
+        lightest = list;
+      }
+    }
+    lightest.files.push(file);
+    lightest.weight += weight;
+  }
+  return lists
+    .map((list) => list.files.toSorted())
+    .filter((list) => list.length > 0);
 };
 
 export const unlistedTestCommands = ({
   files,
   timeout,
+  groups = 1,
+  weightOf = () => 1,
 }: UnlistedTestCommandOptions): string[][] => {
   const bunTests = files.filter((file) => file.endsWith(".ts"));
   const shellTests = files.filter((file) => file.endsWith(".sh"));
   return [
-    ...(bunTests.length === 0
-      ? []
-      : [
-          [
-            "bun",
-            "test",
-            ...(timeout === undefined ? [] : ["--timeout", String(timeout)]),
-            ...bunTests,
-          ],
-        ]),
+    ...balanceTestFiles(bunTests, groups, weightOf).map((group) => [
+      "bun",
+      "test",
+      ...(timeout === undefined ? [] : ["--timeout", String(timeout)]),
+      ...group,
+    ]),
     ...shellTests.map((file) => ["bash", file]),
   ];
 };
@@ -101,16 +146,34 @@ const scan = (pattern: string): string[] => [
   ...new Bun.Glob(pattern).scanSync({ cwd: REPO_ROOT }),
 ];
 
-const run = (command: readonly string[]): boolean => {
-  console.log(`$ ${command.join(" ")}`);
-  // Inherited output: a piped stdout is truncated for large test reports.
-  const result = Bun.spawnSync([...command], {
-    cwd: REPO_ROOT,
-    stderr: "inherit",
-    stdout: "inherit",
-  });
-  return result.exitCode === 0;
+/**
+ * Runs `command` with its output in files, then prints it whole, so commands
+ * running at once never interleave their reports. Files, not pipes: a piped
+ * stdout is truncated for large test reports.
+ */
+const run = async (command: readonly string[]): Promise<boolean> => {
+  const directory = mkdtempSync(path.join(tmpdir(), "unlisted-script-tests-"));
+  const stdoutPath = path.join(directory, "stdout.log");
+  const stderrPath = path.join(directory, "stderr.log");
+  try {
+    const child = Bun.spawn([...command], {
+      cwd: REPO_ROOT,
+      stdout: Bun.file(stdoutPath),
+      stderr: Bun.file(stderrPath),
+    });
+    const exitCode = await child.exited;
+    console.log(`$ ${command.join(" ")}`);
+    process.stdout.write(readFileSync(stdoutPath, "utf-8"));
+    process.stderr.write(readFileSync(stderrPath, "utf-8"));
+    return exitCode === 0;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 };
+
+/** Bun test processes at once: two, so this step and the job's background
+ *  checks together stay within the runner's four cores. */
+const UNLISTED_TEST_GROUPS = 2;
 
 if (import.meta.main) {
   const options = parseScriptTestArguments(process.argv.slice(2));
@@ -128,8 +191,12 @@ if (import.meta.main) {
     const commands = unlistedTestCommands({
       files: unlisted,
       timeout: options.timeout,
+      groups: UNLISTED_TEST_GROUPS,
+      weightOf: (file) => statSync(path.join(REPO_ROOT, file)).size,
     });
-    const results = commands.map((command) => run(command));
+    const results = await Promise.all(
+      commands.map(async (command) => await run(command)),
+    );
     if (results.includes(false)) {
       panic("Unlisted script tests failed");
     }
