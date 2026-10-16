@@ -114,7 +114,8 @@ const verifyReference = ({
       const exactPath =
         kind === "reusable-workflow"
           ? target.path === localPath
-          : target.path === `${localPath}/action.yml` ||
+          : !reference.startsWith("$/") ||
+            target.path === `${localPath}/action.yml` ||
             target.path === `${localPath}/action.yaml`;
       if (
         target.repository !== callerRepository ||

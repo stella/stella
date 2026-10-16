@@ -36,6 +36,7 @@ import {
 } from "../../../scripts/ci-job-classification/yaml";
 
 const ORDINARY = CLASSIFICATIONS[0];
+const SUPPORT = CLASSIFICATIONS[1];
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
@@ -53,6 +54,20 @@ test("committed classifications cover the repository and its pinned metadata cal
   expect(result.value.classifications.priority).toBeGreaterThan(0);
   // Parses every reachable workflow and action document in a child process.
 }, 60_000);
+
+test("the consolidated quick checks retain the support classification of the jobs they replace", () => {
+  const { decisions } = readClassificationInputs(repositoryRoot);
+  expect(
+    decisions["candidate:.github/workflows/ci.yml/ci-quick-checks"]?.kind,
+  ).toBe(SUPPORT);
+});
+
+test("the opt-in flake report remains an ordinary non-publishing check", () => {
+  const { decisions } = readClassificationInputs(repositoryRoot);
+  expect(
+    decisions["candidate:.github/workflows/flake-gate.yml/report"]?.kind,
+  ).toBe(ORDINARY);
+});
 
 test("committed classifications declare every local action", () => {
   const manifest = v.parse(
@@ -479,10 +494,13 @@ test("local reusable workflows cannot use workspace aliases to change path or re
     );
   }
 });
-test("relative actions bind metadata to the caller repository, origin and path", () => {
+test("relative actions bind metadata to the caller repository and origin", () => {
   for (const route of [
-    { repository: "other", targetPath: ".github/actions/local/action.yml" },
-    { repository: "candidate", targetPath: ".github/actions/other/action.yml" },
+    {
+      repository: "other",
+      targetPath: ".github/actions/local/action.yml",
+      message: "local metadata path, repository or origin mismatch",
+    },
     {
       repository: "candidate",
       targetPath: ".github/actions/local/action.yml",
@@ -492,6 +510,7 @@ test("relative actions bind metadata to the caller repository, origin and path",
         repo: "shared",
         sha: "a".repeat(40),
       } satisfies MetadataOrigin,
+      message: "local metadata path, repository or origin mismatch",
     },
   ]) {
     failure(
@@ -503,7 +522,7 @@ test("relative actions bind metadata to the caller repository, origin and path",
           ...route,
         }),
       ),
-      "local metadata path, repository or origin mismatch",
+      route.message,
     );
   }
 });

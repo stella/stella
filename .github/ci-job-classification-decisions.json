@@ -99,18 +99,6 @@
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
-  "candidate:.github/workflows/ci.yml/parser-version-guard": {
-    "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
-  },
-  "candidate:.github/workflows/ci.yml/ci-generated-sources": {
-    "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
-  },
-  "candidate:.github/workflows/ci.yml/ci-checks-docs": {
-    "kind": "support",
-    "qualifier": "Prerequisites follow the workflow's execution conditions."
-  },
   "candidate:.github/workflows/ci.yml/ci-checks-generated": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
@@ -251,11 +239,11 @@
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
-  "candidate:.github/workflows/ci.yml/dated-waiver-expiry": {
+  "candidate:.github/workflows/ci.yml/ci-result": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
-  "candidate:.github/workflows/ci.yml/ci-result": {
+  "candidate:.github/workflows/ci.yml/ci-quick-checks": {
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
@@ -364,6 +352,10 @@
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/fetch-public-documents.yml/fetch": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/flake-gate.yml/report": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
