@@ -36,6 +36,13 @@ if (!hasPreparedGeneratedSources(root)) {
       "scripts/generated-files.ts",
       "packages/scripts/src/generated-output-cache.ts",
       "packages/scripts/src/generation-lock.ts",
+      // Other generators rewrite their derived outputs concurrently (the API
+      // capability runtime under apps/api/src/mcp/generated among them); they
+      // are not this preparation's sources.
+      ...GENERATORS.filter(
+        (generator) =>
+          generator.outputKind === "derived" && !owners.includes(generator),
+      ).flatMap(({ outputs }) => outputs.map((output) => `!${output}`)),
       // Concurrent package builds write these; the Turbo task excludes them too.
       "!packages/**/dist/**",
       "!packages/**/*.tsbuildinfo",
