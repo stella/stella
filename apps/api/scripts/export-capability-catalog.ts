@@ -311,26 +311,37 @@ const ENTRY_ADDITIONAL_SCOPES: Record<string, readonly string[]> = {
   "entities.duplicate": ["stella:documents_write"],
 };
 
-/** `additionalScopes` plus the entry's ENTRY_ADDITIONAL_SCOPES, minus its scope. */
+/** Retain independent domain consent alongside entry and tool consents. */
 const withEntryAdditionalScopes = ({
   additionalScopes,
+  domainWriteScope,
   id,
+  isRead,
   scope,
   uses,
 }: {
   additionalScopes: readonly string[];
+  domainWriteScope: string;
   id: string;
+  isRead: boolean;
   scope: string;
   uses: Set<string>;
 }): readonly string[] => {
+  const scopes = new Set(additionalScopes);
   const extraScopes = ENTRY_ADDITIONAL_SCOPES[id];
-  if (extraScopes === undefined) {
-    return additionalScopes;
+  if (extraScopes !== undefined) {
+    uses.add(id);
+    for (const extraScope of extraScopes) {
+      scopes.add(extraScope);
+    }
   }
-  uses.add(id);
-  return [...new Set([...additionalScopes, ...extraScopes])].filter(
-    (requiredScope) => requiredScope !== scope,
-  );
+  // A document writer adds consent to a list mutation; it cannot replace
+  // the list's own consent, including when the endpoint has a scope pin.
+  if (!isRead && deriveDomain(id) === "lists") {
+    scopes.add(domainWriteScope);
+  }
+  scopes.delete(scope);
+  return [...scopes];
 };
 
 /**
@@ -1461,7 +1472,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
     scope = primitiveResolution.scope;
     additionalScopes = withEntryAdditionalScopes({
       additionalScopes,
+      domainWriteScope: scopeResolution.writeScope,
       id,
+      isRead,
       scope,
       uses: additionalScopeUses,
     });

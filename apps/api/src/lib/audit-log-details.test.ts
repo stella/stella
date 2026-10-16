@@ -240,40 +240,84 @@ const auditedWrites = (source: string) => {
       (entry): entry is ts.PropertyAssignment =>
         ts.isPropertyAssignment(entry) && entry.name.getText(file) === name,
     )?.initializer;
+  const mappedObjectLiteral = (expression: ts.Expression) => {
+    if (
+      !ts.isCallExpression(expression) ||
+      !ts.isPropertyAccessExpression(expression.expression) ||
+      expression.expression.name.text !== "map"
+    ) {
+      return undefined;
+    }
+    const mapper = expression.arguments.at(0);
+    if (!mapper || !ts.isArrowFunction(mapper)) {
+      return undefined;
+    }
+    const body = ts.isParenthesizedExpression(mapper.body)
+      ? mapper.body.expression
+      : mapper.body;
+    return ts.isObjectLiteralExpression(body) ? body : undefined;
+  };
+  // A batch write is inspected entry by entry: each element is an object
+  // literal or a spread of `items.map((item) => ({ ... }))`.
+  const auditPayloads = (
+    payload: ts.Expression | undefined,
+  ): ts.ObjectLiteralExpression[] => {
+    if (payload && ts.isObjectLiteralExpression(payload)) {
+      return [payload];
+    }
+    if (payload && ts.isArrayLiteralExpression(payload)) {
+      return payload.elements.map((element) => {
+        if (ts.isObjectLiteralExpression(element)) {
+          return element;
+        }
+        const mapped = ts.isSpreadElement(element)
+          ? mappedObjectLiteral(element.expression)
+          : undefined;
+        if (!mapped) {
+          throw new TypeError(
+            "Feature audit writes require a classified object payload",
+          );
+        }
+        return mapped;
+      });
+    }
+    throw new TypeError(
+      "Feature audit writes require a classified object payload",
+    );
+  };
+  const classify = (payload: ts.ObjectLiteralExpression) => {
+    const resource = property(payload, "resourceType");
+    if (
+      !resource ||
+      !ts.isPropertyAccessExpression(resource) ||
+      resource.expression.getText(file) !== "AUDIT_RESOURCE_TYPE"
+    ) {
+      throw new TypeError("Feature audit writes require a resource constant");
+    }
+    const resourceType = Object.entries(AUDIT_RESOURCE_TYPE).find(
+      ([name]) => name === resource.name.text,
+    )?.[1];
+    if (!resourceType) {
+      throw new TypeError("Feature audit resource requires a classification");
+    }
+    const metadata = property(payload, "metadata");
+    if (metadata && !ts.isObjectLiteralExpression(metadata)) {
+      throw new TypeError(
+        "Feature audit metadata requires an explicit operation classification",
+      );
+    }
+    const operation = metadata ? property(metadata, "operation") : undefined;
+    writes.push({ resourceType, operation: operationValue(operation) });
+  };
   const visit = (node: ts.Node) => {
     if (
       ts.isCallExpression(node) &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === "recordAuditEvent"
     ) {
-      const payload = node.arguments.at(1);
-      if (!payload || !ts.isObjectLiteralExpression(payload)) {
-        throw new TypeError(
-          "Feature audit writes require a classified object payload",
-        );
+      for (const payload of auditPayloads(node.arguments.at(1))) {
+        classify(payload);
       }
-      const resource = property(payload, "resourceType");
-      if (
-        !resource ||
-        !ts.isPropertyAccessExpression(resource) ||
-        resource.expression.getText(file) !== "AUDIT_RESOURCE_TYPE"
-      ) {
-        throw new TypeError("Feature audit writes require a resource constant");
-      }
-      const resourceType = Object.entries(AUDIT_RESOURCE_TYPE).find(
-        ([name]) => name === resource.name.text,
-      )?.[1];
-      if (!resourceType) {
-        throw new TypeError("Feature audit resource requires a classification");
-      }
-      const metadata = property(payload, "metadata");
-      if (metadata && !ts.isObjectLiteralExpression(metadata)) {
-        throw new TypeError(
-          "Feature audit metadata requires an explicit operation classification",
-        );
-      }
-      const operation = metadata ? property(metadata, "operation") : undefined;
-      writes.push({ resourceType, operation: operationValue(operation) });
     }
     ts.forEachChild(node, visit);
   };
@@ -340,6 +384,22 @@ describe("feature-owned audit operations", () => {
         operation: "new_item_operation",
       },
     ]);
+  });
+
+  test("classifies each entry of a batch audit write", () => {
+    const source = `recordAuditEvent(tx, [
+      {resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION},
+      ...items.map((item) => ({resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM, metadata: {operation: "new_item_operation"}})),
+    ]);`;
+    expect(verificationWritesWithoutPolicy(source)).toEqual([
+      {
+        resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
+        operation: "new_item_operation",
+      },
+    ]);
+    expect(() => auditedWrites("recordAuditEvent(tx, [...entries]);")).toThrow(
+      "Feature audit writes require a classified object payload",
+    );
   });
 
   test("requires an inspectable operation at the writer boundary", () => {
