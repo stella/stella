@@ -194,7 +194,7 @@ if (!databaseUrl || !runPostgresTests) {
                           return;
                         default: {
                           const exhaustive: never = mutation;
-                          return exhaustive;
+                          panic("Unexpected steward mutation", exhaustive);
                         }
                       }
                     },

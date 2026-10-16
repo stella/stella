@@ -245,7 +245,7 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
       );
       expect(outcome.isOk()).toBe(maySteward);
       if (outcome.isErr()) {
-        expect(String(outcome.error)).toMatch(/steward|lead|assigned/u);
+        expect(outcome.error.message).toMatch(/steward|lead|assigned/u);
         expect(await matterSnapshot(database)).toEqual(before);
       } else {
         const matter = await database.query<{ lead_user_id: string }>(
@@ -352,7 +352,9 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
         [id, lead],
       );
     }
-    const commit = await Result.tryPromise(() => database.exec("COMMIT"));
+    const commit = await Result.tryPromise(
+      async () => await database.exec("COMMIT"),
+    );
     expect(commit.isOk()).toBe(lead === MEMBER && assigned);
     if (commit.isErr()) {
       await database.exec("ROLLBACK");

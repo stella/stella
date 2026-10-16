@@ -1,3 +1,4 @@
+// parser-output-unchanged: Optional HTTP matter handover metadata and its leaf import leave ingestion adapter records and stop kinds unchanged.
 // parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
@@ -5,8 +6,8 @@
 // parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
 import { panic, TaggedError } from "better-result";
 
-import type { MatterStewardHandoverMatter } from "@stll/api-contract";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { MatterStewardHandoverMatter } from "@stll/api-contract/matter-visibility";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";

@@ -53,7 +53,7 @@ const createOrphan = async (tx: Transaction) => {
   return workspaceId;
 };
 
-const refuseStatus = (error: unknown, status: number) => {
+const refuseStatus = (error: unknown, status: HandlerError["status"]) => {
   expect(HandlerError.is(error)).toBe(true);
   if (!HandlerError.is(error)) {
     throw new TypeError("Expected a recovery refusal");

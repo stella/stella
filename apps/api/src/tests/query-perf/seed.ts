@@ -1,5 +1,7 @@
 import { type SQL, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { TransactionOf, WorkspaceScope } from "@/api/db/scoped";
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
@@ -72,6 +74,9 @@ const seedPlaceholderQueryPerf = async (
     "queryperforganization00000000001",
   );
   const userId = toSafeId<"user">("queryperfuser0000000000000000001");
+  const backgroundStewardId = toSafeId<"user">(
+    "queryperfuser0000000000000000002",
+  );
   const workspaceId = toSafeId<"workspace">(
     "01990000-0000-7000-8000-000000000001",
   );
@@ -89,14 +94,17 @@ const seedPlaceholderQueryPerf = async (
     await tx.execute(sql`INSERT INTO organization (id, name, slug, created_at)
       VALUES (${organizationId}, 'Query perf fixture', ${organizationId}, now())`);
     await tx.execute(sql`INSERT INTO "user" (id, name, email)
-      VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test')`);
+      VALUES (${userId}, 'Query perf fixture', 'query-perf@example.test'),
+        (${backgroundStewardId}, 'Background matter steward', 'query-perf-background@example.test')`);
     await tx.execute(sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
-      VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now())`);
-    await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference)
-      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf'),
-        (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background')`);
+      VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now()),
+        ('queryperfmember00000000000000002', ${organizationId}, ${backgroundStewardId}, 'member', now())`);
+    await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
+      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf', ${MATTER_VISIBILITY.assignedOnly}, ${userId}),
+        (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background', ${MATTER_VISIBILITY.assignedOnly}, ${backgroundStewardId})`);
     await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
-      VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId})`);
+      VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId}),
+        ('01990000-0003-7000-8000-000000000002', ${backgroundWorkspaceId}, ${backgroundStewardId})`);
     for (let first = 1; first <= documentCount; first += SEED_CHUNK_ROWS) {
       const last = Math.min(first + SEED_CHUNK_ROWS - 1, documentCount);
       // db-await-in-loop: bounded chunks keep each seed statement well inside the connection's statement timeout.

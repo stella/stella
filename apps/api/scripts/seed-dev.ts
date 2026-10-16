@@ -5239,7 +5239,7 @@ export async function seed(organizationId?: string, userId?: string) {
           .insert(workspaces)
           .values({
             visibility: defaultMatterVisibilityFor({
-              hasClient: ws.clientId !== null,
+              hasClient: true,
             }),
             id: ws.id,
             organizationId: ORG_ID,

@@ -392,7 +392,7 @@ export const recoverOrphanedMatterSteward = async (
   }
   const matter = await tx.query.workspaces.findFirst({
     columns: { leadUserId: true, visibility: true },
-    where: { id: workspaceId, organizationId },
+    where: { id: { eq: workspaceId }, organizationId: { eq: organizationId } },
   });
   if (!matter) {
     panic("Locked matter disappeared during steward recovery");

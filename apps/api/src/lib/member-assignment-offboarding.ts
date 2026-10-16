@@ -1469,7 +1469,10 @@ export const removeOrganizationMemberInTransaction = async (
   if (reassignTo) {
     const replacement = await tx.query.member.findFirst({
       columns: { id: true },
-      where: { organizationId, userId: reassignTo },
+      where: {
+        organizationId: { eq: organizationId },
+        userId: { eq: reassignTo },
+      },
     });
     if (reassignTo === userId || replacement === undefined) {
       abortTransaction(

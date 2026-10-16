@@ -25,7 +25,7 @@ import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
-import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract";
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -1556,11 +1556,12 @@ export const createAuth = (
             organizationId: brandPersistedOrganizationId(org.id),
             userId: brandPersistedUserId(updatedMember.userId),
             serverValidatedWorkspaceIds: [],
-          })((tx) =>
-            leadsAssignedOnlyMatter(tx, {
-              organizationId: brandPersistedOrganizationId(org.id),
-              userId: brandPersistedUserId(updatedMember.userId),
-            }),
+          })(
+            async (tx) =>
+              await leadsAssignedOnlyMatter(tx, {
+                organizationId: brandPersistedOrganizationId(org.id),
+                userId: brandPersistedUserId(updatedMember.userId),
+              }),
           ))
         ) {
           throw new APIError("BAD_REQUEST", {

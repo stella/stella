@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract/matter-visibility";
+
 import type { Transaction } from "@/api/db/root";
 import { createMembershipFence } from "@/api/lib/review-organization/reset";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -12,7 +14,7 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 // Row locks need two real sessions; PGlite runs one connection, so this
 // suite needs a real server. Rows are written by column so the suite runs on
-// the migrated schema and on a bare user/organization/member/workspaces slice.
+// the migrated schema and on a bare user/organization/member/workspaces/workspace_members slice.
 if (!databaseUrl || !enabled) {
   describe.skip("review organization membership fence (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
@@ -67,11 +69,16 @@ if (!databaseUrl || !enabled) {
           );
           // A matter insert checks its foreign key to the same row, so a
           // matter cannot appear while the sweep counts them either.
-          const matter = joiner2.sql`
-            INSERT INTO workspaces (id, organization_id, name, reference)
-            VALUES (${lateMatterId}, ${organizationId}, 'Late matter', 'LATE-1')`.then(
-            () => "created" as const,
-          );
+          const matter = joiner2.sql.begin(async (tx) => {
+            await tx`
+              INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
+              VALUES (${lateMatterId}, ${organizationId}, 'Late matter', 'LATE-1',
+                ${defaultMatterVisibilityFor({ hasClient: false })}, ${reviewUserId})`;
+            await tx`
+              INSERT INTO workspace_members (id, workspace_id, user_id)
+              VALUES (${Bun.randomUUIDv7()}, ${lateMatterId}, ${reviewUserId})`;
+            return "created" as const;
+          });
           const waited = await Promise.race([
             join,
             matter,

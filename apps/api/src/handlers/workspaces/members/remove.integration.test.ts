@@ -35,6 +35,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   authorizedMemberRole,
@@ -334,6 +335,11 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
               if (result.isOk()) {
                 expect.unreachable(
                   "Lead removal must be refused without authority or a successor",
+                );
+              }
+              if (!HandlerError.is(result.error)) {
+                expect.unreachable(
+                  "Lead removal must return a handler refusal",
                 );
               }
               expect(result.error.status).toBe(

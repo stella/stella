@@ -411,8 +411,8 @@ describe("keeping a steward when a lead leaves", () => {
       visibility: "assigned_only",
       members: [ids.userA1],
     });
-    const result = await Result.tryPromise(() =>
-      restore(workspaceId, ids.userA1),
+    const result = await Result.tryPromise(
+      async () => await restore(workspaceId, ids.userA1),
     );
     expect(result.isErr()).toBe(true);
     expect(await readLead(workspaceId)).toBe(ids.userA1);

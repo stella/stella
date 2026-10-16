@@ -2,7 +2,7 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "from": "0f0556ddff0a0353c8e9733fcd221854b54c55dc49a0fc05e42757c4b6ac48f3",
-    "to": "aa327ba04f6eb3561ddec1c1db69cb6032f1c69aa20c5801307ceb00d048e195",
+    "to": "9ea607fe410da304423d0417ed139b738a4822dbf239b3f8fd2e16addb0f21ec",
     "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {

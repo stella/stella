@@ -448,8 +448,9 @@ describe("matter visibility migration", () => {
   test("a writer that omits visibility gets the visibility the old rule implied, with its creator as lead", async () => {
     await using database = await migrated();
     // Without a usable creator, clientless creation is refused.
-    const missingCreator = await Result.tryPromise(() =>
-      database.exec(`
+    const missingCreator = await Result.tryPromise(
+      async () =>
+        await database.exec(`
       INSERT INTO workspaces (id, organization_id, client_id) VALUES
         ('00000000-0000-4000-8000-0000000000a5', '${ORG}', NULL);
     `),

@@ -1,17 +1,14 @@
-import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  lockMatterAccessAssignments,
-  lockTimerMatterAccessRows,
-  TIMER_MATTER_LOCK_SCOPE,
+  lockMemberAccessRow,
+  lockMatterAccessWorkspaceRows,
   lockWorkspaceLifecycle,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
-import { reachesMatterWithoutAssignmentSql } from "@/api/lib/workspaces/visibility";
 
 export const hasCurrentTimerMatterAccess = async ({
   organizationId,
@@ -25,42 +22,28 @@ export const hasCurrentTimerMatterAccess = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
   await lockWorkspaceLifecycle(tx, workspaceId);
-  // This predicate only preserves the timer's original lock scope, including
-  // its exemption for access without an assignment. The later database rule is
-  // the access decision.
-  const rows = sql`CASE
-    WHEN ${reachesMatterWithoutAssignmentSql(sql`organization_member.role`, sql`workspace.visibility`)} THEN ${TIMER_MATTER_LOCK_SCOPE.client}
-    WHEN EXISTS (
-      SELECT 1 FROM workspace_members AS workspace_member
-      WHERE workspace_member.workspace_id = workspace.id
-        AND workspace_member.user_id = ${userId}
-    ) THEN ${TIMER_MATTER_LOCK_SCOPE.assignment}
-    ELSE NULL
-  END`;
-  const lockScope = await lockTimerMatterAccessRows({
+  // Freeze membership before the matter: role changes already hold the member
+  // row, and their guards can then take the matter without an inverted wait.
+  const member = await lockMemberAccessRow({
     tx,
     organizationId,
     userId,
-    workspaceId,
-    lockScope: rows,
+    mode: "share",
   });
-  switch (lockScope) {
-    case null:
-      return false;
-    case TIMER_MATTER_LOCK_SCOPE.assignment:
-      await lockMatterAccessAssignments({
-        tx,
-        organizationId,
-        userId,
-        workspaceIds: [workspaceId],
-        mode: "share",
-      });
-      break;
-    case TIMER_MATTER_LOCK_SCOPE.client:
-      break;
-    default:
-      lockScope satisfies never;
-      return panic("Unknown timer matter lock scope");
+  if (member === undefined) {
+    return false;
+  }
+  // Assignment-loss guards lock the matter FOR UPDATE, so this one lock
+  // also serializes revocation without locking an assignment after its matter.
+  const matters = await lockMatterAccessWorkspaceRows({
+    tx,
+    organizationId,
+    workspaceIds: [workspaceId],
+    mode: "share",
+    where: eq(workspaces.status, "active"),
+  });
+  if (matters.length === 0) {
+    return false;
   }
   const reachableRows = await tx
     .select({ id: workspaces.id })

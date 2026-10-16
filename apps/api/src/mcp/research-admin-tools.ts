@@ -32,7 +32,10 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
@@ -956,9 +959,12 @@ const handleRemoveMember = async ({
       workspaceId,
       userId: brandPersistedUserId(userId),
       actorUserId: context.userId,
-      managesOrganizationMatters: hasManagementPermission(context.memberRole, {
-        workspace: ["update"],
-      }),
+      managesOrganizationMatters: hasManagementPermission(
+        mcpMemberAuthority(context),
+        {
+          workspace: ["update"],
+        },
+      ),
       reassignTo:
         reassignTo === undefined ? undefined : brandPersistedUserId(reassignTo),
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),

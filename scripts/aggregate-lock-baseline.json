@@ -295,15 +295,15 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "9fcbfa6512797103cec37e38896f11d4fe675476de3e17973c682a992aecd7c5",
+    "fingerprint": "9ea607fe410da304423d0417ed139b738a4822dbf239b3f8fd2e16addb0f21ec",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "aa327ba04f6eb3561ddec1c1db69cb6032f1c69aa20c5801307ceb00d048e195",
+    "fingerprint": "9fcbfa6512797103cec37e38896f11d4fe675476de3e17973c682a992aecd7c5",
     "count": 1,
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
+    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -1725,7 +1725,7 @@
     "file": "apps/api/src/handlers/seller-profiles/update.ts",
     "fingerprint": "5ffac904ba623fc6e5e375de08bef306b4e9c27b22c0de3934b7a0fd55d78c55",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/seller-profiles/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The same row lock now also reads vat_id and vat_payer so the VAT payer rule is checked against the locked row; no new acquisition."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/oauth-callback.ts",

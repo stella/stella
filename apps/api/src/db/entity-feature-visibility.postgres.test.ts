@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, count, eq, sql } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import { cents } from "@stll/money";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -77,8 +78,12 @@ describe.skipIf(!runPostgresTests)(
             VALUES (${userId}, 'Feature user', ${`${userId}@example.test`})`;
             await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${mintAuthProviderIdValue()}, ${organizationId}, ${userId}, 'owner', now())`;
-            await client`INSERT INTO workspaces (id, organization_id, name, reference)
-            VALUES (${workspaceId}, ${organizationId}, 'Feature matter', ${workspaceId})`;
+            await client.begin(async (tx) => {
+              await tx`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
+                VALUES (${workspaceId}, ${organizationId}, 'Feature matter', ${workspaceId}, ${defaultMatterVisibilityFor({ hasClient: false })}, ${userId})`;
+              await tx`INSERT INTO workspace_members (id, workspace_id, user_id)
+                VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
+            });
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             VALUES (${factId}, ${workspaceId}, 'task', 'fact', 'Reference fact')`;
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name, parent_id)
