@@ -2,6 +2,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import type { EditorView } from "@tiptap/pm/view";
 import { panic } from "better-result";
 
 import { CHAT_LINK_ATTRIBUTES, CHAT_LINK_CLASS_NAME } from "./link";
@@ -40,6 +41,26 @@ const decorateChatLinks = (doc: ProseMirrorNode) => {
   return DecorationSet.create(doc, decorations);
 };
 
+const openComposerLink = (view: EditorView, event: MouseEvent) => {
+  if (
+    event.type === "click"
+      ? event.button !== 0 || !(event.metaKey || event.ctrlKey)
+      : event.button !== 1
+  ) {
+    return false;
+  }
+  if (!(event.target instanceof Element)) {
+    return false;
+  }
+  const anchor = event.target.closest("a[data-chat-composer-link]");
+  if (!(anchor instanceof HTMLAnchorElement) || !view.dom.contains(anchor)) {
+    return false;
+  }
+  event.preventDefault();
+  window.open(anchor.href, CHAT_LINK_ATTRIBUTES.target, "noopener,noreferrer");
+  return true;
+};
+
 /** View-only links: saved drafts and submitted HTML retain the original bytes. */
 export const ChatComposerLinks = Extension.create({
   name: "stllChatComposerLinks",
@@ -70,12 +91,11 @@ export const ChatComposerLinks = Extension.create({
               case "composing":
                 return {
                   status: "composing",
-                  /* oxlint-disable unicorn/no-array-method-this-argument -- ProseMirror DecorationSet.map takes a mapping and document, not an Array thisArg. */
                   decorations: current.decorations.map(
+                    // oxlint-disable-next-line unicorn/no-array-method-this-argument -- ProseMirror DecorationSet.map takes a mapping and document, not an Array thisArg.
                     transaction.mapping,
                     transaction.doc,
                   ),
-                  /* oxlint-enable unicorn/no-array-method-this-argument */
                 };
               case "ready":
                 return {
@@ -109,25 +129,8 @@ export const ChatComposerLinks = Extension.create({
               });
               return false;
             },
-            click: (view, event) => {
-              if (!(event.target instanceof Element)) {
-                return false;
-              }
-              const anchor = event.target.closest("a[data-chat-composer-link]");
-              if (
-                !(anchor instanceof HTMLAnchorElement) ||
-                !view.dom.contains(anchor)
-              ) {
-                return false;
-              }
-              event.preventDefault();
-              window.open(
-                anchor.href,
-                CHAT_LINK_ATTRIBUTES.target,
-                "noopener,noreferrer",
-              );
-              return true;
-            },
+            click: openComposerLink,
+            auxclick: openComposerLink,
           },
         },
       }),

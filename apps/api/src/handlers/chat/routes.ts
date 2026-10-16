@@ -8,6 +8,7 @@ import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
@@ -47,6 +48,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
   // of `permissions`. See tests/security/route-auth-invariants.test.ts.
   .guard({ validateAuth: true })
+  .get("/link-icons/:hostname", getLinkIcon.handler, {
+    params: getLinkIcon.config.params,
+    permissions: getLinkIcon.config.permissions,
+  })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
