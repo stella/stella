@@ -2002,9 +2002,9 @@ test.each(Object.values(boundaryFaults))(
         expect(boundary).toHaveLength(sanctionsSourceIds().length);
         expect(
           boundary.map(({ attributes }) => [
-            attributes?.stage,
-            attributes?.phase,
-            attributes?.source,
+            attributes?.["stage"],
+            attributes?.["phase"],
+            attributes?.["source"],
           ]),
         ).toEqual(
           sanctionsSourceIds().map((source) => [
