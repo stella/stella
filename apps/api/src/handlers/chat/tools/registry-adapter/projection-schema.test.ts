@@ -20,7 +20,9 @@ import {
   chatEntityRef,
   chatRef,
   containsRawUuid,
+  contentText,
   deriveRefMediationEntry,
+  MASKED_CONTENT_ID,
   passthroughId,
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
   projectionBranch,
@@ -395,6 +397,38 @@ describe("projectForChat", () => {
     }).unwrap();
 
     expect(projected).toEqual({ sourceUrl: justiceCzUrl });
+  });
+
+  test("contentText masks each embedded UUID and keeps the rest of the text", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      text: contentText(),
+    });
+
+    const projected = project({
+      payload: {
+        text: `Ref ${ROGUE_UUID} and ${WS_UUID.toUpperCase()}.`,
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      text: `Ref ${MASKED_CONTENT_ID} and ${MASKED_CONTENT_ID}.`,
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+  });
+
+  test("contentText without a UUID is forwarded verbatim", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      text: v.nullable(contentText()),
+    });
+
+    expect(
+      project({ payload: { text: "Plain text." }, schema }).unwrap(),
+    ).toEqual({ text: "Plain text." });
+    expect(project({ payload: { text: null }, schema }).unwrap()).toEqual({
+      text: null,
+    });
   });
 
   test("sibling workspace source reads the raw payload, not the hydrated output", () => {
