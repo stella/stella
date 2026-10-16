@@ -1326,6 +1326,7 @@
       "loadError": "Nepavyko įkelti elementų"
     },
     "messageTimestampToday": "Šiandien, {time}",
+    "messageUnavailable": "Šio pranešimo negalima parodyti.",
     "mockModel": {
       "description": "Iš anksto paruošti vietinio imituojamo modelio atsakymai",
       "label": "Imituojamas DI"
@@ -1491,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Pridedamas komentaras",
+      "add_matter_member": "Pridėti bylos narį",
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",
       "ares_lookup_company": "Ieškoma įmonės duomenų",
       "ares_search_companies": "Ieškoma įmonių duomenų",
@@ -1547,7 +1549,6 @@
       "list_stories": "Išvardijamos dokumento dalys",
       "list_templates": "Šablonų sąrašas",
       "load-skill": "Skaitomos gairės",
-      "manage_organization": "Tvarkyti organizaciją",
       "read-contact": "Skaitomas kontaktas",
       "read-content-across-matters": "Skaitomas turinys keliose bylose",
       "read-skill-resource": "Skaitomos gairės",
@@ -1557,6 +1558,7 @@
       "read_section": "Skaitomas skyrius",
       "read_story": "Skaitoma dokumento dalis",
       "remember": "Įsimenama",
+      "remove_matter_member": "Pašalinti bylos narį",
       "reply_comment": "Atsakoma į komentarą",
       "request_secret": "Prašoma privačių prisijungimo duomenų",
       "resolve_comment": "Išsprendžiamas komentaras",
@@ -1590,6 +1592,7 @@
       "suggest_template_fields": "Siūlomi šablono laukai",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",
+      "update_organization_settings": "Atnaujinti komandos nustatymus",
       "update_reader_annotation": "Redaguoti paryškinimą ar komentarą",
       "use-browser": "Jūsų naršyklės naudojimas",
       "use_connector_secret": "Naudojami jungties prisijungimo duomenys",

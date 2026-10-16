@@ -125,7 +125,7 @@ describe("MCP gateway skill tools", () => {
     });
 
     const tools = installedOnly(
-      await loadVisibleSkillTools({ context, mode: "default" }),
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
     );
 
     expect(tools.map((tool) => tool.exposedName)).toEqual([
@@ -154,7 +154,7 @@ describe("MCP gateway skill tools", () => {
     });
 
     const tools = installedOnly(
-      await loadVisibleSkillTools({ context, mode: "default" }),
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
     );
 
     expect(tools).toHaveLength(1);
@@ -175,7 +175,7 @@ describe("MCP gateway skill tools", () => {
     });
 
     const tools = installedOnly(
-      await loadVisibleSkillTools({ context, mode: "default" }),
+      await loadVisibleSkillTools({ context, mode: "advanced" }),
     );
 
     const names = tools.map((tool) => tool.exposedName);
@@ -215,7 +215,7 @@ describe("MCP gateway skill tools", () => {
 
     const rejection: unknown = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
     }).then(
       () => null,
       (error: unknown) => error,
@@ -236,7 +236,7 @@ describe("MCP gateway skill tools", () => {
 
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__beta",
     });
 
@@ -256,12 +256,12 @@ describe("MCP gateway skill tools", () => {
 
     const writer = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:knowledge_write"],
     });
     const reader = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
 
@@ -350,14 +350,7 @@ describe("MCP gateway skill tools", () => {
       status: "unavailable",
       missingTools: ["read_capability"],
     });
-    expect(defaultResult?.type).toBe("internal");
-    if (defaultResult?.type !== "internal") {
-      throw new TypeError("expected the default skill refusal to be internal");
-    }
-    expect(defaultResult.result).toMatchObject({
-      status: "error",
-      error: { code: "feature_disabled" },
-    });
+    expect(defaultResult).toBeNull();
   });
 
   test("a compound tool counts only with every scope it needs", async () => {
@@ -374,12 +367,12 @@ describe("MCP gateway skill tools", () => {
 
     const withoutTemplates = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:documents_write"],
     });
     const withTemplates = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills", "stella:documents_write", "stella:templates"],
     });
 
@@ -400,7 +393,7 @@ describe("MCP gateway skill tools", () => {
 
     const resolved = await resolveSkillTool({
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__playbook_builder",
     });
 
@@ -420,11 +413,11 @@ describe("MCP gateway skill tools", () => {
 
     expect(
       installedOnly(
-        await loadVisibleSkillTools({ context, mode: "default" }),
+        await loadVisibleSkillTools({ context, mode: "advanced" }),
       ).map(({ name }) => name),
     ).toEqual(["auto-skill"]);
     expect(
-      installedOnly(await loadSkillPrompts({ context, mode: "default" })).map(
+      installedOnly(await loadSkillPrompts({ context, mode: "advanced" })).map(
         ({ exposedName }) => exposedName,
       ),
     ).toEqual(["skill__manual_skill"]);
@@ -441,7 +434,7 @@ describe("MCP gateway skill tools", () => {
         recordSkillReadAudit: async () => undefined,
         resolveSkillTool,
       }),
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__manual_skill",
     });
 
@@ -458,7 +451,7 @@ describe("MCP gateway skill tools", () => {
     expect(
       await resolveSkillTool({
         context,
-        mode: "default",
+        mode: "advanced",
         toolName: "skill__missing",
       }),
     ).toBeNull();
