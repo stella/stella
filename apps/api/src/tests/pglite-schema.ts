@@ -17,6 +17,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261015090000_matter_access_rule_function",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -269,6 +274,7 @@ export const installPgliteWorkspaceAccessObjects = async (
 ): Promise<void> => {
   const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
+    MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH,
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {
@@ -496,6 +502,28 @@ export const installPgliteReaderAnswerRls = async (
     }
     await db.execute(sql.raw(statement));
   }
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteCitationDoctrineRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261014174500_case_law_citation_doctrine",
+      "migration.sql",
+    ),
+  );
+  const statement = statements.find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "case_law_citation_doctrine_reviews" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Citation doctrine FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
 };
 
 /** Apply the committed setting omitted by schema push. */

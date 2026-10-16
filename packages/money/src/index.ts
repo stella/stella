@@ -179,7 +179,7 @@ export const addCents = <A extends string, B extends A = A>(
   // A's brand reattached, which is sound because the parameter types
   // already proved both operands share currency A.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  cents((a as CurrencyCents<A>) + (b as CurrencyCents<B>)) as CurrencyCents<A>;
+  cents(a + b) as CurrencyCents<A>;
 
 /**
  * Per-currency accumulator for aggregating money across rows that may carry

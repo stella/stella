@@ -387,6 +387,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: pendingId },
         async (subject) => subject.id,
       ),
@@ -394,6 +395,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: publishedId },
         async (subject) => subject.id,
       ),
@@ -425,6 +427,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: groupPendingId },
         async (subject) => subject.id,
       ),

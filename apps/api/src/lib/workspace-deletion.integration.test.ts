@@ -27,6 +27,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -353,7 +354,9 @@ beforeAll(async () => {
   });
   const retainedMessageId = createSafeId<"chatMessage">();
   await testDb.insert(chatMessages).values({
-    content: { data: [{ text: "Retained chat", type: "text" }], version: 1 },
+    content: toPersistedChatMessageContentV3({
+      data: [{ content: "Retained chat", type: "text" }],
+    }),
     id: retainedMessageId,
     role: "user",
     threadId: retainedThread.threadId,
