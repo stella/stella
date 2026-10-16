@@ -1010,7 +1010,16 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchCount: 1,
                         mismatchedNames: [A],
                       });
-                      expect(stdout.mock.calls).toHaveLength(1);
+                      // The no-op event, then the schema phase's duration.
+                      expect(stdout.mock.calls).toHaveLength(2);
+                      expect(
+                        JSON.parse(String(stdout.mock.calls.at(1)?.at(0))),
+                      ).toMatchObject({
+                        event: "migrate.phase_duration",
+                        phase: "schema",
+                        outcome: "stale_bundle_noop",
+                        appliedCount: 0,
+                      });
                       const noopLine = String(stdout.mock.calls.at(0)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({
