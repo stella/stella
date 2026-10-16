@@ -111,6 +111,7 @@ const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   citationCount: hit.citationCount,
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
+  match: hit.match,
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 

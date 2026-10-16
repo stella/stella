@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import type { FtsSearchConfig } from "@/api/lib/legal-search/fts-config";
 import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
@@ -12,12 +13,14 @@ type PgFtsSearchSqlRefs = {
 };
 
 type PgFtsSearchSql = {
+  coverage: SQL;
   headlineQuery: SQL;
   predicate: SQL;
   rank: SQL;
 };
 
 type BuildPgFtsSearchSqlArgs = {
+  match?: "all" | "any";
   configs: readonly FtsSearchConfig[];
   query: string;
   refs: PgFtsSearchSqlRefs;
@@ -25,6 +28,7 @@ type BuildPgFtsSearchSqlArgs = {
 
 export const buildPgFtsSearchSql = ({
   configs,
+  match = "all",
   query,
   refs,
 }: BuildPgFtsSearchSqlArgs): PgFtsSearchSql => {
@@ -33,19 +37,38 @@ export const buildPgFtsSearchSql = ({
   ];
 
   const branches = configs.flatMap((config) => {
-    const tsQuery = buildPlainSearchTsQuery(query, {
+    const options = {
       regconfig: sql`${config.regconfig}::regconfig`,
       useUnaccent: config.useUnaccent,
-    });
+    };
+    const termQueries = [
+      ...new Set(tokenizeCorpusFreeText(query).map(({ value }) => value)),
+    ].map((term) => buildPlainSearchTsQuery(term, options));
+    const tsQuery =
+      match === "any" && termQueries.length > 0
+        ? sql`(${sql.join(termQueries, sql` || `)})`
+        : buildPlainSearchTsQuery(query, options);
+    const coverage =
+      termQueries.length === 0
+        ? sql`0`
+        : sql`(${sql.join(
+            termQueries.map(
+              (termQuery) =>
+                sql`CASE WHEN ${refs.vector} @@ ${termQuery} THEN 1 ELSE 0 END`,
+            ),
+            sql` + `,
+          )})`;
 
     return [
       {
         condition: buildConfigCondition(config, knownLanguages, refs),
         tsQuery,
+        coverage,
       },
       {
         condition: buildStoredRegconfigCompatibilityCondition(config, refs),
         tsQuery,
+        coverage,
       },
     ];
   });
@@ -53,6 +76,12 @@ export const buildPgFtsSearchSql = ({
   const fallbackQuery = buildPlainSearchTsQuery("", {});
 
   return {
+    coverage: sql`(${sqlCaseFragment({
+      branches: branches.map(
+        ({ condition, coverage }) => sql`WHEN ${condition} THEN ${coverage}`,
+      ),
+      fallback: sql`0`,
+    })})`,
     headlineQuery: sql`(${sqlCaseFragment({
       branches: branches.map(
         ({ condition, tsQuery }) => sql`WHEN ${condition} THEN ${tsQuery}`,

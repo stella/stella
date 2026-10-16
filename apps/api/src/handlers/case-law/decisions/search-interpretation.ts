@@ -195,6 +195,7 @@ type SearchAnswerOptions = {
   interpretation: DecisionQueryInterpretation;
   /** Hits this page carries. */
   hitCount: number;
+  partialHitCount?: number;
   /**
    * Whether this page can speak for the whole result set. A continuation
    * page cannot: it comes back empty at the end of every result set that had
@@ -216,11 +217,13 @@ export const searchAnswer = ({
   body,
   interpretation,
   hitCount,
+  partialHitCount = 0,
   countsResultSet,
 }: SearchAnswerOptions): SearchAnswer => ({
   queryUsed: interpretation.queryUsed,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
+    partialHitCount,
     filters: narrowingFilters(body),
     emptyResultSet: countsResultSet && hitCount === 0,
   }),

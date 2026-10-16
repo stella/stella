@@ -1074,6 +1074,8 @@ type Messages = {
         "hint": "Drop or widen a filter and search again.";
         "message": "Nothing matched under the filters you narrowed with.";
       };
+      "partialMatch": "Partial match";
+      "partialMatches": "Partial matches for: <bdi>{query}</bdi>";
       "resultsFor": "Results for: <bdi>{query}</bdi>";
       "searchEveryWord": "Search every word";
     };

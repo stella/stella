@@ -302,6 +302,7 @@ export const decisionsPageOptions = ({
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            match: h.match,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
             createdAt: h.createdAt,

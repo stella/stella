@@ -200,6 +200,11 @@ const ResultTableRow = ({
               )}
             </PreviewCardPopup>
           </PreviewCard>
+          {row.type === "search" && row.match === "some_terms" && (
+            <span className="text-muted-foreground text-xs">
+              {t("partialMatch")}
+            </span>
+          )}
         </div>
       </TableCell>
       <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">

@@ -1071,6 +1071,8 @@
         "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
         "message": "Niekas neatitiko pasirinktų filtrų."
       },
+      "partialMatch": "Dalinė atitiktis",
+      "partialMatches": "Dalinės atitiktys užklausai: <bdi>{query}</bdi>",
       "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
       "searchEveryWord": "Ieškoti visų žodžių"
     },

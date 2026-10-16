@@ -1071,6 +1071,8 @@
         "hint": "Noņemiet vai paplašiniet filtru un meklējiet vēlreiz.",
         "message": "Nekas neatbilst izvēlētajiem filtriem."
       },
+      "partialMatch": "Daļēja atbilstība",
+      "partialMatches": "Daļējas atbilstības vaicājumam: <bdi>{query}</bdi>",
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },

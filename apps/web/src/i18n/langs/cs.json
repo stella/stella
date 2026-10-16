@@ -1071,6 +1071,8 @@
         "hint": "Zrušte nebo rozšiřte filtr a hledejte znovu.",
         "message": "Zvoleným filtrům nic neodpovídá."
       },
+      "partialMatch": "Částečná shoda",
+      "partialMatches": "Částečné shody pro: <bdi>{query}</bdi>",
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },

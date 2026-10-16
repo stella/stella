@@ -82,6 +82,7 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
+  partialMatchesAppendedWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
@@ -1962,6 +1963,8 @@ type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
  */
 type MergedCaseLawHit = {
   hit: CaseLawSearchHit;
+  /** `all_terms` when any query returned the decision as holding every word. */
+  match: CaseLawSearchHit["match"];
   matchedQueries: number[];
   rank: number;
 };
@@ -1990,14 +1993,24 @@ const mergeCaseLawSearchHits = (
     for (const [rank, hit] of hits.entries()) {
       const seen = merged.get(hit.decisionId);
       if (seen === undefined) {
-        merged.set(hit.decisionId, { hit, matchedQueries: [queryIndex], rank });
+        merged.set(hit.decisionId, {
+          hit,
+          match: hit.match,
+          matchedQueries: [queryIndex],
+          rank,
+        });
         continue;
       }
       // Queries are walked in index order, so this stays ascending.
       seen.matchedQueries.push(queryIndex);
-      if (rank < seen.rank) {
+      // A full match represents the decision over any partial one: its hit
+      // (excerpt) and rank stand, and ranks compare only within one class,
+      // so a promoted decision never sorts by its partial rank.
+      const promotes = hit.match === "all_terms" && seen.match === "some_terms";
+      if (promotes || (hit.match === seen.match && rank < seen.rank)) {
         seen.hit = hit;
         seen.rank = rank;
+        seen.match = hit.match;
       }
     }
   }
@@ -2005,6 +2018,11 @@ const mergeCaseLawSearchHits = (
   // is an opaque key, and all the order has to be is total and stable.
   return [...merged.values()].toSorted(
     (left, right) =>
+      // Partial matches follow every full match: within one query they are
+      // appended after it, and ranks of different queries are not comparable
+      // across that line.
+      Number(left.match === "some_terms") -
+        Number(right.match === "some_terms") ||
       left.rank - right.rank ||
       right.matchedQueries.length - left.matchedQueries.length ||
       (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
@@ -2364,8 +2382,40 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
+type PartialMatchWarningOptions = {
+  merged: readonly MergedCaseLawHit[];
+  queryIndex: number;
+  countsStrictSet: boolean;
+};
+
+/**
+ * `partial_matches_appended` for a phrasing, counted on the merged response
+ * the caller reads: a hit another phrasing matched in full is returned as
+ * `all_terms`, so it is not counted here.
+ */
+const partialMatchWarnings = ({
+  merged,
+  queryIndex,
+  countsStrictSet,
+}: PartialMatchWarningOptions): AgentCaseLawSearchWarning[] => {
+  const partial = merged.filter(
+    (result) =>
+      result.match === "some_terms" &&
+      result.matchedQueries.includes(queryIndex),
+  ).length;
+  return partial === 0
+    ? []
+    : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
+};
+
+/** What a phrasing's page says beyond its filters, read from the page alone. */
+const phrasingAnswerWarnings = (
+  options: ManyRequiredTermsOptions,
+): AgentCaseLawSearchWarning[] => manyRequiredTermsWarnings(options);
+
 const caseLawSearchResult = ({
   hit,
+  match,
   matchedQueries,
 }: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
   const resource = resourceRef({
@@ -2398,6 +2448,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    match,
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
@@ -2584,6 +2635,39 @@ const listSearchCaseLawProvision = async ({
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
+type CaseLawSearchCallOutcome =
+  | { exhausted: true }
+  | {
+      exhausted: false;
+      result: Parameters<typeof readCaseLawSearchAnswer>[0];
+    };
+
+/**
+ * Each phrasing's page, or the first failure. A query that failed sinks the
+ * call: a merged page silently missing one phrasing reads as "that phrasing
+ * found nothing", which is a different answer.
+ */
+const readCaseLawQueryPages = (
+  outcomes: readonly CaseLawSearchCallOutcome[],
+  cursor: string | undefined,
+):
+  | Extract<CaseLawSearchAnswer, { type: "failed" }>
+  | { type: "pages"; pages: CaseLawQueryOutcome[] } => {
+  const pages: CaseLawQueryOutcome[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.exhausted) {
+      pages.push({ exhausted: true });
+      continue;
+    }
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer;
+    }
+    pages.push({ exhausted: false, page: answer.page });
+  }
+  return { type: "pages", pages };
+};
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2723,21 +2807,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   });
 
-  // A query that failed sinks the call: a merged page silently missing one
-  // phrasing reads as "that phrasing found nothing", which is a different
-  // answer.
-  const pages: CaseLawQueryOutcome[] = [];
-  for (const outcome of outcomes) {
-    if (outcome.exhausted) {
-      pages.push({ exhausted: true });
-      continue;
-    }
-    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
-    if (answer.type === "failed") {
-      return answer.result;
-    }
-    pages.push({ exhausted: false, page: answer.page });
+  const read = readCaseLawQueryPages(outcomes, cursor);
+  if (read.type === "failed") {
+    return read.result;
   }
+  const { pages } = read;
 
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.exhausted ? [] : outcome.page.hits)),
@@ -2782,14 +2856,21 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         warnings: [
           ...filterWarnings,
           ...provisionRead.warnings,
-          ...outcome.page.warnings.map((warning) =>
-            withFacetValues(warning, values),
-          ),
-          ...manyRequiredTermsWarnings({
+          // Recount partial matches after deduplication: another phrasing
+          // may have promoted a partial hit to a full match.
+          ...outcome.page.warnings
+            .filter(({ code }) => code !== "partial_matches_appended")
+            .map((warning) => withFacetValues(warning, values)),
+          ...phrasingAnswerWarnings({
             guidance,
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
+          }),
+          ...partialMatchWarnings({
+            merged,
+            queryIndex: index,
+            countsStrictSet: single !== undefined,
           }),
         ],
       };

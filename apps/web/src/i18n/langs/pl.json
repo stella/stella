@@ -1071,6 +1071,8 @@
         "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
         "message": "Nic nie odpowiada wybranym filtrom."
       },
+      "partialMatch": "Częściowe dopasowanie",
+      "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },

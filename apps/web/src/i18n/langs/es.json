@@ -1071,6 +1071,8 @@
         "hint": "Quite o amplíe un filtro y vuelva a buscar.",
         "message": "Nada coincide con los filtros aplicados."
       },
+      "partialMatch": "Coincidencia parcial",
+      "partialMatches": "Coincidencias parciales para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
