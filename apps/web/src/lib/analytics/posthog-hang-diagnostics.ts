@@ -3,21 +3,20 @@ import type { CaptureResult } from "posthog-js";
 
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import { isPersistedUiStateFingerprintKey } from "@/lib/persisted-ui-state";
-import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
+import { isPersistedUiStateFingerprintKey } from "@/lib/analytics/web-hang/persisted-ui-state";
 
 const BUILD = /^[\w.+-]{1,100}$/u;
 const STATIC_SCRIPT = /^\/assets\/[\w.-]{1,200}\.m?js$/u;
 const MAX_SCRIPTS = 10;
 const MAX_FRAME_DURATION = 60 * 60 * 1000;
-const SAFE_INVOKERS = new Set([
-  "Window.requestAnimationFrame",
-  "Window.setTimeout",
-  "Window.setInterval",
-  "Window.requestIdleCallback",
-  "Response.json",
-  "Promise.then",
-]);
+const SAFE_INVOKERS = {
+  "Window.requestAnimationFrame": true,
+  "Window.setTimeout": true,
+  "Window.setInterval": true,
+  "Window.requestIdleCallback": true,
+  "Response.json": true,
+  "Promise.then": true,
+} as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -59,7 +58,7 @@ const sanitizeScripts = (value: unknown, appUrl: string) => {
       {
         sourceURL,
         invoker:
-          typeof invoker === "string" && SAFE_INVOKERS.has(invoker)
+          typeof invoker === "string" && Object.hasOwn(SAFE_INVOKERS, invoker)
             ? invoker
             : "?",
         // Engines infer function names from computed keys, including user content.
@@ -69,10 +68,17 @@ const sanitizeScripts = (value: unknown, appUrl: string) => {
   });
 };
 
-export const sanitizeHangDiagnosticEvent = (
-  event: CaptureResult,
-  appUrl: string,
-): CaptureResult | null => {
+type SanitizeHangDiagnosticEventOptions = {
+  event: CaptureResult;
+  appUrl: string;
+  routeTemplates: readonly string[];
+};
+
+export const sanitizeHangDiagnosticEvent = ({
+  event,
+  appUrl,
+  routeTemplates,
+}: SanitizeHangDiagnosticEventOptions): CaptureResult | null => {
   const properties: Record<string, unknown> = event.properties;
   if (event.event === WEB_ANALYTICS_EVENTS.longAnimationFrame) {
     const duration = properties["duration"];
@@ -100,7 +106,7 @@ export const sanitizeHangDiagnosticEvent = (
   if (
     typeof routeTemplate !== "string" ||
     (routeTemplate !== "unknown" &&
-      !WEB_ROUTE_TEMPLATES.some((template) => template === routeTemplate)) ||
+      !routeTemplates.some((template) => template === routeTemplate)) ||
     (phase !== "boot" && phase !== "session") ||
     typeof build !== "string" ||
     !BUILD.test(build) ||

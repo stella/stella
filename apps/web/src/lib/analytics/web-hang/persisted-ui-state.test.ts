@@ -5,7 +5,7 @@ import {
   PERSISTED_UI_STATE_NAMES,
   PERSISTED_UI_STATE_PREFIXES,
   resetPersistedUiState,
-} from "@/lib/persisted-ui-state";
+} from "@/lib/analytics/web-hang/persisted-ui-state";
 
 const memoryStorage = (entries: [string, string][]): Storage => {
   const values = new Map(entries);

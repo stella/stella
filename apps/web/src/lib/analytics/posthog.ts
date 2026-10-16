@@ -715,6 +715,7 @@ export const signedInAnonymousId = (userId: string): string =>
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -729,6 +730,7 @@ export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
@@ -782,7 +784,11 @@ export const createPostHogAnalytics = ({
           return routeErrorLifecycleSanitizer?.(event) ?? null;
         case WEB_ANALYTICS_EVENTS.pageHangSuspected:
         case WEB_ANALYTICS_EVENTS.longAnimationFrame:
-          return sanitizeHangDiagnosticEvent(event, env.VITE_PUBLIC_APP_URL);
+          return sanitizeHangDiagnosticEvent({
+            event,
+            appUrl: env.VITE_PUBLIC_APP_URL,
+            routeTemplates,
+          });
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:

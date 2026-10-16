@@ -14,7 +14,7 @@ import { useState } from "react";
 import { useInspectorPaneWidth } from "@stll/ui/inspector";
 
 import { deviceStorage } from "@/lib/account/browser-storage";
-import type { PersistedDeviceUiStateKey } from "@/lib/persisted-ui-state";
+import type { PersistedDeviceUiStateKey } from "@/lib/analytics/web-hang/persisted-ui-state";
 
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
   "stella:inspector-pane-width:v2" satisfies PersistedDeviceUiStateKey;

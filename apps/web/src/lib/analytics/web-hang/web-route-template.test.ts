@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createWebRouteTemplateResolver,
   resolveWebRouteTemplate,
-} from "@/lib/web-route-template";
+} from "@/lib/analytics/web-hang/web-route-template";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 
 describe("route templates before app initialization", () => {

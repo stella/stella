@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
-import { getWebHangDetector } from "@/lib/web-hang-detector";
+import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
 
 export const WebHangRecoveryNotice = ({
   detector = getWebHangDetector(),

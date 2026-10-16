@@ -11,7 +11,7 @@ export const routeTemplateManifest = (tree: string): string => {
     return panic("Generated route tree has no full-path interface");
   }
   const templates = Array.from(
-    body.matchAll(/^\s+['"]([^'"]+)['"]: /gmu),
+    body.matchAll(/^[\t ]+['"]([^'"]+)['"]: /gmu),
     (match) => match.at(1) ?? panic("Route template capture is missing"),
   );
   if (templates.length === 0) {

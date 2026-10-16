@@ -1,4 +1,4 @@
-import { bootClientRuntime } from "@/lib/client-bootstrap";
+import { bootClientRuntime } from "@/lib/analytics/web-hang/client-bootstrap";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 
 // The runtime chunk can fail before any of its modules evaluate.

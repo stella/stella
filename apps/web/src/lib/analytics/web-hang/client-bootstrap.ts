@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { startWebHangDetector } from "@/lib/web-hang-detector";
+import { startWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
 
 type ClientBootstrapOptions = {
   loadRuntime: () => Promise<unknown>;

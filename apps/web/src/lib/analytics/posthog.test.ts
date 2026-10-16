@@ -135,6 +135,7 @@ describe("PostHog browser analytics adapter", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
+      routeTemplates: ["/chat/$threadId"],
     });
     const diagnostic = {
       routeTemplate: "/chat/$threadId",
@@ -193,6 +194,30 @@ describe("PostHog browser analytics adapter", () => {
         properties: { ...diagnostic, routeTemplate: "unknown" },
       })?.properties?.["routeTemplate"],
     ).toBe("unknown");
+  });
+
+  test("hang diagnostics accept only the route templates supplied by their router", () => {
+    createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+      routeTemplates: ["/isolated/$routeId"],
+    });
+    for (const routeTemplate of ["/isolated/$routeId", "/chat/$threadId"]) {
+      const result = initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.pageHangSuspected,
+        properties: {
+          routeTemplate,
+          phase: "session",
+          build: "test",
+          restoredState: [],
+        },
+      });
+      if (routeTemplate === "/isolated/$routeId") {
+        expect(result?.properties?.["routeTemplate"]).toBe(routeTemplate);
+      } else {
+        expect(result).toBeNull();
+      }
+    }
   });
 
   test("allows long animation frames with bounded static script attribution only", () => {
@@ -279,8 +304,8 @@ describe("PostHog browser analytics adapter", () => {
       "https://staging.stll.app/",
       "https://staging.stll.app/app/",
     ]) {
-      const result = sanitizeHangDiagnosticEvent(
-        {
+      const result = sanitizeHangDiagnosticEvent({
+        event: {
           event: WEB_ANALYTICS_EVENTS.longAnimationFrame,
           uuid: "normalized-origin-frame",
           properties: {
@@ -301,7 +326,8 @@ describe("PostHog browser analytics adapter", () => {
           },
         },
         appUrl,
-      );
+        routeTemplates: [],
+      });
       expect(result?.properties["scripts"]).toEqual([
         {
           invoker: "Window.requestAnimationFrame",

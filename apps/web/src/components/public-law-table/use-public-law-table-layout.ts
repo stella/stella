@@ -6,8 +6,8 @@ import { layoutForSurface } from "@/components/public-law-table/public-law-table
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
+import type { PersistedDeviceUiStateKey } from "@/lib/analytics/web-hang/persisted-ui-state";
 import { ClientOperationError } from "@/lib/errors/client";
-import type { PersistedDeviceUiStateKey } from "@/lib/persisted-ui-state";
 
 /**
  * Where one public-law table keeps its arrangements and what they mean. A

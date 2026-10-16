@@ -10,13 +10,13 @@ import {
   isPersistedUiStateFingerprintKey,
   persistedUiStateFingerprint,
   resetPersistedUiState,
-} from "@/lib/persisted-ui-state";
+} from "@/lib/analytics/web-hang/persisted-ui-state";
+import { resolveWebRouteTemplate } from "@/lib/analytics/web-hang/web-route-template";
 import { createEphemeralId } from "@/lib/uuid";
-import { resolveWebRouteTemplate } from "@/lib/web-route-template";
 
 export const HANG_HEARTBEAT_MS = 3000;
 export const HANG_STALE_MS = 15_000;
-export const LOAF_SAMPLE_RATE = 0.1;
+const LOAF_SAMPLE_RATE = 0.1;
 export const LOAF_SESSION_LIMIT = 5;
 export const MAX_HANG_MARKERS = 32;
 export const HANG_MARKER_PREFIX = "stella:web-hang:";

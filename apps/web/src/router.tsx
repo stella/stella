@@ -18,11 +18,11 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
+import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
-import { getWebHangDetector } from "@/lib/web-hang-detector";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
@@ -30,7 +30,7 @@ import { routeTree } from "@/routeTree.gen";
 enableMapSet();
 
 export function getRouter() {
-  const analyticsValue = createAnalyticsValue();
+  const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
