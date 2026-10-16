@@ -2957,13 +2957,15 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         toolName: "search_case_law",
         args: { country: "SVK", queries: ["synthetic"] },
+        expectedDomain: "caseLaw",
       },
       {
         toolName: "search_legislation",
         args: { country: "SVK", query: "synthetic" },
+        expectedDomain: "legislation",
       },
     ];
-    for (const call of calls) {
+    for (const { expectedDomain, ...call } of calls) {
       const result = await handleMcpToolCall({
         ...call,
         context: createContext(),
@@ -2972,8 +2974,13 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toMatchObject({
         status: "unavailable",
+        domain: expectedDomain,
         country: "SVK",
         reason: "pending_public",
+      });
+      expect(result.content).toContainEqual({
+        type: "text",
+        text: JSON.stringify(result.structuredContent),
       });
       expect(result.structuredContent).not.toHaveProperty("results");
     }
