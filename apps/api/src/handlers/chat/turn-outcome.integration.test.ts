@@ -18,10 +18,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import {
-  CHAT_TURN_INTERACTION_TYPES,
-  CHAT_TURN_STATUSES,
-} from "@/api/handlers/chat/chat-turn-state";
+import { CHAT_TURN_INTERACTION_TYPES } from "@/api/handlers/chat/chat-turn-state";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import { runSubagent } from "@/api/handlers/chat/subagent-runner";
@@ -37,6 +34,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";

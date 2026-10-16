@@ -2163,7 +2163,10 @@ describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const unavailable = publicCountryUnavailable(country, "search");
+      const unavailable = publicCountryUnavailable(country, {
+        domain: "legislation",
+        surface: "search",
+      });
       const listed = await listStatutesHandler({ country }, legislationDb);
       if (unavailable === null) {
         const page = expectPage(listed);

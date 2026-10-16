@@ -24,7 +24,8 @@ const readHandlerSource = async (file: string) =>
 describe("public statute routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) =>
+        PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
@@ -32,7 +33,7 @@ describe("public statute routes", () => {
       const urls = [
         `/law/statutes?country=${country}`,
         // A pages-public country's sitemap is a page route, and it is served.
-        ...(PUBLIC_COUNTRY_CAPABILITIES[country] === "pages_public"
+        ...(PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "pages_public"
           ? []
           : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
@@ -44,7 +45,7 @@ describe("public statute routes", () => {
         expect(await response.json()).toMatchObject({
           status: "unavailable",
           country,
-          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country].legislation,
         });
       }
     },
