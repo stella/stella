@@ -182,6 +182,14 @@ export function isModeled({
   if (output === null && !needsPlan(definition)) {
     return false;
   }
+  // A job gated by a plan output must test that output: otherwise it runs in
+  // cases where the merge gate believes it is not planned.
+  if (
+    output !== null &&
+    !condition.includes(`needs.ci-plan.outputs.${output} == 'true'`)
+  ) {
+    return false;
+  }
   let residue = condition;
   for (const atom of predicateAtoms(job, output)) {
     residue = residue.replaceAll(atom, "");

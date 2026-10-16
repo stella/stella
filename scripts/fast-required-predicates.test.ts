@@ -89,6 +89,17 @@ describe("fast-required predicates", () => {
     expect(unmodeledIds(source)).toEqual(["ci-tests"]);
   });
 
+  test("a job that no longer tests its own gating output fails", () => {
+    const source = editedCi((jobs) => {
+      const target = job(jobs, "ci-tests");
+      const condition = v.parse(v.string(), target["if"]);
+      const atom = "needs.ci-plan.outputs.package_checks_required == 'true'";
+      expect(condition).toContain(atom);
+      target["if"] = condition.replaceAll(atom, "always()");
+    });
+    expect(unmodeledIds(source)).toEqual(["ci-tests"]);
+  });
+
   test("another job's output atom fails", () => {
     const source = editedCi((jobs) => {
       const target = job(jobs, "ci-tests");
