@@ -2,7 +2,9 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { distance } from "@stll/fuzzy-search";
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
@@ -10,7 +12,7 @@ import {
 import { normalizeUnicode, stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { AliasQuality, SanctionsEntry } from "./entry";
-import { buildNameIndex, matchNames, MAX_SCREENING_WORK } from "./name-match";
+import { buildNameIndex, matchNames } from "./name-match";
 import { nameReading, nameTokens } from "./normalise";
 
 const config = () => propertyConfig({ seed: propertySeed() });
@@ -38,6 +40,37 @@ const word = fc.oneof(
     .map((letters) => letters.join("")),
 );
 const words = fc.array(word, { minLength: 1, maxLength: 4 });
+// Inflected, transcribed and joined spellings of shared stems, so generated
+// queries land within edit budgets of many listed tokens at once.
+const inflectedWord = fc.constantFrom(
+  "Novák",
+  "Nováková",
+  "Novákovi",
+  "Novakem",
+  "Nowak",
+  "Dvořák",
+  "Dvořáková",
+  "Dvorak",
+  "Mohammed",
+  "Muhammad",
+  "Mokhammed",
+  "Abdul",
+  "Rahman",
+  "Abdulrahman",
+  "Ivanov",
+  "Ivanova",
+  "Ivanovich",
+  "Iwanow",
+  "Ali",
+  "Al",
+  "Müller",
+  "Mueller",
+  "Smith",
+  "Smiht",
+);
+const inflectedName = fc
+  .array(inflectedWord, { minLength: 1, maxLength: 4 })
+  .map((parts) => parts.join(" "));
 const fullName = words.map((parts) => parts.join(" "));
 const spacing = fc.constantFrom(" ", "  ", "\t", "\n", "\u00a0", "\u2003");
 
@@ -64,23 +97,17 @@ const entry = (
 const matchesFor = (
   index: ReturnType<typeof buildNameIndex>,
   query: string,
+  tau = 0,
 ) => {
   const result = matchNames({
     index,
     reading: nameReading(query, "person"),
-    ceiling: Math.sqrt,
-    rankEntry: (_entry, nameScore) => nameScore,
-    cutoff: 0,
-    work: {
-      remaining: MAX_SCREENING_WORK,
-      exhausted: false,
-      selection: "complete",
-    },
+    tau,
+    work: { remaining: Number.MAX_SAFE_INTEGER, exhausted: false },
   });
   if (result === undefined) {
     panic("Small generated names exceeded the screening work budget");
   }
-  expect(result.truncated).toBe(false);
   return result.matches;
 };
 
@@ -93,20 +120,19 @@ const score = (listed: string, query: string) =>
   matchesFor(buildNameIndex([entry(listed)]), query).get(0)?.score ?? 0;
 
 describe("name matching (properties)", () => {
-  test("shares raw and folded vocabularies only when every token is unchanged", () => {
-    const plainIndex = buildNameIndex([entry("Robert Martin")]);
-    expect(plainIndex.raw).toBe(plainIndex.folded);
-
-    const accentedIndex = buildNameIndex([entry("José Alvarez")]);
-    expect(accentedIndex.raw).not.toBe(accentedIndex.folded);
-    expect(accentedIndex.raw.ids).not.toBe(accentedIndex.folded.ids);
-    expect(matchesFor(accentedIndex, "José Alvarez").get(0)?.score).toBe(1);
+  test("matches raw and folded spellings of a listed name", () => {
+    const accentedIndex = buildNameIndex([entry("José Mikhailovich")]);
+    expect(accentedIndex.raw.strings.get(1)).toBe("mikhailovich");
+    expect(accentedIndex.folded.strings.get(1)).not.toBe("mikhailovich");
+    expect(matchesFor(accentedIndex, "José Mikhailovich").get(0)?.score).toBe(
+      1,
+    );
     expect(
-      matchesFor(accentedIndex, "Jose Alvarez").get(0)?.score,
+      matchesFor(accentedIndex, "Jose Michajlovic").get(0)?.score,
     ).toBeGreaterThan(0);
   });
 
-  test("keeps supplementary-plane letters in compact character histograms", () => {
+  test("keeps supplementary-plane letters in spelling lookups", () => {
     const index = buildNameIndex([entry("𐐨obert Smith")]);
     expect(matchesFor(index, "𐐨obert Smith").get(0)?.score).toBe(1);
     expect(matchesFor(index, "𐐨obertt Smith").get(0)?.score).toBeGreaterThan(0);
@@ -316,5 +342,149 @@ describe("name matching (properties)", () => {
       );
     },
     propertyTestTimeout(5000),
+  );
+
+  test(
+    "lexicon lookups equal a brute-force edit-distance scan of each form",
+    () => {
+      assertProperty(
+        "lexicon lookups equal a brute-force edit-distance scan of each form",
+        fc.property(
+          fc.array(inflectedName, { minLength: 1, maxLength: 12 }),
+          inflectedName,
+          (names, query) => {
+            const index = buildNameIndex(names.map((value) => entry(value)));
+            const texts = new Set([
+              ...nameTokens(query, "person").flatMap(({ raw, folded }) => [
+                raw,
+                folded,
+              ]),
+              ...names.flatMap((value) =>
+                nameTokens(value, "person").map(({ raw }) => raw),
+              ),
+            ]);
+            for (const text of texts) {
+              const found = index.candidates.search(
+                {
+                  tokens: [{ form: 0, text, weight: 1 }],
+                  units: [0, 1].map((form) => ({
+                    form,
+                    text,
+                    positions: [0],
+                  })),
+                },
+                { tau: 2, quality: 1, maxCost: Number.MAX_SAFE_INTEGER },
+              );
+              expect(found.exhausted).toBe(false);
+              for (const [form, vocabulary] of [
+                index.folded,
+                index.raw,
+              ].entries()) {
+                const actual = new Map<number, number>();
+                for (
+                  let match = 0;
+                  match < found.similarities.length;
+                  match++
+                ) {
+                  if (found.matchKeys[match * 3] === form) {
+                    actual.set(
+                      found.matchKeys[match * 3 + 2] ?? panic("Missing id"),
+                      found.similarities[match] ?? panic("Missing score"),
+                    );
+                  }
+                }
+                const expected = new Map<number, number>();
+                for (let id = 0; id < vocabulary.strings.length; id += 1) {
+                  const candidate = vocabulary.strings.get(id);
+                  const lengths = [text, candidate].map(
+                    (value) => Array.from(value).length,
+                  );
+                  const shorter = Math.min(...lengths);
+                  let budget = 0;
+                  if (shorter >= 4) {
+                    budget = shorter <= 5 ? 1 : 2;
+                  }
+                  const edits = distance(
+                    text,
+                    candidate,
+                    "damerau-levenshtein",
+                  );
+                  if (edits <= budget) {
+                    expected.set(id, 1 - edits / Math.max(...lengths));
+                  }
+                }
+                expect([...actual.keys()].toSorted((a, b) => a - b)).toEqual(
+                  [...expected.keys()].toSorted((a, b) => a - b),
+                );
+                for (const [id, similarity] of expected) {
+                  expect(actual.get(id)).toBeCloseTo(similarity, 12);
+                }
+              }
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "candidates keep every alias whose score reaches the name-score floor",
+    () => {
+      assertProperty(
+        "candidates keep every alias whose score reaches the name-score floor",
+        fc.property(
+          fc.array(
+            fc.tuple(
+              fc.array(inflectedName, { minLength: 1, maxLength: 3 }),
+              fc.constantFrom<AliasQuality>("strong", "weak", "unknown"),
+            ),
+            { minLength: 1, maxLength: 20 },
+          ),
+          fc.oneof(inflectedName, fc.constantFrom("A. Novák", "J Smith")),
+          (listed, query) => {
+            const index = buildNameIndex(
+              listed.map(([names, quality], position) => ({
+                ...entry(names.at(0) ?? panic("Missing generated name")),
+                sourceId: String(position),
+                names: names.map((name) => ({ name, quality })),
+              })),
+            );
+            // At a zero floor the index returns every alias, and its lookups
+            // equal brute force (above), so this is exhaustive scoring.
+            const all = index.candidates.search(
+              {
+                tokens: [{ form: 0, text: "x", weight: 1 }],
+                units: [],
+              },
+              { tau: 0, quality: 1, maxCost: Number.MAX_SAFE_INTEGER },
+            );
+            expect(all.survivors.length).toBe(index.aliases.length);
+            const oracle = matchesFor(index, query, 0);
+            // Each score is the tightest floor at which its entry must stay.
+            for (const tau of new Set(
+              [...oracle.values()].map((match) => match.score),
+            )) {
+              const actual = matchesFor(index, query, tau);
+              for (const [entryIndex, match] of oracle) {
+                if (match.score >= tau) {
+                  expect(actual.get(entryIndex)).toEqual(match);
+                }
+              }
+              // Below the floor only a lower-scoring alias may remain.
+              for (const [entryIndex, match] of actual) {
+                const best = oracle.get(entryIndex);
+                if (match.score >= tau) {
+                  expect(best).toEqual(match);
+                } else {
+                  expect(match.score).toBeLessThanOrEqual(best?.score ?? 0);
+                }
+              }
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(10_000),
   );
 });
