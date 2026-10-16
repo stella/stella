@@ -1,6 +1,9 @@
-import { ADMITTED_PUBLIC_COUNTRIES } from "./public-country-capability";
+import {
+  ADMITTED_PUBLIC_COUNTRIES,
+  PAGES_PUBLIC_COUNTRIES,
+} from "./public-country-capability";
 
-/** Statute jurisdictions admitted by the shared public capability. */
+/** Statute jurisdictions admitted to search, the API search surfaces and MCP. */
 export const PUBLIC_LEGISLATION_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES;
 
 export type PublicLegislationCountry =
@@ -25,3 +28,9 @@ export const publicLegislationCountry = (
     null
   );
 };
+
+/** Statute jurisdictions whose pages are served, listed in sitemaps and crawlable. */
+export const PUBLIC_LEGISLATION_PAGE_COUNTRIES = PAGES_PUBLIC_COUNTRIES;
+
+export const isPublicLegislationPageCountry = (country: string): boolean =>
+  PUBLIC_LEGISLATION_PAGE_COUNTRIES.some((candidate) => candidate === country);

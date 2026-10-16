@@ -845,6 +845,14 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: true,
     readOnlyHint: false,
   },
+  annotationReasons: {
+    readOnlyHint:
+      "Records template execution, fill history, and usage before returning the rendered output.",
+    destructiveHint:
+      "Renders a transient result without overwriting or deleting an existing document.",
+    openWorldHint:
+      "Registry fields query external business registries; AI fields and conditions can call model providers.",
+  },
   access: "write",
   accountAccess: "standard",
   permissions: { type: "all", permissions: { template: ["use"] } },

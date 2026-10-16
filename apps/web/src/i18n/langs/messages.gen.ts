@@ -201,6 +201,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
@@ -776,6 +777,7 @@ type Messages = {
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}";
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}";
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}";
+        "retryAfter": "You can try again after {time}.";
         "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}";
         "unavailable": "AI analysis is not available for this decision.";
       };
@@ -1322,6 +1324,7 @@ type Messages = {
       "overflow": "+{count, number}";
       "unnamed": "{count, plural, one {and # more} other {and # more}}";
     };
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.";
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1353,6 +1356,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";
@@ -1518,6 +1522,7 @@ type Messages = {
     };
     "tool": {
       "add_comment": "Adding comment";
+      "add_matter_member": "Add matter member";
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
@@ -1574,7 +1579,6 @@ type Messages = {
       "list_stories": "Listing document parts";
       "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
-      "manage_organization": "Manage organization";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
@@ -1584,6 +1588,7 @@ type Messages = {
       "read_section": "Reading a section";
       "read_story": "Reading a document part";
       "remember": "Remembering";
+      "remove_matter_member": "Remove matter member";
       "reply_comment": "Replying to comment";
       "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
@@ -1617,6 +1622,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_organization_settings": "Update team settings";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
       "use_connector_secret": "Using connector credential";
@@ -2102,6 +2108,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -2581,6 +2588,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
@@ -3676,6 +3687,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -4537,6 +4552,25 @@ type Messages = {
     };
     "tokenHelp": "How to get a token";
     "viewOnGithub": "View on GitHub";
+  };
+  "readerAnswers": {
+    "budgetError": "The answer budget is exhausted.";
+    "citation": "¶{paragraph}";
+    "expand": "Expand answer";
+    "explain": "Explain";
+    "externalCitation": "{decision} · ¶{paragraph}";
+    "followUp": "Ask a follow-up";
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}";
+    "loading": "Generating answer…";
+    "minimise": "Minimise answer";
+    "modelError": "The model could not finish this answer.";
+    "networkError": "The connection was interrupted. Try again.";
+    "regenerate": "Regenerate answer";
+    "selectionError": "Select text within a single paragraph (up to 2,000 characters).";
+    "send": "Send follow-up";
+    "share": "Share with team";
+    "timeoutError": "The answer timed out. Try again.";
+    "title": "Answer about selected text";
   };
   "routeError": {
     "backToMatters": "Return to matters";
@@ -5584,7 +5618,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {

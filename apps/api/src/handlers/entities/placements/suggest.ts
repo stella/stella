@@ -88,7 +88,8 @@ const generatedSummaryAISchema = v.strictObject({
   language: v.nullable(v.string()),
 });
 
-const generatedSummariesAISchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const generatedSummariesAISchema = v.strictObject({
   summaries: v.array(generatedSummaryAISchema),
 });
 
@@ -100,7 +101,8 @@ const suggestionAIOutputSchema = v.strictObject({
   documentType: v.string(),
 });
 
-const suggestionsAIOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const suggestionsAIOutputSchema = v.strictObject({
   suggestions: v.array(suggestionAIOutputSchema),
   deleteFolders: v.array(
     v.strictObject({

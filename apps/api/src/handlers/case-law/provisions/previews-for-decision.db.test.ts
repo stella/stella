@@ -104,6 +104,7 @@ const previewsFor = async (rows: ReturnType<typeof citation>[]) =>
     page: pageOf(rows),
     decisionDate: DECISION_DATE,
     legislationDb,
+    surface: "pages",
   });
 
 beforeAll(
