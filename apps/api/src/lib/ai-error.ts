@@ -647,6 +647,7 @@ export const aiHandlerError = (
           kind: error.kind,
           requestId: error.requestId,
           providerDiagnostic: error.providerDiagnostic,
+          retryAfterMs: error.retryAfterMs,
           facts:
             error.providerStatus === undefined
               ? undefined

@@ -15,6 +15,7 @@ import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
   screenSanctionsSubject,
+  type SanctionsScreening,
   SanctionsSubjectError,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
@@ -145,6 +146,41 @@ describe("anonymous sanctions search", () => {
       expect(body.lists.every((list) => list.reason === reason)).toBe(true);
     },
   );
+
+  test("preserves incomplete outcomes through the public response schema", async () => {
+    const partial = {
+      ...screening,
+      status: "incomplete",
+      lists: [
+        {
+          source: "us-sdn",
+          issuer: "US",
+          classification: "informational",
+          status: "incomplete",
+          reason: null,
+          editionId: "edition-sdn",
+          publishedAt: "2026-09-29",
+          verifiedAt: screening.checkedAt,
+          pendingUpdate: null,
+          totalMatches: 0,
+          truncated: true,
+          possibleMatches: [],
+        },
+      ],
+    } satisfies SanctionsScreening;
+    const screen = mock<typeof screenSanctionsSubject>(async () =>
+      Result.ok(partial),
+    );
+    const { app } = appWith(screen);
+    const response = await app.handle(
+      request({ type: "organization", name: "Synthetic Company" }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ...partial,
+      retryAfterSeconds: null,
+    });
+  });
 
   test("is a safe anonymous POST and labels lists without firm jurisdictions", async () => {
     const screen = clearScreen();

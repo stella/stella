@@ -624,31 +624,37 @@ describe("warm screening", () => {
       entityType: "organisation",
     } as const;
     const options = { cutoff: DEFAULT_CUTOFF };
-    expect(screen(realistic, query, options).unwrap()).toEqual(
-      legacyScreen(legacy, query, options).unwrap(),
-    );
     // Work units are the matcher's own deterministic cost, so the budget
     // holds on a loaded runner where wall-clock ratios do not. Cached lookups
     // charge their original work, so warm and cold queries spend the same.
-    const minimalWork = () => {
-      let low = 1;
-      let high = MAX_SCREENING_WORK;
-      while (low < high) {
-        const middle = Math.floor((low + high) / 2);
-        if (screen(realistic, query, { ...options, maxWork: middle }).isOk()) {
-          high = middle;
-        } else {
-          low = middle + 1;
-        }
+    // The reported spend is the exact minimal budget, so no search over
+    // maxWork is needed: a few screenings keep this inside the test timeout.
+    const spentWork = () => {
+      const spent: number[] = [];
+      const result = screen(realistic, query, {
+        ...options,
+        onWork: (usage) => {
+          spent.push(usage.spent);
+        },
+      }).unwrap();
+      expect(spent).toHaveLength(1);
+      const [usage] = spent;
+      if (usage === undefined) {
+        throw new Error("Missing work usage");
       }
-      return low;
+      return { result, spent: usage };
     };
-    const cold = minimalWork();
-    expect(minimalWork()).toBe(cold);
-    console.info(JSON.stringify({ minimalWork: cold }));
+    const cold = spentWork();
+    expect(cold.result).toEqual(legacyScreen(legacy, query, options).unwrap());
+    expect(spentWork().spent).toBe(cold.spent);
+    const bounded = (maxWork: number) =>
+      screen(realistic, query, { ...options, maxWork });
+    expect(bounded(cold.spent).isOk()).toBe(true);
+    expect(bounded(cold.spent - 1).isErr()).toBe(true);
+    console.info(JSON.stringify({ minimalWork: cold.spent }));
     // Measured at 1,603,468 units; the allowance admits small ranking changes,
     // and any larger growth needs a deliberate change to this budget.
-    expect(cold).toBeLessThanOrEqual(1_650_000);
+    expect(cold.spent).toBeLessThanOrEqual(1_650_000);
   });
 
   test("warm screening work stays bounded for repeated common query tokens", () => {

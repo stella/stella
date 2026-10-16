@@ -259,6 +259,8 @@ for (const [locale, messages] of [
             nextCursor: null,
             previews: [],
             status: { type: "legacy" },
+            capability: { type: "supported", languages: ["cs"] },
+            pendingSince: null,
             generation: "0",
             publishedProjectionDigest: null,
           } satisfies Page,
