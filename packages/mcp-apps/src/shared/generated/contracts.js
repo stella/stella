@@ -156,25 +156,25 @@ Caused by: ${o}`;
     *[Symbol.iterator]() {
       return (
         yield* ve(this),
-        m("Unreachable: Err yielded in Panic but generator continued", this)
+        I("Unreachable: Err yielded in Panic but generator continued", this)
       );
     }
   };
-var m = (e, r) => {
+var I = (e, r) => {
     throw new at({ message: e, cause: r });
   },
   x = (e, r) => {
     try {
       return e();
     } catch (o) {
-      throw m(r, o);
+      throw I(r, o);
     }
   },
   B = async (e, r) => {
     try {
       return await e();
     } catch (o) {
-      throw m(r, o);
+      throw I(r, o);
     }
   };
 var ct = class e {
@@ -210,7 +210,7 @@ var ct = class e {
     return x(() => r.err(this.error), "match err handler threw");
   }
   unwrap(r) {
-    return m(r ?? `Unwrap called on Err: ${String(this.error)}`, this.error);
+    return I(r ?? `Unwrap called on Err: ${String(this.error)}`, this.error);
   }
   unwrapOr(r) {
     return r;
@@ -242,7 +242,7 @@ var ct = class e {
   *[Symbol.iterator]() {
     return (
       yield this,
-      m(
+      I(
         "Unreachable: Err yielded in Result.gen but generator continued",
         this.error,
       )
@@ -301,7 +301,7 @@ Caused by: ${et}`;
       *[Symbol.iterator]() {
         return (
           yield* ve(this),
-          m(
+          I(
             "Unreachable: Err yielded in TaggedError but generator continued",
             this,
           )
@@ -319,7 +319,7 @@ var ut = E(2, (e, r) => {
   try {
     return o(e);
   } catch (d) {
-    return m("matchError handler threw", d);
+    return I("matchError handler threw", d);
   }
 });
 var On = class extends w("UnhandledException") {
@@ -426,19 +426,19 @@ var _e = _.strictObject({
 var Se = ["document", "folder", "task", "message", "link"];
 var St = ["relevance", "newest"],
   nr = St[0];
-var It = ["short", "medium", "long"],
-  rr = It[0];
-var Ie = { EXACT: "exact", AT_LEAST: "at-least", ESTIMATE: "estimate" },
+var mt = ["short", "medium", "long"],
+  rr = mt[0];
+var me = { EXACT: "exact", AT_LEAST: "at-least", ESTIMATE: "estimate" },
   N = { EXACT: "exact", ESTIMATE: "estimate", NOT_COUNTED: "not_counted" },
   ir = { type: N.NOT_COUNTED };
-var me = ["function_words_optional", "no_hits", "no_hits_filtered"],
+var Ie = ["function_words_optional", "no_hits", "no_hits_filtered"],
   sr = ["matter", "contact", "case-law", ...Se, "chat"];
 var Te = { type: "complete" },
   H = { type: "truncated", reason: "exclusion_budget" };
 import * as u from "valibot";
-var mt = () =>
+var It = () =>
     "(?<=\\s|^)(?:\\p{L} (?:\\p{L} ){2,}\\p{L})(?: ?[,:;.!?])?(?=\\s|$)",
-  be = () => new RegExp(mt(), "gu"),
+  be = () => new RegExp(It(), "gu"),
   Tt = / {2,}/gu,
   At = / /gu,
   Ae,
@@ -529,7 +529,7 @@ var P = s.strictObject({
   Lt = s.strictObject({
     ...P.entries,
     value: h(),
-    countType: s.picklist(Object.values(Ie)),
+    countType: s.picklist(Object.values(me)),
   }),
   wt = s.strictObject({ tierLabel: s.picklist(C), courts: s.array(P) }),
   Ne = (e) =>
@@ -591,7 +591,7 @@ var P = s.strictObject({
             paginationOutcome: s.optional(V),
             warnings: s.array(
               s.strictObject({
-                code: s.picklist([...me, ...Oe]),
+                code: s.picklist([...Ie, ...Oe]),
                 message: s.string(),
                 hint: s.string(),
               }),
@@ -847,7 +847,7 @@ var He = (e) => {
           ),
         };
       default:
-        return m(`Unhandled block: ${String(e)}`);
+        return I(`Unhandled block: ${String(e)}`);
     }
   };
 var ie = t.array(t.lazy(() => U)),
@@ -1154,7 +1154,7 @@ var oe = ["consolidation", "promulgated", "unversioned"],
   fi = [...L["never-in-force"], ...L["invalid-window"], ...L.withdrawn],
   Sn = { consolidation: !0, promulgated: !1, unversioned: !0 },
   Ci = oe.filter((e) => Sn[e]);
-var I = {
+var m = {
     found: "found",
     notFound: "not_found",
     uncoveredDate: "uncovered_date",
@@ -1162,9 +1162,9 @@ var I = {
     textWithheld: "text_withheld",
     invalid: "invalid",
   },
-  ae = [I.notFound, I.uncoveredDate, I.provisionNotFound, I.textWithheld],
-  Ri = [I.found, ...ae, I.invalid];
-var In = {
+  ae = [m.notFound, m.uncoveredDate, m.provisionNotFound, m.textWithheld],
+  Ri = [m.found, ...ae, m.invalid];
+var mn = {
     expressionKind: c.picklist(oe),
     windowDisposition: c.picklist(Je),
     windowDispositionBasis: c.nullable(c.picklist(Object.values(L).flat())),
@@ -1181,7 +1181,7 @@ var In = {
             source_url: c.optional(S()),
             documentId: h(),
             resourceName: h(),
-            status: c.literal(I.found),
+            status: c.literal(m.found),
             text: c.string(),
             nextTextCursor: c.nullable(h()),
             truncated: c.boolean(),
@@ -1208,7 +1208,7 @@ var In = {
               c.strictObject({ message: c.string(), path: c.string() }),
             ),
             message: c.string(),
-            status: c.literal(I.invalid),
+            status: c.literal(m.invalid),
           }),
         ),
       ]),
@@ -1222,16 +1222,16 @@ var In = {
     resourceName: h(),
     versionValidFrom: c.nullable(c.string()),
     versionValidTo: c.nullable(c.string()),
-    ...In,
+    ...mn,
   },
-  mn = c.strictObject({
+  In = c.strictObject({
     ...ce,
     items: c.array(
       c.variant("status", [
         v(
           c.strictObject({
             ...Ze,
-            status: c.literal(I.found),
+            status: c.literal(m.found),
             text: c.string(),
             nextTextCursor: c.nullable(h()),
             truncated: c.boolean(),
@@ -1241,7 +1241,7 @@ var In = {
           c.strictObject({
             ...Ze,
             message: c.string(),
-            status: c.literal(I.textWithheld),
+            status: c.literal(m.textWithheld),
           }),
         ),
       ]),
@@ -1321,7 +1321,7 @@ var O = q.options[1].pipe[0],
 export {
   gn as APP_DECISION_BLOCKS_SCHEMA,
   vn as APP_OPEN_DECISION_SCHEMA,
-  mn as APP_PROVISION_HISTORY_SCHEMA,
+  In as APP_PROVISION_HISTORY_SCHEMA,
   _n as APP_PROVISION_PREVIEW_SCHEMA,
   Bi as APP_RESOLVE_SCHEMA,
   ji as APP_SEARCH_SCHEMA,
