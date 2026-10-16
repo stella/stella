@@ -117,12 +117,12 @@ type RunFinishReason = RunFinishedChunk["finishReason"];
 
 /**
  * Whether a finish keeps its own reading when the response also spent its
- * output ceiling. A clean stop is the provider saying the answer ended, and
- * a tool call is a turn the engine continues; every other finish (a
- * filtered response, none reported) is read as the ceiling that cut it. A
- * `stop` stands only when the provider named it: an answered step whose
- * reason no table lists is also finished as `stop`, and that one says
- * nothing about where the answer ended.
+ * output ceiling. A finish the provider named stands: a clean stop says the
+ * answer ended, a tool call is a turn the engine continues, and a filtered
+ * response is the provider's decision about the content, which spent usage
+ * cannot overrule. Only a finish that says nothing about where the answer
+ * ended (none reported, or a reason no table lists, which an answered step
+ * also finishes as `stop`) is read as the ceiling that cut it.
  */
 const finishStandsAgainstCeiling = (chunk: RunFinishedChunk): boolean => {
   const reason: RunFinishReason = chunk.finishReason;
@@ -131,8 +131,8 @@ const finishStandsAgainstCeiling = (chunk: RunFinishedChunk): boolean => {
       return recordedStopReasonOf(chunk) !== UNRECOGNIZED_STOP_REASON;
     case "tool_calls":
     case "length":
-      return true;
     case "content_filter":
+      return true;
     case null:
     case undefined:
       return false;
@@ -158,10 +158,10 @@ const finishStandsAgainstCeiling = (chunk: RunFinishedChunk): boolean => {
  * its trailing `RUN_FINISHED` gives the finish the usage the stop lacked.
  *
  * Given the request's `ceiling`, the usage a terminal event reports is
- * evidence too: a response that spent the whole ceiling was cut by it, even
- * where the provider labels the stop otherwise (a filtered or unfinished
- * response, a reason it does not list) or ends without a reason. A clean
- * `stop` or a tool call keeps its own finish.
+ * evidence too: a response that spent the whole ceiling and whose finish
+ * says nothing about where it ended (no reason, or one no table lists) was
+ * cut by it. A finish the provider named (a clean `stop`, a tool call, a
+ * filtered response) keeps its own reading.
  *
  * @yields Every chunk of the run, with a ceiling stop read as `length`.
  */

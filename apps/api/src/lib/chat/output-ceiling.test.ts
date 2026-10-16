@@ -18,6 +18,7 @@ import {
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createTestState } from "@/api/tests/helpers/test-state";
@@ -173,6 +174,7 @@ afterAll(() => {
 const generate = async (
   keySource: keyof typeof KEY_SOURCES,
   maxOutputTokens: number,
+  finishPolicy: TanStackTextFinishPolicy = "require-complete",
 ) => {
   sent.length = 0;
   const result = await Result.tryPromise(
@@ -181,7 +183,7 @@ const generate = async (
         admission: testModelAdmission(organizationId),
         caching: { enabled: false, reason: "org-disabled" },
         dataClass: "customer",
-        finishPolicy: "require-complete",
+        finishPolicy,
         managedAIResidency: "eu",
         maxOutputTokens,
         orgAIConfig: KEY_SOURCES[keySource].orgAIConfig,
@@ -212,13 +214,7 @@ describe("an answer cut at its output ceiling", () => {
   // The provider labels the stop `length`, labels it otherwise (with a
   // reason no table lists, too), or ends the stream without a label; the
   // usage it reports shows the ceiling spent.
-  const LABELS = [
-    "length",
-    "content_filter",
-    "error",
-    "provider_specific_stop",
-    null,
-  ] as const;
+  const LABELS = ["length", "error", "provider_specific_stop", null] as const;
 
   for (const label of LABELS) {
     test(`reads as an incomplete answer on both key sources when labelled ${String(label)}`, async () => {
@@ -243,12 +239,26 @@ describe("an answer cut at its output ceiling", () => {
     });
   }
 
-  test("keeps the provider's own label beside the finish it was read as", async () => {
+  test("keeps an explicit moderation at the ceiling a moderated answer", async () => {
+    // Spent usage cannot overrule the provider's own word on the content, so
+    // a policy that accepts a ceiling stop still rejects this answer.
     script.answer = reasoningSpendsTheCeiling("content_filter");
-    expect(failureOf(await generate("byok", 64)).finish).toEqual({
-      finish: "length",
-      providerStopReason: "content_filter",
-    });
+    for (const finishPolicy of [
+      "require-complete",
+      "allow-output-ceiling",
+    ] as const) {
+      const result = await generate("byok", 64, finishPolicy);
+      if (Result.isError(result)) {
+        expect(result.error.cause).toBeInstanceOf(ModelOutputModeratedError);
+      }
+      expect(failureOf(result)).toEqual({
+        name: "ModelOutputModeratedError",
+        finish: {
+          finish: "content_filter",
+          providerStopReason: "content_filter",
+        },
+      });
+    }
   });
 
   test("keeps an answer with an unlisted stop under the ceiling", async () => {
@@ -393,7 +403,7 @@ describe("compacting a long thread", () => {
   });
 
   test("keeps the newest history and says so when the summary hits its ceiling", async () => {
-    script.answer = reasoningSpendsTheCeiling("content_filter");
+    script.answer = reasoningSpendsTheCeiling(null);
     const outcomes = [];
     for (const keySource of ["byok", "managed"] as const) {
       const errorSpy = spyOn(logger, "error");
@@ -411,7 +421,6 @@ describe("compacting a long thread", () => {
           expect.objectContaining({
             "ai.error_kind": "output_incomplete",
             "ai.finish_reason": "length",
-            "ai.provider_stop_reason": "content_filter",
           }),
         ],
       ]);
