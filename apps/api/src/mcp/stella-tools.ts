@@ -230,6 +230,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
+import { searchNotesForCall } from "./search-notes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -2567,14 +2568,17 @@ const listSearchCaseLawProvision = async ({
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
-    searches: [
-      {
-        query: provisionText,
-        queryUsed: page.queryUsed,
-        paginationOutcome: page.paginationOutcome,
-        warnings: [...filterWarnings, ...page.warnings],
-      },
-    ],
+    searches: searchNotesForCall(
+      [
+        {
+          query: provisionText,
+          queryUsed: page.queryUsed,
+          paginationOutcome: page.paginationOutcome,
+          warnings: [...filterWarnings, ...page.warnings],
+        },
+      ],
+      [],
+    ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
     results: merged.map(caseLawSearchResult),
@@ -2798,7 +2802,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: first.exhausted ? null : first.page.facets,
-    searches,
+    searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: pages.some(
       (outcome) =>

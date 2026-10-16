@@ -22,7 +22,7 @@ const identityFields = [
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,
   v.object({
-    ...v.pick(search, ["nextCursor", "nextStep", "headnotes"]).entries,
+    ...v.pick(search, ["nextCursor", "headnotes"]).entries,
     results: v.array(
       v.union([
         v.object(
@@ -68,8 +68,8 @@ export const APP_SEARCH_SCHEMA = v.union([
         warnings: v.array(
           v.object(
             v.pick(search.entries.searches.item.entries.warnings.item, [
+              "audience",
               "message",
-              "hint",
             ]).entries,
           ),
         ),

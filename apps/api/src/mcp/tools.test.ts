@@ -10,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import JSZip from "jszip";
+import * as v from "valibot";
 
 import {
   AGENT_INPUT_NORMALIZATION_KEY,
@@ -80,6 +81,8 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
+import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
+import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -3107,6 +3110,57 @@ describe("OpenAI-compatible MCP tools", () => {
     ).toEqual([5, 5]);
   });
 
+  test("search_case_law emits one agent grammar note naming all phrasings' dropped words", async () => {
+    const phrasings = [
+      { query: "náhrada za škodu vůči zaměstnavateli", words: ["za", "vůči"] },
+      { query: "odpovědnost vůči zaměstnavateli", words: ["vůči"] },
+      { query: "nárok na náhradu za škodu", words: ["na", "za"] },
+      { query: "náhrada na opravu", words: ["na"] },
+    ];
+    searchDecisionsHandlerMock.mockImplementation(
+      async ({ body: { query } }: { body: { query: string } }) => {
+        const phrasing = phrasings.find((entry) => entry.query === query);
+        if (phrasing === undefined) {
+          return panic("Expected one of the requested search phrasings");
+        }
+        return {
+          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          facets: null,
+          hits: [createCaseLawHit(`dec-${query}`, query)],
+          nextCursor: null,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+          queryUsed: query,
+          warnings: [functionWordsWarning(phrasing.words)],
+        };
+      },
+    );
+
+    const payload = v.parse(
+      SEARCH_CASE_LAW_PROJECTION,
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            country: "CZE",
+            queries: phrasings.map(({ query }) => query),
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
+    if (!("searches" in payload)) {
+      panic("Expected search results from the injected handler");
+    }
+    expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(phrasings.length);
+    expect(payload.searches).toHaveLength(phrasings.length);
+    expect(payload.searches.flatMap(({ warnings }) => warnings)).toEqual([
+      { ...functionWordsWarning(["za", "vůči", "na"]), audience: "agent" },
+    ]);
+    expect(
+      payload.searches.slice(1).every(({ warnings }) => warnings.length === 0),
+    ).toBe(true);
+  });
+
   test("search_case_law returns source facet buckets with their count type", async () => {
     const sourceFacets = [
       {
@@ -5202,7 +5256,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     );
 
-    test("a provision cited too widely for one search says so on every phrasing, with its count", async () => {
+    test("a provision cited too widely for one search says so once per call, with its count", async () => {
       readCaseLawProvisionScopeMock.mockResolvedValue({
         type: "broad",
         citingDecisions: 4037,
@@ -5228,7 +5282,7 @@ describe("OpenAI-compatible MCP tools", () => {
       const warnings = searchWarnings(result).filter(
         ({ code }) => code === "provision_cited_widely",
       );
-      expect(warnings).toHaveLength(2);
+      expect(warnings).toHaveLength(1);
       expect(warnings[0]?.message).toContain("4037");
       expect(warnings[0]?.message).toContain("§ 2910 OZ");
       expect(warnings[0]?.hint).toContain("subsection");
