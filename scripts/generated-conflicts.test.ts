@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -12,6 +13,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  assertFrozenLockfile,
+  assertLockfileWorkspaces,
+  indentationOnly,
+  mergeLockfile,
+  refreshLockfile,
   classifyConflicts,
   conflictsOf,
   isAllowedResolution,
@@ -38,6 +44,112 @@ const field = (value: unknown, ...keys: string[]): unknown => {
   return current;
 };
 const SCRIPT = path.join(import.meta.dirname, "generated-conflicts.ts");
+
+describe("conservative format and lockfile proofs", () => {
+  test("indentation changes preserve literals and line boundaries", () => {
+    expect(
+      indentationOnly({
+        before: 'const x = {\n  value: "two words",\n};\n',
+        after: 'const x = {\n    value: "two words",\n};\n',
+      }),
+    ).toBe(true);
+    for (const [before, after] of [
+      ["return\n  value;", "return value;"],
+      ['const x = "two words";', 'const x = "twowords";'],
+      ["const x = `line\n  value`;", "const x = `line\n    value`;"],
+      ["/* line\n  value */", "/* line\n    value */"],
+      ["const x = <p>\n  value</p>;", "const x = <p>\n    value</p>;"],
+    ]) {
+      expect(indentationOnly({ before, after })).toBe(false);
+    }
+  });
+
+  test("independent lock additions retain every parent pin", () => {
+    const base = {
+      packages: { common: ["common@1.0.0", "", {}, "integrity"] },
+    };
+    const head = { packages: { ...base.packages, a: ["a@1.0.0"] } };
+    const main = { packages: { ...base.packages, b: ["b@2.0.0"] } };
+    expect(mergeLockfile({ base, head, main })).toEqual({
+      packages: { ...base.packages, a: ["a@1.0.0"], b: ["b@2.0.0"] },
+    });
+    expect(() =>
+      mergeLockfile({
+        base,
+        head: { packages: { common: ["common@2.0.0"] } },
+        main: { packages: { common: ["common@3.0.0"] } },
+      }),
+    ).toThrow("competing edits");
+  });
+
+  test("workspace metadata is derived from merged manifests and rejects forged specs", () => {
+    const manifest = {
+      name: "fixture",
+      version: "1",
+      dependencies: { a: "1.0.0" },
+    };
+    const before = {
+      workspaces: { "": { name: "fixture", dependencies: { a: "0.9.0" } } },
+    };
+    const after = {
+      workspaces: { "": { name: "fixture", dependencies: { a: "1.0.0" } } },
+    };
+    expect(() =>
+      assertLockfileWorkspaces({ before, after, readManifest: () => manifest }),
+    ).not.toThrow();
+    expect(() =>
+      assertLockfileWorkspaces({
+        before,
+        after: {
+          workspaces: {
+            "": { ...after.workspaces[""], dependencies: { a: "*" } },
+          },
+        },
+        readManifest: () => manifest,
+      }),
+    ).toThrow("differs from merged manifest");
+    expect(() =>
+      assertLockfileWorkspaces({
+        before,
+        after: { workspaces: {} },
+        readManifest: () => manifest,
+      }),
+    ).toThrow("changed the merged workspace set");
+  });
+
+  test("metadata refresh cannot upgrade, add, remove or change integrity of any frozen pin", () => {
+    const before = {
+      lockfileVersion: 3,
+      packages: { a: ["a@1.0.0", "", {}, "sha512-old"] },
+      workspaces: { "": { version: "1" } },
+    };
+    expect(() =>
+      assertFrozenLockfile({
+        before,
+        after: {
+          ...before,
+          workspaces: { "": { version: "2" } },
+        },
+      }),
+    ).not.toThrow();
+    for (const packages of [
+      {},
+      { a: ["a@2.0.0"] },
+      { ...before.packages, b: ["b@1.0.0"] },
+      { a: ["a@1.0.0", "", {}, "sha512-other"] },
+    ]) {
+      expect(() =>
+        assertFrozenLockfile({ before, after: { ...before, packages } }),
+      ).toThrow("frozen pins or policy");
+    }
+    expect(() =>
+      assertFrozenLockfile({
+        before,
+        after: { ...before, trustedDependencies: ["a"] },
+      }),
+    ).toThrow("frozen pins or policy");
+  });
+});
 
 describe("classification", () => {
   test("a conflict only in an autofix generator's output is regenerable", () => {
@@ -204,13 +316,14 @@ describe("resolution across runs", () => {
   };
 
   type Fixture = {
+    baseEdits?: (origin: string) => void;
     branchEdits?: (origin: string) => void;
     mainEdits?: (origin: string) => void;
   };
   // main and the branch both regenerate the message types from catalogue
   // edits that merge cleanly; each side also edits a different hunk of an
   // ordinary file, which the merge combines into a blob neither side has.
-  const fixture = ({ branchEdits, mainEdits }: Fixture = {}) => {
+  const fixture = ({ baseEdits, branchEdits, mainEdits }: Fixture = {}) => {
     root = mkdtempSync(path.join(tmpdir(), "generated-conflicts-"));
     const origin = path.join(root, "origin");
     mkdirSync(origin);
@@ -221,6 +334,7 @@ describe("resolution across runs", () => {
       NOTES,
       lines(() => {}),
     );
+    baseEdits?.(origin);
     git(origin, "add", ".");
     git(origin, "commit", "-qm", "base");
     git(origin, "switch", "-qc", "feature");
@@ -331,6 +445,169 @@ describe("resolution across runs", () => {
     edit(manifest);
     writeFileSync(file, JSON.stringify(manifest));
   };
+
+  test("lock refresh skips lifecycle scripts and rolls back unpinned resolutions", () => {
+    root = mkdtempSync(path.join(tmpdir(), "lock-refresh-"));
+    write(
+      root,
+      "peer/package.json",
+      JSON.stringify({ name: "fixture-peer", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "other-peer/package.json",
+      JSON.stringify({ name: "fixture-other", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "dependency/package.json",
+      JSON.stringify({
+        name: "local-dependency",
+        version: "1.0.0",
+        bin: { fixture: "index.js" },
+        dependencies: { "fixture-peer": "workspace:*" },
+        devDependencies: { "fixture-other": "workspace:*" },
+        peerDependencies: {
+          "fixture-peer": "workspace:*",
+          "fixture-other": "workspace:*",
+        },
+        peerDependenciesMeta: {
+          "fixture-peer": { optional: true },
+          "fixture-other": { optional: true },
+        },
+      }),
+    );
+    const manifest = {
+      name: "fixture",
+      workspaces: ["dependency", "peer", "other-peer"],
+      dependencies: { "local-dependency": "workspace:*" },
+      scripts: { postinstall: "touch lifecycle-ran" },
+    };
+    write(root, "package.json", JSON.stringify(manifest));
+    const seeded = run(root, [
+      "bun",
+      "--no-env-file",
+      "install",
+      "--lockfile-only",
+      "--ignore-scripts",
+    ]);
+    expect(seeded.exitCode, seeded.stderr).toBe(0);
+    refreshLockfile(root);
+    expect(existsSync(path.join(root, "lifecycle-ran"))).toBe(false);
+    expect(existsSync(path.join(root, "node_modules"))).toBe(false);
+    write(
+      root,
+      "second/package.json",
+      JSON.stringify({ name: "second-dependency", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "package.json",
+      JSON.stringify({
+        ...manifest,
+        dependencies: {
+          ...manifest.dependencies,
+          "second-dependency": "file:./second",
+        },
+      }),
+    );
+    const before = readFileSync(path.join(root, "bun.lock"), "utf-8");
+    expect(() => refreshLockfile(root)).toThrow("frozen pins or policy");
+    expect(readFileSync(path.join(root, "bun.lock"), "utf-8")).toBe(before);
+    expect(existsSync(path.join(root, "lifecycle-ran"))).toBe(false);
+  });
+
+  test("format-only conflict keeps the semantic side and rejects an artifact changing logic", () => {
+    const source = "apps/api/format.ts";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) =>
+        write(repo, source, "const x = {\n  value: 1,\n};\n"),
+      branchEdits: (repo) =>
+        write(repo, source, "const x = {\n    value: 1,\n};\n"),
+      mainEdits: (repo) =>
+        write(repo, source, "const x = {\n  value: 2,\n};\n"),
+    });
+    const { out } = resolve(origin, head, main);
+    expect(readFileSync(path.join(out, "files", source), "utf-8")).toContain(
+      "value: 2",
+    );
+    const published = publish(origin, head, out);
+    expect(published.exitCode, published.stderr).toBe(0);
+    write(path.join(out, "files"), source, "const x = 99;\n");
+    expect(publish(origin, head, out).stderr).toContain(
+      "format-only resolution changed source logic",
+    );
+  });
+
+  test("source logic conflicts remain ineligible", () => {
+    const source = "apps/api/logic.ts";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, source, "const x = 1;\n"),
+      branchEdits: (repo) => write(repo, source, "const x = 2;\n"),
+      mainEdits: (repo) => write(repo, source, "const x = 3;\n"),
+    });
+    const planned = cli(
+      origin,
+      "plan",
+      "--git-dir",
+      ".git",
+      "--head",
+      head,
+      "--main",
+      main,
+    );
+    expect(planned.exitCode, planned.stderr).toBe(0);
+    expect(JSON.parse(planned.stdout).eligible).toBe(false);
+  });
+
+  test("lockfile-only conflicts combine existing pins and reject a forged upgrade", () => {
+    const lock = (packages: Record<string, unknown>) =>
+      JSON.stringify({
+        lockfileVersion: 3,
+        workspaces: { "": { name: "fixture" } },
+        packages,
+      });
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify({ name: "fixture" }));
+        write(repo, "bun.lock", lock({ common: ["common@1.0.0"] }));
+      },
+      branchEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          lock({ common: ["common@1.0.0"], a: ["a@1.0.0"] }),
+        ),
+      mainEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          lock({ common: ["common@1.0.0"], b: ["b@1.0.0"] }),
+        ),
+    });
+    const { out } = resolve(origin, head, main);
+    const merged = JSON.parse(
+      readFileSync(path.join(out, "files", "bun.lock"), "utf-8"),
+    );
+    expect(Object.keys(merged.packages).toSorted()).toEqual([
+      "a",
+      "b",
+      "common",
+    ]);
+    const published = publish(origin, head, out);
+    expect(published.exitCode, published.stderr).toBe(0);
+    merged.workspaces[""].dependencies = { arbitrary: "*" };
+    write(path.join(out, "files"), "bun.lock", JSON.stringify(merged));
+    expect(publish(origin, head, out).stderr).toContain(
+      "differs from merged manifest",
+    );
+    delete merged.workspaces[""].dependencies;
+    merged.packages.common = ["common@2.0.0"];
+    write(path.join(out, "files"), "bun.lock", JSON.stringify(merged));
+    expect(publish(origin, head, out).stderr).toContain(
+      "frozen pins or policy",
+    );
+  });
 
   test("the trusted run rebuilds exactly the collected tree", () => {
     const { origin, head, main } = fixture();
@@ -460,7 +737,7 @@ describe("resolution across runs", () => {
     // A symlink inside the collected data itself.
     symlinkSync("/etc/hosts", path.join(out, "files", "link"));
     expect(publish(origin, head, out).stderr).toContain("non-regular entry");
-  });
+  }, 15_000);
 
   test("a deletion of a file nobody conflicted on is refused", () => {
     const { origin, head, main } = fixture();

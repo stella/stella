@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
 
+import { SAFE_AUTOFIX_RULES, safeAutofixRuleArgs } from "./autofix-safe-rules";
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
   CI_GENERATION_COMMANDS,
@@ -547,7 +548,7 @@ describe("changed-file autofix boundary", () => {
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${safe_rule_args[@]}" "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
     // The Astro project has no native-compiler type graph to fix against.
@@ -623,5 +624,35 @@ test("type-aware autofix fixtures require a successful dependency install", asyn
   expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",
+  );
+});
+
+test("source fixes use only the documented safe-rule allowlist and never save PR caches", () => {
+  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(workflow),
+    "regenerate-derived-files",
+  );
+  const fix = workflowStepByName(steps, "Fix changed files")["run"];
+  expect(fix).toContain("bun scripts/autofix-safe-rules.ts");
+  expect(fix).toContain(`"\${safe_rule_args[@]}" "\${lint_paths[@]}"`);
+  expect(safeAutofixRuleArgs()).toEqual([
+    "--allow",
+    "all",
+    ...Object.keys(SAFE_AUTOFIX_RULES).flatMap((rule) => ["--deny", rule]),
+  ]);
+  for (const reason of Object.values(SAFE_AUTOFIX_RULES)) {
+    expect(reason.length).toBeGreaterThan(20);
+  }
+  expect(workflow).not.toContain("save: true");
+  expect(workflow).not.toContain("--fix-dangerously");
+  const refresh = steps.indexOf(
+    workflowStepByName(steps, "Refresh merged lockfile"),
+  );
+  expect(refresh).toBeLessThan(
+    steps.indexOf(workflowStepByName(steps, "Install dependencies")),
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    "refresh-lock --repo .",
   );
 });
