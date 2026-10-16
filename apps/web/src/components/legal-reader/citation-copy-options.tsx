@@ -77,10 +77,11 @@ export const CitationCopyOptions = ({
                   return;
                 }
                 stellaToast.add({ title: t("common.copied"), type: "success" });
+                // A failed copy keeps the menu open, so the reader can retry.
+                onCopied();
               })(),
               "citation-copy.copy",
             );
-            onCopied();
           }}
           onFocus={() => setPreviewMode(mode)}
           // A press must not move focus: the readers' selection would clear.

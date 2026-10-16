@@ -385,16 +385,19 @@ export const ChatAnswerDecisionProvider = ({
  */
 export const useAnswerCitedDecisions = (): PublicCaseLawDecision[] => {
   const answer = useContext(AnswerDecisionContext);
-  const decisionIds = answer === null ? [] : [...answer.reads.keys()];
-  const queries = useQueries({
-    queries: decisionIds.map((decisionId) => decisionOptions(decisionId)),
-  });
-  // A decision still loading, or failed, leaves its quotations unverified
+  if (answer === null) {
+    return [];
+  }
+  // Decisions cited by id or by route, as the answer already read them. A
+  // decision still loading, or failed, leaves its quotations unverified
   // rather than wrong; its citation chip already reports a failed read.
-  return queries.flatMap((query) => {
-    const view = queryView(query);
-    return view.type === "items" ? [view.items] : [];
-  });
+  const decisions = new Map<string, PublicCaseLawDecision>();
+  for (const read of [...answer.reads.values(), ...answer.routes.values()]) {
+    if (read.type === "query" && read.view.type === "items") {
+      decisions.set(read.view.items.id, read.view.items);
+    }
+  }
+  return [...decisions.values()];
 };
 
 /** A quotation remains prose; its decision annotation owns metadata and actions. */

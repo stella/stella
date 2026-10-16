@@ -2108,8 +2108,10 @@ const AssistantMessageParts = ({
                 : null
             }
             stepCount={visibleEntries.length}
+            // Counted over every entry: completed web searches and fetches
+            // render in the sources tray, not as steps, but are still work.
             workCounts={countProcessWork(
-              visibleEntries.map((entry) => entry.part),
+              group.entries.map((entry) => entry.part),
             )}
           >
             {group.entries.map((entry, offset) =>
