@@ -778,7 +778,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "case_law_v9",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: CASE_LAW_V8_INDEX_CONFIG,
     },
     projection: {
