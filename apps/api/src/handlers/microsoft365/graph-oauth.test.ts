@@ -5,16 +5,19 @@ import { sha256Base64Url as legacyBase64Url } from "@stll/sha256/node";
 import {
   buildAuthorizeUrl,
   createPkce,
-} from "@/api/handlers/sharepoint/graph-oauth";
+} from "@/api/handlers/microsoft365/graph-oauth";
+
+import { delegatedScopes } from "./capabilities";
 
 describe("buildAuthorizeUrl", () => {
   test("carries the OAuth and PKCE parameters", () => {
     const url = new URL(
       buildAuthorizeUrl({
+        scope: delegatedScopes(["files.read"], null),
         clientId: "client-123",
         tenantId: "tenant-abc",
         codeChallenge: "challenge",
-        redirectUri: "https://api.example.com/v1/sharepoint/oauth/callback",
+        redirectUri: "https://api.example.com/v1/microsoft365/oauth/callback",
         state: "state-xyz",
       }),
     );
@@ -28,7 +31,7 @@ describe("buildAuthorizeUrl", () => {
   });
 });
 
-test("SharePoint PKCE preserves the legacy unpadded base64url digest", () => {
+test("Microsoft 365 PKCE preserves the legacy unpadded base64url digest", () => {
   const { codeVerifier, codeChallenge } = createPkce();
   expect(codeChallenge).toBe(legacyBase64Url(codeVerifier));
 });

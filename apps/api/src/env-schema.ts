@@ -671,11 +671,11 @@ export const envApiServerSchema = {
   FEATURE_TEMPLATE_PACKS: featureFlagSchema,
   FEATURE_PUBLIC_KNOWLEDGE: featureFlagSchema,
   FEATURE_WEB_SEARCH: featureFlagSchema,
-  // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
-  // OneDrive access for future workspace import. Default-off; a deployment
+  // Delegated Microsoft 365 connection: per-user file and calendar reads.
+  // Default-off; a deployment
   // opts in only after its Microsoft app registration is granted the
-  // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
-  FEATURE_SHAREPOINT: featureFlagSchema,
+  // read-only delegated scopes (see handlers/microsoft365/capabilities.ts).
+  FEATURE_MICROSOFT365: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)

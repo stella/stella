@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   mapDriveChildrenToPage,
   type DriveChildrenResponse,
-} from "@/api/handlers/sharepoint/graph-client";
+} from "@/api/handlers/microsoft365/graph-client";
 
 const folder = {
   id: "01FOLDER",

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  decryptSharepointSecret,
-  encryptSharepointSecret,
-} from "@/api/handlers/sharepoint/crypto";
+  decryptMicrosoft365Secret,
+  encryptMicrosoft365Secret,
+} from "@/api/handlers/microsoft365/crypto";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -22,20 +22,20 @@ const organizationId = toSafeId<"organization">(
 const userId = toSafeId<"user">("0191d14d-9a63-7d2e-a021-06053e542c87");
 const secret = "graph-access-token-value";
 
-describe("encryptSharepointSecret / decryptSharepointSecret", () => {
+describe("encryptMicrosoft365Secret / decryptMicrosoft365Secret", () => {
   test("roundtrips on an exact purpose/user match", async () => {
-    const { ciphertext, iv } = await encryptSharepointSecret({
+    const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       secret,
       userId,
     });
 
-    const decrypted = await decryptSharepointSecret({
+    const decrypted = await decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       userId,
     });
 
@@ -51,17 +51,17 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
     });
 
     for (const payload of payloads) {
-      const { ciphertext, iv } = await encryptSharepointSecret({
+      const { ciphertext, iv } = await encryptMicrosoft365Secret({
         organizationId,
-        purpose: "sharepoint_refresh_token",
+        purpose: "microsoft365_refresh_token",
         secret: payload,
         userId,
       });
-      const decrypted = await decryptSharepointSecret({
+      const decrypted = await decryptMicrosoft365Secret({
         ciphertext,
         iv,
         organizationId,
-        purpose: "sharepoint_refresh_token",
+        purpose: "microsoft365_refresh_token",
         userId,
       });
       expect(String(decrypted)).toBe(payload);
@@ -69,18 +69,18 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
   });
 
   test("rejects a purpose mismatch (access token read back as refresh)", async () => {
-    const { ciphertext, iv } = await encryptSharepointSecret({
+    const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       secret,
       userId,
     });
 
-    const decrypt = decryptSharepointSecret({
+    const decrypt = decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId,
-      purpose: "sharepoint_refresh_token",
+      purpose: "microsoft365_refresh_token",
       userId,
     });
 
@@ -88,18 +88,18 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
   });
 
   test("rejects a userId mismatch", async () => {
-    const { ciphertext, iv } = await encryptSharepointSecret({
+    const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       secret,
       userId,
     });
 
-    const decrypt = decryptSharepointSecret({
+    const decrypt = decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       userId: toSafeId<"user">("0191d14d-9a63-7d2e-a021-06053e542c99"),
     });
 
@@ -107,36 +107,36 @@ describe("encryptSharepointSecret / decryptSharepointSecret", () => {
   });
 
   test("stores ciphertext rather than the plaintext envelope", async () => {
-    const { ciphertext, iv } = await encryptSharepointSecret({
+    const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       secret,
       userId,
     });
 
     expect(ciphertext.toString("utf-8")).not.toContain(secret);
     expect(ciphertext.toString("utf-8")).not.toContain(
-      "sharepoint_access_token",
+      "microsoft365_access_token",
     );
     // A zero IV is the no-op plaintext envelope; real AES-GCM never mints one.
     expect(iv.every((byte) => byte === 0)).toBe(false);
   });
 
   test("rejects an organization mismatch (per-org key separation)", async () => {
-    const { ciphertext, iv } = await encryptSharepointSecret({
+    const { ciphertext, iv } = await encryptMicrosoft365Secret({
       organizationId,
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       secret,
       userId,
     });
 
-    const decrypt = decryptSharepointSecret({
+    const decrypt = decryptMicrosoft365Secret({
       ciphertext,
       iv,
       organizationId: toSafeId<"organization">(
         "0191d14d-9a63-7d2e-a021-06053e542c9a",
       ),
-      purpose: "sharepoint_access_token",
+      purpose: "microsoft365_access_token",
       userId,
     });
 

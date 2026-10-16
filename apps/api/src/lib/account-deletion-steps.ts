@@ -52,8 +52,8 @@ import {
   searchHistoryEntries,
   searchHistoryOwners,
   searchHistoryTombstones,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   taskAssignees,
   userFiles,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -271,8 +271,8 @@ export const revokeOAuthTokensAndGrants = async (
 export const DELETE_CONNECTED_CREDENTIALS_TABLES = [
   mcpUserConnections,
   mcpOAuthState,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   agentRegistration,
   agentDelegation,
 ] as const satisfies readonly PgTable[];
@@ -290,11 +290,11 @@ export const deleteConnectedCredentialsAndOAuthState = async (
     .where(eq(mcpUserConnections.userId, currentUserId));
   await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.userId, currentUserId));
   await tx
-    .delete(sharepointConnections)
-    .where(eq(sharepointConnections.userId, currentUserId));
+    .delete(microsoft365Connections)
+    .where(eq(microsoft365Connections.userId, currentUserId));
   await tx
-    .delete(sharepointOAuthState)
-    .where(eq(sharepointOAuthState.userId, currentUserId));
+    .delete(microsoft365OAuthState)
+    .where(eq(microsoft365OAuthState.userId, currentUserId));
   await tx
     .delete(agentRegistration)
     .where(eq(agentRegistration.boundUserId, currentUserId));

@@ -17,24 +17,26 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Secret, SecretKind } from "@/api/lib/secret-brands";
 import { secretSchema } from "@/api/lib/secret-brands";
 
-type SharepointSecretPurpose =
-  | "sharepoint_access_token"
-  | "sharepoint_refresh_token";
+type Microsoft365SecretPurpose =
+  | "microsoft365_access_token"
+  | "microsoft365_refresh_token";
 
-type DecryptedKind<P extends SharepointSecretPurpose> =
-  P extends "sharepoint_access_token"
+type DecryptedKind<P extends Microsoft365SecretPurpose> =
+  P extends "microsoft365_access_token"
     ? "AccessToken"
-    : P extends "sharepoint_refresh_token"
+    : P extends "microsoft365_refresh_token"
       ? "RefreshToken"
       : never;
 
-type DecryptedFor<P extends SharepointSecretPurpose> = Secret<DecryptedKind<P>>;
+type DecryptedFor<P extends Microsoft365SecretPurpose> = Secret<
+  DecryptedKind<P>
+>;
 
 const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
   v.parse(secretSchema, value);
 
 type SecretEnvelope = {
-  purpose: SharepointSecretPurpose;
+  purpose: Microsoft365SecretPurpose;
   secret: string;
   userId: SafeId<"user">;
 };
@@ -44,14 +46,14 @@ export type EncryptedSecret = {
   iv: Buffer;
 };
 
-export const encryptSharepointSecret = async ({
+export const encryptMicrosoft365Secret = async ({
   organizationId,
   purpose,
   secret,
   userId,
 }: {
   organizationId: SafeId<"organization">;
-  purpose: SharepointSecretPurpose;
+  purpose: Microsoft365SecretPurpose;
   secret: string;
   userId: SafeId<"user">;
 }): Promise<EncryptedSecret> =>
@@ -61,8 +63,8 @@ export const encryptSharepointSecret = async ({
     JSON.stringify({ purpose, secret, userId } satisfies SecretEnvelope),
   );
 
-export const decryptSharepointSecret = async <
-  P extends SharepointSecretPurpose,
+export const decryptMicrosoft365Secret = async <
+  P extends Microsoft365SecretPurpose,
 >({
   ciphertext,
   iv,
@@ -91,7 +93,7 @@ export const decryptSharepointSecret = async <
   ) {
     throw new HandlerError({
       status: 500,
-      message: "Stored SharePoint secret envelope is invalid",
+      message: "Stored Microsoft 365 secret envelope is invalid",
     });
   }
 

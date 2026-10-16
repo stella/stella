@@ -1077,56 +1077,58 @@ export const mcpConnectorAuthorizationReviewPolicies = () => [
   }),
 ];
 
-// SharePoint (Microsoft Graph) delegated connections are per user+org, so
+// Microsoft 365 (Microsoft Graph) delegated connections are per user+org, so
 // their rows are visible only to the owning user within the active org —
 // the same fail-closed shape as mcp_user_connections.
-const sharepointConnectionCheck = sql`(
+const microsoft365ConnectionCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
 
-export const sharepointConnectionPolicies = () => [
-  p.pgPolicy("sharepoint_connection_select", {
+export const microsoft365ConnectionPolicies = () => [
+  p.pgPolicy("microsoft365_connection_select", {
     for: "select",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
-  p.pgPolicy("sharepoint_connection_insert", {
+  p.pgPolicy("microsoft365_connection_insert", {
     for: "insert",
     to: stella,
-    withCheck: sharepointConnectionCheck,
+    withCheck: microsoft365ConnectionCheck,
   }),
-  p.pgPolicy("sharepoint_connection_update", {
+  p.pgPolicy("microsoft365_connection_update", {
     for: "update",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
-  p.pgPolicy("sharepoint_connection_delete", {
+  p.pgPolicy("microsoft365_connection_delete", {
     for: "delete",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
 ];
 
-export const sharepointOAuthStatePolicies = () => [
-  p.pgPolicy("sharepoint_oauth_state_select", {
+export const microsoft365OAuthStatePolicies = () => [
+  p.pgPolicy("microsoft365_oauth_state_select", {
     for: "select",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
-  p.pgPolicy("sharepoint_oauth_state_insert", {
+  p.pgPolicy("microsoft365_oauth_state_insert", {
     for: "insert",
     to: stella,
-    withCheck: sharepointConnectionCheck,
+    withCheck: microsoft365ConnectionCheck,
   }),
-  p.pgPolicy("sharepoint_oauth_state_update", {
+  p.pgPolicy("microsoft365_oauth_state_update", {
+    as: "restrictive",
     for: "update",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: sql`false`,
+    withCheck: sql`false`,
   }),
-  p.pgPolicy("sharepoint_oauth_state_delete", {
+  p.pgPolicy("microsoft365_oauth_state_delete", {
     for: "delete",
     to: stella,
-    using: sharepointConnectionCheck,
+    using: microsoft365ConnectionCheck,
   }),
 ];
 

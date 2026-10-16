@@ -1480,19 +1480,19 @@
     "reason": "Existing POST route apps/api/src/handlers/seller-profiles/create.ts.handler awaits ownership declaration at its handler boundary."
   },
   {
-    "key": "apps/api/src/handlers/sharepoint/routes.ts|DELETE|/sharepoint/connection|apps/api/src/handlers/sharepoint/disconnect.ts.handler",
+    "key": "apps/api/src/handlers/microsoft365/routes.ts|DELETE|/microsoft365/connection|apps/api/src/handlers/microsoft365/disconnect.ts.handler",
     "count": 1,
-    "reason": "Existing DELETE route apps/api/src/handlers/sharepoint/disconnect.ts.handler awaits ownership declaration at its handler boundary."
+    "reason": "Existing DELETE route apps/api/src/handlers/microsoft365/disconnect.ts.handler awaits ownership declaration at its handler boundary."
   },
   {
-    "key": "apps/api/src/handlers/sharepoint/routes.ts|POST|/sharepoint/connect|apps/api/src/handlers/sharepoint/connect.ts.handler",
+    "key": "apps/api/src/handlers/microsoft365/routes.ts|POST|/microsoft365/connect|apps/api/src/handlers/microsoft365/connect.ts.handler",
     "count": 1,
-    "reason": "Existing POST route apps/api/src/handlers/sharepoint/connect.ts.handler awaits ownership declaration at its handler boundary."
+    "reason": "Existing POST route apps/api/src/handlers/microsoft365/connect.ts.handler awaits ownership declaration at its handler boundary."
   },
   {
-    "key": "apps/api/src/handlers/sharepoint/routes.ts|PUT|/sharepoint/enablement|apps/api/src/handlers/sharepoint/set-enablement.ts.handler",
+    "key": "apps/api/src/handlers/microsoft365/routes.ts|PUT|/microsoft365/enablement|apps/api/src/handlers/microsoft365/set-enablement.ts.handler",
     "count": 1,
-    "reason": "Existing PUT route apps/api/src/handlers/sharepoint/set-enablement.ts.handler awaits ownership declaration at its handler boundary."
+    "reason": "Existing PUT route apps/api/src/handlers/microsoft365/set-enablement.ts.handler awaits ownership declaration at its handler boundary."
   },
   {
     "key": "apps/api/src/handlers/signals/routes.ts|POST|/signals/:signalId/acceptances|apps/api/src/handlers/signals/acceptances/create.ts.handler",

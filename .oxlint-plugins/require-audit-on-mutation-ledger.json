@@ -50,8 +50,8 @@
       "delete:agentRegistration": 1,
       "delete:mcpOAuthState": 1,
       "delete:mcpUserConnections": 1,
-      "delete:sharepointConnections": 1,
-      "delete:sharepointOAuthState": 1
+      "delete:microsoft365Connections": 1,
+      "delete:microsoft365OAuthState": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -388,16 +388,16 @@
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
-    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointConnection",
+    "id": "apps/api/src/lib/auth-artifacts.ts::microsoft365Connection",
     "writes": {
-      "delete:sharepointConnections": 1
+      "delete:microsoft365Connections": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
-    "id": "apps/api/src/lib/auth-artifacts.ts::sharepointOAuthState",
+    "id": "apps/api/src/lib/auth-artifacts.ts::microsoft365OAuthState",
     "writes": {
-      "delete:sharepointOAuthState": 1
+      "delete:microsoft365OAuthState": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },

@@ -141,7 +141,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
-  sharepoint: WAIVER_REASON.noTenantReadSurface,
+  microsoft365: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
   // Public corpus ingestion has no tenant data or tenant-facing read surface.
   "soft-law": WAIVER_REASON.noTenantReadSurface,

@@ -22,8 +22,8 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   pdfSigningSessions,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -43,8 +43,8 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const credentialTables = [
   mcpUserConnections,
   mcpOAuthState,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   desktopEditHandoffs,
   pdfSigningSessions,
   folioCollabRoomTokens,
@@ -82,14 +82,14 @@ const snapshot = async (tx: Transaction) => ({
     .from(mcpUserConnections)
     .orderBy(mcpUserConnections.id),
   mcpStates: await tx.select().from(mcpOAuthState).orderBy(mcpOAuthState.state),
-  sharepointConnections: await tx
+  microsoft365Connections: await tx
     .select()
-    .from(sharepointConnections)
-    .orderBy(sharepointConnections.id),
+    .from(microsoft365Connections)
+    .orderBy(microsoft365Connections.id),
   sharepointStates: await tx
     .select()
-    .from(sharepointOAuthState)
-    .orderBy(sharepointOAuthState.state),
+    .from(microsoft365OAuthState)
+    .orderBy(microsoft365OAuthState.state),
   handoffs: await tx
     .select()
     .from(desktopEditHandoffs)
@@ -257,15 +257,15 @@ if (!databaseUrl || !enabled) {
                 resourceUrl: "https://example.test",
                 authorizationServerUrl: "https://example.test",
               });
-              await tx.insert(sharepointConnections).values({
-                id: createSafeId<"sharepointConnection">(),
+              await tx.insert(microsoft365Connections).values({
+                id: createSafeId<"microsoft365Connection">(),
                 organizationId: scope.organizationId,
                 userId: scope.userId,
                 accessTokenEncrypted: Buffer.from("ciphertext"),
                 accessTokenIv: Buffer.from("iv"),
                 status: "connected",
               });
-              await tx.insert(sharepointOAuthState).values({
+              await tx.insert(microsoft365OAuthState).values({
                 state: Bun.randomUUIDv7(),
                 organizationId: scope.organizationId,
                 userId: scope.userId,
@@ -412,8 +412,8 @@ if (!databaseUrl || !enabled) {
                 row.organizationId !== organizationId || row.userId !== userId,
             ),
           );
-          expect(after.sharepointConnections).toEqual(
-            before.sharepointConnections.filter(
+          expect(after.microsoft365Connections).toEqual(
+            before.microsoft365Connections.filter(
               (row) =>
                 row.organizationId !== organizationId || row.userId !== userId,
             ),

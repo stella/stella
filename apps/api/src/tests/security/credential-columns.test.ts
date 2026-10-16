@@ -99,7 +99,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "verification.value",
   "oauth_refresh_token.rotation_replay_response",
   "mcp_oauth_state.state",
-  "sharepoint_oauth_state.state",
+  "microsoft365_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
 ]);
@@ -190,8 +190,8 @@ const INITIAL_CLEARTEXT_COLUMNS = new Set([
   "mcp_oauth_state.code_verifier",
   "mcp_oauth_state.state",
   "session.token",
-  "sharepoint_oauth_state.code_verifier",
-  "sharepoint_oauth_state.state",
+  "microsoft365_oauth_state.code_verifier",
+  "microsoft365_oauth_state.state",
   "verification.identifier",
   "verification.value",
 ]);

@@ -1,17 +1,21 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { sharepointConnections } from "@/api/db/schema";
-import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import {
+  microsoft365Connections,
+  microsoft365OAuthState,
+} from "@/api/db/schema";
+import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
 const config = {
   contract: "patch",
   permissions: { integration: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
-  realtime: sharepointRealtimeUpdates,
+  realtime: microsoft365RealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 
@@ -21,23 +25,41 @@ const config = {
 // Deliberately NOT gated on org enablement: credential removal must always be
 // possible, even after the feature is disabled, so a user can always revoke
 // their own stored tokens. Auth plus org/user ownership still apply.
-const disconnectSharepoint = createSafeRootHandler(
+const disconnectMicrosoft365 = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, recordAuditEvent }) {
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .delete(sharepointConnections)
+        await withAggregateLock({
+          tx,
+          aggregate: "organization",
+          id: session.activeOrganizationId,
+          mode: "update",
+        });
+        // audit: skip — invalidate ephemeral consent attempts with credential removal.
+        await tx
+          .delete(microsoft365OAuthState)
           .where(
             and(
               eq(
-                sharepointConnections.organizationId,
+                microsoft365OAuthState.organizationId,
                 session.activeOrganizationId,
               ),
-              eq(sharepointConnections.userId, user.id),
+              eq(microsoft365OAuthState.userId, user.id),
+            ),
+          );
+        const rows = await tx
+          .delete(microsoft365Connections)
+          .where(
+            and(
+              eq(
+                microsoft365Connections.organizationId,
+                session.activeOrganizationId,
+              ),
+              eq(microsoft365Connections.userId, user.id),
             ),
           )
-          .returning({ id: sharepointConnections.id });
+          .returning({ id: microsoft365Connections.id });
 
         // A stored delegated-token connection is a per-user credential; its
         // removal is a distinct credential-lifecycle event, recorded in the
@@ -50,7 +72,7 @@ const disconnectSharepoint = createSafeRootHandler(
             workspaceId: null,
             metadata: {
               connectionUserId: user.id,
-              operation: "sharepoint_oauth_disconnect",
+              operation: "microsoft365_oauth_disconnect",
               scope: "self",
             },
           });
@@ -64,4 +86,4 @@ const disconnectSharepoint = createSafeRootHandler(
   },
 );
 
-export default disconnectSharepoint;
+export default disconnectMicrosoft365;

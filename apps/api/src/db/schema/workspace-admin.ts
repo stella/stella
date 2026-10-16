@@ -299,13 +299,23 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .default(true),
     /**
-     * Org-level enablement for the delegated SharePoint / OneDrive
+     * Org-level enablement for the delegated Microsoft 365
      * connection. Default-off (fail closed): even where the deployment
      * feature flag is on, an org must explicitly opt in before its members
      * can connect a Microsoft account.
      */
-    sharepointConnectionEnabled: p
-      .boolean("sharepoint_connection_enabled")
+    microsoft365ConnectionEnabled: p
+      .boolean("microsoft365_connection_enabled")
+      .notNull()
+      .default(false),
+    /** Whether delegated file reads are permitted by organization policy. */
+    microsoft365FilesReadEnabled: p
+      .boolean("microsoft365_files_read_enabled")
+      .notNull()
+      .default(false),
+    /** Whether delegated calendar reads are permitted by organization policy. */
+    microsoft365CalendarReadEnabled: p
+      .boolean("microsoft365_calendar_read_enabled")
       .notNull()
       .default(false),
     /**

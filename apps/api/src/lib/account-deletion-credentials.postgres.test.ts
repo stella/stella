@@ -6,8 +6,8 @@ import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   mcpOAuthState,
   mcpUserConnections,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
 } from "@/api/db/schema";
 import {
   DELETE_CONNECTED_CREDENTIALS_TABLES,
@@ -74,15 +74,15 @@ const insertCredentials = async ({
   await transaction(async (tx) => {
     for (const organizationId of organizationIds) {
       const credential = Bun.randomUUIDv7();
-      await tx.insert(sharepointConnections).values({
-        id: createSafeId<"sharepointConnection">(),
+      await tx.insert(microsoft365Connections).values({
+        id: createSafeId<"microsoft365Connection">(),
         organizationId,
         userId,
         accessTokenEncrypted: Buffer.from(Bun.randomUUIDv7()),
         accessTokenIv: Buffer.from(Bun.randomUUIDv7()),
         status: "connected",
       });
-      await tx.insert(sharepointOAuthState).values({
+      await tx.insert(microsoft365OAuthState).values({
         state: Bun.randomUUIDv7(),
         organizationId,
         userId,
@@ -155,16 +155,16 @@ const countsForUser = async ({
       .from(mcpOAuthState)
       .where(eq(mcpOAuthState.userId, userId))
       .orderBy(asc(mcpOAuthState.state)),
-    sharepointConnections: await tx
+    microsoft365Connections: await tx
       .select()
-      .from(sharepointConnections)
-      .where(eq(sharepointConnections.userId, userId))
-      .orderBy(asc(sharepointConnections.id)),
-    sharepointOAuthState: await tx
+      .from(microsoft365Connections)
+      .where(eq(microsoft365Connections.userId, userId))
+      .orderBy(asc(microsoft365Connections.id)),
+    microsoft365OAuthState: await tx
       .select()
-      .from(sharepointOAuthState)
-      .where(eq(sharepointOAuthState.userId, userId))
-      .orderBy(asc(sharepointOAuthState.state)),
+      .from(microsoft365OAuthState)
+      .where(eq(microsoft365OAuthState.userId, userId))
+      .orderBy(asc(microsoft365OAuthState.state)),
     agentRegistration: await tx
       .select()
       .from(agentRegistration)
@@ -216,8 +216,8 @@ if (!databaseUrl || !enabled) {
         ).toEqual({
           mcpUserConnections: [],
           mcpOAuthState: [],
-          sharepointConnections: [],
-          sharepointOAuthState: [],
+          microsoft365Connections: [],
+          microsoft365OAuthState: [],
           agentRegistration: [],
           agentDelegation: [],
         });
@@ -252,8 +252,8 @@ if (!databaseUrl || !enabled) {
         expect(afterFirstRun).toEqual({
           mcpUserConnections: [],
           mcpOAuthState: [],
-          sharepointConnections: [],
-          sharepointOAuthState: [],
+          microsoft365Connections: [],
+          microsoft365OAuthState: [],
           agentRegistration: [],
           agentDelegation: [],
         });

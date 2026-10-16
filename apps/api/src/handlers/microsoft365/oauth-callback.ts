@@ -6,30 +6,31 @@ import { Temporal } from "@stll/time";
 
 import {
   organizationSettings,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
-import { encryptSharepointSecret } from "@/api/handlers/sharepoint/crypto";
-import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
-import { fetchAccountLabel } from "@/api/handlers/sharepoint/graph-client";
+import { encryptMicrosoft365Secret } from "@/api/handlers/microsoft365/crypto";
+import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
+import { fetchAccountLabel } from "@/api/handlers/microsoft365/graph-client";
 import {
   exchangeAuthorizationCode,
-  getSharepointOAuthConfig,
+  getMicrosoft365OAuthConfig,
   tokenExpiresAt,
-} from "@/api/handlers/sharepoint/graph-oauth";
+} from "@/api/handlers/microsoft365/graph-oauth";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { oauthCallbackFailureReason } from "@/api/lib/errors/oauth-callback-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 const requestQuery = t.Object({
-  code: t.Optional(t.String()),
-  state: t.Optional(t.String()),
-  error: t.Optional(t.String()),
+  code: t.Optional(t.String({ maxLength: 4096 })),
+  state: t.Optional(t.String({ maxLength: 128 })),
+  error: t.Optional(t.String({ maxLength: 256 })),
 });
 
 const config = {
@@ -48,10 +49,10 @@ const buildCallbackRedirectUrl = (
   frontendUrl: string,
   input: CallbackRedirectInput,
 ): string => {
-  const url = new URL("/sharepoint/oauth-callback", frontendUrl);
-  url.searchParams.set("status", input.status);
+  const url = new URL("/settings/account/connections", frontendUrl);
+  url.searchParams.set("microsoft365Status", input.status);
   if (input.status === "error") {
-    url.searchParams.set("reason", input.reason);
+    url.searchParams.set("microsoft365Reason", input.reason);
   }
   return url.toString();
 };
@@ -66,18 +67,28 @@ const redirect = (input: CallbackRedirectInput) =>
 // exchange the code for the user's own tokens, and persist them encrypted.
 // All failure branches redirect to the SPA with a reason rather than leaking
 // an error body.
-export type SharepointOAuthCallbackDependencies = {
-  assertSharepointConnectionEnabled: typeof assertSharepointConnectionEnabled;
+export type Microsoft365OAuthCallbackDependencies = {
+  assertMicrosoft365ConnectionEnabled: typeof assertMicrosoft365ConnectionEnabled;
+  exchangeAuthorizationCode: typeof exchangeAuthorizationCode;
+  getMicrosoft365OAuthConfig: typeof getMicrosoft365OAuthConfig;
+  fetchAccountLabel: typeof fetchAccountLabel;
 };
 
-const defaultSharepointOAuthCallbackDependencies = {
-  assertSharepointConnectionEnabled,
-} satisfies SharepointOAuthCallbackDependencies;
+const defaultMicrosoft365OAuthCallbackDependencies = {
+  assertMicrosoft365ConnectionEnabled,
+  exchangeAuthorizationCode,
+  getMicrosoft365OAuthConfig,
+  fetchAccountLabel,
+} satisfies Microsoft365OAuthCallbackDependencies;
 
-export const createSharepointOAuthCallback = (
-  dependencies: SharepointOAuthCallbackDependencies = defaultSharepointOAuthCallbackDependencies,
-) =>
-  createSafeRootHandler(
+export const createMicrosoft365OAuthCallback = (
+  dependencies: Partial<Microsoft365OAuthCallbackDependencies> = {},
+) => {
+  const resolved = {
+    ...defaultMicrosoft365OAuthCallbackDependencies,
+    ...dependencies,
+  };
+  return createSafeRootHandler(
     config,
     async function* ({
       query: input,
@@ -88,7 +99,7 @@ export const createSharepointOAuthCallback = (
       recordAuditEvent,
     }) {
       const run = async (): Promise<Result<Response, never>> => {
-        const gate = await dependencies.assertSharepointConnectionEnabled({
+        const gate = await resolved.assertMicrosoft365ConnectionEnabled({
           organizationId: session.activeOrganizationId,
           safeDb,
         });
@@ -123,7 +134,7 @@ export const createSharepointOAuthCallback = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
-              operation: "sharepoint_oauth_callback",
+              operation: "microsoft365_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,
             }),
@@ -133,14 +144,14 @@ export const createSharepointOAuthCallback = (
           const stateRowsResult = await safeDb((tx) =>
             tx
               .select({
-                organizationId: sharepointOAuthState.organizationId,
-                userId: sharepointOAuthState.userId,
-                codeVerifier: sharepointOAuthState.codeVerifier,
-                redirectUri: sharepointOAuthState.redirectUri,
-                createdAt: sharepointOAuthState.createdAt,
+                organizationId: microsoft365OAuthState.organizationId,
+                userId: microsoft365OAuthState.userId,
+                codeVerifier: microsoft365OAuthState.codeVerifier,
+                redirectUri: microsoft365OAuthState.redirectUri,
+                createdAt: microsoft365OAuthState.createdAt,
               })
-              .from(sharepointOAuthState)
-              .where(eq(sharepointOAuthState.state, state))
+              .from(microsoft365OAuthState)
+              .where(eq(microsoft365OAuthState.state, state))
               .limit(1),
           );
           if (Result.isError(stateRowsResult)) {
@@ -162,14 +173,14 @@ export const createSharepointOAuthCallback = (
             );
           }
 
-          const oauthConfig = getSharepointOAuthConfig();
+          const oauthConfig = resolved.getMicrosoft365OAuthConfig();
           if (Result.isError(oauthConfig)) {
             return Result.ok(
               redirect({ status: "error", reason: "not-configured" }),
             );
           }
 
-          const token = await exchangeAuthorizationCode({
+          const token = await resolved.exchangeAuthorizationCode({
             clientId: oauthConfig.value.clientId,
             clientSecret: oauthConfig.value.clientSecret,
             tenantId: oauthConfig.value.tenantId,
@@ -184,64 +195,88 @@ export const createSharepointOAuthCallback = (
           }
 
           const rowUserId = brandPersistedUserId(row.userId);
-          const accountLabel = await fetchAccountLabel(
+          const account = await resolved.fetchAccountLabel(
             token.value.access_token,
           );
 
-          const encryptedAccess = await encryptSharepointSecret({
-            purpose: "sharepoint_access_token",
+          if (Result.isError(account)) {
+            return Result.ok(redirectForFailure(account.error));
+          }
+          const accountLabel = account.value;
+          const encryptedAccess = await encryptMicrosoft365Secret({
+            purpose: "microsoft365_access_token",
             secret: token.value.access_token,
             organizationId: row.organizationId,
             userId: rowUserId,
           });
           const encryptedRefresh = token.value.refresh_token
-            ? await encryptSharepointSecret({
-                purpose: "sharepoint_refresh_token",
+            ? await encryptMicrosoft365Secret({
+                purpose: "microsoft365_refresh_token",
                 secret: token.value.refresh_token,
                 organizationId: row.organizationId,
                 userId: rowUserId,
               })
             : null;
 
-          const connectResult = await safeDb(async (tx) =>
-            tx.transaction(async (innerTx) => {
-              // Re-check enablement under the row lock: the Graph round trips
-              // above can take long enough for an admin to turn the connection
-              // off mid-flow, and the check at the top of this handler ran
-              // before any of that work started.
-              const settingsRows = await innerTx
-                .select({
-                  sharepointConnectionEnabled:
-                    organizationSettings.sharepointConnectionEnabled,
-                })
-                .from(organizationSettings)
-                .where(
-                  eq(organizationSettings.organizationId, row.organizationId),
-                )
-                .for("update");
-              if (!settingsRows.at(0)?.sharepointConnectionEnabled) {
-                return { status: "not-enabled" as const };
-              }
+          const connectResult = await safeDb(async (innerTx) => {
+            await withAggregateLock({
+              tx: innerTx,
+              aggregate: "organization",
+              id: row.organizationId,
+              mode: "update",
+            });
+            // Re-check enablement under the organization lock: the Graph round trips
+            // above can take long enough for an admin to turn the connection
+            // off mid-flow, and the check at the top of this handler ran
+            // before any of that work started.
+            const settingsRows = await innerTx
+              .select({
+                microsoft365ConnectionEnabled:
+                  organizationSettings.microsoft365ConnectionEnabled,
+              })
+              .from(organizationSettings)
+              .where(
+                eq(organizationSettings.organizationId, row.organizationId),
+              );
+            if (!settingsRows.at(0)?.microsoft365ConnectionEnabled) {
+              return { status: "not-enabled" as const };
+            }
 
-              // Authoritative on the state token: a concurrent callback for the
-              // same state (replay, or a double-fired redirect) deletes zero
-              // rows here and must not also persist a connection.
-              const deletedState = await innerTx
-                .delete(sharepointOAuthState)
-                .where(eq(sharepointOAuthState.state, state))
-                .returning({ state: sharepointOAuthState.state });
-              await innerTx
-                .delete(sharepointOAuthState)
-                .where(lt(sharepointOAuthState.createdAt, cutoff));
-              if (deletedState.length === 0) {
-                return { status: "state-consumed" as const };
-              }
+            // Authoritative on the state token: a concurrent callback for the
+            // same state (replay, or a double-fired redirect) deletes zero
+            // rows here and must not also persist a connection.
+            const deletedState = await innerTx
+              .delete(microsoft365OAuthState)
+              .where(eq(microsoft365OAuthState.state, state))
+              .returning({ state: microsoft365OAuthState.state });
+            await innerTx
+              .delete(microsoft365OAuthState)
+              .where(lt(microsoft365OAuthState.createdAt, cutoff));
+            if (deletedState.length === 0) {
+              return { status: "state-consumed" as const };
+            }
 
-              await innerTx
-                .insert(sharepointConnections)
-                .values({
-                  organizationId: row.organizationId,
-                  userId: rowUserId,
+            await innerTx
+              .insert(microsoft365Connections)
+              .values({
+                organizationId: row.organizationId,
+                userId: rowUserId,
+                accessTokenEncrypted: encryptedAccess.ciphertext,
+                accessTokenIv: encryptedAccess.iv,
+                refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
+                refreshTokenIv: encryptedRefresh?.iv ?? null,
+                tokenType: token.value.token_type ?? "Bearer",
+                scope: token.value.scope ?? null,
+                accountLabel,
+                expiresAt: tokenExpiresAt(token.value),
+                status: "connected",
+              })
+              .onConflictDoUpdate({
+                target: [
+                  microsoft365Connections.organizationId,
+                  microsoft365Connections.userId,
+                ],
+                set: {
                   accessTokenEncrypted: encryptedAccess.ciphertext,
                   accessTokenIv: encryptedAccess.iv,
                   refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
@@ -251,38 +286,21 @@ export const createSharepointOAuthCallback = (
                   accountLabel,
                   expiresAt: tokenExpiresAt(token.value),
                   status: "connected",
-                })
-                .onConflictDoUpdate({
-                  target: [
-                    sharepointConnections.organizationId,
-                    sharepointConnections.userId,
-                  ],
-                  set: {
-                    accessTokenEncrypted: encryptedAccess.ciphertext,
-                    accessTokenIv: encryptedAccess.iv,
-                    refreshTokenEncrypted: encryptedRefresh?.ciphertext ?? null,
-                    refreshTokenIv: encryptedRefresh?.iv ?? null,
-                    tokenType: token.value.token_type ?? "Bearer",
-                    scope: token.value.scope ?? null,
-                    accountLabel,
-                    expiresAt: tokenExpiresAt(token.value),
-                    status: "connected",
-                    updatedAt: new Date(),
-                  },
-                });
-              await recordAuditEvent(innerTx, {
-                action: AUDIT_ACTION.UPDATE,
-                resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-                resourceId: row.organizationId,
-                workspaceId: null,
-                metadata: {
-                  connectionUserId: rowUserId,
-                  operation: "sharepoint_oauth_connect",
+                  updatedAt: new Date(),
                 },
               });
-              return { status: "connected" as const };
-            }),
-          );
+            await recordAuditEvent(innerTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+              resourceId: row.organizationId,
+              workspaceId: null,
+              metadata: {
+                connectionUserId: rowUserId,
+                operation: "microsoft365_oauth_connect",
+              },
+            });
+            return { status: "connected" as const };
+          });
           if (Result.isError(connectResult)) {
             return Result.ok(redirectForFailure(connectResult.error));
           }
@@ -317,7 +335,8 @@ export const createSharepointOAuthCallback = (
       return Result.ok(yield* Result.await(run()));
     },
   );
+};
 
-const sharepointOAuthCallback = createSharepointOAuthCallback();
+const microsoft365OAuthCallback = createMicrosoft365OAuthCallback();
 
-export default sharepointOAuthCallback;
+export default microsoft365OAuthCallback;

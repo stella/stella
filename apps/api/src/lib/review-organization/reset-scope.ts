@@ -57,8 +57,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",
-  sharepoint_connections: "OAuth data: never touched by the reset.",
-  sharepoint_oauth_state: "OAuth data: never touched by the reset.",
+  microsoft365_connections: "OAuth data: never touched by the reset.",
+  microsoft365_oauth_state: "OAuth data: never touched by the reset.",
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",

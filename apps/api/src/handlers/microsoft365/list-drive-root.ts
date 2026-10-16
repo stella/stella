@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { sharepointConnections } from "@/api/db/schema";
-import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
+import { microsoft365Connections } from "@/api/db/schema";
+import { assertMicrosoft365ConnectionEnabled } from "@/api/handlers/microsoft365/enablement";
 import {
-  ensureSharepointAccessToken,
+  ensureMicrosoft365AccessToken,
   listDriveRootChildren,
-} from "@/api/handlers/sharepoint/graph-client";
+} from "@/api/handlers/microsoft365/graph-client";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
@@ -35,13 +35,14 @@ const config = {
 // via Graph's `@odata.nextLink` and mapped to the standard `Page<T>`. Proves
 // the delegated connection works end to end; the browser UI and the import
 // pipeline are separate, later slices.
-const listSharepointDriveRoot = createSafeRootHandler(
+const listMicrosoft365DriveRoot = createSafeRootHandler(
   config,
   async function* ({ query: input, safeDb, session, user }) {
     yield* Result.await(
-      assertSharepointConnectionEnabled({
+      assertMicrosoft365ConnectionEnabled({
         organizationId: session.activeOrganizationId,
         safeDb,
+        capabilities: ["files.read"],
       }),
     );
 
@@ -49,24 +50,26 @@ const listSharepointDriveRoot = createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            id: sharepointConnections.id,
-            organizationId: sharepointConnections.organizationId,
-            userId: sharepointConnections.userId,
-            accessTokenEncrypted: sharepointConnections.accessTokenEncrypted,
-            accessTokenIv: sharepointConnections.accessTokenIv,
-            refreshTokenEncrypted: sharepointConnections.refreshTokenEncrypted,
-            refreshTokenIv: sharepointConnections.refreshTokenIv,
-            expiresAt: sharepointConnections.expiresAt,
-            status: sharepointConnections.status,
+            id: microsoft365Connections.id,
+            scope: microsoft365Connections.scope,
+            organizationId: microsoft365Connections.organizationId,
+            userId: microsoft365Connections.userId,
+            accessTokenEncrypted: microsoft365Connections.accessTokenEncrypted,
+            accessTokenIv: microsoft365Connections.accessTokenIv,
+            refreshTokenEncrypted:
+              microsoft365Connections.refreshTokenEncrypted,
+            refreshTokenIv: microsoft365Connections.refreshTokenIv,
+            expiresAt: microsoft365Connections.expiresAt,
+            status: microsoft365Connections.status,
           })
-          .from(sharepointConnections)
+          .from(microsoft365Connections)
           .where(
             and(
               eq(
-                sharepointConnections.organizationId,
+                microsoft365Connections.organizationId,
                 session.activeOrganizationId,
               ),
-              eq(sharepointConnections.userId, user.id),
+              eq(microsoft365Connections.userId, user.id),
             ),
           )
           .limit(1),
@@ -78,13 +81,14 @@ const listSharepointDriveRoot = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 404,
-          message: "No SharePoint connection for this user",
+          message: "No Microsoft 365 connection for this user",
         }),
       );
     }
 
     const accessToken = yield* Result.await(
-      ensureSharepointAccessToken({
+      ensureMicrosoft365AccessToken({
+        capability: "files.read",
         // `user_id` is stored as plain text; brand it at this boundary so the
         // token crypto's user-scoping guard receives a typed owner id.
         connection: {
@@ -107,4 +111,4 @@ const listSharepointDriveRoot = createSafeRootHandler(
   },
 );
 
-export default listSharepointDriveRoot;
+export default listMicrosoft365DriveRoot;

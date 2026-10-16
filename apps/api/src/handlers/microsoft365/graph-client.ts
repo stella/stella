@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 /**
- * Minimal delegated Microsoft Graph client for the SharePoint connection.
+ * Minimal delegated Microsoft Graph client for the Microsoft 365 connection.
  *
  * Two responsibilities only, deliberately narrow for this first slice:
- *   1. `ensureSharepointAccessToken` — return a usable access token,
+ *   1. `ensureMicrosoft365AccessToken` — return a usable access token,
  *      refreshing it when expired and persisting the rotated tokens. On any
  *      refresh failure the connection is marked `reconnect_required` and the
  *      failure is surfaced (never swallowed), so a stale token can never be
@@ -17,34 +17,40 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { Microsoft365Capability } from "@stll/api-contract/microsoft365";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { sharepointConnections } from "@/api/db/schema";
-import type { SharepointConnectionStatus } from "@/api/db/schema";
+import { microsoft365Connections } from "@/api/db/schema";
+import type { Microsoft365ConnectionStatus } from "@/api/db/schema";
 import {
-  decryptSharepointSecret,
-  encryptSharepointSecret,
-} from "@/api/handlers/sharepoint/crypto";
+  decryptMicrosoft365Secret,
+  encryptMicrosoft365Secret,
+} from "@/api/handlers/microsoft365/crypto";
 import {
-  getSharepointOAuthConfig,
+  getMicrosoft365OAuthConfig,
   refreshAccessToken,
   tokenExpiresAt,
-} from "@/api/handlers/sharepoint/graph-oauth";
+} from "@/api/handlers/microsoft365/graph-oauth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
+import { grantedCapabilities } from "./capabilities";
+
 const GRAPH_FETCH_TIMEOUT_MS = 10_000;
+const GRAPH_ACCOUNT_RESPONSE_MAX_BYTES = 64 * 1024;
+const GRAPH_DRIVE_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 const GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0";
 // Refresh a little early so a token does not expire mid-request.
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 
-/** Columns `ensureSharepointAccessToken` needs from a connection row. */
-export type SharepointConnectionTokens = {
-  id: SafeId<"sharepointConnection">;
+/** Columns `ensureMicrosoft365AccessToken` needs from a connection row. */
+export type Microsoft365ConnectionTokens = {
+  id: SafeId<"microsoft365Connection">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   accessTokenEncrypted: Buffer;
@@ -52,20 +58,21 @@ export type SharepointConnectionTokens = {
   refreshTokenEncrypted: Buffer | null;
   refreshTokenIv: Buffer | null;
   expiresAt: Date | null;
-  status: SharepointConnectionStatus;
+  status: Microsoft365ConnectionStatus;
+  scope: string | null;
 };
 
 const reconnectRequiredError = (): HandlerError<409> =>
   new HandlerError({
     status: 409,
-    message: "SharePoint connection must be reconnected",
+    message: "Microsoft 365 connection must be reconnected",
   });
 
 const markReconnectRequired = async ({
   connection,
   safeDb,
 }: {
-  connection: SharepointConnectionTokens;
+  connection: Microsoft365ConnectionTokens;
   safeDb: SafeDb;
 }): Promise<Result<void, SafeDbError>> =>
   await Result.gen(async function* () {
@@ -75,16 +82,20 @@ const markReconnectRequired = async ({
         // needing reconnect. The user-facing lifecycle events (connect /
         // disconnect / org-disable purge) are the audited surface.
         await tx
-          .update(sharepointConnections)
+          .update(microsoft365Connections)
           .set({ status: "reconnect_required", updatedAt: new Date() })
           .where(
             and(
-              eq(sharepointConnections.id, connection.id),
+              eq(microsoft365Connections.id, connection.id),
               eq(
-                sharepointConnections.organizationId,
+                microsoft365Connections.accessTokenEncrypted,
+                connection.accessTokenEncrypted,
+              ),
+              eq(
+                microsoft365Connections.organizationId,
                 connection.organizationId,
               ),
-              eq(sharepointConnections.userId, connection.userId),
+              eq(microsoft365Connections.userId, connection.userId),
             ),
           );
       }),
@@ -92,24 +103,46 @@ const markReconnectRequired = async ({
     return Result.ok(undefined);
   });
 
-export const ensureSharepointAccessToken = async ({
-  connection,
-  safeDb,
-}: {
-  connection: SharepointConnectionTokens;
-  safeDb: SafeDb;
-}): Promise<Result<AccessToken, HandlerError<409 | 500 | 502> | SafeDbError>> =>
+const TOKEN_REFRESH_DEPENDENCIES = {
+  getMicrosoft365OAuthConfig,
+  refreshAccessToken,
+};
+
+export const ensureMicrosoft365AccessToken = async (
+  {
+    connection,
+    safeDb,
+    capability,
+  }: {
+    connection: Microsoft365ConnectionTokens;
+    safeDb: SafeDb;
+    capability: Microsoft365Capability;
+  },
+  dependencies = TOKEN_REFRESH_DEPENDENCIES,
+): Promise<
+  Result<AccessToken, HandlerError<403 | 409 | 500 | 502> | SafeDbError>
+> =>
   await Result.gen(async function* () {
+    if (!grantedCapabilities(connection.scope).includes(capability)) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Microsoft 365 capability missing",
+        }),
+      );
+    }
+    if (connection.status !== "connected") {
+      return Result.err(reconnectRequiredError());
+    }
     const stillValid =
-      connection.status === "connected" &&
       connection.expiresAt !== null &&
       connection.expiresAt.getTime() -
         Temporal.Now.instant().epochMilliseconds >
         TOKEN_EXPIRY_BUFFER_MS;
 
     if (stillValid) {
-      const accessToken = await decryptSharepointSecret({
-        purpose: "sharepoint_access_token",
+      const accessToken = await decryptMicrosoft365Secret({
+        purpose: "microsoft365_access_token",
         ciphertext: connection.accessTokenEncrypted,
         iv: connection.accessTokenIv,
         organizationId: connection.organizationId,
@@ -123,20 +156,20 @@ export const ensureSharepointAccessToken = async ({
       return Result.err(reconnectRequiredError());
     }
 
-    const config = getSharepointOAuthConfig();
+    const config = dependencies.getMicrosoft365OAuthConfig();
     if (Result.isError(config)) {
       return Result.err(config.error);
     }
 
-    const refreshToken = await decryptSharepointSecret({
-      purpose: "sharepoint_refresh_token",
+    const refreshToken = await decryptMicrosoft365Secret({
+      purpose: "microsoft365_refresh_token",
       ciphertext: connection.refreshTokenEncrypted,
       iv: connection.refreshTokenIv,
       organizationId: connection.organizationId,
       userId: connection.userId,
     });
 
-    const refreshed = await refreshAccessToken({
+    const refreshed = await dependencies.refreshAccessToken({
       clientId: config.value.clientId,
       clientSecret: config.value.clientSecret,
       refreshToken,
@@ -149,29 +182,28 @@ export const ensureSharepointAccessToken = async ({
     }
 
     const token = refreshed.value;
-    const encryptedAccess = await encryptSharepointSecret({
-      purpose: "sharepoint_access_token",
+    const encryptedAccess = await encryptMicrosoft365Secret({
+      purpose: "microsoft365_access_token",
       secret: token.access_token,
       organizationId: connection.organizationId,
       userId: connection.userId,
     });
     const encryptedRefresh = token.refresh_token
-      ? await encryptSharepointSecret({
-          purpose: "sharepoint_refresh_token",
+      ? await encryptMicrosoft365Secret({
+          purpose: "microsoft365_refresh_token",
           secret: token.refresh_token,
           organizationId: connection.organizationId,
           userId: connection.userId,
         })
       : null;
 
-    yield* Result.await(
+    const updated = yield* Result.await(
       safeDb(async (tx) => {
-        // audit: skip — token-refresh bookkeeping: rotates the stored access /
-        // refresh tokens after a silent Graph refresh. The user-facing
-        // lifecycle events (connect / disconnect / org-disable purge) are the
-        // audited surface.
-        await tx
-          .update(sharepointConnections)
+        // Compare the token snapshot so a refresh cannot overwrite a newer
+        // consent grant or return a token after the connection was removed.
+        // audit: skip - Token refresh bookkeeping; connection lifecycle actions own the audit trail.
+        const rows = await tx
+          .update(microsoft365Connections)
           .set({
             accessTokenEncrypted: encryptedAccess.ciphertext,
             accessTokenIv: encryptedAccess.iv,
@@ -182,7 +214,7 @@ export const ensureSharepointAccessToken = async ({
                 }
               : {}),
             tokenType: token.token_type ?? "Bearer",
-            scope: token.scope ?? null,
+            scope: token.scope ?? connection.scope,
             expiresAt: tokenExpiresAt(token),
             status: "connected",
             lastUsedAt: new Date(),
@@ -190,21 +222,40 @@ export const ensureSharepointAccessToken = async ({
           })
           .where(
             and(
-              eq(sharepointConnections.id, connection.id),
+              eq(microsoft365Connections.id, connection.id),
               eq(
-                sharepointConnections.organizationId,
+                microsoft365Connections.accessTokenEncrypted,
+                connection.accessTokenEncrypted,
+              ),
+              eq(
+                microsoft365Connections.organizationId,
                 connection.organizationId,
               ),
-              eq(sharepointConnections.userId, connection.userId),
+              eq(microsoft365Connections.userId, connection.userId),
             ),
-          );
+          )
+          .returning({ id: microsoft365Connections.id });
+        return rows.length > 0;
       }),
     );
+    if (!updated) {
+      return Result.err(reconnectRequiredError());
+    }
 
+    if (
+      !grantedCapabilities(token.scope ?? connection.scope).includes(capability)
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: "Microsoft 365 capability missing",
+        }),
+      );
+    }
     // Re-decrypt what we just stored so the returned value is minted through
     // the single brand boundary, rather than casting the raw string here.
-    const accessToken = await decryptSharepointSecret({
-      purpose: "sharepoint_access_token",
+    const accessToken = await decryptMicrosoft365Secret({
+      purpose: "microsoft365_access_token",
       ciphertext: encryptedAccess.ciphertext,
       iv: encryptedAccess.iv,
       organizationId: connection.organizationId,
@@ -233,7 +284,7 @@ export type DriveChildrenResponse = v.InferOutput<
   typeof driveChildrenResponseSchema
 >;
 
-export type SharepointDriveItem = {
+export type Microsoft365DriveItem = {
   id: string;
   name: string;
   kind: "file" | "folder";
@@ -246,7 +297,7 @@ export type SharepointDriveItem = {
 
 const toDriveItem = (
   item: v.InferOutput<typeof driveItemSchema>,
-): SharepointDriveItem => ({
+): Microsoft365DriveItem => ({
   id: item.id,
   name: item.name ?? "Untitled",
   kind: item.folder ? "folder" : "file",
@@ -275,7 +326,7 @@ const parseSkipToken = (nextLink: string | undefined): string | null => {
 export const mapDriveChildrenToPage = (
   response: DriveChildrenResponse,
   limit: number,
-): Page<SharepointDriveItem> => ({
+): Page<Microsoft365DriveItem> => ({
   items: response.value.map(toDriveItem),
   nextCursor: parseSkipToken(response["@odata.nextLink"]),
   limit,
@@ -287,36 +338,54 @@ const meResponseSchema = v.looseObject({
   mail: v.optional(v.string()),
 });
 
-/**
- * Best-effort display label for the connected Microsoft account, read once at
- * connect time. Boundary try/catch: a failure here must never block the
- * connection, so it degrades to `null`. `accessToken` is the raw token fresh
- * from the code exchange (not yet a stored `Secret`).
- */
+/** Read a display label without treating a provider failure as an empty account. */
 export const fetchAccountLabel = async (
   accessToken: string,
-): Promise<string | null> => {
-  try {
-    const url = new URL(`${GRAPH_API_BASE_URL}/me`);
-    url.searchParams.set("$select", "userPrincipalName,displayName,mail");
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const parsed = v.parse(meResponseSchema, await response.json());
-    return (
-      parsed.userPrincipalName ?? parsed.mail ?? parsed.displayName ?? null
-    );
-  } catch {
-    return null;
-  }
-};
+): Promise<Result<string | null, HandlerError<502>>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const url = new URL(`${GRAPH_API_BASE_URL}/me`);
+      url.searchParams.set("$select", "userPrincipalName,displayName,mail");
+      const response = await fetchWithTimeout(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+        },
+        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
+        signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+        redirect: "error",
+      });
+      if (!response.ok || !response.body) {
+        throw new HandlerError({
+          status: 502,
+          message: "Microsoft account lookup failed",
+        });
+      }
+      const bytes = await readCappedBytes(
+        response.body,
+        GRAPH_ACCOUNT_RESPONSE_MAX_BYTES,
+      );
+      if (!bytes) {
+        throw new HandlerError({
+          status: 502,
+          message: "Microsoft account response exceeds byte limit",
+        });
+      }
+      const parsed = v.parse(
+        meResponseSchema,
+        JSON.parse(new TextDecoder().decode(bytes)),
+      );
+      return (
+        parsed.userPrincipalName ?? parsed.mail ?? parsed.displayName ?? null
+      );
+    },
+    catch: (cause) =>
+      new HandlerError({
+        status: 502,
+        message: "Microsoft account lookup failed",
+        cause,
+      }),
+  });
 
 export const listDriveRootChildren = async ({
   accessToken,
@@ -326,7 +395,7 @@ export const listDriveRootChildren = async ({
   accessToken: AccessToken;
   cursor: string | null;
   limit: number;
-}): Promise<Result<Page<SharepointDriveItem>, HandlerError<502>>> =>
+}): Promise<Result<Page<Microsoft365DriveItem>, HandlerError<502>>> =>
   await Result.tryPromise({
     try: async () => {
       const url = new URL(`${GRAPH_API_BASE_URL}/me/drive/root/children`);
@@ -340,7 +409,9 @@ export const listDriveRootChildren = async ({
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
         },
-        timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
+        timeout: { type: "idle", ms: GRAPH_FETCH_TIMEOUT_MS },
+        signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+        redirect: "error",
       });
 
       if (!response.ok) {
@@ -350,9 +421,25 @@ export const listDriveRootChildren = async ({
         });
       }
 
+      if (!response.body) {
+        throw new HandlerError({
+          status: 502,
+          message: "Missing Microsoft drive response",
+        });
+      }
+      const bytes = await readCappedBytes(
+        response.body,
+        GRAPH_DRIVE_RESPONSE_MAX_BYTES,
+      );
+      if (!bytes) {
+        throw new HandlerError({
+          status: 502,
+          message: "Microsoft drive response exceeds byte limit",
+        });
+      }
       const parsed = v.parse(
         driveChildrenResponseSchema,
-        await response.json(),
+        JSON.parse(new TextDecoder().decode(bytes)),
       );
       return mapDriveChildrenToPage(parsed, limit);
     },

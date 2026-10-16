@@ -19,8 +19,8 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   pdfSigningSessions,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   workspaces,
 } from "@/api/db/schema";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
@@ -207,29 +207,29 @@ const MEMBER_CREDENTIAL_REVOCATION = {
         ),
       );
   },
-  sharepointConnection: async (
+  microsoft365Connection: async (
     tx,
     { organizationId, userId }: MemberCredentialScope,
   ) => {
     await tx
-      .delete(sharepointConnections)
+      .delete(microsoft365Connections)
       .where(
         and(
-          eq(sharepointConnections.organizationId, organizationId),
-          eq(sharepointConnections.userId, userId),
+          eq(microsoft365Connections.organizationId, organizationId),
+          eq(microsoft365Connections.userId, userId),
         ),
       );
   },
-  sharepointOAuthState: async (
+  microsoft365OAuthState: async (
     tx,
     { organizationId, userId }: MemberCredentialScope,
   ) => {
     await tx
-      .delete(sharepointOAuthState)
+      .delete(microsoft365OAuthState)
       .where(
         and(
-          eq(sharepointOAuthState.organizationId, organizationId),
-          eq(sharepointOAuthState.userId, userId),
+          eq(microsoft365OAuthState.organizationId, organizationId),
+          eq(microsoft365OAuthState.userId, userId),
         ),
       );
   },

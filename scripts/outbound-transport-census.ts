@@ -32,6 +32,13 @@ export type OutboundTransportCensusEntry = {
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/api/src/handlers/microsoft365/calendar-client.ts",
+    class: "third-party",
+    reason:
+      "Reads delegated calendar metadata through fixed Graph endpoints with timeout, byte, range, and paging bounds.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
@@ -185,13 +192,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/handlers/sharepoint/graph-client.ts",
+    path: "apps/api/src/handlers/microsoft365/graph-client.ts",
     class: "third-party",
     reason: "Reads Microsoft Graph resources for connected accounts.",
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+    path: "apps/api/src/handlers/microsoft365/graph-oauth.ts",
     class: "third-party",
     reason: "Exchanges credentials with Microsoft identity endpoints.",
     transports: ["module:@stll/fetch"],

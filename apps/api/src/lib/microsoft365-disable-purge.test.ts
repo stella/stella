@@ -11,15 +11,15 @@ import { eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import {
   organizationSettings,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
+import disconnectMicrosoft365 from "@/api/handlers/microsoft365/disconnect";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { purgeMicrosoft365ForOrg } from "@/api/lib/microsoft365-disable-purge";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -46,12 +46,12 @@ beforeAll(async () => {
   // orgB stays disabled (schema default) — the disconnect test runs against it.
   await testDb
     .update(organizationSettings)
-    .set({ sharepointConnectionEnabled: true })
+    .set({ microsoft365ConnectionEnabled: true })
     .where(eq(organizationSettings.organizationId, ids.orgA));
 
-  await testDb.insert(sharepointConnections).values([
+  await testDb.insert(microsoft365Connections).values([
     {
-      id: createSafeId<"sharepointConnection">(),
+      id: createSafeId<"microsoft365Connection">(),
       organizationId: ids.orgA,
       userId: ids.userA1,
       accessTokenEncrypted: enc(),
@@ -61,7 +61,7 @@ beforeAll(async () => {
       status: "connected",
     },
     {
-      id: createSafeId<"sharepointConnection">(),
+      id: createSafeId<"microsoft365Connection">(),
       organizationId: ids.orgA,
       userId: ids.userA2,
       accessTokenEncrypted: enc(),
@@ -69,7 +69,7 @@ beforeAll(async () => {
       status: "connected",
     },
     {
-      id: createSafeId<"sharepointConnection">(),
+      id: createSafeId<"microsoft365Connection">(),
       organizationId: ids.orgB,
       userId: ids.userB1,
       accessTokenEncrypted: enc(),
@@ -78,12 +78,19 @@ beforeAll(async () => {
     },
   ]);
 
-  await testDb.insert(sharepointOAuthState).values({
+  await testDb.insert(microsoft365OAuthState).values({
+    state: `spstate-${ids.orgB}`,
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    codeVerifier: "verifier",
+    redirectUri: "https://api.example.test/v1/microsoft365/oauth/callback",
+  });
+  await testDb.insert(microsoft365OAuthState).values({
     state: `spstate-${ids.orgA}`,
     organizationId: ids.orgA,
     userId: ids.userA1,
     codeVerifier: "verifier",
-    redirectUri: "https://api.example.test/v1/sharepoint/oauth/callback",
+    redirectUri: "https://api.example.test/v1/microsoft365/oauth/callback",
   });
 });
 
@@ -102,7 +109,7 @@ describe("disabling the org toggle revokes stored tokens", () => {
 
     const result = await testDb.transaction(
       async (tx) =>
-        await purgeSharepointForOrg(asTestRaw<Transaction>(tx), {
+        await purgeMicrosoft365ForOrg(asTestRaw<Transaction>(tx), {
           organizationId: ids.orgA,
           recordAuditEvent,
         }),
@@ -113,28 +120,27 @@ describe("disabling the org toggle revokes stored tokens", () => {
     expect(result.purgedPendingStates).toBe(1);
 
     const remaining = await testDb
-      .select({ id: sharepointConnections.id })
-      .from(sharepointConnections)
-      .where(eq(sharepointConnections.organizationId, ids.orgA));
+      .select({ id: microsoft365Connections.id })
+      .from(microsoft365Connections)
+      .where(eq(microsoft365Connections.organizationId, ids.orgA));
     expect(remaining).toHaveLength(0);
-
     const pending = await testDb
-      .select({ state: sharepointOAuthState.state })
-      .from(sharepointOAuthState)
-      .where(eq(sharepointOAuthState.organizationId, ids.orgA));
+      .select({ state: microsoft365OAuthState.state })
+      .from(microsoft365OAuthState)
+      .where(eq(microsoft365OAuthState.organizationId, ids.orgA));
     expect(pending).toHaveLength(0);
 
     const settings = await testDb
-      .select({ enabled: organizationSettings.sharepointConnectionEnabled })
+      .select({ enabled: organizationSettings.microsoft365ConnectionEnabled })
       .from(organizationSettings)
       .where(eq(organizationSettings.organizationId, ids.orgA));
     expect(settings[0]?.enabled).toBe(false);
 
     // Another org's connection is untouched.
     const orgBConnections = await testDb
-      .select({ id: sharepointConnections.id })
-      .from(sharepointConnections)
-      .where(eq(sharepointConnections.organizationId, ids.orgB));
+      .select({ id: microsoft365Connections.id })
+      .from(microsoft365Connections)
+      .where(eq(microsoft365Connections.organizationId, ids.orgB));
     expect(orgBConnections).toHaveLength(1);
 
     // A toggle-change audit plus a disconnect/purge audit.
@@ -142,7 +148,7 @@ describe("disabling the org toggle revokes stored tokens", () => {
     expect(events[0]?.action).toBe("update");
     expect(events[1]?.action).toBe("delete");
     expect(events[1]?.metadata?.["operation"]).toBe(
-      "sharepoint_oauth_disconnect",
+      "microsoft365_oauth_disconnect",
     );
     expect(events[1]?.metadata?.["purgedConnections"]).toBe(2);
   });
@@ -161,7 +167,7 @@ describe("disconnect is never gated on org enablement", () => {
 
     const safeDb = createSafeDb(testDb, [], ids.orgB, ids.userB1);
 
-    const result = await disconnectSharepoint.handler(
+    const result = await disconnectMicrosoft365.handler(
       asTestRaw({
         safeDb,
         session: { activeOrganizationId: ids.orgB },
@@ -169,9 +175,9 @@ describe("disconnect is never gated on org enablement", () => {
         memberRole: sessionMemberRole("owner"),
         recordAuditEvent,
         request: new Request(
-          "https://api.example.test/v1/sharepoint/connection",
+          "https://api.example.test/v1/microsoft365/connection",
         ),
-        route: "/v1/sharepoint/connection",
+        route: "/v1/microsoft365/connection",
       }),
     );
 
@@ -179,9 +185,14 @@ describe("disconnect is never gated on org enablement", () => {
     expect(auditActions).toEqual(["delete"]);
 
     const remaining = await testDb
-      .select({ id: sharepointConnections.id })
-      .from(sharepointConnections)
-      .where(eq(sharepointConnections.organizationId, ids.orgB));
+      .select({ id: microsoft365Connections.id })
+      .from(microsoft365Connections)
+      .where(eq(microsoft365Connections.organizationId, ids.orgB));
     expect(remaining).toHaveLength(0);
+    const pending = await testDb
+      .select({ state: microsoft365OAuthState.state })
+      .from(microsoft365OAuthState)
+      .where(eq(microsoft365OAuthState.organizationId, ids.orgB));
+    expect(pending).toHaveLength(0);
   });
 });

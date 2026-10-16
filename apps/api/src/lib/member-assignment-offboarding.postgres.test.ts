@@ -23,8 +23,8 @@ import {
   mcpConnectors,
   mcpUserConnections,
   mcpOAuthState,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   workObligations,
   contacts,
   entities,
@@ -928,9 +928,9 @@ if (!databaseUrl || !runPostgresTests) {
           resourceUrl: "https://example.test/mcp",
           authorizationServerUrl: "https://example.test",
         });
-        await db.insert(sharepointConnections).values(
+        await db.insert(microsoft365Connections).values(
           [owner.userId, leaver.userId].map((userId) => ({
-            id: createSafeId<"sharepointConnection">(),
+            id: createSafeId<"microsoft365Connection">(),
             organizationId,
             userId,
             accessTokenEncrypted: Buffer.from("fixture"),
@@ -938,7 +938,7 @@ if (!databaseUrl || !runPostgresTests) {
             status: "connected" as const,
           })),
         );
-        await db.insert(sharepointOAuthState).values({
+        await db.insert(microsoft365OAuthState).values({
           state: inviteId,
           organizationId,
           userId: leaver.userId,
@@ -1090,9 +1090,9 @@ if (!databaseUrl || !runPostgresTests) {
         ).toBe(1);
         for (const table of [
           mcpUserConnections,
-          sharepointConnections,
+          microsoft365Connections,
           mcpOAuthState,
-          sharepointOAuthState,
+          microsoft365OAuthState,
         ]) {
           expect(
             await db.$count(
@@ -1115,10 +1115,10 @@ if (!databaseUrl || !runPostgresTests) {
         ).toBe(1);
         expect(
           await db.$count(
-            sharepointConnections,
+            microsoft365Connections,
             and(
-              eq(sharepointConnections.organizationId, organizationId),
-              eq(sharepointConnections.userId, owner.userId),
+              eq(microsoft365Connections.organizationId, organizationId),
+              eq(microsoft365Connections.userId, owner.userId),
             ),
           ),
         ).toBe(1);

@@ -122,6 +122,8 @@ import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isAccountAuthorizedForMcpTool } from "@/api/mcp/write-tool-authority";
 
+import type { createCalendarTools } from "./calendar-tools";
+
 const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
 /**
@@ -364,7 +366,8 @@ type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
 type SecretTools = ReturnType<typeof createSecretTools>;
 
-type BuiltInChatTools = OrgTools &
+type BuiltInChatTools = ReturnType<typeof createCalendarTools> &
+  OrgTools &
   SecretTools &
   ChatExecutionTools &
   SkillTools &
@@ -408,6 +411,7 @@ export type GetChatToolsProps = {
   testDependencies?: ChatRegistryContextDeps["testDependencies"] | undefined;
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
   memoryEnabled?: boolean | undefined;
+  calendarTools?: ReturnType<typeof createCalendarTools> | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
@@ -1275,6 +1279,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         ? {}
         : createShowVisualTools(props.visualTools)),
       ...orgTools,
+      ...props.calendarTools,
       ...secretTools,
       ...executionTools,
       ...skillTools,

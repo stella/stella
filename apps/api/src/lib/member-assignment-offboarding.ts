@@ -32,8 +32,8 @@ import {
   flowDefinitions,
   flowRunSteps,
   mcpUserConnections,
-  sharepointConnections,
-  sharepointOAuthState,
+  microsoft365Connections,
+  microsoft365OAuthState,
   mcpOAuthState,
   contacts,
   searchHistoryEntries,
@@ -1564,11 +1564,11 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
-    .delete(sharepointConnections)
+    .delete(microsoft365Connections)
     .where(
       and(
-        eq(sharepointConnections.organizationId, organizationId),
-        eq(sharepointConnections.userId, userId),
+        eq(microsoft365Connections.organizationId, organizationId),
+        eq(microsoft365Connections.userId, userId),
       ),
     );
   await tx
@@ -1580,11 +1580,11 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
-    .delete(sharepointOAuthState)
+    .delete(microsoft365OAuthState)
     .where(
       and(
-        eq(sharepointOAuthState.organizationId, organizationId),
-        eq(sharepointOAuthState.userId, userId),
+        eq(microsoft365OAuthState.organizationId, organizationId),
+        eq(microsoft365OAuthState.userId, userId),
       ),
     );
   await tx
@@ -1661,8 +1661,8 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [pdfSigningSessions.createdBy, "cleared"],
   [mcpUserConnections.userId, "cleared"],
   [mcpOAuthState.userId, "cleared"],
-  [sharepointConnections.userId, "cleared"],
-  [sharepointOAuthState.userId, "cleared"],
+  [microsoft365Connections.userId, "cleared"],
+  [microsoft365OAuthState.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],
   // Revoked by `removeOrganizationMemberWithAuthArtifacts`.

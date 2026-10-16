@@ -492,9 +492,9 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "mcp_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
-  "sharepoint_connections.user_id":
+  "microsoft365_connections.user_id":
     "Organization-scoped connection; the person stays an organization member.",
-  "sharepoint_oauth_state.user_id":
+  "microsoft365_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",

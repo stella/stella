@@ -7160,7 +7160,7 @@
         "job": "measure-2"
       }
     },
-    "src/handlers/sharepoint/crypto.test.ts": {
+    "src/handlers/microsoft365/crypto.test.ts": {
       "peakMb": 182,
       "baselineMb": 182,
       "source": {
@@ -7168,7 +7168,7 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/sharepoint/graph-client.test.ts": {
+    "src/handlers/microsoft365/graph-client.test.ts": {
       "peakMb": 193,
       "baselineMb": 193,
       "source": {
@@ -7176,7 +7176,7 @@
         "job": "measure-4"
       }
     },
-    "src/handlers/sharepoint/graph-oauth.test.ts": {
+    "src/handlers/microsoft365/graph-oauth.test.ts": {
       "peakMb": 191,
       "baselineMb": 191,
       "source": {
@@ -7184,7 +7184,7 @@
         "job": "measure-1"
       }
     },
-    "src/handlers/sharepoint/oauth-callback.test.ts": {
+    "src/handlers/microsoft365/oauth-callback.test.ts": {
       "peakMb": 274,
       "baselineMb": 184,
       "source": {
@@ -15720,7 +15720,7 @@
         "job": "measure-4"
       }
     },
-    "src/lib/sharepoint-disable-purge.test.ts": {
+    "src/lib/microsoft365-disable-purge.test.ts": {
       "peakMb": 775,
       "baselineMb": 191,
       "source": {
@@ -18816,7 +18816,7 @@
         "job": "measure-3"
       }
     },
-    "src/tests/security/rls-sharepoint.test.ts": {
+    "src/tests/security/rls-microsoft365.test.ts": {
       "peakMb": 685,
       "baselineMb": 193,
       "source": {

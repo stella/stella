@@ -4767,6 +4767,10 @@ type Messages = {
       "mcpSetupHint": "Add a URL as a custom connector in Claude, Cursor or another MCP client, then sign in and approve access.";
       "mcpTitle": "MCP server";
       "mcpUrlLabel": "Server URL";
+      "microsoft365Description": "Read files and Outlook calendars in chat. Each capability requires organization approval and your Microsoft consent.";
+      "microsoft365Disable": "Turn off Microsoft 365 and disconnect all accounts";
+      "microsoft365Error": "Microsoft 365 could not connect. Try again or contact your administrator.";
+      "microsoft365Title": "Microsoft 365 connection";
       "noMatches": "No connections match “{query}”";
       "notConnected": "Not connected";
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}";

@@ -80,6 +80,7 @@ import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
 import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
+import { microsoft365Route } from "@/api/handlers/microsoft365/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
@@ -97,7 +98,6 @@ import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/r
 import { searchHistoryRoute } from "@/api/handlers/search-history/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
-import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
@@ -576,7 +576,7 @@ const api = new Elysia()
       )
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
-      .use(sharepointRoute)
+      .use(microsoft365Route)
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
       .use(apiKeysRoute)

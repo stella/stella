@@ -298,6 +298,8 @@ import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
+import { loadCalendarTools } from "./tools/calendar-tools";
+
 const COMPLETED_TURN_FOLLOW_UPS_FAILED = failureSink({
   event: "chat.turn.completed_follow_ups_failed",
   expected: [],
@@ -2737,7 +2739,16 @@ export const createSendMessage = (
             workspaceId,
           }),
         };
+        const calendarContext = {
+          safeDb,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        };
+        const calendarTools = yield* Result.await(
+          loadCalendarTools(calendarContext),
+        );
         const chatToolContext = {
+          calendarTools,
           visualTools,
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,

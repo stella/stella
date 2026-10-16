@@ -70,6 +70,8 @@ export const STATUS_COLUMNS = {
   mcpConnectorAuthorizationReviews: ["status"],
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
+  microsoft365Connections: ["status"],
+  microsoft365OAuthState: ["state"],
   officeFileEvidence: ["status"],
   organizationAccessStates: ["state"],
   organizationConfiguredAccess: [
@@ -89,8 +91,6 @@ export const STATUS_COLUMNS = {
   sanctionsMonitoringBackfills: ["status"],
   schedulerJobRuns: ["status"],
   scoutRuns: ["status"],
-  sharepointConnections: ["status"],
-  sharepointOAuthState: ["state"],
   signals: ["status"],
   softLawDocumentLocators: ["state"],
   softLawDocuments: [

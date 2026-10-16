@@ -1,38 +1,44 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
+
 import { organizationSettings } from "@/api/db/schema";
-import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { microsoft365RealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
+import { disableAndPurgeMicrosoft365ForOrg } from "@/api/lib/microsoft365-disable-purge";
 
 const requestBody = t.Object({
   enabled: t.Boolean(),
+  capabilities: t.Array(t.UnionEnum(MICROSOFT365_CAPABILITIES), {
+    maxItems: 2,
+  }),
 });
 
 const config = {
   contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
-  realtime: sharepointRealtimeUpdates,
+  realtime: microsoft365RealtimeUpdates,
   mcp: { type: "internal", reason: "provider_secret" },
   body: requestBody,
 } satisfies HandlerConfig;
 
-// Org-admin toggle for the delegated SharePoint connection. Dashboard-only
+// Org-admin toggle for the delegated Microsoft 365 connection. Dashboard-only
 // (internal): org enablement of an internal feature is not an agent-facing
 // capability, so it stays out of the CLI/MCP catalog.
 //
 // Enabling requires the deployment feature flag. Disabling is a revocation:
-// it purges every member's stored tokens (see sharepoint-disable-purge) and
+// it purges every member's stored tokens (see microsoft365-disable-purge) and
 // is always allowed, even when the deployment flag is off, so a kill switch
 // can never be blocked.
-const setSharepointEnablement = createSafeRootHandler(
+const setMicrosoft365Enablement = createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
@@ -40,14 +46,14 @@ const setSharepointEnablement = createSafeRootHandler(
     if (!body.enabled) {
       const purge = await Result.tryPromise({
         try: async () =>
-          await disableAndPurgeSharepointForOrg({
+          await disableAndPurgeMicrosoft365ForOrg({
             organizationId,
             recordAuditEvent,
           }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
-            message: "Failed to disable the SharePoint connection",
+            message: "Failed to disable the Microsoft 365 connection",
             cause,
           }),
       });
@@ -57,7 +63,7 @@ const setSharepointEnablement = createSafeRootHandler(
       return Result.ok({ enabled: false });
     }
 
-    if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
+    if (!isDeploymentFeatureEnabled("FEATURE_MICROSOFT365")) {
       return Result.err(
         new HandlerError({ status: 404, message: "Not found" }),
       );
@@ -65,9 +71,19 @@ const setSharepointEnablement = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await withAggregateLock({
+          tx,
+          aggregate: "organization",
+          id: organizationId,
+          mode: "update",
+        });
         const existing = await tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { sharepointConnectionEnabled: true },
+          columns: {
+            microsoft365ConnectionEnabled: true,
+            microsoft365FilesReadEnabled: true,
+            microsoft365CalendarReadEnabled: true,
+          },
         });
 
         await tx
@@ -75,11 +91,22 @@ const setSharepointEnablement = createSafeRootHandler(
           .values({
             id: createSafeId<"organizationSettings">(),
             organizationId,
-            sharepointConnectionEnabled: true,
+            microsoft365ConnectionEnabled: true,
+            microsoft365FilesReadEnabled:
+              body.capabilities.includes("files.read"),
+            microsoft365CalendarReadEnabled:
+              body.capabilities.includes("calendar.read"),
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
-            set: { sharepointConnectionEnabled: true, updatedAt: new Date() },
+            set: {
+              microsoft365ConnectionEnabled: true,
+              microsoft365FilesReadEnabled:
+                body.capabilities.includes("files.read"),
+              microsoft365CalendarReadEnabled:
+                body.capabilities.includes("calendar.read"),
+              updatedAt: new Date(),
+            },
           });
 
         await recordAuditEvent(tx, {
@@ -88,8 +115,16 @@ const setSharepointEnablement = createSafeRootHandler(
           resourceId: organizationId,
           workspaceId: null,
           changes: {
-            sharepointConnectionEnabled: {
-              old: existing?.sharepointConnectionEnabled ?? false,
+            microsoft365FilesReadEnabled: {
+              old: existing?.microsoft365FilesReadEnabled ?? false,
+              new: body.capabilities.includes("files.read"),
+            },
+            microsoft365CalendarReadEnabled: {
+              old: existing?.microsoft365CalendarReadEnabled ?? false,
+              new: body.capabilities.includes("calendar.read"),
+            },
+            microsoft365ConnectionEnabled: {
+              old: existing?.microsoft365ConnectionEnabled ?? false,
               new: true,
             },
           },
@@ -101,4 +136,4 @@ const setSharepointEnablement = createSafeRootHandler(
   },
 );
 
-export default setSharepointEnablement;
+export default setMicrosoft365Enablement;

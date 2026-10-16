@@ -1728,18 +1728,6 @@
     "reason": "builder-for in apps/api/src/handlers/seller-profiles/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/sharepoint/oauth-callback.ts",
-    "fingerprint": "7bd262739ad1fdbb54a09ba6c6f245870aefe664f12e1a7c12eb5be7b315089e",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/sharepoint/oauth-callback.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/sharepoint/oauth-callback.ts",
-    "fingerprint": "f473000c2b6b1a4a6479a9a35a4d5dfc80afc99ce06639991c6bbd22ec04637d",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/sharepoint/oauth-callback.ts: Legacy savepoint on tx; migrate through the aggregate savepoint owner so the parent lock history is retained."
-  },
-  {
     "file": "apps/api/src/handlers/skills/delete.ts",
     "fingerprint": "be66524f1a87939c8c87b6eb92b8f9ac14258173610829e71ff9b39146132f79",
     "count": 1,
@@ -4006,12 +3994,6 @@
     "fingerprint": "bafef3180a607f1e28266adf36a58a23fd8466b1f77c8cfeb2cafbd77dc31815",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/search/process-extraction.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/sharepoint-disable-purge.ts",
-    "fingerprint": "8f251f5c50d8856c2cda79c689c28c5fc197e9bbdb2b59690e8125eb57ac9f36",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/sharepoint-disable-purge.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/skills/install.ts",

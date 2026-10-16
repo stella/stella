@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { SearchXIcon } from "@stll/ui/icons";
 import { List, ListGroup } from "@stll/ui/list";
@@ -28,9 +29,15 @@ import {
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
+import { Microsoft365Group } from "./-components/account/connections/microsoft365-group";
+
 export const Route = createFileRoute(
   "/_protected/settings/account/connections",
 )({
+  validateSearch: v.object({
+    microsoft365Status: v.optional(v.picklist(["connected", "error"])),
+    microsoft365Reason: v.optional(v.string()),
+  }),
   component: ConnectionsPage,
   loader: async ({ context }) => {
     // Prime every query the page suspends on so the fetches run in parallel
@@ -60,6 +67,9 @@ export const Route = createFileRoute(
 
 function ConnectionsPage() {
   const t = useTranslations();
+  const outcome = Route.useSearch({
+    select: (search) => search.microsoft365Status,
+  });
   const [query, setQuery] = useState("");
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length > 0;
@@ -83,6 +93,16 @@ function ConnectionsPage() {
           value={query}
         />
       </div>
+      {outcome && (
+        <p role="status">
+          {t(
+            outcome === "connected"
+              ? "settings.connections.connected"
+              : "settings.connections.microsoft365Error",
+          )}
+        </p>
+      )}
+      {!isSearching && <Microsoft365Group />}
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
       {showApps && <AppsGroup apps={apps} />}

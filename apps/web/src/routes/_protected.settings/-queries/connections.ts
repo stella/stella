@@ -37,3 +37,16 @@ export const connectedAppsOptions = (userId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: fetchConnectedApps,
   });
+
+type Microsoft365QueryScope = { organizationId: string; userId: string };
+
+export const microsoft365Options = ({
+  organizationId,
+  userId,
+}: Microsoft365QueryScope) =>
+  queryOptions({
+    queryKey: ["microsoft365", organizationId, userId] as const,
+    queryFn: async ({ signal }) =>
+      unwrapEden(await api.microsoft365.connection.get({ fetch: { signal } })),
+    retry: false,
+  });

@@ -370,7 +370,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/api/src/handlers/playbooks" },
   { reason: "unreviewed", unit: "apps/api/src/handlers/properties" },
   { reason: "unreviewed", unit: "apps/api/src/handlers/rates" },
-  { reason: "unreviewed", unit: "apps/api/src/handlers/sharepoint" },
+  { reason: "unreviewed", unit: "apps/api/src/handlers/microsoft365" },
   { reason: "unreviewed", unit: "apps/api/src/handlers/signals" },
   { reason: "unreviewed", unit: "apps/api/src/handlers/skills" },
   { reason: "unreviewed", unit: "apps/api/src/handlers/style-sets" },
