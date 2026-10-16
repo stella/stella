@@ -31,7 +31,6 @@ import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
   createNetworkCollector,
-  delayWaterfallRequests,
   mergeNetworkBaseline,
   summarizeCapture,
 } from "../helpers/network";
@@ -515,7 +514,7 @@ const measureRouteTarget = async ({
   const detachNetwork = network.trackPage(page);
 
   try {
-    await delayWaterfallRequests(page);
+    await network.measureRounds(page);
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
@@ -523,6 +522,7 @@ const measureRouteTarget = async ({
       // Allow injected request waves to finish; quiet activity still exits early.
       timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
+    network.finishRounds();
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);

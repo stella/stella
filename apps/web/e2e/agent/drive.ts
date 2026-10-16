@@ -446,9 +446,11 @@ const measureOnce = async (
   }, LCP_GLOBAL);
   const tracked = await trackPage(context);
   const startedAt = performance.now();
+  await tracked.network.measureRounds(tracked.page);
   await tracked.page.goto(target, { waitUntil: "domcontentloaded" });
   const ready = await waitUntilReady(tracked, options.waitFor);
   const settledMs = performance.now() - startedAt - QUIET.idleMs;
+  tracked.network.finishRounds();
   const networkCapture = await tracked.network.capture();
   const sample: MeasureSample = {
     ...pageTotals(networkCapture),

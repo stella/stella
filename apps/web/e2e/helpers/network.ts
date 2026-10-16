@@ -10,6 +10,7 @@ import path from "node:path";
 
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
 
+import { createNetworkRoundController } from "./network-rounds";
 import { networkBaselineCoverageProblem } from "./smoke-route-coverage";
 
 // Matches apps/web/e2e/playwright.config.ts and helpers/api.ts: the API origin
@@ -44,6 +45,8 @@ const BASELINE_RELATIVE = "apps/web/e2e/network-baseline.json";
 const WRITE_HINT =
   "declare an intentional increase in apps/web/e2e/network-budgets/<change>.json; main records the shared baseline";
 
+const NETWORK_ROUND_POLL_MS = 10;
+
 // --- collector -------------------------------------------------------------
 
 export type NetworkCapture = {
@@ -60,16 +63,14 @@ export type NetworkCapture = {
     // body failed (e.g. aborted/redirected mid-navigation).
     responseBytesUnavailable: boolean;
   }[];
-  // Intervals for finite API responses only. Streams and background polls
-  // remain in `requests` so request coverage sees them, but they do not
-  // represent a route-load round: the page waits on neither to settle.
-  // `key` is the same method + normalized path `requests` is keyed by, so a
-  // depth reading can name the chain that produced it.
-  intervals: { start: number; end: number; key: string }[];
+  // Scheduled release rounds; only measurement navigations install the barrier.
+  depthChain: string[][];
 };
 
 export type NetworkCollector = {
   trackPage: (page: Page) => () => void;
+  measureRounds: (page: Page) => Promise<void>;
+  finishRounds: () => void;
   // Waits until tracked API activity has been quiet for the requested window.
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
@@ -125,42 +126,9 @@ type NetworkCollectorOptions = {
   apiOrigin?: string;
 };
 
-// Playwright does not export its resource-timing shape as a named type, so it
-// is derived from the method that produces it.
-type ResourceTiming = ReturnType<Request["timing"]>;
-
-// The browser reports -1 for a value it never recorded (a request that failed
-// before the response, or an engine that does not populate the field).
-const TIMING_UNAVAILABLE = -1;
-
-// Depth is measured from timestamps taken inside the browser's network stack,
-// not from when this process handles the corresponding CDP event. The driver
-// competes with the browser and every other shard on a CI runner, so delayed
-// event delivery used to merge real launch waves on busy runs and expose them
-// again on fast runs. `startTime` is epoch ms; `responseEnd` is relative to it.
-export const browserRequestInterval = (
-  timing: ResourceTiming,
-): { start: number; end: number } | null => {
-  if (timing.startTime <= 0 || timing.responseEnd === TIMING_UNAVAILABLE) {
-    return null;
-  }
-  return {
-    start: timing.startTime,
-    end: timing.startTime + timing.responseEnd,
-  };
-};
-
 type NetworkRecord = {
   method: string;
   pathname: string;
-  resourceType: string;
-  start: number;
-  end: number | null;
-  streamed: boolean;
-  // Browser-measured interval, present once the request settles and the
-  // network stack times it. Untimed requests retain both driver timestamps,
-  // so an interval is never assembled from two different clocks.
-  browserInterval: { start: number; end: number } | null;
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
@@ -172,25 +140,6 @@ type NetworkRecord = {
   responseBytes: number | null;
   responseBytesUnavailable: boolean;
 };
-
-// The app-version poll (ApiVersionMismatchReporter) fires from chrome after
-// mount and nothing on the page waits on it, so where it lands in the timeline
-// is pure scheduling: launched in a gap between two real rounds, it read as a
-// level of its own.
-const BACKGROUND_POLL_PATHS = new Set(["/health"]);
-
-/**
- * Streams and background polls are covered as requests, but never form a
- * route-load waterfall.
- */
-export const countsTowardsWaterfall = ({
-  pathname,
-  resourceType,
-  streamed,
-}: Pick<NetworkRecord, "pathname" | "resourceType" | "streamed">): boolean =>
-  resourceType !== "eventsource" &&
-  !streamed &&
-  !BACKGROUND_POLL_PATHS.has(pathname);
 
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
@@ -231,12 +180,47 @@ export const createNetworkCollector = (
   // so capture() awaits these before reading responseBytes off the records.
   const pendingBodyReads: Promise<void>[] = [];
   let lastActivityAt = Date.now();
+  const rounds = createNetworkRoundController<Request>();
+  const released = new Set<Request>();
 
   const markActivity = () => {
     lastActivityAt = Date.now();
   };
 
   return {
+    measureRounds: async (page) => {
+      await page.route(
+        (url) => url.origin === apiOrigin,
+        async (route) => {
+          const request = route.request();
+          if (!isTrackedApiRequest(request, apiOrigin) || rounds.loaded) {
+            await route.continue();
+            return;
+          }
+          rounds.arrive({
+            token: request,
+            key: requestKey({
+              method: request.method(),
+              pathname: new URL(request.url()).pathname,
+            }),
+            now: Date.now(),
+          });
+          while (!released.delete(request) && !rounds.loaded) {
+            for (const token of rounds.release(Date.now())) {
+              released.add(token);
+            }
+            if (released.has(request)) {
+              continue;
+            }
+            await ownerSleep(NETWORK_ROUND_POLL_MS);
+          }
+          await route.continue();
+        },
+      );
+    },
+    finishRounds: () => {
+      rounds.finish();
+    },
     trackPage: (page) => {
       const onRequest = (request: Request) => {
         if (!isTrackedApiRequest(request, apiOrigin)) {
@@ -245,11 +229,6 @@ export const createNetworkCollector = (
         const record: NetworkRecord = {
           method: request.method(),
           pathname: new URL(request.url()).pathname,
-          resourceType: request.resourceType(),
-          start: Date.now(),
-          end: null,
-          streamed: request.resourceType() === "eventsource",
-          browserInterval: null,
           dbQueries: null,
           dbQueryHeaderMissing: false,
           responseBytes: null,
@@ -261,11 +240,9 @@ export const createNetworkCollector = (
       };
 
       const onSettled = (request: Request) => {
+        rounds.complete(request, Date.now());
         const record = byRequest.get(request);
         if (record) {
-          record.end = Date.now();
-          // `responseEnd` becomes available when the request finishes.
-          record.browserInterval = browserRequestInterval(request.timing());
           markActivity();
         }
       };
@@ -284,7 +261,8 @@ export const createNetworkCollector = (
         }
 
         if (isStreamedResponse(response)) {
-          record.streamed = true;
+          // Streams never finish; headers establish that the channel opened.
+          rounds.complete(response.request(), Date.now());
           return;
         }
         pendingBodyReads.push(readResponseBytes(response, record));
@@ -296,6 +274,8 @@ export const createNetworkCollector = (
       page.on("requestfailed", onSettled);
 
       return () => {
+        rounds.finish();
+        released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
         page.off("requestfinished", onSettled);
@@ -306,15 +286,13 @@ export const createNetworkCollector = (
     waitForQuiet: async (quietOptions) =>
       waitForQuietPeriod({
         ...quietOptions,
-        getLastActivityAt: () => lastActivityAt,
+        getLastActivityAt: () => (rounds.pending ? Date.now() : lastActivityAt),
       }),
 
     capture: async () => {
       await Promise.all(pendingBodyReads);
-      // A still-pending request can only be the tail of a chain (nothing waited
-      // on its response yet), so closing it at "now" never inflates the depth.
-      const now = Date.now();
       return {
+        depthChain: rounds.rounds,
         requests: records.map(
           ({
             method,
@@ -332,16 +310,6 @@ export const createNetworkCollector = (
             responseBytesUnavailable,
           }),
         ),
-        intervals: records
-          .filter(countsTowardsWaterfall)
-          .map(({ browserInterval, start, end, method, pathname }) => {
-            const interval = browserInterval ?? { start, end: end ?? now };
-            return {
-              start: interval.start,
-              end: interval.end,
-              key: requestKey({ method, pathname }),
-            };
-          }),
       };
     },
   };
@@ -366,90 +334,6 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// Measurement intervention: hold each tracked API request before sending it,
-// so a request that waits for another one launches at least this long after
-// it. Provisional until calibrated on a local shard.
-export const WATERFALL_REQUEST_DELAY_MS = 250;
-// Leave 750 ms for server/processing work beyond the injected delay before
-// treating a later launch as idle prefetch rather than another load wave.
-const REQUEST_SEQUENCE_GAP_MS = WATERFALL_REQUEST_DELAY_MS + 750;
-
-// Install before navigation; share the collector's origin and resource filter
-// so every request counted by the gate receives the same intervention.
-export const delayWaterfallRequests = async (page: Page): Promise<void> => {
-  const apiOrigin = new URL(DEFAULT_API_URL).origin;
-  await page.route(
-    (url) => url.origin === apiOrigin,
-    async (route) => {
-      if (isTrackedApiRequest(route.request(), apiOrigin)) {
-        await ownerSleep(WATERFALL_REQUEST_DELAY_MS);
-      }
-      await route.continue();
-    },
-  );
-};
-
-export type WaterfallInterval = {
-  start: number;
-  end: number;
-  // Request key (method + normalized path). Optional so a caller measuring bare
-  // timings still gets a depth; such intervals contribute no key to their level.
-  key?: string;
-};
-
-// Under the request hold above, a request that depends on another launches at
-// least D after it. A request's level is therefore one more than the deepest
-// request in its sequence that launched at least D earlier: the longest chain
-// of D-separated launches. Parallel branches whose responses finish at
-// different speeds still reach the same level, and response ends never affect
-// levels or idle-prefetch splits. This measures launch chains under the
-// intervention, not causality in an unmodified trace. Ties retain the earliest
-// deepest sequence; depth and diagnostics share it.
-export const deepestWaterfallSequence = (
-  intervals: WaterfallInterval[],
-): string[][] => {
-  const sorted = intervals.toSorted((a, b) => a.start - b.start);
-  const first = sorted.at(0);
-  if (first === undefined) {
-    return [];
-  }
-  const keysOf = ({ key }: WaterfallInterval): string[] =>
-    key === undefined ? [] : [key];
-  let sequence: { start: number; level: number }[] = [];
-  let levels: string[][] = [];
-  let best = levels;
-  let previousStart = first.start;
-
-  for (const interval of sorted) {
-    if (interval.start - previousStart > REQUEST_SEQUENCE_GAP_MS) {
-      sequence = [];
-      levels = [];
-    }
-    previousStart = interval.start;
-    let deepestEarlier = 0;
-    for (const launched of sequence) {
-      if (interval.start - launched.start >= WATERFALL_REQUEST_DELAY_MS) {
-        deepestEarlier = Math.max(deepestEarlier, launched.level);
-      }
-    }
-    const level = deepestEarlier + 1;
-    sequence.push({ start: interval.start, level });
-    const levelKeys = levels[level - 1];
-    if (levelKeys === undefined) {
-      levels.push(keysOf(interval));
-    } else {
-      levelKeys.push(...keysOf(interval));
-    }
-    if (levels.length > best.length) {
-      best = levels;
-    }
-  }
-  return best;
-};
-
-export const waterfallDepth = (intervals: WaterfallInterval[]): number =>
-  deepestWaterfallSequence(intervals).length;
-
 // --- baseline machinery ----------------------------------------------------
 
 export type RouteNetworkMetrics = {
@@ -457,10 +341,10 @@ export type RouteNetworkMetrics = {
   requests: string[];
   // Per request key, how many times it was observed.
   requestCounts: Record<string, number>;
-  // Depth over ALL observed intervals, including duplicate keys.
+  // Number of nonempty barrier releases, including duplicate request keys.
   depth: number;
   // The request keys behind `depth`, one entry per level in launch order (see
-  // deepestWaterfallSequence). Diagnostic only: never written to the baseline.
+  // round controller). Diagnostic only: never written to the baseline.
   depthChain: string[][];
   // Per request key, the max `x-db-queries` observed this run. Keys whose
   // responses carried no header (auth-mounted endpoints, dropped responses)
@@ -475,8 +359,12 @@ export type RouteNetworkMetrics = {
   missingResponseSizeCounts: Record<string, number>;
 };
 
+export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
+
 export type NetworkBaselineEntry = {
   depth: number;
+  // Missing on recordings made before depth method versioning.
+  depthMethod?: string;
   requests: string[];
   // Optional so baselines written before request multiplicity existed still parse.
   requestCounts?: Record<string, number>;
@@ -497,7 +385,7 @@ export const summarizeCapture = (
   const responseSizes: Record<string, number> = {};
   const missingResponseSizeCounts: Record<string, number> = {};
   const requestCounts: Record<string, number> = {};
-  const depthChain = deepestWaterfallSequence(capture.intervals);
+  const depthChain = capture.depthChain;
   for (const request of capture.requests) {
     const key = requestKey(request);
     requestCounts[key] = (requestCounts[key] ?? 0) + 1;
@@ -742,7 +630,10 @@ const pushImprovementNotices = ({
         .join("\n")}`,
     );
   }
-  if (metrics.depth >= entry.depth) {
+  if (
+    entry.depthMethod !== NETWORK_DEPTH_METHOD ||
+    metrics.depth >= entry.depth
+  ) {
     return;
   }
   notices.push(
@@ -831,7 +722,13 @@ export const diffNetworkBaseline = (
       notices.push(`Changed scoped route ${route}: ${JSON.stringify(metrics)}`);
     }
     pushNewRequestProblems({ route, entry, metrics, problems });
-    pushWaterfallDepthProblems({ route, entry, metrics, problems });
+    if (entry.depthMethod === NETWORK_DEPTH_METHOD) {
+      pushWaterfallDepthProblems({ route, entry, metrics, problems });
+    } else {
+      notices.push(
+        `Waterfall depth method differs on ${route}: ${entry.depthMethod ?? "unversioned"} -> ${NETWORK_DEPTH_METHOD}; observed depth ${metrics.depth} (baseline ${entry.depth}). Depth is informational until main records the current method.`,
+      );
+    }
     pushRequestCountProblems({ route, entry, metrics, problems });
 
     // DB-count budgets only fail on exceed: a lower count is common (cache
@@ -888,6 +785,8 @@ const isNetworkBaselineEntry = (
   }
   return (
     typeof value["depth"] === "number" &&
+    (value["depthMethod"] === undefined ||
+      typeof value["depthMethod"] === "string") &&
     isStringArray(value["requests"]) &&
     (value["requestCounts"] === undefined ||
       isNumberRecord(value["requestCounts"])) &&
@@ -905,7 +804,7 @@ const isNetworkBaseline = (value: unknown): value is NetworkBaseline =>
 // settle). A single-run snapshot would miss them and a later run would then
 // fail the one-directional check as a "new request". `write` therefore MERGES
 // into the existing baseline: requests accumulate as a union and depth takes
-// the max, so repeated write runs converge on the full envelope of observable
+// the max within the same method, so repeated write runs converge on the full envelope of observable
 // behavior. Routes absent from this run (renamed/removed) are dropped — the
 // walk deterministically visits every smoked route.
 export const mergeNetworkBaseline = (
@@ -945,7 +844,11 @@ export const mergeNetworkBaseline = (
       }
     }
     merged[route] = {
-      depth: Math.max(metrics.depth, previous?.depth ?? 0),
+      depth: Math.max(
+        metrics.depth,
+        previous?.depthMethod === NETWORK_DEPTH_METHOD ? previous.depth : 0,
+      ),
+      depthMethod: NETWORK_DEPTH_METHOD,
       requests: [
         ...new Set([...metrics.requests, ...previousRequests]),
       ].toSorted(),
