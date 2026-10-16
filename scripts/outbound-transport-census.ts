@@ -30,6 +30,15 @@ export type OutboundTransportCensusEntry = {
   transports: readonly string[];
 };
 
+/** Consumers of verified favicon byte transport, confined by ownership. */
+export const LINK_ICON_TRANSPORT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/origin.ts",
+    reason:
+      "Fetches only bounded favicon bytes through safeOutboundFetchBytes, revalidating and pinning every redirect hop.",
+  },
+] as const;
+
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "packages/start-runtime/src/local-module-loader.ts",
@@ -514,14 +523,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/api/src/mcp/apps/document-upload/app.ts",
+    path: "packages/mcp-apps/src/document-upload/runtime.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads documents to reserved object storage URLs in the browser app.",
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/mcp/apps/file-comparison/app.ts",
+    path: "packages/mcp-apps/src/file-comparison/runtime.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads comparison inputs to reserved object storage URLs in the browser app.",
@@ -819,7 +828,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/api/src/db/online-index-observer.ts",
     class: "operator-configured-infrastructure",
-    reason: "Reads online index state through Bun SQL connections.",
+    reason:
+      "Reads online index state and runs operator online repairs through Bun SQL connections.",
     transports: ["module:bun"],
   },
   {
@@ -979,6 +989,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Downloads entity archives and OCR exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams reader answers from the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {
@@ -1207,6 +1223,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/test-kit/src/network.ts",
+    class: "package-owned-client",
+    reason:
+      "Test network guard wraps fetch and the socket factories to refuse non-loopback hosts; it opens no connection of its own.",
+    transports: ["global:fetch", "module:node:net", "module:node:tls"],
+  },
+  {
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:
@@ -1277,6 +1300,10 @@ export type OutboundPermitGrantOwner = {
 
 /** Direct request boundaries allowed to create outbound permits. */
 export const OUTBOUND_PERMIT_GRANT_OWNERS = [
+  {
+    path: "apps/api/src/handlers/chat/link-icons/get.ts",
+    reason: "Authenticated direct boundary for verified public favicon bytes.",
+  },
   {
     path: "apps/api/src/handlers/chat/tools/secret-tools.ts",
     reason: "Native chat tool boundary for a scoped connector request.",

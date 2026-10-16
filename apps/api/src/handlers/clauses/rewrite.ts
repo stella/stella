@@ -42,7 +42,8 @@ const rewriteClauseBodySchema = t.Object({
 // strictObject + required (not optional): OpenAI strict structured output
 // rejects objects without `additionalProperties: false` / missing-from-required
 // properties. The model returns revised text per editable paragraph index.
-const rewriteOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const rewriteOutputSchema = v.strictObject({
   paragraphs: v.array(
     v.strictObject({
       index: v.number(),
@@ -152,6 +153,7 @@ const rewriteClause = createSafeRootHandler(
       feature: "clauses.rewrite",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });

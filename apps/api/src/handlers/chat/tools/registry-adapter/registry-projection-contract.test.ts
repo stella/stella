@@ -29,7 +29,6 @@ import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
@@ -105,7 +104,6 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
-const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
@@ -232,7 +230,6 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
@@ -503,6 +500,18 @@ const CONTRACT_CORPUS = {
               createdBy: "Jana",
               createdByImage: null,
               createdByDeletedAt: null,
+              assignedTo: "Petr",
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+          // The web agenda stays out of the matter detail projection.
+          upcomingAgenda: [
+            {
+              entityId: toSafeId<"entity">(uid(43)),
+              name: "File the response",
+              status: null,
+              dueDate: "2026-01-10",
               assignedTo: "Petr",
               assignedToImage: null,
               assignedToDeletedAt: null,
@@ -1587,41 +1596,6 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [],
     },
   ],
-  lookup_case_law: [
-    {
-      mode: "search",
-      buildArgs: () => ({
-        country: "CZE",
-        identifiers: ["22 Cdo 1000/2020"],
-      }),
-      setup: () => {
-        // The identity read, not the ranked search: this tool resolves a
-        // reference off the identity columns and never consults a provider.
-        lookupDecisionsByIdentityMock.mockResolvedValue([
-          {
-            caseNumber: "22 Cdo 1000/2020",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            country: "CZ",
-            court: "Nejvyšší soud",
-            courtAbbreviation: "NS",
-            decisionDate: "2020-05-01",
-            ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-            id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                value: "22 Cdo 1000/2020",
-              },
-            ],
-            language: "cs",
-            languageAlternates: [],
-            slug: "ns-22-cdo-1000-2020",
-          },
-        ] satisfies Awaited<ReturnType<typeof lookupDecisionsByIdentity>>);
-      },
-      expectRefPaths: [],
-    },
-  ],
   read_case_law_decision: [
     {
       mode: "read",
@@ -1733,19 +1707,27 @@ const CONTRACT_CORPUS = {
           unclassified: 0,
         };
         readGatedDecisionCitationDigestMock.mockResolvedValue({
+          doctrineSummary: { status: "unavailable" },
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
-            capped: { incoming: false, outgoing: false },
+            precision: {
+              status: "bounded",
+              capped: { incoming: false, outgoing: false },
+            },
             incomingByYear: [],
           },
-          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          topCiting: {
+            precision: "exact",
+            items: [relatedDecision(58, "23 Cdo 200/2021")],
+          },
           cites: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
               textWithheldReason: null,
               sectionIndex: 0,
+              doctrine: "unread",
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
             },
@@ -1754,6 +1736,7 @@ const CONTRACT_CORPUS = {
               citationText: "sp. zn. 20 Cdo 1/2001",
               textWithheldReason: null,
               sectionIndex: 1,
+              doctrine: "unread",
               treatment: "neutral",
               decision: null,
             },
@@ -1774,12 +1757,14 @@ const CONTRACT_CORPUS = {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
           page: {
+            doctrineAvailability: "available",
             items: [
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
                 textWithheldReason: null,
                 sectionIndex: 1,
+                doctrine: "unread",
                 treatment: "positive",
                 decision: {
                   id: toSafeId<"caseLawDecision">(uid(58)),
@@ -1889,6 +1874,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"legislationDocument">(uid(72)),
             astS3Key: null,
             documentAst: null,
+            eli: "/eli/cz/sb/2012/89",
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
             expressionKind: "consolidation" as const,
@@ -2133,7 +2119,6 @@ const ALL_MOCKS = [
   readWorkspaceMembersHandlerMock,
   describeStoredTemplateMock,
   searchProviderSearchMock,
-  lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
   readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
@@ -2497,13 +2482,14 @@ describe("decision text in chat projection", () => {
       unclassified: 0,
     };
     readGatedDecisionCitationDigestMock.mockResolvedValue({
+      doctrineSummary: { status: "unavailable" },
       summary: {
         incoming: noCitations,
         outgoing: noCitations,
-        capped: { incoming: false, outgoing: false },
+        precision: { status: "exact" },
         incomingByYear: [],
       },
-      topCiting: [],
+      topCiting: { precision: "exact", items: [] },
       cites: [],
       citesMore: false,
     } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);

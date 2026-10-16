@@ -128,6 +128,11 @@
     "orSignInWithEmail": "أو سجّل الدخول بالبريد الإلكتروني",
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
+    "professionalUse": {
+      "description": "لم يُعرض عليك هذا البيان عند إنشاء حسابك. اقبله للمتابعة.",
+      "title": "تأكيد الاستخدام المهني"
+    },
+    "professionalUseStatement": "بإنشاء حساب، تؤكد أنك تستخدم stella لأغراض مهنية، وتقرّ بأن stella أداة مخصّصة للمهنيين القانونيين ولا تُغني عن الاستشارة القانونية.",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
@@ -168,6 +173,7 @@
       "heldDescription": "هذه المقتطفات <strong>غير مؤكدة المعنى بالفعل</strong>؛ فالمحتوى مؤقت أو غير مؤكد، وليس مجرد محتوى مكتوب بخط اليد. وتُستبعد من التقييم إلى أن يؤكدها المراجع أو يحررها أو يعيد كتابتها. ولا يُحال أي مصدر مقروء للمراجعة لمجرد وسيطه.",
       "heldForReview": "محجوزة للمراجعة",
       "holdOutOfScoring": "الاستبعاد من التقييم",
+      "inScoring": "ضمن التقييم",
       "includeInScoring": "الإدراج في التقييم",
       "interpretationNote": "ملاحظة تفسيرية",
       "interpretationNotePlaceholder": "إذا كان معنى هذا الدليل محل خلاف، فاذكر وجه الخلاف. واتركه فارغًا إن لم يكن كذلك.",
@@ -358,6 +364,8 @@
       "chooseList": "اختيار قائمة",
       "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
+      "loadSample": "تحميل قضية نموذجية",
+      "loadSampleFailed": "تعذّر تحميل القضية النموذجية",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
@@ -521,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
+    "invoiceComposer": {
+      "addSellerProfile": "أضف ملف بائع في إعدادات الفوترة",
+      "billedHours": "الساعات المفوترة",
+      "buyer": "العميل (المشتري)",
+      "continueToDetails": "المتابعة إلى التفاصيل",
+      "continueToIssue": "المتابعة إلى الإصدار",
+      "datesAndPayment": "التواريخ والسداد",
+      "days": "{days, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}}",
+      "draftSavedTitle": "حُفظت مسودة الفاتورة",
+      "dueIn": "الاستحقاق خلال",
+      "dueOn": "تستحق في {date}",
+      "flatFee": "لهذا الملف القانوني أتعاب ثابتة: تحتسب الفاتورة المبلغ المتفق عليه {amount}، والوقت أدناه مشمول به.",
+      "flatFeeLine": "الأتعاب الثابتة المتفق عليها",
+      "include": "تضمين في هذه الفاتورة",
+      "issueFailed": "حُفظت المسودة، لكن تعذّر إصدار الفاتورة.",
+      "issueInvoice": "إصدار الفاتورة",
+      "issuedTitle": "صدرت الفاتورة {number}",
+      "lines": "بنود الفاتورة",
+      "loggedHours": "مسجل {hours} ساعة",
+      "noCharge": "دون مقابل",
+      "noClient": "لا عميل لهذا الملف القانوني، لذا لا يوجد مشترٍ في الفاتورة بعد.",
+      "noExpenses": "لا توجد مصروفات معتمدة غير مفوترة في هذا الملف القانوني.",
+      "noTime": "لا يوجد وقت معتمد غير مفوتر في هذا الملف القانوني.",
+      "noVat": "دون ضريبة القيمة المضافة",
+      "nothingToBill": "لا يوجد ما يُفوتر بعد. اعتمد قيود الوقت أو المصروفات في هذا الملف القانوني لفوترتها.",
+      "openInvoice": "فتح الفاتورة",
+      "otherCurrency": "{count, plural, zero {لا توجد بنود مسجلة} one {بند واحد مسجل} two {بندان مسجلان} few {# بنود مسجلة} many {# بندًا مسجلًا} other {# بند مسجل}} بعملة غير {currency}، وتبقى لفاتورة منفصلة.",
+      "outsideScope": "خارج نطاق ضريبة القيمة المضافة، 0 %",
+      "rate": "السعر",
+      "readyDescription": "عند الإصدار تحصل الفاتورة على الرقم التالي من سلسلة الترقيم لديك وتُقفل. يمكن مواصلة تعديل المسودة.",
+      "readyTitle": "جاهزة للإصدار",
+      "reverseCharge": "الاحتساب العكسي، 0 %",
+      "saveDraft": "حفظ كمسودة",
+      "seller": "البائع",
+      "sources": {
+        "client": "منسوخ من عميل الملف القانوني",
+        "clientTerm": "مهلة السداد الخاصة بالعميل",
+        "defaultSeller": "ملف البائع الافتراضي لديك",
+        "defaultTerm": "مهلة السداد المعتادة",
+        "lastWorkDay": "آخر يوم من العمل المضمَّن"
+      },
+      "steps": {
+        "issue": "المراجعة والإصدار",
+        "items": "الوقت والمصروفات"
+      },
+      "tax": "الضريبة والعملة",
+      "taxableSupplyDate": "تاريخ التوريد",
+      "timeEntries": "قيود الوقت",
+      "timeSummary": "{count, plural, zero {لا قيود} one {قيد واحد} two {قيدان} few {# قيود} many {# قيدًا} other {# قيد}} · {hours} ساعة",
+      "title": "فاتورة جديدة",
+      "totalsSummary": "دون الضريبة {net} · الضريبة {vat} · الإجمالي {total}",
+      "vat": "معاملة ضريبة القيمة المضافة",
+      "vatRate": "ضريبة القيمة المضافة {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "تعذّر تأكيد بلد العميل: رقم ضريبة القيمة المضافة والعنوان لا يشيران إلى البلد نفسه، لذا يُطبَّق المعدل القياسي",
+        "clientVatIdInvalid": "رقم ضريبة القيمة المضافة للعميل لا يطابق تنسيق بلده، لذا يُطبَّق السعر القياسي",
+        "domesticRate": "أعلى معدل لضريبة القيمة المضافة لديك ساري المفعول في تاريخ التوريد",
+        "noSellerProfile": "لا يوجد ملف بائع، لذا لا تُحتسب ضريبة القيمة المضافة حتى تحددها في الفاتورة",
+        "noVatRate": "لم يُعدّ أي معدل لضريبة القيمة المضافة في إعدادات الفوترة",
+        "outsideScope": "رقم ضريبة القيمة المضافة للعميل مسجل خارج الاتحاد الأوروبي، لذا فإن مكان التوريد في الخارج",
+        "reverseCharge": "رقم ضريبة القيمة المضافة للعميل مسجل في بلد آخر",
+        "sellerNotVatPayer": "البائع غير مكلف بضريبة القيمة المضافة"
+      }
+    },
     "invoiceNarrative": "بيان الفاتورة",
     "invoiceNarrativePlaceholder": "وصف موجّه للعميل (اختياري)",
     "invoices": {
@@ -530,6 +602,16 @@
       "createInvoice": "إنشاء فاتورة",
       "dueDate": "تاريخ الاستحقاق",
       "editInvoice": "تعديل الفاتورة",
+      "export": {
+        "accounting": "استيراد محاسبي",
+        "eBilling": "الفوترة الإلكترونية",
+        "eso9": "جدول استيراد ESO9 (XLSX)",
+        "exporting": "جارٍ تجهيز التصدير…",
+        "isdoc": "فاتورة ISDOC الإلكترونية (ABRA Gen وغيره)",
+        "spreadsheets": "جداول البيانات",
+        "xlsx": "الفواتير (XLSX)",
+        "xlsxLines": "بنود الفواتير (XLSX)"
+      },
       "finalize": "إنهاء",
       "invoiceDate": "تاريخ الفاتورة",
       "invoiceDetail": "تفاصيل الفاتورة",
@@ -653,7 +735,10 @@
       "registrationId": "رقم التسجيل",
       "setDefault": "تعيين كافتراضي",
       "title": "ملفات البائع",
-      "vatId": "رقم ضريبة القيمة المضافة"
+      "vatId": "رقم ضريبة القيمة المضافة",
+      "vatPayer": "مكلف بضريبة القيمة المضافة",
+      "vatPayerHelp": "تفرض فواتير هذا البائع ضريبة القيمة المضافة. أوقفه لشخص مسجل لديه رقم ضريبة القيمة المضافة لكنه غير مكلف بها.",
+      "vatPayerRequiresVatId": "أدخل رقم ضريبة القيمة المضافة لإصدار الفواتير بصفتك مكلفًا بها."
     },
     "settingsTitle": "الفوترة",
     "split": {
@@ -731,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
         "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
         "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "retryAfter": "يمكنك المحاولة مرة أخرى بعد {time}.",
         "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
@@ -771,6 +857,9 @@
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
+      "paragraphLabel": "الفقرة {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}، {caseNumber}، {date}، الفقرة {paragraph}",
       "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
@@ -799,7 +888,7 @@
       "courtCount": "{count, plural, zero {لا محاكم} one {محكمة واحدة} two {محكمتان} few {# محاكم} many {# محكمة} other {# محكمة}}",
       "newLast24Hours": "{count} خلال آخر 24 ساعة",
       "newLast7Days": "الجديد خلال آخر 7 أيام",
-      "unlistedCourts": "{count, plural, zero {المحاكم غير المدرجة} one {المحاكم خارج أكبر محكمة} two {المحاكم خارج أكبر محكمتين} few {المحاكم خارج أكبر # محاكم} many {المحاكم خارج أكبر # محكمة} other {المحاكم خارج أكبر # محكمة}}"
+      "otherCourts": "محاكم أخرى"
     },
     "courtTiers": {
       "constitutional": "المحاكم الدستورية",
@@ -815,6 +904,7 @@
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "exceedsReportedTotal": "يحتوي على أكثر من آخر إجمالي أعلنته الجهة الناشرة في {date}",
+      "gapStatusUnknown": "حالة الفجوات غير معروفة",
       "generatedAt": "أرقام بتاريخ {date}",
       "globeLabel": "الدول التي يحتوي المخزن على سوابقها القضائية، على كرة أرضية",
       "healthCurrent": "محدّثة",
@@ -823,9 +913,12 @@
       "healthStalled": "متعثّر",
       "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",
+      "knownGaps": "فجوات معروفة",
       "lastSync": "آخر مزامنة",
+      "noGapsRecorded": "لم تُسجّل فجوات",
       "notCountedYet": "لم يُحصَ بعد",
       "notMeasuredYet": "لم يُقَس بعد",
+      "pendingTexts": "نصوص معلقة",
       "reportedByListing": "محسوب من قائمة الجهة الناشرة",
       "reportedByOperator": "مُدخَل يدويًا",
       "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
@@ -1020,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {لا إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
       "provisionsCited": "الأحكام المستشهد بها",
+      "provisionsFailed": "فشلت معالجة الاستشهادات",
+      "provisionsNoneFound": "لم يُعثر على أحكام مستشهد بها",
+      "provisionsProcessing": "جارٍ معالجة الاستشهادات",
+      "provisionsUnavailable": "الاستشهادات غير متاحة",
+      "provisionsUnplaceable": "لا يمكن تحديد مواضع الاستشهادات في نص القرار",
+      "provisionsUnsupported": "معالجة الاستشهادات غير مدعومة لهذا القرار",
+      "provisionsWithheld": "الاستشهادات محجوبة",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
@@ -1261,10 +1361,16 @@
     "greeting": "ما الذي تودّ العمل عليه؟",
     "greetingSubtitle": "ابدأ بملف قانوني أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
+    "history": {
+      "matterUnavailable": "هذا الملف القانوني غير متاح",
+      "older": "أقدم",
+      "previous7Days": "الأيام السبعة السابقة"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
     },
+    "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
@@ -1277,6 +1383,9 @@
       "noMatters": "لا توجد ملفات قانونية بعد",
       "noRecentChats": "لا توجد دردشات حديثة",
       "noSkills": "لا توجد مهارات بعد",
+      "openAllMatters": "فتح جميع الملفات القانونية",
+      "openChatHistory": "فتح سجل الدردشات",
+      "openSkillsLibrary": "فتح مكتبة المهارات",
       "pinnedMatters": "الملفات القانونية المثبّتة",
       "recentChats": "الدردشات الحديثة",
       "skillEditedBy": "عُدِّل بواسطة {name} · {time}",
@@ -1293,6 +1402,7 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "messageUnavailable": "لا يمكن عرض هذه الرسالة.",
     "mockModel": {
       "description": "ردود ثابتة من نموذج المحاكاة المحلي",
       "label": "ذكاء اصطناعي مُحاكى"
@@ -1409,17 +1519,23 @@
     },
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
+    "sendErrorConnectionFailed": "تعذّر الاتصال بالدردشة. تحقّق من اتصالك وحاول مرة أخرى.",
     "sendErrorEmptyCompletion": "أعاد الذكاء الاصطناعي ردّاً فارغاً. حاول مجدداً أو أعد صياغة رسالتك.",
     "sendErrorLoopDetected": "تكرّر ردّ الذكاء الاصطناعي مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
     "sendErrorModelUnavailable": "نموذج الذكاء الاصطناعي المُهيّأ لم يعد متاحاً. اطلب من مسؤول مساحة العمل تحديث النموذج في إعدادات المؤسسة.",
+    "sendErrorNotStarted": "المحادثة لا تزال مشغولة. انتظر قليلاً وحاول مرة أخرى.",
+    "sendErrorPreparationFailed": "تعذّر تجهيز رسالتك. أعد فتح الدردشة وحاول مرة أخرى.",
     "sendErrorProviderBilling": "أبلغ مزوّد الذكاء الاصطناعي عن مشكلة في الفوترة. تواصل مع مسؤول مساحة العمل.",
     "sendErrorProviderCredentialsRejected": "رفض مزوّد الذكاء الاصطناعي بيانات الاعتماد المُهيّأة. اطلب من مسؤول مساحة العمل التحقق من مفتاح API في إعدادات المؤسسة.",
     "sendErrorProviderUnavailable": "مزوّد الذكاء الاصطناعي غير متاح مؤقتاً. يُرجى المحاولة مرة أخرى بعد لحظات.",
     "sendErrorQuotaExhausted": "نفدت حصة مزوّد الذكاء الاصطناعي. حاول مجدداً بعد دقيقة، أو تواصل مع مسؤول مساحة العمل.",
     "sendErrorStreamIncomplete": "انقطع ردّ الذكاء الاصطناعي قبل أن يكتمل. حاول مجدداً.",
+    "sendErrorTimedOut": "لم تستجب خدمة الدردشة في الوقت المحدد. حاول مرة أخرى.",
     "sendPrompt": "إرسال الرسالة",
     "sendQueuedMessageNow": "إرسال الآن",
     "sendWithoutAnonymization": "إرسال دون تجهيل",
+    "signInToChat": "سجّل الدخول للدردشة حول هذا المستند",
+    "signInToChatAbout": "سجّل الدخول للدردشة حول",
     "skills": {
       "scope": {
         "private": "مهاراتك",
@@ -1446,12 +1562,25 @@
       "rejected": "مرفوض"
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
+    "tableChart": {
+      "bar": "أعمدة",
+      "kind": "نوع الرسم البياني",
+      "line": "خطي",
+      "loading": "جارٍ اختيار رسم بياني…",
+      "pie": "دائري",
+      "scatter": "مبعثر",
+      "showChart": "عرض كرسم بياني",
+      "summary": "عدد القيم المعروضة: {n, number}.",
+      "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "العمل مع السياق",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"
     },
     "tool": {
       "add_comment": "إضافة تعليق",
+      "add_matter_member": "إضافة عضو إلى ملف قانوني",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",
       "ares_lookup_company": "البحث في سجلات الشركات",
       "ares_search_companies": "البحث في سجلات الشركات",
@@ -1508,7 +1637,6 @@
       "list_stories": "سرد أجزاء المستند",
       "list_templates": "سرد القوالب",
       "load-skill": "قراءة الإرشادات",
-      "manage_organization": "إدارة المؤسسة",
       "read-contact": "قراءة جهة الاتصال",
       "read-content-across-matters": "قراءة المحتوى عبر الملفات القانونية",
       "read-skill-resource": "قراءة الإرشادات",
@@ -1518,6 +1646,7 @@
       "read_section": "قراءة قسم",
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
+      "remove_matter_member": "إزالة عضو من ملف قانوني",
       "reply_comment": "الرد على التعليق",
       "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
@@ -1551,6 +1680,7 @@
       "suggest_template_fields": "اقتراح حقول القالب",
       "unknown": "استخدام أداة",
       "update-entity-fields": "تحديث البيانات الوصفية",
+      "update_organization_settings": "تحديث إعدادات الفريق",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
@@ -1750,6 +1880,8 @@
     "citations": "الاستشهادات",
     "clauses": "البنود",
     "clearDate": "مسح التاريخ",
+    "clearFilters": "مسح عوامل التصفية",
+    "clearSearch": "مسح البحث",
     "close": "إغلاق",
     "closeAll": "إغلاق الكل",
     "closeOthers": "إغلاق الأخرى",
@@ -1780,6 +1912,7 @@
       "nextDecade": "العقد التالي",
       "nextMonth": "الشهر التالي",
       "nextYear": "السنة التالية",
+      "outOfRange": "اختر تاريخًا ضمن النطاق المسموح به.",
       "previousDecade": "العقد السابق",
       "previousMonth": "الشهر السابق",
       "previousYear": "السنة السابقة",
@@ -2033,6 +2166,7 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "website": "موقع الويب",
+    "whenToUse": "متى يُستخدَم",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -2081,28 +2215,27 @@
     "showAllPermissions": "{count, plural, zero {عرض الأذونات} one {عرض الإذن} two {عرض الإذنين} few {عرض الأذونات الـ#} many {عرض الأذونات الـ#} other {عرض الأذونات الـ#}}",
     "signedInAs": "تم تسجيل الدخول باسم <email>{accountEmail}</email>",
     "summaryAdminRead": "سجل التدقيق",
-    "summaryAdminWrite": "أعضاء المؤسسة وإعداداتها، بما في ذلك حذفها",
-    "summaryBillingWrite": "إدخالات الوقت، بما في ذلك حذفها",
-    "summaryChat": "الدردشات، بما في ذلك حذفها",
-    "summaryContactsWrite": "جهات الاتصال، بما في ذلك حذفها",
-    "summaryDocumentsWrite": "المستندات، بما في ذلك حذفها",
+    "summaryAdminWrite": "أعضاء المؤسسة وإعداداتها",
+    "summaryBillingWrite": "إدخالات الوقت",
+    "summaryChat": "الدردشات",
+    "summaryContactsWrite": "جهات الاتصال",
+    "summaryDocumentsWrite": "المستندات",
     "summaryExternalMcps": "التكاملات المتصلة",
-    "summaryFeedback": "الملاحظات",
-    "summaryKnowledgeWrite": "البنود وأدلّة المراجعة، بما في ذلك حذف البنود",
+    "summaryKnowledgeWrite": "البنود وأدلّة المراجعة",
     "summaryLawRead": "التشريعات العامة وأحكام القضاء",
-    "summaryLineChange": "<group>يمكنه تغيير:</group> {items} ({count})",
-    "summaryLineOther": "<group>وأيضًا:</group> {items}",
-    "summaryLineRead": "<group>يمكنه قراءة:</group> {items} ({count})",
-    "summaryMattersWrite": "الملفات والمهام، بما في ذلك حذفها",
-    "summaryOfflineAccess": "البقاء مسجّل الدخول",
-    "summaryOnboarding": "الولايات القضائية للممارسة",
+    "summaryLineChange": "<group>إنشاء وتعديل:</group> {items}",
+    "summaryLineOther": "<group>أيضًا:</group> {items}",
+    "summaryLineRead": "<group>قراءة:</group> {items}",
+    "summaryLineUse": "<group>استخدام:</group> {items}",
+    "summaryMattersWrite": "الملفات والمهام",
     "summaryProfile": "الملف الشخصي",
     "summaryRead": "المستندات والملفات القانونية وجهات الاتصال",
     "summaryReadAnonymized": "المستندات والملفات المُخفاة الهوية",
     "summarySearch": "البحث",
     "summarySearchAnonymized": "البحث المُخفى الهوية",
-    "summarySkills": "المهارات، بما في ذلك حذفها",
-    "summaryTemplates": "قوالب المستندات، بما في ذلك حذفها",
+    "summarySkills": "المهارات",
+    "summaryStaySignedIn": "البقاء مسجّلًا للدخول",
+    "summaryTemplates": "قوالب المستندات",
     "summaryTemplatesAnonymized": "قوالب المستندات المُخفاة الهوية",
     "title": "التفويض بالوصول",
     "unverifiedApp": "تطبيق غير موثّق",
@@ -2513,6 +2646,10 @@
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
+      "validationInvalid": "يحتوي حقل على قيمة لا يمكن حفظها.",
+      "validationRequired": "حقل مطلوب فارغ.",
+      "validationTooLong": "طويل جدًا: استخدم {limit, number} حرفًا كحد أقصى.",
+      "validationTooShort": "قصير جدًا: استخدم {limit, number} حرفًا على الأقل.",
       "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
       "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
@@ -2883,6 +3020,7 @@
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
     "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
+    "collaborationSnapshotRecovered": "تعذر إعادة فتح نسخة التعاون المخزنة. تمت استعادة الغرفة من آخر مستند محفوظ؛ وربما فُقدت التغييرات التي لم تُحفظ.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",
@@ -3130,14 +3268,14 @@
         "steps": {
           "basics": {
             "body": "أضف اسمًا ووصفًا. اقصره على نوع مستند عند الحاجة.",
-            "title": "سمِّ دليل العمل"
+            "title": "سمِّ دليل المراجعة"
           },
           "create": {
-            "body": "ابدأ بدليل عمل فارغ.",
-            "title": "أنشئ دليل عمل"
+            "body": "ابدأ بدليل مراجعة فارغ.",
+            "title": "أنشئ دليل مراجعة"
           },
           "overview": {
-            "body": "يحفظ دليل العمل الأسئلة والقواعد لمراجعة مستندات أخرى.",
+            "body": "يحفظ دليل المراجعة الأسئلة والقواعد لمراجعة مستندات أخرى.",
             "title": "احفظ عملية المراجعة"
           },
           "positions": {
@@ -3145,7 +3283,7 @@
             "title": "أضف قواعد المراجعة"
           }
         },
-        "title": "أنشئ دليل عمل"
+        "title": "أنشئ دليل مراجعة"
       },
       "tabularReview": {
         "description": "استخرج الإجابات عبر العديد من الملفات دفعة واحدة",
@@ -3578,6 +3716,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "أنشئ دليل مراجعة للعقود موقفًا تلو الآخر، استنادًا إلى عقودك الموقّعة سابقًا ومقابلة قصيرة والمعايير المعتادة في السوق.",
+          "name": "إنشاء دليل مراجعة"
+        }
+      },
       "builtInSection": "المهارات المُدمَجة",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -3601,6 +3745,10 @@
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
       "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invocationAuto": "تلقائيًا",
+      "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
+      "invocationManual": "عند الاستدعاء فقط",
+      "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4105,7 +4253,6 @@
     "appsSubtitle": "تعمل stella أيضًا خارج المتصفح: على سطح مكتبك وداخل مساعد الذكاء الاصطناعي الخاص بك. يمكنك العودة إلى هذا الإعداد في أي وقت لاحقًا.",
     "appsTitle": "احصل على stella في كل مكان",
     "catalogueAlwaysOn": "مُفعَّل دائمًا",
-    "catalogueClearSearch": "مسح البحث",
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
@@ -4292,6 +4439,8 @@
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
       },
+      "showInTitle": "إظهار الرقم بجانب اسم الملف القانوني",
+      "showInTitleDescription": "عند إيقاف هذا الخيار، يكون العنوان هو الاسم الذي أدخلته بالضبط.",
       "title": "ترقيم الملفات القانونية",
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
@@ -4462,6 +4611,25 @@
     "tokenHelp": "كيفية الحصول على رمز وصول",
     "viewOnGithub": "العرض على GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "نفدت الميزانية المخصصة للإجابات.",
+    "citation": "¶{paragraph}",
+    "expand": "توسيع الإجابة",
+    "explain": "شرح",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "طرح سؤال متابعة",
+    "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
+    "loading": "جارٍ توليد الإجابة…",
+    "minimise": "طي الإجابة",
+    "modelError": "لم يتمكن النموذج من إكمال هذه الإجابة.",
+    "networkError": "انقطع الاتصال. حاول مرة أخرى.",
+    "regenerate": "إعادة توليد الإجابة",
+    "selectionError": "حدد نصًا ضمن فقرة واحدة (حتى 2000 حرف).",
+    "send": "إرسال سؤال المتابعة",
+    "share": "مشاركة مع الفريق",
+    "timeoutError": "انتهت مهلة توليد الإجابة. حاول مرة أخرى.",
+    "title": "إجابة عن النص المحدد"
+  },
   "routeError": {
     "backToMatters": "العودة إلى الملفات القانونية",
     "copyReference": "نسخ مرجع الخطأ",
@@ -4474,6 +4642,8 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",
     "dateTo": "إلى",
@@ -4586,9 +4756,19 @@
       "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. سيبقى سجل مساحات العمل المكتمل منسوبًا إلى حسابك المحذوف.",
       "desktop": "سطح المكتب",
       "desktopAppDescription": "استرجع أي نص تنسخه، وافتح مستندات stella في تطبيقات سطح المكتب التي تستخدمها بالفعل.",
+      "desktopCardApproveDetail": "وافق لربط هذا الكمبيوتر بـ <bdi>{identity}</bdi> على {host}.",
+      "desktopCardApproveTitle": "يطلب stella desktop الاتصال",
+      "desktopCardConnectedDetail": "مرتبط بـ <bdi>{identity}</bdi> على {host} · الإصدار {version}",
+      "desktopCardConnectedDetailNoVersion": "مرتبط بـ <bdi>{identity}</bdi> على {host}",
+      "desktopCardConnectedTitle": "تم ربط stella desktop",
+      "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
+      "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
+      "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",
+      "desktopCardOutdatedTitle": "يحتاج stella desktop إلى تحديث",
       "desktopClipboardDescription": "افتح النص المنسوخ من أي تطبيق وابحث فيه ونظّمه وأعد استخدامه.",
       "desktopClipboardTitle": "سجل حافظة قابل للبحث",
       "desktopConnectFailed": "تعذّر الاتصال بتطبيق stella desktop.",
+      "desktopConnectInstalled": "مثبّت بالفعل، اتصال",
       "desktopConnectedAs": "متصل باسم <bdi>{email}</bdi>",
       "desktopDescription": "سجل الحافظة وأدوات المستندات على جهازك",
       "desktopDocumentsDescription": "افتح ملفات stella في تطبيقات سطح المكتب؛ وستعود المراجعات إلى الملف القانوني الصحيح.",
@@ -4923,17 +5103,22 @@
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
+    "provisionEffectiveFrom": "نافذ منذ {date}",
     "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
+    "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
+    "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
+    "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
@@ -4949,7 +5134,6 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -5502,7 +5686,6 @@
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
-    "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
   "timesheets": {
@@ -5623,7 +5806,7 @@
       "title": "نسخ إلى ملف قانوني"
     },
     "create": {
-      "ownerTypeToggle": "نوع الملف القانوني",
+      "matterName": "اسم الملف القانوني",
       "personalDescription": "الملفات القانونية الشخصية خاصة بك ولا تحتاج إلى عميل. يمكنك ترقيتها لاحقًا لمشاركتها مع الفريق."
     },
     "createNewWorkspace": "إنشاء ملف قانوني جديد",
@@ -6075,15 +6258,12 @@
       "upcomingTasks": "جدول الأعمال القادم",
       "uploaded": "تم الرفع"
     },
-    "ownerType": {
-      "client": "عميل",
-      "personal": "شخصية"
-    },
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
       "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
+      "noClientOptional": "بلا عميل (اختياري)",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف القانوني.",
       "partyRoles": {
         "co_counsel": "محامٍ مشارك",
@@ -6366,7 +6546,6 @@
         "year": "السنة"
       },
       "cannotDeleteRequired": "يلزم وجود طريقة عرض واحدة على الأقل من هذا النوع",
-      "clearFilters": "مسح عوامل التصفية",
       "copySuffix": "{name} (نسخة)",
       "deleteView": "حذف طريقة العرض",
       "exportCsv": "تصدير CSV",

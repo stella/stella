@@ -117,6 +117,8 @@ type FixtureOptions = {
   membershipError?: number;
   storeError?: number;
   apiError?: { route: string; status: number };
+  apiFailures?: { route: string; errors: unknown[] }[];
+  commitPageFailures?: unknown[];
   queuePages?: QueuePage[];
   // Served to every queue read after the first: the group was rebuilt.
   rebuiltQueuePages?: QueuePage[];
@@ -139,6 +141,8 @@ const fixture = ({
   membershipError,
   storeError,
   apiError,
+  apiFailures = [],
+  commitPageFailures = [],
   queuePages = [
     [
       {
@@ -166,6 +170,13 @@ const fixture = ({
   const created: Record<string, unknown>[] = [];
   const updates: Record<string, unknown>[] = [];
   const errors: string[] = [];
+  const annotations: { message: string; title: string }[] = [];
+  const delays: number[] = [];
+  const lateCommitFailures = [...commitPageFailures];
+  const failures = apiFailures.map(({ route, errors: injected }) => ({
+    route,
+    errors: [...injected],
+  }));
   let store = { signedContributors: signatures, policyVersion: "unchanged" };
   let blob = BLOB;
   let writes = 0;
@@ -175,6 +186,10 @@ const fixture = ({
     pulls.map(({ number }) => [number, [...comments]]),
   );
   const injectFailure = (route: string) => {
+    const injected = failures.find((failure) => failure.route === route);
+    if (injected?.errors.length) {
+      throw injected.errors.shift();
+    }
     if (apiError?.route === route) {
       throw new FixtureApiError({
         status: apiError.status,
@@ -503,6 +518,9 @@ const fixture = ({
             index < Math.max(commits.length, 1);
             index += 100
           ) {
+            if (index === 100 && lateCommitFailures.length) {
+              throw lateCommitFailures.shift();
+            }
             yield { data: commits.slice(index, index + 100) };
           }
           return;
@@ -572,7 +590,16 @@ const fixture = ({
         payload,
         repo: { owner: "stella", repo: "stella" },
       },
-      core: { setFailed: (message: string) => errors.push(message) },
+      core: {
+        setFailed: (message: string) => errors.push(message),
+        error: (message: string, { title }: { title: string }) => {
+          annotations.push({ message, title });
+        },
+      },
+      setTimeout: (callback: () => void, delay: number) => {
+        delays.push(delay);
+        callback();
+      },
       process: {
         env: {
           ...(credentials["store_required"] === "false"
@@ -593,6 +620,8 @@ const fixture = ({
     created,
     updates,
     errors,
+    annotations,
+    delays,
     stored: () => store,
     writes: () => writes,
     prompts: () => prompts,
@@ -688,11 +717,231 @@ describe("contributor signature workflow", () => {
     },
   );
 
+  test.each([
+    ["gateway timeout", { status: 504 }],
+    ["rate limit", { status: 429 }],
+    ["server error", { status: 500 }],
+    ["service unavailable", { status: 503 }],
+    ["socket timeout", { code: "ETIMEDOUT" }],
+    ["request timeout", { code: "ESOCKETTIMEDOUT" }],
+    ["connection timeout", { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }],
+    ["headers timeout", { code: "UND_ERR_HEADERS_TIMEOUT" }],
+    ["body timeout", { code: "UND_ERR_BODY_TIMEOUT" }],
+    ["named timeout", { name: "TimeoutError" }],
+  ])(
+    "transient %s recovers before issuing the signature verdict",
+    async (_kind, error) => {
+      const route = "GET /repos/{owner}/{repo}/contents/{path}";
+      const run = fixture({
+        signatures: [signature()],
+        apiFailures: [{ route, errors: [error] }],
+      });
+      await run.execute();
+      expect(run.errors).toEqual([]);
+      expect(run.annotations).toEqual([]);
+      expect(run.delays).toEqual([2000]);
+      expect(
+        run.requests.filter((request) => request.route === route),
+      ).toHaveLength(3);
+      expect(lastOutput(run).conclusion).toBe("success");
+    },
+  );
+
+  test("three gateway timeouts report a signature service outage and fail closed", async () => {
+    const route = "GET /repos/{owner}/{repo}/contents/{path}";
+    const message = "CLA_API_UNAVAILABLE status=504 attempts=3";
+    const run = fixture({ apiError: { route, status: 504 } });
+    await run.execute();
+    expect(
+      run.requests.filter((request) => request.route === route),
+    ).toHaveLength(3);
+    expect(run.delays).toEqual([2000, 4000]);
+    expect(run.errors).toEqual([message]);
+    expect(run.annotations).toEqual([
+      { message, title: "signature-service-unavailable" },
+    ]);
+    expect(lastOutput(run).conclusion).toBe("failure");
+  });
+
+  test("timeout exhaustion has a distinct service outage diagnostic", async () => {
+    const route = "GET /repos/{owner}/{repo}/contents/{path}";
+    const message = "CLA_API_UNAVAILABLE status=TIMEOUT attempts=3";
+    const run = fixture({
+      apiFailures: [
+        {
+          route,
+          errors: Array.from({ length: 3 }, () => ({ code: "ETIMEDOUT" })),
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.delays).toEqual([2000, 4000]);
+    expect(run.errors).toEqual([message]);
+    expect(run.annotations).toEqual([
+      { message, title: "signature-service-unavailable" },
+    ]);
+  });
+
+  test("a check reporting failure preserves the primary service outage diagnostic", async () => {
+    const message = "CLA_API_UNAVAILABLE status=504 attempts=3";
+    const run = fixture({
+      apiError: {
+        route: "GET /repos/{owner}/{repo}/contents/{path}",
+        status: 504,
+      },
+      apiFailures: [
+        {
+          route: "PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}",
+          errors: [{ status: 403 }],
+        },
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([message]);
+    expect(run.annotations).toEqual([
+      { message, title: "signature-service-unavailable" },
+      {
+        message: "CLA_CHECK_REPORT_ERROR_403",
+        title: "signature-check-report-failed",
+      },
+    ]);
+    expect(run.delays).toEqual([2000, 4000]);
+  });
+
+  test.each([
+    { status: 400 },
+    { status: 401 },
+    { status: 403 },
+    { status: 404 },
+    { status: 403, code: "ETIMEDOUT" },
+    { status: 600 },
+    { name: "AbortError" },
+  ])("permanent API failures do not retry (%j)", async (error) => {
+    const route = "GET /repos/{owner}/{repo}/pulls/{pull_number}";
+    const run = fixture({ apiFailures: [{ route, errors: [error] }] });
+    await run.execute();
+    expect(
+      run.requests.filter((request) => request.route === route),
+    ).toHaveLength(1);
+    expect(run.delays).toEqual([]);
+    expect(run.annotations).toEqual([]);
+    expect(run.errors).toEqual([
+      `CLA_API_ERROR_${"status" in error ? error.status : "UNKNOWN"}`,
+    ]);
+  });
+
+  test.each([
+    "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits",
+    "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+    "GRAPHQL authors",
+  ])("transient errors recover at the %s boundary", async (route) => {
+    const run = fixture({
+      comments: [comment()],
+      apiFailures: [{ route, errors: [{ status: 504 }] }],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(run.delays).toEqual([2000]);
+    expect(lastOutput(run).conclusion).toBe("success");
+    expect(run.stored().signedContributors.map(({ id }) => id)).toContain(
+      author.id,
+    );
+  });
+
+  test("pagination retries discard pages accumulated before the failed page", async () => {
+    const route = "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits";
+    const commits = Array.from({ length: 101 }, (_, index) =>
+      commit({ sha: (index + 1).toString(16).padStart(40, "0") }),
+    );
+    const run = fixture({
+      pulls: [{ ...pull(), commits: commits.length }],
+      commitsByPull: { 17: commits },
+      signatures: [signature()],
+      commitPageFailures: [{ status: 504 }],
+    });
+    await run.execute();
+    expect(
+      run.requests.filter((request) => request.route === route),
+    ).toHaveLength(3);
+    expect(run.delays).toEqual([2000]);
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).conclusion).toBe("success");
+  });
+
+  test("each API operation receives its own three-attempt budget", async () => {
+    const routes = [
+      "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits",
+      "GET /repos/{owner}/{repo}/contents/{path}",
+    ];
+    const run = fixture({
+      signatures: [signature()],
+      apiFailures: routes.map((route) => ({
+        route,
+        errors: [{ status: 504 }, { status: 504 }],
+      })),
+    });
+    await run.execute();
+    expect(run.delays).toEqual([2000, 4000, 2000, 4000]);
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).conclusion).toBe("success");
+  });
+
+  test("a signature write failure is reported without replaying the write", async () => {
+    const route = "PUT /repos/{owner}/{repo}/contents/{path}";
+    const run = fixture({
+      comments: [comment()],
+      apiError: { route, status: 504 },
+    });
+    await run.execute();
+    expect(
+      run.requests.filter((request) => request.route === route),
+    ).toHaveLength(1);
+    expect(run.delays).toEqual([]);
+    expect(run.annotations).toEqual([]);
+    expect(run.errors).toEqual(["CLA_API_ERROR_504"]);
+    expect(lastOutput(run).conclusion).toBe("failure");
+  });
+
+  test("merge queue GraphQL reads recover from a gateway timeout", async () => {
+    const run = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: SQUASH,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+        },
+      },
+      pulls: [pull(), pull(18)],
+      signatures: [signature()],
+      apiFailures: [{ route: "GRAPHQL queue", errors: [{ status: 504 }] }],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(run.delays).toEqual([2000]);
+    expect(lastOutput(run).conclusion).toBe("success");
+  });
+
+  test("an unsigned contributor remains a policy verdict without API retries", async () => {
+    const run = fixture();
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(run.annotations).toEqual([]);
+    expect(run.delays).toEqual([]);
+    expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+  });
+
   const assertActiveChecksFailed = (
     run: ReturnType<typeof fixture>,
     status: number,
+    retryable = true,
   ) => {
-    expect(run.errors).toEqual([`CLA_API_ERROR_${status}`]);
+    expect(run.errors).toEqual([
+      retryable && (status === 429 || (status >= 500 && status <= 599))
+        ? `CLA_API_UNAVAILABLE status=${status} attempts=3`
+        : `CLA_API_ERROR_${status}`,
+    ]);
     expect(run.created.length).toBeGreaterThan(0);
     for (let index = 0; index < run.created.length; index++) {
       const update = run.updates.findLast(
@@ -746,7 +995,7 @@ describe("contributor signature workflow", () => {
             };
       const run = fixture(options);
       await run.execute();
-      assertActiveChecksFailed(run, 500);
+      assertActiveChecksFailed(run, 500, boundary !== "store-put");
     },
   );
   test("a scoped API error preserves the completed common contributor verdict", async () => {
@@ -760,10 +1009,12 @@ describe("contributor signature workflow", () => {
       },
     });
     await run.execute();
-    expect(run.errors).toEqual(["CLA_API_ERROR_500"]);
+    expect(run.errors).toEqual(["CLA_API_UNAVAILABLE status=500 attempts=3"]);
     expect(lastOutput(run, "cla").conclusion).toBe("success");
     expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
-    expect(lastOutput(run, "cla/pr-17").output.title).toBe("CLA_ERROR");
+    expect(lastOutput(run, "cla/pr-17").output.title).toBe(
+      "CLA_API_UNAVAILABLE",
+    );
     expect(
       run.updates.filter((update) => update["check_run_id"] === 401),
     ).toHaveLength(1);

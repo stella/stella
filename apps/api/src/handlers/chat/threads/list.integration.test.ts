@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
@@ -17,6 +18,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -131,7 +133,6 @@ const seedThread = async ({
   attachmentNames = [],
   contextMatterIds = [],
   dataWorkspaceIds = [],
-  legacyMentions = [],
   mentions = [],
   orphanUploadNames = [],
   subjectDecisionId = null,
@@ -142,8 +143,6 @@ const seedThread = async ({
   attachmentNames?: string[];
   contextMatterIds?: SafeId<"workspace">[];
   dataWorkspaceIds?: SafeId<"workspace">[];
-  /** Mentions stored the version-1 way, as a data-stella-mentions part. */
-  legacyMentions?: ChatMention[];
   mentions?: ChatMention[];
   /** Uploads whose message no longer exists (edited away or truncated). */
   orphanUploadNames?: string[];
@@ -191,19 +190,6 @@ const seedThread = async ({
             url: toUserFileUrl(fileId),
           }),
         ],
-      }),
-    });
-  }
-
-  if (legacyMentions.length > 0) {
-    await testDb.insert(chatMessages).values({
-      ...message(attachmentNames.length),
-      content: asTestRaw<typeof chatMessages.$inferInsert.content>({
-        data: [
-          { text: "Compare these.", type: "text" },
-          { data: { mentions: legacyMentions }, type: "data-stella-mentions" },
-        ],
-        version: 1,
       }),
     });
   }
@@ -350,25 +336,6 @@ describe("chat thread list context", () => {
 
     expect(findThread(listed, threadId)).toBeDefined();
     expect(findThread(listed, unrelatedId)).toBeUndefined();
-  });
-
-  test("reads mentions stored by version-1 messages", async () => {
-    const threadId = await seedThread({
-      legacyMentions: [
-        entityMention(ids.entityA2, ids.wsA2),
-        matterMention(ids.wsA2),
-      ],
-      title: "Context: legacy mentions",
-    });
-
-    const thread = findThread(await listThreads(), threadId);
-
-    expect(thread?.context.matters.map((matter) => matter.id)).toEqual([
-      ids.wsA2,
-    ]);
-    expect(thread?.context.files.map((file) => file.id)).toEqual([
-      ids.entityA2,
-    ]);
   });
 
   test("leaves out uploads no surviving message attaches", async () => {
@@ -525,6 +492,175 @@ describe("chat thread list context", () => {
     ]);
 
     expect(findThread(listed, threadId)).toBeDefined();
+  });
+});
+
+// The history page's matter filter: applied in SQL before the page is cut, so
+// every page of a filtered walk holds only that matter's threads.
+describe("chat thread list matter filter", () => {
+  /** The raw handler result: a page, or the error response it returned. */
+  const requestPage = async ({
+    cursor,
+    limit,
+    workspaceId,
+    workspaceIds,
+  }: {
+    cursor?: string | undefined;
+    limit: number;
+    workspaceId: SafeId<"workspace">;
+    /** The matters the caller can open, for both the access check and RLS. */
+    workspaceIds: SafeId<"workspace">[];
+  }) =>
+    await getThreads.handler(
+      asTestRaw<ThreadsCtx>({
+        getWorkspaceAccess: async (
+          id: SafeId<"workspace">,
+        ): Promise<AccessibleWorkspace | null> =>
+          workspaceIds.includes(id) ? { id, status: "active" } : null,
+        memberRole: sessionMemberRole("owner"),
+        query: {
+          limit,
+          workspaceId,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+        request: new Request("http://localhost/v1/chat/threads"),
+        safeDb: scopedTo(workspaceIds),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+
+  const listPage = async (options: Parameters<typeof requestPage>[0]) => {
+    const listed = await requestPage(options);
+    if ("code" in listed) {
+      throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
+    }
+    return listed;
+  };
+
+  const listedIds = (listed: Awaited<ReturnType<typeof listPage>>) => [
+    ...listed.global.map((thread) => thread.id),
+    ...listed.workspaces.flatMap((group) =>
+      group.threads.map((thread) => thread.id),
+    ),
+  ];
+
+  /** A thread with one message, owned by someone other than the caller. */
+  const seedForeignThread = async ({
+    organizationId,
+    userId,
+    workspaceId,
+  }: {
+    organizationId: TestIds["orgA"];
+    userId: TestIds["userA1"];
+    workspaceId: SafeId<"workspace">;
+  }) => {
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    await testDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId,
+      title: "Someone else's chat",
+      titleSource: "user",
+      userId,
+      workspaceId,
+    });
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Not yours.", type: "text" }],
+      }),
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      threadId,
+      userId,
+      workspaceId,
+    });
+    return threadId;
+  };
+
+  test("walks only the chosen matter's threads, page by page, newest first", async () => {
+    const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    seededWorkspaceIds.push(matterId);
+    await testDb.insert(workspaces).values({
+      clientId: ids.contactA,
+      id: matterId,
+      name: "Filter matter",
+      organizationId: ids.orgA,
+      reference: `FILTER-${matterId}`,
+    });
+    const visible = [ids.wsA1, ids.wsA2, matterId];
+    // Seeded oldest first, interleaved with threads the filter must skip, so
+    // a filter applied after the page is cut would leave gaps.
+    const oldest = await seedThread({
+      title: "Filter: oldest",
+      workspaceId: matterId,
+    });
+    await seedThread({ title: "Filter: other matter", workspaceId: ids.wsA1 });
+    const middle = await seedThread({
+      title: "Filter: middle",
+      workspaceId: matterId,
+    });
+    await seedThread({
+      contextMatterIds: [matterId],
+      title: "Filter: global thread pinning the matter",
+    });
+    await seedForeignThread({
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+      workspaceId: matterId,
+    });
+    const newest = await seedThread({
+      title: "Filter: newest",
+      workspaceId: matterId,
+    });
+
+    const first = await listPage({
+      limit: 2,
+      workspaceId: matterId,
+      workspaceIds: visible,
+    });
+    expect(first.global).toEqual([]);
+    expect(first.workspaces.map((group) => group.workspaceId)).toEqual([
+      matterId,
+    ]);
+    expect(listedIds(first)).toEqual([newest, middle]);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await listPage({
+      cursor: first.nextCursor ?? panic("expected a next page"),
+      limit: 2,
+      workspaceId: matterId,
+      workspaceIds: visible,
+    });
+    expect(listedIds(second)).toEqual([oldest]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  test("a matter the caller cannot open is not found, not an empty list", async () => {
+    const hiddenId = await seedThread({
+      title: "Filter: matter the caller lost",
+      workspaceId: ids.wsA2,
+    });
+
+    const listed = await requestPage({
+      limit: 100,
+      workspaceId: ids.wsA2,
+      workspaceIds: [ids.wsA1],
+    });
+
+    expect(listed).toMatchObject({
+      code: 404,
+      response: { message: "Workspace not found" },
+    });
+    expect(JSON.stringify(listed)).not.toContain(hiddenId);
+  });
+
+  test("rejects a matter id that is not a safe identifier at the query boundary", () => {
+    const querySchema = getThreads.config.query;
+    expect(Value.Check(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
+    expect(Value.Check(querySchema, { workspaceId: "not-a-matter-id" })).toBe(
+      false,
+    );
   });
 });
 

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import {
@@ -32,6 +32,16 @@ import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
+/**
+ * A title runs on the standard tier: the reader sees it the moment the first
+ * turn ends, and a deferred tier bounds no latency at all, so a title queued
+ * there outlives its deadline and is never written. Read by the
+ * structured-output request settings test.
+ *
+ * @public
+ */
+export const TITLE_SERVICE_TIER = "standard";
+
 const SEND_MODE_READ_FAILED_SINK = failureSink({
   event: "chat.thread_title.send_mode_read_failed",
   expected: [],
@@ -54,6 +64,8 @@ type GenerateThreadTitleProps = {
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  /** The organization's scope, read for the title's managed model tier. */
+  organizationStateDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
@@ -84,13 +96,14 @@ const generateAdmittedThreadTitle = async ({
       actionType: "background",
       organizationId,
       safeDb,
-      serviceTier: "batch",
+      serviceTier: TITLE_SERVICE_TIER,
       userId,
       workspaceId: threadWorkspaceId,
     },
     feature: "chat.thread_title",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: modelAdmission.modelTier,
     properties: threadWorkspaceId ? { workspace_id: threadWorkspaceId } : {},
     traceId: Bun.randomUUIDv7(),
   });
@@ -119,7 +132,7 @@ const generateAdmittedThreadTitle = async ({
         finishPolicy: TITLE_FINISH_POLICY,
         maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
         role: "fast",
-        serviceTier: "batch",
+        serviceTier: TITLE_SERVICE_TIER,
         orgAIConfig,
         managedAIResidency,
         organizationId,
@@ -236,6 +249,7 @@ export const generateThreadTitle = async (
     actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
+    organizationStateDb: props.organizationStateDb,
   });
   if (Result.isError(admitted)) {
     observeFailure(admitted.error, {

@@ -90,7 +90,8 @@ const aiResourceSchema = v.strictObject({
   ),
 });
 
-const aiGenerationSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const aiGenerationSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),
     v.description(
@@ -140,6 +141,7 @@ const generateSkillDraft = createSafeRootHandler(
       feature: "skills.generate_draft",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

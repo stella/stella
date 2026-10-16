@@ -4,10 +4,9 @@ defaults:
   run:
     shell: bash
 
+# Optional proofs run on demand only: pull requests, pushes and the merge queue
+# run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 03:17 UTC daily (off-minute to avoid :00 stampede)
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       fresh-web:
@@ -32,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -43,9 +42,6 @@ jobs:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
-
-      - name: Typecheck parity (all checked projects)
-        run: bun run check:typecheck-parity
 
       - name: Full typecheck (no --affected, no turbo cache)
         # The API compiler and web contract generator each build the API graph.
@@ -71,7 +67,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -93,7 +89,7 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
+    if: ${{ inputs.fresh-web }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -104,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json

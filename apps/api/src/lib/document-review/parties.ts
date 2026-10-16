@@ -75,7 +75,8 @@ export const normalizeParties = (
   return normalized;
 };
 
-const proposedPartiesSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const proposedPartiesSchema = v.strictObject({
   parties: v.array(proposedPartySchema),
 });
 
@@ -124,6 +125,7 @@ export const detectReviewParties = async ({
     feature: "document-review.parties",
     modelRole: ROLE,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,

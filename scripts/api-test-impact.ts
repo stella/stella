@@ -5,15 +5,18 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
 import {
   API_TEST_DURATIONS_FILE_ENV,
   loadTestDurationWeights,
 } from "../apps/api/scripts/test-timings";
+import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
-const MAX_SHARDS = 4;
+const MAX_SHARDS = API_TEST_SHARD_IDS.length;
 export const API_SHARD_SECONDS = 600;
 const MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
@@ -240,7 +243,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const pending = starts.map((file) => path.join(root, file));
   while (pending.length > 0) {
     const absolute = pending.pop() ?? panic("Graph queue is empty");
-    const file = path.relative(root, absolute);
+    const file = repoRelativePath(root, absolute);
     if (edges.has(file)) {
       continue;
     }
@@ -307,7 +310,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       if (resolution.value === undefined) {
         continue;
       }
-      dependencies.push(path.relative(root, resolution.value));
+      dependencies.push(repoRelativePath(root, resolution.value));
       pending.push(resolution.value);
     }
   }

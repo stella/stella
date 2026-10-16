@@ -256,10 +256,13 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       itemsKey: "countries",
       paginationless: true,
     },
-    lookup_case_law: {
-      command: ["case-law", "lookup"],
-      scope: "read",
-      itemsKey: "items",
+    resolve_case_law_decision: {
+      command: ["case-law", "resolve"],
+      scope: "law_read",
+    },
+    resolve_law_citation: {
+      command: ["legislation", "resolve"],
+      scope: "law_read",
     },
     // A batch read answers per entry, so the leaf renders `items`. It pages
     // by number (`--page`), not by cursor, so there is nothing to follow.
@@ -427,38 +430,17 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "read",
     },
 
-    manage_organization: {
-      command: ["organization"],
+    add_matter_member: {
+      command: ["matter", "add-member"],
       scope: "admin_write",
-      discriminator: {
-        prop: "action",
-        subcommands: {
-          add_member: {
-            command: "add-member",
-            include: ["matter_id", "user_id"],
-            required: ["matter_id", "user_id"],
-          },
-          remove_member: {
-            command: "remove-member",
-            include: ["matter_id", "user_id", "reassign_to"],
-            required: ["matter_id", "user_id"],
-          },
-          update_org_settings: {
-            command: "update-settings",
-            include: [
-              "matter_number_pattern",
-              "matter_number_padding",
-              "prompt_caching_enabled",
-              "document_processing_mode",
-              "time_minimum_unit_minutes",
-              "time_edit_window_days",
-              "time_locked_through_month",
-              "time_narrative_required",
-              "time_zone",
-            ],
-          },
-        },
-      },
+    },
+    remove_matter_member: {
+      command: ["matter", "remove-member"],
+      scope: "admin_write",
+    },
+    update_organization_settings: {
+      command: ["organization", "update-settings"],
+      scope: "admin_write",
     },
   },
 );

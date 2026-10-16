@@ -4,20 +4,170 @@ defaults:
   run:
     shell: bash
 
-# No `paths` filter: each job scopes itself. Dependency updates and ordinary
-# same-repository PRs share the Tauri alignment fixer and existing App push.
+# Each job scopes itself. Dependency updates and ordinary same-repository
+# PRs share the Tauri alignment fixer and existing App push.
 on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+      generator:
+        description: Owning generator ID
+        required: true
+        type: string
   pull_request:
     types: [opened, synchronize, reopened]
+    # Workflow files are never fixed (the App cannot push them); only those a
+    # generator or the Tauri alignment reads stay in scope. A test derives
+    # this list from both.
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - ".github/workflows/autofix.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/release.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  regenerate-requested-files:
+    name: Regenerate requested files
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      STELLA_LOCAL_AUTOFIX: "true"
+    steps:
+      - name: Checkout regeneration controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .regeneration-controls
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/pr-regeneration.ts
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Setup regeneration tooling
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: .regeneration-controls/package.json
+
+      - name: Preserve regeneration controls
+        id: controls
+        run: |
+          set -euo pipefail
+          cp .regeneration-controls/scripts/pr-regeneration.ts "$RUNNER_TEMP/pr-regeneration.ts"
+          cp .regeneration-controls/scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
+          {
+            echo "hash=$(sha256sum "$RUNNER_TEMP/pr-regeneration.ts" | cut -d ' ' -f 1)"
+            echo "retry_hash=$(sha256sum "$RUNNER_TEMP/gh-retry.sh" | cut -d ' ' -f 1)"
+            echo "event_hash=$(sha256sum "$GITHUB_EVENT_PATH" | cut -d ' ' -f 1)"
+          } >> "$GITHUB_OUTPUT"
+          rm -rf .regeneration-controls
+
+      - name: Verify regeneration request
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+          GENERATOR_ID: ${{ inputs.generator }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid pull request number."; exit 1; }
+          bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout regeneration head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.target.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Install regeneration dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare regeneration environment
+        run: |
+          [[ -f apps/api/.env ]] || cp apps/api/.env.example apps/api/.env
+
+      - name: Run owning generator
+        env:
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          JOB_SERVICES: ${{ toJSON(job.services) }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" run "$GENERATOR_ID"
+
+      - name: Verify generated outputs
+        env:
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          HEAD_SHA: ${{ steps.target.outputs.head }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
+
+      - name: Verify current regeneration head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          RETRY_HASH: ${{ steps.controls.outputs.retry_hash }}
+          EVENT_HASH: ${{ steps.controls.outputs.event_hash }}
+          HEAD_SHA: ${{ steps.target.outputs.head }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          echo "$RETRY_HASH  $RUNNER_TEMP/gh-retry.sh" | sha256sum --check
+          echo "$EVENT_HASH  $GITHUB_EVENT_PATH" | sha256sum --check
+          bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
+
+      - name: Push regenerated files
+        id: regeneration-push
+        continue-on-error: true
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: regenerate files"
+          fail-fast: false
+
+      - name: Verify regeneration submission
+        if: ${{ !cancelled() && steps.regeneration-push.outcome != 'skipped' }}
+        env:
+          SUBMISSION_OUTCOME: ${{ steps.regeneration-push.outcome }}
+          AUTOFIX_STARTED: ${{ steps.regeneration-push.outputs.autofix_started }}
+        run: |
+          set -euo pipefail
+          if [[ "$SUBMISSION_OUTCOME" == success || ( "$SUBMISSION_OUTCOME" == failure && "$AUTOFIX_STARTED" == true ) ]]; then
+            exit 0
+          fi
+          echo "::error::Regeneration submission failed."
+          exit 1
+
   dependabot-bun-autofix:
     name: Autofix Dependabot dependency update
     if: >-
@@ -44,7 +194,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -169,9 +319,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
+      # The merge-queue yield reads workflow runs and their jobs.
+      actions: read
       contents: read
       pull-requests: read
     outputs:
+      deferred: ${{ steps.merge-queue.outputs.result == 'skip' }}
       ready: ${{ steps.planner.outputs.ready }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
@@ -184,8 +337,38 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/merge-queue-waiting.mjs
           sparse-checkout-cone-mode: false
+
+      # Autofix is a convenience; CI's format, lint and drift guards still
+      # enforce. While the merge queue has waiting work, a first attempt
+      # skips the fixer instead of taking a runner; a re-run never skips.
+      - name: Yield to the merge queue
+        id: merge-queue
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
+        with:
+          retries: 0
+          result-encoding: string
+          script: |
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { mergeQueueGate } = await import(pathToFileURL(
+              resolve(".gh-retry/scripts/merge-queue-waiting.mjs")).href);
+            return mergeQueueGate({
+              github,
+              context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
+              polls: 0,
+              intervalMs: 0,
+              sleep: async () => {},
+              notice: (message) => core.notice(message),
+            });
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
@@ -214,11 +397,12 @@ jobs:
             /package.json
           sparse-checkout-cone-mode: false
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Check planner availability
         id: planner
@@ -257,6 +441,7 @@ jobs:
     if: >-
       needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
+      && needs.regenerate-scope.outputs.deferred != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -286,7 +471,7 @@ jobs:
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -327,14 +512,22 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
 
-      - name: Regenerate selected files
+      # Generated exports must exist before the compiler can check source fixes.
+      # Regenerate again below because lint may rewrite generator inputs.
+      - name: Prepare selected MCP app exports
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
         run: |
-          if [[ -n "$GENERATOR_IDS" ]]; then
-            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          mcp_ids=""
+          for id in mcp-app-contracts mcp-app-bundles; do
+            if [[ ",$GENERATOR_IDS," == *",$id,"* ]]; then
+              mcp_ids="${mcp_ids:+$mcp_ids,}$id"
+            fi
+          done
+          if [[ -n "$mcp_ids" ]]; then
+            bun scripts/autofix-plan.ts run "$mcp_ids"
           fi
 
       - name: Fix changed files
@@ -361,10 +554,14 @@ jobs:
             fi
             protected_path=false
             for pattern in "${protected[@]}"; do
-              if [[ "$path" == $pattern ]]; then
-                protected_path=true
-                break
-              fi
+              # Protected entries are glob patterns, so expansion must stay unquoted.
+              # shellcheck disable=SC2254
+              case "$path" in
+                $pattern)
+                  protected_path=true
+                  break
+                  ;;
+              esac
             done
             [[ "$protected_path" == false ]] || continue
             format_paths+=("./$path")
@@ -393,6 +590,30 @@ jobs:
             bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
           fi
 
+      # Final outputs must reflect lint and formatting rewrites, including
+      # sources prepared earlier for the type-aware fixer.
+      - name: Regenerate selected files
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
+
+      # Baselines stay protected; the one exception is deleting entries that
+      # no longer match code. The restrict step re-verifies every rewrite
+      # against the head commit before anything is pushed.
+      - name: Prune stale baseline entries
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ -f scripts/autofix-baseline-prune.ts ]]; then
+            bun scripts/autofix-baseline-prune.ts prune
+          fi
+
       - name: Restrict autofix changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -415,6 +636,11 @@ jobs:
           fi
 
           # No changed-path or generator grant can authorize decision records.
+          # The only exception is a shrink-only baseline whose rewrite deletes
+          # entries, checked against the head commit by the base revision's
+          # verifier, run from an empty directory without dependencies. That
+          # is a policy guard against mistaken rewrites, not a security
+          # boundary: the pull request's own code already ran in this job.
           bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
           protected=()
           while IFS= read -r pattern; do
@@ -424,9 +650,27 @@ jobs:
           for pattern in "${protected[@]}"; do
             protected_specs+=(":(glob)$pattern")
           done
-          if ! git diff --quiet "$HEAD_SHA" -- "${protected_specs[@]}" || [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+          refuse_protected() {
             echo "::error::Autofix cannot modify baselines, ledgers, waivers, allowances or changesets."
             exit 1
+          }
+          if [[ -n "$(git ls-files --others --exclude-standard -- "${protected_specs[@]}")" ]]; then
+            refuse_protected
+          fi
+          pruned=()
+          while IFS= read -r -d '' path; do
+            pruned+=("$path")
+          done < <(git diff --name-only -z "$HEAD_SHA" -- "${protected_specs[@]}")
+          if (( ${#pruned[@]} > 0 )); then
+            verifier=$(mktemp -d)
+            for source in autofix-baseline-prune.ts baseline-shrink.ts baseline-paths.ts; do
+              git show "$BASE_SHA:scripts/$source" > "$verifier/$source" || refuse_protected
+            done
+            repository=$(pwd)
+            if ! (cd "$verifier" && bun --no-install --no-env-file autofix-baseline-prune.ts \
+              verify --repo "$repository" --ref "$HEAD_SHA" "${pruned[@]}"); then
+              refuse_protected
+            fi
           fi
 
           changed=()
@@ -448,6 +692,9 @@ jobs:
           done
           for path in "${tauri_paths[@]}"; do
             [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,literal)$path")
+          done
+          for path in ${pruned[@]+"${pruned[@]}"}; do
             excludes+=(":(exclude,literal)$path")
           done
 

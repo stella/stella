@@ -1,10 +1,8 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 describe.serial("audit detail read ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "audit-detail-read");
@@ -203,6 +201,38 @@ describe.serial("BullMQ worker ownership", () => {
         sourcePath: "apps/api/src/lib/bullmq-queue.ts",
       }),
     ).toEqual([]);
+  });
+});
+
+describe.serial("parallel dynamic import ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "bullmq-worker");
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: "apps/api/src/lib/example-worker.ts",
+  };
+
+  test("tracks named bindings through each Promise.all slot", async () => {
+    const sources = [
+      'const [{ Queue }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Queue: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [{ Worker }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Worker: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [namespace] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue, ...rest }] = await Promise.all([import("bullmq")]);',
+      'const [{ [key]: selected }] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([...others, import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([import("bullmq"), ...others]);',
+      'const [{ Queue }] = await Promise.allSettled([import("bullmq")]);',
+      'const read = async (Promise) => { const [{ Queue }] = await Promise.all([import("bullmq")]); };',
+      'const [slot] = Promise.all([import("bullmq")]);',
+    ];
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        sources.map((source) => `{ ${source} }`).join("\n"),
+        options,
+      ),
+    ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 });
 
@@ -789,4 +819,48 @@ test("RTF code-page decoding stays in the document reader", async () => {
       sourcePath: "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
     }),
   ).toEqual([]);
+});
+
+describe.serial("verification run evidence reads", () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "verification-run-evidence-read",
+  );
+  const source = [
+    'import { legalListVerificationRuns } from "@/api/db/schema";',
+    "db.select({ evidence: legalListVerificationRuns.evidence }).from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning({ evidence: legalListVerificationRuns.evidence });",
+    "db.select().from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning();",
+    "db.select({ id: legalListVerificationRuns.id }).from(legalListVerificationRuns);",
+    "db.update(legalListVerificationRuns).set({ status: 'running' }).returning({ id: legalListVerificationRuns.id });",
+  ].join("\n");
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: "apps/api/src/lib/lists/verification/run-queue.ts",
+    cwd: "scratch",
+  } as const;
+
+  test("rejects foreign evidence selections and returning rows", async () => {
+    expect(entry?.owner).toEqual([
+      "apps/api/src/lib/lists/verification/read-run.ts",
+    ]);
+    expect(await lintSingleRule("confine-owner", source, options)).toEqual([
+      2, 3, 4, 5,
+    ]);
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        ruleOptions: { entries: [] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("admits evidence reads inside the reader", async () => {
+    expect(
+      await lintSingleRule("confine-owner", source, {
+        ...options,
+        sourcePath: "apps/api/src/lib/lists/verification/read-run.ts",
+      }),
+    ).toEqual([]);
+  });
 });

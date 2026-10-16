@@ -25,6 +25,7 @@ import {
   parseReleasePathspec,
   readChangesetDiff,
 } from "./changeset-guard";
+import { staticReuseCondition } from "./ci-static-checks";
 import {
   flattenWorkflowSteps,
   workflowJobSteps,
@@ -848,7 +849,14 @@ const compareVersions = (
 
 const expectChangesetConditions = (gate: unknown) => {
   const steps = v.parse(
-    v.array(v.object({ name: v.string(), if: v.string() })),
+    v.array(
+      v.object({
+        name: v.string(),
+        if: v.string(),
+        id: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.string())),
+      }),
+    ),
     flattenWorkflowSteps(gate),
   );
   expect(steps.length).toBeGreaterThan(0);
@@ -857,8 +865,14 @@ const expectChangesetConditions = (gate: unknown) => {
       step.name === CHANGESET_GATE_LAST_STEP
         ? " && steps.policy.outcome == 'success'"
         : "";
+    const reuse =
+      step.env?.["CI_CHECK_KIND"] === "STATIC"
+        ? staticReuseCondition(
+            step.id ?? expect.unreachable("Static changeset step has no id"),
+          )
+        : "";
     expect(step.if, step.name).toBe(
-      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request')${suffix} }}`,
+      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request')${suffix}${reuse} }}`,
     );
   }
 };

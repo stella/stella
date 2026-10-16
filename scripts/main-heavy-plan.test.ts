@@ -6,6 +6,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -28,6 +29,7 @@ const source = readFileSync(
 );
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
+  id: v.optional(v.string()),
   if: v.optional(v.string()),
   uses: v.optional(v.string()),
   with: v.optional(v.record(v.string(), v.unknown())),
@@ -46,6 +48,28 @@ const workflowSchema = v.object({
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+// Resolve the real-checkout baseline during suite setup, as the CI partition
+// tests do. Git history and lazy blob fetches are not unit-test work.
+const baselineGit = (args: string[]) => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: root,
+    timeout: 5000,
+    killSignal: "SIGKILL",
+  });
+  if (childExitStatus(result) !== 0) {
+    panic(
+      `Heavy policy baseline unavailable: git ${args.join(" ")}; exit status ${result.exitCode}, signal ${String(result.signalCode)}; ${result.stderr.toString().trim() || "git produced no diagnostic"}`,
+    );
+  }
+  return result.stdout.toString().trim();
+};
+const baselineRevision = baselineGit(["merge-base", "origin/main", "HEAD"]);
+const original = v.parse(
+  workflowSchema,
+  Bun.YAML.parse(
+    baselineGit(["show", `${baselineRevision}:.github/workflows/ci.yml`]),
+  ),
+);
 const querySource = readFileSync(
   new URL("../.github/workflows/query-perf.yml", import.meta.url),
   "utf-8",
@@ -67,6 +91,10 @@ if (!outcome?.run || !outcomeEnv) {
 const scopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(outcomeEnv["JOB_SCOPES"] ?? ""),
+);
+const foldedSuites = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
 );
 const expectedHeavy = Object.keys(scopes).filter(
   (job) => !THIN_JOBS.some((thin) => thin === job),
@@ -138,15 +166,13 @@ const planned = (plan: Record<string, string>, job: string) => {
 // Computed job scopes also depend on changed-file scopes that are not gated
 // directly. Pin their source outputs; unrelated scopes remain unplanned.
 const directScopePattern =
-  /^\$\{\{\s*(steps\.changed-files\.outputs\.[\w-]+_required)\s*\}\}$/u;
+  /^\$\{\{\s*(steps\.[\w-]+\.outputs\.[\w-]+_required)(?:\s*\|\|\s*'[^']*')?\s*\}\}$/u;
 const computedScopeInputs = new Set(
   Object.values(planOutputs)
     .filter((expression) => !directScopePattern.test(expression))
     .flatMap((expression) =>
       [
-        ...expression.matchAll(
-          /\bsteps\.changed-files\.outputs\.[\w-]+_required\b/gu,
-        ),
+        ...expression.matchAll(/\bsteps\.[\w-]+\.outputs\.[\w-]+_required\b/gu),
       ].map(([reference]) => reference),
     ),
 );
@@ -154,6 +180,7 @@ const allPlanned = Object.fromEntries(
   [
     ...new Set([
       ...Object.values(scopes).filter((scope) => scope !== null),
+      ...Object.values(foldedSuites).flatMap(Object.values),
       ...Object.entries(planOutputs)
         .filter(([, expression]) => {
           const reference = directScopePattern.exec(expression)?.[1];
@@ -470,8 +497,9 @@ test("a thin-depth skip on any gated code job violates merge-group coverage", ()
     if (!job) {
       panic(`Missing mutation job: ${name}`);
     }
-    const condition = (job.if ?? "true").replace(/^\$\{\{|\}\}$/gu, "");
-    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${condition}) }}`;
+    const condition = job.if?.trim() ?? "true";
+    const body = /^\$\{\{([\s\S]*)\}\}$/u.exec(condition)?.[1] ?? condition;
+    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${body}) }}`;
     expect(() => assertMergeGroupCoverage(mutated), name).toThrow(
       `${name}/thin`,
     );
@@ -548,7 +576,7 @@ test("completed-depth reuse skips every nonstructural main heavy job", () => {
       if (
         job === "ci-plan" ||
         job === "ci-result" ||
-        job === "dated-waiver-expiry"
+        job === "ci-quick-checks"
       ) {
         continue;
       }
@@ -586,23 +614,6 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
-  const base = Bun.spawnSync(["git", "merge-base", "origin/main", "HEAD"], {
-    cwd: root,
-  });
-  expect(base.exitCode).toBe(0);
-  const previous = Bun.spawnSync(
-    [
-      "git",
-      "show",
-      `${base.stdout.toString().trim()}:.github/workflows/ci.yml`,
-    ],
-    { cwd: root },
-  );
-  expect(previous.exitCode).toBe(0);
-  const original = v.parse(
-    workflowSchema,
-    Bun.YAML.parse(previous.stdout.toString()),
-  );
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {
@@ -686,6 +697,7 @@ type EvaluateOptions = {
   isPlanned?: boolean;
   planResult?: string;
   thinResult?: string;
+  suiteResults?: Record<string, string>;
 };
 const evaluate = ({
   event,
@@ -694,6 +706,7 @@ const evaluate = ({
   isPlanned = true,
   planResult = "success",
   thinResult = "skipped",
+  suiteResults = {},
 }: EvaluateOptions) => {
   const needs = Object.fromEntries(
     ciNeeds.map((job) => {
@@ -707,13 +720,12 @@ const evaluate = ({
         job,
         {
           result: jobResult,
-          outputs:
-            job === "docker-checks"
-              ? {
-                  "agent-sandbox-docker": "success",
-                  "api-image-deps": "success",
-                }
-              : {},
+          outputs: Object.fromEntries(
+            Object.keys(foldedSuites[job] ?? {}).map((suite) => [
+              suite,
+              suiteResults[suite] ?? "success",
+            ]),
+          ),
         },
       ];
     }),
@@ -750,6 +762,26 @@ const evaluate = ({
   return run.exitCode;
 };
 
+test("main heavy aggregation rejects unsuccessful or missing folded verdicts", () => {
+  for (const event of heavyEvents) {
+    expect(evaluate({ event, result: "success" }), event).toBe(0);
+    for (const suites of Object.values(foldedSuites)) {
+      for (const suite of Object.keys(suites)) {
+        for (const verdict of ["failure", "cancelled", "skipped", ""]) {
+          expect(
+            evaluate({
+              event,
+              result: "success",
+              suiteResults: { [suite]: verdict },
+            }),
+            `${event}/${suite}/${verdict}`,
+          ).toBe(1);
+        }
+      }
+    }
+  }
+}, 30_000);
+
 test("main heavy aggregation rejects failures, cancellations, timeouts and planned skips", () => {
   for (const event of heavyEvents) {
     for (const result of [
@@ -783,7 +815,7 @@ test("the reusable result gate allows skipped thin checks in heavy mode", () => 
   }
 }, 30_000);
 
-test("heavy scope selection plans full suites even on an empty main diff", () => {
+test("heavy scope selection plans full suites with runnable folded producers even on an empty main diff", () => {
   const scope = workflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Check changed file scope",
   );
@@ -813,6 +845,57 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
           .split("\n")
           .map((line) => line.split("=", 2)),
       );
+      const folded = v.parse(
+        v.record(v.string(), v.record(v.string(), v.string())),
+        JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+      );
+      for (const [job, suites] of Object.entries(folded)) {
+        const producer = workflow.jobs[job];
+        if (!producer?.if || !producer.outputs) {
+          panic(`Missing folded producer: ${job}`);
+        }
+        const plannedContext = context(event, true, {
+          ...heavyPlan,
+          ...outputs,
+        });
+        expect(heavy, `${event}/${job}`).toContain(job);
+        expect(selected(producer.if, plannedContext), `${event}/${job}`).toBe(
+          true,
+        );
+        const steps = Object.fromEntries(
+          (producer.steps ?? []).flatMap((step) =>
+            step.id === undefined
+              ? []
+              : [
+                  [
+                    step.id,
+                    {
+                      outcome: selected(step.if ?? "true", plannedContext)
+                        ? "success"
+                        : "skipped",
+                    },
+                  ],
+                ],
+          ),
+        );
+        for (const [suite, suiteScope] of Object.entries(suites)) {
+          expect(outputs[suiteScope], `${event}/${suite}`).toBe("true");
+          const expression = producer.outputs[suite];
+          if (expression === undefined) {
+            panic(`Missing folded output: ${job}/${suite}`);
+          }
+          expect(
+            evaluateExpression(
+              expression,
+              contextWithPlanOutputs({
+                context: contextFromNested({ ...plannedContext, steps }),
+                outputs: planOutputs,
+              }),
+            ),
+            `${event}/${suite}`,
+          ).toBe("success");
+        }
+      }
       for (const key of [
         "desktop_rust_checks_required",
         "docker_checks_required",
@@ -830,6 +913,24 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
     rmSync(directory, { force: true, recursive: true });
   }
 }, 30_000);
+
+test("main-heavy planning rejects a folded producer excluded by its condition", () => {
+  const folded = v.parse(
+    v.record(v.string(), v.record(v.string(), v.string())),
+    JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+  );
+  for (const job of Object.keys(folded)) {
+    const mutated = structuredClone(workflow);
+    const producer = mutated.jobs[job];
+    if (!producer?.if) {
+      panic(`Missing folded producer: ${job}`);
+    }
+    producer.if = `inputs.heavy_only != true && (${producer.if})`;
+    expect(() => mainHeavyJobs(mutated)).toThrow(
+      `Folded suites require a main-heavy producer: ${job}`,
+    );
+  }
+});
 
 test("every main heavy event requires the planned compiler to succeed", () => {
   for (const event of heavyEvents) {

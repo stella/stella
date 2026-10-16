@@ -2,8 +2,10 @@ import JSZip from "jszip";
 
 import { isReviewFlag } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import type { JustificationContent } from "@/api/db/schema";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { escapeCSV } from "@/api/lib/csv";
 import type { QueryEntityResult } from "@/api/lib/entities/query-entities";
 import { LIMITS } from "@/api/lib/limits";
@@ -236,6 +238,7 @@ const mergeVerdictValue = (askValue: string, tier: string): string => {
 
 const justificationToComment = (
   content: JustificationContent | undefined,
+  locale: string,
 ): string => {
   if (!content) {
     return "";
@@ -250,10 +253,15 @@ const justificationToComment = (
       continue;
     }
     // A cited decision passage exports as the passage itself; it has no
-    // statement the model wrote around it.
+    // statement the model wrote around it. The court's paragraph number
+    // follows it, as the chip shows it.
     if (block.kind === "decision-passage") {
       if (block.excerpt.length > 0) {
-        parts.push(block.excerpt);
+        parts.push(
+          block.courtParagraphNumber === null
+            ? block.excerpt
+            : `${block.excerpt} (${formatCourtParagraphMark(locale, block.courtParagraphNumber)})`,
+        );
       }
       continue;
     }
@@ -293,7 +301,10 @@ const buildPropertyCell = ({
     ? fieldByPropertyId.get(column.commentPropertyId)
     : undefined;
   const comment = commentField
-    ? justificationToComment(justificationByFieldId.get(commentField.id))
+    ? justificationToComment(
+        justificationByFieldId.get(commentField.id),
+        locale,
+      )
     : "";
   const commentOption = comment.length > 0 ? comment : undefined;
 
@@ -436,9 +447,9 @@ export const buildDocxExport = async ({
   rows,
 }: ExportTableInput): Promise<ArrayBuffer> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", docxContentTypesXml);
-  zip.file("_rels/.rels", docxRootRelationshipsXml);
-  zip.file("word/document.xml", buildDocxDocumentXml(columns, rows));
+  writeZipEntry(zip, "[Content_Types].xml", docxContentTypesXml);
+  writeZipEntry(zip, "_rels/.rels", docxRootRelationshipsXml);
+  writeZipEntry(zip, "word/document.xml", buildDocxDocumentXml(columns, rows));
 
   return await zip.generateAsync({
     type: "arraybuffer",
@@ -501,12 +512,17 @@ export const buildXlsxExport = async ({
   const commentsRelId = `rId${hyperlinks.length + 1}`;
   const vmlRelId = `rId${hyperlinks.length + 2}`;
 
-  zip.file("[Content_Types].xml", buildContentTypesXml(hasComments));
-  zip.file("_rels/.rels", rootRelsXml);
-  zip.file("xl/workbook.xml", buildWorkbookXml(worksheetName ?? "Table"));
-  zip.file("xl/_rels/workbook.xml.rels", workbookRelsXml);
-  zip.file("xl/styles.xml", buildStylesXml(styleRegistry));
-  zip.file(
+  writeZipEntry(zip, "[Content_Types].xml", buildContentTypesXml(hasComments));
+  writeZipEntry(zip, "_rels/.rels", rootRelsXml);
+  writeZipEntry(
+    zip,
+    "xl/workbook.xml",
+    buildWorkbookXml(worksheetName ?? "Table"),
+  );
+  writeZipEntry(zip, "xl/_rels/workbook.xml.rels", workbookRelsXml);
+  writeZipEntry(zip, "xl/styles.xml", buildStylesXml(styleRegistry));
+  writeZipEntry(
+    zip,
     "xl/worksheets/sheet1.xml",
     buildSheetXml({
       columns,
@@ -518,7 +534,8 @@ export const buildXlsxExport = async ({
   );
 
   if (hyperlinks.length > 0 || hasComments) {
-    zip.file(
+    writeZipEntry(
+      zip,
       "xl/worksheets/_rels/sheet1.xml.rels",
       buildWorksheetRelsXml({
         hyperlinks,
@@ -529,8 +546,12 @@ export const buildXlsxExport = async ({
     );
   }
   if (hasComments) {
-    zip.file("xl/comments1.xml", buildCommentsXml(comments));
-    zip.file("xl/drawings/vmlDrawing1.vml", buildVmlDrawingXml(comments));
+    writeZipEntry(zip, "xl/comments1.xml", buildCommentsXml(comments));
+    writeZipEntry(
+      zip,
+      "xl/drawings/vmlDrawing1.vml",
+      buildVmlDrawingXml(comments),
+    );
   }
 
   return await zip.generateAsync({

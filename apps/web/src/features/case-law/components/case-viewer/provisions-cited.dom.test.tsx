@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 
@@ -44,7 +45,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type ProvisionsPage = Awaited<
@@ -83,6 +84,8 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     status: { type: "legacy" },
     generation: "0",
     publishedProjectionDigest: null,
+    capability: { type: "supported", languages: ["cs"] },
+    pendingSince: null,
   } satisfies ProvisionsPage;
   client.setQueryData(decisionProvisionsInfiniteOptions(decisionId).queryKey, {
     pageParams: [null],
@@ -153,8 +156,11 @@ test("an inferred act shows its basis once and preserves repeated citation count
     ],
     true,
   );
-  expect(screen.getAllByText(title)).toHaveLength(1);
-  expect(screen.getAllByText("Decision date · inferred")).toHaveLength(1);
+  const actName = /40\/1964 Sb\., Občanský zákoník/u;
+  expect(screen.getAllByRole("button", { name: actName })).toHaveLength(1);
+  expect(
+    screen.getAllByRole("button", { name: "Decision date · inferred" }),
+  ).toHaveLength(1);
   expect(
     container.querySelectorAll('[data-version-basis="group"]'),
   ).toHaveLength(1);
@@ -163,7 +169,7 @@ test("an inferred act shows its basis once and preserves repeated citation count
   ).toHaveLength(0);
   expect(screen.getByText("2×")).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: title }).getAttribute("aria-expanded"),
+    screen.getByRole("button", { name: actName }).getAttribute("aria-expanded"),
   ).toBe("true");
 });
 

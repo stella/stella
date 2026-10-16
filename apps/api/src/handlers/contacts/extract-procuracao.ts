@@ -53,7 +53,8 @@ const outorganteCandidateSchema = v.strictObject({
   contactType: v.nullable(v.picklist(["person", "organization"])),
 });
 
-const extractProcuracaoOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const extractProcuracaoOutputSchema = v.strictObject({
   outorgantes: v.array(outorganteCandidateSchema),
 });
 
@@ -285,6 +286,7 @@ const extractProcuracao = createSafeRootHandler(
         feature: "contacts.extractProcuracao",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });

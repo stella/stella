@@ -7,6 +7,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -32,8 +33,6 @@ import {
   TEMPLATE_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/template-workflow-reference";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-
-import { MCP_APPS } from "./apps/manifest";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -311,6 +310,9 @@ describe("MCP resources", () => {
     expect(content.text).toContain("`par_1729`");
     expect(content.text).toContain("`text_withheld`");
     expect(content.text).toContain("`textWithheldReason`");
+    expect(content.text).toContain("`documentId`");
+    expect(content.text).toContain("`nextTextCursor`");
+    expect(content.text).toContain("`text_cursor`");
     // Applicability takes both fields, and a promulgated entry never applied.
     expect(content.text).toContain(
       "only when both hold: `windowDisposition` is `effective` and " +
@@ -469,7 +471,7 @@ describe("MCP resources", () => {
       homepage: "https://stll.app",
       documentation: "https://stll.app/product/cli-mcp",
       source: "https://github.com/stella/stella",
-      support: "https://github.com/stella/stella/issues",
+      support: "https://stll.app/support/",
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
     });

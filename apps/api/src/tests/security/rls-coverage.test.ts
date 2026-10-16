@@ -394,6 +394,15 @@ describe("policy coverage", () => {
     // every privilege is revoked from stella (asserted in
     // rls-table-grants.test.ts), so there is no org policy to require.
     "feedback_reports",
+    // Chat content repair receipts: organization_id lets the receipts cascade
+    // with their organization and is never a tenant scope. RLS is forced with
+    // one owner-only policy and every privilege is revoked from stella; the
+    // dedicated assertion below covers that instead of tenant CRUD.
+    "chat_content_v3_backfill_receipts",
+    // Professional-use acceptances are written once at organization creation
+    // on the owner connection and deny the request role entirely
+    // (asserted in rls-table-grants.test.ts).
+    "organization_professional_use_acceptances",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,
@@ -766,6 +775,41 @@ describe("policy coverage", () => {
       expect(policy?.check_expr).toBe("false");
       expect(privilegesForTable(privileges, table)).toEqual([]);
     }
+  });
+
+  test("chat content repair receipts admit only the owning role", async () => {
+    const table = "chat_content_v3_backfill_receipts";
+    const result = await testDb.execute<{
+      command: string;
+      permissive: boolean;
+      roles: string;
+      using_expr: string | null;
+      check_expr: string | null;
+    }>(sql`
+      SELECT p.polcmd AS command,
+             p.polpermissive AS permissive,
+             p.polroles::text AS roles,
+             pg_get_expr(p.polqual, p.polrelid) AS using_expr,
+             pg_get_expr(p.polwithcheck, p.polrelid) AS check_expr
+      FROM pg_policy p
+      WHERE p.polrelid = ${table}::regclass
+    `);
+    expect(result.rows).toHaveLength(1);
+    const policy = result.rows.at(0);
+    expect(policy).toMatchObject({
+      command: "*",
+      permissive: true,
+      roles: "{0}",
+    });
+    // Both sides compare the session role with the table's owner, nothing else.
+    const ownerOnly = `(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid
+   FROM pg_class
+  WHERE (pg_class.oid = ('${table}'::regclass)::oid)))`;
+    expect(policy?.using_expr).toBe(ownerOnly);
+    expect(policy?.check_expr).toBe(ownerOnly);
+    expect(
+      privilegesForTable(await fetchStellaTablePrivileges(testDb), table),
+    ).toEqual([]);
   });
 
   test("every table with organization_id (org-only) has org policies", async () => {
@@ -1382,6 +1426,46 @@ describe("policy coverage", () => {
     expect(policy?.owner_check).toBe(policy?.owner_using);
     const privileges = await fetchStellaTablePrivileges(testDb);
     expect(privilegesForTable(privileges, "service_oauth_clients")).toEqual([]);
+  });
+
+  test("doctrine reviews retain owner writes and ingestion reads and erasure", async () => {
+    const policies = await fetchStellaIngestionPolicies(testDb);
+    const ingestionPolicy = policies.find(
+      (policy) =>
+        policy.table_name === "case_law_citation_doctrine_reviews" &&
+        policy.policy_name === "case_law_ingestion_access",
+    );
+    expect(ingestionPolicy?.command).toBe("*");
+    expect(ingestionPolicy?.using_expr).toBe("true");
+    expect(ingestionPolicy?.check_expr).toBe("true");
+    const ingestionGrants = await fetchStellaIngestionTablePrivileges(testDb);
+    expect(
+      privilegesForTable(ingestionGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual(["DELETE", "SELECT"]);
+    const requestGrants = await fetchStellaTablePrivileges(testDb);
+    expect(
+      privilegesForTable(requestGrants, "case_law_citation_doctrine_reviews"),
+    ).toEqual([]);
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      rls_forced: boolean;
+      owner_using: string;
+      owner_check: string;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled, rel.relforcerowsecurity AS rls_forced,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.case_law_citation_doctrine_reviews'::regclass
+        AND policy.polname = 'citation_doctrine_reviews_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
+    expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
   });
 
   test("case-law ingestion role has explicit narrow write boundaries", async () => {

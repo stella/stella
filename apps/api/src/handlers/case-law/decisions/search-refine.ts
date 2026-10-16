@@ -76,6 +76,7 @@ const refineCaseLawSearch = createSafeRootHandler(
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "unavailable") {
       return Result.ok(countryRead.answer);
@@ -119,6 +120,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       feature: "case-law.search.refine",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });

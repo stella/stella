@@ -3,6 +3,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/storage" });
 const { act, cleanup, renderHook } = await import("@testing-library/react");
 const { browserStorage, browserStateStorage, deviceStorage } =
@@ -27,7 +29,7 @@ afterEach(() => {
   browserStorage("session")?.clear();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const family of USER_STORAGE_FAMILIES.filter(

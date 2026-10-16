@@ -37,6 +37,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_professional_use_acceptances:
+    "The organization's professional-use acceptance; written once, never reviewer content.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",
   organization_file_objects:
     "Storage accounting, settled by the cleanup workers as objects are erased.",
@@ -60,6 +62,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  chat_content_v3_backfill_receipts:
+    "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
@@ -108,6 +112,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_time_entry_batches",
   "document_processing_runs",
   "document_reference_counters",
   "document_review_findings",
@@ -127,6 +132,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "invoice_lines",
   "invoices",
   "legal_reader_annotations",
+  "legal_reader_answers",
   "matter_counters",
   "matter_inbound_addresses",
   "notifications",

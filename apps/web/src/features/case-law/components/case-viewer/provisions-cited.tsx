@@ -5,6 +5,11 @@ import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import {
+  pickVersionAt,
+  referencesOutsideVersion,
+  versionCoversDate,
+} from "@stll/api-contract/statute-version";
+import {
   Accordion,
   AccordionItem,
   AccordionPanel,
@@ -12,6 +17,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -20,6 +26,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
+  provisionStatusMessage,
   summarizeProvisionVersions,
   type ProvisionGroup,
   type WorkGroup,
@@ -38,16 +45,12 @@ import type {
   CitedWorkAtDate,
   ResolvedCitedStatute,
 } from "@/features/case-law/queries/provisions";
-import {
-  pickVersionAt,
-  referencesOutsideVersion,
-  versionCoversDate,
-} from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -121,14 +124,18 @@ export const ProvisionsCited = ({
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
-  // Absent is the answer for a decision that applies no provisions. A failed
-  // read is not that answer, so it keeps the panel and says so instead of
-  // disappearing as though the decision cited nothing. Until hydrated the
-  // panel is absent either way: the non-blocking prefetch may be known on
-  // one side of hydration and not the other.
+  const firstPage = data?.pages.at(0);
+  const statusMessage =
+    firstPage === undefined
+      ? null
+      : provisionStatusMessage(
+          firstPage.status,
+          groups.length,
+          firstPage.capability,
+        );
   const environmentHydrated = useHydrated();
   const hydrated = isHydrated ?? environmentHydrated;
-  if (!hydrated || (groups.length === 0 && !isError)) {
+  if (!hydrated || (data === undefined && !isError)) {
     return null;
   }
 
@@ -139,6 +146,11 @@ export const ProvisionsCited = ({
         expanded === undefined && "px-3 pb-3",
       )}
     >
+      {!isError && statusMessage !== null && (
+        <p className="text-muted-foreground text-xs" role="status">
+          {t(statusMessage)}
+        </p>
+      )}
       {isError && (
         <div className="flex items-center gap-2">
           <p className="text-muted-foreground text-xs">
@@ -315,6 +327,9 @@ const WorkReferences = ({
         }) && <QueryViewFeedback view={versionsView} />}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2">
         <AccordionTrigger className="min-w-0 flex-1" size="compact">
+          <DocumentIdentityBadge
+            identity={statuteDocumentIdentity(group.workEli)}
+          />
           <BidiText as="span" className="min-w-0 text-pretty">
             {title}
           </BidiText>

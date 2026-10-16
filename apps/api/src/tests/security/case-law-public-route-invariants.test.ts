@@ -1,17 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
@@ -164,6 +171,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",
 ] as const;
@@ -193,9 +201,6 @@ const PUBLIC_DECISION_READ_GATES = {
     reason: "Relation definitions.",
   },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
-  "apps/api/src/handlers/case-law/decisions/citations.ts": {
-    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
-  },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
@@ -217,9 +222,13 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
+  "apps/api/src/lib/case-law/decision-citations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   "apps/api/src/lib/case-law/citation-storage-bounds.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -256,6 +265,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Sitemap shard naming fragments; no query.",
+  },
+  "apps/api/src/lib/db/aggregate-lock.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Locks citation stats batch rows by ID for ingestion; returns no row.",
   },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -485,7 +499,7 @@ describe("public case-law route boundary", () => {
     expect(block).not.toContain("permissions:");
   });
 
-  test("public read handlers use the public-safe handler factory", () => {
+  test("public read handlers use the budgeted public-safe handler factory", () => {
     // Was a grep for nine `const x = createSafePublicHandler` lines, which
     // could not see a tenth route or a handler renamed around it. The factory
     // now stamps what it produces, so the census covers every mounted route
@@ -499,7 +513,7 @@ describe("public case-law route boundary", () => {
       (route) => typeof route.handler === "function",
     );
     const ungoverned = declared
-      .filter((route) => !isSafePublicHandler(route.handler))
+      .filter((route) => !isPublicReadBudgetHandler(route.handler))
       .map((route) => `${route.method} ${route.path}`);
 
     expect(ungoverned).toEqual([]);
@@ -700,9 +714,35 @@ describe("public case-law route boundary", () => {
         readSource(CITATION_GRAPH_FILE),
         readSource(LAUNCH_READINESS_FILE),
       ]);
-    expect(subject).toContain("!isPublicCaseLawCountry(row.country)");
-    for (const source of [sitemap, alternates, citations]) {
-      expect(source).toContain("PUBLIC_CASE_LAW_COUNTRIES");
+    // The subject gate resolves the surface it was asked for to one country
+    // list, from one table that names both, and checks the row against it.
+    // The subject carries that list, and the citation graph filters the
+    // subject's far ends against it, so a far end answers to the same surface.
+    expect(subject).toContain("!isListed(countries, row.country)");
+    expect(subject).toContain("CASE_LAW_SURFACE_COUNTRIES[surface]");
+    for (const entry of [
+      "pages: PUBLIC_CASE_LAW_PAGE_COUNTRIES,",
+      "search: PUBLIC_CASE_LAW_COUNTRIES,",
+    ]) {
+      expect(subject).toContain(entry);
+    }
+    expect(citations).toContain("[...countries]");
+    for (const source of [sitemap, alternates]) {
+      expect(source).toContain("PUBLIC_CASE_LAW_PAGE_COUNTRIES");
+    }
+    // Behaviour, not spelling: the default table is the contract's two lists,
+    // pages a superset of search. A pages-public decision's own behaviour on
+    // both surfaces is proven in citation-graph-surface.db.test.ts.
+    expect(CASE_LAW_SURFACE_COUNTRIES.pages).toEqual(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+    );
+    expect(CASE_LAW_SURFACE_COUNTRIES.search).toEqual(
+      PUBLIC_CASE_LAW_COUNTRIES,
+    );
+    for (const country of PUBLIC_COUNTRIES) {
+      if (CASE_LAW_SURFACE_COUNTRIES.search.includes(country)) {
+        expect(CASE_LAW_SURFACE_COUNTRIES.pages).toContain(country);
+      }
     }
     expect(readiness).toContain("evalSetExists: v.literal(true)");
     expect(readiness).toContain("lastCensusGreen: v.literal(true)");
@@ -798,7 +838,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );
@@ -892,7 +932,7 @@ describe("public case-law route boundary", () => {
 
   test("the listing-only predicate has one owner", async () => {
     const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/case-law/published-decisions-sql.ts"),
       readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
     ]);
 
@@ -915,7 +955,7 @@ describe("public case-law route boundary", () => {
     for (const component of [
       "redistributableCaseLawSourceFor(",
       "publishedCaseLawDecisionFor(",
-      "[...PUBLIC_CASE_LAW_COUNTRIES]",
+      "[...countries]",
     ]) {
       expect({ component, count: count(component) }).toEqual({
         component,

@@ -4,12 +4,14 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame } from "@stll/ui/frame";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { getInitials } from "@stll/ui/initials";
+import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   SortableHead,
   Table,
@@ -27,7 +29,6 @@ import { useMatterContextMenu } from "@/components/workspaces/matter-context-men
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   MattersColumnId,
@@ -356,6 +357,7 @@ const MattersTableRow = ({
               />
               <InlineEdit
                 className="font-medium"
+                maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                 onCancel={ctx.rename.cancel}
                 onChange={ctx.rename.setDraft}
                 onCommit={ctx.rename.commit}

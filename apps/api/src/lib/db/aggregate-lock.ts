@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -20,15 +21,21 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationParam,
+} from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
   fields,
   pdfSigningSessions,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -42,6 +49,7 @@ import { isRecord } from "@/api/lib/type-guards";
 /** Registered blocking chains share one physical transaction order. */
 export const AGGREGATE_LOCKS = {
   organization: { rank: 0, kind: "row" },
+  professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
@@ -49,11 +57,14 @@ export const AGGREGATE_LOCKS = {
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
+  desktopBatch: { rank: 90, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
+  readerAnswer: { rank: 120, kind: "row" },
+  readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
   run: { rank: 200, kind: "row" },
@@ -67,12 +78,31 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
   signingSession: { rank: 900, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
+
+type OrganizationFencedRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  query: string;
+  params: readonly OnlineMigrationParam[];
+};
+
+/**
+ * Online repairs own native transactions instead of Drizzle transactions.
+ * Their batch query joins organization as tenant; key-share fencing preserves
+ * that parent until dependent metadata commits without locking source rows.
+ */
+export const queryOrganizationFencedRepairBatch = async ({
+  connection,
+  query,
+  params,
+}: OrganizationFencedRepairBatchOptions) =>
+  await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
@@ -116,7 +146,9 @@ export const AGGREGATE_CHAINS = {
     "obligation",
     "entity",
   ],
+  professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
     "workspace",
     "entity",
@@ -128,8 +160,10 @@ export const AGGREGATE_CHAINS = {
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
+  readerAnswer: ["readerAnswer", "readerAnswerMessage"],
   signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -168,12 +202,19 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
+  professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
   desktopCredential: { id: string; userId: SafeId<"user"> };
+  desktopBatch: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    idempotencyKey: string;
+  };
   orgFeatureAdmission: {
     organizationId: SafeId<"organization">;
     featureId: "flows" | "signals";
@@ -208,6 +249,15 @@ type AggregateIdentities = {
     id: SafeId<"chatThread">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
+  };
+  readerAnswer: {
+    id: SafeId<"legalReaderAnswer">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnswerMessage: {
+    id: SafeId<"legalReaderAnswerMessage">;
+    answerId: SafeId<"legalReaderAnswer">;
   };
   chatTurn: {
     threadId: SafeId<"chatThread">;
@@ -547,6 +597,81 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   });
 };
 
+const executorSavepoints = new WeakSet<object>();
+
+type ExecutorSavepointDecision<T> = {
+  type: "commit" | "rollback";
+  value: T;
+};
+
+export class ExecutorSavepointError extends TaggedError(
+  "ExecutorSavepointError",
+)<{
+  message: string;
+  cause: unknown;
+  phase: "setup" | "callback" | "cleanup";
+}> {}
+
+/**
+ * A savepoint for execute-only callbacks. The callback must not acquire typed
+ * aggregate handles: those require withAggregateSavepoint and its lock history.
+ * One executor cannot own overlapping or nested scopes. Admission covers timeout
+ * capture through restoration, including savepoint cleanup.
+ */
+export const withExecutorSavepoint = async <T>(
+  tx: { execute: (statement: SQL) => Promise<unknown> },
+  run: (previous: {
+    statementTimeoutMs: number;
+    lockTimeoutMs: number;
+  }) => Promise<ExecutorSavepointDecision<T>>,
+): Promise<Result<T, ExecutorSavepointError>> => {
+  if (executorSavepoints.has(tx)) {
+    return panic("Await the executor savepoint before reusing its transaction");
+  }
+  executorSavepoints.add(tx);
+  const name = sql.identifier(
+    `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+  );
+  let phase: ExecutorSavepointError["phase"] = "setup";
+  try {
+    const scope = await Result.tryPromise({
+      try: async () =>
+        await withSharedTransactionTimeoutRestoration(tx, async (previous) => {
+          await tx.execute(sql`SAVEPOINT ${name}`);
+          const outcome = await Result.tryPromise({
+            try: async () => await run(previous),
+            catch: (cause) =>
+              new ExecutorSavepointError({
+                message: "Executor savepoint callback failed",
+                cause,
+                phase: "callback",
+              }),
+          });
+          phase = "cleanup";
+          if (outcome.isErr() || outcome.value.type === "rollback") {
+            await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+          }
+          await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+          if (outcome.isErr()) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value.value;
+        }),
+      catch: (cause) =>
+        cause instanceof ExecutorSavepointError
+          ? cause
+          : new ExecutorSavepointError({
+              message: `Executor savepoint ${phase} failed`,
+              cause,
+              phase,
+            }),
+    });
+    return scope;
+  } finally {
+    executorSavepoints.delete(tx);
+  }
+};
+
 /** Track the public savepoint callback without inspecting driver internals. */
 export const withAggregateSavepoint = async <T>(
   tx: Pick<Transaction, "execute" | "transaction">,
@@ -607,26 +732,32 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+// Most row aggregates are one row found by id inside a single owning scope.
+const byIdWithin = (
+  table: string,
+  id: string,
+  scopeColumn: string,
+  scopeValue: string,
+): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: [scopeColumn],
+  scopeValues: [scopeValue],
+});
 const memberCleanupRowResource = (
   id: AggregateIdentities["memberCleanup"],
 ): RowResource => {
   switch (id.type) {
     case "organization-member":
-      return {
-        table: "member",
-        columns: ["id"],
-        values: [id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [id.organizationId],
-      };
+      return byIdWithin("member", id.id, "organization_id", id.organizationId);
     case "workspace-member":
-      return {
-        table: "workspace_members",
-        columns: ["id"],
-        values: [id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [id.workspaceId],
-      };
+      return byIdWithin(
+        "workspace_members",
+        id.id,
+        "workspace_id",
+        id.workspaceId,
+      );
     default:
       id satisfies never;
       return panic("Unknown member cleanup resource");
@@ -659,45 +790,40 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [],
       };
     case "desktopCredential":
-      return {
-        table: "apikey",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["reference_id"],
-        scopeValues: [options.id.userId],
-      };
+      return byIdWithin(
+        "apikey",
+        options.id.id,
+        "reference_id",
+        options.id.userId,
+      );
     case "chatMessage":
-      return {
-        table: "chat_messages",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["thread_id"],
-        scopeValues: [options.id.threadId],
-      };
+      return byIdWithin(
+        "chat_messages",
+        options.id.id,
+        "thread_id",
+        options.id.threadId,
+      );
     case "workspace":
-      return {
-        table: "workspaces",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "workspaces",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "run":
-      return {
-        table: "flow_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "flow_runs",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "currentStep":
-      return {
-        table: "flow_run_steps",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "flow_run_steps",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "obligation":
       return {
         table: "work_obligations",
@@ -707,13 +833,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "entity":
-      return {
-        table: "entities",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "entities",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "entityVersion":
       return {
         table: "entity_versions",
@@ -731,13 +856,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [options.id.workspaceId],
       };
     case "signal":
-      return {
-        table: "signals",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "signals",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "schedulerClaim":
       return {
         table: "scheduler_jobs",
@@ -747,29 +871,26 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeValues: [],
       };
     case "definition":
-      return {
-        table: "flow_definitions",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "flow_definitions",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "processingClaim":
-      return {
-        table: "document_processing_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "document_processing_runs",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "scoutCensus":
-      return {
-        table: "scout_runs",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id"],
-        scopeValues: [options.id.organizationId],
-      };
+      return byIdWithin(
+        "scout_runs",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "chatThread":
       return {
         table: "chat_threads",
@@ -778,6 +899,21 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         scopeColumns: ["organization_id", "user_id"],
         scopeValues: [options.id.organizationId, options.id.userId],
       };
+    case "readerAnswer":
+      return {
+        table: "legal_reader_answers",
+        columns: ["id"],
+        values: [options.id.id],
+        scopeColumns: ["organization_id", "user_id"],
+        scopeValues: [options.id.organizationId, options.id.userId],
+      };
+    case "readerAnswerMessage":
+      return byIdWithin(
+        "legal_reader_answer_messages",
+        options.id.id,
+        "answer_id",
+        options.id.answerId,
+      );
     case "chatTurn":
       return {
         table: "chat_turns",
@@ -799,13 +935,12 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         ],
       };
     case "signingSession":
-      return {
-        table: "pdf_signing_sessions",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["workspace_id"],
-        scopeValues: [options.id.workspaceId],
-      };
+      return byIdWithin(
+        "pdf_signing_sessions",
+        options.id.id,
+        "workspace_id",
+        options.id.workspaceId,
+      );
     case "memberCleanup":
       return memberCleanupRowResource(options.id);
     default:
@@ -1044,6 +1179,29 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "desktopBatch":
+      return {
+        first: sql`${0x0f_10_cc_ac}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId, options.id.idempotencyKey])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+          options.id.idempotencyKey,
+        ],
+      };
+    case "sampleCase":
+      return {
+        first: sql`hashtext('lists.sample-case')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "professionalUseAcceptance":
+      return {
+        first: sql`hashtext('professional-use')`,
+        second: sql`hashtext(${options.id.userId})`,
+        order: [options.aggregate, options.id.userId],
+      };
     case "automatedFlowRunCap":
       return {
         first: sql`${0x0f_10_cc_a9}::integer`,
@@ -1921,3 +2079,236 @@ export const withAutomatedFlowRunCapLock = async <T>(
     });
     return await run(tx);
   });
+
+type DecisionCitationStatsLocksOptions = {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/**
+ * Lock before comparing so a concurrent writer cannot create false drift.
+ * Every existing batch row, published or listing-only, is locked before any
+ * stripe: refresh rebuilds each supplied decision, and a visibility update
+ * holds its own row while it waits for stripes.
+ */
+const lockedDecisionRowSchema = v.object({ id: v.string() });
+
+/**
+ * The citing decisions a reviewed-label run admits: the unredacted ones among
+ * `decisionIds`. A write (`lock: true`) holds them FOR SHARE in id order until
+ * it commits: a redaction updates the decision row, so it either waits for the
+ * write and then erases what it stored, or commits first and the decision is
+ * not returned. A plan writes nothing and may run read-only, so it reads them
+ * without a lock.
+ */
+export const lockUnredactedCitingDecisions = async ({
+  tx,
+  decisionIds,
+  lock,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly string[];
+  lock: boolean;
+}): Promise<Set<string>> => {
+  if (decisionIds.length === 0) {
+    return new Set();
+  }
+  const rows = executedRows(
+    await tx.execute(sql`
+      SELECT id::text AS id FROM case_law_decisions
+      WHERE redacted_at IS NULL
+        AND id IN (${sql.join(
+          decisionIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})
+      ORDER BY id${lock ? sql` FOR SHARE` : sql``}
+    `),
+  );
+  return new Set(rows.map((row) => v.parse(lockedDecisionRowSchema, row).id));
+};
+
+export const withDecisionCitationStatsLocks = async ({
+  tx,
+  decisionIds,
+}: DecisionCitationStatsLocksOptions) => {
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id FOR NO KEY UPDATE
+  `);
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(19053, key) FROM (
+      SELECT DISTINCT (hashtextextended('decision-citation-stats:' || id::text, 0) & 127)::integer AS key
+      FROM case_law_decisions WHERE id IN (${sql.join(
+        decisionIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+      ORDER BY key
+    ) anchors
+  `);
+};
+
+type MemberAccessRowLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  mode: "share" | "no key update" | "update";
+};
+
+/** Lock the member within the caller's lifecycle or access-hold sequence. */
+export const lockMemberAccessRow = async ({
+  tx,
+  organizationId,
+  userId,
+  mode,
+}: MemberAccessRowLockOptions) =>
+  (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for(mode)
+  ).at(0);
+
+type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
+  workspaceIds: readonly SafeId<"workspace">[];
+  /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */
+  where?: SQL | undefined;
+};
+
+/** Lock assignments after the caller's member and optional matter prefix. */
+export const lockMatterAccessAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        inArray(workspaceMembers.workspaceId, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaceMembers.workspaceId, workspaceMembers.id)
+    .limit(workspaceIds.length)
+    .for(mode, { of: workspaceMembers });
+};
+
+type MatterAccessWorkspaceRowsLockOptions = Omit<
+  MatterAccessRowsLockOptions,
+  "userId"
+>;
+
+/**
+ * Lock in stable matter order. A narrowing predicate can
+ * select the unassigned matters whose reach depends on their row. Decide
+ * access in a later statement, using only identities covered by held locks.
+ */
+export const lockMatterAccessWorkspaceRows = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessWorkspaceRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaces.id)
+    .limit(workspaceIds.length)
+    .for(mode);
+};
+
+/** Shares the lifecycle fence used by matter deletion and timer writes. */
+export const lockWorkspaceLifecycle = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+};
+
+export const TIMER_MATTER_LOCK_SCOPE = {
+  assignment: "assignment",
+  client: "client",
+} as const;
+
+type TimerMatterAccessRowsLockOptions = Omit<
+  MemberAccessRowLockOptions,
+  "mode"
+> & {
+  workspaceId: SafeId<"workspace">;
+  lockScope: SQL;
+};
+
+/**
+ * Preserve the timer's joint matter/member SHARE statement. The supplied
+ * scope only selects the original rows to lock; access is decided later.
+ */
+export const lockTimerMatterAccessRows = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceId,
+  lockScope,
+}: TimerMatterAccessRowsLockOptions) => {
+  const rows = executedRows(
+    await tx.execute(sql`
+    SELECT ${lockScope} AS "lockScope"
+    FROM workspaces AS workspace
+    INNER JOIN member AS organization_member
+      ON organization_member.organization_id = workspace.organization_id
+      AND organization_member.user_id = ${userId}
+    WHERE workspace.id = ${workspaceId}
+      AND workspace.organization_id = ${organizationId}
+      AND workspace.status = 'active'
+      AND (${lockScope}) IS NOT NULL
+    LIMIT 1
+    FOR SHARE OF workspace, organization_member
+  `),
+  );
+  const row = rows.at(0);
+  if (row === undefined) {
+    return null;
+  }
+  if (!isRecord(row)) {
+    return panic("Invalid timer matter lock result");
+  }
+  const scope = row["lockScope"];
+  switch (scope) {
+    case TIMER_MATTER_LOCK_SCOPE.assignment:
+    case TIMER_MATTER_LOCK_SCOPE.client:
+      return scope;
+    default:
+      return panic("Invalid timer matter lock scope");
+  }
+};

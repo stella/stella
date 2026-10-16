@@ -1,5 +1,11 @@
+import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
+
 import {
+  caseLawDecisionCitationStatsState,
   desktopEditSessions,
+  folioCollabRooms,
+  desktopTimeEntryBatches,
+  legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
@@ -13,6 +19,8 @@ import {
   FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
+import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
   STATUS_COLUMNS,
   StatusTable,
@@ -21,6 +29,7 @@ import {
   defineFixedLifecycle,
   defineKeyedTransitions,
   defineLifecycle,
+  defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
@@ -71,6 +80,32 @@ const UNMANAGED_REASONS = {
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
 
+export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
+  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
+  table: folioCollabRooms,
+  edges: {
+    empty: ["empty", "claimed"],
+    claimed: ["empty", "claimed", "seeded"],
+    seeded: ["empty", "seeded"],
+  },
+  initial: ["empty"],
+});
+
+// Refresh atomically publishes a complete recount; later recounts remain exact.
+const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
+  table: caseLawDecisionCitationStatsState,
+  key: "decisionId",
+  edges: { pending: ["exact"], exact: [] },
+  options: { terminal: ["exact"] },
+});
+
+const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
+  ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
+  table: legalReaderAnswerMessages,
+  edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
+  initial: ["streaming", "complete"],
+});
+
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,
   {
@@ -87,6 +122,15 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
 );
+
+const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  table: desktopTimeEntryBatches,
+  key: "idempotencyKey",
+  scope: ["organizationId", "userId"],
+  stateColumn: "status",
+  edges: { committed: [], cancelled: [] },
+  initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
@@ -246,6 +290,7 @@ export const TRANSITIONS = {
   caseLawDecisionIdentifierBackfills: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
+  caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -267,6 +312,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -284,7 +330,7 @@ export const TRANSITIONS = {
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
-  folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
+  folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
@@ -294,6 +340,7 @@ export const TRANSITIONS = {
   legalListItemSources: { unmanaged: UNMANAGED_REASONS.projection },
   legalLists: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListVerificationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legalReaderAnswerMessages: READER_ANSWER_MESSAGE_TRANSITIONS,
   legislationDocuments: { unmanaged: UNMANAGED_REASONS.projection },
   legislationIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   mcpConnectorAuthorizationReviews: {

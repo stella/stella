@@ -108,7 +108,12 @@ keyring-core = "1"
 opener = "0.9"
 notify = "8"
 ring = "0.17"
-reqwest = { version = "0.13", features = ["json", "multipart", "stream"] }
+reqwest = { version = "0.13", features = [
+  "json",
+  "multipart",
+  "query",
+  "stream",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
@@ -119,7 +124,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
-zip = { version = "8.6.0", default-features = false }
+zip = { version = "9.0.0", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [

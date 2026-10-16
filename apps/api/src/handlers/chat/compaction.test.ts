@@ -11,11 +11,12 @@ import {
   parseChatCompactionSummary,
 } from "@/api/lib/chat/compaction-summary";
 import {
-  COMPACTION_GENERATION_POLICY,
+  compactionGenerationRequest,
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
 import { LIMITS } from "@/api/lib/limits";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 import {
@@ -52,11 +53,32 @@ const textMessage = ({
 });
 
 describe("chat history compaction", () => {
-  test("never checkpoints an output-ceiling prefix", () => {
-    expect(COMPACTION_GENERATION_POLICY).toEqual({
-      finishPolicy: "require-complete",
-      maxOutputTokens: 1800,
-    });
+  test("bounds the summary in its prompt, well under a ceiling sized to the input", () => {
+    const targets: number[] = [];
+    for (const chars of [0, 4000, 40_000, 400_000, 4_000_000]) {
+      const prompt = "x".repeat(chars);
+      const request = compactionGenerationRequest(prompt);
+      // A summary that reaches its ceiling never replaces its source window.
+      expect(request.finishPolicy).toBe("require-complete");
+      // The summarizer asks for no deliberation of its own.
+      expect(request.reasoningEffort).toBe("none");
+      expect(request.prompt.startsWith(prompt)).toBe(true);
+      const words = Number(/under (\d+) words/u.exec(request.prompt)?.[1]);
+      expect(Number.isInteger(words) && words > 0).toBe(true);
+      // A summary that keeps to its word target finishes with as much room
+      // again to spare, beside the reasoning reserve.
+      const targetTokens = Math.ceil(words / 0.75);
+      expect(request.maxOutputTokens).toBeGreaterThanOrEqual(
+        2 * targetTokens + 4096,
+      );
+      targets.push(words);
+    }
+    // The target grows with the input and stays bounded at both ends.
+    expect(targets).toEqual(targets.toSorted((a, b) => a - b));
+    expect(targets.at(0)).toBeLessThan(targets.at(-1) ?? 0);
+    expect(
+      compactionGenerationRequest("x".repeat(40_000_000)).maxOutputTokens,
+    ).toBe(compactionGenerationRequest("x".repeat(4_000_000)).maxOutputTokens);
   });
 
   test("keeps full history below the token trigger", () => {
@@ -101,14 +123,15 @@ describe("chat history compaction", () => {
       return;
     }
 
-    expect(compacted.value).toHaveLength(2);
-    expect(compacted.value.at(0)?.role).toBe("user");
-    expect(compacted.value.at(0)?.parts.at(0)).toEqual({
+    expect(compacted.value.notice).toBeNull();
+    expect(compacted.value.messages).toHaveLength(2);
+    expect(compacted.value.messages.at(0)?.role).toBe("user");
+    expect(compacted.value.messages.at(0)?.parts.at(0)).toEqual({
       type: "text",
       content:
         "Earlier conversation compacted from 2 message(s).\n\nold work summary",
     });
-    expect(compacted.value.at(1)?.id).toBe("msg_3");
+    expect(compacted.value.messages.at(1)?.id).toBe("msg_3");
   });
 
   test("preserves chat history from the latest user turn boundary", () => {
@@ -330,32 +353,96 @@ describe("chat history compaction", () => {
     expect(plan.recentMessages.map((message) => message.id)).toEqual(["msg_4"]);
   });
 
-  test("falls back to the recent tail when summary generation fails", async () => {
-    const messages = [
-      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
-      textMessage({ id: "msg_2", role: "user", text: "latest question" }),
-    ];
-    let observedSummaryError = false;
-
-    const compacted = await compactChatMessages({
-      messages,
-      onSummaryError: () => {
-        observedSummaryError = true;
-      },
-      preserveTokens: 20,
-      summarizeTranscript: async () => {
+  describe("when the summary cannot be made", () => {
+    // Six turns of about 80 tokens each: the thread crosses the trigger, the
+    // preserved tail holds one turn, and the trigger holds several.
+    const longThread = Array.from({ length: 6 }, (_, turn) => [
+      textMessage({
+        id: `user_${turn}`,
+        role: "user",
+        text: `question ${turn} `.repeat(16),
+      }),
+      textMessage({
+        id: `assistant_${turn}`,
+        role: "assistant",
+        text: `answer ${turn} `.repeat(16),
+      }),
+    ]).flat();
+    const budget = { preserveTokens: 120, triggerTokens: 450 };
+    const failures = {
+      fails: async (): Promise<string> => {
         throw new Error("provider unavailable");
       },
-      triggerTokens: 50,
-    });
+      "is empty": async () => await Promise.resolve("  "),
+    };
 
-    expect(Result.isOk(compacted)).toBe(true);
-    if (Result.isError(compacted)) {
-      return;
+    for (const [failure, summarizeTranscript] of Object.entries(failures)) {
+      test(`keeps the newest history that fits and says so when it ${failure}`, async () => {
+        const compacted = await compactChatMessages({
+          messages: longThread,
+          ...budget,
+          summarizeTranscript,
+        });
+
+        expect(Result.isOk(compacted)).toBe(true);
+        if (Result.isError(compacted)) {
+          return;
+        }
+        const preservedTail = planChatCompaction({
+          messages: longThread,
+          ...budget,
+        });
+        expect(preservedTail.type).toBe("compact");
+        if (preservedTail.type !== "compact") {
+          return;
+        }
+        const kept = compacted.value.messages.map(({ id }) => id);
+        // More than the preserved tail: the history the request can carry.
+        expect(kept.length).toBeGreaterThan(
+          preservedTail.recentMessages.length,
+        );
+        expect(kept.length).toBeLessThan(longThread.length);
+        expect(kept).toEqual(
+          longThread.slice(longThread.length - kept.length).map(({ id }) => id),
+        );
+        expect(kept.at(0)?.startsWith("user_")).toBe(true);
+        // And the answer is told that earlier history was left out.
+        expect(compacted.value.notice).toEqual({ type: "history-trimmed" });
+      });
     }
 
-    expect(observedSummaryError).toBe(true);
-    expect(compacted.value.map((message) => message.id)).toEqual(["msg_2"]);
+    test("reports the failure it fell back from", async () => {
+      let observedSummaryError = false;
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: () => {
+          observedSummaryError = true;
+        },
+        summarizeTranscript: failures.fails,
+      });
+      expect(observedSummaryError).toBe(true);
+    });
+
+    test("keeps step history the same way", async () => {
+      const compacted = await compactModelMessages({
+        messages: longThread.map((message): ModelMessage => ({
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        })),
+        ...budget,
+        summarizeTranscript: failures.fails,
+      });
+      expect(Result.isOk(compacted)).toBe(true);
+      if (Result.isError(compacted)) {
+        return;
+      }
+      expect(compacted.value.notice).toEqual({ type: "history-trimmed" });
+      expect(compacted.value.messages.length).toBeGreaterThan(2);
+      expect(compacted.value.messages.length).toBeLessThan(longThread.length);
+    });
   });
 
   test("parses structured chat compaction summaries", () => {
@@ -435,14 +522,17 @@ Continue drafting the termination analysis.
       return;
     }
 
-    expect(compacted.value).toEqual([
-      {
-        role: "user",
-        content:
-          "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
-      },
-      { role: "user", content: "latest request" },
-    ]);
+    expect(compacted.value).toEqual({
+      messages: [
+        {
+          role: "user",
+          content:
+            "Earlier model-step history compacted from 2 message(s).\n\nstep summary",
+        },
+        { role: "user", content: "latest request" },
+      ],
+      notice: null,
+    });
   });
 
   test("uses the TanStack model wrapper for model compaction summaries", async () => {
@@ -474,7 +564,7 @@ Continue drafting the termination analysis.
       return;
     }
     expect(transcriptSeenBySummarizer).toContain("old request");
-    expect(compacted.value.at(0)).toEqual({
+    expect(compacted.value.messages.at(0)).toEqual({
       role: "user",
       content:
         "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
@@ -711,9 +801,30 @@ describe("per-model compaction budget", () => {
       chatModelOverride: "openai::gpt-5.4",
       orgAIConfig: null,
       organizationId: toSafeId<"organization">("org_test"),
+      modelTier: MANAGED_MODEL_TIER.standard,
     });
 
     expect(budget.triggerTokens).toBe(200_000);
+  });
+
+  test("sizes a managed fast-tier thread by the model that serves it, not its selection", () => {
+    const organizationId = toSafeId<"organization">("org_test");
+    const fastTier = {
+      orgAIConfig: null,
+      organizationId,
+      modelTier: MANAGED_MODEL_TIER.fast,
+    };
+    expect(
+      resolveChatCompactionBudget({
+        ...fastTier,
+        chatModelOverride: "openai::gpt-5.4",
+      }),
+    ).toEqual(
+      resolveChatCompactionBudget({
+        ...fastTier,
+        chatModelOverride: undefined,
+      }),
+    );
   });
 
   test("uses half the window, clamped to [64k, 200k]", () => {

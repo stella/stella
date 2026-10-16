@@ -79,6 +79,11 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
+  chatContentBackfill: {
+    maxReplicas: 1,
+    pools: DATABASE_POOL_DEFAULTS,
+    publicPool: "shared",
+  },
   signInReplay: {
     maxReplicas: 1,
     pools: DATABASE_POOL_DEFAULTS,
@@ -171,6 +176,14 @@ const DATABASE_POOLS = [
     constructor: 1,
     maximum: { type: "fixed", value: 1 },
     processes: ["migrator"],
+    admission: "pooled",
+  },
+  {
+    // openOnlineRepairConnection: the operator-run chat content v3 backfill.
+    file: "src/db/online-index-observer.ts",
+    constructor: 2,
+    maximum: { type: "fixed", value: 1 },
+    processes: ["chatContentBackfill"],
     admission: "pooled",
   },
   {

@@ -71,6 +71,7 @@ export const tVatRateBps = t.Integer({
 export const tVatTreatment = t.Union([
   t.Literal("domestic_vat"),
   t.Literal("not_vat_payer"),
+  t.Literal("outside_scope"),
   t.Literal("reverse_charge"),
   t.Literal("exempt"),
 ]);
@@ -621,7 +622,13 @@ type LineQuantity = {
   unitPrice: CentsAmount;
 };
 
-type InvoiceSourceLine = LineAmountInput & Partial<LineQuantity>;
+/** The entry a line bills, kept so a document read can say where it came from. */
+type LineOrigin = {
+  timeEntryId?: SafeId<"timeEntry"> | null;
+  expenseId?: SafeId<"expense"> | null;
+};
+
+type InvoiceSourceLine = LineAmountInput & Partial<LineQuantity> & LineOrigin;
 
 /**
  * The lines an invoice read counts. An invoice with stored totals (`netAmount`
@@ -707,6 +714,8 @@ export const readInvoiceDocumentLines = (invoice: InvoiceForDocumentLines) => {
             billed.unitPrice === undefined
               ? null
               : cents(sign * Math.abs(billed.unitPrice) || 0),
+          timeEntryId: billed.timeEntryId ?? null,
+          expenseId: billed.expenseId ?? null,
         };
       }),
       totals,

@@ -131,6 +131,11 @@ type Messages = {
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
+    "professionalUse": {
+      "description": "Your account was set up without showing you this statement. Accept it to continue.";
+      "title": "Confirm professional use";
+    };
+    "professionalUseStatement": "By creating an account, you confirm that you use stella for professional purposes and understand that stella is a tool for legal professionals and not a substitute for legal advice.";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
@@ -171,6 +176,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
@@ -361,6 +367,8 @@ type Messages = {
       "chooseList": "Choose a list";
       "createList": "Create a list";
       "evidenceList": "Facts from";
+      "loadSample": "Load sample case";
+      "loadSampleFailed": "Couldn't load the sample case";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
     };
@@ -524,6 +532,70 @@ type Messages = {
     };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
+    "invoiceComposer": {
+      "addSellerProfile": "Add a seller profile in billing settings";
+      "billedHours": "Billed hours";
+      "buyer": "Client (buyer)";
+      "continueToDetails": "Continue to details";
+      "continueToIssue": "Continue to issue";
+      "datesAndPayment": "Dates and payment";
+      "days": "{days, plural, one {# day} other {# days}}";
+      "draftSavedTitle": "Draft invoice saved";
+      "dueIn": "Due in";
+      "dueOn": "due {date}";
+      "flatFee": "This matter has a flat fee: the invoice bills the agreed {amount}, and the time below is covered by it.";
+      "flatFeeLine": "Agreed flat fee";
+      "include": "Include on this invoice";
+      "issueFailed": "The draft was saved but could not be issued.";
+      "issueInvoice": "Issue invoice";
+      "issuedTitle": "Invoice {number} issued";
+      "lines": "Invoice lines";
+      "loggedHours": "{hours} h logged";
+      "noCharge": "No charge";
+      "noClient": "This matter has no client, so the invoice has no buyer yet.";
+      "noExpenses": "No approved, unbilled expenses on this matter.";
+      "noTime": "No approved, unbilled time on this matter.";
+      "noVat": "No VAT";
+      "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.";
+      "openInvoice": "Open invoice";
+      "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.";
+      "outsideScope": "Outside the scope of VAT, 0 %";
+      "rate": "Rate";
+      "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.";
+      "readyTitle": "Ready to issue";
+      "reverseCharge": "Reverse charge, 0 %";
+      "saveDraft": "Save as draft";
+      "seller": "Seller";
+      "sources": {
+        "client": "Copied from the matter's client";
+        "clientTerm": "The client's payment term";
+        "defaultSeller": "Your default seller profile";
+        "defaultTerm": "Standard payment term";
+        "lastWorkDay": "Last day of included work";
+      };
+      "steps": {
+        "issue": "Review and issue";
+        "items": "Time and expenses";
+      };
+      "tax": "Tax and currency";
+      "taxableSupplyDate": "Taxable supply date";
+      "timeEntries": "Time entries";
+      "timeSummary": "{count, plural, one {# entry} other {# entries}} · {hours} h";
+      "title": "New invoice";
+      "totalsSummary": "Excl. VAT {net} · VAT {vat} · Total {total}";
+      "vat": "VAT treatment";
+      "vatRate": "{rate} % VAT";
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Couldn't confirm the client's country: its VAT ID and address don't name the same country, so the standard rate applies";
+        "clientVatIdInvalid": "The client's VAT ID doesn't have the format of a VAT ID from its country, so the standard rate applies";
+        "domesticRate": "Your highest VAT rate in force on the supply date";
+        "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
+        "noVatRate": "No VAT rate is set up in billing settings";
+        "outsideScope": "The client's VAT ID is registered outside the EU, so the place of supply is abroad";
+        "reverseCharge": "The client's VAT ID is registered in another country";
+        "sellerNotVatPayer": "The seller is not a VAT payer";
+      };
+    };
     "invoiceNarrative": "Invoice narrative";
     "invoiceNarrativePlaceholder": "Client-facing description (optional)";
     "invoices": {
@@ -533,6 +605,16 @@ type Messages = {
       "createInvoice": "Create invoice";
       "dueDate": "Due date";
       "editInvoice": "Edit invoice";
+      "export": {
+        "accounting": "Accounting import";
+        "eBilling": "E-billing";
+        "eso9": "ESO9 import sheet (XLSX)";
+        "exporting": "Preparing export…";
+        "isdoc": "ISDOC e-invoice (ABRA Gen and others)";
+        "spreadsheets": "Spreadsheets";
+        "xlsx": "Invoices (XLSX)";
+        "xlsxLines": "Invoice lines (XLSX)";
+      };
       "finalize": "Finalize";
       "invoiceDate": "Invoice date";
       "invoiceDetail": "Invoice detail";
@@ -657,6 +739,9 @@ type Messages = {
       "setDefault": "Make default";
       "title": "Seller profiles";
       "vatId": "VAT ID";
+      "vatPayer": "VAT payer";
+      "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.";
+      "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer.";
     };
     "settingsTitle": "Billing";
     "split": {
@@ -734,6 +819,7 @@ type Messages = {
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}";
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}";
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}";
+        "retryAfter": "You can try again after {time}.";
         "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}";
         "unavailable": "AI analysis is not available for this decision.";
       };
@@ -774,6 +860,9 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "paragraphLabel": "Paragraph {paragraph}";
+      "paragraphMark": "¶ {paragraph}";
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph}";
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
@@ -802,7 +891,7 @@ type Messages = {
       "courtCount": "{count, plural, one {# court} other {# courts}}";
       "newLast24Hours": "{count} in the last 24 h";
       "newLast7Days": "New in the last 7 days";
-      "unlistedCourts": "{count, plural, one {Courts beyond the largest one} other {Courts beyond the # largest}}";
+      "otherCourts": "Other courts";
     };
     "courtTiers": {
       "constitutional": "Constitutional courts";
@@ -818,6 +907,7 @@ type Messages = {
       "decisionYears": "Decision years";
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.";
       "exceedsReportedTotal": "Holds more than the publisher's last stated total of {date}";
+      "gapStatusUnknown": "Gap status unknown";
       "generatedAt": "Figures from {date}";
       "globeLabel": "Countries whose case law the corpus holds, on a globe";
       "healthCurrent": "Up to date";
@@ -826,9 +916,12 @@ type Messages = {
       "healthStalled": "Stalled";
       "healthUnknown": "Never run";
       "inPreparation": "In preparation";
+      "knownGaps": "Known gaps";
       "lastSync": "Last sync";
+      "noGapsRecorded": "No gaps recorded";
       "notCountedYet": "Not counted yet";
       "notMeasuredYet": "Not measured yet";
+      "pendingTexts": "Pending texts";
       "reportedByListing": "Counted from the publisher's listing";
       "reportedByOperator": "Recorded by hand";
       "reportedByPublisher": "Publisher's own count";
@@ -1023,6 +1116,13 @@ type Messages = {
       "provisionMentions": "{count, number}×";
       "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";
+      "provisionsFailed": "Citation processing failed";
+      "provisionsNoneFound": "No cited provisions found";
+      "provisionsProcessing": "Citations are being processed";
+      "provisionsUnavailable": "Citations are unavailable";
+      "provisionsUnplaceable": "Citations cannot be placed in the decision text";
+      "provisionsUnsupported": "Citation processing is not supported for this decision";
+      "provisionsWithheld": "Citations are withheld";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -1264,10 +1364,16 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "history": {
+      "matterUnavailable": "This matter isn't available";
+      "older": "Older";
+      "previous7Days": "Previous 7 days";
+    };
     "historyContext": {
       "overflow": "+{count, number}";
       "unnamed": "{count, plural, one {and # more} other {and # more}}";
     };
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.";
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1280,6 +1386,9 @@ type Messages = {
       "noMatters": "No matters yet";
       "noRecentChats": "No recent chats";
       "noSkills": "No skills yet";
+      "openAllMatters": "Open all matters";
+      "openChatHistory": "Open chat history";
+      "openSkillsLibrary": "Open the skills library";
       "pinnedMatters": "Pinned matters";
       "recentChats": "Recent chats";
       "skillEditedBy": "Edited by {name} · {time}";
@@ -1296,6 +1405,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";
@@ -1412,17 +1522,23 @@ type Messages = {
     };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
+    "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
+    "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.";
+    "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.";
     "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.";
     "sendErrorProviderCredentialsRejected": "The AI provider rejected the configured credentials. Ask your workspace admin to check the API key in organization settings.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
+    "sendErrorTimedOut": "The chat service did not respond in time. Try again.";
     "sendPrompt": "Send message";
     "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
+    "signInToChat": "Sign in to chat about this document";
+    "signInToChatAbout": "Sign in to chat about";
     "skills": {
       "scope": {
         "private": "Your skills";
@@ -1449,12 +1565,25 @@ type Messages = {
       "rejected": "Rejected";
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
+    "tableChart": {
+      "bar": "Bar";
+      "kind": "Chart type";
+      "line": "Line";
+      "loading": "Choosing a chart…";
+      "pie": "Pie";
+      "scatter": "Scatter";
+      "showChart": "Show as chart";
+      "summary": "Values shown: {n, number}.";
+      "unavailable": "A chart could not be selected. The table is shown.";
+      "values": "{label}: {value, number}";
+    };
     "thinking": "Working with context";
     "threadFiles": {
       "title": "Files in this chat";
     };
     "tool": {
       "add_comment": "Adding comment";
+      "add_matter_member": "Add matter member";
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
@@ -1511,7 +1640,6 @@ type Messages = {
       "list_stories": "Listing document parts";
       "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
-      "manage_organization": "Manage organization";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
@@ -1521,6 +1649,7 @@ type Messages = {
       "read_section": "Reading a section";
       "read_story": "Reading a document part";
       "remember": "Remembering";
+      "remove_matter_member": "Remove matter member";
       "reply_comment": "Replying to comment";
       "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
@@ -1554,6 +1683,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_organization_settings": "Update team settings";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
       "use_connector_secret": "Using connector credential";
@@ -1753,6 +1883,8 @@ type Messages = {
     "citations": "Citations";
     "clauses": "Clauses";
     "clearDate": "Clear date";
+    "clearFilters": "Clear filters";
+    "clearSearch": "Clear search";
     "close": "Close";
     "closeAll": "Close all";
     "closeOthers": "Close others";
@@ -1783,6 +1915,7 @@ type Messages = {
       "nextDecade": "Next decade";
       "nextMonth": "Next month";
       "nextYear": "Next year";
+      "outOfRange": "Choose a date within the allowed range.";
       "previousDecade": "Previous decade";
       "previousMonth": "Previous month";
       "previousYear": "Previous year";
@@ -2036,6 +2169,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -2084,28 +2218,27 @@ type Messages = {
     "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}";
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "summaryAdminRead": "audit log";
-    "summaryAdminWrite": "organization members and settings, including deleting them";
-    "summaryBillingWrite": "time entries, including deleting them";
-    "summaryChat": "chats, including deleting them";
-    "summaryContactsWrite": "contacts, including deleting them";
-    "summaryDocumentsWrite": "documents, including deleting them";
+    "summaryAdminWrite": "organization members and settings";
+    "summaryBillingWrite": "time entries";
+    "summaryChat": "chats";
+    "summaryContactsWrite": "contacts";
+    "summaryDocumentsWrite": "documents";
     "summaryExternalMcps": "connected integrations";
-    "summaryFeedback": "feedback";
-    "summaryKnowledgeWrite": "clauses and playbooks, including deleting clauses";
+    "summaryKnowledgeWrite": "clauses and playbooks";
     "summaryLawRead": "public statutes and case law";
-    "summaryLineChange": "<group>Can change:</group> {items} ({count})";
+    "summaryLineChange": "<group>Create and edit:</group> {items}";
     "summaryLineOther": "<group>Also:</group> {items}";
-    "summaryLineRead": "<group>Can read:</group> {items} ({count})";
-    "summaryMattersWrite": "matters and tasks, including deleting them";
-    "summaryOfflineAccess": "staying signed in";
-    "summaryOnboarding": "practice jurisdictions";
+    "summaryLineRead": "<group>Read:</group> {items}";
+    "summaryLineUse": "<group>Use:</group> {items}";
+    "summaryMattersWrite": "matters and tasks";
     "summaryProfile": "profile";
     "summaryRead": "documents, matters and contacts";
     "summaryReadAnonymized": "anonymized documents and matters";
     "summarySearch": "search";
     "summarySearchAnonymized": "anonymized search";
-    "summarySkills": "skills, including deleting them";
-    "summaryTemplates": "templates, including deleting them";
+    "summarySkills": "skills";
+    "summaryStaySignedIn": "Stay signed in";
+    "summaryTemplates": "templates";
     "summaryTemplatesAnonymized": "anonymized templates";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
@@ -2516,6 +2649,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
@@ -2886,6 +3023,7 @@ type Messages = {
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.";
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.";
     "comment": "Comment";
     "comments": {
       "addPlaceholder": "Add a comment...";
@@ -3581,6 +3719,12 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.";
+          "name": "Build a playbook";
+        };
+      };
       "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
@@ -3604,6 +3748,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -4108,7 +4256,6 @@ type Messages = {
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
     "catalogueAlwaysOn": "Always on";
-    "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
     "catalogueDetailAbout": "About";
@@ -4295,6 +4442,8 @@ type Messages = {
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
       };
+      "showInTitle": "Show the number next to the matter name";
+      "showInTitleDescription": "When this is off, the title is exactly the name you entered.";
       "title": "Matter numbering";
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)";
     };
@@ -4465,6 +4614,25 @@ type Messages = {
     "tokenHelp": "How to get a token";
     "viewOnGithub": "View on GitHub";
   };
+  "readerAnswers": {
+    "budgetError": "The answer budget is exhausted.";
+    "citation": "¶{paragraph}";
+    "expand": "Expand answer";
+    "explain": "Explain";
+    "externalCitation": "{decision} · ¶{paragraph}";
+    "followUp": "Ask a follow-up";
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}";
+    "loading": "Generating answer…";
+    "minimise": "Minimise answer";
+    "modelError": "The model could not finish this answer.";
+    "networkError": "The connection was interrupted. Try again.";
+    "regenerate": "Regenerate answer";
+    "selectionError": "Select text within a single paragraph (up to 2,000 characters).";
+    "send": "Send follow-up";
+    "share": "Share with team";
+    "timeoutError": "The answer timed out. Try again.";
+    "title": "Answer about selected text";
+  };
   "routeError": {
     "backToMatters": "Return to matters";
     "copyReference": "Copy error reference";
@@ -4477,6 +4645,8 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
+    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}";
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
@@ -4589,9 +4759,19 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
+      "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.";
+      "desktopCardApproveTitle": "stella desktop is asking to connect";
+      "desktopCardConnectedDetail": "Linked to <bdi>{identity}</bdi> on {host} · version {version}";
+      "desktopCardConnectedDetailNoVersion": "Linked to <bdi>{identity}</bdi> on {host}";
+      "desktopCardConnectedTitle": "stella desktop is linked";
+      "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.";
+      "desktopCardMissingTitle": "stella desktop isn't linked yet";
+      "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.";
+      "desktopCardOutdatedTitle": "stella desktop needs an update";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
+      "desktopConnectInstalled": "It's installed, connect";
       "desktopConnectedAs": "Connected as <bdi>{email}</bdi>";
       "desktopDescription": "Clipboard history and document tools on your computer";
       "desktopDocumentsDescription": "Open stella files in desktop apps; revisions return to the right matter.";
@@ -4926,17 +5106,22 @@ type Messages = {
     "provisionAskSummarize": "Summarize how courts apply this provision";
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
     "provisionDetailsFor": "Details of {provision}";
+    "provisionEffectiveFrom": "in force since {date}";
     "provisionHistoryEarliest": "Earliest wording on record.";
     "provisionHistoryEmpty": "No wording of this provision is on record.";
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.";
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
+    "showCitedPartOnly": "Show cited part only";
+    "showFullProvision": "Show full provision";
     "showInText": "Show in the text";
     "statedWindow": "Dates stated by the publisher: {range}";
     "status": {
@@ -4952,7 +5137,6 @@ type Messages = {
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
     "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
-    "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
@@ -5505,7 +5689,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {
@@ -5626,7 +5809,7 @@ type Messages = {
       "title": "Copy to Matter";
     };
     "create": {
-      "ownerTypeToggle": "Matter type";
+      "matterName": "Matter name";
       "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
     };
     "createNewWorkspace": "Create new matter";
@@ -6078,15 +6261,12 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
-    "ownerType": {
-      "client": "Client";
-      "personal": "Personal";
-    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
       "client": "Client";
       "noClient": "No client assigned";
+      "noClientOptional": "No client (optional)";
       "noParties": "No parties added to this matter.";
       "partyRoles": {
         "co_counsel": "Co-counsel";
@@ -6369,7 +6549,6 @@ type Messages = {
         "year": "Year";
       };
       "cannotDeleteRequired": "At least one view of this type is required";
-      "clearFilters": "Clear filters";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "exportCsv": "Export CSV";

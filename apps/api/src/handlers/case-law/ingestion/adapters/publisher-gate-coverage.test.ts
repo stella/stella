@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const caseLawRoot = nodePath.resolve(
   new URL(".", import.meta.url).pathname,
   "../..",
@@ -40,7 +42,6 @@ const DIRECT_FETCH_MODULES = {
   "judges/import-cz-us-roster.ts": "reserve",
   /** Test-only helpers, not a path any crawl takes. */
   "ingestion/adapters/test-utils.ts": "test-only",
-  "ingestion/adapters/update-fixtures.ts": "test-only",
 } as const;
 
 /**
@@ -88,9 +89,10 @@ const modulesUnder = (tree: string): readonly string[] =>
         !entry.name.endsWith(".test.ts"),
     )
     .map((entry) =>
-      nodePath
-        .relative(caseLawRoot, nodePath.resolve(entry.parentPath, entry.name))
-        .replaceAll(nodePath.sep, "/"),
+      repoRelativePath(
+        caseLawRoot,
+        nodePath.resolve(entry.parentPath, entry.name),
+      ),
     );
 
 const scannedModules = SCANNED_TREES.flatMap(modulesUnder).toSorted();

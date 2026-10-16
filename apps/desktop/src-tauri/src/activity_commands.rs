@@ -10,7 +10,8 @@ use tauri::{AppHandle, Emitter, State};
 use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
-    ActivityHistoryDisposition, ActivityManager, ActivityRecordingStatus,
+    ActivityDeletionError, ActivityDeletionRecovery, ActivityHistoryDisposition,
+    ActivityManager, ActivityOtherHistoryRecovery, ActivityRecordingStatus,
     ActivityRetention,
   },
   activity_details,
@@ -23,15 +24,15 @@ fn lock_error() -> String {
   "activity timeline is unavailable".to_string()
 }
 
-fn update(
+fn update<E: From<String>>(
   app: &AppHandle,
   state: &ActivityAppState,
   caller: &ActivityCaller,
-  change: impl FnOnce(&mut ActivityManager) -> Result<(), String>,
-) -> Result<(), String> {
-  let mut manager = state.lock().map_err(|_| lock_error())?;
-  caller.require_current(app)?;
-  manager.require_caller(caller)?;
+  change: impl FnOnce(&mut ActivityManager) -> Result<(), E>,
+) -> Result<(), E> {
+  let mut manager = state.lock().map_err(|_| E::from(lock_error()))?;
+  caller.require_current(app).map_err(E::from)?;
+  manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
   drop(manager);
   let _ = app.emit(activity::CHANGED_EVENT, ());
@@ -43,6 +44,7 @@ pub fn activity_get_day(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
+  gates: State<'_, crate::feature_gate::FeatureGates>,
   date: Option<String>,
 ) -> Result<ActivityDaySnapshot, String> {
   let now = Utc::now();
@@ -61,13 +63,18 @@ pub fn activity_get_day(
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   let other_account_history_days = manager.other_account_history_days()?;
-  Ok(manager.day_snapshot(
+  let mut snapshot = manager.day_snapshot(
     date,
     now,
     &caller,
     other_account_history_days,
     details_access,
-  ))
+  );
+  drop(manager);
+  snapshot.resolve_app_visuals();
+  snapshot.time_billing_enabled =
+    gates.is_enabled(crate::feature_gate::DesktopFeature::TimeBilling);
+  Ok(snapshot)
 }
 
 #[tauri::command]
@@ -129,18 +136,22 @@ pub fn activity_delete_day(
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   date: String,
-) -> Result<(), String> {
+) -> Result<(), ActivityDeletionError> {
   let date = activity::parse_date(&date)?;
   update(&app, &state, &caller, |manager| manager.delete_day(date))
 }
 
 #[tauri::command]
-pub fn activity_delete_all(
+pub async fn activity_delete_all(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-) -> Result<(), String> {
-  update(&app, &state, &caller, ActivityManager::delete_all)
+  recovery: ActivityDeletionRecovery,
+) -> Result<(), ActivityDeletionError> {
+  let _confirmation = crate::time_entry_commands::BATCH_CONFIRMATION.lock().await;
+  update(&app, &state, &caller, |manager| {
+    manager.delete_all(recovery)
+  })
 }
 
 #[tauri::command]
@@ -148,13 +159,11 @@ pub fn activity_delete_other_account_history(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-) -> Result<(), String> {
-  update(
-    &app,
-    &state,
-    &caller,
-    ActivityManager::delete_other_account_history,
-  )
+  recovery: ActivityOtherHistoryRecovery,
+) -> Result<(), ActivityDeletionError> {
+  update(&app, &state, &caller, |manager| {
+    manager.delete_other_account_history(recovery)
+  })
 }
 
 /// Copies a block summary the window composed. The text goes to the system
@@ -234,5 +243,19 @@ pub fn activity_set_browser_title_capture(
 ) -> Result<(), String> {
   update(&app, &state, &caller, |manager| {
     manager.set_browser_title_capture(&identifier, &name, enabled, Utc::now())
+  })
+}
+
+#[tauri::command]
+pub fn activity_assign_ranges(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  date: String,
+  ranges: Vec<activity::ActivityManualAssignment>,
+) -> Result<(), String> {
+  let date = activity::parse_date(&date)?;
+  update(&app, &state, &caller, |manager| {
+    manager.assign_ranges(date, ranges)
   })
 }

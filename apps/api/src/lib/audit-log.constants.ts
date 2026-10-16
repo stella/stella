@@ -23,6 +23,7 @@ export const AUDIT_RESOURCE_TYPE = {
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
+  CASE_LAW_READER_ANSWER: "case_law_reader_answer",
   CASE_LAW_RESEARCH_COLUMN: "case_law_research_column",
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
@@ -92,3 +93,13 @@ export const AUDIT_RESOURCE_TYPE = {
 
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
+
+/** Account events describe the export lifecycle without carrying export contents. */
+export const ACCOUNT_AUDIT_EVENT_TYPES = [
+  "account.data_export.requested",
+  "account.data_export.ready",
+  "account.data_export.downloaded",
+  "account.data_export.expired",
+] as const;
+
+export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { allApiTests } from "./api-test-impact";
+import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { parseApiTestImpact, planCiApiTests } from "./ci-api-test-plan";
 
 const selected = () => ({
@@ -13,7 +14,7 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
   const plan = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    apiInScope: false,
+    testJobs: ["rest-web"],
     select: () => {
       throw new Error("selector should not run");
     },
@@ -24,7 +25,7 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
     planCiApiTests({
       event: "pull_request",
       scopeUnknown: false,
-      apiInScope: true,
+      testJobs: FULL_TEST_JOB_SHARDS,
       select: () => ({ mode: "none", files: [], shards: 0 }),
     }).matrix,
   ).toEqual({ shard: ["rest-web"] });
@@ -32,34 +33,27 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
     planCiApiTests({
       event: "pull_request",
       scopeUnknown: false,
-      apiInScope: true,
+      testJobs: FULL_TEST_JOB_SHARDS,
       select: selected,
     }).matrix,
   ).toEqual({ shard: ["api-1", "api-2", "rest-web"] });
 });
 
-test("merge groups, dispatches and unreadable scopes retain four shards without invoking the selector", () => {
+test("dispatches and unreadable scopes retain every API shard without invoking the selector", () => {
   for (const [event, scopeUnknown] of [
-    ["merge_group", false],
     ["workflow_dispatch", false],
     ["pull_request", true],
   ] as const) {
     const plan = planCiApiTests({
       event,
       scopeUnknown,
-      apiInScope: false,
+      testJobs: ["rest-web"],
       select: () => {
         throw new Error("selector should not run");
       },
     });
     expect(plan.impact).toEqual(allApiTests());
-    expect(plan.matrix.shard).toEqual([
-      "api-1",
-      "api-2",
-      "api-3",
-      "api-4",
-      "rest-web",
-    ]);
+    expect(plan.matrix.shard).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   }
 });
 
@@ -68,7 +62,7 @@ test("crashes and malformed selector output cannot remove API work", () => {
     planCiApiTests({
       event: "pull_request",
       scopeUnknown: false,
-      apiInScope: true,
+      testJobs: FULL_TEST_JOB_SHARDS,
       select: () => {
         throw new Error("planted crash");
       },
@@ -92,4 +86,25 @@ test("crashes and malformed selector output cannot remove API work", () => {
     expect(parseApiTestImpact(output)).toEqual(allApiTests());
   }
   expect(parseApiTestImpact(JSON.stringify(selected()))).toEqual(selected());
+});
+
+test("merge groups select the batch union without narrowing API test files", () => {
+  const options = {
+    event: "merge_group",
+    scopeUnknown: false,
+    testJobs: ["rest-web"],
+    select: () => {
+      throw new Error("merge groups must retain whole affected API suites");
+    },
+  } as const;
+  expect(planCiApiTests(options).matrix.shard).toEqual(["rest-web"]);
+  expect(
+    planCiApiTests({
+      ...options,
+      testJobs: FULL_TEST_JOB_SHARDS,
+    }).impact,
+  ).toEqual(allApiTests());
+  expect(
+    planCiApiTests({ ...options, scopeUnknown: true }).matrix.shard,
+  ).toHaveLength(FULL_TEST_JOB_SHARDS.length);
 });

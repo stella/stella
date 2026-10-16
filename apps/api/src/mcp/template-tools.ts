@@ -845,6 +845,14 @@ const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: true,
     readOnlyHint: false,
   },
+  annotationReasons: {
+    readOnlyHint:
+      "Records template execution, fill history, and usage before returning the rendered output.",
+    destructiveHint:
+      "Renders a transient result without overwriting or deleting an existing document.",
+    openWorldHint:
+      "Registry fields query external business registries; AI fields and conditions can call model providers.",
+  },
   access: "write",
   accountAccess: "standard",
   permissions: { type: "all", permissions: { template: ["use"] } },
@@ -1465,6 +1473,7 @@ const handleFillTemplateTool: McpToolHandler<
         feature: "templates.fill",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
@@ -1938,6 +1947,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         feature: "templates.fill",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
@@ -3134,6 +3144,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
               feature: "templates.preview-conditions",
               modelRole: "fast",
               orgAIConfig,
+              modelTier: admission.modelTier,
               organizationId: context.organizationId,
               traceId: Bun.randomUUIDv7(),
               usageMetering,

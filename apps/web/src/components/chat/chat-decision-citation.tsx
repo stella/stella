@@ -28,8 +28,9 @@ import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
+import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import {
   decisionBySlugOptions,
@@ -55,7 +56,8 @@ type AnswerDecisionContextValue = {
 };
 type CommonCitationProps = {
   passage?: ReactNode;
-  anchorId?: string | undefined;
+  /** The block the citation points into, as the answer's link names it. */
+  paragraph?: CitedDecisionParagraph | undefined;
   readerUrl?: string | undefined;
   originalUrl?: string | null | undefined;
   interactive: boolean;
@@ -86,7 +88,7 @@ const CitationView = ({
   passage,
   readerUrl,
   originalUrl,
-  anchorId,
+  paragraph,
   renderPassage = true,
   presentationById,
   onOpen,
@@ -106,7 +108,7 @@ const CitationView = ({
   }
   const decision = {
     ...metadata,
-    readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, anchorId),
+    readerUrl: withAnchor(readerUrl ?? metadata.readerUrl, paragraph?.anchorId),
     originalUrl: originalUrl === undefined ? metadata.originalUrl : originalUrl,
   };
   return (
@@ -117,6 +119,7 @@ const CitationView = ({
           decision={decision}
           passage={passage}
           presentation={presentationById?.get(metadata.decisionId) ?? "compact"}
+          paragraphNumber={paragraph?.courtParagraphNumber ?? null}
           onOpen={onOpen}
         />
       </span>
@@ -149,10 +152,10 @@ const ActiveChatDecisionCitation = ({
         detached(
           view.type === "items"
             ? openReadCaseLawDecision(view.items, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               })
             : openCaseLawDecision({ type: "ref", ref: decisionId }, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               }),
           "chat-decision-citation.open",
         )
@@ -185,10 +188,10 @@ const ActiveChatRouteDecisionCitation = ({
         detached(
           view.type === "items"
             ? openReadCaseLawDecision(view.items, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               })
             : openCaseLawDecision({ type: "route", params }, open, {
-                anchorId: props.anchorId,
+                anchorId: props.paragraph?.anchorId,
               }),
           "chat-decision-citation.open-route",
         )
@@ -259,7 +262,9 @@ export const ChatAnswerDecisionProvider = ({
         break;
       case "route": {
         const key = createCaseLawDecisionPath(target.params);
-        const country = publicCaseLawCountryFromParam(target.params.country);
+        const country = publicCaseLawPageCountryFromParam(
+          target.params.country,
+        );
         if (!routes.has(key) && country !== null) {
           requests.push({
             key,
@@ -355,7 +360,7 @@ export const ChatRouteDecisionCitation = ({
   params,
   ...props
 }: ChatRouteDecisionCitationProps): ReactNode => {
-  const country = publicCaseLawCountryFromParam(params.country);
+  const country = publicCaseLawPageCountryFromParam(params.country);
   if (!props.interactive || country === null) {
     return props.renderPassage !== false && props.passage;
   }

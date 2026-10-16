@@ -39,7 +39,7 @@ type CzechLawDependencies = {
 const normalizedSection = (
   section: string,
 ): { anchor: string; section: string } | null => {
-  const match = /^(\d+)\s*([a-z])?$/iu.exec(section.trim());
+  const match = /^(?:§\s*)?(\d+)\s*([a-z])?$/iu.exec(section.trim());
   const number = match?.at(1);
   if (number === undefined) {
     return null;
@@ -109,12 +109,13 @@ export const resolveCzechLaw = async (
   const expression = await resolveExpression(
     { eli, ...(input.asOf === undefined ? {} : { asOf: input.asOf }) },
     legislationPublicReadDb,
+    "search",
   );
   if (expression.type !== "expression") {
     return { status: "not_found", reason: "unknown_document" };
   }
   const [document, preview] = await Promise.all([
-    readDocument(expression.id, legislationPublicReadDb),
+    readDocument(expression.id, legislationPublicReadDb, "search"),
     readPreview({
       documentId: expression.id,
       anchor: section.anchor,

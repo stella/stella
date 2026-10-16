@@ -1,4 +1,4 @@
-// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
+// parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
  * `html_lawbox`, `html_columbia`, `html_anon_2020`, `html`, and the
@@ -19,6 +19,8 @@ import {
   isText,
   type ParentNode,
 } from "domhandler";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -445,7 +447,7 @@ const vocabularyFor = (
  */
 const noteBoundaries = (
   format: CourtListenerHtmlFormat,
-  $: cheerio.CheerioAPI,
+  root: cheerio.Cheerio<ParentNode>,
 ): TextUnit["boundaries"] => {
   switch (format) {
     case "html_anon_2020":
@@ -455,8 +457,9 @@ const noteBoundaries = (
     case "html":
       return "layout";
     case "html_with_citations":
-      return $("div.courtcasedochead, div.courtcasedocbody, footnote_body")
-        .length > 0
+      return root.find(
+        "div.courtcasedochead, div.courtcasedocbody, footnote_body",
+      ).length > 0
         ? "markup"
         : "layout";
     default: {
@@ -467,10 +470,112 @@ const noteBoundaries = (
 };
 
 /** Publisher links that name another document, not a place in this one. */
-const publisherLinks = ($: cheerio.CheerioAPI): number =>
-  $("a[href]")
+const publisherLinks = ($: cheerio.CheerioAPI, root: ParentNode): number =>
+  $(root)
+    .find("a[href]")
     .toArray()
     .filter((element) => !element.attribs["href"]?.startsWith("#")).length;
+
+// Tags and landmarks alone never justify losing visible text.
+export const PAGE_CHROME_SIGNATURES = {
+  OSCN_MENU:
+    "OSCN navigation Home Courts Court Dockets Legal Research Calendar Help Previous Case Top Of Index This Point in Index Citationize Next Case Print Only",
+  COURT_MENU:
+    "Home Courts Decisions Programs News Legal Research Court Records Quick Links",
+  BAP_MENU:
+    "About Us Clerk's Office Judges Directions Courthouse Visitor's Policy Employment Media Information Judicial Conduct and Disability How to File Notice of Appeal to the BAP Designation of Record and Statement of Issues One Document Motions or Responses Briefs Appendix Oral Argument Acknowledgement Form Notice of Appeal to the Circuit CM/ECF & PACER E-Filing (CM/ECF) Court Docket (PACER) Forms Fees Rules Argument Calendar Search Decisions",
+  SITE_CONTROLS:
+    "Search this site Home | Contact Us | Employment Contact the Webmaster",
+  REPORTING_BANNER:
+    "Law Reporting Bureau Thomas J.K. Smith, State Reporter Court Decisions Resources About Home All Court Decisions Decisions",
+  REPORTING_FOOTER:
+    "Court Decisions All Court Decisions Official Reports Service Bound Volumes Decision Search Resources RSS Feeds Style Manual Citation Tools Opinion Formatting & Privacy Guidelines Opinion Selection Criteria Legal Research Portal Site Index About About the Law Reporting Bureau About our Operations Contact Us Twitter Quick Contact Info 17 Lodge Street Albany, NY 12207 Phone: (518) 453-6900",
+} as const;
+
+const normalizePageChromeText = (text: string): string =>
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim();
+
+const pageChromeTextVocabulary = {
+  paragraphs: PARAGRAPHS,
+  headings: HEADINGS,
+  containers: CONTAINERS,
+  inlines: INLINES,
+  opinion: () => null,
+  footnote: () => null,
+  backlink: () => false,
+  pageAnchor: () => undefined,
+} satisfies BodyVocabulary;
+
+const pageChromeText = (element: Element): string =>
+  normalizePageChromeText(
+    sourceTextOf(element, pageChromeTextVocabulary).paragraphs.join(" "),
+  );
+
+type PageChrome =
+  | { readonly type: "classified"; readonly excluded: readonly Element[] }
+  | { readonly type: "unclassified" };
+
+const opinionContentRoots = (
+  $: cheerio.CheerioAPI,
+  body: ParentNode,
+): readonly ParentNode[] => {
+  const explicitRoots = $(body)
+    .find("opinion, div.opinion, div.courtcasedocbody, main, article")
+    .toArray();
+  if (explicitRoots.length > 0) {
+    return explicitRoots;
+  }
+  const heading = $(body)
+    .find("h1")
+    .toArray()
+    .find(
+      (element) =>
+        $(element).closest("header, footer, aside, nav").length === 0,
+    );
+  return [heading?.parent ?? body];
+};
+
+/** Page chrome is excluded only when its own text matches a reviewed signature. */
+const pageChrome = ($: cheerio.CheerioAPI, body: ParentNode): PageChrome => {
+  const roots = opinionContentRoots($, body);
+  const rootSet = new WeakSet(roots);
+  const rootAncestors = new WeakSet(
+    roots.flatMap((root) => $(root).parents().toArray()),
+  );
+  const candidates = $(body)
+    .find(
+      'header, footer, aside, nav, [role="navigation"], [role="banner"], [role="contentinfo"]',
+    )
+    .toArray();
+  const excluded: Element[] = [];
+  const excludedSet = new WeakSet<Element>();
+  for (const candidate of candidates) {
+    const ancestors = $(candidate).parents().toArray();
+    if (ancestors.some((ancestor) => excludedSet.has(ancestor))) {
+      continue;
+    }
+    if (
+      rootSet.has(candidate) ||
+      rootAncestors.has(candidate) ||
+      ancestors.some((ancestor) => rootSet.has(ancestor))
+    ) {
+      continue;
+    }
+    const normalizedText = pageChromeText(candidate);
+    if (normalizedText === "") {
+      continue;
+    }
+    const signatureMatch = Object.values(PAGE_CHROME_SIGNATURES).some(
+      (signature) => signature === normalizedText,
+    );
+    if (!signatureMatch) {
+      return { type: "unclassified" };
+    }
+    excluded.push(candidate);
+    excludedSet.add(candidate);
+  }
+  return { type: "classified", excluded };
+};
 
 const parseHtml =
   (
@@ -490,17 +595,28 @@ const parseHtml =
     if (limit !== null) {
       return { status: "over-limit", limit };
     }
-    const [body] = $("body").toArray();
-    if (body === undefined || !hasChildren(body)) {
+    const [pageBody] = $("body").toArray();
+    if (pageBody === undefined || !hasChildren(pageBody)) {
       return {
         status: "unusable",
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
-    const graphics = graphicsIn(body);
+    const body = pageBody;
+    const graphics = graphicsIn(pageBody);
     if (Object.keys(graphics).length > 0) {
       return { status: "requires-assets", graphics };
     }
+    const chrome = context === "opinion" ? pageChrome($, pageBody) : null;
+    if (chrome?.type === "unclassified") {
+      return {
+        status: "unusable",
+        reason: TEXT_CANDIDATE_UNUSABLE.UNCLASSIFIED_PAGE_CHROME,
+      };
+    }
+    const excludedElements =
+      chrome?.type === "classified" ? chrome.excluded : [];
+    const excluded = new WeakSet(excludedElements);
     $(body)
       .find("emphasis[typestyle]")
       .each((_, element) => {
@@ -509,19 +625,39 @@ const parseHtml =
           element.name = style === "it" ? "em" : "strong";
         }
       });
-    const notes = $(body).find("*").toArray().filter(isNote);
+    const notes = $(body)
+      .find("*")
+      .toArray()
+      .filter(
+        (element) =>
+          isNote(element) &&
+          !$(element)
+            .parents()
+            .toArray()
+            .some((parent) => excluded.has(parent)),
+      );
     const spanDefects = noteSpanDefects(text, notes);
     const preparedNotes = prepareNotes($, notes);
     const baseVocabulary = vocabularyFor(
       preparedNotes.labels,
       captionElements(body),
     );
-    const vocabulary =
+    const documentVocabulary =
       context === "headmatter"
         ? { ...baseVocabulary, opinion: () => null }
         : baseVocabulary;
+    const vocabulary = {
+      ...documentVocabulary,
+      excluded: (element: Element) => excluded.has(element),
+    };
+    // Each excluded subtree was checked against its exact signature on the original
+    // body, before note preparation. Conservation covers every other visible character.
+    const source = sourceTextOf(pageBody, vocabulary);
+    for (const element of excludedElements) {
+      $(element).remove();
+    }
     const backlinkCharacters = preparedNotes.removed;
-    const links = publisherLinks($);
+    const links = publisherLinks($, body);
 
     const builder = createUnitBuilder({
       rootOpinionPolicy: "single",
@@ -531,7 +667,8 @@ const parseHtml =
           ? "front-matter"
           : unitClass(rowType, domType, position).body,
       blockAllowance: blockAllowance(budget),
-      boundaries: spanDefects === 0 ? noteBoundaries(format, $) : "layout",
+      boundaries:
+        spanDefects === 0 ? noteBoundaries(format, $(body)) : "layout",
     });
     const implicitOpinion =
       context === "opinion" &&
@@ -566,7 +703,6 @@ const parseHtml =
         reason: TEXT_CANDIDATE_UNUSABLE.NO_VISIBLE_TEXT,
       };
     }
-    const source = sourceTextOf(body, vocabulary);
     if (!conservesText(source.paragraphs.join(" "), units)) {
       return {
         status: "unusable",

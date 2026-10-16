@@ -25,8 +25,11 @@ jobs:
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Covers the bounded merge-queue wait below.
+    timeout-minutes: 30
     permissions:
+      # The merge-queue wait reads workflow runs and their jobs.
+      actions: read
       contents: read
       packages: read
     outputs:
@@ -59,12 +62,39 @@ jobs:
             echo "skipped: no migration change" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Migration checks run nowhere else, so they wait for the merge queue
+      # (bounded) instead of skipping. Only this light job holds a runner.
+      - name: Wait for the merge queue
+        if: github.event_name == 'pull_request' && steps.changes.outputs.required != 'false'
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
+        with:
+          retries: 0
+          script: |
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { mergeQueueGate } = await import(pathToFileURL(
+              resolve("scripts/merge-queue-waiting.mjs")).href);
+            await mergeQueueGate({
+              github,
+              context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
+              polls: 20,
+              intervalMs: 60_000,
+              sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+              notice: (message) => core.notice(message),
+            });
+
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
         if: steps.changes.outputs.required != 'false'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+          no-cache: true
 
       - name: Login to GitHub Container Registry
         id: registry
@@ -106,7 +136,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -142,7 +172,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280' }}
+        image: ${{ needs.scope.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
         credentials: ${{ startsWith(needs.scope.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
@@ -172,13 +202,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test Postgres owner replacement and helper replay
-        run: |
-          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -188,6 +213,11 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api
@@ -329,12 +359,7 @@ jobs:
             bun src/server.ts >"$log_file" 2>&1 &
           api_pid=$!
 
-          # shellcheck disable=SC2329
-          cleanup() {
-            kill "$api_pid" >/dev/null 2>&1 || true
-            wait "$api_pid" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          trap 'kill "$api_pid" >/dev/null 2>&1 || true; wait "$api_pid" >/dev/null 2>&1 || true' EXIT
 
           for _ in {1..60}; do
             if curl -fsS http://127.0.0.1:3001/live >/dev/null \

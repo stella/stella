@@ -5,7 +5,25 @@ export const MCP_DOCUMENTS_HTTP_PATH = "/mcp-documents" as const;
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized" as const;
 export const MCP_LAW_HTTP_PATH = "/mcp-law" as const;
 
+// Browser-safe literal; registry.test.ts compares both directions against
+// every scope required by the tools served on /mcp.
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
+  "stella:search",
+  "stella:read",
+  "stella:law_read",
+  "stella:templates",
+  "stella:documents_write",
+  "stella:matters_write",
+  "stella:contacts_write",
+  "stella:knowledge_write",
+  "stella:billing_write",
+  "stella:admin_read",
+  "stella:admin_write",
+  "stella:onboarding",
+  "stella:feedback",
+] as const;
+
+export const MCP_ADVANCED_RESOURCE_SCOPES = [
   "stella:search",
   "stella:read",
   "stella:law_read",
@@ -21,10 +39,6 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
-] as const;
-
-export const MCP_ADVANCED_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
   "stella:external_mcps",
 ] as const;
 
@@ -34,7 +48,7 @@ export type McpDefaultResourceScope =
 export const MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE = {
   "stella:search": "stella:search_anonymized",
   "stella:read": "stella:read_anonymized",
-  "stella:law_read": null,
+  "stella:law_read": "stella:read_anonymized",
   "stella:templates": "stella:templates_anonymized",
   "stella:documents_write": null,
   "stella:matters_write": null,
@@ -62,9 +76,13 @@ const isMcpAnonymizedResourceScope = (
   scope: McpAnonymizedResourceScope | null,
 ): scope is McpAnonymizedResourceScope => scope !== null;
 
-export const MCP_ANONYMIZED_RESOURCE_SCOPES = Object.values(
-  MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
-).filter(isMcpAnonymizedResourceScope);
+export const MCP_ANONYMIZED_RESOURCE_SCOPES = [
+  ...new Set(
+    Object.values(MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE).filter(
+      isMcpAnonymizedResourceScope,
+    ),
+  ),
+];
 
 const MCP_RESOURCE_SCOPE_ACCESS = {
   "stella:search": "read-capable",

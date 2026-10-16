@@ -19,7 +19,7 @@ import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterp
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -380,8 +380,9 @@ describe("built-in skills are decided beside installed ones", () => {
   // on them is visible; their names stay the shipped ones.
   const listUnmetBuiltIns = createListUnavailableChatSkills({
     listBuiltInSkills: () =>
-      listSkillMetadata().map(({ description, name, version }) => ({
+      listSkillMetadata().map(({ description, invocation, name, version }) => ({
         description,
+        invocation,
         metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: SKILL.nowhere.tools },
         name,
         version,

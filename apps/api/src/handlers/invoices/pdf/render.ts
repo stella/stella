@@ -109,10 +109,11 @@ const EN_LABELS = {
   payment: "Payment",
   notes: "Notes",
   reverse: "Reverse charge",
+  outsideScope: "Outside the scope of VAT",
   exempt: "Exempt",
   nonPayer: "Not a VAT payer",
 } as const;
-const LABELS = {
+export const INVOICE_PDF_LABELS = {
   en: EN_LABELS,
   cs: {
     invoice: "Faktura",
@@ -137,6 +138,7 @@ const LABELS = {
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Přenesení daňové povinnosti",
+    outsideScope: "Plnění není předmětem daně v tuzemsku",
     exempt: "Osvobozeno",
     nonPayer: "Neplátce DPH",
   },
@@ -163,6 +165,7 @@ const LABELS = {
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Prenesenie daňovej povinnosti",
+    outsideScope: "Plnenie nie je predmetom dane v tuzemsku",
     exempt: "Oslobodené",
     nonPayer: "Neplatiteľ DPH",
   },
@@ -189,6 +192,7 @@ const LABELS = {
     payment: "Zahlung",
     notes: "Anmerkungen",
     reverse: "Steuerschuldnerschaft des Leistungsempfängers",
+    outsideScope: "Im Inland nicht steuerbar",
     exempt: "Steuerbefreit",
     nonPayer: "Nicht umsatzsteuerpflichtig",
   },
@@ -215,6 +219,7 @@ const LABELS = {
     payment: "Paiement",
     notes: "Notes",
     reverse: "Autoliquidation",
+    outsideScope: "Hors du champ d'application de la TVA",
     exempt: "Exonéré",
     nonPayer: "Non assujetti à la TVA",
   },
@@ -241,6 +246,7 @@ const LABELS = {
     payment: "Pago",
     notes: "Notas",
     reverse: "Inversión del sujeto pasivo",
+    outsideScope: "Fuera del ámbito de aplicación del IVA",
     exempt: "Exento",
     nonPayer: "No sujeto al IVA",
   },
@@ -267,6 +273,7 @@ const LABELS = {
     payment: "Pagamento",
     notes: "Observações",
     reverse: "Inversão do sujeito passivo",
+    outsideScope: "Fora do âmbito de aplicação do IVA",
     exempt: "Isento",
     nonPayer: "Não contribuinte do IVA",
   },
@@ -293,6 +300,7 @@ const LABELS = {
     payment: "Płatność",
     notes: "Uwagi",
     reverse: "Odwrotne obciążenie",
+    outsideScope: "Niepodlegające opodatkowaniu VAT w kraju",
     exempt: "Zwolnione",
     nonPayer: "Nie jest podatnikiem VAT",
   },
@@ -319,6 +327,7 @@ const LABELS = {
     payment: "Fizetés",
     notes: "Megjegyzések",
     reverse: "Fordított adózás",
+    outsideScope: "Az ÁFA hatályán kívül",
     exempt: "Adómentes",
     nonPayer: "Nem ÁFA-alany",
   },
@@ -345,6 +354,7 @@ const LABELS = {
     payment: "Makse",
     notes: "Märkused",
     reverse: "Pöördmaksustamine",
+    outsideScope: "Ei kuulu käibemaksu kohaldamisalasse",
     exempt: "Maksuvaba",
     nonPayer: "Ei ole käibemaksukohustuslane",
   },
@@ -371,6 +381,7 @@ const LABELS = {
     payment: "Maksājums",
     notes: "Piezīmes",
     reverse: "Apgrieztā maksāšana",
+    outsideScope: "Neietilpst PVN piemērošanas jomā",
     exempt: "Atbrīvots",
     nonPayer: "Nav PVN maksātājs",
   },
@@ -397,6 +408,7 @@ const LABELS = {
     payment: "Mokėjimas",
     notes: "Pastabos",
     reverse: "Atvirkštinis apmokestinimas",
+    outsideScope: "Nepatenka į PVM taikymo sritį",
     exempt: "Neapmokestinama",
     nonPayer: "Ne PVM mokėtojas",
   },
@@ -423,6 +435,7 @@ const LABELS = {
     payment: "الدفع",
     notes: "ملاحظات",
     reverse: "الاحتساب العكسي",
+    outsideScope: "خارج نطاق ضريبة القيمة المضافة",
     exempt: "معفى",
     nonPayer: "غير مسجل في ضريبة القيمة المضافة",
   },
@@ -602,22 +615,19 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
   return { write, field, isolate, writeQr, finish };
 };
 
-export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
-  const { invoice, seller, totals, locale, lang, originalNumber } = options;
-  const l = LABELS[lang];
-  const pdf = PDF.create();
-  const { write, field, isolate, writeQr, finish } = await createInvoiceWriter({
-    pdf,
-    lang,
-  });
-  const titles = {
-    invoice: l.invoice,
-    advance: l.advance,
-    credit_note: l.credit,
-  } satisfies Record<InvoiceDocumentType, string>;
-  const title = `${titles[invoice.documentType]}${invoice.status === "draft" || invoice.invoiceNumber === null ? "" : ` ${invoice.invoiceNumber}`}`;
+/**
+ * Locale formatting shared by every invoice renderer, so the hand-placed
+ * layout and the Typst template print identical amounts, dates and rates.
+ */
+export const createInvoiceFormatters = ({
+  currency,
+  locale,
+}: {
+  currency: string;
+  locale: string;
+}) => {
   const money = (amountCents: number) =>
-    formatMoneyCents({ amountCents, currency: invoice.currency, locale });
+    formatMoneyCents({ amountCents, currency, locale });
   const date = (value: string) => {
     const parsed =
       parsePlainDate(value) ??
@@ -650,9 +660,31 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
       ? quantityFormat.format(parsed)
       : canonical;
   };
+  return { money, date, vatRate, quantity };
+};
+
+export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
+  const { invoice, seller, totals, locale, lang, originalNumber } = options;
+  const l = INVOICE_PDF_LABELS[lang];
+  const pdf = PDF.create();
+  const { write, field, isolate, writeQr, finish } = await createInvoiceWriter({
+    pdf,
+    lang,
+  });
+  const titles = {
+    invoice: l.invoice,
+    advance: l.advance,
+    credit_note: l.credit,
+  } satisfies Record<InvoiceDocumentType, string>;
+  const title = `${titles[invoice.documentType]}${invoice.status === "draft" || invoice.invoiceNumber === null ? "" : ` ${invoice.invoiceNumber}`}`;
+  const { money, date, vatRate, quantity } = createInvoiceFormatters({
+    currency: invoice.currency,
+    locale,
+  });
   const treatments = {
     domestic_vat: l.vat,
     reverse_charge: l.reverse,
+    outside_scope: l.outsideScope,
     exempt: l.exempt,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;

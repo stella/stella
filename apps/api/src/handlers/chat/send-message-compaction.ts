@@ -1,13 +1,12 @@
 import { Result } from "better-result";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
   compactChatMessagesForModel,
   chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
+import type { CompactedHistory } from "@/api/handlers/chat/compaction";
 import {
   applyChatCompactionCheckpoint,
   readLatestChatCompaction,
@@ -23,6 +22,7 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 type ChatCompactionModelProps = {
   /** Effective chat model override for this turn; see `resolveEffectiveChatModelSelection`. */
@@ -30,8 +30,6 @@ type ChatCompactionModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  /** Effective reasoning override paired with the selected thread model. */
-  reasoningEffort: ReasoningEffort | undefined;
 };
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
@@ -97,7 +95,6 @@ export const compactMessagesForContext = async ({
   admission,
   orgAIConfig,
   managedAIResidency,
-  reasoningEffort,
   safeDb,
   tenantWorkspaceIds,
   threadId,
@@ -105,7 +102,7 @@ export const compactMessagesForContext = async ({
   userId,
   workspaceId,
 }: CompactMessagesForContextProps): Promise<
-  Result<ChatMessage[], HandlerError>
+  Result<CompactedHistory<ChatMessage>, HandlerError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -123,6 +120,7 @@ export const compactMessagesForContext = async ({
     feature: "chat.context_compaction",
     modelRole: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
@@ -135,6 +133,7 @@ export const compactMessagesForContext = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: admission.modelTier,
   });
 
   return await compactChatMessagesForModel({
@@ -154,7 +153,6 @@ export const compactMessagesForContext = async ({
     admission,
     orgAIConfig,
     managedAIResidency,
-    reasoningEffort,
     preserveTokens,
     triggerTokens,
   });
@@ -165,6 +163,8 @@ type MarkChatCompactionDueProps = Omit<
   "managedAIResidency"
 > & {
   messages: ChatMessage[];
+  /** The turn's managed model tier, so the trigger matches its model. */
+  modelTier: ManagedModelTier;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -185,6 +185,7 @@ type MarkChatCompactionDueProps = Omit<
 export const markChatCompactionDue = async ({
   chatModelOverride,
   messages,
+  modelTier,
   organizationId,
   orgAIConfig,
   safeDb,
@@ -194,6 +195,7 @@ export const markChatCompactionDue = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier,
   });
 
   if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {

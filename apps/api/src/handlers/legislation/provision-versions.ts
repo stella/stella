@@ -5,13 +5,14 @@ import type {
   LegislationWindowDisposition,
   LegislationWindowDispositionBasis,
 } from "@stll/api-contract/legislation-expression";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import { versionAstColumns } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -27,6 +28,7 @@ import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
  */
 export type LegislationProvisionVersion = {
   id: SafeId<"legislationDocument">;
+  eli: string;
   country: string;
   slug: string | null;
   sourceUrl: string | null;
@@ -51,9 +53,12 @@ export type LegislationProvisionVersion = {
 export const readLegislationProvisionVersions = async ({
   documentIds,
   legislationDb,
+  surface,
 }: {
   documentIds: readonly SafeId<"legislationDocument">[];
   legislationDb: LegislationReadDb;
+  /** The surface the versions are read for; its country list decides publication. */
+  surface: PublicCountrySurface;
 }): Promise<LegislationProvisionVersion[]> => {
   if (documentIds.length === 0) {
     return [];
@@ -64,6 +69,7 @@ export const readLegislationProvisionVersions = async ({
       await tx
         .select({
           ...versionAstColumns,
+          eli: legislationDocuments.eli,
           country: legislationDocuments.country,
           slug: legislationDocuments.slug,
           sourceUrl: legislationDocuments.sourceUrl,
@@ -81,7 +87,7 @@ export const readLegislationProvisionVersions = async ({
         .where(
           and(
             inArray(legislationDocuments.id, [...documentIds]),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor(surface),
           ),
         ),
   );

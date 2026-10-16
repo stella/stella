@@ -43,7 +43,7 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
       resolveFolioCollabServiceRoom(validatedBody.value.roomId),
     );
 
-    const snapshot = await loadFolioCollabSnapshot(value);
+    const snapshot = yield* Result.await(loadFolioCollabSnapshot(value));
     if (snapshot === null) {
       return Result.err(
         new HandlerError({

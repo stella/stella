@@ -23,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
     env:
-      API_TEST_SHARD: ${{ matrix.shard }}/4
+      API_TEST_SHARD: ${{ matrix.shard }}/3
       API_TEST_LANES: "1"
     steps:
       - name: Checkout
@@ -35,7 +35,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -92,7 +92,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -163,7 +163,7 @@ jobs:
       # computed from current main instead of opening another.
       - name: Open or update the refresh PR
         if: steps.refresh.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

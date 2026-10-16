@@ -45,6 +45,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: () => `/chat/${randomUUID()}`,
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
+  staticRoute("/chat/history"),
   staticRoute("/contacts"),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),
@@ -156,6 +157,10 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/number-series", {
     expectation: { kind: "settles" },
   }),
+  {
+    template: "/workspaces/$workspaceId/invoices/new",
+    path: (world) => `/workspaces/${world.workspace.id}/invoices/new`,
+  },
 ];
 
 // These routes need richer domain setup than cheap route smoke should own.

@@ -3,6 +3,13 @@ export type TableRetention =
   | { boundedBy: string };
 
 export const TABLE_RETENTION = {
+  desktop_time_entry_batches: {
+    boundedBy:
+      "One receipt per authenticated account, organization and idempotency key; cascade-deleted with its account or organization.",
+  },
+  time_entries: {
+    boundedBy: "Matter-owned billing history, deleted with its matter.",
+  },
   desktop_device_proof_replays: {
     ttlColumn: "expires_at",
     sweeper: "pruneDesktopProofReceipts",
@@ -119,6 +126,14 @@ export const TABLE_RETENTION = {
   hosted_checkout_claims: {
     boundedBy:
       "At most one claim per organization, taken over in place once expired and deleted with its owner.",
+  },
+  organization_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per organization, written once and deleted with its owner.",
+  },
+  user_professional_use_acceptances: {
+    boundedBy:
+      "One acceptance per account, written once and deleted with the account.",
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",

@@ -46,10 +46,10 @@ import { createProviderCallError } from "@/api/lib/errors/provider-call-failure"
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { DetachedModelActionStarter } from "@/api/lib/rate-limit/model-action-admission";
-import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { outputTokensWithinModelLimit } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { PROVIDER_SETUP_ERROR_FIXTURES } from "@/api/tests/fixtures/provider-setup-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -121,12 +121,20 @@ const VALID_ANSWER = {
 };
 
 /** How the faked provider answers one run. */
-type ProviderAnswer = "cut-off" | "valid" | "never" | "refused";
+type ProviderAnswer =
+  | "cut-off"
+  | "valid"
+  | "never"
+  | "refused"
+  | "rate-limited";
+
+/** The retry delay the rate-limited answer names: far past the wait cap. */
+const RATE_LIMIT_DELAY_MS = 41_400_000;
 
 const PROVIDER_RUN = { runId: "run-1", threadId: "thread-1" } as const;
 
 const answerChunks = async function* (
-  answer: Exclude<ProviderAnswer, "refused">,
+  answer: Exclude<ProviderAnswer, "refused" | "rate-limited">,
   signal: AbortSignal | undefined,
 ): AsyncIterable<StreamChunk> {
   yield { type: EventType.RUN_STARTED, ...PROVIDER_RUN };
@@ -225,6 +233,27 @@ const fakeGoogle = (answers: ProviderAnswer[]) => {
           },
         });
       }
+      if (answer === "rate-limited") {
+        // What Gemini answers a key whose daily quota is spent.
+        throw createProviderCallError({
+          model,
+          status: 429,
+          evidence: {
+            status: 429,
+            error: {
+              code: 429,
+              status: "RESOURCE_EXHAUSTED",
+              message: "Quota exceeded for the day.",
+              details: [
+                {
+                  "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                  retryDelay: `${RATE_LIMIT_DELAY_MS / 1000}s`,
+                },
+              ],
+            },
+          },
+        });
+      }
       return answerChunks(
         answer,
         options.chatOptions.request?.signal ?? undefined,
@@ -254,10 +283,7 @@ const inlineStarter =
     starts.count += 1;
     const admitted = {
       signal: new AbortController().signal,
-      admission: admitFixtureModelDispatch({
-        organizationId,
-        actionKind: "case-law.analysis",
-      }),
+      admission: testModelAdmission(organizationId, "case-law.analysis"),
     };
     const started = await start(admitted);
     await background(admitted, started);
@@ -602,7 +628,12 @@ describe("a failed analysis run", () => {
       decisionId,
       fingerprint: FINGERPRINT,
       observed: null,
-      unlessFailed: failureClaimGuard({ decisionId, now, reader }),
+      unlessFailed: failureClaimGuard({
+        decisionId,
+        now,
+        reader,
+        request: "poll",
+      }),
     });
 
     // The failure read saw it, so the swap was rolled back (with the seam's
@@ -631,6 +662,7 @@ describe("a failed analysis run", () => {
           decisionId,
           now,
           reader: { source: "platform" },
+          request: "poll",
         }),
       })
     ).unwrap();
@@ -769,6 +801,178 @@ describe("a failed analysis run", () => {
 
     expect(await failureRows(expiredDecision)).toHaveLength(0);
     expect(await failureRows(freshDecision)).toHaveLength(1);
+  });
+
+  describe("a provider retry time past the wait cap", () => {
+    const failureTimes = async (decisionId: SafeId<"caseLawDecision">) => {
+      const [row] = await db
+        .select({
+          recordedAt: caseLawAnalysisFailures.recordedAt,
+          retryAfter: caseLawAnalysisFailures.retryAfter,
+        })
+        .from(caseLawAnalysisFailures)
+        .where(eq(caseLawAnalysisFailures.decisionId, decisionId));
+      return row ?? panic("expected a failure record");
+    };
+
+    /** Moves the filed failure in time, as the clock moving on would. */
+    const setFailureTimes = async (
+      decisionId: SafeId<"caseLawDecision">,
+      times: { recordedAt: Date; retryAfter: Date },
+    ) => {
+      await db
+        .update(caseLawAnalysisFailures)
+        .set(times)
+        .where(eq(caseLawAnalysisFailures.decisionId, decisionId));
+    };
+
+    const pastHold = () =>
+      new Date(Date.now() - ANALYSIS_FAILURE_HOLD_MS - 60_000);
+
+    test("holds polls and explicit retries until then, and a poll past it and the hold runs again", async () => {
+      const decisionId = await insertDecision();
+      const google = fakeGoogle(["rate-limited", "valid"]);
+
+      expect(await read({ decisionId, model: google.model })).toEqual({
+        response: { status: "generating" },
+        starts: 1,
+      });
+      const filed = await failureTimes(decisionId);
+      expect(filed.retryAfter?.getTime()).toBe(
+        filed.recordedAt.getTime() + RATE_LIMIT_DELAY_MS,
+      );
+      const retryAt = filed.retryAfter?.toISOString();
+
+      // Neither a poll nor the reader's explicit retry reaches the provider:
+      // both answer the failure and the time to retry after.
+      for (const retry of [false, true]) {
+        expect(await read({ decisionId, model: google.model, retry })).toEqual({
+          response: expect.objectContaining({
+            status: "error",
+            code: "provider_refused",
+            key: { source: "organization", provider: "google" },
+            retryAt,
+          }),
+          starts: 0,
+        });
+      }
+
+      // Past the plain hold, the retry time still holds both.
+      await setFailureTimes(decisionId, {
+        recordedAt: pastHold(),
+        retryAfter: new Date(Date.now() + 60_000),
+      });
+      for (const retry of [false, true]) {
+        const held = await read({ decisionId, model: google.model, retry });
+        expect(held.response).toMatchObject({ status: "error" });
+        expect(held.starts).toBe(0);
+      }
+
+      // A retry time that passed within the hold leaves the plain hold as
+      // it always was: a poll answers the failure, with no time to wait for.
+      await setFailureTimes(decisionId, {
+        recordedAt: new Date(),
+        retryAfter: new Date(Date.now() - 1000),
+      });
+      const withinHold = await read({ decisionId, model: google.model });
+      expect(withinHold.starts).toBe(0);
+      expect(withinHold.response).toMatchObject({ status: "error" });
+      expect(withinHold.response).not.toHaveProperty("retryAt");
+
+      // Past both, the next poll runs again.
+      await setFailureTimes(decisionId, {
+        recordedAt: pastHold(),
+        retryAfter: new Date(Date.now() - 1000),
+      });
+      expect(await read({ decisionId, model: google.model })).toEqual({
+        response: { status: "generating" },
+        starts: 1,
+      });
+      expect(google.remaining()).toBe(0);
+      expect(await storedValue(decisionId)).toMatchObject({ version: 3 });
+    });
+
+    test("refuses the claim itself, in its transaction, while the time is ahead", async () => {
+      const cases = [
+        { request: "retry", retryAfterIn: 60_000, claims: false },
+        { request: "retry", retryAfterIn: -1000, claims: true },
+        { request: "poll", retryAfterIn: 60_000, claims: false },
+        { request: "poll", retryAfterIn: -1000, claims: true },
+      ] as const;
+      for (const { request, retryAfterIn, claims } of cases) {
+        const decisionId = await insertDecision();
+        const now = new Date();
+        const retryAfter = new Date(now.getTime() + retryAfterIn);
+        // Filed after the claim's read, past the plain hold: only the retry
+        // time can refuse the claim.
+        const store = createDbAnalysisStore(db, {
+          afterClaimLock: async (tx) => {
+            await tx.execute(sql`
+              INSERT INTO "case_law_analysis_failures"
+                ("decision_id", "key_tag", "input_fingerprint", "code", "key_source", "provider", "recorded_at", "retry_after")
+              VALUES (${decisionId}::uuid, 'platform', ${FINGERPRINT}, 'provider_refused', 'platform', NULL,
+                ${pastHold().toISOString()}::timestamptz, ${retryAfter.toISOString()}::timestamptz)
+            `);
+          },
+        });
+
+        const claimed = await store.claimUnlessFailed({
+          decisionId,
+          fingerprint: FINGERPRINT,
+          observed: null,
+          unlessFailed: failureClaimGuard({
+            decisionId,
+            now,
+            reader: { source: "platform" },
+            request,
+          }),
+        });
+
+        expect({
+          request,
+          retryAfterIn,
+          claimed: claimed.unwrap() !== null,
+        }).toEqual({ request, retryAfterIn, claimed: claims });
+      }
+    });
+
+    test("the expiry sweep keeps a record until its retry time passes", async () => {
+      const waiting = await insertDecision();
+      const lapsed = await insertDecision();
+      const fresh = await insertDecision();
+      const store = createDbAnalysisStore(db);
+      const recordFor = async (
+        decisionId: SafeId<"caseLawDecision">,
+        recordedAt: Date,
+        retryAfterMs?: number,
+      ) => {
+        const sentinel = analysisSentinel(FINGERPRINT, recordedAt);
+        await holdRow(decisionId, sentinel);
+        await store.fail({
+          decisionId,
+          keyTag: "platform",
+          sentinel,
+          failure: analysisFailureRecord({
+            code: "provider_refused",
+            fingerprint: FINGERPRINT,
+            now: recordedAt,
+            reader: { source: "platform" },
+            retryAfterMs,
+          }),
+        });
+      };
+
+      const old = pastHold();
+      // Both are past the plain hold; one's retry time is an hour ahead, the
+      // other's passed a minute after it was filed.
+      await recordFor(waiting, old, ANALYSIS_FAILURE_HOLD_MS + 60 * 60_000);
+      await recordFor(lapsed, old, 60_000);
+      await recordFor(fresh, new Date());
+
+      expect(await failureRows(waiting)).toHaveLength(1);
+      expect(await failureRows(lapsed)).toHaveLength(0);
+      expect(await failureRows(fresh)).toHaveLength(1);
+    });
   });
 
   test("the run asks for the analysis budget, bounded by the model's catalog limit", async () => {

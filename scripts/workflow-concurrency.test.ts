@@ -253,6 +253,13 @@ const concurrencyModes: Record<
 };
 
 describe("pull request workflow concurrency", () => {
+  const supersedingEventsFor = (file: string) => {
+    if (file === "ci.yml") {
+      return ["workflow_dispatch", "push"];
+    }
+    return [];
+  };
+
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
     const pullRequestWorkflows = workflows.filter(({ workflow }) =>
@@ -265,8 +272,7 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents:
-            file === "ci.yml" ? ["workflow_dispatch", "push"] : [],
+          supersedingEvents: supersedingEventsFor(file),
           mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
@@ -536,29 +542,35 @@ type ConcurrencyContext = {
   event_name: string;
   ref: string;
   run_id: number;
+  inputs?: { base_ref?: string };
   event: {
+    action?: string;
     pull_request?: { number: number; head: { sha: string } };
     label?: { name: string };
   };
 };
-const groupFor = async (file: string, github: ConcurrencyContext) => {
+const concurrencyValueFor = async (
+  file: string,
+  key: "group" | "cancel-in-progress",
+  github: ConcurrencyContext,
+) => {
   const workflow: unknown = Bun.YAML.parse(
     await Bun.file(new URL(file, WORKFLOWS_URL)).text(),
   );
   if (!isRecord(workflow) || !isRecord(workflow["concurrency"])) {
     throw new Error("Missing concurrency");
   }
-  const group = workflow["concurrency"]["group"];
-  if (typeof group !== "string") {
-    throw new TypeError("Missing group");
+  const value = workflow["concurrency"][key];
+  if (typeof value !== "string") {
+    return value;
   }
   // These group expressions use the same short-circuit/string operations
   // as JavaScript. Execute the actual file, rather than a copied key.
-  return group.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
+  return value.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
     String(
       new Script(expression).runInNewContext({
         github,
-        inputs: {},
+        inputs: { base_ref: github.inputs?.base_ref ?? "" },
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
@@ -567,6 +579,8 @@ const groupFor = async (file: string, github: ConcurrencyContext) => {
     ),
   );
 };
+const groupFor = async (file: string, github: ConcurrencyContext) =>
+  concurrencyValueFor(file, "group", github);
 const recording = {
   workflow: "Record network baseline",
   event_name: "pull_request",
@@ -615,6 +629,57 @@ test("unrelated labels cannot supersede baseline recording requests", async () =
   expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
     await groupFor(file, unrelated),
   );
+});
+
+test("unrelated flake-gate labels use an isolated non-cancelling group", async () => {
+  const file = "flake-gate.yml";
+  const requested = {
+    ...recording,
+    workflow: "Changed-test flake report",
+    inputs: { base_ref: "" },
+    event: {
+      ...recording.event,
+      action: "labeled",
+      label: { name: "flake-gate" },
+    },
+  };
+  const reportGroup = await groupFor(file, requested);
+  expect(
+    await groupFor(file, {
+      ...requested,
+      event: { ...requested.event, action: "synchronize" },
+    }),
+  ).toBe(reportGroup);
+
+  const unrelated = {
+    ...requested,
+    event: { ...requested.event, label: { name: "documentation" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(reportGroup);
+  expect(await concurrencyValueFor(file, "cancel-in-progress", unrelated)).toBe(
+    "false",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", requested)).toBe(
+    "true",
+  );
+
+  const reusableCall = {
+    ...requested,
+    run_id: 44,
+    event: {
+      pull_request: requested.event.pull_request,
+      action: "opened",
+    },
+    inputs: { base_ref: "origin/main" },
+  };
+  const reusableGroup = await groupFor(file, reusableCall);
+  expect(reusableGroup).not.toBe(reportGroup);
+  expect(
+    await groupFor(file, { ...reusableCall, run_id: reusableCall.run_id + 1 }),
+  ).not.toBe(reusableGroup);
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", reusableCall),
+  ).toBe("false");
 });
 
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {

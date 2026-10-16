@@ -16,12 +16,15 @@ import {
   InspectorRailIconButton,
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
+import { getMatterSwatch } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { DocumentIcon } from "@/components/document-icon";
+import { chatTabHeaderLabel } from "@/components/inspector/chat-context-label.logic";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
@@ -43,18 +46,18 @@ import type {
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-import { getMatterSwatch } from "@/lib/matter-colors";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
@@ -65,7 +68,6 @@ export const InspectorRail = ({
   onOpenChat,
   onSetMinimized,
   tabs,
-  workspaceId,
 }: InspectorRailProps) => {
   const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
@@ -92,7 +94,13 @@ export const InspectorRail = ({
     activeTab,
     activeSkillCatalogueData?.entries,
   );
-  const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
+  // A new chat is about the matter in the URL, not the matter this rail
+  // displays (the active tab's, which the user may have left).
+  const routeWorkspaceId = useRouteWorkspaceId();
+  const railContextMenu = useRailContextMenu({
+    activeSkill,
+    workspaceId: routeWorkspaceId,
+  });
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
   const legalDocument = useMainLegalDocument();
@@ -124,7 +132,13 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(railChatOpenArgs({ activeSkill, legalDocument, workspaceId }));
+    onOpenChat(
+      railChatOpenArgs({
+        activeSkill,
+        legalDocument,
+        workspaceId: routeWorkspaceId,
+      }),
+    );
   };
 
   const toggleLabel = (() => {
@@ -237,7 +251,6 @@ type InspectorRailProps = {
   ) => void;
   onSetMinimized: (minimized: boolean) => void;
   tabs: InspectorTab[];
-  workspaceId?: string | undefined;
 };
 
 const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
@@ -485,8 +498,27 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
+const ChatVerticalTab = ({
+  tab,
+  ...props
+}: VerticalTabProps & { tab: ChatTab }) => {
+  const t = useTranslations();
+  const skillLabel = useSkillLabel();
+  const label = chatTabHeaderLabel({
+    activeSkillName:
+      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
+    boundDocumentLabel: undefined,
+    newChatLabel: t("chat.newChat"),
+    tabLabel: tab.label,
+  });
+  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
+};
+
 const VerticalTab = (props: VerticalTabProps) => {
   const { tab } = props;
+  if (tab.type === "chat") {
+    return <ChatVerticalTab {...props} tab={tab} />;
+  }
   if (tab.type !== "view") {
     return <VerticalTabCell {...props} />;
   }

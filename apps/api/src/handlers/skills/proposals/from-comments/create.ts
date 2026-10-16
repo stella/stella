@@ -94,7 +94,8 @@ const config = {
   },
 } satisfies HandlerConfig;
 
-const aiRevisionSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const aiRevisionSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),
     v.description(
@@ -226,6 +227,7 @@ const createProposalFromComments = createSafeRootHandler(
       feature: "skills.apply_comments",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

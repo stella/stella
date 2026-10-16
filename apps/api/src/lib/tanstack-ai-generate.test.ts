@@ -66,6 +66,7 @@ import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
 } from "@/api/lib/tanstack-ai-schema";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -997,13 +998,100 @@ describe("TanStack AI structured output generation", () => {
     });
 
     expect(options).toEqual({
-      maxCompletionTokens: 1000,
+      // The model reasons by default, so its reasoning is reserved on top of
+      // the reply's allowance.
+      maxCompletionTokens: 1000 + 8192,
       serviceTier: "flex",
       temperature: 0,
     });
     expect(options).not.toHaveProperty("maxOutputTokens");
     expect(options).not.toHaveProperty("promptCacheKey");
     expect(options).not.toHaveProperty("sessionId");
+  });
+
+  describe("a short reply's allowance on a reasoning model", () => {
+    // Gemini, OpenAI and OpenRouter count reasoning inside the one output
+    // ceiling. A fast-role Gemini runs at its lowest level, `LOW`, which by
+    // itself outspends a 200-token reply: without the reservation the run
+    // stops at the ceiling before the answer starts.
+    const SHORT_REPLY = 200;
+    const ceilingFor = (
+      provider: "google" | "openai" | "openrouter",
+      modelId: string,
+    ) => {
+      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+      const model = {
+        adapter: {},
+        keySource: "byok",
+        modelId,
+        modelOptions: tanStackModelOptionsForRole({
+          modelId,
+          organizationId: null,
+          provider,
+          role: "fast",
+        }),
+        provider,
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      } as ResolvedTanStackTextModel;
+      const options: object = mergeGenerationOptions({
+        caching: noCaching,
+        maxOutputTokens: SHORT_REPLY,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      });
+      if ("maxOutputTokens" in options) {
+        return options.maxOutputTokens;
+      }
+      if ("maxCompletionTokens" in options) {
+        return options.maxCompletionTokens;
+      }
+      return "max_output_tokens" in options
+        ? options.max_output_tokens
+        : undefined;
+    };
+
+    test("Gemini reserves its thinking level on top of the reply", () => {
+      expect(ceilingFor("google", "gemini-3.8-flash")).toBe(SHORT_REPLY + 4096);
+    });
+
+    test("OpenRouter reserves the reasoning effort it sends", () => {
+      expect(ceilingFor("openrouter", "google/gemini-3.8-flash")).toBe(
+        SHORT_REPLY + 4096,
+      );
+    });
+
+    test("a model the catalog does not list keeps the reply's allowance", () => {
+      expect(ceilingFor("google", "stella-no-such-model")).toBe(SHORT_REPLY);
+    });
+
+    test("the reservation never lifts a request past the model's limit", () => {
+      const limit = getOutputTokenLimit("gemini-3.8-flash") ?? 0;
+      expect(limit).toBeGreaterThan(0);
+      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+      const model = {
+        adapter: {},
+        keySource: "byok",
+        modelId: "gemini-3.8-flash",
+        modelOptions: tanStackModelOptionsForRole({
+          modelId: "gemini-3.8-flash",
+          organizationId: null,
+          provider: "google",
+          role: "fast",
+        }),
+        provider: "google",
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+      } as ResolvedTanStackTextModel;
+      expect(
+        mergeGenerationOptions({
+          caching: noCaching,
+          maxOutputTokens: limit,
+          model,
+          serviceTier: "standard",
+          temperature: undefined,
+        }),
+      ).toMatchObject({ maxOutputTokens: limit });
+    });
   });
 
   test("forwards deferred service tiers to Gemini requests", () => {
@@ -1472,6 +1560,7 @@ describe("model dispatch within its admitted action", () => {
     const caught = await admitModelDispatch({
       organizationId,
       actionKind: "document-reviews.background",
+      organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
       run: async (admission) =>
         await generateTextForTestModel({ ...dispatchOptions, admission }),
@@ -1494,6 +1583,7 @@ describe("model dispatch within its admitted action", () => {
     const escaped = await admitModelDispatch({
       organizationId,
       actionKind: "templates.fill",
+      organizationStateDb: testOrganizationStateDb,
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission),
     });
@@ -2369,22 +2459,30 @@ describe("model output that fails its schema", () => {
     tenantWorkspaceIds: [],
   };
 
-  for (const { name, run } of [
+  // A schema mismatch gets one repair turn, so it is queued twice; text that
+  // is not JSON fails in the engine before any repair.
+  for (const { name, runs } of [
     {
       name: "an object with an unexpected key",
-      run: objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+      runs: [
+        objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+        objectRun({ answer: "ok", [SENTINEL]: SENTINEL }),
+      ],
     },
     {
       name: "a value of the wrong type",
-      run: objectRun({ answer: [SENTINEL] }),
+      runs: [
+        objectRun({ answer: [SENTINEL] }),
+        objectRun({ answer: [SENTINEL] }),
+      ],
     },
     {
       name: "text that is not JSON",
-      run: objectRun(undefined, `${SENTINEL} is not JSON`),
+      runs: [objectRun(undefined, `${SENTINEL} is not JSON`)],
     },
   ]) {
     test(`reports ${name} without quoting it`, async () => {
-      queueRun(run);
+      queuedRuns.push(...runs);
 
       const caught = await generateObjectForTestModel(objectOptions).then(
         () => undefined,
@@ -2396,6 +2494,123 @@ describe("model output that fails its schema", () => {
       expect(String(asTestRaw<Error>(caught).stack)).not.toContain(SENTINEL);
     });
   }
+});
+
+describe("a structured answer its schema rejects gets one repair turn", () => {
+  const objectOptions = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    caching: noCaching,
+    organizationId: null,
+    dataClass: "customer" as const,
+    managedAIResidency: "eu" as const,
+    orgAIConfig: null,
+    outputSchema: v.strictObject({ answer: v.string(), page: v.number() }),
+    prompt: "Extract the answer.",
+    role: "chat" as const,
+    serviceTier: "standard" as const,
+    tenantWorkspaceIds: [],
+  };
+
+  const outcomeLogs = () =>
+    logs.records
+      .filter(({ message }) => message === "ai.structured_output.outcome")
+      .map(({ attributes }) => ({
+        result: attributes?.["ai.structured_output.result"],
+        rung: attributes?.["ai.structured_output.rung"],
+        issueTypes: attributes?.["ai.structured_output.issue_types"],
+      }));
+
+  const lastUserContent = (request: CapturedProviderRequest | undefined) => {
+    const messages = request?.messages;
+    const last: unknown = Array.isArray(messages) ? messages.at(-1) : undefined;
+    return JSON.stringify(last);
+  };
+
+  test("a first answer that matches is returned without a repair turn", async () => {
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+
+    const object = await generateObjectForTestModel(objectOptions);
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(1);
+    expect(outcomeLogs()).toEqual([]);
+  });
+
+  test("the same model is shown where its answer breaks the schema and its fix is returned", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+
+    const object = await generateObjectForTestModel(objectOptions);
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(providerRequests).toHaveLength(2);
+    const repairRequest = providerRequests[1];
+    expect(lastUserContent(repairRequest)).toContain("page: expected number");
+    // The repair turn names the path and the expectation, never the value.
+    expect(lastUserContent(repairRequest)).not.toContain("three");
+    expect(outcomeLogs()).toEqual([
+      { result: "ok", rung: "model_repair", issueTypes: "number" },
+    ]);
+  });
+
+  test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+
+    const caught = await generateObjectForTestModel(objectOptions).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // "3" is not converted to 3: the answer passes the schema or fails.
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(classifyAIError(caught)).toBe("output_invalid");
+    expect(providerRequests).toHaveLength(2);
+    expect(outcomeLogs()).toEqual([
+      { result: "failed", rung: "output_invalid", issueTypes: "number" },
+    ]);
+    // The outcome line carries paths and types, never the model's values.
+    expect(JSON.stringify(logs.records)).not.toContain("three");
+  });
+
+  test("a missing field is not filled in on the model's behalf", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+    queueRun(objectRun({ answer: "ok" }));
+
+    const caught = await generateObjectForTestModel(objectOptions).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(lastUserContent(providerRequests[1])).toContain("page: expected");
+  });
+
+  test("a cancelled repair turn is a cancellation, not invalid output", async () => {
+    const controller = new AbortController();
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(cancelledObjectRun({ answer: "ok", page: 3 }, controller));
+
+    const caught = await generateObjectForTestModel({
+      ...objectOptions,
+      abortSignal: controller.signal,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toMatchObject({ status: 502 });
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({ reason: "generation_cancelled" });
+    // The tried repair is still counted.
+    expect(outcomeLogs()).toEqual([
+      { result: "failed", rung: "repair_failed", issueTypes: "number" },
+    ]);
+  });
 });
 
 describe("a chat run a caller consumes itself", () => {

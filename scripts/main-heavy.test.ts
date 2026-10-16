@@ -510,7 +510,18 @@ test("only the final job can publish the main/heavy status", () => {
   const jobsWithStatusPermission = Object.entries(mainWorkflow.jobs)
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
-  expect(jobsWithStatusPermission).toEqual(["status"]);
+  // The suites call only grants a ceiling: ci.yml declares the scope for the
+  // merge-queue yield, which runs on pull_request events and never here.
+  expect(jobsWithStatusPermission).toEqual(["suites", "status"]);
+  const ciStatusWriters = Object.values(ciWorkflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => /commitstatus|\/statuses\b/iu.test(JSON.stringify(step)));
+  expect(ciStatusWriters.map(({ name }) => name)).toEqual([
+    "Yield to the merge queue",
+  ]);
+  expect(String(ciStatusWriters[0]?.["if"])).toContain(
+    "github.event_name == 'pull_request'",
+  );
   expect(mainWorkflow.jobs.status.permissions).toEqual({
     contents: "read",
     actions: "read",
@@ -594,6 +605,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
             RESULTS: results,
             RUN_URL: runUrl,
             SHA: sha,
+            PROOF_MAIN_BASE: validatedSha,
           },
         });
         expect(process.exitCode).toBe(exit);
@@ -608,7 +620,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           "-f",
           `state=${expected}`,
           "-f",
-          `description=Main heavy suites: ${expected}`,
+          `description=Main heavy suites: ${expected}; main=${validatedSha}`,
           "-f",
           `target_url=${runUrl}`,
         ]);

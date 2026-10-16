@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
-import { DOCX_OUTLINE_DEPTH_STORAGE_KEY } from "@/components/docx/docx-outline-depth.logic";
-import { READER_PROVISION_MODE_STORAGE_KEY } from "@/components/legal-reader/reader-provision-mode.logic";
+import { mergeLegacyLawHistory } from "@/lib/account/law-history-legacy-merge";
 import {
+  DOCX_OUTLINE_DEPTH_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
-  mergeLawRecent,
-} from "@/lib/law-search-history/law-search-history.logic";
+  READER_PROVISION_MODE_STORAGE_KEY,
+} from "@/lib/account/storage-keys";
 
 export type StorageArea = "local" | "session";
 
@@ -151,7 +151,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     prefix: LAW_HISTORY_STORAGE_KEY,
     owner: "scoped",
     retention: "kept-for-owner",
-    legacy: { keys: "bare", adopt: mergeLawRecent },
+    legacy: { keys: "bare", adopt: mergeLegacyLawHistory },
   },
   // Instructions the user wrote for organizing a workspace's files.
   {
@@ -266,6 +266,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.provision-question:",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // A desktop app's linking challenge, held across the sign-in redirect
+  // until the desktop settings page consumes it once.
+  {
+    area: "session",
+    prefix: "stella.desktop-account-link",
     owner: "carried",
     retention: "cleared",
   },

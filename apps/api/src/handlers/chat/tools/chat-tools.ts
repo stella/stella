@@ -85,10 +85,11 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import type {
@@ -544,7 +545,7 @@ export type GetChatToolsProps = {
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
-  skillMetadata?: readonly SkillMetadata[] | undefined;
+  skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /** Records reads that run without an approval, such as `load-skill`. */

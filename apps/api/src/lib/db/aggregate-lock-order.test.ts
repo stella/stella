@@ -5,19 +5,20 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  AggregateLockBusy,
-  ROW_LOCK_MODES,
-  withAggregateLock,
-  withAggregateTransaction,
-} from "./aggregate-lock";
-import {
   aggregateExecutionRows,
   aggregateFences,
   aggregateRecorder,
   plantedDescendingBlockingAcquisition,
   plantedBlockingUpgradeAtHighWater,
   plantedWeakerHeldModeReuse,
-} from "./aggregate-lock-order.fixture";
+} from "@/api/tests/fixtures/aggregate-lock-order";
+
+import {
+  AggregateLockBusy,
+  ROW_LOCK_MODES,
+  withAggregateLock,
+  withAggregateTransaction,
+} from "./aggregate-lock";
 
 describe("blocking aggregate order regressions", () => {
   test("chat revision locks scope the thread to its principal and the message to its thread", async () => {
@@ -46,6 +47,49 @@ describe("blocking aggregate order regressions", () => {
       fixture.chatMessage.id.id,
       fixture.chatThread.id.id,
     ]);
+  });
+
+  test("reader answer locks scope the answer to its principal and the message to its answer", async () => {
+    const fixture = aggregateFences();
+    const { tx, statements } = aggregateRecorder();
+
+    expect(await withAggregateLock({ ...fixture.readerAnswer, tx })).toEqual({
+      status: "locked",
+    });
+    expect(
+      await withAggregateLock({ ...fixture.readerAnswerMessage, tx }),
+    ).toEqual({ status: "locked" });
+
+    expect(statements).toHaveLength(2);
+    expect(statements.at(0)?.sql).toContain(
+      'FROM "public"."legal_reader_answers"',
+    );
+    expect(statements.at(0)?.sql).toContain('"organization_id" =');
+    expect(statements.at(0)?.sql).toContain('"user_id" =');
+    expect(statements.at(0)?.params).toEqual([
+      fixture.readerAnswer.id.id,
+      fixture.readerAnswer.id.organizationId,
+      fixture.readerAnswer.id.userId,
+    ]);
+    expect(statements.at(1)?.sql).toContain(
+      'FROM "public"."legal_reader_answer_messages"',
+    );
+    expect(statements.at(1)?.sql).toContain('"answer_id" =');
+    expect(statements.at(1)?.params).toEqual([
+      fixture.readerAnswerMessage.id.id,
+      fixture.readerAnswer.id.id,
+    ]);
+  });
+
+  test("a reader answer message fence cannot precede its answer fence", async () => {
+    const fixture = aggregateFences();
+    const { tx, statements } = aggregateRecorder();
+
+    await withAggregateLock({ ...fixture.readerAnswerMessage, tx });
+    expect(
+      await rejectionOf(withAggregateLock({ ...fixture.readerAnswer, tx })),
+    ).toMatchObject({ message: "Aggregate lock rank inversion" });
+    expect(statements).toHaveLength(1);
   });
 
   test("a planted descending blocking request never reaches its SQL acquisition", async () => {

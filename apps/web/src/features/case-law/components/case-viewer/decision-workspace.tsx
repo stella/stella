@@ -1,8 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
+import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import {
   decisionCaseName,
@@ -11,21 +14,28 @@ import {
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
+import { SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
+import {
+  createCaseDecisionViewTab,
+  navigateToCaseDecisionMain,
+} from "@/components/inspector/case-decision-view";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -39,7 +49,10 @@ import {
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
 import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import type {
+  AnalysisMarginItem,
+  AnswerMarginItem,
+} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -48,6 +61,7 @@ import {
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
+import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
 import { decisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing.logic";
 import {
@@ -61,12 +75,30 @@ import { useDecisionAnnotationSurface } from "@/features/case-law/components/cas
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
 import { useDecisionStatuteCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-statute-citation-anchors";
+import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader-provision-mode-toggle";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import type { SafeId } from "@/lib/safe-id";
 import { forceReflow } from "@/lib/utils";
+
+import {
+  attachReaderAnswerMarkers,
+  jumpReaderAnswerCitation,
+  openReaderAnswerFromMark,
+  readerAnswerAnchors,
+} from "./reader-answer-navigation";
+import {
+  ReaderAnswerFailure,
+  readerAnswerFailureKind,
+} from "./reader-answers.logic";
+import { useReaderAnswers } from "./use-reader-answers";
 
 type DecisionWorkspaceDecision = Pick<
   PublicCaseLawDecision,
@@ -97,6 +129,8 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
+  /** A repeated citation is a fresh landing on the same passage. */
+  landingSessionId?: string | undefined;
 };
 
 /**
@@ -143,9 +177,79 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId } = props;
+  const user = useMaybeAuthenticatedUser();
+  return (
+    <DecisionWorkspaceContent
+      {...props}
+      key={`${user?.activeOrganizationId ?? "guest"}:${user?.id ?? "guest"}:${props.decisionId}`}
+    />
+  );
+};
+
+type ParagraphLanding = ReturnType<typeof decisionParagraphLanding>;
+
+const ReaderStatusNotices = ({
+  answersError,
+  foreignDecisionFailed,
+  isCreatingAnswer,
+  paragraphLanding,
+}: {
+  answersError: unknown;
+  foreignDecisionFailed: boolean;
+  isCreatingAnswer: boolean;
+  paragraphLanding: ParagraphLanding;
+}) => {
   const t = useTranslations();
-  const provisions = useReaderProvisionMode();
+  return (
+    <>
+      {answersError !== null && (
+        <p role="alert" className="text-destructive px-4 py-2 text-sm">
+          {readerAnswerFailureKind(answersError) === "budget"
+            ? t("readerAnswers.budgetError")
+            : t("readerAnswers.networkError")}
+        </p>
+      )}
+      {foreignDecisionFailed && (
+        <p role="alert" className="text-destructive px-4 py-2 text-sm">
+          {t("errors.actionFailed")}
+        </p>
+      )}
+      {isCreatingAnswer && (
+        <p role="status" className="text-muted-foreground px-4 py-2 text-sm">
+          {t("readerAnswers.loading")}
+        </p>
+      )}
+      {(paragraphLanding.type === "range" ||
+        paragraphLanding.type === "not-found") && (
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn(
+            paragraphLanding.type === "range"
+              ? "sr-only"
+              : "bg-muted text-muted-foreground px-4 py-2 text-sm",
+          )}
+        >
+          {t(
+            paragraphLanding.type === "range"
+              ? "caseLaw.paragraphRangeSelected"
+              : "caseLaw.paragraphRangeNotFound",
+            {
+              range: formatDecisionParagraphRange(paragraphLanding.range),
+              count:
+                paragraphLanding.range.to - paragraphLanding.range.from + 1,
+            },
+          )}
+        </p>
+      )}
+    </>
+  );
+};
+
+const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
+  const { decision, decisionId, initialAnchorId, landingSessionId } = props;
+  const t = useTranslations();
   const ast = parseDocumentAst(decision.documentAst);
   // The case's citable name, for the legal copy modes.
   const caseName = decisionCaseName({
@@ -165,6 +269,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     name: caseName,
   } as const satisfies ReaderAnnotationTarget;
   const mainRef = useRef<HTMLDivElement>(null);
+  const provisions = useReaderProvisionMode(mainRef);
   const [notesFilter, setNotesFilter] = useState<NotesFilter>("all");
   const showAiNotes = NOTES_FILTER_SHOWS_AI[notesFilter];
   const annotations = useDecisionAnnotationSurface({
@@ -172,6 +277,181 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     scrollContainerRef: mainRef,
     target: annotationTarget,
   });
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const answers = useReaderAnswers({
+    decisionId,
+    generationMode: props.aiMode,
+  });
+  const visibleAnswers = annotationsForMarksFilter(
+    answers.answers,
+    MARKS_FOR_NOTES_FILTER[notesFilter],
+  );
+  const [answerPlacement, setAnswerPlacement] = useState<"gutter" | "inline">(
+    "gutter",
+  );
+  useMountEffect(() => {
+    const aside = mainRef.current?.querySelector<HTMLElement>(
+      "[data-reader-notes-column]",
+    );
+    if (!aside) {
+      return undefined;
+    }
+    const measure = () =>
+      setAnswerPlacement(
+        aside.getBoundingClientRect().width > 0 ? "gutter" : "inline",
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(aside);
+    measure();
+    return () => observer.disconnect();
+  });
+  const openAnswer = useLatestCallback((id: string) => {
+    annotations.clearActive();
+    answers.activateAnswer(id);
+  });
+  const activateMark = (id: string | null) => {
+    if (
+      openReaderAnswerFromMark({
+        id,
+        answers: answers.answers,
+        onOpen: openAnswer,
+      })
+    ) {
+      return;
+    }
+    annotations.setActiveAnnotationId(id);
+  };
+  useExternalSyncEffect(() => {
+    const root = mainRef.current;
+    if (root === null) {
+      return undefined;
+    }
+    return attachReaderAnswerMarkers({
+      root,
+      answers: visibleAnswers,
+      label: t("readerAnswers.expand"),
+      onOpen: openAnswer,
+    });
+  }, [visibleAnswers, openAnswer, t]);
+  const foreignDecisionIds = [
+    ...new Set(
+      answers.answers
+        .filter((answer) => answer.id === answers.activeAnswerId)
+        .flatMap((answer) =>
+          answer.messages.flatMap((message) =>
+            message.citations.map((citation) => citation.decisionId),
+          ),
+        ),
+    ),
+  ].filter((id) => id !== decisionId);
+  const foreignDecisions = useQueries({
+    queries: foreignDecisionIds.map((id) => decisionOptions(id)),
+  });
+  const foreignDecisionError = foreignDecisions.find(
+    (query) => query.error !== null,
+  )?.error;
+  const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
+    kind: "answer",
+    id: answer.id,
+    startAnchorId: answer.anchor.paragraphId,
+    answer,
+    generationMode: props.aiMode,
+    active: answers.activeAnswerId === answer.id,
+    openRevision: answers.openRevision,
+    busy:
+      answers.busyAnswerIds.has(answer.id) ||
+      answer.messages.some((message) => message.status === "streaming"),
+    error: readerAnswerFailureKind(answers.errors.get(answer.id)),
+    onOpen: () => openAnswer(answer.id),
+    onFollowUp: (question) =>
+      detached(
+        answers.followUp(answer.id, question),
+        "reader-answer.follow-up",
+      ),
+    onRegenerate: () =>
+      detached(answers.regenerate(answer.id), "reader-answer.regenerate"),
+    onDelete: () => detached(answers.remove(answer.id), "reader-answer.delete"),
+    onVisibility: (visibility) =>
+      detached(
+        answers.setVisibility(answer.id, visibility),
+        "reader-answer.visibility",
+      ),
+    citationLabel: (citation) => {
+      const foreignIndex = foreignDecisionIds.indexOf(citation.decisionId);
+      const foreignRead =
+        foreignIndex !== -1 ? foreignDecisions.at(foreignIndex) : undefined;
+      const foreignCited =
+        foreignRead?.data ??
+        queryClient.getQueryData(decisionOptions(citation.decisionId).queryKey);
+      const cited =
+        citation.decisionId === decisionId ? decision : foreignCited;
+      const citedAst = parseDocumentAst(cited?.documentAst);
+      const paragraph = citedAst?.blocks.find(
+        (block) => block.anchorId === citation.paragraphId,
+      );
+      const number = paragraph?.type === "paragraph" ? paragraph.number : null;
+      return citation.decisionId === decisionId
+        ? t("readerAnswers.citation", {
+            paragraph: number?.toString() ?? citation.paragraphId,
+          })
+        : t("readerAnswers.externalCitation", {
+            decision: cited?.caseNumber ?? citation.decisionId,
+            paragraph: number?.toString() ?? citation.paragraphId,
+          });
+    },
+    onCitation: (citation) =>
+      detachedUserAction(
+        jumpReaderAnswerCitation({
+          citation,
+          decisionId,
+          root: mainRef.current,
+          openDecision: async (id, paragraphId) => {
+            const cited = await queryClient.query({
+              ...decisionOptions(id),
+              staleTime: "static",
+            });
+            const tab = createCaseDecisionViewTab({
+              ...cited,
+              decisionId: id,
+              anchorId: paragraphId,
+            });
+            await navigateToCaseDecisionMain(navigate, tab.payload);
+          },
+        }),
+        {
+          context: "reader-answer.citation",
+          failureMessage: t("errors.actionFailed"),
+        },
+      ),
+  }));
+  const explain = async (spans: SelectionAnchor[]) => {
+    const span = spans.at(0);
+    if (
+      spans.length !== 1 ||
+      span === undefined ||
+      span.quote.length > READER_ANSWER_QUOTE_MAX_LENGTH
+    ) {
+      notifyUserError(
+        new ReaderAnswerFailure({
+          kind: "request",
+          message: "Selection is outside the reader answer anchor limits",
+        }),
+        t("readerAnswers.selectionError"),
+      );
+      return;
+    }
+    if (props.aiMode !== "enabled" || !(await props.ensureAIAvailable())) {
+      return;
+    }
+    setNotesFilter("all");
+    await answers.createExplain({
+      paragraphId: span.blockAnchorId,
+      quote: span.quote,
+      startOffset: span.startOffset,
+      endOffset: span.endOffset,
+    });
+  };
   // Only an account may start a run, so only this branch polls. Everything
   // below reads `analysisState` alone: a gated reader never starts a run, so
   // its state stays `idle` (the offer rather than an empty analysis column)
@@ -180,6 +460,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
   const [panelWidth, setPanelWidth] = useState(220);
+  // The same per-browser size the inspector's readers step, so a size chosen
+  // in either place holds in both.
+  const textScale = useWebReaderTextScale();
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -248,7 +531,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
   const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
@@ -265,6 +548,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    sessionId: landingSessionId,
   });
 
   const jumpToAnchor = (anchorId: string) => {
@@ -387,6 +671,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
       : [];
 
   const visibleMarginItems = [
+    ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
     ...exampleMarginItems,
     ...annotations.notes,
@@ -409,17 +694,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
-        <Button
-          aria-label={t("caseLaw.reader.expandProvisions")}
-          aria-pressed={provisions.expandProvisions}
-          data-pressed={provisions.expandProvisions ? "" : undefined}
-          onClick={provisions.toggle}
-          size="icon-sm"
-          tooltip={t("caseLaw.reader.expandProvisions")}
-          variant="ghost"
-        >
-          <BookTextIcon aria-hidden="true" className="size-4" />
-        </Button>
+        <ZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
+        <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
       <h1 className="sr-only" data-slot="decision-title">
@@ -524,42 +806,17 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               />
             )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-              {(paragraphLanding.type === "range" ||
-                paragraphLanding.type === "not-found") && (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  className={cn(
-                    paragraphLanding.type === "range"
-                      ? "sr-only"
-                      : "bg-muted text-muted-foreground px-4 py-2 text-sm",
-                  )}
-                >
-                  {paragraphLanding.type === "range"
-                    ? t("caseLaw.paragraphRangeSelected", {
-                        range: formatDecisionParagraphRange(
-                          paragraphLanding.range,
-                        ),
-                        count:
-                          paragraphLanding.range.to -
-                          paragraphLanding.range.from +
-                          1,
-                      })
-                    : t("caseLaw.paragraphRangeNotFound", {
-                        range: formatDecisionParagraphRange(
-                          paragraphLanding.range,
-                        ),
-                        count:
-                          paragraphLanding.range.to -
-                          paragraphLanding.range.from +
-                          1,
-                      })}
-                </p>
-              )}
+              <ReaderStatusNotices
+                answersError={answers.error}
+                foreignDecisionFailed={foreignDecisionError !== undefined}
+                isCreatingAnswer={answers.isCreating}
+                paragraphLanding={paragraphLanding}
+              />
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
+                {...textScale.rootProps}
                 style={{
+                  ...textScale.rootProps.style,
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
@@ -569,6 +826,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     prompt's own button is the keyboard path to the same gate. */}
                 {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pointer shortcut only; the sticky prompt's button is the keyboard path */}
                 <aside
+                  data-reader-notes-column=""
                   className={cn(
                     "relative flex flex-col max-lg:hidden",
                     visitorOffer !== undefined && "cursor-pointer",
@@ -667,16 +925,51 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   className="reader-paper min-w-0 py-8"
                   data-slot="reader-document-column"
                 >
+                  {/* Below lg the analysis column, and the offer in it, is
+                      not drawn; a visitor still has to learn the layer
+                      exists and that signing in opens it. */}
+                  {showAiNotes &&
+                    props.aiMode === "gated" &&
+                    props.onRequestAnalysis !== undefined &&
+                    analysisState.status === "idle" && (
+                      <NarrowGatedAnalysisInvitation
+                        onRequest={props.onRequestAnalysis}
+                      />
+                    )}
                   <DecisionText
                     surface="full-reader"
                     aiHeadnotes={aiHeadnotes}
-                    annotationAnchors={annotations.anchors}
+                    annotationAnchors={[
+                      ...annotations.anchors,
+                      ...readerAnswerAnchors(
+                        visibleAnswers,
+                        t("readerAnswers.expand"),
+                      ),
+                    ]}
                     citationAnchors={citationAnchors}
                     decision={decision}
                     decisionId={decisionId}
                     expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
-                    onAnnotationActivate={annotations.setActiveAnnotationId}
+                    onAnnotationActivate={activateMark}
+                    notesByAnchorId={
+                      answerPlacement === "inline"
+                        ? new Map(
+                            answerNotes.map((note) => [
+                              note.startAnchorId,
+                              <MarginNotes
+                                key={note.startAnchorId}
+                                items={answerNotes.filter(
+                                  (item) =>
+                                    item.startAnchorId === note.startAnchorId,
+                                )}
+                                placement="inline"
+                              />,
+                            ]),
+                          )
+                        : undefined
+                    }
+                    landingSessionId={landingSessionId}
                     provisionAnchors={provisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
@@ -691,9 +984,14 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
           activeSpans={annotations.activeSpans}
           controller={annotations.controller}
           mode={annotations.mode}
-          onActivateAnnotation={annotations.setActiveAnnotationId}
+          onActivateAnnotation={activateMark}
           onClearActive={annotations.clearActive}
           onCompose={annotations.startComposing}
+          onExplain={
+            props.aiMode === "enabled"
+              ? (spans) => detached(explain(spans), "reader-answer.explain")
+              : undefined
+          }
           scrollContainerRef={mainRef}
           target={annotationTarget}
         />
@@ -734,6 +1032,37 @@ const AnalysisLoader = () => {
           )}
         </div>
       ))}
+    </div>
+  );
+};
+
+/**
+ * The analysis column's offer, above the text where that column is not drawn.
+ */
+const NarrowGatedAnalysisInvitation = ({
+  onRequest,
+}: {
+  onRequest: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div
+      aria-label={t("caseLaw.notesFilter.ai")}
+      className="reader-chrome mx-auto mb-6 flex max-w-(--reader-measure) flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 lg:hidden"
+      data-slot="gated-analysis-invitation-narrow"
+      role="region"
+    >
+      <SparklesIcon
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0"
+      />
+      <p className="text-foreground-strong-muted min-w-0 flex-1 text-sm leading-snug">
+        {t("caseLaw.analysis.invitation")}
+      </p>
+      <Button onClick={onRequest} size="sm" variant="muted">
+        {t("auth.signIn")}
+      </Button>
     </div>
   );
 };

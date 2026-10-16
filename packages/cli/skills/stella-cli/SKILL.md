@@ -101,9 +101,9 @@ requires (request it at `stella auth login --scopes`).
 | capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
 | case-law | `stella case-law coverage` | read |  |
-| case-law | `stella case-law lookup` | read |  |
 | case-law | `stella case-law open` | read |  |
 | case-law | `stella case-law read` | read |  |
+| case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
@@ -131,13 +131,14 @@ requires (request it at `stella auth login --scopes`).
 | legislation | `stella legislation history` | read | paginated |
 | legislation | `stella legislation provisions` | read |  |
 | legislation | `stella legislation read` | read | paginated; windowed text |
+| legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
+| matter | `stella matter add-member` | admin_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
+| matter | `stella matter remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization add-member` | admin_write |  |
-| organization | `stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
@@ -201,19 +202,18 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
 - `stella case-law coverage`
   - optional: --country
-- `stella case-law lookup`
-  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it, with the sheet number when the court publishes one (it picks a single decision when the file holds several), or an ECLI. Each is answered on its own. (string-array, repeatable)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
 - `stella case-law open`
-  - `--decision-id` — Decision ID returned by search_case_law or lookup_case_law. (string)
+  - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
   - optional: --paragraphs
 - `stella case-law read`
   - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
+- `stella case-law resolve`
+  - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — One exact docket as the court wrote it, including its sheet, or ECLI. Use search_case_law for a description of a case. (string)
 - `stella case-law search`
-  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --court, --courts, --category, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - optional: --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -297,15 +297,24 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella legislation history`
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - `--anchor` — Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes. (string)
-  - optional: --language
+  - optional: --language, --text-cursor
 - `stella legislation provisions` — no flags; pass `--input` with items
 - `stella legislation read`
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
+- `stella legislation resolve`
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
+  - optional: --as-of
+  - via `--input` only: source
+  - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
   - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to
+- `stella matter add-member`
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Existing organization member ID (string)
 - `stella matter delete`
   - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
@@ -313,18 +322,15 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --matter-contact-id
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
+- `stella matter remove-member`
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Matter member ID (string)
+  - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
-- `stella organization add-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-- `stella organization remove-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-  - optional: --reassign-to
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
-  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
+  - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
@@ -405,7 +411,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 413
+Beyond the curated commands above, the CLI generates 417
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

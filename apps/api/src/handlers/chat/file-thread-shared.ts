@@ -10,6 +10,7 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   estimateChatContextPromptTokens,
   estimateChatRevisionNoteTokens,
@@ -42,6 +43,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -238,13 +240,14 @@ export const loadResolvedThreadMessagePage = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: await readManagedModelTierOnTx(tx, organizationId),
   });
   const context: ThreadContextUsage | null = hasContext
     ? computeThreadContextUsage({
         messages: windowedMessages.map((message) => ({
           id: message.id,
           role: message.role,
-          parts: message.content.data,
+          parts: chatMessageFromPersisted(message).parts,
         })),
         conversationContextTokens:
           estimateChatRevisionNoteTokens(revisionChanges),

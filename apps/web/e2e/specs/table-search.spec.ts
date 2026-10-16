@@ -22,12 +22,14 @@ test.describe("find in table", () => {
     workspace = await createTestWorkspace(request, "table-search");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
@@ -420,6 +422,18 @@ test.describe("find in table", () => {
     await expect(body).toHaveAttribute(
       "data-bubbled-find-presses",
       "prevented,untouched",
+    );
+
+    const searchDialog = page.getByRole("dialog");
+    await expect(searchDialog.getByRole("combobox").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(searchDialog).toBeHidden();
+
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox")).toBeFocused();
+    await expect(body).toHaveAttribute(
+      "data-bubbled-find-presses",
+      "prevented,untouched,prevented",
     );
   });
 

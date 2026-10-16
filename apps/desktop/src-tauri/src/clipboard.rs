@@ -1,5 +1,4 @@
 use ammonia::Builder as HtmlSanitizer;
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
@@ -39,21 +38,18 @@ use crate::{
     DesktopTimingReport,
   },
   foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
+  foreground_app_visual::{
+    ClipboardSourceAppVisual, MAX_SOURCE_APP_VISUALS, foreground_app_visual,
+  },
   keychain,
   local_store::StoreKey,
   local_window::ClipboardCaller,
 };
 
-#[cfg(target_os = "macos")]
-use icns::{IconFamily, PixelFormat};
 #[cfg(target_os = "windows")]
 use image::{DynamicImage, ImageDecoder, codecs::bmp::BmpDecoder};
 #[cfg(target_os = "macos")]
-use std::{
-  fs::File,
-  io::BufReader,
-  path::{Component, PathBuf},
-};
+use std::path::PathBuf;
 
 const HISTORY_EVENT: &str = "clipboard-history-changed";
 const HISTORY_LOADING_ERROR: &str = "clipboard history is still loading";
@@ -88,9 +84,6 @@ const RETENTION_SWEEP_INTERVAL: std::time::Duration =
 const MAX_GROUPS: usize = 24;
 const MAX_GROUP_NAME_CHARACTERS: usize = 64;
 const MAX_CAPTURE_EXCLUSIONS: usize = 128;
-const MAX_SOURCE_APP_ICON_DATA_URL_BYTES: usize = 48 * 1024;
-const MAX_SOURCE_APP_VISUALS: usize = 128;
-const SOURCE_APP_ICON_SIZE: u32 = 48;
 const MAX_SOURCE_PAGE_URL_BYTES: usize = 2048;
 /// Chromium browsers put the copying page's URL on the macOS pasteboard under
 /// this type (`ui::kUTTypeChromiumSourceUrl`).
@@ -205,14 +198,6 @@ pub struct ClipboardSourcePage {
   pub host: String,
   pub origin: String,
   pub url: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClipboardSourceAppVisual {
-  pub color: Option<String>,
-  pub icon_data_url: Option<String>,
-  pub key: String,
 }
 
 pub type ClipboardSourceAppExclusion = AppExclusion;
@@ -1263,6 +1248,78 @@ fn text_clipboard_contents(
   Some(contents)
 }
 
+/// Builds one local pasteboard item; source clip identities and history stay intact.
+pub(crate) fn compose_clipboard_items(
+  items: &[ClipboardItem],
+  format: ClipboardCopyFormat,
+) -> Result<ClipboardItem, String> {
+  let first = items.first().ok_or("no clipboard items selected")?;
+  let mut ids = HashSet::new();
+  let mut text_items = Vec::with_capacity(items.len());
+  for item in items {
+    let plain_text = item
+      .plain_text()
+      .ok_or("clipboard images cannot be combined with other clips")?;
+    if !ids.insert(item.id()) {
+      return Err("clipboard selection contains duplicate items".to_string());
+    }
+    text_items.push((plain_text, item.html()));
+  }
+  if items.len() == 1 {
+    return Ok(first.clone());
+  }
+  let plain_text = text_items
+    .iter()
+    .map(|(plain_text, _)| *plain_text)
+    .collect::<Vec<_>>()
+    .join("\n");
+  if format == ClipboardCopyFormat::Original
+    && text_items.iter().any(|(_, html)| html.is_some())
+  {
+    let html = text_items
+      .iter()
+      .map(|(plain_text, html)| {
+        html.map(str::to_string).unwrap_or_else(|| {
+          // Text becomes markup only at this boundary; escape before adding breaks.
+          plain_text
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\n', "<br>")
+        })
+      })
+      .collect::<Vec<_>>()
+      .join("<br>");
+    return Ok(ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      html,
+      id: String::new(),
+      name: None,
+      plain_text,
+      retention_class: ClipboardItemRetentionClass::History,
+      // RTF documents cannot be concatenated; HTML carries combined formatting.
+      rtf: None,
+      source_app: None,
+    });
+  }
+  Ok(ClipboardItem::Text {
+    copied_at: Utc::now(),
+    group_id: None,
+    grouped_at: None,
+    id: String::new(),
+    name: None,
+    plain_text,
+    retention_class: ClipboardItemRetentionClass::History,
+    source_app: None,
+  })
+}
+
 impl ClipboardManager {
   pub fn new() -> Self {
     Self {
@@ -1715,6 +1772,25 @@ impl ClipboardManager {
     prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
+  }
+
+  pub fn compose_items(
+    &self,
+    ids: &[String],
+    format: ClipboardCopyFormat,
+  ) -> Result<ClipboardItem, String> {
+    if ids.len() > self.items.len() {
+      return Err("clipboard selection is invalid".to_string());
+    }
+    let items = ids
+      .iter()
+      .map(|id| {
+        self
+          .item(id)
+          .ok_or_else(|| "clipboard item no longer exists".to_string())
+      })
+      .collect::<Result<Vec<_>, _>>()?;
+    compose_clipboard_items(&items, format)
   }
 
   pub fn item(&self, id: &str) -> Option<ClipboardItem> {
@@ -2860,138 +2936,15 @@ fn windows_clipboard_history_allows_capture(
     .is_ok_and(|value| windows_history_control_allows_capture(&value))
 }
 
-fn dominant_icon_color(icon: &image::RgbaImage) -> Option<String> {
-  let mut buckets = HashMap::<(u8, u8, u8), (u64, u64, u64, u64)>::new();
-  for pixel in icon.pixels() {
-    let [red, green, blue, alpha] = pixel.0;
-    if alpha < 48 {
-      continue;
-    }
-    let maximum = red.max(green).max(blue);
-    let minimum = red.min(green).min(blue);
-    let chroma = maximum - minimum;
-    let weight = u64::from(alpha) * u64::from(chroma.saturating_add(24));
-    let bucket = (red / 32, green / 32, blue / 32);
-    let entry = buckets.entry(bucket).or_default();
-    entry.0 += weight;
-    entry.1 += u64::from(red) * weight;
-    entry.2 += u64::from(green) * weight;
-    entry.3 += u64::from(blue) * weight;
-  }
-  let (_, (weight, red, green, blue)) =
-    buckets.into_iter().max_by_key(|(_, values)| values.0)?;
-  if weight == 0 {
-    return None;
-  }
-  Some(format!(
-    "#{:02x}{:02x}{:02x}",
-    red / weight,
-    green / weight,
-    blue / weight
-  ))
-}
-
-fn source_app_visual(icon: image::RgbaImage) -> (Option<String>, Option<String>) {
-  let icon = image::DynamicImage::ImageRgba8(icon)
-    .thumbnail(SOURCE_APP_ICON_SIZE, SOURCE_APP_ICON_SIZE)
-    .to_rgba8();
-  let color = dominant_icon_color(&icon);
-  let mut png = Cursor::new(Vec::new());
-  let icon_data_url = image::DynamicImage::ImageRgba8(icon)
-    .write_to(&mut png, image::ImageFormat::Png)
-    .ok()
-    .and_then(|()| {
-      let value = format!(
-        "data:image/png;base64,{}",
-        STANDARD.encode(png.into_inner())
-      );
-      (value.len() <= MAX_SOURCE_APP_ICON_DATA_URL_BYTES).then_some(value)
-    });
-  (icon_data_url, color)
-}
-
 struct ClipboardSourceCapture {
   app: ClipboardSourceApp,
   visual: Option<ClipboardSourceAppVisual>,
 }
 
-fn source_app_visual_metadata(
-  key: String,
-  (icon_data_url, color): (Option<String>, Option<String>),
-) -> Option<ClipboardSourceAppVisual> {
-  if icon_data_url.is_none() && color.is_none() {
-    return None;
-  }
-  Some(ClipboardSourceAppVisual {
-    color,
-    icon_data_url,
-    key,
-  })
-}
-
-#[cfg(target_os = "macos")]
-fn macos_bundle_icon_path(bundle_path: &Path) -> Option<PathBuf> {
-  let info = plist::Value::from_file(bundle_path.join("Contents/Info.plist")).ok()?;
-  let icon_name = info.as_dictionary()?.get("CFBundleIconFile")?.as_string()?;
-  let mut components = Path::new(icon_name).components();
-  let Component::Normal(file_name) = components.next()? else {
-    return None;
-  };
-  if components.next().is_some() {
-    return None;
-  }
-  let mut icon_path = bundle_path.join("Contents/Resources").join(file_name);
-  if icon_path.extension().is_none() {
-    icon_path.set_extension("icns");
-  }
-  icon_path.is_file().then_some(icon_path)
-}
-
-#[cfg(target_os = "macos")]
-fn macos_source_app_icon(bundle_path: &Path) -> Option<image::RgbaImage> {
-  let icon_path = macos_bundle_icon_path(bundle_path)?;
-  let family = IconFamily::read(BufReader::new(File::open(icon_path).ok()?)).ok()?;
-  let mut icon_types = family.available_icons();
-  icon_types.sort_by_key(|icon_type| {
-    let width = icon_type.pixel_width();
-    (
-      width < SOURCE_APP_ICON_SIZE,
-      width.abs_diff(SOURCE_APP_ICON_SIZE),
-    )
-  });
-  icon_types.into_iter().find_map(|icon_type| {
-    let icon = family.get_icon_with_type(icon_type).ok()?;
-    let icon = icon.convert_to(PixelFormat::RGBA);
-    image::RgbaImage::from_raw(icon.width(), icon.height(), icon.into_data().into_vec())
-  })
-}
-
 /// The foreground app as a clipboard source, with its icon and accent.
 fn frontmost_source_app(app: &AppHandle) -> Option<ClipboardSourceCapture> {
   let foreground = crate::foreground_app::current(app)?;
-  let key = foreground
-    .identifier
-    .clone()
-    .unwrap_or_else(|| foreground.name.clone());
-  #[cfg(target_os = "macos")]
-  let visual = foreground
-    .bundle_path
-    .as_deref()
-    .and_then(|bundle_path| macos_source_app_icon(Path::new(bundle_path)))
-    .map(source_app_visual)
-    .and_then(|visual| source_app_visual_metadata(key, visual));
-  #[cfg(target_os = "windows")]
-  let visual = source_app_visual_metadata(
-    key,
-    windows_icons::get_icon_by_process_id(foreground.process_id)
-      .ok()
-      .map_or((None, None), source_app_visual),
-  );
-  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-  let visual = {
-    let _ = key;
-    None
-  };
+  let visual = foreground_app_visual(&foreground);
   Some(ClipboardSourceCapture {
     app: ClipboardSourceApp {
       identifier: foreground.identifier,
@@ -4492,19 +4445,92 @@ mod tests {
   }
 
   #[test]
-  fn source_app_visual_uses_the_icon_color_and_a_bounded_png() {
-    let icon = image::RgbaImage::from_pixel(
-      SOURCE_APP_ICON_SIZE,
-      SOURCE_APP_ICON_SIZE,
-      image::Rgba([30, 120, 220, 255]),
+  fn multi_copy_preserves_selection_order_and_escapes_plain_text_in_html() {
+    let plain = text_item(Utc::now(), "<A> & \"quoted\"\r\nnext");
+    let rich = ClipboardItem::FormattedText {
+      copied_at: Utc::now(),
+      group_id: None,
+      grouped_at: None,
+      html: "<strong>Clause</strong>".to_string(),
+      id: "rich".to_string(),
+      name: None,
+      plain_text: "Clause".to_string(),
+      retention_class: ClipboardItemRetentionClass::History,
+      rtf: Some("{\\rtf1 Clause}".to_string()),
+      source_app: None,
+    };
+    let items = vec![rich.clone(), plain, text_item(Utc::now(), "last")];
+    let original =
+      compose_clipboard_items(&items, ClipboardCopyFormat::Original).unwrap();
+    assert_eq!(
+      original.plain_text(),
+      Some("Clause\n<A> & \"quoted\"\r\nnext\nlast")
     );
+    assert_eq!(
+      original.html(),
+      Some(
+        "<strong>Clause</strong><br>&lt;A&gt; &amp; &quot;quoted&quot;<br>next<br>last"
+      )
+    );
+    assert_eq!(original.rtf(), None);
+    let plain =
+      compose_clipboard_items(&items, ClipboardCopyFormat::PlainText).unwrap();
+    assert_eq!(plain.plain_text(), original.plain_text());
+    assert_eq!(plain.html(), None);
+    assert_eq!(plain.rtf(), None);
+    assert_eq!(
+      compose_clipboard_items(
+        std::slice::from_ref(&rich),
+        ClipboardCopyFormat::Original
+      )
+      .unwrap(),
+      rich
+    );
+  }
 
-    let (icon_data_url, color) = source_app_visual(icon);
+  #[test]
+  fn multi_copy_rejects_empty_duplicate_missing_and_image_selections() {
+    let item = text_item(Utc::now(), "text");
+    assert_eq!(
+      compose_clipboard_items(&[], ClipboardCopyFormat::Original),
+      Err("no clipboard items selected".to_string())
+    );
+    assert_eq!(
+      compose_clipboard_items(
+        &[item.clone(), item.clone()],
+        ClipboardCopyFormat::Original
+      ),
+      Err("clipboard selection contains duplicate items".to_string())
+    );
+    let image = image_item("image", "blob", "checksum", 10);
+    assert_eq!(
+      compose_clipboard_items(&[item.clone(), image], ClipboardCopyFormat::Original),
+      Err("clipboard images cannot be combined with other clips".to_string())
+    );
+    let mut manager = ready_manager();
+    manager.items.push(item);
+    assert_eq!(
+      manager.compose_items(&["missing".to_string()], ClipboardCopyFormat::Original),
+      Err("clipboard item no longer exists".to_string())
+    );
+  }
 
-    assert_eq!(color.as_deref(), Some("#1e78dc"));
-    let icon_data_url = icon_data_url.unwrap();
-    assert!(icon_data_url.starts_with("data:image/png;base64,"));
-    assert!(icon_data_url.len() <= MAX_SOURCE_APP_ICON_DATA_URL_BYTES);
+  #[test]
+  fn multi_copy_plain_clips_keep_unicode_and_newlines_without_rich_formats() {
+    let items = vec![
+      text_item(Utc::now(), "Žluťoučký\n第一"),
+      text_item(Utc::now(), ""),
+      text_item(Utc::now(), "آخر"),
+    ];
+    for format in [
+      ClipboardCopyFormat::Original,
+      ClipboardCopyFormat::PlainText,
+    ] {
+      let combined = compose_clipboard_items(&items, format).unwrap();
+      assert_eq!(combined.plain_text(), Some("Žluťoučký\n第一\n\nآخر"));
+      assert_eq!(combined.html(), None);
+      assert_eq!(combined.rtf(), None);
+    }
   }
 
   #[test]

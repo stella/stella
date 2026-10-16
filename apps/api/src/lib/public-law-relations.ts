@@ -7,6 +7,7 @@
  * from this map, so adding a field requires one explicit public-data decision.
  */
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
+  caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
@@ -15,6 +16,8 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawDecisionCitationStats: "case_law_decision_citation_stats",
+  caseLawDecisionCitationStatsState: "case_law_decision_citation_stats_state",
   caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
@@ -57,6 +60,41 @@ export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
 
+/**
+ * Expansion release: tolerate these future public census grants without
+ * requiring the relation or reading it. Deploy this declaration before the
+ * follow-up migration grants the columns and its readers require them.
+ */
+export const CENSUS_COLUMN_GRANTS_BY_RELATION = {
+  case_law_completeness_census: {
+    source_id: "permitted",
+    slice: "permitted",
+    year: "permitted",
+    outcome: "permitted",
+    scope_status: "permitted",
+    publisher_count: "permitted",
+    stored_count: "permitted",
+    text_count: "permitted",
+    observed_at: "permitted",
+    expected_slices: "permitted",
+    evidence_ref: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+  },
+  case_law_citation_doctrine_reviews: {
+    citing_decision_id: "permitted",
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+    evidence_quote: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
 /** Columns the provision link status capability requires after its grants land. */
@@ -87,6 +125,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   case_law_provision_extractions: {
     decision_id: PROVISION_LINK_STATUS_GRANT,
     desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    pending_since: PROVISION_LINK_STATUS_GRANT,
     work_status: PROVISION_LINK_STATUS_GRANT,
     generation: PROVISION_LINK_STATUS_GRANT,
     outcome: PROVISION_LINK_STATUS_GRANT,
@@ -121,7 +160,11 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * the two steps are apart.
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+  case_law_citation_doctrine_reviews:
+    DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
+    ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",
@@ -173,6 +216,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     name_key: "permitted",
     role: "required",
     position: "required",
+  },
+  case_law_decision_citation_stats: {
+    decision_id: "permitted",
+    direction: "permitted",
+    related_year: "permitted",
+    related_country: "permitted",
+    related_source_id: "permitted",
+    polarity: "permitted",
+    count: "permitted",
+  },
+  case_law_decision_citation_stats_state: {
+    decision_id: "permitted",
+    status: "permitted",
   },
   case_law_decisions: {
     id: "required",

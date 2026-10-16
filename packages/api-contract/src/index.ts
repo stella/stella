@@ -59,6 +59,8 @@ export type {
 } from "./browser-control";
 export {
   BILLING_STATUS,
+  DEFAULT_INVOICE_DUE_DAYS,
+  INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
   INVOICE_LINE_SOURCE,
   INVOICE_LINE_SOURCES,
@@ -139,10 +141,13 @@ export {
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
+  stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,
 } from "./chat-decision-passage-link";
 export type {
+  ChatDecisionPassage,
   ChatDecisionPassageHref,
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
@@ -302,6 +307,7 @@ export type {
 export {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
@@ -313,6 +319,7 @@ export {
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "./error";
 export type {
   ApiErrorInput,
@@ -321,7 +328,9 @@ export type {
   ApiFileSecurityIssue,
   ApiFileSecurityRejection,
   ApiFileSecurityRejectionDetails,
+  ApiValidationConstraint,
   ApiValidationErrorValue,
+  ApiValidationIssue,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -357,6 +366,7 @@ export type {
 } from "./flow-status";
 export {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,

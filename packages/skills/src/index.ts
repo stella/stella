@@ -8,8 +8,14 @@ export {
   readExcludedChatTools,
   readSkillDisplayName,
   SKILL_DISPLAY_NAME_METADATA_KEY,
+  SKILL_INVOCATION_METADATA_KEY,
+  SKILL_INVOCATIONS,
 } from "./frontmatter";
-export type { SkillMetadata } from "./frontmatter";
+export type {
+  ParsedSkillMetadata,
+  SkillInvocation,
+  SkillMetadata,
+} from "./frontmatter";
 export {
   isAllowedResourcePath,
   listSkillMetadata,
@@ -18,7 +24,7 @@ export {
   normalizeResourcePath,
   readSkillResource,
 } from "./loader";
-export type { SkillResource, StellaSkill } from "./loader";
+export type { BuiltInSkillId, SkillResource, StellaSkill } from "./loader";
 export {
   hashSkillEntrypoint,
   hashSkillPackage,

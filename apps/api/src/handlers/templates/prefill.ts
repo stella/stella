@@ -71,7 +71,8 @@ const prefillBodySchema = t.Object({
 
 // strictObject + nullable-required members: OpenAI strict structured output
 // rejects plain objects and optional properties.
-const prefillOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const prefillOutputSchema = v.strictObject({
   fields: v.array(
     v.strictObject({
       id: v.string(),
@@ -429,27 +430,28 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     return Result.ok({ fields: [] });
   }
 
-  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "customer",
-    usageMetering: {
-      actionType: "chat",
-      organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId: user.id,
-      workspaceId: null,
-    },
-    feature: "templates.prefill",
-    modelRole: "fast",
-    orgAIConfig,
-    properties: { organization_id: organizationId },
-    traceId: Bun.randomUUIDv7(),
-  });
-
   return yield* admitFiniteAction({
     actionKind: "templates.prefill",
     ctx,
     async *handler({ modelAdmission }) {
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: null,
+        },
+        feature: "templates.prefill",
+        modelRole: "fast",
+        orgAIConfig,
+        modelTier: modelAdmission.modelTier,
+        properties: { organization_id: organizationId },
+        traceId: Bun.randomUUIDv7(),
+      });
+
       const fields = yield* Result.await(
         Result.tryPromise({
           try: async () =>

@@ -13,7 +13,8 @@ const TRANSLATION_ROLE = "chat" as const;
 const SERVICE_TIER = "standard" as const;
 const CALL_TIMEOUT_MS = 90_000;
 
-const translationSchema = v.object({
+/** Read by the structured-output role contract test. @public */
+export const translationSchema = v.object({
   items: v.array(
     v.object({
       id: v.string(),
@@ -56,6 +57,7 @@ export const translateTaggedSegments = async ({
     feature: "document_translation.translate",
     modelRole: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
+    modelTier: context.admission.modelTier,
     properties: {
       organization_id: context.organizationId,
       workspace_id: context.workspaceId,

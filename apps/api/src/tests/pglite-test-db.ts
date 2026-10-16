@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { getTableName, sql } from "drizzle-orm";
-import type { SQLWrapper } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -10,7 +10,10 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  CENSUS_COLUMN_GRANTS_BY_RELATION,
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -21,8 +24,11 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteAccountAuditRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
+  installPgliteCitationDoctrineRls,
+  installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
@@ -41,6 +47,7 @@ import {
   installPgliteEntityFeatureGateMaintenance,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
+  installPgliteDecisionCitationStats,
   installPgliteTimeEntryTimerSignals,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
@@ -284,7 +291,23 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set(["case_law_decisions.docket_family_key"]);
+  new Set([
+    "case_law_decisions.docket_family_key",
+    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
+  ]);
+
+const grantedPublicLawColumns = (
+  relation: string,
+  columns: Readonly<Record<string, unknown>>,
+) =>
+  Object.keys(columns).filter(
+    (column) =>
+      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+        `${relation}.${column}`,
+      ),
+  );
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
@@ -340,8 +363,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
+  `,
+  // Redaction erases the doctrine evidence quoted from the citing decision.
+  `
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -393,7 +421,9 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_citation_resolution_census_runs",
       "case_law_citation_resolution_progress",
       "case_law_raw_sweeps",
-      "case_law_citation_authority_sweep"
+      "case_law_citation_authority_sweep",
+      "case_law_decision_citation_stats",
+      "case_law_decision_citation_stats_state"
     TO stella_ingestion
   `,
   `
@@ -538,17 +568,15 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+      ([relation, columns]) =>
+        relation !== getTableName(schema.caseLawDecisionAliases) &&
+        relation !== getTableName(schema.caseLawDecisionCitationStats) &&
+        relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
+        grantedPublicLawColumns(relation, columns).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns)
-        .filter(
-          (column) =>
-            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-              `${relation}.${column}`,
-            ),
-        )
+      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -679,6 +707,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
+  await installPgliteDecisionCitationStats(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
@@ -690,8 +719,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteCitationDoctrineRls(db);
+  await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 
@@ -727,4 +759,21 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
     extensions: { pg_trgm },
     loadDataDir: Bun.file(snapshotPath),
   });
+};
+
+/** Simulate the later grant release only in suites exercising exact reads. */
+export const grantPgliteDecisionCitationStatsReader = async (db: {
+  execute: (query: SQL) => PromiseLike<unknown>;
+}) => {
+  for (const table of [
+    schema.caseLawDecisionCitationStats,
+    schema.caseLawDecisionCitationStatsState,
+  ] as const) {
+    const relation = getTableName(table);
+    const columns = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[relation]);
+    await db.execute(
+      sql.raw(`GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+      ON TABLE ${quoteSqlIdentifier(relation)} TO stella_public_law_reader`),
+    );
+  }
 };

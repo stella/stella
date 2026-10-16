@@ -3,10 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
@@ -16,6 +19,7 @@ import {
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { professionalUseOptions } from "@/lib/auth-queries";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -232,6 +236,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries/catalogue.ts"],
     keys: () => [catalogueOptions(ORG, USER).queryKey],
   },
+  "chat/link-icons/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public site icons are shared by hostname; the caller is used only for miss admission.",
+  },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },
@@ -293,6 +302,17 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [chatUnavailableSkillsOptions(ORG, USER).queryKey],
   },
+  "chat/decision-threads/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat["decision-threads"]().get'],
+    files: ["features/chat/queries.ts"],
+    keys: () => [
+      chatKeys.decisionThread(ORG, { decisionId: "decision", userId: USER }),
+    ],
+    opaqueKeys: {
+      "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
+  },
   "chat/threads/list.ts": {
     kind: "keyed",
     calls: ["api.chat.threads.get"],
@@ -351,6 +371,18 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
+  "legal-reader/answers/list.ts": {
+    kind: "keyed",
+    calls: ["api.reader.answers.get"],
+    files: ["features/case-law/components/case-viewer/reader-answers-query.ts"],
+    keys: () => [
+      readerAnswersOptions({
+        organizationId: ORG,
+        userId: USER,
+        decisionId: "decision",
+      }).queryKey,
+    ],
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -404,6 +436,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api.me["oauth-connections"].get'],
     files: ["routes/_protected.settings/-queries/connections.ts"],
     keys: () => [connectedAppsOptions(USER).queryKey],
+  },
+  "me/professional-use.ts": {
+    kind: "keyed",
+    calls: ['api.me["professional-use"].get'],
+    files: ["lib/auth-queries.ts"],
+    keys: () => [professionalUseOptions(USER).queryKey],
   },
   "me/pending-tasks.ts": {
     kind: "keyed",
@@ -777,7 +815,7 @@ const readHandlers = () => {
     }
   }
   for (const path of listFiles(API_HANDLERS)) {
-    const handler = nodePath.relative(API_HANDLERS, path);
+    const handler = repoRelativePath(API_HANDLERS, path);
     if (READ_HANDLER_NAME.test(`/${handler}`)) {
       reads.add(handler);
     }
@@ -993,7 +1031,7 @@ const webCallers = () => {
       if (chains.some((chain) => chain.startsWith(`${call}()`))) {
         callers.set(call, [
           ...(callers.get(call) ?? []),
-          nodePath.relative(WEB_SOURCE, path),
+          repoRelativePath(WEB_SOURCE, path),
         ]);
       }
     }

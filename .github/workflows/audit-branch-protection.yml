@@ -6,7 +6,9 @@ defaults:
 
 on:
   schedule:
-    - cron: "0 8 * * 1" # Monday 08:00 UTC
+    # Daily: settings changed through the API must not drift from the
+    # checked-in rulesets for long, since the next sync would revert them.
+    - cron: "0 8 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -26,7 +28,7 @@ jobs:
   audit-branch:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8
     with:
       expected-config-path: .github/branch-protection/ruleset-main.json
     secrets:
@@ -36,7 +38,7 @@ jobs:
   audit-tag:
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/audit-branch-protection.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+    uses: stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8
     with:
       expected-config-path: .github/branch-protection/tags-v.json
     secrets:

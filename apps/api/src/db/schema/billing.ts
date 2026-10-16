@@ -8,6 +8,10 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
+import {
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatchResponse,
+} from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
@@ -627,6 +631,9 @@ export const sellerProfiles = p.pgTable(
     legalName: p.varchar("legal_name", { length: 512 }).notNull(),
     registrationId: p.varchar("registration_id", { length: 64 }),
     vatId: p.varchar("vat_id", { length: 64 }),
+    // Whether the issuer charges VAT. A VAT ID alone does not decide it: a
+    // registered person who is not a payer has one and must not charge VAT.
+    vatPayer: p.boolean("vat_payer").notNull().default(false),
     addressLine1: p.varchar("address_line_1", { length: 512 }),
     addressLine2: p.varchar("address_line_2", { length: 512 }),
     city: p.varchar({ length: 256 }),
@@ -658,6 +665,10 @@ export const sellerProfiles = p.pgTable(
     p.check(
       "seller_profiles_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    p.check(
+      "seller_profiles_vat_payer_check",
+      sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
     ...orgPolicies(),
   ],
@@ -1271,5 +1282,48 @@ export const timeEntryTimerStates = p.pgTable(
       using: TIMER_SIGNAL_WRITER_CHECK,
       withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
     }),
+  ],
+);
+
+// Receipts survive edits or deletion of individual drafts so a network retry
+// cannot recreate a reviewed batch. Only the authenticated owner can read it.
+export const desktopTimeEntryBatches = p.pgTable(
+  "desktop_time_entry_batches",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p.varchar("request_fingerprint", { length: 64 }),
+    status: p
+      .text({ enum: DESKTOP_TIME_ENTRY_BATCH_STATUSES })
+      .notNull()
+      .default(DESKTOP_TIME_ENTRY_BATCH_STATUSES[0]),
+    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_time_entry_batches_pkey",
+      columns: [table.organizationId, table.userId, table.idempotencyKey],
+    }),
+    p.check(
+      "desktop_time_entry_batches_key_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_status_check",
+      sql`(${table.status} = 'committed' AND ${table.requestFingerprint} IS NOT NULL AND ${table.result} IS NOT NULL) OR (${table.status} = 'cancelled' AND ${table.requestFingerprint} IS NULL AND ${table.result} IS NULL)`,
+    ),
+    ...userOrganizationPolicies(),
+    ...reviewResetOwnerPolicies("desktop_time_entry_batches"),
   ],
 );

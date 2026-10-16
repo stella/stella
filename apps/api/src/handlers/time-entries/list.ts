@@ -11,12 +11,12 @@ import {
   timeEntryContextColumns,
   timeEntryReadColumns,
 } from "@/api/handlers/time-entries/time-entry-columns";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
-} from "@/api/handlers/time-entries/timekeeper-names";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
+} from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,

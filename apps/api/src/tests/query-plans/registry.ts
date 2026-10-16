@@ -11,6 +11,9 @@ import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/ci
 import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
+  decisionCitationStatsStateQuery,
+  exactDecisionCitationSummaryQuery,
+  EXACT_CITATION_SUMMARY_MAX_ROWS,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
@@ -41,6 +44,7 @@ import {
   decisionPageSql,
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
@@ -377,10 +381,13 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "incoming",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -392,10 +399,13 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       decisionCitationPageQuery({
+        // The public reader holds no doctrine grants in this release.
+        doctrineAvailable: false,
         cursorId: undefined,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
         direction: "outgoing",
         limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }),
     seed: "case-law",
@@ -409,11 +419,39 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).summary,
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.citation-summary"],
+  },
+  {
+    id: "case-law.citation-summary-state",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationStatsStateQuery({
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-state"],
+  },
+  {
+    id: "case-law.citation-summary-exact",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      exactDecisionCitationSummaryQuery({
+        limit: EXACT_CITATION_SUMMARY_MAX_ROWS + 1,
+        currentYear: 2026,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-exact"],
   },
   {
     id: "case-law.top-citing-decisions",
@@ -423,6 +461,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationSummaryQuery({
         currentYear: 2026,
         decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).topCiting(CITATION_DIGEST_TOP_CITING),
     seed: "case-law",
@@ -562,6 +601,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtActivity]: {
     type: "excluded",
     reason: "Court activity has a date-window-dependent aggregate shape.",
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount]: {
+    type: "excluded",
+    reason:
+      "Court count is a cached aggregate over the public-corpus court index.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtWeights]: {
     type: "excluded",

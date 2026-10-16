@@ -44,6 +44,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 
 /** JSON columns read and found to hold no user or member id. */
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
+  "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
   "chat_message_revisions.edit",
   "agent_skills.metadata",
@@ -92,6 +93,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "correspondence_filers.filed_by_display",
   "database_backfill_states.batch",
   "desktop_edit_handoffs.linked_account",
+  "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
   "document_review_parties.parties",
@@ -128,6 +130,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  "legal_lists.sample_case",
+  "legal_reader_answer_messages.citations",
+  "legal_reader_answer_messages.usage",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -191,6 +196,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "desktop_time_entry_batches.user_id":
+    "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
+  "account_audit_logs.user_id":
+    "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":
@@ -215,6 +224,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_professional_use_acceptances.accepted_by_user_id":
+    "Acceptance record of who created the organization; grants no membership.",
+  "user_professional_use_acceptances.user_id":
+    "Account-scoped acceptance record; organization removal does not erase the user account.",
   "agent_skill_comments.author_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "agent_skill_comments.resolved_by":
@@ -334,6 +347,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "legal_reader_answers.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "matter_inbound_addresses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -644,6 +659,27 @@ const census = {
 };
 
 describe("member removal schema coverage", () => {
+  test("chat repair receipts retain only organization-owned metadata on member removal", () => {
+    // Repair history belongs to the organization, contains no member data,
+    // and is erased by its organization FK rather than member offboarding.
+    const receipt = schemaCensus().find(
+      (table) => table.name === "chat_content_v3_backfill_receipts",
+    );
+    expect(receipt).toBeDefined();
+    expect(receipt?.memberForeignKeyColumns).toEqual([]);
+    expect(receipt?.columns.map((column) => column.name).toSorted()).toEqual([
+      "from_version",
+      "message_id",
+      "organization_id",
+      "outcome",
+      "reason",
+      "recorded_at",
+      "row_id",
+      "source",
+    ]);
+    expect(receipt?.columns.some((column) => column.json)).toBe(false);
+  });
+
   test("every column naming a member has a disposition on both removal paths", () => {
     expect(memberReferenceGaps({ ...census, tables: schemaCensus() })).toEqual(
       [],

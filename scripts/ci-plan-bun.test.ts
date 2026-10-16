@@ -51,18 +51,24 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
   }
   for (const step of candidate.steps) {
     const runs = enabled(step.if);
-    if (
-      runs &&
-      step.uses?.startsWith("stella/.github/actions/setup-bun-cached@")
-    ) {
+    if (runs && step.uses?.startsWith("oven-sh/setup-bun@")) {
       setups++;
     }
-    if (runs && /\bbun\b/u.test(step.run ?? "")) {
+    if (
+      runs &&
+      (/\bbun\b/u.test(step.run ?? "") ||
+        step.uses === "$/.github/actions/ci-install" ||
+        step.uses === "./.github/actions/ci-install")
+    ) {
       consumers++;
       expect(setups, `Bun setup count before ${step.name}`).toBe(1);
     }
     if (step.id) {
       values[`steps.${step.id}.outcome`] = runs ? "success" : "skipped";
+    }
+    // The generated-source gate step only echoes required=true when it runs.
+    if (step.id === "generated-plan") {
+      values["steps.generated-plan.outputs.required"] = runs ? "true" : "";
     }
   }
   expect(setups, "Bun setup count at job completion").toBe(
@@ -103,7 +109,11 @@ const axes = [
   ["github.token", ["", "fixture-token"]],
   ["steps.pilot.outputs.coverage_profile", ["normal-v1", "pilot-fast-v1"]],
   ["steps.changed-files.outputs.package_checks_required", ["false", "true"]],
+  // Read by the generated-source gate step.
+  ["steps.completed-depth.outputs.pr_depth_reused", ["", "true"]],
+  ["steps.pilot-plan.outputs.fast_jobs", ["", '["ci-checks-generated"]']],
   ["steps.changed-files.outputs.api_scope_unknown", ["false", "true"]],
+  ["steps.changed-files.outputs.legal_atlas_image_required", ["true"]],
 ] as const satisfies readonly (readonly [
   string,
   readonly (string | boolean)[],
@@ -182,7 +192,7 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
 
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
-    step.uses?.startsWith("stella/.github/actions/setup-bun-cached@");
+    step.uses?.startsWith("oven-sh/setup-bun@");
   expect(plan.steps.filter(setup)).toHaveLength(1);
   const duplicate = {
     ...plan,

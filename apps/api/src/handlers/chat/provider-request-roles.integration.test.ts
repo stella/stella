@@ -9,12 +9,13 @@ import type { ModelRole } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TOOL_POLICY_KIND } from "@stll/api-contract";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
+import { repoRelativePath } from "@stll/portable-path";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   compactChatMessagesForModel,
   compactModelMessagesForModel,
@@ -37,7 +38,6 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isChatModelReasoningEffortAvailable } from "@/api/lib/chat-model-selection";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -49,18 +49,19 @@ import {
   NO_DB,
   createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
-import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   CACHING_SETTINGS,
   endpointKey,
   enumerateEndpoints,
-  EFFORT_CHOICES,
   modelOf,
   SEND_MODES,
 } from "@/api/tests/helpers/provider-request-matrix";
 import type {
   CachingSetting,
-  EffortChoice,
   ModelEndpoint,
   SendMode,
 } from "@/api/tests/helpers/provider-request-matrix";
@@ -98,10 +99,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   a union: a source scan fails when a file calls a model helper and is
 //   neither listed here nor named as outside the chat surface.
 // - Every combination of builder, provider and model, caching setting (where
-//   the builder takes one), reasoning effort (where it takes one and the
-//   model offers it) and send mode (where it crosses the third-party
-//   boundary) is enumerated, and every one runs (a few seconds in
-//   all).
+//   the builder takes one) and send mode (where it crosses the third-party
+//   boundary) is enumerated, and every one runs (a few seconds in all). No
+//   builder here takes the thread's reasoning effort.
 // - Every request those builders send holds to the provider's published
 //   request schema and documented rules.
 //
@@ -154,7 +154,6 @@ const safeDbOf = (): SafeDb =>
 /** What one run of a builder is handed. */
 type RoleRun = {
   caching: boolean;
-  effort: EffortChoice;
   orgAIConfig: OrgAIConfig;
   sendMode: SendMode;
 };
@@ -217,9 +216,8 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   });
   await testDb.insert(chatMessages).values(
     TRANSCRIPT.map((text, index) => ({
-      content: toChatMessageContent({
+      content: toPersistedChatMessageContentV3({
         data: [{ content: text, type: "text" }],
-        version: 2,
       }),
       createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -230,9 +228,6 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   );
   return threadId;
 };
-
-const effortOf = (effort: EffortChoice) =>
-  effort === "default" ? undefined : effort;
 
 const noAudit = async () => await Promise.resolve();
 
@@ -257,7 +252,7 @@ const ROLE_REQUESTS = {
   "thread-title": {
     file: "handlers/chat/generate-thread-title.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       const threadId = await seedThread();
       const [first, second] = chatMessagesOf(TRANSCRIPT);
@@ -273,6 +268,7 @@ const ROLE_REQUESTS = {
         promptCachingEnabled: run.caching,
         recordAuditEvent: noAudit,
         safeDb: safeDbOf(),
+        organizationStateDb: testOrganizationStateDb,
         threadId,
         threadWorkspaceId: null,
         userId: ids.userA1,
@@ -282,7 +278,7 @@ const ROLE_REQUESTS = {
   "suggested-title": {
     file: "handlers/chat/suggest-thread-title.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       const handler = createSuggestThreadTitle();
       await handler.handler(
@@ -298,7 +294,7 @@ const ROLE_REQUESTS = {
   "follow-up-suggestions": {
     file: "handlers/chat/get-suggested-prompts.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       await getSuggestedPrompts.handler(
         asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
@@ -313,7 +309,7 @@ const ROLE_REQUESTS = {
   "thread-recap": {
     file: "handlers/chat/thread-recap.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       await generateThreadRecapText({
         messages: chatMessagesOf(TRANSCRIPT),
@@ -330,7 +326,7 @@ const ROLE_REQUESTS = {
   "improve-prompt": {
     file: "handlers/chat/improve-prompt.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: true },
+    settings: { caching: true, sendMode: true },
     run: async (run) => {
       for (const strategy of CHAT_PROMPT_IMPROVEMENT_STRATEGIES) {
         await improvePrompt.handler(
@@ -350,7 +346,7 @@ const ROLE_REQUESTS = {
   "pre-stream-compaction": {
     file: "handlers/chat/compaction.ts",
     role: "chat",
-    settings: { caching: false, effort: true, sendMode: true },
+    settings: { caching: false, sendMode: true },
     run: async (run) => {
       await compactChatMessagesForModel({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -361,7 +357,6 @@ const ROLE_REQUESTS = {
         orgAIConfig: run.orgAIConfig,
         managedAIResidency: "eu" as const,
         preserveTokens: 1,
-        reasoningEffort: effortOf(run.effort),
         tenantWorkspaceIds: [],
         triggerTokens: 1,
       });
@@ -370,7 +365,7 @@ const ROLE_REQUESTS = {
   "step-compaction": {
     file: "handlers/chat/compaction.ts",
     role: "chat",
-    settings: { caching: false, effort: false, sendMode: false },
+    settings: { caching: false, sendMode: false },
     run: async (run) => {
       await compactModelMessagesForModel({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -392,7 +387,7 @@ const ROLE_REQUESTS = {
   "thread-compaction": {
     file: "lib/chat/thread-compaction.ts",
     role: "chat",
-    settings: { caching: false, effort: true, sendMode: false },
+    settings: { caching: false, sendMode: false },
     run: async (run) => {
       await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -402,7 +397,6 @@ const ROLE_REQUESTS = {
         organizationId: ids.orgA,
         admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
-        reasoningEffort: effortOf(run.effort),
         safeDb: safeDbOf(),
         threadId: await seedThread(),
         triggerTokens: 1,
@@ -412,7 +406,7 @@ const ROLE_REQUESTS = {
   subagent: {
     file: "handlers/chat/subagent-runner.ts",
     role: "fast",
-    settings: { caching: false, effort: false, sendMode: true },
+    settings: { caching: false, sendMode: true },
     run: async (run) => {
       await runSubagent({
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
@@ -451,7 +445,7 @@ const ROLE_REQUESTS = {
   "skill-draft": {
     file: "handlers/skills/drafts/generate.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       await generateSkillDraft.handler(
         asTestRaw<Parameters<typeof generateSkillDraft.handler>[0]>(
@@ -465,7 +459,7 @@ const ROLE_REQUESTS = {
   "skill-proposal": {
     file: "handlers/skills/proposals/from-comments/create.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       const { revisionId, skillId } = await seedSkill();
       await createSkillComment.handler(
@@ -491,7 +485,7 @@ const ROLE_REQUESTS = {
   "skill-resource-rewrite": {
     file: "handlers/skills/resources/rewrite.ts",
     role: "fast",
-    settings: { caching: true, effort: false, sendMode: false },
+    settings: { caching: true, sendMode: false },
     run: async (run) => {
       const { skillId } = await seedSkill();
       await createSkillResource.handler(
@@ -518,7 +512,7 @@ const ROLE_REQUESTS = {
     file: string;
     role: ModelRole;
     run: (run: RoleRun) => Promise<void>;
-    settings: { caching: boolean; effort: boolean; sendMode: boolean };
+    settings: { caching: boolean; sendMode: boolean };
   }
 >;
 
@@ -600,7 +594,7 @@ const sourceFilesUnder = (directory: string): string[] =>
     if (!entry.isFile() || !entry.name.endsWith(".ts")) {
       return [];
     }
-    const file = path.relative(
+    const file = repoRelativePath(
       SOURCE_ROOT,
       path.join(entry.parentPath, entry.name),
     );
@@ -611,30 +605,19 @@ const sourceFilesUnder = (directory: string): string[] =>
 
 type RoleCombination = {
   caching: CachingSetting;
-  effort: EffortChoice;
   endpoint: ModelEndpoint;
   request: RoleRequestName;
   sendMode: SendMode;
 };
 
 const roleCombinationKey = (combination: RoleCombination): string =>
-  `${combination.request} on ${endpointKey(combination.endpoint)}; caching ${combination.caching}, effort ${combination.effort}, ${combination.sendMode}`;
+  `${combination.request} on ${endpointKey(combination.endpoint)}; caching ${combination.caching}, ${combination.sendMode}`;
 
 const endpoints = enumerateEndpoints(cassettes);
 
 /** The production predicate that says the product cannot produce
  *  `combination`, if one does. */
 const roleRefusal = (combination: RoleCombination): string | undefined => {
-  if (
-    combination.effort !== "default" &&
-    !isChatModelReasoningEffortAvailable({
-      modelId: modelOf(cassettes, combination.endpoint),
-      provider: combination.endpoint.provider,
-      reasoningEffort: combination.effort,
-    })
-  ) {
-    return "effort: isChatModelReasoningEffortAvailable";
-  }
   if (
     combination.request === "improve-prompt" &&
     combination.sendMode === CHAT_SEND_MODE.anonymized
@@ -653,25 +636,15 @@ const roleCombinations = (() => {
       for (const caching of settings.caching
         ? CACHING_SETTINGS
         : (["off"] as const)) {
-        for (const effort of settings.effort
-          ? EFFORT_CHOICES
-          : (["default"] as const)) {
-          for (const sendMode of settings.sendMode
-            ? SEND_MODES
-            : (["rawOverride"] as const)) {
-            const combination = {
-              caching,
-              effort,
-              endpoint,
-              request,
-              sendMode,
-            };
-            const refused = roleRefusal(combination);
-            if (refused === undefined) {
-              included.push(combination);
-            } else {
-              excluded.push({ combination, predicate: refused });
-            }
+        for (const sendMode of settings.sendMode
+          ? SEND_MODES
+          : (["rawOverride"] as const)) {
+          const combination = { caching, endpoint, request, sendMode };
+          const refused = roleRefusal(combination);
+          if (refused === undefined) {
+            included.push(combination);
+          } else {
+            excluded.push({ combination, predicate: refused });
           }
         }
       }
@@ -705,7 +678,6 @@ const requestsOf = async (
       async () =>
         await ROLE_REQUESTS[combination.request].run({
           caching: combination.caching === "on",
-          effort: combination.effort,
           orgAIConfig,
           sendMode: combination.sendMode,
         }),

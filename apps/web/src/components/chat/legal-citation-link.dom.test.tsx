@@ -3,7 +3,14 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import type { AskUserInput } from "@/components/chat/chat-ui-tools";
+import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import type { api } from "@/lib/api";
+import type { PublicLawData } from "@/lib/public-law-api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+import type { CaseLawDecisionLocator } from "./case-law-open";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/chat",
@@ -44,9 +51,17 @@ const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
 const { SourceChips } = await import("./source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
 const { LegalCitationLink } = await import("./legal-citation-link");
+const { DecisionMainViewAction } =
+  await import("@/features/case-law/components/decision-main-view-action");
+const { registerMainDecisionReader, mainDecisionReaderStore } =
+  await import("@/components/inspector/main-decision-reader");
+const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
+const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
+const { MessageResponseImpl } =
+  await import("@/components/ai-elements/message-response");
 const { useExternalSourceStore } = await import("./external-source-store");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
@@ -65,6 +80,7 @@ afterEach(async () => {
     clients.length = 0;
     useExternalSourceStore.setState({ sourcesByUrl: {} });
     useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    mainDecisionReaderStore.setState({ reader: null });
     globalThis.fetch = idleFetch;
   });
 });
@@ -76,7 +92,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderChat = async (
@@ -192,6 +208,138 @@ const fullDecision = {
 const quotedPassage = "The court preserves the remedy.";
 const decisionReference = "Nejvyšší soud, 26 Cdo 4249/2016, Jan 12, 2017";
 
+const canonicalDecision = {
+  ...fullDecision,
+  ecli: "ECLI:CZ:NS:2017:26.CDO.4249.2016.1",
+  slug: "26-cdo-4249-2016",
+} satisfies PublicCaseLawDecision;
+const canonicalSearchHit = {
+  ...canonicalDecision,
+  decisionId: documentId,
+  identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
+  textWithheldReason: null,
+  keywords: null,
+  anchorId: null,
+  headline: null,
+  citationAuthority: 0,
+  citationCount: 0,
+  matchingPassages: 1,
+} satisfies PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+const routeParams = createCaseLawDecisionRouteParams({
+  ...canonicalDecision,
+  decisionId: documentId,
+});
+const idRouteParams = createCaseLawDecisionRouteParams({
+  ...canonicalDecision,
+  decisionId: documentId,
+  slug: null,
+});
+const decisionLocators = [
+  { name: "decision id", locator: { type: "ref", ref: documentId } },
+  {
+    name: "ECLI",
+    locator: { type: "ref", ref: canonicalDecision.ecli },
+  },
+  {
+    name: "file number",
+    locator: { type: "ref", ref: canonicalDecision.caseNumber },
+  },
+  {
+    name: "encoded file number",
+    locator: {
+      type: "ref",
+      ref: encodeURIComponent(canonicalDecision.caseNumber),
+    },
+  },
+  { name: "slug route", locator: { type: "route", params: routeParams } },
+  { name: "id route", locator: { type: "route", params: idRouteParams } },
+  {
+    name: "language route",
+    locator: { type: "route", params: { ...routeParams, language: "cs" } },
+  },
+  {
+    name: "language id route",
+    locator: { type: "route", params: { ...idRouteParams, language: "cs" } },
+  },
+] as const satisfies readonly {
+  name: string;
+  locator: CaseLawDecisionLocator;
+}[];
+
+for (const { name, locator } of decisionLocators) {
+  for (const anchorId of [undefined, "p-12"]) {
+    test(`a ${name} resolves to the same canonical decision ${anchorId === undefined ? "without a passage" : "at its cited passage"}`, async () => {
+      const requests: Request[] = [];
+      globalThis.fetch = Object.assign(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const request = new Request(input, init);
+          const url = new URL(request.url);
+          requests.push(request);
+          if (url.pathname.endsWith("/case/decisions/search")) {
+            return Response.json({
+              hits: [
+                {
+                  ...canonicalSearchHit,
+                  decisionId: "019dd47e-2d83-7178-8f24-11f2976a01db",
+                  caseNumber: "26 Cdo 999/2016",
+                  ecli: "ECLI:CZ:NS:2017:26.CDO.999.2016.1",
+                },
+                canonicalSearchHit,
+              ],
+            });
+          }
+          if (
+            url.pathname.endsWith(`/case/decisions/${documentId}`) ||
+            url.pathname.endsWith(
+              `/case/decisions/by-slug/${canonicalDecision.slug}`,
+            )
+          ) {
+            return Response.json(canonicalDecision);
+          }
+          throw new TypeError(`Unexpected decision transport: ${url.pathname}`);
+        },
+        { preconnect: () => undefined },
+      );
+      const opened: DecisionTabTarget[] = [];
+      await openCaseLawDecision(
+        locator,
+        (target) => {
+          opened.push(target);
+        },
+        { anchorId },
+      );
+      expect(opened).toEqual([
+        {
+          decisionId: documentId,
+          caseNumber: canonicalDecision.caseNumber,
+          court: canonicalDecision.court,
+          country: canonicalDecision.country,
+          language: canonicalDecision.language,
+          languageAlternates: canonicalDecision.languageAlternates,
+          slug: canonicalDecision.slug,
+          ...(anchorId !== undefined && { anchorId }),
+        },
+      ]);
+      expect(requests).toHaveLength(1);
+      const request = requests.at(0);
+      expect(request).toBeDefined();
+      if (locator.type === "ref" && locator.ref !== documentId) {
+        expect(await request?.json()).toMatchObject({
+          query: decodeURIComponent(locator.ref),
+          limit: 5,
+        });
+      }
+      if (name === "language route") {
+        expect(new URL(request?.url ?? "").searchParams.get("language")).toBe(
+          "cs",
+        );
+      }
+    });
+  }
+}
+
 const citations = [
   { kind: "statute", path: statutePath },
   { kind: "provision", path: `${statutePath}#par-420` },
@@ -218,7 +366,6 @@ for (const { kind, path } of citations) {
           <>
             <section aria-label="Sources">
               <SourceChips
-                activeOrganizationId="organization"
                 messageId="message"
                 parts={[
                   {
@@ -262,6 +409,12 @@ for (const { kind, path } of citations) {
             }
           }
         });
+        const trayPrimary = sources.querySelector("a");
+        expect(trayPrimary?.classList.contains("border")).toBe(true);
+        expect(trayPrimary?.classList.contains("bg-muted/50")).toBe(true);
+        const trayLabel = trayPrimary?.querySelector(".truncate");
+        expect(trayLabel?.classList.contains("max-w-[20ch]")).toBe(true);
+        expect(trayLabel?.classList.contains("truncate")).toBe(true);
         expect(view.container.querySelector("a a, a button")).toBeNull();
         expect(view.container.querySelector("img")).toBeNull();
         expect(requests).toEqual([]);
@@ -286,7 +439,6 @@ test("held decision tray and answer share a compact annotation without moving th
     <>
       <section aria-label="Sources">
         <SourceChips
-          activeOrganizationId="organization"
           messageId="message"
           parts={[
             {
@@ -379,7 +531,40 @@ test("default markdown and clarification analysis share publisher aliases and in
   });
 });
 
-test("an external primary still previews its publisher in the inspector on plain activation", async () => {
+test("Arabic clarification questions use automatic direction and localized numbering", async () => {
+  const input = {
+    analysis: "Review [the source](https://example.test/source).",
+    questions: [
+      {
+        question: "هل ينبغي متابعة هذا المصدر؟",
+        reason: "يحدد الجواب الخطوة التالية.",
+      },
+    ],
+  } satisfies AskUserInput;
+  const view = await renderChat(
+    <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+      <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+        <AskUserCard
+          isAwaitingUser
+          onSubmit={() => undefined}
+          part={{
+            type: "tool-call",
+            name: "ask-user",
+            id: "arabic-ask",
+            state: "input-complete",
+            arguments: JSON.stringify(input),
+            input,
+          }}
+        />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  const question = view.container.querySelector("form p");
+  expect(question?.getAttribute("dir")).toBe("auto");
+  expect(question?.textContent).toBe("١. هل ينبغي متابعة هذا المصدر؟");
+});
+
+test("an external primary opens immediately in a new tab without inspector interception", async () => {
   const label = "Unheld citation";
   const publisher = "https://publisher.example.test/unheld";
   const view = await renderChat(
@@ -390,12 +575,16 @@ test("an external primary still previews its publisher in the inspector on plain
   const primary = view.getByRole("link", { name: label });
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   primary.dispatchEvent(click);
-  expect(click.defaultPrevented).toBe(true);
-  expect(
-    useInspectorTabsStore
-      .getState()
-      .tabs.some((tab) => tab.type === "external" && tab.url === publisher),
-  ).toBe(true);
+  expect(click.defaultPrevented).toBe(false);
+  expect(primary.getAttribute("href")).toBe(publisher);
+  expect(primary.getAttribute("target")).toBe("_blank");
+  expect(primary.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(primary.firstElementChild?.querySelector("svg")).not.toBeNull();
+  expect(primary.querySelector("bdi")?.textContent).toBe(label);
+  primary.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  primary.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  expect(view.container.querySelector("img")).toBeNull();
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
 });
 
 for (const anchorId of [null, "p-12"]) {
@@ -459,7 +648,9 @@ for (const anchorId of [null, "p-12"]) {
     );
     // Native navigation follows the href, so a cited passage rides in it.
     reader.hash = anchorId ?? "";
-    expect(primary.getAttribute("href")).toBe(reader.href);
+    expect(primary.getAttribute("href")).toBe(
+      `${reader.pathname}${reader.search}${reader.hash}`,
+    );
     expect(primary.textContent).toBe("NS");
     expect(primary.textContent).not.toContain(target.caseNumber);
     fireEvent.focus(primary);
@@ -520,6 +711,37 @@ for (const interactive of [false, true]) {
   });
 }
 
+test("a long external source title stays inside its truncated tray chip", async () => {
+  const title = "Publisher".repeat(12);
+  const href = "https://publisher.example.test/long-title";
+  const view = await renderChat(
+    <SourceChips
+      messageId="long-external"
+      parts={[
+        {
+          type: "tool-call",
+          name: "execute_typescript",
+          id: "long-external-source",
+          state: "complete",
+          arguments: "{}",
+          output: { url: href, title },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => {
+    const chip = view.getByRole("link", { name: title });
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(chip.className).toContain("rounded-md");
+    expect(chip.className).toContain("border");
+    const label = chip.querySelector(".truncate");
+    expect(label?.className).toContain("max-w-[20ch]");
+    expect(label?.textContent).toBe(title);
+  });
+});
+
 test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";
@@ -528,7 +750,6 @@ test("a relative held primary keeps its publisher source in the tray and passive
   const view = await renderChat(
     <>
       <SourceChips
-        activeOrganizationId="organization"
         messageId="relative"
         parts={[
           {
@@ -649,3 +870,138 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
   });
 }
+
+test("reply markdown and clarification analysis share bare-domain chips without remote icons", async () => {
+  const input = {
+    analysis:
+      "Read stll.app and [Repository](https://github.com/stella/stella).",
+    questions: [{ question: "Continue?", reason: "Confirm the reading." }],
+  };
+  const view = await renderChat(
+    <>
+      <MessageResponseImpl>{input.analysis}</MessageResponseImpl>
+      <AskUserCard
+        isAwaitingUser
+        onSubmit={() => undefined}
+        part={{
+          type: "tool-call",
+          name: "ask-user",
+          id: "external-links",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        }}
+      />
+    </>,
+  );
+  await waitFor(() => {
+    for (const name of ["stll.app", "Repository"]) {
+      const links = view.getAllByRole("link", { name });
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute("target")).toBe("_blank");
+        expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
+        expect(link.children.item(1)?.tagName).toBe("BDI");
+        fireEvent.mouseEnter(link);
+        fireEvent.focus(link);
+      }
+    }
+  });
+  expect(view.container.querySelector("img")).toBeNull();
+});
+
+test("relative Markdown destinations retain their original href through citation classification", async () => {
+  const label = "Relative source";
+  const href = "/github.com/stella";
+  const view = await renderChat(
+    <StreamdownMentionLink href={href} interactive>
+      {label}
+    </StreamdownMentionLink>,
+  );
+  const link = view.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe(href);
+  expect(
+    new URL(link.getAttribute("href") ?? "", window.location.href).origin,
+  ).toBe(window.location.origin);
+  expect(link.querySelector("svg")).toBeNull();
+  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(link.getAttribute("target")).toBe("_blank");
+});
+
+test("maximizing a different decision docks the displaced main reader before navigation", async () => {
+  const side = createCaseDecisionViewTab({
+    decisionId: "019dd47d-f507-7c84-b827-980af11b8981",
+    caseNumber: "SYN 2/2026",
+    country: "CZE",
+    court: "Synthetic Court",
+    language: null,
+    languageAlternates: null,
+    slug: "other-decision",
+  });
+  const store = useInspectorTabsStore.getState();
+  store.openView(side);
+  const openedPassages: string[] = [];
+  registerMainDecisionReader({
+    decisionId: fullDecision.id,
+    openPassage: ({ decisionId }) => {
+      openedPassages.push(decisionId);
+    },
+  });
+  const root = router.createRootRoute({ component: router.Outlet });
+  const decisionRoute = router.createRoute({
+    getParentRoute: () => root,
+    path: "/law/$country/cases/$court/$slug",
+    loader: () => fullDecision,
+    component: () => (
+      <DecisionMainViewAction
+        payload={side.payload}
+        onMoveToMain={() => store.closeTab(side.id)}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({
+      initialEntries: ["/law/cze/cases/synthetic-court/main-decision"],
+    }),
+    routeTree: root.addChildren([decisionRoute]),
+    isServer: false,
+  });
+  await appRouter.load();
+  render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <router.RouterProvider router={appRouter} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    screen.getByRole("link", { name: messages.inspector.swapViews }),
+  );
+  await waitFor(() =>
+    expect(appRouter.state.location.pathname).toEndWith("/other-decision"),
+  );
+  expect(openedPassages).toEqual([]);
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+  expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+    payload: { decisionId: fullDecision.id },
+  });
+});
+
+test("an external tray label without a safe URL retains its compact presentation", async () => {
+  const title = "Unavailable publisher title".repeat(8);
+  const view = await renderChat(
+    <LegalCitationLink
+      appearance="tray"
+      interactive={false}
+      source={{ title, url: "data:text/plain,unavailable" }}
+    >
+      {title}
+    </LegalCitationLink>,
+  );
+  const label = view.getByText(title);
+  expect(label.className).toContain("max-w-[20ch]");
+  expect(label.className).toContain("truncate");
+  expect(label.parentElement?.className).toContain("border");
+  expect(view.queryByRole("link")).toBeNull();
+});

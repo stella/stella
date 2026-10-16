@@ -94,7 +94,7 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicLawCountryUnavailable(country),
+      : publicLawCountryUnavailable(country, "search"),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 
@@ -857,10 +857,13 @@ describe.skipIf(!runEngineTests)(
         {
           provider: "corpus-index",
           loadSearchConfigs: async () => [],
-          readServingGeneration: async (tx, family) => ({
-            ...(await readServingCorpusIndexGenerationTx(tx, family)),
-            generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
-          }),
+          readServingGeneration: async (tx, family) =>
+            (await readServingCorpusIndexGenerationTx(tx, family)).map(
+              (serving) => ({
+                ...serving,
+                generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
+              }),
+            ),
         },
       );
       expect(response).toMatchObject({

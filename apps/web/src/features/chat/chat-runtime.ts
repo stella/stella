@@ -17,6 +17,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -64,6 +65,7 @@ import {
   providerDiagnosticFromThrown,
   withProviderDiagnostic,
 } from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
@@ -76,6 +78,11 @@ import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
 } from "./chat-query-contract";
+import {
+  ChatRequestError,
+  findChatRequestError,
+  normalizeChatStreamError,
+} from "./chat-request-error";
 
 type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
@@ -150,10 +157,11 @@ export type ChatRuntime = ChatActivitySession & {
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
-  ) => ChatRouteHandoffStart;
+  ) => Promise<ChatRouteHandoffStart>;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
@@ -229,15 +237,12 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const isRejectedChatContinuation = (error: unknown): boolean => {
+const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
   while (current instanceof Error && !visited.has(current)) {
-    if (
-      APIError.is(current) &&
-      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
-    ) {
+    if (APIError.is(current) && current.code === code) {
       return true;
     }
     visited.add(current);
@@ -246,6 +251,14 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
 
   return false;
 };
+
+const isRejectedChatContinuation = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_CONTINUATION_REJECTED_ERROR_CODE);
+
+/** The server refused a request for a turn it already settled (failed,
+ *  completed or superseded): its stored outcome is the answer. */
+const isSettledTurnRefusal = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
@@ -285,13 +298,16 @@ const requestChatTurnStop = async ({
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
-class ChatMessageStartError extends Error {
+class ChatMessageStartError extends ChatRequestError {
   readonly messageId: SafeId<"chatMessage">;
 
-  constructor(messageId: SafeId<"chatMessage">) {
-    super(
-      `TanStack ChatClient did not append user message "${messageId}" before starting the stream.`,
-    );
+  constructor(messageId: SafeId<"chatMessage">, cause?: unknown) {
+    super({
+      kind: "not_started",
+      message:
+        "Chat client did not start the message while another request was active",
+      cause,
+    });
     this.name = "ChatMessageStartError";
     this.messageId = messageId;
   }
@@ -343,11 +359,17 @@ export const createChatRuntime = ({
   let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** The server refused the latest request for a turn it had already
+   *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
+   *  a generic replay of the same failure stays quiet too; the next request
+   *  clears it. */
+  let settledTurnRefused = false;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
+    settledTurnRefused = false;
     stopBeforeHeaders = "none";
     if (snapshot.stop.status !== "idle") {
       setSnapshot({ stop: { status: "idle" } });
@@ -596,18 +618,29 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      const prepared = Result.try({
+        try: () =>
+          buildSendRequestBody({
+            context,
+            key,
+            messages: toPersistedChatMessages(messages),
+            run: runContext,
+            requestBody: normalizeChatContinuationRequestBody(data),
+          }),
+        catch: (cause) =>
+          new ChatRequestError({
+            kind: "preparation_failed",
+            message: "Chat request could not be prepared",
+            cause,
+          }),
+      });
+      const requestBody = readQueryResult(prepared);
       return observeChatProviderDiagnostic(
         keepPostedMessagesInSnapshots(
           messages,
           upstreamConnection.connect(
             messages,
-            buildSendRequestBody({
-              context,
-              key,
-              messages: toPersistedChatMessages(messages),
-              run: runContext,
-              requestBody: normalizeChatContinuationRequestBody(data),
-            }),
+            requestBody,
             abortSignal,
             runContext,
           ),
@@ -649,32 +682,61 @@ export const createChatRuntime = ({
       if (isStoppedTurn()) {
         return;
       }
+      // The same holds for a turn the server settled on its own: a
+      // continuation posted after it ended is refused as not owned, and the
+      // page shows what the server stored instead of reporting a failure.
+      if (isSettledTurnRefusal(error)) {
+        if (activeToolResultOperation !== undefined) {
+          activeToolResultOperation.rejection = error;
+        }
+        if (!settledTurnRefused) {
+          settledTurnRefused = true;
+          reloadThread();
+        }
+        return;
+      }
+      if (settledTurnRefused) {
+        return;
+      }
       if (
         activeToolResultOperation !== undefined &&
         isRejectedChatContinuation(error)
       ) {
         activeToolResultOperation.rejection = error;
       }
-      const normalized = withProviderDiagnostic(error, providerDiagnostic);
+      const normalized = withProviderDiagnostic(
+        normalizeChatStreamError(error),
+        providerDiagnostic,
+      );
       onError(normalized);
       setSnapshot({ error: normalized });
     },
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
       // reporting its typed cause. A new request clears the error first.
+      if (error === undefined) {
+        settledTurnRefused = false;
+      } else if (settledTurnRefused) {
+        return;
+      }
       if (
         error !== undefined &&
         ((actionAdmissionOutcome(snapshot.error) &&
           !actionAdmissionOutcome(error)) ||
           (chatRefusal(snapshot.error) !== null &&
             chatRefusal(error) === null) ||
+          (findChatRequestError(snapshot.error) !== undefined &&
+            findChatRequestError(error) === undefined) ||
           (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
             providerDiagnosticFromThrown(error) === undefined &&
             providerDiagnostic === undefined))
       ) {
         return;
       }
-      if (error === undefined || !isStoppedTurn()) {
+      if (
+        error === undefined ||
+        (!isStoppedTurn() && !isSettledTurnRefusal(error))
+      ) {
         setSnapshot({
           error:
             error === undefined
@@ -850,27 +912,57 @@ export const createChatRuntime = ({
     viewerAttached.resolve(undefined);
   };
 
+  type ChatClientSendStart =
+    | ChatRouteHandoffStart
+    | {
+        status: "not_started";
+        messageId: SafeId<"chatMessage">;
+        stream: Promise<void>;
+      };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
-  ): ChatRouteHandoffStart => {
+  ): ChatClientSendStart => {
     attachClient();
     supersedePendingInterrupts();
+    const requestWasActive =
+      snapshot.isLoading || isChatClientRequestActive(snapshot.status);
     const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
-      throw captureRuntimeError(new ChatMessageStartError(message.id));
+      return {
+        messageId: message.id,
+        status: "not_started",
+        stream: stream.catch((error: unknown) =>
+          readQueryResult(
+            Result.err(
+              requestWasActive
+                ? new ChatMessageStartError(message.id, error)
+                : new ChatRequestError({
+                    kind: "preparation_failed",
+                    message: "Chat client failed before starting the message",
+                    cause: error,
+                  }),
+            ),
+          ),
+        ),
+      };
     }
     startTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    const { stream } = startClientSend(message, options);
-    try {
-      await stream;
-    } catch (error) {
-      throw captureRuntimeError(error);
+    const started = startClientSend(message, options);
+    const outcome = await Result.tryPromise({
+      try: async () => await started.stream,
+      catch: (cause) => captureRuntimeError(cause),
+    });
+    readQueryResult(outcome);
+    if (started.status === "not_started") {
+      return readQueryResult(
+        Result.err(captureRuntimeError(new ChatMessageStartError(message.id))),
+      );
     }
   };
 
@@ -1051,6 +1143,16 @@ export const createChatRuntime = ({
                   : { errorText: result.errorText }),
               });
               if (
+                operation.rejection !== undefined &&
+                isSettledTurnRefusal(operation.rejection)
+              ) {
+                // The turn had settled: the result was never stored, and the
+                // reload shows the turn as the server ended it.
+                client.setMessagesManually(messagesBeforeResult);
+                setSnapshot({ messages: messagesBeforeResult });
+                return;
+              }
+              if (
                 snapshot.error !== undefined &&
                 snapshot.error !== errorBeforeResult
               ) {
@@ -1101,8 +1203,20 @@ export const createChatRuntime = ({
       client.setMessagesManually(messages);
       setSnapshot({ messages });
     },
-    startRouteHandoffMessage: (message, options) => {
+    startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
+      if (started.status === "not_started") {
+        const outcome = await Result.tryPromise({
+          try: async () => await started.stream,
+          catch: (cause) => captureRuntimeError(cause),
+        });
+        readQueryResult(outcome);
+        return readQueryResult(
+          Result.err(
+            captureRuntimeError(new ChatMessageStartError(message.id)),
+          ),
+        );
+      }
       detached(
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",

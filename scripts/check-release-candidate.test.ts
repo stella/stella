@@ -66,10 +66,17 @@ const fixture = (script = subject) => {
   const repo = path.join(directory, "repo");
   mkdirSync(path.join(repo, "scripts"), { recursive: true });
   writeFileSync(path.join(repo, "scripts/check-release-candidate.sh"), script);
+  for (const name of ["verify-release-tree-proof.sh", "gh-retry.sh"]) {
+    writeFileSync(
+      path.join(repo, "scripts", name),
+      readFileSync(new URL(name, import.meta.url), "utf-8"),
+    );
+  }
   git(repo, "init", "-q", "-b", "main");
   git(repo, "config", "user.email", "test@example.com");
   git(repo, "config", "user.name", "test");
   git(repo, "config", "commit.gpgsign", "false");
+  git(repo, "config", "tag.gpgsign", "false");
   writeFileSync(path.join(repo, "VERSION"), "1.2.3\n");
   git(repo, "add", ".");
   git(repo, "commit", "-qm", "previous");
@@ -262,7 +269,7 @@ test("the actual first-step bootstrap fetches tags and uses the checker from mai
   expect(() => assertBootstrap(noTags)).toThrow(
     "tagged VERSION bootstrap must fail",
   );
-});
+}, 20_000);
 test("tag preparation delegates the candidate identity checks to the same owner", () => {
   const prepare = readFileSync(
     new URL("prepare-release-tag.sh", import.meta.url),

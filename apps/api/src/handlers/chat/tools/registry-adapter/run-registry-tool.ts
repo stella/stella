@@ -3,11 +3,9 @@ import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
-import {
-  containsRawUuid,
-  projectForChat,
-} from "@/api/lib/chat/projection-schema";
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
@@ -25,6 +23,7 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
+import { LEGAL_RESOLVE_TOOL_HANDLERS } from "@/api/mcp/legal-resolve-tools";
 import { LEGISLATION_TOOL_HANDLERS } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
@@ -66,7 +65,9 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
   list_contacts: MATTER_TOOL_HANDLERS.list_contacts,
-  lookup_case_law: STELLA_TOOL_HANDLERS.lookup_case_law,
+  resolve_case_law_decision:
+    LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision,
+  resolve_law_citation: LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation,
   case_law_coverage: STELLA_TOOL_HANDLERS.case_law_coverage,
   read_case_law_citations: STELLA_TOOL_HANDLERS.read_case_law_citations,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,

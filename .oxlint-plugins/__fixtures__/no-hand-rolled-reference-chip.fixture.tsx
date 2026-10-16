@@ -2,9 +2,9 @@
 import { parseChatResourceHref } from "@stll/api-contract";
 import type { ChatMentionResourceHref } from "@stll/api-contract";
 import { FileTextIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 
 import { InlinePill } from "@/components/inline-pill";
-import { MatterIcon } from "@/components/matter-icon";
 
 declare const matterId: string;
 declare const label: string;

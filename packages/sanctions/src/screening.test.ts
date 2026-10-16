@@ -1,4 +1,4 @@
-import { Panic, panic } from "better-result";
+import { Panic } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 
@@ -562,6 +562,37 @@ describe("name screening", () => {
   });
 });
 
+test("a completed screening reports exactly the work it needed", () => {
+  const query = { name: "Vladimir Putin" } as const;
+  const usages: { spent: number; limit: number }[] = [];
+  screen(index, query, {
+    cutoff: DEFAULT_CUTOFF,
+    onWork: (usage) => {
+      usages.push(usage);
+    },
+  }).unwrap();
+  expect(usages).toHaveLength(1);
+  const [usage] = usages;
+  if (usage === undefined) {
+    throw new Error("Missing work usage");
+  }
+  expect(usage.limit).toBe(MAX_SCREENING_WORK);
+  expect(usage.spent).toBeGreaterThan(1);
+  const bounded = (maxWork: number) =>
+    screen(index, query, { cutoff: DEFAULT_CUTOFF, maxWork });
+  expect(bounded(usage.spent).isOk()).toBe(true);
+  expect(bounded(usage.spent - 1).isErr()).toBe(true);
+  const rejected: unknown[] = [];
+  screen(index, query, {
+    cutoff: DEFAULT_CUTOFF,
+    maxWork: usage.spent - 1,
+    onWork: (failed) => {
+      rejected.push(failed);
+    },
+  });
+  expect(rejected).toEqual([]);
+});
+
 describe("warm screening", () => {
   let commonLists: ParsedList[];
   let realistic: ReturnType<typeof buildScreeningIndex>;
@@ -587,52 +618,43 @@ describe("warm screening", () => {
     legacy = buildLegacyScreeningIndex(commonLists);
   });
 
-  test("warm common-token screening stays within the legacy time budget", () => {
+  test("warm common-token screening stays within its deterministic work budget", () => {
     const query = {
       name: "Registered Entity Holdings",
       entityType: "organisation",
     } as const;
     const options = { cutoff: DEFAULT_CUTOFF };
-    expect(screen(realistic, query, options).unwrap()).toEqual(
-      legacyScreen(legacy, query, options).unwrap(),
-    );
-    // Warm the matcher and its bounded caches before collecting timings.
-    for (let warmup = 0; warmup < 2; warmup += 1) {
-      screen(realistic, query, options).unwrap();
-      legacyScreen(legacy, query, options).unwrap();
-    }
-    const compactTimes: number[] = [];
-    const legacyTimes: number[] = [];
-    const runs = [
-      () => {
-        const started = performance.now();
-        screen(realistic, query, options).unwrap();
-        compactTimes.push(performance.now() - started);
-      },
-      () => {
-        const started = performance.now();
-        legacyScreen(legacy, query, options).unwrap();
-        legacyTimes.push(performance.now() - started);
-      },
-    ];
-    // Alternate the order, then compare medians to limit scheduling and GC noise.
-    for (let sample = 0; sample < 3; sample += 1) {
-      for (const run of sample % 2 === 0 ? runs : runs.toReversed()) {
-        run();
+    // Work units are the matcher's own deterministic cost, so the budget
+    // holds on a loaded runner where wall-clock ratios do not. Cached lookups
+    // charge their original work, so warm and cold queries spend the same.
+    // The reported spend is the exact minimal budget, so no search over
+    // maxWork is needed: a few screenings keep this inside the test timeout.
+    const spentWork = () => {
+      const spent: number[] = [];
+      const result = screen(realistic, query, {
+        ...options,
+        onWork: (usage) => {
+          spent.push(usage.spent);
+        },
+      }).unwrap();
+      expect(spent).toHaveLength(1);
+      const [usage] = spent;
+      if (usage === undefined) {
+        throw new Error("Missing work usage");
       }
-    }
-    const compactMs =
-      compactTimes.toSorted((a, b) => a - b).at(1) ??
-      panic("Missing warm-screen timing sample");
-    const legacyMs =
-      legacyTimes.toSorted((a, b) => a - b).at(1) ??
-      panic("Missing warm-screen timing sample");
-    expect(legacyMs).toBeGreaterThan(0);
-    console.info(
-      JSON.stringify({ compactMs, legacyMs, ratio: compactMs / legacyMs }),
-    );
-    // Allow runner noise while rejecting the several-fold compaction regression.
-    expect(compactMs / legacyMs).toBeLessThanOrEqual(1.25);
+      return { result, spent: usage };
+    };
+    const cold = spentWork();
+    expect(cold.result).toEqual(legacyScreen(legacy, query, options).unwrap());
+    expect(spentWork().spent).toBe(cold.spent);
+    const bounded = (maxWork: number) =>
+      screen(realistic, query, { ...options, maxWork });
+    expect(bounded(cold.spent).isOk()).toBe(true);
+    expect(bounded(cold.spent - 1).isErr()).toBe(true);
+    console.info(JSON.stringify({ minimalWork: cold.spent }));
+    // Measured at 1,603,468 units; the allowance admits small ranking changes,
+    // and any larger growth needs a deliberate change to this budget.
+    expect(cold.spent).toBeLessThanOrEqual(1_650_000);
   });
 
   test("warm screening work stays bounded for repeated common query tokens", () => {

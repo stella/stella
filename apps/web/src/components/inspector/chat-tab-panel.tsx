@@ -69,11 +69,12 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { dockNewChatArgs } from "@/components/inspector/new-chat-scope";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import {
   AIUnavailableDialogTrigger,
   useAIKeyGate,
@@ -109,6 +110,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -193,15 +195,21 @@ export const ChatTabPanel = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const contextLabel = useChatContextLabel(tab, activeOrganizationId);
 
-  const { openChat, resetChatTabId, setChatContext, updateLabel } =
-    useInspectorTabsStore(
-      useShallow((s) => ({
-        openChat: s.openChat,
-        resetChatTabId: s.resetChatTabId,
-        setChatContext: s.setChatContext,
-        updateLabel: s.updateLabel,
-      })),
-    );
+  const {
+    markChatStarted,
+    openChat,
+    resetChatTabId,
+    setChatContext,
+    updateLabel,
+  } = useInspectorTabsStore(
+    useShallow((s) => ({
+      markChatStarted: s.markChatStarted,
+      openChat: s.openChat,
+      resetChatTabId: s.resetChatTabId,
+      setChatContext: s.setChatContext,
+      updateLabel: s.updateLabel,
+    })),
+  );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -368,6 +376,13 @@ export const ChatTabPanel = ({
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
   const hasThreadMessages = messages.length > 0;
+  // The tab store keeps a document's chat across reloads only once its
+  // conversation exists on the server.
+  useExternalSyncEffect(() => {
+    if (hasThreadMessages && tab.started !== true) {
+      markChatStarted(tab.id);
+    }
+  }, [hasThreadMessages, markChatStarted, tab.id, tab.started]);
   // The optimistic label write needs its own rollback: the mutation's
   // onError restores the query caches but cannot reach this local tabs
   // store, and a failed PATCH must not leave the tab showing a title the
@@ -436,20 +451,12 @@ export const ChatTabPanel = ({
   };
 
   // New-chat lives in the composer's status row (the dock), not the
-  // pane header: opens a fresh tab with the same scope + context.
+  // pane header: opens a fresh tab scoped to the route's matter.
+  const routeWorkspaceId = useRouteWorkspaceId();
   const startNewThread = () => {
-    openChat({
-      // Named explicitly: a chat about a legal document otherwise continues
-      // that document's one conversation, and this button asks for a fresh
-      // one. Naming it also makes it the document's conversation, so the
-      // reader's floating composer follows rather than staying on the thread
-      // left here.
-      id: createChatThreadId(),
-      workspaceId: tabWorkspaceId,
-      contextMatterIds: tab.contextMatterIds,
-      ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
-      ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
-    });
+    openChat(
+      dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
+    );
   };
 
   // The shared tab context menu (right-click on rail icon or
@@ -744,6 +751,7 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const { id: userId } = useAuthenticatedUser();
   const dataQuery = useQuery(
     workspacesNavigationOptions({
@@ -823,6 +831,7 @@ const ChatTabPanelChrome = ({
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
@@ -840,11 +849,18 @@ const ChatTabPanelChrome = ({
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col"
+      // Which conversation the pane shows, for tests that need to tell a
+      // restored thread from a freshly minted one.
+      data-chat-thread-id={tab.id}
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader
         actions={actions}
         label={chatTabHeaderLabel({
+          activeSkillName:
+            tab.activeSkill === undefined
+              ? undefined
+              : skillLabel(tab.activeSkill),
           boundDocumentLabel,
           newChatLabel: t("chat.newChat"),
           tabLabel: tab.label,

@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
 // the DOM is loaded after it exists.
@@ -172,6 +174,17 @@ globalThis.fetch = Object.assign(
         return await unanswered(signal);
       }
       return Response.json(sessionBody());
+    }
+    if (
+      path === "/v1/me/professional-use" &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: "2026-10-01T00:00:00.000Z",
+      });
     }
     if (path === "/v1/public/knowledge/template-packs") {
       return Response.json({
@@ -404,7 +417,7 @@ afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
   await settle();
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("Knowledge for every visitor, on one live client", () => {

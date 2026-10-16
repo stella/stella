@@ -17,12 +17,13 @@ import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
+import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isSearchIndexUnavailable,
@@ -408,8 +409,7 @@ export const enumProp = (description: string, values: readonly string[]) =>
  * that behavior selects an irreversible operation or outbound send;
  * `destructiveHint` alone does not require confirmation. Set it only after a
  * human has approved the selected operation. Pass a custom `description` for
- * outbound sends or an action-scoped gate (e.g. `manage_organization`, where
- * only the `remove_member` action requires it).
+ * outbound sends or an operation-specific confirmation reason.
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +
@@ -522,10 +522,10 @@ const successStructuredContent = (
     projected,
   );
   if (Result.isError(parsed)) {
-    // Paths only: an issue's `input` is the tool's output, which carries
-    // matter content.
-    const paths = parsed.error.issues.map(
-      (issue) => v.getDotPath(issue) ?? "(root)",
+    // Paths only, ids masked: an issue's `input` is the tool's output, which
+    // carries matter content, and a dynamic key can be an id.
+    const paths = parsed.error.issues.map((issue) =>
+      maskUuids(v.getDotPath(issue) ?? "(root)"),
     );
     return panic(
       "MCP tool output violated its advertised contract",

@@ -56,6 +56,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `chat.decision-threads.get` | read | stella:chat | — | generic invoke → `stella capability chat decision-threads-get` |
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
@@ -225,12 +226,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices delete` |
 | `invoices.entries.add` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add` |
 | `invoices.entries.remove` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
+| `invoices.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices export` |
 | `invoices.get` | read | stella:read | FEATURE_TIME_BILLING | covered by `list_invoices` |
 | `invoices.lines.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create` |
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
 | `invoices.lines.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update` |
 | `invoices.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_invoices` |
 | `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
+| `invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices prefill` |
 | `invoices.transition` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition` |
 | `invoices.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update` |
 
@@ -279,6 +282,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.items.sources.verification.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-sources-verification-update` |
 | `lists.items.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-update` |
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
+| `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
@@ -310,8 +314,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
-| `matters.members.add` | write | stella:admin_write | — | curated tool `manage_organization` |
-| `matters.members.remove` | write, destructive | stella:admin_write | — | covered by `manage_organization` |
+| `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
@@ -349,7 +353,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.practice-jurisdictions.update` | write | stella:admin_write | — | curated tool `set_practice_jurisdictions` |
 | `organization-settings.preview` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings preview` |
 | `organization-settings.sanctions-monitoring.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings sanctions-monitoring-update` |
-| `organization-settings.update` | write | stella:admin_write | — | covered by `manage_organization` |
+| `organization-settings.update` | write | stella:admin_write | — | curated tool `update_organization_settings` |
 
 ## playbooks
 
@@ -680,10 +684,10 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-| assistant_chat | 16 |
-| auth_plumbing | 25 |
+| assistant_chat | 17 |
+| auth_plumbing | 32 |
 | billing_ui | 1 |
-| chat_thread_ui | 8 |
+| chat_thread_ui | 12 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
@@ -693,7 +697,7 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 10 |
 | provider_secret | 33 |
 | public_indexing | 9 |
-| realtime_stream | 6 |
+| realtime_stream | 9 |
 | search_ui | 18 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |

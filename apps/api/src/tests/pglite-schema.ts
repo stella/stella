@@ -17,6 +17,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261015090000_matter_access_rule_function",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -91,6 +96,11 @@ const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
 const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260929180100_case_law_provision_scope_transition_keyset",
+  "migration.sql",
+);
+const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261010110000_case_law_provision_pending_since",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -269,6 +279,7 @@ export const installPgliteWorkspaceAccessObjects = async (
 ): Promise<void> => {
   const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
+    MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH,
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {
@@ -401,6 +412,27 @@ const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Apply the account audit migration's forced user boundary after schema push. */
+export const installPgliteAccountAuditRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010005100_account_audit_scope",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "account_audit_logs" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Account audit FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /** Apply the revision migration's forced boundary, which schema push omits. */
 export const installPgliteChatMessageRevisionsRls = async (
   db: PgliteSchemaDb,
@@ -448,6 +480,55 @@ export const installPgliteChatRunLogRls = async (
     panic("Chat run log entries FORCE RLS migration statement is missing");
   }
   await db.execute(sql.raw(entriesStatement));
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteReaderAnswerRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010212100_reader_answers",
+      "migration.sql",
+    ),
+  );
+  for (const table of [
+    "legal_reader_answers",
+    "legal_reader_answer_messages",
+  ]) {
+    const statement = statements.find((candidate) =>
+      executableSql(candidate).startsWith(
+        `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+      ),
+    );
+    if (statement === undefined) {
+      panic(`Reader answer FORCE RLS migration statement is missing: ${table}`);
+    }
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteCitationDoctrineRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261014174500_case_law_citation_doctrine",
+      "migration.sql",
+    ),
+  );
+  const statement = statements.find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "case_law_citation_doctrine_reviews" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Citation doctrine FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
 };
 
 /** Apply the committed setting omitted by schema push. */
@@ -591,6 +672,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READ_STATUS_MIGRATION_PATH,
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
+    PROVISION_PENDING_SINCE_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
@@ -932,6 +1014,29 @@ export const installPgliteDecisionAliases = async (
     );
   });
   for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Use the committed SQL for the projection that schema push cannot install. */
+export const installPgliteDecisionCitationStats = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120200_decision_citation_stats",
+      "migration.sql",
+    ),
+  ).filter((candidate) => {
+    const text = executableSql(candidate);
+    return (
+      text.startsWith("CREATE FUNCTION") ||
+      text.startsWith("CREATE TRIGGER") ||
+      text.startsWith("REVOKE ALL ON FUNCTION") ||
+      text.startsWith("GRANT EXECUTE ON FUNCTION")
+    );
+  })) {
     await db.execute(sql.raw(statement));
   }
 };

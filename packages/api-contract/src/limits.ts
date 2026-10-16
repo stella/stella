@@ -9,6 +9,13 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+/**
+ * Max length of a short required text field such as a matter or contact
+ * name. The API schema rejects longer input, and inputs bound to those
+ * fields cap typing at the same length.
+ */
+export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
+
 /** Max input documents a single flow run may be launched against. */
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 
@@ -83,6 +90,9 @@ export const ENTITIES_PER_WORKSPACE_MAX = 10_000;
  * this span, so an old decision does not stretch the strip back to its date.
  */
 export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;
+
+/** Raw incoming edges considered by bounded citation summaries and rankings. */
+export const CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT = 2048;
 
 /**
  * Decisions one research-answer run request may queue. The server rejects a

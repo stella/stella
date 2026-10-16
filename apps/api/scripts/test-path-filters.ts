@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 /**
  * Positional arguments select which discovered test files to run.
  *
@@ -31,6 +33,7 @@ const VALUE_FLAGS = new Set([
   "--cwd",
   "--env-file",
   "--max-concurrency",
+  "--path-ignore-patterns",
   "--preload",
   "-r",
   "--reporter",
@@ -49,6 +52,16 @@ const VALUE_FLAGS = new Set([
  */
 const OPTIONAL_NUMERIC_FLAGS = new Set(["--bail"]);
 
+export const testRunnerFlagArity = (flag: string) => {
+  if (VALUE_FLAGS.has(flag)) {
+    return "value";
+  }
+  if (OPTIONAL_NUMERIC_FLAGS.has(flag)) {
+    return "optional-number";
+  }
+  return undefined;
+};
+
 const INTEGER_PATTERN = /^\d+$/u;
 const FLAGS_TERMINATOR = "--";
 
@@ -61,6 +74,7 @@ export type PartitionedArguments = {
 
 export const partitionRunnerArguments = (
   runnerArguments: readonly string[],
+  omittedFlags?: ReadonlySet<string>,
 ): PartitionedArguments => {
   const bunArguments: string[] = [];
   const patterns: string[] = [];
@@ -84,7 +98,10 @@ export const partitionRunnerArguments = (
       continue;
     }
 
-    bunArguments.push(argument);
+    const omitFlag = omittedFlags?.has(argument) ?? false;
+    if (!omitFlag) {
+      bunArguments.push(argument);
+    }
     const next = runnerArguments[index + 1];
     if (next === undefined) {
       continue;
@@ -93,7 +110,9 @@ export const partitionRunnerArguments = (
       VALUE_FLAGS.has(argument) ||
       (OPTIONAL_NUMERIC_FLAGS.has(argument) && INTEGER_PATTERN.test(next));
     if (takesNext) {
-      bunArguments.push(next);
+      if (!omitFlag) {
+        bunArguments.push(next);
+      }
       index += 1;
     }
   }
@@ -112,11 +131,11 @@ export const normalizeAbsoluteTestPatterns = (
     if (!path.isAbsolute(pattern)) {
       return pattern;
     }
-    const relative = path.relative(root, pattern);
+    const relative = repoRelativePath(root, pattern);
     // path.relative drops a trailing separator; keep it, so a directory
     // selector (`/…/src/lib/`) doesn't also match `src/library/`.
     return pattern.endsWith(path.sep) && relative !== ""
-      ? `${relative}${path.sep}`
+      ? `${relative}/`
       : relative;
   });
 

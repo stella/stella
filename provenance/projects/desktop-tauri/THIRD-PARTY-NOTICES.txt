@@ -15,7 +15,7 @@ Project: desktop-tauri
 - aho-corasick 1.1.5 — MIT OR Unlicense
 - alloc-no-stdlib 3.0.0 — BSD-3-Clause
 - alloc-stdlib 0.3.0 — BSD-3-Clause
-- ammonia 4.2.0 — Apache-2.0 OR MIT
+- ammonia 4.2.3 — Apache-2.0 OR MIT
 - android_system_properties 0.1.6 — Apache-2.0 OR MIT
 - anyhow 1.0.104 — Apache-2.0 OR MIT
 - apple-native-keyring-store 1.0.2 — Apache-2.0 OR MIT
@@ -314,7 +314,7 @@ Project: desktop-tauri
 - num-traits 0.2.19 — Apache-2.0 OR MIT
 - num_enum 0.7.6 — Apache-2.0 OR BSD-3-Clause OR MIT
 - num_enum_derive 0.7.6 — Apache-2.0 OR BSD-3-Clause OR MIT
-- objc2 0.6.4 — MIT
+- objc2 0.6.5 — MIT
 - objc2-app-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-cloud-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-data 0.3.2 — Apache-2.0 OR MIT OR Zlib
@@ -410,7 +410,7 @@ Project: desktop-tauri
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
 - rustc_version 0.4.1 — Apache-2.0 OR MIT
 - rustix 1.1.4 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-- rustls 0.23.45 — Apache-2.0 OR ISC OR MIT
+- rustls 0.23.46 — Apache-2.0 OR ISC OR MIT
 - rustls-native-certs 0.8.4 — Apache-2.0 OR ISC OR MIT
 - rustls-pki-types 1.15.1 — Apache-2.0 OR MIT
 - rustls-platform-verifier 0.7.0 — Apache-2.0 OR MIT
@@ -483,7 +483,7 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.1 — Apache-2.0 OR MIT
+- tauri 2.12.2 — Apache-2.0 OR MIT
 - tauri-build 2.7.1 — Apache-2.0 OR MIT
 - tauri-codegen 2.7.1 — Apache-2.0 OR MIT
 - tauri-macros 2.7.1 — Apache-2.0 OR MIT
@@ -496,7 +496,7 @@ Project: desktop-tauri
 - tauri-plugin-opener 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
 - tauri-plugin-single-instance 2.5.2 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.13.1 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.13.2 — Apache-2.0 OR MIT
 - tauri-runtime 2.12.1 — Apache-2.0 OR MIT
 - tauri-runtime-wry 2.12.1 — Apache-2.0 OR MIT
 - tauri-utils 2.10.1 — Apache-2.0 OR MIT
@@ -518,7 +518,7 @@ Project: desktop-tauri
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.12.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.53.1 — MIT
+- tokio 1.53.2 — MIT
 - tokio-macros 2.7.2 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
 - tokio-util 0.7.19 — MIT
@@ -558,7 +558,7 @@ Project: desktop-tauri
 - url 2.5.8 — Apache-2.0 OR MIT
 - urlpattern 0.6.0 — MIT
 - utf8_iter 1.0.4 — Apache-2.0 OR MIT
-- uuid 1.26.1 — Apache-2.0 OR MIT
+- uuid 1.28.0 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0
@@ -680,12 +680,12 @@ Project: desktop-tauri
 - zerocopy-derive 0.8.56 — Apache-2.0 OR BSD-2-Clause OR MIT
 - zerofrom 0.1.8 — Unicode-3.0
 - zerofrom-derive 0.1.7 — Unicode-3.0
-- zeroize 1.9.0 — Apache-2.0 OR MIT
+- zeroize 1.9.1 — Apache-2.0 OR MIT
 - zerotrie 0.2.4 — Unicode-3.0
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
 - zip 4.6.1 — MIT
-- zip 8.6.0 — MIT
+- zip 9.0.0 — MIT
 - zmij 1.0.23 — MIT
 - zune-core 0.5.3 — Apache-2.0 OR MIT OR Zlib
 - zune-jpeg 0.5.15 — Apache-2.0 OR MIT OR Zlib

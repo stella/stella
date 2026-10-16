@@ -94,6 +94,11 @@ const packageWithSubpaths =
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
   new Set(glyphs.flatMap((glyph) => [glyph, `${glyph}Icon`, `Lucide${glyph}`]));
 
+// Test support (`asTestRaw` and the other unchecked casts) must not be
+// reachable from production modules.
+const isTestSupportModule = (moduleId: string): boolean =>
+  moduleId.startsWith("apps/api/src/tests/");
+
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
 // owner component is restricted there too.
@@ -147,6 +152,25 @@ const RESTRICTED_IMPORT_RULES = {
       owners: [ICON_MODULE, "packages/ui/src/icons.test.ts"],
     },
   ],
+  // Production API modules import nothing under apps/api/src/tests/; the
+  // scope (production versus test files) is set by the rule's override in
+  // oxlint.config.ts.
+  "no-test-support-import": [
+    {
+      messageId: "noTestSupportImport",
+      message:
+        "Production modules must not import from apps/api/src/tests/. " +
+        "Move test-only code under that directory and import it only from " +
+        "tests.",
+      modules: [isTestSupportModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+  ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
   // custom alphabets from crypto.getRandomValues().
   "no-nanoid": [
@@ -191,7 +215,7 @@ const RESTRICTED_IMPORT_RULES = {
       messageId: "directMatterGlyph",
       message:
         "Do not import '{{name}}' from 'lucide-react' here. Render " +
-        "<MatterIcon> from '@/components/matter-icon' instead so the " +
+        "<MatterIcon> from '@stll/ui/matter-icon' instead so the " +
         "matter colour is always applied (matter={{ id, color }}, or " +
         'variant="none" / variant="all" for non-matter affordances). ' +
         "The raw glyph is only allowed in matter-icon.tsx.",
@@ -201,7 +225,7 @@ const RESTRICTED_IMPORT_RULES = {
         names: lucideGlyphNames(["Layers", "Layers2"]),
         hit: EXPORT_HIT.binding,
       },
-      owners: ["apps/web/src/components/matter-icon.tsx", ICON_MODULE],
+      owners: ["packages/ui/src/components/matter-icon.tsx", ICON_MODULE],
     },
   ],
   // `<EntityKindIcon>` switches exhaustively over the entity kind. Only the
