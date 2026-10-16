@@ -145,6 +145,7 @@ export const readDocumentationExclusions = (
       ts.isPropertyAccessExpression(unwrapped.expression) &&
       unwrapped.expression.name.text === "map" &&
       unwrapped.arguments.length === 1 &&
+      unwrapped.arguments[0] !== undefined &&
       ts.isIdentifier(unwrapped.arguments[0]) &&
       unwrapped.arguments[0].text === "noLlmsTxt"
     ) {
