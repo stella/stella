@@ -5725,7 +5725,7 @@ jobs:
 
       - name: Check migration coverage
         env:
-          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD^' }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.merge_group.base_sha || 'HEAD^' }}
         run: bash scripts/check-migrations.sh
 
       - *merge_group_cancel
