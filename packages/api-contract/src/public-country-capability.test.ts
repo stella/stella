@@ -18,6 +18,7 @@ import {
   PAGES_PUBLIC_COUNTRIES,
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
+  IDENTITY_PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
@@ -32,6 +33,7 @@ describe("public country availability contract", () => {
     expect(ADMITTED_PUBLIC_COUNTRIES).toEqual(PUBLIC_CASE_LAW_COUNTRIES);
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(ADMITTED_PUBLIC_COUNTRIES);
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE).toBe("admitted");
+    expect(PUBLIC_COUNTRY_CAPABILITIES.EU).toBe("identity_public");
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toBe("pending_public");
     for (const country of PUBLIC_COUNTRIES) {
       const unavailable = publicCountryUnavailable(country, "search");
@@ -50,6 +52,28 @@ describe("public country availability contract", () => {
     }
   });
 
+  test("EU is open only for exact identity reads", () => {
+    expect(IDENTITY_PUBLIC_COUNTRIES).toContain("EU");
+    expect(PAGES_PUBLIC_COUNTRIES).not.toContain("EU");
+    expect(ADMITTED_PUBLIC_COUNTRIES).not.toContain("EU");
+    expect(publicCountryUnavailable("EU", "identity")).toBeNull();
+    expect(publicCountryUnavailable("EU", "pages")).toMatchObject({
+      reason: "identity_public",
+    });
+    expect(publicCountryUnavailable("EU", "search")).toMatchObject({
+      reason: "identity_public",
+    });
+  });
+
+  test("a pending country is unavailable on every public surface", () => {
+    for (const surface of ["identity", "pages", "search"] as const) {
+      expect(publicCountryUnavailable("SVK", surface)).toMatchObject({
+        country: "SVK",
+        reason: "pending_public",
+      });
+    }
+  });
+
   test("public-country-capability.canonical-spelling", () => {
     assertProperty(
       "public-country-capability.canonical-spelling",
@@ -64,6 +88,9 @@ describe("public country availability contract", () => {
             " ".repeat(spaces);
           expect(publicCountryUnavailable(input, "search")).toEqual(
             publicCountryUnavailable(country, "search"),
+          );
+          expect(publicCountryUnavailable(input, "identity")).toEqual(
+            publicCountryUnavailable(country, "identity"),
           );
           expect(publicCountryUnavailable(input, "pages")).toEqual(
             publicCountryUnavailable(country, "pages"),

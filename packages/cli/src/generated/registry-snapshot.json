@@ -1274,7 +1274,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "resolve_case_law_decision",
-    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions. Returns the legal resolve API envelope: resolved carries decisionId, readerUrl and readable, licence-withheld or unavailable text. Readable text has extent complete or partial; for partial call read_case_law_decision with decisionId to continue, or open readerUrl. Ambiguous lists candidates without choosing; open only an explicitly chosen readerUrl. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason: use search_case_law. Country_unavailable: unrecognized or unsupported country; use case_law_coverage. Add missing stella:search for search or stella:read for the reader and coverage through OAuth consent before recovery calls.",
+    "description": "Resolve one exact docket (including its sheet) or ECLI; use search_case_law for descriptions in searchable countries. Resolved returns the selected language, languageAlternates, decisionId and bounded text. Continue partial text with read_case_law_decision and its decisionId. Ambiguous lists candidates without choosing. Incomplete_identifier lists missing parts: supply them and retry. Not_found names the reason. Country_unavailable means this country has no exact-identity surface. Add missing stella:read through OAuth consent before recovery calls.",
     "inputSchema": {
       "type": "object",
       "required": ["country", "identifier"],

@@ -1,3 +1,4 @@
+// parser-output-unchanged: exact-identity admission only changes read surfaces, not parsed decision records.
 // parser-output-unchanged: public admission metadata does not change parsed decision records.
 // parser-output-unchanged: the pages/search surface split gates public reads only; parsed decision records are identical.
 import { panic } from "better-result";
@@ -7,32 +8,44 @@ import * as v from "valibot";
  * How far a country is open to the public.
  *
  * - `pending_public`: nothing is public.
- * - `pages_public`: the country's decision and statute pages are served,
- *   listed in the sitemaps and open to crawlers, but the country is not yet
- *   part of search, the API search surfaces or MCP.
+ * - `identity_public`: exact decision identities and decision IDs are readable;
+ *   public pages and search remain closed.
+ * - `pages_public`: decision and statute pages are served, listed in sitemaps
+ *   and open to crawlers; exact decision reads are available, but search
+ *   and listing remain closed.
  * - `admitted`: pages are public and the country is admitted to search, the
  *   API search surfaces and MCP.
  * - `withdrawn`: nothing is public any more.
  */
 export type PublicCountryCapability =
   | "admitted"
+  | "identity_public"
   | "pages_public"
   | "pending_public"
   | "withdrawn";
 
 /** The public surfaces a capability gates. A new surface needs a decision per state. */
-export type PublicCountrySurface = "pages" | "search";
+export type PublicCountrySurface = "identity" | "pages" | "search";
 
 /** Total on both axes: a new state or surface cannot compile without a decision. */
 export const PUBLIC_COUNTRY_SURFACE_OPEN = {
+  identity: {
+    admitted: true,
+    identity_public: true,
+    pages_public: true,
+    pending_public: false,
+    withdrawn: false,
+  },
   pages: {
     admitted: true,
+    identity_public: false,
     pages_public: true,
     pending_public: false,
     withdrawn: false,
   },
   search: {
     admitted: true,
+    identity_public: false,
     pages_public: false,
     pending_public: false,
     withdrawn: false,
@@ -46,7 +59,7 @@ export const PUBLIC_COUNTRY_SURFACE_OPEN = {
 export const PUBLIC_COUNTRY_CAPABILITIES = {
   AUT: "pending_public",
   CZE: "admitted",
-  EU: "pending_public",
+  EU: "identity_public",
   HUN: "pending_public",
   POL: "pending_public",
   SVK: "pending_public",
@@ -90,6 +103,12 @@ export const PAGES_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
     PUBLIC_COUNTRY_SURFACE_OPEN.pages[PUBLIC_COUNTRY_CAPABILITIES[country]],
 );
 
+/** Countries whose exact decision identities and decision IDs may be read. */
+export const IDENTITY_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
+  (country): country is PublicCountryOnSurface<"identity"> =>
+    PUBLIC_COUNTRY_SURFACE_OPEN.identity[PUBLIC_COUNTRY_CAPABILITIES[country]],
+);
+
 export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
 
 // parser-output-unchanged: the refusal's HTTP status affects responses only, not parsed records.
@@ -104,7 +123,12 @@ export const publicCountryUnavailableSchema = v.strictObject({
   code: v.literal(PUBLIC_COUNTRY_UNAVAILABLE_CODE),
   status: v.literal("unavailable"),
   country: v.picklist(PUBLIC_COUNTRIES),
-  reason: v.picklist(["pages_public", "pending_public", "withdrawn"]),
+  reason: v.picklist([
+    "identity_public",
+    "pages_public",
+    "pending_public",
+    "withdrawn",
+  ]),
   message: v.string(),
   hint: v.string(),
 });
@@ -121,6 +145,8 @@ type ClosedCapability = Exclude<PublicCountryCapability, "admitted">;
  * that public law is unavailable.
  */
 const PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE = {
+  identity_public:
+    "Only exact decision identity resolution and reading are available for this country.",
   pages_public:
     "Public-law search is not available for this country; its public pages are.",
   pending_public: "Public law for this country is not available.",
@@ -142,6 +168,7 @@ const closedReason = (
   switch (capability) {
     case "admitted":
       return panic("An admitted country must be open on every surface.");
+    case "identity_public":
     case "pages_public":
     case "pending_public":
     case "withdrawn":

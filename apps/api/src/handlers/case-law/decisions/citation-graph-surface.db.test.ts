@@ -45,6 +45,7 @@ import {
  */
 const PAGES_ONLY_COUNTRY = "SVK";
 const SURFACE_COUNTRIES: CaseLawSurfaceCountries = {
+  identity: ["CZE"],
   pages: ["CZE", PAGES_ONLY_COUNTRY],
   search: ["CZE"],
 };

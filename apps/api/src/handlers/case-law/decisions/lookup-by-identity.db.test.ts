@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -11,19 +12,25 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import {
   citationKeyOf,
   normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -37,6 +44,12 @@ const administrativeId = createSafeId<"caseLawDecision">();
 const listingOnlyId = createSafeId<"caseLawDecision">();
 const restrictedId = createSafeId<"caseLawDecision">();
 const reportedId = createSafeId<"caseLawDecision">();
+const euSourceId = createSafeId<"caseLawSource">();
+const euEcli = "ECLI:EU:C:2019:801";
+const euVersions = [
+  { id: createSafeId<"caseLawDecision">(), language: "en" },
+  { id: createSafeId<"caseLawDecision">(), language: "fr" },
+] as const;
 
 /** A bare docket's locator: the case file, nothing singling a decision out. */
 const docketLocator = (value: string) =>
@@ -94,6 +107,11 @@ beforeAll(
 
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        id: euSourceId,
+        name: "EU identity fixture",
+      }),
       caseLawSourceRow({
         adapterKey: "closed",
         descriptor: {
@@ -173,6 +191,23 @@ beforeAll(
         languageGroupKey: "lookup-reported",
       },
     ]);
+    await db.insert(caseLawDecisions).values(
+      euVersions.map(
+        ({ id, language }) =>
+          ({
+            id,
+            sourceId: euSourceId,
+            caseNumber: "C-40/17",
+            citationKey: citationKeyOf("C-40/17"),
+            court: "Court of Justice of the European Union",
+            country: "EU",
+            decisionDate: "2019-10-03",
+            ecli: euEcli,
+            language,
+            languageGroupKey: "lookup-eu-judgment",
+          }) satisfies typeof caseLawDecisions.$inferInsert,
+      ),
+    );
     await db.insert(caseLawDecisionIdentifiers).values([
       // Two parallel references on one decision: a joined case's docket and
       // the reporter citation the publisher prints beside it.
@@ -396,3 +431,72 @@ test("a typed reference resolves only through identifiers of its own type", asyn
   });
   expect(reporterAsDocket).toEqual([]);
 });
+
+test("EU ECLI resolution returns one decision with its stored language versions", async () => {
+  const admitted = admitLawRead({
+    organizationId: mintAuthProviderId<"organization">(),
+    publicLawEnabled: () => true,
+  });
+  if (Result.isError(admitted)) {
+    panic("Fixture law read was not admitted");
+  }
+  const rows = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "EU",
+    locator: { kind: "ecli", value: euEcli },
+  });
+  expect(rows).toHaveLength(1);
+  const result = await resolveDecision({
+    admission: admitted.value,
+    country: "EU",
+    identifier: euEcli,
+    dependencies: {
+      lookup: async ({ country, locator }) =>
+        await lookupDecisionsByIdentity({ caseLawDb, country, locator }),
+      read: async (options) =>
+        await readDecisionReaderSource({ ...options, caseLawDb }),
+    },
+  });
+  if (result.status !== "resolved" || result.document.kind !== "decision") {
+    return panic("EU ECLI did not resolve to one decision");
+  }
+  expect(result.document.ecli).toBe(euEcli);
+  expect(result.document.country).toBe("EU");
+  const { decisionId } = result.document;
+  const selectedVersion =
+    euVersions.find(({ id }) => id === decisionId) ??
+    panic("EU resolution returned a decision outside its language group");
+  expect(result.document.language).toBe(selectedVersion.language);
+  expect(result.document.languageAlternates).toEqual(
+    euVersions.map(({ id, language }) => ({
+      decisionId: String(id),
+      language,
+    })),
+  );
+});
+
+test.each(
+  euVersions.flatMap((version) =>
+    (["pages", "search"] as const).map((surface) => ({ version, surface })),
+  ),
+)(
+  "stored EU $version.language stays closed on the $surface surface",
+  async ({ surface, version }) => {
+    expect(
+      await withRedistributableSubject(
+        caseLawDb,
+        "identity",
+        { kind: "id", id: version.id },
+        async ({ id }) => id,
+      ),
+    ).toBe(version.id);
+    expect(
+      await withRedistributableSubject(
+        caseLawDb,
+        surface,
+        { kind: "id", id: version.id },
+        async ({ id }) => id,
+      ),
+    ).toBeNull();
+  },
+);

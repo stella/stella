@@ -35,6 +35,7 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { IDENTITY_PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -116,14 +117,15 @@ export type CaseLawSurfaceCountries = Readonly<
 >;
 
 /**
- * Which country list a read answers to: `pages` serves decision pages and
- * their sitemaps, `search` is search, the API search surfaces, MCP and AI.
+ * Which country list a read answers to: `identity` resolves decisions and IDs,
+ * `pages` serves public pages and sitemaps, and `search` serves search and listing.
  * A pages-public country is on the first list and not on the second. The
  * gate resolves its surface here once and hands the list to every read it
  * admits; tests pass their own table (see `GateSurface`) to exercise a state
  * no country holds.
  */
 export const CASE_LAW_SURFACE_COUNTRIES: CaseLawSurfaceCountries = {
+  identity: IDENTITY_PUBLIC_COUNTRIES,
   pages: PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   search: PUBLIC_CASE_LAW_COUNTRIES,
 };

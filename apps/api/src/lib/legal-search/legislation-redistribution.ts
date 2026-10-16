@@ -19,6 +19,7 @@ export const redistributableLegislationSource =
  * for pages-public countries, a search read only for search-admitted ones.
  */
 const LEGISLATION_COUNTRIES_BY_SURFACE = {
+  identity: PUBLIC_LEGISLATION_COUNTRIES,
   pages: PUBLIC_LEGISLATION_PAGE_COUNTRIES,
   search: PUBLIC_LEGISLATION_COUNTRIES,
 } as const satisfies Record<PublicCountrySurface, readonly string[]>;
