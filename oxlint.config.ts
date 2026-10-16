@@ -2365,10 +2365,29 @@ const config = defineConfig({
         "no-layout-motion-classes/no-layout-motion-classes": [
           "error",
           {
-            // Surfaces that change their own box. Each exemption names the
-            // exact existing utility, so another layout transition in the same
-            // file still fails.
+            // Surfaces that change their own box, and motion that is not
+            // interface feedback. Each exemption names the exact existing
+            // utility, so another layout transition or long duration in the
+            // same file still fails.
             allowedFiles: [
+              {
+                path: "apps/web/src/components/globe.tsx",
+                reason:
+                  "Decorative globe canvas fades in once after it draws; nothing waits on it.",
+                utilities: ["duration-700"],
+              },
+              {
+                path: "apps/web/src/routes/knowledge/-components/template-studio-selection-gesture.tsx",
+                reason:
+                  "Teaching animation: a one-shot cross-fade from the template to its filled result, slow enough to follow.",
+                utilities: ["duration-500"],
+              },
+              {
+                path: "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx",
+                reason:
+                  "Onboarding preview: a status dot pulses slowly to show a connection in progress.",
+                utilities: ["duration-500"],
+              },
               {
                 path: "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx",
                 reason:
@@ -2434,7 +2453,19 @@ const config = defineConfig({
         "apps/landing/src/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-layout-motion-classes/no-layout-motion-classes": "error",
+        "no-layout-motion-classes/no-layout-motion-classes": [
+          "error",
+          {
+            allowedFiles: [
+              {
+                path: "apps/landing/src/components/react/ProductShowcase.tsx",
+                reason:
+                  "Marketing motion: showcase tiles settle in as the carousel scrolls; nothing waits on it.",
+                utilities: ["duration-[500ms]"],
+              },
+            ],
+          },
+        ],
       },
     },
     {
