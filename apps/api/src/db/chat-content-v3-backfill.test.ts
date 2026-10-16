@@ -159,7 +159,7 @@ test("v2 tool arguments convert only when every number survives parsing exactly"
   ]) {
     const result = convert(lossy);
     if (result.isOk()) {
-      return panic(`Lossy arguments converted: ${lossy}`);
+      panic(`Lossy arguments converted: ${lossy}`);
     }
     expect(result.error).toBeInstanceOf(LegacyChatContentError);
     expect(result.error).toMatchObject({ reason: LOSSY_JSON_NUMBER });

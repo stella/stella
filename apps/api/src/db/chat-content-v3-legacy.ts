@@ -195,7 +195,7 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
     return part;
   }
 
-  let lossy = false;
+  const lossyLiterals: string[] = [];
   const parsed = Result.try((): unknown =>
     JSON.parse(
       part.arguments,
@@ -205,7 +205,7 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
           (context?.source === undefined ||
             decimalIdentity(context.source) !== decimalIdentity(String(value)))
         ) {
-          lossy = true;
+          lossyLiterals.push(context?.source ?? String(value));
         }
         return value;
       },
@@ -214,7 +214,7 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
   if (Result.isError(parsed)) {
     return part;
   }
-  if (lossy) {
+  if (lossyLiterals.length > 0) {
     // The parsed input would replace the exact argument text with rounded doubles.
     throw new LegacyChatContentError({
       message: `Stored legacy tool call ${part.id} has a number beyond double precision`,
