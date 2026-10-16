@@ -49,9 +49,7 @@ describe("the screening status of a set of lists", () => {
     expect(new Set(precedence)).toEqual(new Set(SANCTIONS_SCREENING_STATUSES));
     for (const statuses of ALL_SEQUENCES) {
       const expected =
-        statuses.length === 0
-          ? "unavailable"
-          : precedence.find((status) => statuses.includes(status));
+        precedence.find((status) => statuses.includes(status)) ?? "unavailable";
       expect(
         aggregateSanctionsScreeningStatus(statuses),
         statuses.join(","),
