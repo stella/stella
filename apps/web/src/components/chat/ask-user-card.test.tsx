@@ -9,6 +9,7 @@ import type {
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -30,7 +31,9 @@ afterAll(() => {
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {children}
+      <FormattingProvider locale="en" timeZone="UTC">
+        {children}
+      </FormattingProvider>
     </IntlProvider>,
   );
 

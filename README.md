@@ -174,6 +174,9 @@ and Valkey and writes `apps/api/.env.test`, which the API test runners load.
 Apply migrations next with
 `(cd apps/api && DB_LOAD_GATE_EBS_SIGNAL=disabled bun --env-file=.env.test run db:migrate)`; the explicit
 signal setting applies to this disposable local database. Startup does not run migrations.
+Setup installs dependencies without lifecycle scripts, so generated route and API
+types are absent until a task needs them; run `bun run generate` first in that
+case. Cloud tasks do not need the `.ai/shared` or template-pack submodules.
 
 ### Optional demo data
 

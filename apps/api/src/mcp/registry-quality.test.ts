@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import {
   MCP_TOOL_NAME_MAX_LENGTH,
@@ -10,7 +11,9 @@ import {
 import type { PermissionInput } from "@stll/permissions";
 import { propertyConfig } from "@stll/property-testing";
 
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import {
   collisionSafeToolName,
   DYNAMIC_TOOL_NAMESPACES,
@@ -448,6 +451,35 @@ describe("MCP registry access coherence", () => {
           `Tool ${tool.name} is access: "write" but appears on the anonymized surface`,
         ).toBe(false);
       }
+    }
+  });
+});
+
+describe("projected chat write approvals", () => {
+  test("every account-control write requires fresh approval regardless of destructive hints", () => {
+    const accountControlPolicies = Object.entries(
+      MCP_CHAT_TOOL_GRANT_POLICIES,
+    ).filter(([name]) => {
+      const tool = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+        (definition) => definition.name === name,
+      );
+      return (
+        tool?.access === "write" &&
+        tool.accountAccess === ACCOUNT_ACCESS.accountControl
+      );
+    });
+    const accountControlTools = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+      (tool) =>
+        tool.access === "write" &&
+        tool.accountAccess === ACCOUNT_ACCESS.accountControl &&
+        WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable,
+    );
+    expect(accountControlTools.length).toBeGreaterThan(0);
+    expect(accountControlPolicies.map(([name]) => name).toSorted()).toEqual(
+      accountControlTools.map((tool) => tool.name).toSorted(),
+    );
+    for (const [name, policy] of accountControlPolicies) {
+      expect(policy, name).toBe("approve-once");
     }
   });
 });
