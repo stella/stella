@@ -35,7 +35,7 @@ export const plannerSourceFiles = (root = repositoryRoot) => {
     }
     const absolute = path.join(realRoot, file);
     const transpiler = new Bun.Transpiler({
-      loader: /x$/u.test(file) ? "tsx" : "ts",
+      loader: file.endsWith("x") ? "tsx" : "ts",
     });
     const source = readFileSync(absolute, "utf-8").replace(/^#!.*/u, "");
     for (const { path: specifier } of transpiler.scanImports(source)) {
