@@ -265,6 +265,11 @@ export type ResolveResults =
             ecli: string | null;
             court: string;
             decisionDate: string | null;
+            language: string;
+            languageAlternates: Array<{
+              decisionId: string;
+              language: string;
+            }>;
             readerUrl: string;
             text:
               | {

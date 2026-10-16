@@ -52,6 +52,14 @@ const unwrapInternalResult = <TData>(
   return response;
 };
 
+type DecisionIdentity = Omit<
+  Extract<
+    Extract<LegalResolveResponse, { status: "resolved" }>["document"],
+    { kind: "decision" }
+  >,
+  "text"
+>;
+
 const identity = {
   kind: "decision",
   decisionId: "00000000-0000-4000-8000-0000000d0041",
@@ -65,7 +73,7 @@ const identity = {
   languageAlternates: [],
   readerUrl:
     "https://app.stella.law/case-law/00000000-0000-4000-8000-0000000d0041",
-} as const;
+} satisfies DecisionIdentity;
 const responses = {
   resolved: [
     {

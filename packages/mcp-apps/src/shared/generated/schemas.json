@@ -573,7 +573,12 @@
         "type": "string"
       },
       "reason": {
-        "enum": ["pages_public", "pending_public", "withdrawn"],
+        "enum": [
+          "identity_public",
+          "pages_public",
+          "pending_public",
+          "withdrawn"
+        ],
         "type": "string"
       },
       "message": {
@@ -862,6 +867,16 @@
           },
           "decisionDate": {
             "type": ["string", "null"]
+          },
+          "language": {
+            "type": "string"
+          },
+          "languageAlternates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
           },
           "readerUrl": {
             "type": "string"

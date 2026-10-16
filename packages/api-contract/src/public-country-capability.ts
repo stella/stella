@@ -1,3 +1,4 @@
+// parser-output-unchanged: exact-identity admission only changes read surfaces, not parsed decision records.
 // parser-output-unchanged: public admission metadata does not change parsed decision records.
 // parser-output-unchanged: the pages/search surface split gates public reads only; parsed decision records are identical.
 import { panic } from "better-result";
