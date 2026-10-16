@@ -5,16 +5,16 @@ defaults:
   run:
     shell: bash
 
-# Runs the captured tree's install, build and spec code. The pre-release
-# checklist (marketing-screenshots-update.yml) dispatches it on the captured
-# branch's own ref, so every cache this run reads or writes stays in that
-# branch's scope; it never runs on the default branch. It holds no write
-# permission and no release secret. Its only output is the
-# `marketing-screenshots` artifact, which the dispatching run validates as
-# data before anything is published.
+# Dispatched from main's workflow definition. The selected tree is checked
+# out only for capture; this job has read permission and uses anonymous pulls.
+# Publication validates its artifact as data in a separate workflow.
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: Release branch selected for capture
+        required: true
+        type: string
       sha:
         description: Commit of this branch to capture
         required: true
@@ -26,17 +26,14 @@ on:
 
 concurrency:
   # Captures of one branch run one at a time; each is awaited by its caller.
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.branch }}
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
   capture:
-    # Never on the default branch: branch code must not run in its cache scope.
-    if: >-
-      startsWith(github.ref, 'refs/heads/')
-      && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -62,8 +59,6 @@ jobs:
         uses: ./.github/actions/marketing-capture
         with:
           mode: update
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Upload regenerated baselines
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

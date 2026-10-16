@@ -4,11 +4,8 @@ defaults:
   run:
     shell: bash
 
-# Runs of this workflow use main's ref, so they never execute branch code: the
-# capture job dispatches marketing-screenshots-capture.yml on the captured
-# branch's own ref, whose cache scope is that branch, and waits for it.
-# Publication treats that run's artifact as data and runs no code from the
-# captured tree. No step relies on workflow_run delivery.
+# Uses main's workflow definitions for dispatch and publication. The capture
+# checks out the selected tree as input; publication validates only its data.
 on:
   workflow_dispatch:
     inputs:
@@ -141,9 +138,7 @@ jobs:
               owner, repo, ref: `refs/heads/${branch}`, sha: process.env.CAPTURE_HEAD,
             });
 
-  # Branch code never runs in this workflow, whose runs use main's ref and
-  # cache scope. The capture runs as marketing-screenshots-capture.yml
-  # dispatched on the captured branch; this job only waits for that run.
+  # Dispatch the trusted capture definition and wait for its returned run id.
   capture:
     needs: [select, prepare]
     if: >-
@@ -172,24 +167,15 @@ jobs:
             if (!branch || branch === 'main' || !/^[0-9a-f]{40}$/u.test(head))
               throw new Error('Capture needs a release branch and a full commit SHA');
             const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
-            const title = `Capture marketing screenshots ${request}`;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const deadline = Date.now() + 40 * 60 * 1000;
             const dispatched = await github.rest.actions.createWorkflowDispatch({
-              owner, repo, workflow_id: workflow, ref: branch,
-              inputs: { sha: head, request }, return_run_details: true,
+              owner, repo, workflow_id: workflow, ref: 'main',
+              inputs: { branch, sha: head, request }, return_run_details: true,
             });
-            let id = dispatched.data?.workflow_run_id;
-            while (!id) {
-              if (Date.now() > deadline) throw new Error('Dispatched capture run did not appear');
-              await sleep(10000);
-              const { data } = await github.rest.actions.listWorkflowRuns({
-                owner, repo, workflow_id: workflow, branch, event: 'workflow_dispatch', per_page: 50,
-              });
-              const runs = data.workflow_runs.filter(run => run.display_title === title);
-              if (runs.length > 1) throw new Error('Ambiguous dispatched capture run');
-              id = runs[0]?.id;
-            }
+            const id = dispatched.data?.workflow_run_id;
+            if (!Number.isSafeInteger(id) || id <= 0)
+              throw new Error('Dispatch did not return a capture run id');
             let run;
             for (;;) {
               ({ data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id }));
@@ -197,10 +183,10 @@ jobs:
               if (Date.now() > deadline) throw new Error(`Capture run ${run.html_url} did not finish in time`);
               await sleep(30000);
             }
-            // The awaited run must be this capture on the release branch's own
-            // ref, never on main, and it must have succeeded.
-            if (run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
-              || run.head_branch !== branch || run.display_title !== title
+            // Bind the artifact source to the dispatched run and selected commit.
+            if (run.id !== id || run.head_sha !== head
+              || run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
+              || run.head_branch !== 'main'
               || run.head_repository?.full_name !== `${owner}/${repo}`)
               throw new Error(`Run ${id} is not this capture on ${branch}`);
             if (run.conclusion !== 'success')
@@ -228,11 +214,26 @@ jobs:
       result: ${{ steps.verify.outputs.result }}
       head: ${{ steps.verify.outputs.head }}
     steps:
-      - name: Checkout the captured head
+      - name: Checkout publication tooling from main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ needs.select.outputs.head }}
+          ref: main
+      - name: Select the publication base as Git data
+        env:
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$CAPTURE_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Publication base must be a full SHA"
+            exit 1
+          fi
+          git fetch --no-tags origin "$CAPTURE_HEAD"
+          git update-ref --no-deref HEAD "$CAPTURE_HEAD"
+          git read-tree "$CAPTURE_HEAD"
+          # Only regenerated PNG data is materialized; the selected source
+          # tree stays in Git's object database and index.
+          rm -f -- apps/landing/public/media/products/*.png
       - name: Download regenerated baselines
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -250,6 +251,9 @@ jobs:
           # Only flat, regular PNG files with plain names cross from the
           # capture job; anything else fails before the token exists.
           count=0
+          total_size=0
+          max_files=100
+          max_total_size=200000000
           while IFS= read -r -d '' entry; do
             name="${entry#"$SOURCE"/}"
             if [[ -L "$entry" || ! -f "$entry" ]]; then
@@ -260,7 +264,8 @@ jobs:
               echo "::error::Unexpected file in the regenerated baselines: $name"
               exit 1
             fi
-            if (( $(wc -c < "$entry") > 20000000 )); then
+            size=$(wc -c < "$entry")
+            if (( size > 20000000 )); then
               echo "::error::Baseline is implausibly large: $name"
               exit 1
             fi
@@ -269,6 +274,11 @@ jobs:
               exit 1
             fi
             count=$((count + 1))
+            total_size=$((total_size + size))
+            if (( count > max_files || total_size > max_total_size )); then
+              echo "::error::Baseline upload exceeds the file count or total size limit"
+              exit 1
+            fi
           done < <(find "$SOURCE" -mindepth 1 -print0)
           if (( count == 0 )); then
             echo "::error::The capture job uploaded no baselines"
@@ -294,6 +304,9 @@ jobs:
         run: |
           set -euo pipefail
           git add -- apps/landing/public/media/products/*.png
+          echo 'paths<<BASELINE_PATHS' >> "$GITHUB_OUTPUT"
+          printf '%s\n' apps/landing/public/media/products/*.png >> "$GITHUB_OUTPUT"
+          echo 'BASELINE_PATHS' >> "$GITHUB_OUTPUT"
           if git diff --cached --quiet; then
             echo "result=no-change" >> "$GITHUB_OUTPUT"
           else
@@ -351,7 +364,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           mode: append
           branch: ${{ needs.select.outputs.branch }}
-          paths: apps/landing/public/media/products/*.png
+          paths: ${{ steps.changes.outputs.paths }}
           commit-message: "chore(landing): regenerate marketing screenshots"
 
       - name: Remove the unused capture branch

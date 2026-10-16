@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -83,8 +84,10 @@ const PUBLISH_SHELL_COMMANDS = new Set([
   "head",
   "if",
   "od",
+  "printf",
   "pwd",
   "read",
+  "rm",
   "set",
   "then",
   "tr",
@@ -110,7 +113,7 @@ const commandsOf = (script: string): string[] =>
         word !== "" &&
         !/^[A-Za-z_][A-Za-z0-9_]*=/u.test(word) &&
         !/^[\])"'<>(]/u.test(word) &&
-        !/^(?:!|\]\]|\)\)?|\(\(|\\|count|done<|fi\)?)$/u.test(word),
+        !/^(?:!|\]\]|\)\)?|\(\(|\\|count|total_size|done<|fi\)?)$/u.test(word),
     );
 
 describe("pre-release screenshot workflow", () => {
@@ -176,7 +179,7 @@ describe("pre-release screenshot workflow", () => {
   // scope (the runtime credentials actions/cache uses). Branch install,
   // build and spec code must never execute there: `save: false` only turns
   // off one cooperative save step, not what the branch's code can do.
-  test("no job on main's ref executes code from a checked-out tree", () => {
+  test("publication jobs execute only trusted inline commands", () => {
     const jobs = jobsOf(publishWorkflow);
     for (const [name, job] of Object.entries(jobs)) {
       const steps = stepsOf(publishWorkflow, name);
@@ -184,7 +187,7 @@ describe("pre-release screenshot workflow", () => {
         // A local action or a cache action would run or restore tree content.
         expect(
           step.uses?.startsWith("./") ?? false,
-          `${name}: ${step.uses}`,
+          `${name}: ${String(step.uses)}`,
         ).toBe(false);
         expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
         expect(step.uses?.includes("setup-bun") ?? false).toBe(false);
@@ -214,7 +217,7 @@ describe("pre-release screenshot workflow", () => {
     }
   });
 
-  test("branch code runs only in a capture dispatched on the branch's own ref", () => {
+  test("branch code runs only in a capture dispatched from main", () => {
     const triggers = v.parse(
       v.looseObject({ on: v.record(v.string(), v.unknown()) }),
       captureWorkflow,
@@ -230,10 +233,10 @@ describe("pre-release screenshot workflow", () => {
       v.looseObject({ if: v.string(), permissions: v.unknown() }),
       jobs["capture"],
     );
-    // Never the default branch, whose cache scope main runs restore.
-    expect(capture.if.replaceAll(/\s+/gu, " ").trim()).toBe(
-      "startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)",
-    );
+    expect(capture.if).toBe("github.ref == 'refs/heads/main'");
+    for (const [name, job] of Object.entries(jobs)) {
+      expect(JSON.stringify(job), name).not.toContain("secrets.");
+    }
     // The job that runs branch code holds no write permission, no
     // deployment environment and no release key.
     expect(capture.permissions).toEqual({ contents: "read" });
@@ -288,6 +291,23 @@ describe("pre-release screenshot workflow", () => {
     expect(action).toContain("save: false");
   });
 
+  test("jobs that check out branch trees or run local actions have no repository secrets", () => {
+    for (const workflow of [captureWorkflow, publishWorkflow]) {
+      for (const [name, job] of Object.entries(jobsOf(workflow))) {
+        const steps = stepsOf(workflow, name);
+        const runsBranchTree = steps.some(
+          (step) =>
+            step.uses?.startsWith("./") ||
+            (step.uses?.startsWith("actions/checkout@") &&
+              step.with?.["ref"] !== "main"),
+        );
+        if (runsBranchTree) {
+          expect(JSON.stringify(job), name).not.toContain("secrets.");
+        }
+      }
+    }
+  });
+
   test("publication validates artifact data before minting its isolated App token", () => {
     const jobs = jobsOf(publishWorkflow);
     expect(jobs["publish"]?.environment).toBe("release-app");
@@ -309,10 +329,10 @@ describe("pre-release screenshot workflow", () => {
       }
     }
     const checkout = steps.find(
-      (step) => step.name === "Checkout the captured head",
+      (step) => step.name === "Checkout publication tooling from main",
     );
     expect(checkout?.with).toMatchObject({
-      ref: githubExpression("needs.select.outputs.head"),
+      ref: "main",
       "persist-credentials": false,
     });
     expect(checkout?.with?.["submodules"]).toBeUndefined();
@@ -336,7 +356,7 @@ describe("pre-release screenshot workflow", () => {
     ).toMatchObject({
       mode: "append",
       branch: githubExpression("needs.select.outputs.branch"),
-      paths: "apps/landing/public/media/products/*.png",
+      paths: githubExpression("steps.changes.outputs.paths"),
     });
     expect(
       steps.find((step) => step.name === "Push regenerated baselines")?.if,
@@ -359,7 +379,7 @@ describe("pre-release screenshot workflow", () => {
   });
 });
 
-describe("capture dispatch on the release branch", () => {
+describe("capture dispatch from main", () => {
   const dispatch = executable("capture", "Capture on the release branch");
   const BRANCH = "changeset-release/main";
   const scenario = () => ({
@@ -372,7 +392,8 @@ describe("capture dispatch on the release branch", () => {
       conclusion: "success",
       path: ".github/workflows/marketing-screenshots-capture.yml",
       event: "workflow_dispatch",
-      head_branch: BRANCH,
+      head_branch: "main",
+      head_sha: HEAD,
       display_title: "Capture marketing screenshots 7-1",
       head_repository: { full_name: "stella/stella" },
       html_url: "https://github.com/stella/stella/actions/runs/42",
@@ -414,14 +435,6 @@ describe("capture dispatch on the release branch", () => {
                 ? { status: 204, data: undefined }
                 : { status: 200, data: { workflow_run_id: input.runId } };
             },
-            listWorkflowRuns: async (params: unknown) => {
-              expect(params).toMatchObject({
-                workflow_id: "marketing-screenshots-capture.yml",
-                branch: BRANCH,
-                event: "workflow_dispatch",
-              });
-              return { data: { workflow_runs: [input.run] } };
-            },
             getWorkflowRun: async () => ({ data: input.run }),
           },
         },
@@ -430,7 +443,7 @@ describe("capture dispatch on the release branch", () => {
     return { outputs, dispatches };
   };
 
-  test("dispatches the capture on the branch's ref and returns its run", async () => {
+  test("dispatches main with the selected branch as input and returns its run", async () => {
     expect(await dispatchFor(scenario())).toEqual({
       outputs: { "run-id": "42" },
       dispatches: [
@@ -438,18 +451,26 @@ describe("capture dispatch on the release branch", () => {
           owner: "stella",
           repo: "stella",
           workflow_id: "marketing-screenshots-capture.yml",
-          ref: BRANCH,
-          inputs: { sha: HEAD, request: "7-1" },
+          ref: "main",
+          inputs: { branch: BRANCH, sha: HEAD, request: "7-1" },
           return_run_details: true,
         },
       ],
     });
   });
 
-  test("finds the dispatched run by its request when no run id is returned", async () => {
+  test("rejects a missing dispatched run id without searching by title", async () => {
     const input = scenario();
     input.runId = undefined;
-    expect((await dispatchFor(input)).outputs).toEqual({ "run-id": "42" });
+    expect(await rejectionOf(dispatchFor(input))).toMatchObject({
+      message: "Dispatch did not return a capture run id",
+    });
+    expect(scriptOf("capture", "Capture on the release branch")).not.toContain(
+      "display_title",
+    );
+    expect(scriptOf("capture", "Capture on the release branch")).not.toContain(
+      "listWorkflowRuns",
+    );
   });
 
   for (const [name, change, message] of [
@@ -470,7 +491,7 @@ describe("capture dispatch on the release branch", () => {
     [
       "a run on another branch",
       (input: ReturnType<typeof scenario>) => {
-        input.run.head_branch = "main";
+        input.run.head_branch = BRANCH;
       },
       "is not this capture",
     ],
@@ -478,6 +499,20 @@ describe("capture dispatch on the release branch", () => {
       "a run of another workflow",
       (input: ReturnType<typeof scenario>) => {
         input.run.path = ".github/workflows/ci.yml";
+      },
+      "is not this capture",
+    ],
+    [
+      "a different returned run id",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.id = 43;
+      },
+      "is not this capture",
+    ],
+    [
+      "a different captured head",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.head_sha = PUBLISHED;
       },
       "is not this capture",
     ],
@@ -1248,6 +1283,71 @@ describe("publication verification", () => {
   }
 });
 
+describe("publication base selection", () => {
+  test("loads the selected Git index without materializing branch source", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "marketing-base-"));
+    try {
+      const git = (args: string[]) => {
+        const result = Bun.spawnSync(["git", ...args], {
+          cwd: root,
+          env: {
+            ...process.env,
+            GIT_AUTHOR_NAME: "Fixture",
+            GIT_AUTHOR_EMAIL: "fixture@example.test",
+            GIT_COMMITTER_NAME: "Fixture",
+            GIT_COMMITTER_EMAIL: "fixture@example.test",
+          },
+        });
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        return result.stdout.toString().trim();
+      };
+      git(["init", "--quiet"]);
+      mkdirSync(path.dirname(path.join(root, PRODUCT)), { recursive: true });
+      writeFileSync(path.join(root, PRODUCT), PNG);
+      writeFileSync(path.join(root, "tooling.sh"), "main tooling");
+      git(["add", "."]);
+      const mainTree = git(["write-tree"]);
+      const main = git(["commit-tree", mainTree, "-m", "Main fixture"]);
+      git(["update-ref", "HEAD", main]);
+      writeFileSync(path.join(root, "tooling.sh"), "selected tooling");
+      writeFileSync(path.join(root, "branch-only.sh"), "selected source");
+      git(["add", "."]);
+      const selectedTree = git(["write-tree"]);
+      const selected = git([
+        "commit-tree",
+        selectedTree,
+        "-p",
+        main,
+        "-m",
+        "Selected fixture",
+      ]);
+      git(["reset", "--hard", main]);
+      git(["remote", "add", "origin", root]);
+      const command = v.parse(
+        v.object({ run: v.string() }),
+        workflowStepByName(
+          workflowJobSteps(publishWorkflow, "publish"),
+          "Select the publication base as Git data",
+        ),
+      ).run;
+      const result = Bun.spawnSync(["bash", "-c", command], {
+        cwd: root,
+        env: { ...process.env, CAPTURE_HEAD: selected },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(git(["rev-parse", "HEAD"])).toBe(selected);
+      expect(git(["write-tree"])).toBe(selectedTree);
+      expect(readFileSync(path.join(root, "tooling.sh"), "utf-8")).toBe(
+        "main tooling",
+      );
+      expect(existsSync(path.join(root, "branch-only.sh"))).toBe(false);
+      expect(existsSync(path.join(root, PRODUCT))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("baseline change classification", () => {
   const command = v.parse(
     v.object({ run: v.string() }),
@@ -1303,8 +1403,13 @@ describe("baseline change classification", () => {
           },
         });
         expect(result.exitCode, result.stderr.toString()).toBe(0);
-        expect(readFileSync(output, "utf-8")).toBe(
-          `result=${change === "unchanged" ? "no-change" : "changed"}\n`,
+        const outputText = readFileSync(output, "utf-8");
+        const expectedPaths =
+          change === "new"
+            ? ["apps/landing/public/media/products/new.png", PRODUCT]
+            : [PRODUCT];
+        expect(outputText).toBe(
+          `paths<<BASELINE_PATHS\n${expectedPaths.join("\n")}\nBASELINE_PATHS\nresult=${change === "unchanged" ? "no-change" : "changed"}\n`,
         );
         expect(readFileSync(summary, "utf-8").length > 0).toBe(
           change !== "unchanged",
@@ -1389,6 +1494,32 @@ describe("regenerated baseline validation", () => {
       populate: (source) => {
         writeFileSync(path.join(source, "real.png"), png);
         symlinkSync("/etc/hosts", path.join(source, "link.png"));
+      },
+    },
+    {
+      name: "too many PNGs",
+      populate: (source) => {
+        for (let index = 0; index < 100; index += 1) {
+          writeFileSync(path.join(source, `${index}.png`), png);
+        }
+      },
+    },
+    {
+      name: "too much total PNG data",
+      populate: (source) => {
+        const large = Buffer.alloc(20_000_000);
+        png.copy(large);
+        for (let index = 0; index < 11; index += 1) {
+          writeFileSync(path.join(source, `${index}.png`), large);
+        }
+      },
+    },
+    {
+      name: "an oversized PNG",
+      populate: (source) => {
+        const large = Buffer.alloc(20_000_001);
+        png.copy(large);
+        writeFileSync(path.join(source, "large.png"), large);
       },
     },
     {
