@@ -888,7 +888,7 @@ describe("projectForChat", () => {
       }));
 
     assertProperty(
-      "chat projection masks ids inside data strings without dropping text",
+      "masking keeps every non-id character of a data string and leaves no raw UUID",
       fc.property(
         textWithIds,
         fc.array(textWithIds, { maxLength: 3 }),
@@ -962,11 +962,28 @@ describe("projectForChat", () => {
     expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
+  test("a failed parse reports its paths with ids masked", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: v.strictObject({ count: v.number() }),
+    });
+
+    const result = project({
+      payload: { content: { [ROGUE_UUID]: "x", count: "not a number" } },
+      schema,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(exceptionProperties()).toEqual([
+      expect.objectContaining({ paths: expect.any(String) }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
   test("a data string without a UUID is forwarded byte for byte, with no degrade report", () => {
     const schema: ChatProjectionSchema = v.strictObject({ text: v.string() });
 
     assertProperty(
-      "chat projection forwards id-free data strings verbatim",
+      "a data string without a UUID is forwarded byte for byte, with no degrade report",
       fc.property(
         fc
           .string({ unit: "grapheme" })

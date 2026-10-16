@@ -537,7 +537,8 @@ const issueRefPath = (issue: v.BaseIssue<unknown>): string => {
     }
     segments.push(String(item.key));
   }
-  return segments.length > 0 ? segments.join(".") : "(root)";
+  // A dynamic key can be an id; failure telemetry carries the path masked.
+  return segments.length > 0 ? maskUuids(segments.join(".")) : "(root)";
 };
 
 /**
