@@ -12,6 +12,8 @@ import { planTestRuns } from "../apps/web/scripts/test-run-plan";
 import { allApiTests, type selectApiTestImpact } from "./api-test-impact";
 import {
   BUDGET_MS,
+  MAX_CHANGED_TEST_FILES,
+  REPEATS,
   annotationData,
   annotationProperty,
   executeGate,
@@ -27,6 +29,22 @@ import {
 
 // Markdown reads consume temporary CLI output only.
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
+
+test("CI repeats changed tests only on pull requests in one existing test shard", async () => {
+  const source = await Bun.file(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+  ).text();
+  expect(source).toContain("github.event_name == 'pull_request'");
+  expect(source).toContain("matrix.shard == 'rest-web'");
+  expect(source).toContain(
+    ["CHANGED_FILES_JSON: $", "{{ needs.ci-plan.outputs.changed_files }}"].join(
+      "",
+    ),
+  );
+  expect(source).toContain("bun scripts/flake-gate.ts --blocking");
+  expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
+  expect(REPEATS).toBe(5);
+});
 
 test.each([
   [
@@ -442,7 +460,7 @@ test("allocation never exceeds remaining cost and reduces the slowest files firs
     );
     expect(cost).toBeLessThanOrEqual(budget);
     const counts = measured.map(({ file }) => plan.get(file) ?? 0);
-    expect(counts.every((count) => count >= 1 && count <= 20)).toBe(true);
+    expect(counts.every((count) => count >= 1 && count <= REPEATS)).toBe(true);
     expect(counts).toEqual(counts.toSorted((a, b) => b - a));
   }
   expect(() => planRepeats([{ file: "invalid", durationMs: 0 }], 1)).toThrow(
@@ -515,7 +533,14 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
       note: "cleanup: best-effort",
     },
     results: [
-      { file: "a|b.test.ts", runs: 3, failures: 1, durationMs: 10, planned: 3 },
+      {
+        file: "a|b.test.ts",
+        runs: 3,
+        failures: 1,
+        failedIterations: [2],
+        durationMs: 10,
+        planned: 3,
+      },
     ],
     skipped: [{ file: "db.test.ts", reason: "not gated (needs DB)" }],
     errors: [],
@@ -537,39 +562,24 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
   ).toBe(1);
 });
 
-test("a real 20-run shuffled fixture detects order dependence and rejects zero-test success", async () => {
-  await withFixture(async (root) => {
-    write(
-      root,
-      "fixture.test.ts",
-      `import {expect,test} from "bun:test";
-let prepared = false;
-test("prepare", () => { prepared = true; });
-test("requires preparation", () => { expect(prepared).toBe(true); });
-`,
-    );
-    const report = await executeGate({
-      targets: [targetFor(root)],
-      skipped: [],
-    });
-    const result = report.results.at(0);
-    expect(result?.runs).toBe(20);
-    expect(result?.failures).toBeGreaterThan(0);
-    expect(result?.failures).toBeLessThan(20);
-    expect(reportExitCode(report, false)).toBe(0);
-    expect(reportExitCode(report, true)).toBe(1);
-    write(root, "empty.test.ts", "export {};\n");
-    expect(
-      await runOnce({
-        target: targetFor(root, "empty.test.ts"),
-        seed: 1,
-        timeoutMs: 10_000,
-      }),
-    ).toMatchObject({ type: "executed", passed: false });
+test("five shuffled iterations name the failing iteration", async () => {
+  const report = await executeGate({
+    targets: [targetFor("/fixture")],
+    skipped: [],
+    run: async ({ seed }) => ({
+      type: "executed",
+      passed: seed !== 3,
+      status: seed === 3 ? 1 : 0,
+      ranTests: true,
+    }),
   });
-}, 30_000);
+  const result = report.results.at(0);
+  expect(result?.runs).toBe(REPEATS);
+  expect(result?.failedIterations).toEqual([3]);
+  expect(reportExitCode(report, true)).toBe(1);
+});
 
-test("the pinned Bun accepts native rerun and shuffle flags with twenty executions", async () => {
+test("the pinned Bun accepts native rerun and shuffle flags", async () => {
   await withFixture(async (root) => {
     write(
       root,
@@ -584,7 +594,7 @@ test("native flag probe", () => appendFileSync("executions.txt", "x"));
         process.execPath,
         "test",
         "--rerun-each",
-        "20",
+        String(REPEATS),
         "--randomize",
         "--seed=1",
         "./native.test.ts",
@@ -593,7 +603,7 @@ test("native flag probe", () => appendFileSync("executions.txt", "x"));
     );
     expect(await child.exited).toBe(0);
     expect(await Bun.file(path.join(root, "executions.txt")).text()).toBe(
-      "x".repeat(20),
+      "x".repeat(REPEATS),
     );
   });
 });

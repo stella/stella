@@ -1472,6 +1472,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
+  // JSON paths handed from ci-plan to the changed-test repeat in ci-tests.
+  "CHANGED_FILES_JSON",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
   "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",

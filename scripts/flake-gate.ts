@@ -29,8 +29,9 @@ import {
   type RustTarget,
 } from "./flake-gate-rust";
 
-export const REPEATS = 20;
-export const BUDGET_MS = 60 * 60 * 1000;
+export const REPEATS = 5;
+export const MAX_CHANGED_TEST_FILES = 10;
+export const BUDGET_MS = 5 * 60 * 1000;
 const root = path.resolve(import.meta.dir, "..");
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const manifestSchema = v.object({
@@ -234,6 +235,7 @@ export type Measurement = {
   file: string;
   runs: number;
   failures: number;
+  failedIterations: number[];
   durationMs: number;
   planned: number;
 };
@@ -249,19 +251,30 @@ const markdown = (value: string) =>
     .replaceAll("|", "\\|")
     .replaceAll(/\r?\n/gu, " ")
     .replaceAll("`", "\\`");
+const coverage = ({
+  runs,
+  failedIterations,
+}: Pick<Measurement, "runs" | "failedIterations">) => {
+  const reduced = runs < REPEATS ? "reduced repeats (cost cap)" : "";
+  if (failedIterations.length === 0) {
+    return reduced || "full";
+  }
+  const failures = `failed iterations ${failedIterations.join(", ")}`;
+  return reduced ? `${failures}; ${reduced}` : failures;
+};
 export const renderReport = (report: Report) =>
   [
     "## Changed-test flake gate (report only by default)",
     "",
-    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: 60 test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
+    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${BUDGET_MS / 60_000} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
     "Failures include persistent failures and runner errors; they require investigation before being called flakes.",
     report.cleanup.note,
     "",
     "| Test | Runs | Failures | Coverage |",
     "| --- | ---: | ---: | --- |",
     ...report.results.map(
-      ({ file, runs, failures }) =>
-        `| ${markdown(file)} | ${runs} | ${failures} | ${runs < REPEATS ? "reduced repeats (cost cap)" : "full"} |`,
+      ({ file, runs, failures, failedIterations }) =>
+        `| ${markdown(file)} | ${runs} | ${failures} | ${coverage({ runs, failedIterations })} |`,
     ),
     ...report.skipped.map(
       ({ file, reason }) =>
@@ -457,37 +470,43 @@ export const executeGate = async ({
       file: target.file,
       runs: 1,
       failures: Number(!outcome.passed),
+      failedIterations: outcome.passed ? [] : [1],
       durationMs,
       planned: 1,
     });
   }
   const plan = planRepeats(measured, remaining());
-  for (const result of report.results.toSorted(
-    (a, b) => a.durationMs - b.durationMs,
-  )) {
-    const target = targets.find(({ file }) => file === result.file);
-    if (!target) {
-      panic(`Missing target: ${result.file}`);
-    }
-    const planned = plan.get(result.file);
-    if (planned === undefined) {
-      panic(`Missing repeat plan: ${result.file}`);
-    }
-    result.planned = planned;
-    for (
-      let index = 1;
-      index < result.planned && remaining() >= result.durationMs;
-      index += 1
-    ) {
-      const outcome = await attempt({
-        target,
-        seed: index + 1,
-        timeoutMs: remaining(),
-      });
-      result.runs += 1;
-      result.failures += Number(outcome.type === "no-tests" || !outcome.passed);
-    }
-  }
+  // Files repeat concurrently on the existing shard runner; iterations for one
+  // file remain serial so state cannot leak between overlapping invocations.
+  await Promise.all(
+    report.results.map(async (result) => {
+      const target = targets.find(({ file }) => file === result.file);
+      if (!target) {
+        return panic(`Missing target: ${result.file}`);
+      }
+      const planned = plan.get(result.file);
+      if (planned === undefined) {
+        return panic(`Missing repeat plan: ${result.file}`);
+      }
+      result.planned = planned;
+      for (
+        let index = 1;
+        index < result.planned && remaining() >= result.durationMs;
+        index += 1
+      ) {
+        const outcome = await attempt({
+          target,
+          seed: index + 1,
+          timeoutMs: remaining(),
+        });
+        result.runs += 1;
+        if (outcome.type === "no-tests" || !outcome.passed) {
+          result.failures += 1;
+          result.failedIterations.push(index + 1);
+        }
+      }
+    }),
+  );
   report.elapsedMs = now() - start;
   return report;
 };
@@ -503,23 +522,40 @@ if (import.meta.main) {
   const outcome = await Result.tryPromise(async () => {
     const base = process.env["BASE_SHA"] || "origin/main";
     // Match ci-plan: NUL-delimited paths, no rename inference, merge-base diff.
-    const diff = Bun.spawn(
-      ["git", "diff", "--name-only", "-z", "--no-renames", `${base}...HEAD`],
-      { cwd: root, stdout: "pipe", stderr: "inherit" },
-    );
-    const changed = (await new Response(diff.stdout).text())
-      .split("\0")
-      .filter(Boolean);
-    if ((await diff.exited) !== 0) {
-      throw new FlakeGateError({ message: "Cannot read PR diff" });
+    const suppliedChanged = process.env["CHANGED_FILES_JSON"];
+    let changed: string[];
+    if (suppliedChanged) {
+      changed = v.parse(v.array(v.string()), JSON.parse(suppliedChanged));
+    } else {
+      const diff = Bun.spawn(
+        ["git", "diff", "--name-only", "-z", "--no-renames", `${base}...HEAD`],
+        { cwd: root, stdout: "pipe", stderr: "inherit" },
+      );
+      changed = (await new Response(diff.stdout).text())
+        .split("\0")
+        .filter(Boolean);
+      if ((await diff.exited) !== 0) {
+        throw new FlakeGateError({ message: "Cannot read PR diff" });
+      }
     }
-    return executeGate(
-      selectTargets({
-        root,
-        changed,
-        hasDb: Boolean(process.env["DATABASE_URL"]),
-      }),
-    );
+    const selection = selectTargets({
+      root,
+      changed,
+      hasDb: Boolean(process.env["DATABASE_URL"]),
+    });
+    if (selection.targets.length > MAX_CHANGED_TEST_FILES) {
+      return {
+        cleanup: cleanupCapability(),
+        results: [],
+        skipped: selection.targets.map(({ file }) => ({
+          file,
+          reason: `not gated (more than ${MAX_CHANGED_TEST_FILES} changed test files)`,
+        })),
+        errors: [],
+        elapsedMs: 0,
+      } satisfies Report;
+    }
+    return executeGate(selection);
   });
   if (outcome.isErr()) {
     report.errors.push(outcome.error.message);
@@ -535,11 +571,11 @@ if (import.meta.main) {
     ({ failures }) => failures > 0,
   )) {
     console.log(
-      `::warning file=${annotationProperty(result.file)}::${result.failures}/${result.runs} runs failed`,
+      `::error file=${annotationProperty(result.file)}::${result.file} failed iteration${result.failedIterations.length === 1 ? "" : "s"} ${result.failedIterations.join(", ")}`,
     );
   }
   for (const error of finalReport.errors) {
-    console.log(`::warning::${annotationData(error)}`);
+    console.log(`::error::${annotationData(error)}`);
   }
   process.exitCode = reportExitCode(
     finalReport,
