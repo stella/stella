@@ -76,7 +76,7 @@ test("a revision retains independent date meanings, provision scope and an unnor
     sourceRawS3Key: null,
     sourceRawContentType: null,
   });
-  expect(stored.metadata["publisherEvidence"]).toEqual(
+  expect(stored.metadata.publisherEvidence).toEqual(
     input.metadata.publisherEvidence,
   );
   expect(stored.status).toBe("unknown");
