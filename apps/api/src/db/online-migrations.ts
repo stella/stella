@@ -97,6 +97,42 @@ type OnlineIndex = RequiredMigrationIndex & {
 };
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legislation_documents_work_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (version_valid_from IS NOT NULL)",
+    isUnique: false,
+    name: "legislation_documents_work_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_publisher_identity_idx" ON public."legislation_documents" (source_id, eli, language, publisher_expression_id) WHERE identity_mode = \'publisher-expression\'',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language, publisher_expression_id) WHERE ((identity_mode)::text = 'publisher-expression'::text)",
+    isUnique: true,
+    name: "legislation_documents_publisher_identity_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NOT NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_current_lang_idx" ON public."legislation_documents" (source_id, eli, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_current_lang_idx",
+    tableName: "legislation_documents",
+  },
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
     definitionBody: `ON public.${tableName} USING btree (id) WHERE ((content -> 'version'::text) IS DISTINCT FROM '3'::jsonb)`,
@@ -495,6 +531,21 @@ type OnlineIndexReplacement = {
 };
 
 const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
+  {
+    legacyName: "legislation_documents_eli_version_lang_idx",
+    replacementNames: [
+      "legislation_documents_work_version_lang_idx",
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_version_lang_idx",
+    ],
+  },
+  {
+    legacyName: "legislation_documents_eli_current_lang_idx",
+    replacementNames: [
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_current_lang_idx",
+    ],
+  },
   {
     legacyName: "legal_reader_answer_messages_answer_idx",
     replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],

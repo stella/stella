@@ -5,6 +5,12 @@
  * not decided what to do with it.
  */
 
+/** The identity contract selected before a source stores its first version. */
+export const LEGISLATION_IDENTITY_MODES = {
+  legacy: "legacy-window",
+  publisher: "publisher-expression",
+} as const;
+
 /** The kind of text a stored version holds. */
 export const LEGISLATION_EXPRESSION_KINDS = [
   /** A consolidated wording with a validity window. */
