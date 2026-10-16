@@ -247,7 +247,8 @@ export const parseStrippingUndeclaredKeys = <TSchema extends v.GenericSchema>(
 
 /**
  * A tool result reached its caller degraded: undeclared fields were stripped,
- * or (chat) a leaf carrying an unmappable internal id was dropped. The call
+ * or (chat) an unmappable internal id was masked in a data string or its
+ * ref leaf dropped. The call
  * succeeded, so nothing else would surface the handler/contract drift; it is
  * a defect and reported at error level.
  */

@@ -7,12 +7,14 @@ import {
   test,
   expectTypeOf,
 } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import {
   PUBLIC_COUNTRIES,
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
+import { assertProperty } from "@stll/property-testing";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
@@ -737,7 +739,7 @@ describe("projectForChat", () => {
     expect(projected).toEqual({ content, question: "Which cap applies?" });
   });
 
-  test("the UUID invariant still covers unenumeratedJson contents: the leaf is dropped", () => {
+  test("the UUID invariant still covers unenumeratedJson contents: each id is masked", () => {
     const schema: ChatProjectionSchema = v.strictObject({
       content: unenumeratedJson(),
     });
@@ -753,7 +755,10 @@ describe("projectForChat", () => {
     }).unwrap();
 
     expect(projected).toEqual({
-      content: { nodes: [{ kind: "text" }], tags: ["kept"] },
+      content: {
+        nodes: [{ kind: "text", value: `see ${MASKED_CONTENT_ID}` }],
+        tags: ["kept", MASKED_CONTENT_ID],
+      },
     });
     expect(containsRawUuid(projected)).toBe(false);
     expect(degradeLogs()).toEqual([
@@ -774,7 +779,7 @@ describe("projectForChat", () => {
     expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
-  test("a UUID embedded in a declared plain string drops that field, reported by path", () => {
+  test("a UUID embedded in a declared plain string is masked, reported by path", () => {
     const schema: ChatProjectionSchema = v.strictObject({
       matters: v.array(
         v.strictObject({ name: v.string(), reference: v.string() }),
@@ -791,10 +796,12 @@ describe("projectForChat", () => {
       schema,
     }).unwrap();
 
-    // The required `reference` is dropped rather than leaked: the model sees
-    // less, never the raw id.
+    // The model keeps the reference text, never the raw id.
     expect(projected).toEqual({
-      matters: [{ name: "Acme" }, { name: "Beta", reference: "REF-2" }],
+      matters: [
+        { name: "Acme", reference: `REF-${MASKED_CONTENT_ID}` },
+        { name: "Beta", reference: "REF-2" },
+      ],
     });
     expect(containsRawUuid(projected)).toBe(false);
     expect(degradeLogs()).toEqual([
@@ -806,7 +813,7 @@ describe("projectForChat", () => {
     expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
-  test("a bare string array item carrying a UUID is removed from the array", () => {
+  test("a bare string array item carrying a UUID keeps its place, masked", () => {
     const schema: ChatProjectionSchema = v.strictObject({
       labels: v.array(v.string()),
     });
@@ -816,11 +823,105 @@ describe("projectForChat", () => {
       schema,
     }).unwrap();
 
-    expect(projected).toEqual({ labels: ["urgent", "nda"] });
+    expect(projected).toEqual({
+      labels: ["urgent", `ref ${MASKED_CONTENT_ID}`, "nda"],
+    });
     expect(containsRawUuid(projected)).toBe(false);
     expect(degradeLogs()).toEqual([
       expect.objectContaining({ defect: "unmapped_id", paths: "labels[]" }),
     ]);
+  });
+
+  test("a ref leaf with an embedded UUID is dropped, never masked into a fake handle", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      matterId: chatRef("matter"),
+      name: v.string(),
+    });
+
+    const projected = project({
+      payload: { matterId: `prefix-${ROGUE_UUID}`, name: "Acme" },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({ name: "Acme" });
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id", paths: "matterId" }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("masking keeps every non-id character of a data string and leaves no raw UUID", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: unenumeratedJson(),
+      labels: v.array(v.string()),
+      text: v.string(),
+    });
+    const uuid = fc
+      .tuple(fc.uuid(), fc.boolean())
+      .map(([id, upper]) => (upper ? id.toUpperCase() : id));
+    // Hex-free segments (diacritics included) with UUIDs spliced between
+    // them, so the expected text is the segments joined around the mask
+    // without re-running the masking regex.
+    const segment = fc.stringMatching(
+      /^[g-zG-Z áčďéěíňóřšťúůýž.,;:()"'„“«»\n-]{0,12}$/u,
+    );
+    const textWithIds = fc
+      .array(fc.tuple(segment, fc.option(uuid, { nil: undefined })), {
+        maxLength: 5,
+      })
+      .map((parts) => ({
+        expected: parts
+          .map(([text, id]) =>
+            id === undefined ? text : `${text}${MASKED_CONTENT_ID}`,
+          )
+          .join(""),
+        raw: parts.map(([text, id]) => `${text}${id ?? ""}`).join(""),
+      }));
+
+    assertProperty(
+      "chat projection masks ids inside data strings without dropping text",
+      fc.property(
+        textWithIds,
+        fc.array(textWithIds, { maxLength: 3 }),
+        (text, labels) => {
+          const projected = project({
+            payload: {
+              content: { nested: [text.raw] },
+              labels: labels.map(({ raw }) => raw),
+              text: text.raw,
+            },
+            schema,
+          }).unwrap();
+
+          expect(projected).toEqual({
+            content: { nested: [text.expected] },
+            labels: labels.map(({ expected }) => expected),
+            text: text.expected,
+          });
+          expect(containsRawUuid(projected)).toBe(false);
+          expect(containsRawUuid(allTelemetry())).toBe(false);
+        },
+      ),
+    );
+  });
+
+  test("a data string without a UUID is forwarded byte for byte, with no degrade report", () => {
+    const schema: ChatProjectionSchema = v.strictObject({ text: v.string() });
+
+    assertProperty(
+      "chat projection forwards id-free data strings verbatim",
+      fc.property(
+        fc
+          .string({ unit: "grapheme" })
+          .filter((text) => !containsRawUuid(text)),
+        (text) => {
+          expect(project({ payload: { text }, schema }).unwrap()).toEqual({
+            text,
+          });
+        },
+      ),
+    );
+    expect(degradeLogs()).toEqual([]);
   });
 
   test("an entity ref whose workspace is unrecoverable is dropped instead of leaking", () => {

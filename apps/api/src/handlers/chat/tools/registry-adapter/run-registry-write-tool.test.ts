@@ -11,6 +11,7 @@ import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   containsRawUuid,
+  MASKED_CONTENT_ID,
   projectForChat,
 } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -422,10 +423,10 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
     );
   });
 
-  test("the UUID invariant drops a raw uuid in a declared plain field", () => {
+  test("the UUID invariant masks a raw uuid in a declared plain field", () => {
     // update_organization_settings's settings echo declares `matterNumberPattern` as an
-    // ordinary string, which no annotation licenses to carry a UUID: the leaf
-    // is dropped rather than leaked, with only the path (never the value)
+    // ordinary string, which no annotation licenses to carry a UUID: the id
+    // is masked rather than leaked, with only the path (never the value)
     // reaching telemetry.
     const result = projectForChat({
       dehydration: {
@@ -441,7 +442,7 @@ describe("write ref mediation (via the WRITE_TOOL_REF_FIELD_MAP)", () => {
       toolName: "update_organization_settings",
     });
 
-    expect(result.unwrap()).toEqual({});
+    expect(result.unwrap()).toEqual({ matterNumberPattern: MASKED_CONTENT_ID });
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([

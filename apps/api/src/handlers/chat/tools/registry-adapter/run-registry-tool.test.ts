@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
-import { containsRawUuid } from "@/api/lib/chat/projection-schema";
+import {
+  containsRawUuid,
+  MASKED_CONTENT_ID,
+} from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -242,13 +245,13 @@ describe("runRegistryReadTool", () => {
     }
   });
 
-  test("drops a raw uuid that survives ref hydration at an undeclared path", async () => {
+  test("masks a raw uuid that survives ref hydration at an undeclared path", async () => {
     const registry = createChatRefRegistry();
     // Doctored: `reference` is an ordinary free-text field the ref map never
     // mediates (it is not one of `list_matters`'s `outputRefs` or
     // `passthroughIdPaths`), but nothing stops it from holding a raw uuid.
     // The path-aware backstop must catch this survivor at its exact path even
-    // though no per-field ref rule exists for it, and drop that leaf.
+    // though no per-field ref rule exists for it, and mask the id in place.
     const rows = [
       {
         id: WS_UUID,
@@ -269,9 +272,15 @@ describe("runRegistryReadTool", () => {
 
     const payload = result.unwrap();
     expect(payload).toMatchObject({
-      matters: [{ id: "mat_1", name: "Acme", status: "active" }],
+      matters: [
+        {
+          id: "mat_1",
+          name: "Acme",
+          reference: MASKED_CONTENT_ID,
+          status: "active",
+        },
+      ],
     });
-    expect(payload).not.toHaveProperty("matters.0.reference");
     expect(containsRawUuid(payload)).toBe(false);
     // Telemetry carries the offending path so the survivor is traceable, but
     // never the leaked value itself.
