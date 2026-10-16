@@ -24,7 +24,6 @@ const LIST_READ_BY_CATEGORY = {
 const SEARCH_LIST_TOKENS = [
   "PUBLIC_CASE_LAW_COUNTRIES",
   "PUBLIC_LEGISLATION_COUNTRIES",
-  "ADMITTED_PUBLIC_COUNTRIES",
   "isPublicCaseLawCountry",
   "publicCaseLawCountryFromParam",
   "publicCaseLawCountry(",
@@ -36,7 +35,6 @@ const SEARCH_LIST_TOKENS = [
 const PAGES_LIST_TOKENS = [
   "PUBLIC_CASE_LAW_PAGE_COUNTRIES",
   "PUBLIC_LEGISLATION_PAGE_COUNTRIES",
-  "PAGES_PUBLIC_COUNTRIES",
   "isPublicCaseLawPageCountry",
   "publicCaseLawPageCountryFromParam",
   "publicCaseLawPageCountry(",
@@ -195,6 +193,53 @@ const mentionsAny = (source: string, tokens: readonly string[]) =>
   tokens.some((token) => source.includes(token));
 
 describe("public law surface consumers", () => {
+  test("each domain derives both serving lists from its own capability", async () => {
+    const owners = {
+      "packages/api-contract/src/case-law-launch-readiness.ts": "caseLaw",
+      "packages/api-contract/src/legislation-publication.ts": "legislation",
+    } as const;
+    for (const [path, domain] of Object.entries(owners)) {
+      const source = await readSource(path);
+      expect(
+        [
+          ...source.matchAll(
+            /publicCountriesFor\(\s*"(caseLaw|legislation)",\s*"(pages|search)",?\s*\)/gu,
+          ),
+        ]
+          .map((match) => [match[1], match[2]])
+          .toSorted(),
+      ).toEqual([
+        [domain, "pages"],
+        [domain, "search"],
+      ]);
+    }
+  });
+
+  test("every HTTP country read chooses its owning domain", async () => {
+    const glob = new Bun.Glob(
+      "apps/api/src/handlers/{case-law,legislation}/**/*.ts",
+    );
+    for await (const path of glob.scan({ cwd: repoRoot })) {
+      if (/\.(test|spec)\.ts$/u.test(path)) {
+        continue;
+      }
+      const source = await readSource(path);
+      const domain = path.includes("/legislation/") ? "legislation" : "caseLaw";
+      const calls = [
+        ...source.matchAll(/readPublicLawCountry\([^,]+, \{([^}]+)\}/gu),
+      ];
+      for (const call of calls) {
+        expect(call[1]).toContain(`domain: "${domain}"`);
+      }
+      const direct = [
+        ...source.matchAll(/publicLawCountryUnavailable\([^,]+, \{([^}]+)\}/gu),
+      ];
+      for (const call of direct) {
+        expect(call[1]).toContain(`domain: "${domain}"`);
+      }
+    }
+  });
+
   test.each(Object.entries(CONSUMERS))(
     "%s reads only the list of its category (%s)",
     async (path, category) => {
@@ -286,7 +331,8 @@ describe("public law surface consumers", () => {
       const source = await readSource(path);
       if (
         mentionsAny(source, SEARCH_LIST_TOKENS) ||
-        mentionsAny(source, PAGES_LIST_TOKENS)
+        mentionsAny(source, PAGES_LIST_TOKENS) ||
+        source.includes("publicCountriesFor")
       ) {
         unregistered.push(path);
       }

@@ -94,7 +94,10 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicLawCountryUnavailable(country, "search"),
+      : publicLawCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 

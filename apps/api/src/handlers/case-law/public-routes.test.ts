@@ -16,7 +16,7 @@ import { LIMITS } from "@/api/lib/limits";
 describe("public case-law routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) => PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
@@ -28,7 +28,7 @@ describe("public case-law routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country,
-        reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+        reason: PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw,
       });
     },
   );

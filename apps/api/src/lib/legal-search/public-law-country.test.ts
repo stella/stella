@@ -33,7 +33,7 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const pendingCountry = PUBLIC_COUNTRIES.find(
-  (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
 );
 
 // Built through the owner rather than read from the capability map, so the
@@ -127,7 +127,10 @@ describe("typed public country unavailability through the request lifecycle", ()
 
       expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
       expect(await response.json()).toEqual(
-        publicCountryUnavailable(country, "search"),
+        publicCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
       );
       expectAnsweredClientOutcome();
     },
@@ -222,19 +225,25 @@ describe("declared public country unavailability", () => {
 describe("a pages_public country on the shared read", () => {
   const capabilities = {
     ...PUBLIC_COUNTRY_CAPABILITIES,
-    SVK: "pages_public",
+    SVK: { ...PUBLIC_COUNTRY_CAPABILITIES.SVK, caseLaw: "pages_public" },
   } as const;
   const admitted = ["CZE", "SVK"];
 
   test("a page read succeeds", () => {
     expect(
-      readPublicLawCountry("SVK", { admitted, capabilities, surface: "pages" }),
+      readPublicLawCountry("SVK", {
+        domain: "caseLaw",
+        admitted,
+        capabilities,
+        surface: "pages",
+      }),
     ).toEqual({ kind: "read", country: "SVK" });
   });
 
   test("a search read stops with the unavailable answer before any query", () => {
     expect(
       readPublicLawCountry("SVK", {
+        domain: "caseLaw",
         admitted,
         capabilities,
         surface: "search",
