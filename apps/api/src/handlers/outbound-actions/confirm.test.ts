@@ -92,9 +92,9 @@ const setup = ({
           executed.push(context.preview);
           return await executor(context);
         };
-  const handler = createConfirmOutboundActionHandler(
-    recordingExecutor === undefined ? {} : { "email.send": recordingExecutor },
-  );
+  const handler = createConfirmOutboundActionHandler({
+    "email.send": recordingExecutor,
+  });
   type Context = Parameters<typeof handler.handler>[0];
   const context = asTestRaw<Context>({
     params: { actionId },

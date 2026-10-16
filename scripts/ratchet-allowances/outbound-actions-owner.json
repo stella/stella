@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The outbound-actions slice owns canonical preview hashing, encrypted pending-action storage and the typed execution contract shared by human-confirmation handlers."
+}

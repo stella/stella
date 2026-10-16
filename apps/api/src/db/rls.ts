@@ -1131,10 +1131,12 @@ export const sharepointOAuthStatePolicies = () => [
 ];
 
 // Outbound actions act as one user outside stella: only that user in the
-// active org reads, prepares, confirms or discards them. Row security is
+// active org reads, prepares, confirms or discards them. Previews inherit the
+// owning thread's current matter and embedded-data scope. Row security is
 // forced, so the owner role used by member offboarding has its own policy.
 const outboundActionCheck = sql`(
-  ${organizationCheck} AND ${userCheck}
+  ${organizationCheck} AND ${userCheck} AND
+  ${chatDerivedThreadScopeCheck(sql`outbound_actions.chat_thread_id`)}
 )`;
 const outboundActionOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass)`;
 
@@ -1160,6 +1162,12 @@ export const outboundActionPolicies = () => [
     to: stella,
     using: outboundActionCheck,
     withCheck: outboundActionCheck,
+  }),
+  p.pgPolicy("outbound_action_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
   }),
 ];
 

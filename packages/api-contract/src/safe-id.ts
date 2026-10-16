@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adding outboundAction does not change parser IDs or parsed records.
 // parser-output-unchanged: Adding the citation doctrine review ID kind does not change parser IDs or parsed records.
 // parser-output-unchanged: Adding search-history, chat revision and reader answer ID kinds does not change parser IDs or parsed records.
 import * as v from "valibot";

@@ -11,11 +11,18 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   OUTBOUND_ACTION_EXECUTORS,
   type OutboundActionExecutors,
 } from "@/api/lib/outbound-actions/executors";
 import { readStoredOutboundPreview } from "@/api/lib/outbound-actions/store";
+
+const EXECUTION_FAILED_SINK = failureSink({
+  event: "outbound_actions.execution_failed",
+  expected: [],
+});
 
 const config = {
   contract: "patch",
@@ -161,7 +168,10 @@ export const createConfirmOutboundActionHandler = (
             safeDb,
             userId: user.id,
           }),
-        catch: () => ({ failureCode: "provider_unreachable" }),
+        catch: (cause) => {
+          observeFailure(cause, { sink: EXECUTION_FAILED_SINK });
+          return { failureCode: "provider_unreachable" };
+        },
       });
       const outcome = Result.isError(executed) ? executed : executed.value;
       const completedAt = new Date();
@@ -187,6 +197,8 @@ export const createConfirmOutboundActionHandler = (
             .where(
               and(
                 eq(outboundActions.id, actionId),
+                eq(outboundActions.organizationId, organizationId),
+                eq(outboundActions.userId, user.id),
                 eq(outboundActions.status, "sending"),
               ),
             );

@@ -24,9 +24,12 @@ export type OutboundActionExecutor = (context: {
   userId: SafeId<"user">;
 }) => Promise<Result<{ providerMessageId: string }, OutboundActionFailure>>;
 
-export type OutboundActionExecutors = Partial<
-  Record<OutboundActionKind, OutboundActionExecutor>
+export type OutboundActionExecutors = Record<
+  OutboundActionKind,
+  OutboundActionExecutor | undefined
 >;
 
 /** Kinds with a provider wired in; a kind without one cannot be confirmed. */
-export const OUTBOUND_ACTION_EXECUTORS: OutboundActionExecutors = {};
+export const OUTBOUND_ACTION_EXECUTORS = {
+  "email.send": undefined,
+} as const satisfies OutboundActionExecutors;

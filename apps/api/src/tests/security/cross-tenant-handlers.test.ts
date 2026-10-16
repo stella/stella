@@ -15,6 +15,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import { desktopTimeEntryBatchResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import type { OutboundActionPreview } from "@stll/api-contract/outbound-action";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
@@ -23,6 +24,7 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
@@ -132,6 +134,9 @@ import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
+import discardOutboundAction from "@/api/handlers/outbound-actions/discard";
+import readOutboundAction from "@/api/handlers/outbound-actions/read";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
@@ -168,6 +173,8 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
+import { prepareOutboundAction } from "@/api/lib/outbound-actions/store";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
@@ -621,7 +628,74 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+const outboundPreview = {
+  kind: "email.send",
+  from: { address: "sender@example.test" },
+  to: [{ address: "recipient@example.test" }],
+  cc: [],
+  bcc: [],
+  subject: "Agreement",
+  bodyText: "Please review the agreement.",
+  attachments: [],
+  inReplyTo: null,
+} satisfies OutboundActionPreview;
+const outboundHash = outboundPreviewHash(outboundPreview);
+let outboundReadB: SafeId<"outboundAction">;
+let outboundConfirmB: SafeId<"outboundAction">;
+let outboundDiscardB: SafeId<"outboundAction">;
+const confirmOutboundAction = createConfirmOutboundActionHandler({
+  "email.send": async () => Result.ok({ providerMessageId: "message-1" }),
+});
+
 const isolationCases: IsolationCase[] = [
+  {
+    name: "outbound action read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readOutboundAction, workspaceA, {
+        params: { actionId: outboundReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expectRecordFieldEquals(result, "id", outboundReadB);
+      expect(recordField(result, "preview")).toEqual(outboundPreview);
+      expectRecordFieldEquals(result, "previewHash", outboundHash);
+    },
+  },
+  {
+    name: "outbound action confirm",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(confirmOutboundAction, workspaceA, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(discardOutboundAction, workspaceA, {
+        params: { actionId: outboundDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
   ...desktopPresenceIsolationCases(),
   ...desktopTimeEntryIsolationCases(),
   ...readerAnswerIsolationCases(),
@@ -2630,6 +2704,27 @@ testState.beforeAll(async () => {
     chatThreadOfB(chatSendThreadB),
     { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
+  const prepareAction = async () => {
+    const prepared = await testDb.transaction(
+      async (tx) =>
+        await prepareOutboundAction({
+          tx: asTestRaw<Transaction>(tx),
+          organizationId: ids.orgB,
+          userId: ids.userA1,
+          chatThreadId: chatThreadB,
+          preview: outboundPreview,
+          now: new Date(),
+          recordAuditEvent: noopAuditRecorder,
+        }),
+    );
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    return prepared.value.id;
+  };
+  outboundReadB = await prepareAction();
+  outboundConfirmB = await prepareAction();
+  outboundDiscardB = await prepareAction();
   const chatText = (text: string) => ({
     version: 1 as const,
     data: [{ type: "text" as const, text }],

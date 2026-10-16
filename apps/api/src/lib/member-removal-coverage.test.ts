@@ -473,6 +473,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "outbound_actions.user_id":
+    "Thread-derived content remains gated by the owning thread and its current matter access.",
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
   "search_history_entries.user_id":

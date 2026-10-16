@@ -1671,6 +1671,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpUserConnections.userId, "cleared"],
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
+  [outboundActions.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],

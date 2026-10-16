@@ -33,7 +33,8 @@ CREATE INDEX "outbound_actions_chat_thread_idx" ON "outbound_actions" ("chat_thr
 ALTER TABLE "outbound_actions" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "outbound_actions" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON TABLE "outbound_actions" TO stella;--> statement-breakpoint
-CREATE POLICY "outbound_action_owner" ON "outbound_actions" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass));--> statement-breakpoint
+CREATE POLICY "outbound_action_owner" ON "outbound_actions" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.outbound_actions'::regclass));
+--> statement-breakpoint
 CREATE POLICY "outbound_action_select" ON "outbound_actions" AS PERMISSIVE FOR SELECT TO "stella" USING ((
   organization_id =
   (SELECT current_setting(
@@ -41,8 +42,66 @@ CREATE POLICY "outbound_action_select" ON "outbound_actions" AS PERMISSIVE FOR S
   )) AND user_id =
   (SELECT current_setting(
     'app.user_id', true
-  ))
-));--> statement-breakpoint
+  )) AND
+  (
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = outbound_actions.chat_thread_id
+      AND ct.user_id = (SELECT current_setting(
+        'app.user_id', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        'app.organization_id', true
+      ))
+      AND (ct.workspace_id IS NULL OR CASE
+  WHEN ct.workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ct.workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END)
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+)
+));
+--> statement-breakpoint
 CREATE POLICY "outbound_action_insert" ON "outbound_actions" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ((
   organization_id =
   (SELECT current_setting(
@@ -50,8 +109,66 @@ CREATE POLICY "outbound_action_insert" ON "outbound_actions" AS PERMISSIVE FOR I
   )) AND user_id =
   (SELECT current_setting(
     'app.user_id', true
-  ))
-));--> statement-breakpoint
+  )) AND
+  (
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = outbound_actions.chat_thread_id
+      AND ct.user_id = (SELECT current_setting(
+        'app.user_id', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        'app.organization_id', true
+      ))
+      AND (ct.workspace_id IS NULL OR CASE
+  WHEN ct.workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ct.workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END)
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+)
+));
+--> statement-breakpoint
 CREATE POLICY "outbound_action_update" ON "outbound_actions" AS PERMISSIVE FOR UPDATE TO "stella" USING ((
   organization_id =
   (SELECT current_setting(
@@ -59,7 +176,64 @@ CREATE POLICY "outbound_action_update" ON "outbound_actions" AS PERMISSIVE FOR U
   )) AND user_id =
   (SELECT current_setting(
     'app.user_id', true
-  ))
+  )) AND
+  (
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = outbound_actions.chat_thread_id
+      AND ct.user_id = (SELECT current_setting(
+        'app.user_id', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        'app.organization_id', true
+      ))
+      AND (ct.workspace_id IS NULL OR CASE
+  WHEN ct.workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ct.workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END)
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+)
 )) WITH CHECK ((
   organization_id =
   (SELECT current_setting(
@@ -67,5 +241,64 @@ CREATE POLICY "outbound_action_update" ON "outbound_actions" AS PERMISSIVE FOR U
   )) AND user_id =
   (SELECT current_setting(
     'app.user_id', true
-  ))
+  )) AND
+  (
+  EXISTS (
+    SELECT 1 FROM chat_threads ct
+    WHERE ct.id = outbound_actions.chat_thread_id
+      AND ct.user_id = (SELECT current_setting(
+        'app.user_id', true
+      ))
+      AND ct.organization_id = (SELECT current_setting(
+        'app.organization_id', true
+      ))
+      AND (ct.workspace_id IS NULL OR CASE
+  WHEN ct.workspace_id = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          'app.workspace_ids', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ct.workspace_id IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.stella_authorized_workspaces aw
+  )
+END)
+      AND (
+        cardinality(ct.data_workspace_ids) = 0
+        OR NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(ct.data_workspace_ids) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              'app.workspace_ids', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.stella_authorized_workspaces aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)
+      )
+  )
+)
 ));
+--> statement-breakpoint
+CREATE POLICY "outbound_action_no_delete" ON "outbound_actions" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);
