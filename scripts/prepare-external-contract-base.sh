@@ -13,11 +13,19 @@ fi
 if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
   head="$(git rev-parse HEAD)"
   git fetch --no-tags --depth=1 origin "$base_ref"
-  while [[ "$(git rev-parse --is-shallow-repository)" == true ]]; do
-    git fetch --no-tags --deepen=32 origin "$head"
+  depth=1
+  max_depth=2048
+  while [[ "$(git rev-parse --is-shallow-repository)" == true && "$depth" -lt "$max_depth" ]]; do
+    before="$(git rev-list --count HEAD "$base_ref")"
+    git fetch --no-tags --deepen=32 origin "$head" "$base_ref"
     if git merge-base HEAD "$base_ref" >/dev/null 2>&1; then
       break
     fi
+    after="$(git rev-list --count HEAD "$base_ref")"
+    if [[ "$after" == "$before" ]]; then
+      break
+    fi
+    depth=$((depth + 32))
   done
 fi
 

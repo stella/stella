@@ -9,6 +9,7 @@ const MAX_BLOB_BATCH = 32;
 
 type OfflineGitReadOperation =
   | { type: "merge-base"; ref: string }
+  | { type: "working-paths" }
   | { type: "ls-tree"; commit: string; file: string }
   | { type: "show"; commit: string; file: string }
   | { type: "objects"; commit: string }
@@ -56,6 +57,8 @@ const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
       case "merge-base":
         validateRef(operation.ref);
         return ["merge-base", "--end-of-options", "HEAD", operation.ref];
+      case "working-paths":
+        return ["diff", "--name-only", "-z", "HEAD", "--"];
       case "ls-tree":
         validateObjectPath(operation);
         return [
@@ -193,6 +196,17 @@ export const readGitWorkingTreeBlobIds = (root: string) => {
     operation: { type: "merge-base", ref: "HEAD" },
   }).trim();
   const objects = snapshotBlobIds({ root, commit });
+  for (const file of readOfflineGit({
+    root,
+    operation: { type: "working-paths" },
+  })
+    .split("\0")
+    .filter(Boolean)) {
+    if (!validObjectPath(file)) {
+      panic("Invalid offline Git working-tree path");
+    }
+    objects.set(file, "");
+  }
   const identities = new Map<string, string | undefined>();
   const get = (file: string) => {
     if (identities.has(file)) {

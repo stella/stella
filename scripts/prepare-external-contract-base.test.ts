@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -63,6 +70,70 @@ test("a shallow checkout fetches only the ancestry needed to resolve its event b
     expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
     expect(prepared.stdout.toString().trim()).toBe(base);
     expect(git(checkout, ["merge-base", "HEAD", base])).toBe(base);
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("a shallow checkout deepens both sides of a diverged history", () => {
+  const fixture = mkdtempSync(
+    path.join(tmpdir(), "external-contract-diverged-"),
+  );
+  try {
+    const source = path.join(fixture, "source");
+    const checkout = path.join(fixture, "checkout");
+    git(fixture, ["init", "-b", "main", source]);
+    git(source, ["config", "user.name", "Contract Test"]);
+    git(source, ["config", "user.email", "contract@example.invalid"]);
+    writeFileSync(path.join(source, "common"), "common\n");
+    git(source, ["add", "common"]);
+    git(source, ["commit", "-m", "common"]);
+    const common = git(source, ["rev-parse", "HEAD"]);
+    git(source, ["checkout", "-b", "feature"]);
+    writeFileSync(path.join(source, "feature"), "one\n");
+    git(source, ["add", "feature"]);
+    git(source, ["commit", "-m", "feature one"]);
+    writeFileSync(path.join(source, "feature"), "two\n");
+    git(source, ["commit", "-am", "feature two"]);
+    git(source, ["checkout", "main"]);
+    for (let index = 1; index <= 40; index += 1) {
+      writeFileSync(path.join(source, "main"), `${index}\n`);
+      git(source, ["add", "main"]);
+      git(source, ["commit", "-m", `main ${index}`]);
+    }
+    const base = git(source, ["rev-parse", "HEAD"]);
+    git(fixture, [
+      "clone",
+      "--depth=1",
+      "--branch=feature",
+      `file://${source}`,
+      checkout,
+    ]);
+    const head = git(checkout, ["rev-parse", "HEAD"]);
+    const bin = path.join(fixture, "bin");
+    const fetchLog = path.join(fixture, "fetch.log");
+    mkdirSync(bin);
+    writeFileSync(
+      path.join(bin, "git"),
+      '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$FETCH_LOG"\nexec "$REAL_GIT" "$@"\n',
+    );
+    chmodSync(path.join(bin, "git"), 0o755);
+
+    const prepared = Bun.spawnSync(["bash", script], {
+      cwd: checkout,
+      env: {
+        ...process.env,
+        CHECK_BASE_REF: base,
+        FETCH_LOG: fetchLog,
+        PATH: `${bin}:${process.env.PATH}`,
+        REAL_GIT: Bun.which("git") ?? "git",
+      },
+    });
+    expect(prepared.exitCode, prepared.stderr.toString()).toBe(0);
+    expect(prepared.stdout.toString().trim()).toBe(common);
+    expect(readFileSync(fetchLog, "utf-8")).toContain(
+      `fetch --no-tags --deepen=32 origin ${head} ${base}`,
+    );
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }
