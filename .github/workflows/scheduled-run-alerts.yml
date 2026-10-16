@@ -62,6 +62,7 @@ on:
       - security.txt Expiry Guard
       - Sync Branch Protection
       - Publish typecheck base
+    branches: [main]
     types: [completed]
 
 permissions: {}
