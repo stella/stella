@@ -1,4 +1,5 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: Document retrieval accepts larger responses; stored raw parsing is unchanged.
 import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
@@ -1133,11 +1134,10 @@ const publisherError = (
 
 type Requested = { status: number; body: string; url: string };
 
-/**
- * The most a single response may hold. The largest document observed is a
- * quarter of a megabyte; anything past this is not a page this adapter reads.
- */
+/** Listings and detail records stay within the ordinary page budget. */
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+/** Converted documents can carry substantially larger HTML than their records. */
+const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 
 type RequestOptions = {
   fetchStage: DocumentFetchStage;
@@ -1151,14 +1151,10 @@ type RequestOptions = {
 /** A response read up to the cap; `bytes` is null past it. */
 type Received = { status: number; bytes: Uint8Array | null; url: string };
 
-const receive = async ({
-  cursor,
-  fetchStage,
-  form,
-  path,
-  signal,
-  timeoutMs,
-}: RequestOptions): Promise<Received> => {
+const receive = async (
+  { cursor, fetchStage, form, path, signal, timeoutMs }: RequestOptions,
+  maxBytes: number,
+): Promise<Received> => {
   const target = restrictOutboundUrl({
     hostPolicy: PL_KIO_HOST_POLICY,
     rawUrl: `${ORIGIN}${path}`,
@@ -1190,14 +1186,14 @@ const receive = async ({
   const bytes =
     response.body === null
       ? new Uint8Array()
-      : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
+      : await readCappedBytes(response.body, maxBytes);
   return { status: response.status, bytes, url: target.toString() };
 };
 
 const request = async (
   options: RequestOptions,
 ): Promise<Result<Requested, AdapterFetchError>> => {
-  const { status, bytes, url } = await receive(options);
+  const { status, bytes, url } = await receive(options, MAX_RESPONSE_BYTES);
   if (bytes === null) {
     return Result.err(
       publisherError(
@@ -1373,13 +1369,16 @@ const fetchPlKioDecision = async ({
       ),
     );
   }
-  const content = await receive({
-    cursor,
-    fetchStage: "document",
-    path: documentPathOf(id, record.kind),
-    signal,
-    timeoutMs: ADAPTER_TIMEOUT.PAGE,
-  });
+  const content = await receive(
+    {
+      cursor,
+      fetchStage: "document",
+      path: documentPathOf(id, record.kind),
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.PAGE,
+    },
+    MAX_DOCUMENT_BYTES,
+  );
   if (
     content.status === 404 ||
     content.status === 410 ||

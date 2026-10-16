@@ -609,7 +609,9 @@ type Seen = { url: string; body: string };
 
 type StubOverrides = {
   detailStatus?: number;
+  detailBytes?: number;
   contentStatus?: number;
+  contentHtml?: string;
   /** Serves a document body of this many bytes instead of the fixture. */
   contentBytes?: number;
   listingStatus?: number;
@@ -648,12 +650,18 @@ const stubPublisher = async (
       return html(pages[form.get("Pg") ?? ""] ?? pages["2"] ?? "");
     }
     if (url.includes("/Home/Details/")) {
+      if (overrides.detailBytes !== undefined) {
+        return html("x".repeat(overrides.detailBytes));
+      }
       return overrides.detailStatus === undefined
         ? html(detail)
         : html("<html>Brak strony</html>", overrides.detailStatus);
     }
     if (overrides.contentBytes !== undefined) {
       return html("x".repeat(overrides.contentBytes));
+    }
+    if (overrides.contentHtml !== undefined) {
+      return html(overrides.contentHtml);
     }
     return overrides.contentStatus === undefined
       ? html(content)
@@ -788,12 +796,57 @@ describe("walking a month", () => {
     ).toBe(true);
   });
 
+  test("a converted document larger than a record retains its text and raw HTML", async () => {
+    const content = await gzFixtureText("pl-kio-content-30308.html.gz");
+    const documentHtml = `<!--${"x".repeat(16 * 1024 * 1024)}-->${content}`;
+    expect(new TextEncoder().encode(documentHtml).byteLength).toBeGreaterThan(
+      16 * 1024 * 1024,
+    );
+    await stubPublisher({
+      contentHtml: documentHtml,
+      monthPages: {
+        "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
+      },
+    });
+    const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
+    expect(Result.isOk(page)).toBe(true);
+    if (Result.isError(page)) {
+      return;
+    }
+    expect(page.value.decisions).toHaveLength(1);
+    const decision = page.value.decisions.at(0);
+    expect(decision?.fulltext).toContain("KIO");
+    expect(decision?.documentAst?.blocks.length).toBeGreaterThan(0);
+    expect(
+      Object.values(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
+    ).toContain(documentHtml);
+  });
+
+  test("a detail record still obeys the smaller record budget", async () => {
+    await stubPublisher({
+      detailBytes: 16 * 1024 * 1024 + 1,
+      monthPages: {
+        "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
+      },
+    });
+    const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
+    expect(Result.isError(page)).toBe(true);
+    if (Result.isError(page)) {
+      expect(page.error.message).toContain("answered more than 16777216 bytes");
+    }
+  });
+
   test("a document past the size cap keeps the record with no document", async () => {
-    await stubPublisher({ contentBytes: 16 * 1024 * 1024 + 1 });
-    const page = await plKioAdapter.fetchPage("2025-09:10+0", {});
+    await stubPublisher({
+      contentBytes: 32 * 1024 * 1024 + 1,
+      monthPages: {
+        "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
+      },
+    });
+    const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isOk(page)).toBe(true);
     if (Result.isOk(page)) {
-      expect(page.value.decisions).toHaveLength(10);
+      expect(page.value.decisions).toHaveLength(1);
       for (const decision of page.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
