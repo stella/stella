@@ -16,7 +16,7 @@
  * It never deletes what it wrote: objects under `exports/` are removed by
  * the bucket lifecycle (see `data-export-queue.ts`).
  */
-import { Result, TaggedError } from "better-result";
+import { TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -30,7 +30,9 @@ import type {
   DataExportPlanRecord,
 } from "@/api/db/schema";
 import {
+  admitDataExportRecords,
   buildDataExport,
+  DATA_EXPORT_RECORD_BYTES_CAP,
   planDataExport,
 } from "@/api/handlers/data-exports/build-export";
 import type {
@@ -111,6 +113,8 @@ export type DataExportRunDependencies = {
   /** Aborted on shutdown; the run stops and is resumed later. */
   signal: AbortSignal;
   partTargetBytes: number;
+  /** The most record text one export may carry. */
+  recordBytesCap: number;
   now: () => Date;
 };
 
@@ -514,14 +518,24 @@ export const runDataExport = async (
   const storage = deps.storage(run.attempt);
   try {
     const scope = { versions: run.versionScope };
+    // A resumed attempt keeps its stored plan but measures the records
+    // again: they may have grown since the plan was made.
+    const storedPlan = run.plan;
     const planned =
-      run.plan === null
+      storedPlan === null
         ? await planDataExport({
             source: deps.source,
             partTargetBytes: deps.partTargetBytes,
+            recordBytesCap: deps.recordBytesCap,
             scope,
           })
-        : Result.ok(run.plan);
+        : (
+            await admitDataExportRecords({
+              source: deps.source,
+              matterIds: storedPlan.parts.flatMap((part) => part.matterIds),
+              recordBytesCap: deps.recordBytesCap,
+            })
+          ).map(() => storedPlan);
     // Retrying cannot shrink the records, so the export fails at once.
     if (planned.isErr()) {
       await markFailed(
@@ -709,6 +723,7 @@ const createS3RunDependencies = ({
     pace,
     signal,
     partTargetBytes: DATA_EXPORT_PART_TARGET_BYTES,
+    recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
     now: () => new Date(),
   };
 };

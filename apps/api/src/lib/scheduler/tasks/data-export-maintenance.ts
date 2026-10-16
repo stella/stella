@@ -34,6 +34,9 @@ export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
 /** Rows handled per state per tick; a continuation takes the rest. */
 const BATCH_SIZE = 8;
 const CONTINUATION_DELAY_MS = 1000;
+// One active export per organisation bounds the queued rows; past this many
+// pages a run hands the rest to its continuation.
+const MAX_HANDOFF_PAGES = 64;
 /** A queued export older than this has lost its queue handoff. */
 const QUEUED_HANDOFF_SETTLE_MS = 5 * 60 * 1000;
 const STALE_RUN_ERROR =
@@ -41,8 +44,13 @@ const STALE_RUN_ERROR =
 const ABANDONED_ERROR =
   "The export could not be started because its requester's account no longer exists.";
 
+/** Queued exports handed to the queue per page. */
+export const DATA_EXPORT_HANDOFF_PAGE_SIZE = BATCH_SIZE;
+
 export type DataExportMaintenanceDependencies = {
   enqueue: typeof enqueueDataExport;
+  /** `DATA_EXPORT_HANDOFF_PAGE_SIZE` in production. */
+  handoffPageSize: number;
 };
 
 type MaintenanceSummary = {
@@ -67,6 +75,14 @@ const atOrBefore = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} <= ${cutoff.toISOString()}::timestamptz`;
 const before = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} < ${cutoff.toISOString()}::timestamptz`;
+
+type QueuedCursor = { createdAt: Date; id: string };
+
+// Keyset position after `cursor` in (createdAt, id) order.
+const afterQueued = (cursor: QueuedCursor | null) =>
+  cursor === null
+    ? undefined
+    : sql<boolean>`(${organizationDataExports.createdAt}, ${organizationDataExports.id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${cursor.id})`;
 
 type SweepRow = {
   id: SafeId<"dataExport">;
@@ -287,53 +303,69 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
       }),
     summary,
   );
-  const queuedPage = await readCursorPage(
-    db
-      .select({
-        id: organizationDataExports.id,
-        organizationId: organizationDataExports.organizationId,
-        requestedBy: organizationDataExports.requestedBy,
-        attempt: organizationDataExports.attempt,
-      })
-      .from(organizationDataExports)
-      .where(and(settled, isNotNull(organizationDataExports.requestedBy)))
-      .orderBy(
-        asc(organizationDataExports.createdAt),
-        asc(organizationDataExports.id),
-      ),
-    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
-  );
-  const queued = queuedPage.items;
-  summary.hasMore ||= queuedPage.nextCursor !== null;
-  // Idempotent: the job id derives from the export and its attempt count,
-  // so a row still waiting for a free slot is not queued twice.
-  const handoffs = await Promise.all(
-    queued.flatMap((row) => {
-      const requestedBy = row.requestedBy;
-      return requestedBy === null
-        ? []
-        : [
-            Result.tryPromise(
-              async () =>
-                await deps.enqueue({
-                  exportId: brandPersistedDataExportId(row.id),
-                  organizationId: brandPersistedOrganizationId(
-                    row.organizationId,
-                  ),
-                  userId: brandPersistedUserId(requestedBy),
-                  attempt: row.attempt,
-                }),
-            ),
-          ];
-    }),
-  );
-  for (const handoff of handoffs) {
-    if (Result.isError(handoff)) {
-      summary.errors.push(handoff.error);
-      continue;
+  // A handoff leaves its row queued (the job id makes it idempotent), so a
+  // run pages past every settled row instead of rereading the oldest page:
+  // a backlog of rows already waiting in the queue never hides later ones.
+  let cursor: QueuedCursor | null = null;
+  for (let page = 0; page < MAX_HANDOFF_PAGES; page += 1) {
+    // Keyset pages are sequential by design: each starts after the previous page's last row
+    const queuedPage = await readCursorPage(
+      db
+        .select({
+          id: organizationDataExports.id,
+          organizationId: organizationDataExports.organizationId,
+          requestedBy: organizationDataExports.requestedBy,
+          attempt: organizationDataExports.attempt,
+          createdAt: organizationDataExports.createdAt,
+        })
+        .from(organizationDataExports)
+        .where(
+          and(
+            settled,
+            isNotNull(organizationDataExports.requestedBy),
+            afterQueued(cursor),
+          ),
+        )
+        .orderBy(
+          asc(organizationDataExports.createdAt),
+          asc(organizationDataExports.id),
+        ),
+      { limit: deps.handoffPageSize, cursorForItem: (row) => row.id },
+    );
+    const handoffs = await Promise.all(
+      queuedPage.items.flatMap((row) => {
+        const requestedBy = row.requestedBy;
+        return requestedBy === null
+          ? []
+          : [
+              Result.tryPromise(
+                async () =>
+                  await deps.enqueue({
+                    exportId: brandPersistedDataExportId(row.id),
+                    organizationId: brandPersistedOrganizationId(
+                      row.organizationId,
+                    ),
+                    userId: brandPersistedUserId(requestedBy),
+                    attempt: row.attempt,
+                  }),
+              ),
+            ];
+      }),
+    );
+    for (const handoff of handoffs) {
+      if (Result.isError(handoff)) {
+        summary.errors.push(handoff.error);
+        continue;
+      }
+      summary.requeued += 1;
     }
-    summary.requeued += 1;
+    const last = queuedPage.items.at(-1);
+    if (queuedPage.nextCursor === null || last === undefined) {
+      return;
+    }
+    cursor = { createdAt: last.createdAt, id: String(last.id) };
   }
+  summary.hasMore = true;
 };
 
 /**
@@ -389,4 +421,5 @@ export const createMaintainDataExportsTask =
 
 export const maintainDataExports = createMaintainDataExportsTask({
   enqueue: enqueueDataExport,
+  handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
 });

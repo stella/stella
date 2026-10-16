@@ -29,6 +29,7 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeDb } from "@/api/db/scoped";
+import { DATA_EXPORT_RECORD_BYTES_CAP } from "@/api/handlers/data-exports/build-export";
 import type { ExportSource } from "@/api/handlers/data-exports/build-export";
 import createDataExport from "@/api/handlers/data-exports/create";
 import {
@@ -54,7 +55,10 @@ import {
   createRootScopedDb,
 } from "@/api/lib/root-scoped-db";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
-import { createMaintainDataExportsTask } from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import {
+  createMaintainDataExportsTask,
+  DATA_EXPORT_HANDOFF_PAGE_SIZE,
+} from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   createTestHandlerContext,
@@ -195,6 +199,7 @@ type RunForOptions = {
   /** Wraps the database-backed source, to act between run steps. */
   wrapSource?: (source: ExportSource) => ExportSource;
   controller?: AbortController;
+  recordBytesCap?: number;
 };
 
 const runFor = async (
@@ -203,6 +208,7 @@ const runFor = async (
   {
     wrapSource = (source) => source,
     controller = new AbortController(),
+    recordBytesCap = DATA_EXPORT_RECORD_BYTES_CAP,
   }: RunForOptions = {},
 ) => {
   const db = createRootMembershipScopedDb(
@@ -256,6 +262,7 @@ const runFor = async (
       pace,
       signal,
       partTargetBytes: 2 * 1024 ** 3,
+      recordBytesCap,
       now: () => now,
     },
   );
@@ -431,6 +438,7 @@ describe("data export maintenance", () => {
 
     const continuations: Date[] = [];
     const task = createMaintainDataExportsTask({
+      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
       enqueue: async () => "requeued",
     });
     const runMaintenance = async (nextRunAt: Date) =>
@@ -505,6 +513,7 @@ describe("data export maintenance", () => {
       expiresAt: new Date(now.getTime() + 1000),
     });
     const task = createMaintainDataExportsTask({
+      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
       enqueue: async () => "requeued",
     });
     const result = await task(
@@ -543,6 +552,49 @@ describe("data export maintenance", () => {
     expect(download).toMatchObject({ code: 409 });
   });
 
+  test("hands every settled queued export to the queue in one run, past a full page", async () => {
+    const now = new Date("2026-10-14T12:00:00.000Z");
+    const settledAt = new Date(now.getTime() - 60 * 60 * 1000);
+    // One active export per organisation: one queued row in each.
+    const first = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+      createdAt: settledAt,
+    });
+    const second = await insertExport({
+      organizationId: ids.orgB,
+      requestedBy: ids.userB1,
+      createdAt: new Date(settledAt.getTime() + 1000),
+    });
+    const enqueued: string[] = [];
+    // A one-row page: the first row stays queued after its handoff, and the
+    // second must still be reached.
+    const task = createMaintainDataExportsTask({
+      handoffPageSize: 1,
+      enqueue: async ({ exportId }) => {
+        enqueued.push(exportId);
+        return "requeued";
+      },
+    });
+    try {
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          dueAt: DueSlot.of({ nextRunAt: now }),
+          logger: { info: () => {}, warn: () => {}, error: () => {} },
+          signal: new AbortController().signal,
+        }),
+      );
+      expect(enqueued).toContain(first);
+      expect(enqueued).toContain(second);
+    } finally {
+      await testDb
+        .update(organizationDataExports)
+        .set({ status: "failed" })
+        .where(inArray(organizationDataExports.id, [first, second]));
+    }
+  });
+
   test("resumes runs whose worker stopped and fails those out of attempts", async () => {
     const now = new Date("2026-10-14T12:00:00.000Z");
     const stale = await insertExport({
@@ -564,6 +616,7 @@ describe("data export maintenance", () => {
     });
     const enqueued: string[] = [];
     const task = createMaintainDataExportsTask({
+      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
       enqueue: async ({ exportId, attempt }) => {
         enqueued.push(`${exportId}:${attempt}`);
         return "requeued";
@@ -805,6 +858,34 @@ describe("run ownership", () => {
         await testDb.delete(contacts).where(eq(contacts.id, contact.id));
       }
     }
+  });
+
+  test("a resumed attempt measures its records again before loading them", async () => {
+    // The stored plan came from an earlier attempt; the records have grown
+    // past the cap since, so the resumed attempt refuses to load them.
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+      plan: {
+        parts: [{ index: 1, matterIds: [ids.wsA1], estimatedBytes: 1 }],
+        mattersTotal: 1,
+        bytesTotal: 1,
+      },
+    });
+    const { outcome, memory } = await runFor(ids.userAdmin, exportId, {
+      recordBytesCap: 1,
+    });
+    expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
+    expect(memory.parts.size).toBe(0);
+    const [row] = await testDb
+      .select({
+        status: organizationDataExports.status,
+        error: organizationDataExports.error,
+      })
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, exportId));
+    expect(row?.status).toBe("failed");
+    expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.recordsTooLarge);
   });
 
   test("a run superseded by a newer attempt cannot finish the export", async () => {

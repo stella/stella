@@ -757,13 +757,49 @@ const sumTotals = (matters: readonly ManifestMatter[]) => {
 type PlanDataExportArgs = {
   source: ExportSource;
   partTargetBytes: number;
+  recordBytesCap: number;
   scope: { versions: DataExportVersionScope };
+};
+
+/**
+ * Measure the records the export will read and refuse it when they exceed
+ * the cap. Every attempt runs it before loading a record: records added
+ * after the plan was stored count against a resumed attempt too.
+ */
+type AdmitDataExportRecordsOptions = {
+  source: ExportSource;
+  matterIds: readonly string[];
+  /** `DATA_EXPORT_RECORD_BYTES_CAP` in production. */
+  recordBytesCap: number;
+};
+
+export const admitDataExportRecords = async ({
+  source,
+  matterIds,
+  recordBytesCap,
+}: AdmitDataExportRecordsOptions): Promise<
+  Result<RecordBytes, DataExportRecordsTooLargeError>
+> => {
+  const records = await source.measureRecords(matterIds);
+  const recordBytes = [...records.matterBytes.values()].reduce(
+    (sum, bytes) => sum + bytes,
+    records.organizationBytes,
+  );
+  return recordBytes > recordBytesCap
+    ? Result.err(
+        new DataExportRecordsTooLargeError({
+          message: "The export's records exceed the export record limit",
+          bytes: recordBytes,
+        }),
+      )
+    : Result.ok(records);
 };
 
 /** Fix the split into parts. Stored, so a resumed run packs the same parts. */
 export const planDataExport = async ({
   source,
   partTargetBytes,
+  recordBytesCap,
   scope,
 }: PlanDataExportArgs): Promise<
   Result<ExportPlan, DataExportRecordsTooLargeError>
@@ -771,19 +807,15 @@ export const planDataExport = async ({
   const listed = (await source.listMatters(scope.versions)).toSorted(byName);
   // Admission comes first: an export whose records cannot be held in memory
   // is refused before any of them is loaded.
-  const records = await source.measureRecords(listed.map((m) => m.id));
-  const recordBytes = [...records.matterBytes.values()].reduce(
-    (sum, bytes) => sum + bytes,
-    records.organizationBytes,
-  );
-  if (recordBytes > DATA_EXPORT_RECORD_BYTES_CAP) {
-    return Result.err(
-      new DataExportRecordsTooLargeError({
-        message: "The export's records exceed the export record limit",
-        bytes: recordBytes,
-      }),
-    );
+  const admitted = await admitDataExportRecords({
+    source,
+    matterIds: listed.map((m) => m.id),
+    recordBytesCap,
+  });
+  if (admitted.isErr()) {
+    return Result.err(admitted.error);
   }
+  const records = admitted.value;
   // Parts are sized by everything they carry, records included.
   const matters = listed.map((matter) => ({
     id: matter.id,

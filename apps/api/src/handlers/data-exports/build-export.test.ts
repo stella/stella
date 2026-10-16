@@ -236,6 +236,7 @@ const run = async (
     await planDataExport({
       source,
       partTargetBytes,
+      recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
       scope: { versions: "all" },
     })
   ).unwrap();
@@ -345,6 +346,7 @@ describe("organisation data export admission", () => {
       await planDataExport({
         source: fakeSource(world),
         partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
       })
     ).unwrap();
@@ -359,6 +361,7 @@ describe("organisation data export admission", () => {
           },
         }),
         partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
       })
     ).unwrap();
@@ -388,6 +391,7 @@ describe("organisation data export admission", () => {
       const planned = await planDataExport({
         source,
         partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
       });
       const error = planned.isErr() ? planned.error : null;
@@ -599,6 +603,7 @@ describe("organisation data export builder", () => {
       await planDataExport({
         source,
         partTargetBytes: 10,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
       })
     ).unwrap();

@@ -11,6 +11,7 @@ import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { organizationDataExports } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { DATA_EXPORT_RECORD_BYTES_CAP } from "@/api/handlers/data-exports/build-export";
 import type { ExportSource } from "@/api/handlers/data-exports/build-export";
 import {
   DATA_EXPORT_FAILURE_MESSAGE,
@@ -101,6 +102,7 @@ const run = async (
       pace,
       signal,
       partTargetBytes: 2 * 1024 ** 3,
+      recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
       now: () => new Date("2026-10-14T10:00:00.000Z"),
     },
   );
