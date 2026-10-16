@@ -408,8 +408,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "force today. Returns that consolidation's metadata and validity " +
       "window, `versions` (the newest page of the work's consolidations), " +
       "`outline` (its heading anchors, the input read_statute_provisions " +
-      "takes) and its plain text on page 1. Later pages carry the next text " +
-      "window and nextCursor without repeating versions or outline; pass the " +
+      "takes) on page 1, plus its plain text. Later pages omit outline and " +
+      "versions; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
       "AI use of its wording still answers with metadata, versions and " +
       "outline, and `textWithheldReason` in place of the text. " +
