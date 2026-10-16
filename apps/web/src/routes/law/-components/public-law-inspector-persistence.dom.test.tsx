@@ -66,6 +66,7 @@ const DETAILS_TAB = createCaseDecisionDetailsTab({
   court: "Nejvyšší soud",
   decisionId: DECISION_ID,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   slug: "27-cdo-59-2022",
 });
