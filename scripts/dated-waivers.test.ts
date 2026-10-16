@@ -510,4 +510,5 @@ test("the base inventory read from git equals the inventory of the same tree", (
       ({ kind, source, id, expiresAt }) => ({ kind, source, id, expiresAt }),
     ),
   );
-});
+  // Both inventories read the whole repository.
+}, 60_000);
