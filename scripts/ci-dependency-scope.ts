@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { spawnSync } from "node:child_process";
 
 import {
@@ -101,8 +100,15 @@ const unknownScope = (
   return { type: "unknown", files: allFiles(changed) };
 };
 
-const parseOrUndefined = (revision: string, file: string): unknown =>
-  Result.try(() => parseAt(revision, file)).unwrapOr(undefined);
+// ci-plan runs this before installing dependencies, so only Bun and Node
+// built-ins are available; an unparseable file reads as absent.
+const parseOrUndefined = (revision: string, file: string): unknown => {
+  try {
+    return parseAt(revision, file);
+  } catch {
+    return undefined;
+  }
+};
 
 const changedDevDependencies = (before: JsonRecord, after: JsonRecord) => {
   const oldDev = isRecord(before["devDependencies"])
