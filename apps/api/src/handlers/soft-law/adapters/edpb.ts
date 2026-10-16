@@ -171,10 +171,16 @@ export const parseEdpbListing = (html: string, url: string) =>
         "EDPB response lacks its expected publication index",
       );
     }
+    const cards = $(marker)
+      .find(".document-card, .node-public-consultation-card")
+      .toArray();
+    if (cards.length === 0) {
+      return yield* invalidSource(
+        "EDPB publication index lacks its expected publication cards",
+      );
+    }
     const documents: string[] = [];
-    for (const element of $(
-      ".document-card, .node-public-consultation-card",
-    ).toArray()) {
+    for (const element of cards) {
       const card = $(element);
       const title = compact(card.find("h3").text());
       const label = compact(card.find(".document-card__document-type").text());

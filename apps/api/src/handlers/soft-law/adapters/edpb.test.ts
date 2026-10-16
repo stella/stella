@@ -8,6 +8,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
 import { softLawIdentityKey } from "@/api/lib/legal-search/soft-law-fingerprint";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import type { SoftLawSourceAdapter } from "@/api/lib/legal-search/soft-law-types";
 
 import { edpbAdapter, parseEdpbDocument, parseEdpbListing } from "./edpb";
@@ -272,6 +273,33 @@ test("EDPB empty HTML shells cannot complete a publication inventory", () => {
       return panic("An empty publisher shell was admitted");
     }
     expect(result.error.message).toContain("expected publication index");
+  }
+});
+
+test("EDPB empty index wrappers fail while explicitly excluded cards remain valid", () => {
+  for (const [path, wrapper, card] of [
+    ["/documents_en", "view-documents-overview-documents", "document-card"],
+    [
+      "/public-consultations_en",
+      "view-public-consultations-closed-overview",
+      "node-public-consultation-card",
+    ],
+  ]) {
+    const empty = parseEdpbListing(
+      `<div class="${wrapper}"></div>`,
+      `${ORIGIN}${path}`,
+    );
+    expect(empty.isErr()).toBe(true);
+    if (empty.isOk()) {
+      return panic("An empty publication index wrapper was admitted");
+    }
+    expect(SoftLawIngestionError.is(empty.error)).toBe(true);
+    expect(empty.error.message).toContain("publication cards");
+    const excluded = parseEdpbListing(
+      `<div class="${wrapper}"><article class="${card}"><h3>Internal rules</h3><span class="document-card__document-type">Rules of procedure</span></article></div>`,
+      `${ORIGIN}${path}`,
+    );
+    expect(excluded.unwrap()).toEqual({ documents: [], next: null });
   }
 });
 

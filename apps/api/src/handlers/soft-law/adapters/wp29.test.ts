@@ -57,58 +57,82 @@ describe("WP29 official source shapes", () => {
     }
   });
 
-  test("Word-only recommendations retain exact alpha references, original bytes and extraction failures", async () => {
-    const html = await fixture("wp29-archive.html.gz");
-    const entries = parseWp29Archive(html).unwrap();
-    const entry = entries.find(
-      ({ metadata }) =>
-        metadata.statedReference.state === "stated" &&
-        metadata.statedReference.value === "WP 195a",
-    );
-    expect(entry).toBeDefined();
-    if (!entry) {
-      return;
-    }
-    const urls: string[] = [];
-    const bytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]);
-    const read = Object.assign(
-      async (url: string) => {
-        urls.push(url);
-        return Result.ok({ bytes, contentType: "application/msword" });
-      },
-      {
-        getBlockReason: () => null,
-        getWindowState: () => "open" as const,
-        getLeaseState: () => "active" as const,
-      },
-    );
-    const result = await wp29Adapter.fetchDocument(
-      {
-        ...entry,
-        sourceRaw: [
-          {
-            role: "source-page-0",
-            contentBase64: Buffer.from(html).toString("base64"),
-            contentType: "text/html",
-          },
-        ],
-      },
-      { signal: new AbortController().signal, fetch: read },
-    );
-    expect(result.status).toBe("ok");
-    if (result.status === "error") {
-      return;
-    }
-    expect(urls).toEqual([entry.url]);
-    expect(result.value.extractionQuality).toBe("extraction_failed");
-    expect(result.value.text).toBeNull();
-    expect(
-      result.value.raw.find(({ role }) => role === "source-page-0")?.purpose,
-    ).toBe("discovery");
-    expect(
-      result.value.raw.find(({ role }) => role === "document-word"),
-    ).toMatchObject({ bytes, purpose: "document" });
-  });
+  test.each([
+    "relative",
+    "absolute",
+    "relative-query",
+    "absolute-query",
+  ] as const)(
+    "Word-only recommendations preserve discovery locators, source bytes and extraction failures (%s)",
+    async (variant) => {
+      const originalHtml = await fixture("wp29-archive.html.gz");
+      const relative =
+        "/justice/article-29/documentation/opinion-recommendation/files/2012/wp195a_application_form_en.doc";
+      const base = variant.startsWith("absolute")
+        ? new URL(relative, ARCHIVE).href
+        : relative;
+      const href = variant.endsWith("query")
+        ? `${base}?download=1&lang=en`
+        : base;
+      const html = originalHtml.replace(
+        `href="${relative}"`,
+        () => `href="${href.replaceAll("&", "&amp;")}"`,
+      );
+      if (variant !== "relative") {
+        expect(html).not.toBe(originalHtml);
+      }
+      const entries = parseWp29Archive(html).unwrap();
+      const entry = entries.find(
+        ({ metadata }) =>
+          metadata.statedReference.state === "stated" &&
+          metadata.statedReference.value === "WP 195a",
+      );
+      expect(entry).toBeDefined();
+      if (!entry) {
+        return;
+      }
+      expect(entry.url).toBe(new URL(href, ARCHIVE).href);
+      const urls: string[] = [];
+      const bytes = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]);
+      const read = Object.assign(
+        async (url: string) => {
+          urls.push(url);
+          return Result.ok({ bytes, contentType: "application/msword" });
+        },
+        {
+          getBlockReason: () => null,
+          getWindowState: () => "open" as const,
+          getLeaseState: () => "active" as const,
+        },
+      );
+      const result = await wp29Adapter.fetchDocument(
+        {
+          ...entry,
+          sourceRaw: [
+            {
+              role: "source-page-0",
+              contentBase64: Buffer.from(html).toString("base64"),
+              contentType: "text/html",
+            },
+          ],
+        },
+        { signal: new AbortController().signal, fetch: read },
+      );
+      expect(result.status).toBe("ok");
+      if (result.status === "error") {
+        return;
+      }
+      expect(urls).toEqual([entry.url]);
+      expect(result.value.extractionQuality).toBe("extraction_failed");
+      expect(result.value.text).toBeNull();
+      expect(
+        result.value.raw.find(({ role }) => role === "source-page-0")?.purpose,
+      ).toBe("discovery");
+      expect(
+        result.value.raw.find(({ role }) => role === "document-word"),
+      ).toMatchObject({ bytes, purpose: "document" });
+    },
+  );
 
   test("archive reference or markup loss cannot become an empty successful census", () => {
     const parsed = parseWp29Archive(

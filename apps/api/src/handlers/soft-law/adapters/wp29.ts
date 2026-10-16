@@ -520,9 +520,14 @@ const listWp29Assets = (entry: SoftLawEntry) => {
       $(node)
         .find("a.link-ico[href]")
         .toArray()
-        .some(
-          (anchor) => $(anchor).attr("href") === new URL(entry.url).pathname,
-        ),
+        .some((anchor) => {
+          const href = $(anchor).attr("href");
+          if (!href) {
+            return false;
+          }
+          const resolved = publisherUrl(href, ARCHIVE);
+          return resolved.status === "ok" && resolved.value === entry.url;
+        }),
     );
     if (row.length !== 1) {
       return Result.err(invalid("WP29 archive asset has no unique source row"));
@@ -535,14 +540,17 @@ const listWp29Assets = (entry: SoftLawEntry) => {
         continue;
       }
       const href = $(anchor).attr("href");
-      if (!href || !/\.(?:pdf|doc)$/iu.test(href)) {
-        return Result.err(
-          invalid("WP29 archive attachment format is unsupported"),
-        );
+      if (!href) {
+        return Result.err(invalid("WP29 archive attachment URL is missing"));
       }
       const resolved = publisherUrl(href, ARCHIVE);
       if (resolved.status === "error") {
         return resolved;
+      }
+      if (!/\.(?:pdf|doc)$/iu.test(new URL(resolved.value).pathname)) {
+        return Result.err(
+          invalid("WP29 archive attachment format is unsupported"),
+        );
       }
       if (!assets.includes(resolved.value)) {
         assets.push(resolved.value);
