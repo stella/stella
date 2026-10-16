@@ -840,6 +840,17 @@ jobs:
           fi
           echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
 
+          # Replace dependency metadata with the workspace source paths whose
+          # resolved closures changed. Unknown and shared-toolchain changes
+          # retain their original paths and therefore keep the full plan.
+          if (( ${#changed_files[@]} > 0 )); then
+            dependency_scope=$(bun scripts/ci-dependency-scope.ts "$base_ref" HEAD "${changed_files[@]}") || dependency_scope='{"type":"unknown","files":[]}'
+            dependency_class=$(jq -er '.type | select(. == "none" or . == "dev-tooling" or . == "runtime" or . == "shared-base" or . == "unknown")' <<< "$dependency_scope") || dependency_class=unknown
+            if [[ "$dependency_class" == dev-tooling || "$dependency_class" == runtime ]]; then
+              mapfile -t changed_files < <(jq -r '.files[]' <<< "$dependency_scope") || scope_unknown=true
+            fi
+          fi
+
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
             # e2e-landing runs, and builds the landing site, at full depth only.
@@ -964,7 +975,7 @@ jobs:
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
           package_checks_required=true
-          if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
+          if [[ "$dependency_class" != dev-tooling && ("$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group) ]]; then
             package_scope=$(bun scripts/ci-package-scope.ts --package-checks "${changed_files[@]}") || package_scope=true
             if [[ "$package_scope" == false ]]; then
               package_checks_required=false

@@ -1,4 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -9,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
   markdownReaders,
@@ -72,6 +74,150 @@ const repository = (
     rmSync(root, { recursive: true, force: true });
   }
 };
+
+const dependencyRepository = (
+  run: (root: string, commit: (message: string) => string) => void,
+) => {
+  const root = mkdtempSync(path.join(tmpdir(), "ci-dependency-scope-"));
+  const write = (file: string, value: unknown) => {
+    const target = path.join(root, file);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, JSON.stringify(value));
+  };
+  const commit = (message: string) => {
+    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=CI",
+        "-c",
+        "user.email=ci@example.test",
+        "commit",
+        "-m",
+        message,
+      ],
+      { cwd: root },
+    );
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf-8",
+    }).trim();
+  };
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    write("package.json", {
+      name: "root",
+      devDependencies: { oxlint: "1.0.0" },
+    });
+    write("apps/a/package.json", {
+      name: "@stll/a",
+      dependencies: { "@stll/core": "workspace:*" },
+    });
+    write("packages/core/package.json", {
+      name: "@stll/core",
+      dependencies: { runtime: "1.0.0" },
+      devDependencies: { oxlint: "1.0.0" },
+    });
+    write("packages/other/package.json", { name: "@stll/other" });
+    write("bun.lock", {
+      workspaces: {
+        "apps/a": {
+          name: "@stll/a",
+          dependencies: { "@stll/core": "workspace:*" },
+        },
+        "packages/core": {
+          name: "@stll/core",
+          dependencies: { runtime: "1.0.0" },
+          devDependencies: { oxlint: "1.0.0" },
+        },
+        "packages/other": { name: "@stll/other" },
+      },
+      packages: {
+        "@stll/core": ["@stll/core@workspace:packages/core"],
+        runtime: ["runtime@1.0.0"],
+        oxlint: ["oxlint@1.0.0"],
+      },
+    });
+    commit("base");
+    const previous = process.cwd();
+    process.chdir(root);
+    try {
+      run(root, commit);
+    } finally {
+      process.chdir(previous);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+test("dependency metadata selects tooling, runtime consumers, shared base, and unknown changes", () => {
+  dependencyRepository((root, commit) => {
+    const base = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf-8",
+    }).trim();
+    const lock = JSON.parse(readFileSync(path.join(root, "bun.lock"), "utf-8"));
+    lock.packages.oxlint = ["oxlint@1.1.0"];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    let head = commit("tool");
+    expect(dependencyScope({ base, head, changed: ["bun.lock"] })).toEqual({
+      type: "dev-tooling",
+      files: [],
+    });
+    // A tooling bump never hides the PR's other files from test selection.
+    expect(
+      dependencyScope({
+        base,
+        head,
+        changed: ["bun.lock", "packages/other/src/index.ts"],
+      }),
+    ).toEqual({ type: "dev-tooling", files: ["packages/other/src/index.ts"] });
+
+    const runtimeBase = head;
+    lock.packages.runtime = ["runtime@2.0.0"];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    head = commit("runtime");
+    expect(
+      dependencyScope({ base: runtimeBase, head, changed: ["bun.lock"] }),
+    ).toEqual({
+      type: "runtime",
+      files: [
+        "apps/a/src/__dependency_scope__.ts",
+        "packages/core/src/__dependency_scope__.ts",
+      ],
+    });
+    expect(
+      dependencyScope({ base, head, changed: [".node-version", "bun.lock"] })
+        .type,
+    ).toBe("shared-base");
+
+    // A runtime change to the root workspace closure has no source path a
+    // selector could match, so it selects everything.
+    const rootBase = head;
+    lock.workspaces[""] = { name: "root", dependencies: { runtime: "2.0.0" } };
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    const rootAdded = commit("root workspace");
+    lock.packages.runtime = ["runtime@3.0.0"];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    const rootRuntime = commit("root runtime");
+    expect(
+      dependencyScope({
+        base: rootAdded,
+        head: rootRuntime,
+        changed: ["bun.lock"],
+      }).type,
+    ).toBe("shared-base");
+    expect(rootBase).not.toBe(rootAdded);
+
+    writeFileSync(path.join(root, "bun.lock"), "not json");
+    const broken = commit("broken");
+    expect(
+      dependencyScope({ base: head, head: broken, changed: ["bun.lock"] }).type,
+    ).toBe("unknown");
+  });
+});
 
 test("ordinary markdown and changesets skip package checks while source content and declared docs retain them", () => {
   repository((root) => {
