@@ -8,6 +8,7 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import type { MigrationTimingRecord } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import {
@@ -60,6 +61,7 @@ const runOnlineMigrations = async (
 ) =>
   await runOnlineMigrationsWithGate(pool, {
     indexGate: healthyIndexGate,
+    timing: { clock: () => 0, emit: () => undefined },
     ...options,
     reserveObserver: async () => ({
       execute: async () => undefined,
@@ -167,6 +169,86 @@ describe("online migrations", () => {
     );
     expect(indexOfStatement(harness.statements, REINDEX_FRAGMENT)).toBe(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  test("every online step reports its duration, in the order the phase runs them", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    let now = 0;
+
+    await runOnlineMigrations(harness.pool, {
+      timing: {
+        clock: () => (now += 5),
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    const steps = records.flatMap((record) =>
+      record.event === "migrate.online_step_duration" ? [record] : [],
+    );
+    expect(steps).toHaveLength(records.length);
+    const named = (kind: string) =>
+      steps.filter((step) => step.kind === kind).map(({ name }) => name);
+    expect(named("index")).toEqual(
+      ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+    );
+    expect(named("cutover")).toEqual(
+      ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final.name),
+    );
+    expect(named("replacement_drop").length).toBeGreaterThan(0);
+    // Indexes, then cutovers, then the replaced indexes they retire.
+    expect(steps.map(({ kind }) => kind)).toEqual(
+      [...steps.map(({ kind }) => kind)].toSorted(
+        (left, right) =>
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(left) -
+          ["index", "cutover", "replacement_drop", "repair"].indexOf(right),
+      ),
+    );
+    for (const step of steps) {
+      expect(step.durationMs, step.name).toBe(5);
+      expect(step.outcome, step.name).toBe("complete");
+    }
+  });
+
+  test("a deferred index is the last step reported, as deferred", async () => {
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, undefined] },
+    });
+    const records: MigrationTimingRecord[] = [];
+
+    const outcome = await runOnlineMigrations(harness.pool, {
+      indexGate: {
+        ...healthyIndexGate,
+        ebs: {
+          type: "reader",
+          read: async () => ({
+            indicator: "ebs_balance",
+            kind: "unknown",
+            value: null,
+            threshold: 70,
+            observedAt: null,
+            reason: "Injected unavailable metric",
+          }),
+        },
+      },
+      timing: {
+        clock: () => 0,
+        emit: (record) => {
+          records.push(record);
+        },
+      },
+    });
+
+    expect(outcome.type).toBe("deferred");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "index",
+      name: REPORT_EXPORT_INDEX,
+      durationMs: 0,
+      outcome: "deferred",
+    });
   });
 
   test("creates a missing index online and verifies completion", async () => {
