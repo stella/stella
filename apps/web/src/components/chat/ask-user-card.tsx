@@ -22,6 +22,7 @@ import type {
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<RegisteredChatUIToolCallPart, { name: "ask-user" }>;
@@ -164,6 +165,7 @@ export const AskUserCard = ({
   restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   // Stable empty fallback so useMemo deps don't churn when the
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
@@ -402,8 +404,8 @@ export const AskUserCard = ({
             const hasOptions = (q.options?.length ?? 0) > 0;
             return (
               <div className="space-y-1.5" key={q.question}>
-                <p className="text-xs font-medium">
-                  {i + 1}. {renderAnonPills(q.question, pairs)}
+                <p className="text-xs font-medium" dir="auto">
+                  {format.number(i + 1)}. {renderAnonPills(q.question, pairs)}
                 </p>
 
                 {!isDone && hasOptions && !customMode[i] && (
