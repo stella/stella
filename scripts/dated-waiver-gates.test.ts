@@ -204,3 +204,73 @@ test("a new extension must reference the deadline the base inventory records", (
     `${proposalFile}: a new extension must reference its base inventory deadline`,
   ]);
 });
+
+test("an applied extension can be renewed through the same proposal record", () => {
+  const at = (deadline: string) => ({ ...entry, expiresAt: deadline });
+  const record = (reference: DatedWaiver, ownerReason: string) => ({
+    [proposalFile]: JSON.stringify({
+      schemaVersion: 1,
+      kind: "extension",
+      entries: [reference],
+      ownerReason,
+    }),
+  });
+  const firstDeadline = expiresAt;
+  const renewedDeadline = "2026-10-25T12:00:00.000Z";
+  const nextDeadline = "2026-11-01T12:00:00.000Z";
+  // The first extension moved the deadline to renewedDeadline; the radar now
+  // proposes extending that one, and the owner moves it to nextDeadline.
+  const baseProposals = record(
+    at(firstDeadline),
+    "The upstream correction is still under review.",
+  );
+  const renewed = record(
+    at(renewedDeadline),
+    "The upstream release slipped by another week.",
+  );
+  const sourceChanged = new Set([proposalFile, entry.source]);
+  const renew = ({
+    proposals = renewed,
+    baseEntries,
+    changedFiles = sourceChanged,
+  }: {
+    proposals?: Record<string, string>;
+    baseEntries: DatedWaiver[] | null;
+    changedFiles?: Set<string>;
+  }) =>
+    extensionProposalFailures({
+      proposals,
+      entries: [at(nextDeadline)],
+      scope: { type: "changes", changedFiles },
+      baseProposals,
+      baseEntries,
+    });
+  const immutable = `${proposalFile}: extension entries are immutable until that extension is applied`;
+  const unbound = `${proposalFile}: a new extension must reference its base inventory deadline`;
+
+  expect(renew({ baseEntries: [at(renewedDeadline)] })).toEqual([]);
+  // The first extension was never applied: its record stays as it is.
+  expect(renew({ baseEntries: [at(firstDeadline)] })).toContain(immutable);
+  // Without the base inventory a renewal cannot be verified.
+  expect(renew({ baseEntries: null })).toContain(immutable);
+  // The renewal must reference the deadline the base inventory records.
+  expect(
+    renew({
+      proposals: record(
+        at("2026-10-28T12:00:00.000Z"),
+        "The upstream release slipped by another week.",
+      ),
+      baseEntries: [at(renewedDeadline)],
+    }),
+  ).toContain(unbound);
+  // The earlier owner reason does not excuse a renewal from changing the
+  // owning source.
+  expect(
+    renew({
+      baseEntries: [at(renewedDeadline)],
+      changedFiles: new Set([proposalFile]),
+    }),
+  ).toContain(
+    `${proposalFile}: resolving an extension requires a change to its owning source`,
+  );
+});

@@ -8,7 +8,8 @@
  */
 
 import { panic } from "better-result";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 import { quarantineBunfigFiles } from "./check-stll-quarantine-excludes";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
@@ -72,13 +73,18 @@ const prepareCheck = (file: string): void => {
         basePackageManifests.set(source, contents.stdout.toString());
       }
     }
-    // A new proposal's reference is checked against the base inventory, so
-    // its recorded deadline cannot be chosen by the proposal itself.
+    // A new or renewed proposal's reference is checked against the base
+    // inventory, so its recorded deadline cannot be chosen by the proposal.
     if (
       tracked.some(
         (candidate) =>
           candidate.startsWith(".github/dated-exception-proposals/") &&
-          !baseFiles.includes(candidate),
+          (!baseProposals.has(candidate) ||
+            baseProposals.get(candidate) !==
+              readFileSync(
+                path.join(import.meta.dir, "..", candidate),
+                "utf-8",
+              )),
       )
     ) {
       baseEntries = baseWaiverReferences(scope.baseSha, baseFiles);

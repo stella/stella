@@ -409,20 +409,80 @@ const recordsDeadline = (
       entry.id === reference.id &&
       expiryInstant(entry.expiresAt) === expiryInstant(reference.expiresAt),
   ) ?? false;
-// A new proposal in a change must name a deadline the base inventory records.
+// A recorded extension is applied once the base inventory no longer records
+// the deadline it extended; only then may the next renewal replace it.
+const baseExtensionApplied = (
+  base: v.InferOutput<typeof proposalSchema>,
+  inventory: readonly WaiverReference[] | null,
+): boolean =>
+  inventory !== null &&
+  base.entries.every((reference) => !recordsDeadline(inventory, reference));
+
+// A new or renewed proposal must name a deadline the base inventory records.
 const changesNewProposal = (
   scope: ExpiryCheckScope | undefined,
   inventory: readonly WaiverReference[] | null,
   reference: WaiverReference,
 ): boolean =>
   scope?.type === "changes" && !recordsDeadline(inventory, reference);
+// One proposal reference: a new or renewed one must name the base deadline,
+// the owner must change the deadline, and unless the same extension was
+// already established, the owning source must change too.
+const referenceFailures = ({
+  file,
+  reference,
+  bound,
+  established,
+  entries,
+  scope,
+  baseEntries,
+}: {
+  file: string;
+  reference: WaiverReference;
+  bound: boolean;
+  established: boolean;
+  entries: readonly DatedWaiver[];
+  scope: ExpiryCheckScope | undefined;
+  baseEntries: readonly WaiverReference[] | null;
+}): string[] => {
+  const errors: string[] = [];
+  if (bound && changesNewProposal(scope, baseEntries, reference)) {
+    errors.push(
+      `${file}: a new extension must reference its base inventory deadline`,
+    );
+  }
+  const current = entries.find(
+    (entry) =>
+      entry.kind === reference.kind &&
+      entry.source === reference.source &&
+      entry.id === reference.id,
+  );
+  if (
+    current &&
+    expiryInstant(current.expiresAt) === expiryInstant(reference.expiresAt)
+  ) {
+    errors.push(
+      `${file}: owner must resolve the exception or explicitly change its expiry`,
+    );
+  }
+  if (
+    scope?.type === "changes" &&
+    !scope.changedFiles.has(reference.source) &&
+    !established
+  ) {
+    errors.push(
+      `${file}: resolving an extension requires a change to its owning source`,
+    );
+  }
+  return errors;
+};
 type ExtensionProposalOptions = {
   proposals: Readonly<Record<string, string>>;
   entries: readonly DatedWaiver[];
   body?: string | undefined;
   scope?: ExpiryCheckScope;
   baseProposals?: Readonly<Record<string, string>>;
-  /** The base inventory, when the change adds a proposal. */
+  /** The base inventory, when the change adds or renews a proposal. */
   baseEntries?: readonly WaiverReference[] | null;
 };
 export const extensionProposalFailures = ({
@@ -455,11 +515,13 @@ export const extensionProposalFailures = ({
         `${file}: extension entries must match their generated proposal identity`,
       );
     }
-    if (
-      base &&
-      JSON.stringify(base.entries) !== JSON.stringify(proposal.entries)
-    ) {
-      errors.push(`${file}: original extension entries are immutable`);
+    const renewal =
+      base !== undefined &&
+      JSON.stringify(base.entries) !== JSON.stringify(proposal.entries);
+    if (renewal && !baseExtensionApplied(base, baseEntries)) {
+      errors.push(
+        `${file}: extension entries are immutable until that extension is applied`,
+      );
     }
     if (reason.length < 12 || placeholder.test(reason)) {
       errors.push(`${file}: owner-reason: requires an explicit owner reason`);
@@ -478,45 +540,23 @@ export const extensionProposalFailures = ({
         );
       }
     }
+    const established =
+      base !== undefined &&
+      !renewal &&
+      base.ownerReason.trim().length >= 12 &&
+      !placeholder.test(base.ownerReason.trim());
     for (const reference of proposal.entries) {
-      // Without a base proposal, the reference must be the deadline the base
-      // inventory records; otherwise an unchanged deadline could pass as an
-      // explicit change.
-      if (
-        base === undefined &&
-        changesNewProposal(scope, baseEntries, reference)
-      ) {
-        errors.push(
-          `${file}: a new extension must reference its base inventory deadline`,
-        );
-      }
-      const current = entries.find(
-        (entry) =>
-          entry.kind === reference.kind &&
-          entry.source === reference.source &&
-          entry.id === reference.id,
+      errors.push(
+        ...referenceFailures({
+          file,
+          reference,
+          bound: base === undefined || renewal,
+          established,
+          entries,
+          scope,
+          baseEntries,
+        }),
       );
-      if (
-        current &&
-        expiryInstant(current.expiresAt) === expiryInstant(reference.expiresAt)
-      ) {
-        errors.push(
-          `${file}: owner must resolve the exception or explicitly change its expiry`,
-        );
-      }
-      const established =
-        base !== undefined &&
-        base.ownerReason.trim().length >= 12 &&
-        !placeholder.test(base.ownerReason.trim());
-      if (
-        scope?.type === "changes" &&
-        !scope.changedFiles.has(reference.source) &&
-        !established
-      ) {
-        errors.push(
-          `${file}: resolving an extension requires a change to its owning source`,
-        );
-      }
     }
     return errors;
   });
