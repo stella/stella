@@ -228,7 +228,10 @@ export const createNetworkCollector = (
             }),
             now: Date.now(),
           });
-          while (!released.delete(request) && !rounds.loaded) {
+          // finishRounds can mark the controller loaded while this handler
+          // awaits, so read it fresh on every iteration.
+          const loaded = () => rounds.loaded;
+          while (!released.delete(request) && !loaded()) {
             for (const token of rounds.release(Date.now())) {
               released.add(token);
             }
