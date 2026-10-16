@@ -10,6 +10,7 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -25,6 +26,7 @@ import {
   installPgliteAccountAuditRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
+  installPgliteCitationDoctrineRls,
   installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -293,7 +295,22 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
     ...Object.keys(
       CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     ).map((column) => `case_law_citations.${column}`),
+    ...Object.entries(DOCTRINE_COLUMN_GRANTS_BY_RELATION).flatMap(
+      ([relation, columns]) =>
+        Object.keys(columns).map((column) => `${relation}.${column}`),
+    ),
   ]);
+
+const grantedPublicLawColumns = (
+  relation: string,
+  columns: Readonly<Record<string, unknown>>,
+) =>
+  Object.keys(columns).filter(
+    (column) =>
+      !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+        `${relation}.${column}`,
+      ),
+  );
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
@@ -349,8 +366,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
+  `,
+  // Redaction erases the doctrine evidence quoted from the citing decision.
+  `
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -549,20 +571,15 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) =>
+      ([relation, columns]) =>
         relation !== getTableName(schema.caseLawDecisionAliases) &&
         relation !== getTableName(schema.caseLawDecisionCitationStats) &&
-        relation !== getTableName(schema.caseLawDecisionCitationStatsState),
+        relation !== getTableName(schema.caseLawDecisionCitationStatsState) &&
+        grantedPublicLawColumns(relation, columns).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns)
-        .filter(
-          (column) =>
-            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-              `${relation}.${column}`,
-            ),
-        )
+      GRANT SELECT (${grantedPublicLawColumns(relation, columns)
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -708,6 +725,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);

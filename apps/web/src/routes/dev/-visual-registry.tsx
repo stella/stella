@@ -33,6 +33,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "reader-answers": {
+    load: async () => {
+      const { ReaderAnswersPlayground } =
+        await import("./-components/reader-answers-playground");
+      return { default: ReaderAnswersPlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =
@@ -86,6 +93,13 @@ const visualLoaders = {
       const { ProtectedPendingSkeleton } =
         await import("../-protected-pending-skeleton");
       return { default: ProtectedPendingSkeleton };
+    },
+  },
+  "provision-header": {
+    load: async () => {
+      const { ProvisionHeaderPlayground } =
+        await import("./-components/provision-header-playground");
+      return { default: ProvisionHeaderPlayground };
     },
   },
   "workspace-table": {

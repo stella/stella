@@ -54,6 +54,7 @@ const listDecisionCitations = createSafePublicSubjectFollowUpHandler({
     }
     return projectResponseText(
       {
+        doctrineAvailability: read.page.doctrineAvailability,
         items: read.page.items.map(({ passage: _passage, ...item }) => item),
         limit: prepared.page.limit,
         nextCursor: read.page.nextCursor,

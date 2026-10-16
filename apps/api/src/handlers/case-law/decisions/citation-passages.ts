@@ -22,9 +22,11 @@ import type {
   DecisionTextWithheldReason,
 } from "@stll/api-contract/case-law-text-field";
 import { CITATION_EVIDENCE_INCOMPLETE_REASON } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
+import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -72,6 +74,8 @@ export type CitationPassage = {
   text: string;
   truncated: boolean;
   mention: CitationPassageMention;
+  evidenceQuote?: string;
+  evidenceAnchorId?: string | null;
 };
 
 export type CitationPolarityEvidence = {
@@ -93,7 +97,10 @@ type CitationEvidenceFields =
       citedPart: null;
     };
 
-export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> &
+export type CitationWithPassage = Omit<
+  DecisionCitationRow,
+  "citationText" | "evidenceQuote"
+> &
   CitationEvidenceFields & {
     citationText: string | null;
     textIncompleteReason: CitationTextIncompleteReason | null;
@@ -107,6 +114,7 @@ export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> &
   };
 
 export type DecisionCitationsPage = {
+  doctrineAvailability: "available" | "unavailable";
   items: CitationWithPassage[];
   nextCursor: string | null;
 };
@@ -143,20 +151,23 @@ type PassageSourcePointer = {
 };
 
 type PassageTextEligibility = {
+  country: string;
   published: boolean;
   redistributable: boolean;
   textRevisionFingerprint: string;
-  descriptor: CorpusSourceDescriptor | null;
+  descriptor: Pick<CorpusSourceDescriptor, "allowsDerivedAi"> | null;
 };
 
-/** Both phases bind the text revision and source disposition to the publication gate. */
-const passageTextEligibility = ({
+/** Both phases bind country, text revision and source disposition to the publication gate. */
+export const passageTextEligibility = ({
+  country,
   published,
   redistributable,
   textRevisionFingerprint,
   descriptor,
 }: PassageTextEligibility) => ({
   textEligibilityFingerprint: JSON.stringify([
+    country,
     published,
     textRevisionFingerprint,
     redistributable,
@@ -166,6 +177,7 @@ const passageTextEligibility = ({
 });
 
 const passageTextEligibilityColumns = {
+  country: caseLawDecisions.country,
   published: sql<boolean>`${publishedCaseLawDecision}`,
   redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
   textRevisionFingerprint: citationTextRevisionFingerprintSql({
@@ -180,10 +192,17 @@ const passageTextEligibilityGate = and(
   redistributableCaseLawSourceFor(caseLawSources.descriptor),
 );
 
-const readPassageSourcePointers = async (
-  tx: CaseLawPublicReadTransaction,
-  ids: readonly SafeId<"caseLawDecision">[],
-): Promise<PassageSourcePointer[]> => {
+type ReadPassageSourcePointersOptions = {
+  tx: CaseLawPublicReadTransaction;
+  ids: readonly SafeId<"caseLawDecision">[];
+  countries: readonly string[];
+};
+
+const readPassageSourcePointers = async ({
+  tx,
+  ids,
+  countries,
+}: ReadPassageSourcePointersOptions): Promise<PassageSourcePointer[]> => {
   if (ids.length === 0) {
     return [];
   }
@@ -197,13 +216,18 @@ const readPassageSourcePointers = async (
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
-      and(inArray(caseLawDecisions.id, [...ids]), passageTextEligibilityGate),
+      and(
+        inArray(caseLawDecisions.id, [...ids]),
+        inArray(caseLawDecisions.country, [...countries]),
+        passageTextEligibilityGate,
+      ),
     );
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
   // with it.
   return rows.map(
     ({
+      country,
       published,
       redistributable,
       descriptor,
@@ -212,6 +236,7 @@ const readPassageSourcePointers = async (
     }) => ({
       ...row,
       textEligibilityFingerprint: passageTextEligibility({
+        country,
         published,
         redistributable,
         descriptor,
@@ -239,10 +264,19 @@ type DecisionTextColumns = {
   sections: DecisionSection[] | null;
 };
 
-const readDecisionTextColumns = async (
-  caseLawDb: CaseLawPublicReadDb,
-  ids: readonly SafeId<"caseLawDecision">[],
-): Promise<Map<string, DecisionTextColumns>> => {
+type ReadDecisionTextColumnsOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  ids: readonly SafeId<"caseLawDecision">[];
+  countries: readonly string[];
+};
+
+const readDecisionTextColumns = async ({
+  caseLawDb,
+  ids,
+  countries,
+}: ReadDecisionTextColumnsOptions): Promise<
+  Map<string, DecisionTextColumns>
+> => {
   const rows = await caseLawDb(
     async (tx) =>
       await tx
@@ -261,6 +295,7 @@ const readDecisionTextColumns = async (
         .where(
           and(
             inArray(caseLawDecisions.id, [...ids]),
+            inArray(caseLawDecisions.country, [...countries]),
             passageTextEligibilityGate,
           ),
         ),
@@ -269,6 +304,7 @@ const readDecisionTextColumns = async (
     rows.map(
       ({
         id,
+        country,
         published,
         redistributable,
         descriptor,
@@ -280,6 +316,7 @@ const readDecisionTextColumns = async (
           {
             ...columns,
             ...passageTextEligibility({
+              country,
               published,
               redistributable,
               descriptor,
@@ -318,6 +355,7 @@ export type CitationPassageOptions = {
   citationText: string;
   /** The section the citation row was extracted from, when the row kept it. */
   sectionText: string | undefined;
+  evidenceQuote?: string | null;
 };
 
 /**
@@ -332,6 +370,7 @@ export const citationPassageIn = ({
   ast,
   citationText,
   sectionText,
+  evidenceQuote,
 }: CitationPassageOptions): CitationPassage | null => {
   const match = findCitationPassage({
     blocks: ast.blocks,
@@ -340,6 +379,27 @@ export const citationPassageIn = ({
   });
   if (match === null) {
     return null;
+  }
+  // The quote anchors to the paragraph that carries it, which need not repeat
+  // the citation: a court often discusses a precedent in the paragraph after
+  // the one naming it. The citing paragraph wins when it carries the quote.
+  const quoteBlocks =
+    evidenceQuote === null || evidenceQuote === undefined
+      ? []
+      : ast.blocks.filter(
+          (block) =>
+            hasBlockInlines(block) &&
+            plainTextOf(block.inlines).includes(evidenceQuote),
+        );
+  const evidenceBlock =
+    quoteBlocks.find((block) => block.id === match.blockId) ??
+    quoteBlocks.at(0);
+  if (
+    evidenceQuote !== null &&
+    evidenceQuote !== undefined &&
+    evidenceBlock === undefined
+  ) {
+    logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
   const excerpt = excerptAround(
     match.text,
@@ -351,6 +411,11 @@ export const citationPassageIn = ({
     text: excerpt.text,
     truncated: excerpt.truncated,
     mention: match.mention,
+    ...(evidenceBlock === undefined ||
+    evidenceQuote === null ||
+    evidenceQuote === undefined
+      ? {}
+      : { evidenceQuote, evidenceAnchorId: evidenceBlock.anchorId }),
   };
 };
 
@@ -465,16 +530,26 @@ const sectionTextAt = (
  * read costs its rows every text field, never the page: the decision identity
  * and treatment metadata remain available with an explicit incomplete reason.
  */
-const readDecisionTextByDecision = async (
-  caseLawDb: CaseLawPublicReadDb,
-  pointers: readonly PassageSourcePointer[],
-): Promise<Map<string, CitationDecisionText>> => {
+type ReadDecisionTextByDecisionOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  pointers: readonly PassageSourcePointer[];
+  countries: readonly string[];
+};
+
+const readDecisionTextByDecision = async ({
+  caseLawDb,
+  pointers,
+  countries,
+}: ReadDecisionTextByDecisionOptions): Promise<
+  Map<string, CitationDecisionText>
+> => {
   const textByDecision = new Map<string, CitationDecisionText>();
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
-    const columns = await readDecisionTextColumns(
+    const columns = await readDecisionTextColumns({
       caseLawDb,
-      group.map((pointer) => pointer.id),
-    );
+      ids: group.map((pointer) => pointer.id),
+      countries,
+    });
     const entries = await Promise.all(
       group.map(async (pointer) => {
         const text = await readCitationDecisionText({
@@ -502,6 +577,7 @@ export type ReadDecisionCitationsOptions = {
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationReadDirection;
   limit: number;
+  surface: PublicCountrySurface;
 };
 
 type PrepareDecisionCitationsOptions = {
@@ -544,7 +620,11 @@ export const prepareDecisionCitations = async ({
             ),
           ).values(),
         ];
-  const sources = await readPassageSourcePointers(subject.tx, citingIds);
+  const sources = await readPassageSourcePointers({
+    tx: subject.tx,
+    ids: citingIds,
+    countries: subject.countries,
+  });
   const [permission] = await subject.tx
     .select({
       available: sql<boolean>`${sql.join(
@@ -565,6 +645,7 @@ export const prepareDecisionCitations = async ({
     return {
       page,
       sources,
+      countries: subject.countries,
       resolvedDecisionId: decisionId,
       direction,
       evidence: { type: "not-granted" as const },
@@ -596,6 +677,7 @@ export const prepareDecisionCitations = async ({
   return {
     page,
     sources,
+    countries: subject.countries,
     evidence,
     resolvedDecisionId: decisionId,
     direction,
@@ -620,10 +702,11 @@ export const completeDecisionCitations = async ({
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-  const textByDecision = await readDecisionTextByDecision(
+  const textByDecision = await readDecisionTextByDecision({
     caseLawDb,
-    gated.sources,
-  );
+    pointers: gated.sources,
+    countries: gated.countries,
+  });
   const evidenceByCitation = new Map(
     gated.evidence.type === "ready"
       ? gated.evidence.rows.map((row) => [String(row.id), row] as const)
@@ -646,6 +729,10 @@ export const completeDecisionCitations = async ({
       citationText: item.citationText,
       sectionIndex: item.sectionIndex,
       evidenceWindows: evidence?.evidenceWindows ?? null,
+      evidenceQuote:
+        item.doctrine === "distinguishes" || item.doctrine === "limits"
+          ? item.evidenceQuote
+          : null,
     });
     const evidenceFields: CitationEvidenceFields =
       evidence === null
@@ -667,8 +754,9 @@ export const completeDecisionCitations = async ({
               excerpt: textFields.evidenceExcerpt,
             },
           };
+    const { evidenceQuote: _evidenceQuote, ...citation } = item;
     return {
-      ...item,
+      ...citation,
       ...evidenceFields,
       citationText:
         gated.evidence.type === "ready" && evidence === null
@@ -684,7 +772,11 @@ export const completeDecisionCitations = async ({
   });
 
   return {
-    page: { items, nextCursor: gated.page.nextCursor },
+    page: {
+      items,
+      nextCursor: gated.page.nextCursor,
+      doctrineAvailability: gated.page.doctrineAvailability,
+    },
     type: "page",
   };
 };
@@ -744,9 +836,11 @@ export const readGatedDecisionCitations = async ({
   decisionId,
   direction,
   limit,
+  surface,
 }: ReadDecisionCitationsOptions): Promise<DecisionCitationsRead | null> => {
   const prepared = await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) =>
       await prepareDecisionCitations({ subject, cursor, direction, limit }),
@@ -766,6 +860,7 @@ type CitationTextFieldsOptions = {
   citationText: string;
   sectionIndex: number | null;
   evidenceWindows: CitationEvidenceWindows | null;
+  evidenceQuote?: string | null;
 };
 
 /** All citation text outputs share one eligibility branch, including the reference itself. */
@@ -775,6 +870,7 @@ export const citationTextFields = ({
   citationText,
   sectionIndex,
   evidenceWindows,
+  evidenceQuote,
 }: CitationTextFieldsOptions) => {
   if (textWithheldReason !== null) {
     return {
@@ -800,6 +896,7 @@ export const citationTextFields = ({
           ast: text.ast,
           citationText,
           sectionText: sectionTextAt(text.sections, sectionIndex),
+          evidenceQuote,
         }),
         evidenceExcerpt: polarityExcerptIn({
           sections: text.sections,

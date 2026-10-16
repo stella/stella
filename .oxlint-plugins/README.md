@@ -249,7 +249,7 @@ runtime validation, or integration tests.
 ### Architecture, configuration, AI, and type safety
 
 - [`ai-output-strict-schema`](./ai-output-strict-schema.ts) (`ai-output-strict-schema`): requires AI structured-output schemas to reject unknown properties instead of silently accepting model drift.
-- [`require-complete-compaction-generation`](./require-complete-compaction-generation.ts) (`require-complete-compaction-generation`): requires every compaction-owned text generation call to apply the shared complete-output policy before its durable checkpoint can advance.
+- [`require-complete-compaction-generation`](./require-complete-compaction-generation.ts) (`require-complete-compaction-generation`): requires every compaction-owned text generation call to apply the shared compaction request (complete-output policy, sized ceiling, bounded prompt) before its durable checkpoint can advance.
 - [`confine-owner`](./confine-owner.ts) (`confine-owner`): confines each capability in `scripts/ownership.ts` to the module that owns it; the same table renders `docs/module-ownership.md`, and a bypass is an `allowed` entry with a reason rather than a new rule.
 - [`no-direct-status-set`](./no-direct-status-set.ts) (`no-direct-status-set`): reports lifecycle updates, conflict sets and visible raw SQL assignments outside the transition owner; opaque handles and payloads count conservatively, and the per-file shrink-only ratchet shares the detector and SQL text backstop. External SQL builders, external payload mutation and custom SQL column names outside the lifecycle naming convention remain outside static inspection.
 - [`no-discarded-transition-result`](./no-discarded-transition-result.ts) (`no-discarded-transition-result`): requires callers to handle or return the transition owner's result, including imported aliases, awaited calls and explicit `void` discards.
@@ -370,3 +370,5 @@ implies a hazard that is gone.
 - [`no-unanchored-footnotes`](./no-unanchored-footnotes.ts): source parsers resolve footnotes at paragraph references instead of reading the package collection as trailing content.
 
 - [`no-ambient-dev-docker`](./no-ambient-dev-docker.ts) (`no-ambient-dev-docker`): keeps development Docker executable references and Bun Shell commands in the endpoint owner, which emits a validated host and captured TLS settings together. Follows shell aliases and configuration chains; checks command positions across compound commands while accepting printed text and unrelated tags.
+
+- [`no-ad-hoc-chat-link`](./no-ad-hoc-chat-link.ts) (`no-ad-hoc-chat-link`): chat content renderers use `ChatLink` from `@stll/chat/link` for external anchors and delegate markdown through citation classification. Rejects raw external/dynamic anchors and browser favicon URLs; shared owner, same-document navigation, internal legal labels and file attachment controls retain their contracts. Chat settings and matter navigation are outside content scope.

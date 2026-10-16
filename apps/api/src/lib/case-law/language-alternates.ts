@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -91,7 +91,9 @@ export const readPublicDecisionLanguageAlternatesQuery =
         .where(
           and(
             inArray(caseLawDecisions.languageGroupKey, [...languageGroupKeys]),
-            inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+            inArray(caseLawDecisions.country, [
+              ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+            ]),
             redistributableCaseLawSource,
             publishedCaseLawDecision,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
@@ -266,7 +268,7 @@ export const listPublicDecisionLanguageAlternates = async ({
     .where(
       and(
         eq(caseLawDecisions.languageGroupKey, languageGroupKey),
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_PAGE_COUNTRIES]),
         redistributableCaseLawSource,
         publishedCaseLawDecision,
         sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,

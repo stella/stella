@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 3,
+  "reason": "The SSE schema validates nonnegative token and citation quantities at zero, a mathematical wire boundary rather than a configurable product limit. Two Temporal.Now calls timestamp received stream events and query polling callbacks; neither executes in SSR/hydration rendering, and both are required for non-renewing claim recovery."
+}

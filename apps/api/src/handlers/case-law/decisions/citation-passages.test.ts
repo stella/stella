@@ -6,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   citationPassageIn,
+  passageTextEligibility,
   citationTextFields,
   readCitationDecisionText,
   polarityExcerptIn,
@@ -109,6 +110,57 @@ describe("the excerpt a citation travels with", () => {
 
     expect(passage?.anchorId).toBe("p9");
     expect(passage?.mention).toBe("latest_of_several");
+  });
+
+  test("keeps the review quote verbatim beside the canonical citation excerpt", () => {
+    const evidenceQuote = "The earlier decision concerns different facts.";
+    const classified = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: classified },
+        { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: classified,
+      evidenceQuote,
+    });
+    expect(passage).toEqual({
+      anchorId: "p1",
+      text: classified,
+      mention: "classified_section",
+      truncated: false,
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("anchors a review quote in a paragraph that does not repeat the citation", () => {
+    const evidenceQuote = "That ruling concerned a different contract.";
+    const citing = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: citing },
+        { anchorId: "p2", text: `However, ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote,
+    });
+    expect(passage).toMatchObject({
+      anchorId: "p1",
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("does not publish a quote absent from the decision text", () => {
+    const passage = citationPassageIn({
+      ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "Different facts.",
+    });
+    expect(passage).not.toHaveProperty("evidenceQuote");
   });
 
   test("is absent when no paragraph carries the citation", () => {
@@ -279,5 +331,80 @@ test("an absent analysis retains eligible citation text without excerpts", () =>
     passage: null,
     evidenceExcerpt: null,
     textIncompleteReason: "absent_ast",
+  });
+});
+
+test("eligible citation text preserves doctrine evidence without polarity windows", () => {
+  const citationText = "21 Cdo 500/2019";
+  const evidenceQuote = "The earlier decision concerns different facts.";
+  const fields = citationTextFields({
+    text: {
+      type: "eligible",
+      ast: astOf([
+        { anchorId: "citation", text: `See ${citationText}.` },
+        { anchorId: "doctrine", text: evidenceQuote },
+      ]),
+      sections: null,
+    },
+    citationText,
+    sectionIndex: null,
+    textWithheldReason: null,
+    evidenceWindows: null,
+    evidenceQuote,
+  });
+  expect(fields.evidenceExcerpt).toBeNull();
+  expect(fields.passage).toMatchObject({
+    anchorId: "citation",
+    evidenceQuote,
+    evidenceAnchorId: "doctrine",
+  });
+});
+
+test("a citing decision country change invalidates text even within the admitted surface", async () => {
+  const eligibility = {
+    published: true,
+    redistributable: true,
+    textRevisionFingerprint: "same-text-revision",
+    descriptor: { allowsDerivedAi: true },
+  };
+  const original = passageTextEligibility({ ...eligibility, country: "CZE" });
+  const changed = passageTextEligibility({ ...eligibility, country: "SVK" });
+  expect(changed.textEligibilityFingerprint).not.toBe(
+    original.textEligibilityFingerprint,
+  );
+  let astReads = 0;
+  const text = await readCitationDecisionText({
+    pointer: {
+      id: createSafeId<"caseLawDecision">(),
+      astS3Key: null,
+      contentHash: "same-content-hash",
+      textEligibilityFingerprint: original.textEligibilityFingerprint,
+    },
+    columns: {
+      ...changed,
+      contentHash: "same-content-hash",
+      documentAst: null,
+      sections: null,
+    },
+    readAst: async () => {
+      astReads += 1;
+      return await Promise.resolve(null);
+    },
+  });
+  expect(astReads).toBe(0);
+  expect(
+    citationTextFields({
+      text,
+      citationText: "21 Cdo 500/2019",
+      sectionIndex: null,
+      textWithheldReason: null,
+      evidenceWindows: null,
+      evidenceQuote: "Synthetic doctrine evidence.",
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "text_changed",
   });
 });

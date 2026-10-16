@@ -121,6 +121,7 @@ test("every public case-law response family bounds serialized multibyte response
 
 test("the REST citation response preserves the text withholding reason", () => {
   const input = {
+    doctrineAvailability: "unavailable",
     items: [
       {
         id: "00000000-0000-4000-8000-000000000000",
@@ -130,6 +131,7 @@ test("the REST citation response preserves the text withholding reason", () => {
         evidenceIncompleteReason: "missing_privileges",
         sectionIndex: null,
         treatment: "neutral",
+        doctrine: null,
         polarityEvidence: null,
         citedPart: null,
         decision: null,

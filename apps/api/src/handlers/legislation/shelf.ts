@@ -13,7 +13,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceToday,
@@ -119,7 +119,7 @@ export const readLegislationShelf = async ({
       )
       .where(
         and(
-          publishedLegislationDocument,
+          publishedLegislationDocumentFor("search"),
           eq(legislationDocuments.country, country),
           inForceToday(documentRef),
           isCurrentVersionOfWork,
@@ -138,7 +138,7 @@ export const readLegislationShelf = async ({
       )
       .where(
         and(
-          publishedLegislationDocument,
+          publishedLegislationDocumentFor("search"),
           eq(legislationDocuments.country, country),
           eligibleExpression(documentRef),
           sql`${validFromKey} > CURRENT_DATE`,
@@ -189,6 +189,7 @@ export const readLegislationShelfHandler = async (
 ) => {
   const countryRead = readPublicLawCountry(country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;

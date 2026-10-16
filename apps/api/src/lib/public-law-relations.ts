@@ -7,6 +7,7 @@
  * from this map, so adding a field requires one explicit public-data decision.
  */
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
+  caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
@@ -59,6 +60,30 @@ export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
 
+/** Expanded before the follow-up release grants the reviewed doctrine capability. */
+export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+  },
+  case_law_citation_doctrine_reviews: {
+    citing_decision_id: "permitted",
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+    evidence_quote: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_evidence_windows: "permitted",
+    cited_part: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
 /** Columns the provision link status capability requires after its grants land. */
@@ -101,17 +126,6 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
-/** Evidence reads activate only after every column grant lands in a later release. */
-export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
-  case_law_citations: {
-    polarity_rule_id: "permitted",
-    polarity_source: "permitted",
-    polarity_classifier_version: "permitted",
-    polarity_evidence_windows: "permitted",
-    cited_part: "permitted",
-  },
-} as const satisfies PublicLawColumnGrantsByRelation;
-
 /**
  * Each column declares how this release relates to its grant:
  *
@@ -134,7 +148,10 @@ export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
  * the two steps are apart.
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citation_doctrine_reviews:
+    DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
+    ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",

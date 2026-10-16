@@ -2,7 +2,11 @@ import { and, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawCitationReviews, caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawCitationDoctrineReviews,
+  caseLawCitationReviews,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import type { caseLawCitations } from "@/api/db/schema";
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
 import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
@@ -119,5 +123,56 @@ export const applyCitationReviews = async (
           polarityEvidenceWindows: null,
           polarityConfidence: null,
         };
+  });
+};
+
+/** Restore doctrinal reviews independently of stance after a citation refresh. */
+export const applyDoctrineReviews = async (
+  tx: Transaction,
+  rows: readonly CitationInsert[],
+): Promise<readonly CitationInsert[]> => {
+  const decisionIds = [...new Set(rows.map((row) => row.citingDecisionId))];
+  const keys = [
+    ...new Set(
+      rows.flatMap((row) =>
+        typeof row.citationKey === "string" ? [row.citationKey] : [],
+      ),
+    ),
+  ];
+  if (keys.length === 0) {
+    return rows;
+  }
+  const reviews = await tx
+    .select({
+      citingDecisionId: caseLawCitationDoctrineReviews.citingDecisionId,
+      citationKey: caseLawCitationDoctrineReviews.citationKey,
+      doctrinalTreatment: caseLawCitationDoctrineReviews.doctrinalTreatment,
+    })
+    .from(caseLawCitationDoctrineReviews)
+    .where(
+      and(
+        inArray(caseLawCitationDoctrineReviews.citingDecisionId, decisionIds),
+        inArray(caseLawCitationDoctrineReviews.citationKey, keys),
+        reviewTextEligibleSql({
+          origin: caseLawCitationDoctrineReviews.origin,
+          citingDecisionId: caseLawCitationDoctrineReviews.citingDecisionId,
+          textRevisionSha256: caseLawCitationDoctrineReviews.textRevisionSha256,
+        }),
+      ),
+    );
+  const reviewed = new Map(
+    reviews.map((review) => [
+      identityOf(review.citingDecisionId, review.citationKey),
+      review.doctrinalTreatment,
+    ]),
+  );
+  return rows.map((row) => {
+    const doctrinalTreatment =
+      row.citationKey === null || row.citationKey === undefined
+        ? undefined
+        : reviewed.get(identityOf(row.citingDecisionId, row.citationKey));
+    return doctrinalTreatment === undefined
+      ? row
+      : { ...row, doctrinalTreatment };
   });
 };

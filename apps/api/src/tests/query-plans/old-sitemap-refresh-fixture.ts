@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -37,7 +37,7 @@ export const oldSitemapBucketCountsQuery = (db: OldSitemapRefreshDb) =>
       and(
         redistributableCaseLawSource,
         publishedCaseLawDecision,
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_PAGE_COUNTRIES]),
       ),
     )
     .groupBy(
