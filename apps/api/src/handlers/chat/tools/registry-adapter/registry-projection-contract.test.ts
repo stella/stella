@@ -457,6 +457,9 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),

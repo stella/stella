@@ -237,7 +237,7 @@ const planImportWrites = async ({
     existingId: SafeId<"contact"> | null,
   ): boolean =>
     dedupeTaxId !== null &&
-    (taxIdHolders.get(dedupeTaxId) ?? []).some(({ id }) => id !== existingId);
+    taxIdHolders.get(dedupeTaxId)?.some(({ id }) => id !== existingId) === true;
 
   const countRow = (
     await tx

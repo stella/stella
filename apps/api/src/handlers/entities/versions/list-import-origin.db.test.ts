@@ -84,7 +84,7 @@ test("an imported document keeps its original dates and author", async () => {
     }),
   );
   if (Result.isError(listed)) {
-    return panic("Listing the imported document's versions failed", {
+    panic("Listing the imported document's versions failed", {
       cause: listed.error,
     });
   }

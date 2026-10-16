@@ -94,6 +94,10 @@ const toMyTimeEntryItem = (
 };
 
 const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "importedAt",
   // The request is scoped to the active organization and signed-in user.
   "organizationId",
   "userId",

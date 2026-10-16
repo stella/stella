@@ -177,7 +177,7 @@ describe("contact import by external ref", () => {
     const ref = { source: "address-book", id: "K-1" };
     const [created] = await runImport(tenant, [person("Eva Malá", ref)]);
     if (created?.status !== "created") {
-      return panic("Fixture contact was not created");
+      panic("Fixture contact was not created");
     }
     await db
       .update(contacts)
@@ -203,7 +203,7 @@ describe("contact import by external ref", () => {
     expect(inFirst?.status).toBe("created");
     expect(inSecond?.status).toBe("created");
     if (inFirst?.status !== "created" || inSecond?.status !== "created") {
-      return panic("Both organizations must create their own contact");
+      panic("Both organizations must create their own contact");
     }
     expect(inSecond.contactId).not.toBe(inFirst.contactId);
 
@@ -229,7 +229,7 @@ describe("contact import by external ref", () => {
     const second = await createTenant("Id reuser");
     const [held] = await runImport(first, [person("Held contact")]);
     if (held?.status !== "created") {
-      return panic("The first organization must create its contact");
+      panic("The first organization must create its contact");
     }
 
     const results = await runImport(second, [
@@ -278,7 +278,7 @@ describe("contact import by external ref", () => {
       person("Plain"),
     ]);
     if (byRef?.status !== "created" || plain?.status !== "created") {
-      return panic("Both seed contacts must be created");
+      panic("Both seed contacts must be created");
     }
 
     const results = await runImport(tenant, [

@@ -29,8 +29,7 @@ const config = {
   mcp: {
     type: "capability",
     consumesServices: false,
-    reason:
-      "Batch import can create and update contacts by external reference, requiring both permissions; save_contact selects a single operation.",
+    reason: "contact_directory",
   },
   body: importContactsBodySchema,
 } satisfies HandlerConfig;
