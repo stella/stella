@@ -3,10 +3,16 @@ import { expect, test } from "bun:test";
 import Elysia, { t } from "elysia";
 import fc from "fast-check";
 
+import {
+  LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITIONS,
+  isEligibleLegislationExpression,
+} from "@stll/api-contract/legislation-expression";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  projectStatuteAmendments,
   projectStatuteReader,
   projectStatuteVersion,
   projectProvisionHistoryItem,
@@ -19,6 +25,8 @@ import {
   PREVIEW_BLOCK_MAX,
   PREVIEW_HEADING_MAX,
 } from "@/api/handlers/legislation/reader-response";
+import { createSafeId } from "@/api/lib/branded-types";
+import { effectOpensVersion } from "@/api/lib/legal-search/legislation-validity-window";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
@@ -330,4 +338,83 @@ test("reader response serialization preserves the complete official AST and text
       },
     ],
   });
+});
+
+test("amendment previews preserve same-day actors, staged starts, and source gaps", () => {
+  const sourceId = createSafeId<"legislationSource">();
+  const relation = {
+    sourceId,
+    targetEli: "/eli/cz/sb/2012/89",
+    language: "cs",
+    publisherId: "effect-a",
+    amendingEli: "/eli/cz/sb/2026/159",
+    amendingTitle: "Amending act",
+    amendingAnchor: null,
+    affectedAnchor: "par_1830a",
+    changeKind: "inserted",
+    effectiveType: "date",
+    effectiveDate: "2027-01-01",
+    effectiveText: null,
+    publisherInstruction: null,
+  } as const;
+  const page = {
+    items: [
+      relation,
+      {
+        ...relation,
+        publisherId: "effect-b",
+        amendingEli: "/eli/cz/sb/2026/160",
+      },
+      {
+        ...relation,
+        publisherId: "effect-c",
+        effectiveDate: "2027-07-01",
+        affectedAnchor: "par_1830b",
+      },
+    ],
+    limit: 500,
+    nextCursor: null,
+  };
+  const snapshot = {
+    observedAt: new Date("2026-10-16T10:00:00Z"),
+    coverage: {
+      type: "partial",
+      unlocatedRelations: 1,
+      reason: "Publisher relation has no provision",
+    },
+  } as const;
+  const result = projectStatuteAmendments({ page, snapshot });
+  expect(
+    result?.items.map(({ amendingEli, effectiveDate }) => [
+      amendingEli,
+      effectiveDate,
+    ]),
+  ).toEqual([
+    ["/eli/cz/sb/2026/159", "2027-01-01"],
+    ["/eli/cz/sb/2026/160", "2027-01-01"],
+    ["/eli/cz/sb/2026/159", "2027-07-01"],
+  ]);
+  expect(result?.coverage).toEqual(snapshot.coverage);
+  expect(projectStatuteAmendments({ page, snapshot: null })).toBeNull();
+  expect(
+    projectStatuteAmendments({ page: { ...page, items: [] }, snapshot })
+      ?.coverage.type,
+  ).toBe("partial");
+});
+
+test("effect dates label only eligible version openings across every expression state", () => {
+  for (const expressionKind of LEGISLATION_EXPRESSION_KINDS) {
+    for (const windowDisposition of LEGISLATION_WINDOW_DISPOSITIONS) {
+      const candidate = {
+        expressionKind,
+        windowDisposition,
+        versionValidFrom: "2027-01-01",
+      };
+      expect(effectOpensVersion("2027-01-01", candidate)).toBe(
+        isEligibleLegislationExpression(candidate),
+      );
+      expect(effectOpensVersion("2027-07-01", candidate)).toBe(false);
+      expect(effectOpensVersion(null, candidate)).toBe(false);
+    }
+  }
 });

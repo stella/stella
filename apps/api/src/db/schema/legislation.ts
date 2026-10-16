@@ -9,6 +9,11 @@ import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legis
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
+import {
+  LEGISLATION_AMENDMENT_CHANGE_KINDS,
+  LEGISLATION_AMENDMENT_EFFECTIVE_TYPES,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import {
   legislationVersionRef,
@@ -741,3 +746,73 @@ export const legislationIndexJobs = p.pgTable(
 );
 
 // -- Chat --
+
+/** Latest publisher observation of incoming amendments for one target Work. */
+export const legislationAmendmentSnapshots = p.pgTable(
+  "legislation_amendment_snapshots",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id")
+      .notNull()
+      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
+    language: p.varchar({ length: 16 }).notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    coverage: jsonb().$type<LegislationAmendmentCoverage>().notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.targetEli, t.language] }),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/** Publisher-stated provision effects, independent of consolidation windows. */
+export const legislationAmendments = p.pgTable(
+  "legislation_amendments",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id")
+      .notNull()
+      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
+    language: p.varchar({ length: 16 }).notNull(),
+    publisherId: p.text("publisher_id").notNull(),
+    amendingEli: p.varchar("amending_eli", { length: 512 }).notNull(),
+    amendingTitle: p.text("amending_title"),
+    amendingAnchor: p.text("amending_anchor"),
+    affectedAnchor: p.text("affected_anchor").notNull(),
+    changeKind: p
+      .text("change_kind", { enum: LEGISLATION_AMENDMENT_CHANGE_KINDS })
+      .notNull(),
+    effectiveType: p
+      .text("effective_type", { enum: LEGISLATION_AMENDMENT_EFFECTIVE_TYPES })
+      .notNull(),
+    effectiveDate: p.date("effective_date"),
+    effectiveText: p.text("effective_text"),
+    publisherInstruction: p.text("publisher_instruction"),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.sourceId, t.targetEli, t.language, t.publisherId],
+    }),
+    p
+      .index("legislation_amendments_amending_idx")
+      .on(t.sourceId, t.amendingEli, t.language, t.targetEli, t.publisherId),
+    p
+      .index("legislation_amendments_target_date_idx")
+      .on(t.sourceId, t.targetEli, t.language, t.effectiveDate, t.publisherId),
+    p.check(
+      "legislation_amendments_kind",
+      sql`${t.changeKind} IN (${sqlValues(LEGISLATION_AMENDMENT_CHANGE_KINDS)})`,
+    ),
+    p.check(
+      "legislation_amendments_effective",
+      sql`(${t.effectiveType} = 'date' AND ${t.effectiveDate} IS NOT NULL AND ${t.effectiveText} IS NULL) OR (${t.effectiveType} = 'not-stated' AND ${t.effectiveDate} IS NULL)`,
+    ),
+    p.check(
+      "legislation_amendments_identity",
+      sql`${t.publisherId} <> '' AND ${t.amendingEli} <> '' AND ${t.affectedAnchor} <> ''`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);

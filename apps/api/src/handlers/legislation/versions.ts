@@ -6,7 +6,10 @@ import type { Static } from "elysia";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments } from "@/api/db/schema";
-import { projectStatuteVersion } from "@/api/handlers/legislation/reader-response";
+import {
+  projectStatuteAmendments,
+  projectStatuteVersion,
+} from "@/api/handlers/legislation/reader-response";
 import {
   selectDefaultVersionId,
   selectWorkKey,
@@ -18,8 +21,14 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
+  readLegislationAmendments,
+  readLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
+  effectOpensVersion,
   UNVERSIONED_SORT_DATE,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
@@ -148,8 +157,35 @@ export const listStatuteVersionsHandler = async ({
       )
       .limit(limit + 1);
 
+    const effectiveDates = page.flatMap((row) =>
+      row.versionValidFrom === null ? [] : [row.versionValidFrom],
+    );
+    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
+    const amendments =
+      snapshot === null
+        ? { items: [], limit: LEGISLATION_AMENDMENT_PAGE_MAX, nextCursor: null }
+        : await readLegislationAmendments(tx, {
+            work,
+            direction: "incoming",
+            limit: LEGISLATION_AMENDMENT_PAGE_MAX,
+            effectiveDates,
+          });
     return page.map((row) =>
-      projectStatuteVersion({ ...row, isDefault: row.id === defaultId }),
+      projectStatuteVersion({
+        ...row,
+        isDefault: row.id === defaultId,
+        // The actor comes from an explicit publisher relation; multiple acts
+        // starting on one day remain separate effects in that day's wording.
+        amendedBy: projectStatuteAmendments({
+          snapshot,
+          page: {
+            ...amendments,
+            items: amendments.items.filter((relation) =>
+              effectOpensVersion(relation.effectiveDate, row),
+            ),
+          },
+        }),
+      }),
     );
   });
 

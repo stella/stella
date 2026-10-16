@@ -41,6 +41,7 @@ import {
   rankOutlineMatches,
 } from "@/components/legal-reader/outline-jump-field.logic";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { PendingStatuteChanges } from "@/features/statutes/components/pending-statute-changes";
 import {
   StatuteIneligibleVersionNotice,
   StatuteWindowGapNotice,
@@ -421,6 +422,7 @@ export const PublicStatuteViewer = ({
         ) : (
           <>
             <StatuteIneligibleVersionNotice version={statute} />
+            <PendingStatuteChanges changes={statute.pendingChanges} />
             <StatuteReaderBody
               blocks={blocks}
               masthead={preparedReader.masthead}

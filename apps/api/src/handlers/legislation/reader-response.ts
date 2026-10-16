@@ -14,6 +14,12 @@ import {
   DECISION_SECTION_TYPES,
   emptyAstSchema,
 } from "@/api/lib/legal-search/document-types";
+import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
+  type readLegislationAmendments,
+  type readLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
+import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -55,6 +61,77 @@ const windowFields = {
   versionValidTo: nullableBoundedString(readerTextBytes.versionValidTo),
   ...labelFields,
 };
+export const statuteAmendmentPageSchema = t.Object(
+  {
+    items: t.Array(
+      t.Object(
+        {
+          publisherId: boundedString(8192),
+          amendingEli: boundedString(readerTextBytes.eli),
+          amendingTitle: nullableBoundedString(readerTextBytes.title),
+          affectedAnchor: boundedString(8192),
+          changeKind: t.UnionEnum(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+          effectiveDate: nullableBoundedString(32),
+          effectiveText: nullableBoundedString(8192),
+        },
+        closed,
+      ),
+      { maxItems: LEGISLATION_AMENDMENT_PAGE_MAX },
+    ),
+    observedAt: boundedString(32),
+    coverage: t.Union([
+      t.Object({ type: t.Literal("complete") }, closed),
+      t.Object(
+        {
+          type: t.Literal("partial"),
+          unlocatedRelations: t.Number(),
+          reason: boundedString(8192),
+        },
+        closed,
+      ),
+      t.Object(
+        { type: t.Literal("not-stated"), reason: boundedString(8192) },
+        closed,
+      ),
+    ]),
+    truncated: t.Boolean(),
+  },
+  closed,
+);
+
+export type StatuteAmendmentPage = Static<typeof statuteAmendmentPageSchema>;
+
+type ProjectStatuteAmendmentsOptions = {
+  page: Awaited<ReturnType<typeof readLegislationAmendments>>;
+  snapshot: Awaited<ReturnType<typeof readLegislationAmendmentSnapshot>>;
+};
+export const projectStatuteAmendments = ({
+  page,
+  snapshot,
+}: ProjectStatuteAmendmentsOptions): StatuteAmendmentPage | null => {
+  if (snapshot === null) {
+    return null;
+  }
+  const coverage = snapshot.coverage;
+  return {
+    items: page.items.map((row) => ({
+      publisherId: truncateTextBytes(row.publisherId, 8192),
+      amendingEli: truncateTextBytes(row.amendingEli, readerTextBytes.eli),
+      amendingTitle: nullableText(row.amendingTitle, readerTextBytes.title),
+      affectedAnchor: truncateTextBytes(row.affectedAnchor, 8192),
+      changeKind: row.changeKind,
+      effectiveDate: row.effectiveDate,
+      effectiveText: nullableText(row.effectiveText, 8192),
+    })),
+    observedAt: snapshot.observedAt.toISOString(),
+    coverage:
+      coverage.type === "complete"
+        ? { type: "complete" }
+        : { ...coverage, reason: truncateTextBytes(coverage.reason, 8192) },
+    truncated: page.nextCursor !== null,
+  };
+};
+
 const versionFields = {
   id: tSafeId("legislationDocument"),
   eli: boundedString(readerTextBytes.eli),
@@ -70,7 +147,11 @@ const versionFields = {
   documentUrl: nullableBoundedString(readerTextBytes.documentUrl),
 };
 const statuteVersionSchema = t.Object(
-  { ...versionFields, isDefault: t.Boolean() },
+  {
+    ...versionFields,
+    isDefault: t.Boolean(),
+    amendedBy: t.Union([statuteAmendmentPageSchema, t.Null()]),
+  },
   closed,
 );
 export const statuteVersionsSuccessResponseSchema = t.Object(
@@ -87,6 +168,7 @@ export const statuteVersionsSuccessResponseSchema = t.Object(
 export const statuteReaderSuccessResponseSchema = t.Object(
   {
     ...versionFields,
+    pendingChanges: t.Union([statuteAmendmentPageSchema, t.Null()]),
     createdAt: boundedString(32),
     updatedAt: boundedString(32),
     citationCaseCount: t.Union([t.Number(), t.Null()]),
@@ -179,7 +261,11 @@ export const provisionPreviewSuccessResponseSchema = t.Object(
 );
 
 type Version = Static<typeof statuteVersionSchema>;
-export const projectStatuteVersion = (row: Version): Version => ({
+type VersionRow = Omit<Version, "amendedBy"> & {
+  amendedBy?: StatuteAmendmentPage | null;
+};
+export const projectStatuteVersion = (row: VersionRow): Version => ({
+  amendedBy: row.amendedBy ?? null,
   id: row.id,
   expressionKind: row.expressionKind,
   windowDisposition: row.windowDisposition,
@@ -206,17 +292,23 @@ export const projectStatuteVersion = (row: Version): Version => ({
 });
 
 type Reader = Static<typeof statuteReaderSuccessResponseSchema>;
-type ReaderRow = Omit<Reader, "createdAt" | "updatedAt"> & {
+type ReaderRow = Omit<Reader, "createdAt" | "updatedAt" | "pendingChanges"> & {
+  pendingChanges?: StatuteAmendmentPage | null;
   createdAt: Date;
   updatedAt: Date;
 };
 export const projectStatuteReader = (row: ReaderRow): Reader => {
-  const { isDefault: _isDefault, ...metadata } = projectStatuteVersion({
+  const {
+    isDefault: _isDefault,
+    amendedBy: _amendedBy,
+    ...metadata
+  } = projectStatuteVersion({
     ...row,
     isDefault: false,
   });
   return {
     ...metadata,
+    pendingChanges: row.pendingChanges ?? null,
     documentAst: row.documentAst,
     fulltext: row.fulltext,
     citationCaseCount: row.citationCaseCount,

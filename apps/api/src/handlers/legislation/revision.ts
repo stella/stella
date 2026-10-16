@@ -14,6 +14,7 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
+import { sanitizeLegislationAmendments } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
@@ -33,6 +34,10 @@ const sanitizeInput = (
       ? undefined
       : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
+  amendments:
+    input.amendments === undefined
+      ? undefined
+      : sanitizeLegislationAmendments(input.amendments),
   expression:
     input.expression === undefined
       ? undefined
@@ -86,6 +91,9 @@ export const legislationSourceHash = (
       input.metadata ?? {},
       input.rawHash,
       input.sourceRawContentType ?? null,
+      ...(input.amendments === undefined
+        ? []
+        : [[input.amendments.relations, input.amendments.coverage]]),
       ...(typed === null
         ? []
         : [
