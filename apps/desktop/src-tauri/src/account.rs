@@ -1702,11 +1702,12 @@ mod tests {
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     let original_id = connection.correlation_id.clone();
     let expires_at = connection.expires_at;
+    let now = expires_at - LINK_APPROVAL_TIMEOUT;
     let mut pending = Some(connection);
     let (replacement, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
-      reserve_browser_connection(&mut pending, replacement, std::time::Instant::now()),
+      reserve_browser_connection(&mut pending, replacement, now),
       ConnectionStart::Resumed,
       "a repeated request shows the waiting approval page again"
     );
@@ -1716,7 +1717,7 @@ mod tests {
       new_browser_connection("https://api.stll.app", "https://web.example.test")
         .unwrap();
     assert_eq!(
-      reserve_browser_connection(&mut pending, other_web, std::time::Instant::now()),
+      reserve_browser_connection(&mut pending, other_web, now),
       ConnectionStart::SameOriginPending,
       "another web origin never receives the waiting challenge"
     );
@@ -1725,11 +1726,7 @@ mod tests {
     let (while_redeeming, _) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
-      reserve_browser_connection(
-        &mut pending,
-        while_redeeming,
-        std::time::Instant::now()
-      ),
+      reserve_browser_connection(&mut pending, while_redeeming, now),
       ConnectionStart::SameOriginPending,
       "a redemption in flight is not shown again"
     );
@@ -1738,7 +1735,7 @@ mod tests {
       new_browser_connection("https://other.example.test", "https://web.example.test")
         .unwrap();
     assert_eq!(
-      reserve_browser_connection(&mut pending, other_server, std::time::Instant::now()),
+      reserve_browser_connection(&mut pending, other_server, now),
       ConnectionStart::DifferentOriginPending,
       "a pending connection for another API cannot count as the requested link"
     );
