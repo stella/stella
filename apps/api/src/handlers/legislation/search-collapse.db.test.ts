@@ -2,6 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -73,15 +74,15 @@ type VersionSeed = {
   id: SafeId<"legislationDocument">;
   eli: string;
   title: string;
-  validFrom: string;
-  validTo: string | null;
+  validFrom: string | SQL;
+  validTo: string | SQL | null;
 };
 
 const version = (
   tail: string,
   title: string,
-  validFrom: string,
-  validTo: string | null,
+  validFrom: string | SQL,
+  validTo: string | SQL | null,
 ): VersionSeed => ({
   id: createSafeId<"legislationDocument">(),
   eli: eli(tail),
@@ -100,8 +101,14 @@ const byteCapVersion = version(
 const CODE_TITLE = "89/2012 Sb., občanský zákoník";
 const code2014 = version("2012/89", CODE_TITLE, "2014-01-01", "2020-01-01");
 const code2020 = version("2012/89", CODE_TITLE, "2020-01-01", "2024-01-01");
-const codeCurrent = version("2012/89", CODE_TITLE, "2024-01-01", "2027-01-01");
-const codeFuture = version("2012/89", CODE_TITLE, "2027-01-01", null);
+const futureBoundary = sql`(CURRENT_DATE + INTERVAL '1 year')::date`;
+const codeCurrent = version(
+  "2012/89",
+  CODE_TITLE,
+  "2024-01-01",
+  futureBoundary,
+);
+const codeFuture = version("2012/89", CODE_TITLE, futureBoundary, null);
 // An earlier act of the same name, repealed, in two versions.
 const OLD_TITLE = "40/1964 Sb., občanský zákoník";
 const old1964 = version("1964/40", OLD_TITLE, "1964-04-01", "1990-01-01");
@@ -735,6 +742,12 @@ describe("the Postgres search path", () => {
   });
 
   test("finds future-only text only at that date and returns its snippet and validity window", async () => {
+    const [futureVersion] = await db
+      .select({ validFrom: legislationDocuments.versionValidFrom })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, codeFuture.id));
+    const futureDate =
+      futureVersion?.validFrom ?? panic("future fixture has no validity date");
     const current = await searchLegislationHandler(
       { query: "1830a", jurisdiction: "CZE", limit: 10 },
       legislationDb,
@@ -746,7 +759,7 @@ describe("the Postgres search path", () => {
         query: "1830a",
         jurisdiction: "CZE",
         limit: 10,
-        asOf: "2027-01-01",
+        asOf: futureDate,
       },
       legislationDb,
       "unobserved",
@@ -760,7 +773,7 @@ describe("the Postgres search path", () => {
     expect(future.items.at(0)).toMatchObject({
       documentId: String(codeFuture.id),
       headline: expect.stringContaining("<mark>1830a</mark>"),
-      versionValidFrom: "2027-01-01",
+      versionValidFrom: futureDate,
       versionValidTo: null,
     });
   });
