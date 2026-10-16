@@ -192,7 +192,9 @@ export const assertApiShardExecuted = ({
 
 if (import.meta.main) {
   const shard = parseShard(process.argv.slice(2));
-  const count = Number(process.env["API_TEST_SHARD_COUNT"] || 4);
+  const count = Number(
+    process.env["API_TEST_SHARD_COUNT"] || API_TEST_SHARD_IDS.length,
+  );
   if (process.argv[2] === "--verify-output") {
     const plan: { tasks: { taskId: string }[] } = JSON.parse(
       readFileSync(process.argv[4] ?? panic("Missing Turbo plan"), "utf-8"),
