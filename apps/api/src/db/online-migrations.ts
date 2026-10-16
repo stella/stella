@@ -80,6 +80,15 @@ type OnlineIndex = RequiredMigrationIndex & {
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   CASE_LAW_COVERAGE_INDEX,
+  // Reviewed doctrine per cited decision: few rows carry a finding.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
+    definitionBody:
+      "ON public.case_law_citations USING btree (cited_decision_id) WHERE ((doctrinal_treatment)::text = ANY ((ARRAY['distinguishes'::character varying, 'limits'::character varying])::text[]))",
+    isUnique: false,
+    name: "case_law_citations_doctrine_cited_idx",
+    tableName: "case_law_citations",
+  },
   {
     createSql: `CREATE INDEX CONCURRENTLY "apikey_personal_owner_keyset_idx" ON public."apikey" (((metadata::jsonb ->> 'organizationId')), reference_id, created_at DESC, id DESC) WHERE metadata IS NOT NULL AND metadata::jsonb ->> 'kind' = 'personal'`,
     definitionBody:
@@ -1021,8 +1030,8 @@ export const ensureOnlineIndexValid = async ({
         case "done":
           await assertIndexReady(connection, index);
           return COMPLETE;
-        // Waiting here would hold the caller's corpus schema lane for as long
-        // as the database stays unhealthy. A build cancelled into INVALID is
+        // Waiting here would hold the migrate run for as long as the database
+        // stays unhealthy; the next run re-reads the ledger first. A build cancelled into INVALID is
         // repaired, with repair priority, by the next run.
         case "retry":
         case "wait":

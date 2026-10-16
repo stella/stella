@@ -14,6 +14,7 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
+import { envBase } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -35,8 +36,16 @@ import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
+import type { FileKey } from "@/api/lib/file-key";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { DerivativeRefusal } from "@/api/lib/files/derivative-admission";
+import {
+  admitDerivativeSourceBytes,
+  DERIVATIVE_REFUSAL,
+  DerivativeAdmissionError,
+} from "@/api/lib/files/derivative-admission";
 import {
   allocateFileObject,
   resolveQueuedFileObject,
@@ -47,6 +56,7 @@ import {
 } from "@/api/lib/files/gotenberg";
 import {
   generateImageThumbnail,
+  IMAGE_SOURCE_TOO_LARGE_CODE,
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
@@ -56,12 +66,32 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
+import { LIMITS } from "@/api/lib/limits";
+import {
+  createMemoryPressureGate,
+  createPressurePause,
+} from "@/api/lib/memory-pressure";
+import type {
+  MemoryPressureGate,
+  PressurePause,
+} from "@/api/lib/memory-pressure";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  derivativeDeferRssBytes,
+  readProcessMemoryLimit,
+} from "@/api/lib/observability/process-memory-limit";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  OBJECT_READ_TIMEOUT_MS,
+  putS3ObjectWithSignal,
+  readS3ObjectBounded,
+  S3ObjectBudgetError,
+} from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -73,9 +103,24 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "file-derivatives";
+const CONSUMPTION_TOGGLE_FAILED_SINK = failureSink({
+  event: "file_derivative.consumption_toggle_failed",
+  expected: [],
+});
 const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
-const WORKER_CONCURRENCY = 3;
+/**
+ * Derivative jobs one API process runs at once. Exported so the bound is
+ * pinned by a test rather than by review.
+ */
+export const FILE_DERIVATIVE_WORKER_CONCURRENCY =
+  LIMITS.fileDerivativeWorkerConcurrency;
+/**
+ * The one retry policy for a derivative: BullMQ's attempts, with exponential
+ * backoff between them. The converter call itself never retries
+ * (`retry: "caller"`), so one job is at most this many full conversions, and
+ * memory is released between attempts.
+ */
 const DEFAULT_JOB_ATTEMPTS = 3;
 const RESERVATION_RETRY_DELAY_MS = FILE_RESERVATION_ABANDON_DELAY_MS + 60_000;
 
@@ -334,24 +379,71 @@ export const initFileDerivativeWorker = () => {
     storeClass: "durable-coordination",
   });
 
+  // The limit is read once: it is fixed for the life of the process.
+  const memoryLimit = readProcessMemoryLimit();
+  const rssHighBytes = derivativeDeferRssBytes(memoryLimit);
+  const memory = createMemoryPressureGate({
+    holdMs: LIMITS.fileDerivativeMemoryPressureHoldMs,
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    readRssBytes: () => process.memoryUsage.rss(),
+    rssHighBytes,
+  });
+  process.on("memoryPressure", memory.record);
+
+  // Bound late: the controller pauses the worker that runs the processor.
+  let pauseTarget: { pause: () => void; resume: () => void } | null = null;
+  const pausing = createPressurePause({
+    gate: memory,
+    pause: () => pauseTarget?.pause(),
+    resume: () => pauseTarget?.resume(),
+    recheckMs: LIMITS.fileDerivativeDeferDelayMs,
+    onClose: (reading) => {
+      logger.warn("file_derivative.paused", {
+        "memory.pressure_cause": reading.cause ?? "",
+        "memory.rss_bytes": reading.rssBytes,
+      });
+    },
+    onOpen: (reading) => {
+      logger.info("file_derivative.resumed", {
+        "memory.rss_bytes": reading.rssBytes,
+      });
+    },
+  });
+
   const worker = new BullMqWorker<FileDerivativeJobData>(
     QUEUE_NAME,
-    async (job) => {
-      try {
-        if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-          await processImageThumbnailJob(job.data);
-          return;
-        }
-        await processPdfDerivativeJob(job.data);
-      } catch (error) {
-        await deferFileDerivativeForPendingReservation({ error, job });
-      }
-    },
+    createFileDerivativeProcessor({
+      memory,
+      pausing,
+      processPdf: processPdfDerivativeJob,
+      processThumbnail: processImageThumbnailJob,
+    }),
     {
       connection: workerConnection,
-      concurrency: WORKER_CONCURRENCY,
+      concurrency: FILE_DERIVATIVE_WORKER_CONCURRENCY,
     },
   );
+
+  pauseTarget = {
+    // Local pause without waiting: it is called from inside the processor,
+    // which must still finish the job in hand.
+    pause: () => {
+      worker.pause(true).catch((error: unknown) => {
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
+      });
+    },
+    resume: () => {
+      worker.resume().catch((error: unknown) => {
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
+      });
+    },
+  };
 
   worker.on("failed", (job, error) => {
     const exhausted =
@@ -400,25 +492,251 @@ export const initFileDerivativeWorker = () => {
   );
 
   logger.info("file_derivative.worker_started", {
-    concurrency: String(WORKER_CONCURRENCY),
+    concurrency: String(FILE_DERIVATIVE_WORKER_CONCURRENCY),
+    "memory.defer_rss_bytes": rssHighBytes,
+    "memory.limit_bytes":
+      memoryLimit.type === "limited" ? memoryLimit.bytes : memoryLimit.type,
   });
 
   return {
     queues: [QUEUE_NAME] as const,
     close: async () => {
+      process.off("memoryPressure", memory.record);
+      pausing.stop();
       await worker.close();
     },
   };
 };
 
-const processPdfDerivativeJob = async ({
-  derivativeFileId,
-  entityId,
+type FileDerivativeProcessorJob = {
+  data: FileDerivativeJobData;
+  moveToDelayed: (timestamp: number, token?: string) => Promise<void>;
+  name: string;
+  token?: string;
+};
+
+/**
+ * The derivative worker's job handler. Before a job does any work it reads
+ * the memory gate. Under pressure only the job in hand goes back to the
+ * queue delayed (BullMQ does this without consuming an attempt), and the
+ * worker stops taking jobs until the gate reopens, so a backlog is not
+ * claimed and re-delayed job by job. Previews are postponed, never failed.
+ */
+export const createFileDerivativeProcessor =
+  ({
+    memory,
+    now = () => Temporal.Now.instant().epochMilliseconds,
+    pausing,
+    processPdf,
+    processThumbnail,
+  }: {
+    memory: Pick<MemoryPressureGate, "read">;
+    now?: () => number;
+    pausing: Pick<PressurePause, "closed">;
+    processPdf: (data: FileDerivativeJobData) => Promise<void>;
+    processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
+  }) =>
+  async (job: FileDerivativeProcessorJob): Promise<void> => {
+    const pressure = memory.read();
+    if (pressure.cause !== null) {
+      pausing.closed(pressure);
+      await job.moveToDelayed(
+        now() + LIMITS.fileDerivativeDeferDelayMs,
+        job.token,
+      );
+      throw new DelayedError();
+    }
+    try {
+      if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
+        await processThumbnail(job.data);
+        return;
+      }
+      await processPdf(job.data);
+    } catch (error) {
+      await deferFileDerivativeForPendingReservation({ error, job });
+    }
+  };
+
+/** The stored failure reason for a source admission refused. */
+const FAILURE_REASON_FOR_REFUSAL = {
+  [DERIVATIVE_REFUSAL.SOURCE_BYTES]: DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  [DERIVATIVE_REFUSAL.SOURCE_PIXELS]: DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  // An image whose header cannot be read would fail every attempt the same
+  // way, so it is terminal at once rather than after the retry budget.
+  [DERIVATIVE_REFUSAL.UNREADABLE_HEADER]: DERIVATIVE_FAILURE_REASON.PROCESSING,
+} as const satisfies Record<DerivativeRefusal, DerivativeFailureReason>;
+
+type DerivativeSource<T> =
+  | { type: "admitted"; source: T }
+  | { type: "refused"; reason: DerivativeFailureReason };
+
+/**
+ * Read a derivative's source only once it is admitted. The recorded size is
+ * checked before anything is read; the read itself is bounded by the same
+ * budget against the store's declared length, so a size the row understates
+ * is still refused before the body is held.
+ */
+export const loadDerivativeSource = async <T>({
+  read,
+  sizeBytes,
+}: {
+  read: (maxBytes: number) => Promise<T>;
+  sizeBytes: number;
+}): Promise<DerivativeSource<T>> => {
+  const refusal = admitDerivativeSourceBytes(sizeBytes);
+  if (refusal !== null) {
+    return {
+      type: "refused",
+      reason: FAILURE_REASON_FOR_REFUSAL[refusal.refusal],
+    };
+  }
+  try {
+    return {
+      type: "admitted",
+      source: await read(LIMITS.fileDerivativeSourceMaxBytes),
+    };
+  } catch (error) {
+    if (error instanceof S3ObjectBudgetError) {
+      return { type: "refused", reason: DERIVATIVE_FAILURE_REASON.TOO_LARGE };
+    }
+    throw error;
+  }
+};
+
+const MARK_DERIVATIVE_FAILED = {
+  [FILE_DERIVATIVE_KIND.PDF]: async (
+    data: FileDerivativeJobData,
+    reason: DerivativeFailureReason,
+  ) => await markPdfDerivativeFailed(data, reason),
+  [FILE_DERIVATIVE_KIND.THUMBNAIL]: async (
+    data: FileDerivativeJobData,
+    reason: DerivativeFailureReason,
+  ) => await markImageThumbnailFailed(data, reason),
+} as const satisfies Record<
+  FileDerivativeKind,
+  (
+    data: FileDerivativeJobData,
+    reason: DerivativeFailureReason,
+  ) => Promise<void>
+>;
+
+/** Record a terminal refusal; the job then completes without a retry. */
+const refuseDerivative = async ({
   fieldId,
-  organizationId,
-  userId,
+  jobData,
+  kind,
+  reason,
   workspaceId,
-}: FileDerivativeJobData): Promise<void> => {
+}: {
+  fieldId: SafeId<"field">;
+  jobData: FileDerivativeJobData;
+  kind: FileDerivativeKind;
+  reason: DerivativeFailureReason;
+  workspaceId: SafeId<"workspace">;
+}): Promise<void> => {
+  logger.info("file_derivative.refused", {
+    fieldId,
+    kind,
+    reason,
+    workspaceId,
+  });
+  await MARK_DERIVATIVE_FAILED[kind](jobData, reason);
+};
+
+type FileFieldContent = Extract<FieldContent, { type: "file" }>;
+
+type DerivativeBuild<T> =
+  | { type: "built"; value: T }
+  | { type: "refused"; reason: DerivativeFailureReason };
+
+const readSourceWithinBudget = async <T>(
+  read: (signal: AbortSignal) => Promise<T>,
+): Promise<T> =>
+  await withTimeout(read, {
+    label: "file-derivative-source-read",
+    timeoutMs: OBJECT_READ_TIMEOUT_MS,
+  });
+
+/**
+ * Read an admitted source once and convert it to PDF. The converter makes a
+ * single attempt (`retry: "caller"`): the job's attempts are the only retry.
+ */
+const buildPdfDerivative = async (
+  content: FileFieldContent,
+  sourceKey: FileKey,
+): Promise<DerivativeBuild<ArrayBuffer>> => {
+  const source = await loadDerivativeSource<ScannedFile>({
+    sizeBytes: content.sizeBytes,
+    read: async (maxBytes) =>
+      await readSourceWithinBudget(
+        async (signal) =>
+          await readStoredFile({
+            key: sourceKey,
+            mimeType: content.mimeType,
+            fileName: content.fileName,
+            maxBytes,
+            signal,
+          }),
+      ),
+  });
+  if (source.type === "refused") {
+    return source;
+  }
+  const conversion = await convertToPdf(source.source, { retry: "caller" });
+  if (Result.isError(conversion)) {
+    if (conversion.error instanceof DerivativeAdmissionError) {
+      return {
+        type: "refused",
+        reason: FAILURE_REASON_FOR_REFUSAL[conversion.error.refusal],
+      };
+    }
+    throw conversion.error;
+  }
+  return { type: "built", value: conversion.value.buffer };
+};
+
+/** Read an admitted image once and render its thumbnail and placeholder. */
+const buildThumbnailDerivative = async (
+  content: FileFieldContent,
+  sourceKey: FileKey,
+): Promise<DerivativeBuild<{ placeholder: string; webp: Uint8Array }>> => {
+  const source = await loadDerivativeSource<Uint8Array>({
+    sizeBytes: content.sizeBytes,
+    read: async (maxBytes) =>
+      await readSourceWithinBudget(
+        async (signal) =>
+          await readS3ObjectBounded({
+            bucket: envBase.S3_BUCKET,
+            key: sourceKey,
+            maxBytes,
+            signal,
+          }),
+      ),
+  });
+  if (source.type === "refused") {
+    return source;
+  }
+  const thumbnail = await generateImageThumbnail(source.source);
+  if (Result.isError(thumbnail)) {
+    if (thumbnail.error.code === IMAGE_SOURCE_TOO_LARGE_CODE) {
+      return { type: "refused", reason: DERIVATIVE_FAILURE_REASON.TOO_LARGE };
+    }
+    throw thumbnail.error;
+  }
+  return { type: "built", value: thumbnail.value };
+};
+
+const processPdfDerivativeJob = async (
+  jobData: FileDerivativeJobData,
+): Promise<void> => {
+  const {
+    derivativeFileId,
+    entityId,
+    fieldId,
+    organizationId,
+    userId,
+    workspaceId,
+  } = jobData;
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
     workspaceId,
@@ -469,16 +787,16 @@ const processPdfDerivativeJob = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const conversionResult = await convertToPdf(
-    await readStoredFile({
-      key: sourceKey,
-      mimeType: content.mimeType,
-      fileName: content.fileName,
-    }),
-  );
-
-  if (Result.isError(conversionResult)) {
-    throw conversionResult.error;
+  const built = await buildPdfDerivative(content, sourceKey);
+  if (built.type === "refused") {
+    await refuseDerivative({
+      fieldId: brandedFieldId,
+      jobData,
+      kind: FILE_DERIVATIVE_KIND.PDF,
+      reason: built.reason,
+      workspaceId: branded.workspaceId,
+    });
+    return;
   }
 
   const pdfFileId = resolveQueuedFileObject(derivativeFileId);
@@ -501,7 +819,7 @@ const processPdfDerivativeJob = async ({
 
   let writeState: "confirmed" | "uncertain" = "uncertain";
   try {
-    const pdfBytes = new Uint8Array(conversionResult.value.buffer);
+    const pdfBytes = new Uint8Array(built.value);
     if (!isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
       await withTimeout(
         async (signal) =>
@@ -661,13 +979,11 @@ const markPdfDerivativeFailed = async (
   );
 };
 
-const processImageThumbnailJob = async ({
-  derivativeFileId,
-  organizationId,
-  fieldId,
-  userId,
-  workspaceId,
-}: FileDerivativeJobData): Promise<void> => {
+const processImageThumbnailJob = async (
+  jobData: FileDerivativeJobData,
+): Promise<void> => {
+  const { derivativeFileId, organizationId, fieldId, userId, workspaceId } =
+    jobData;
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
     workspaceId,
@@ -719,14 +1035,18 @@ const processImageThumbnailJob = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const sourceBuffer = await readS3ArrayBuffer(sourceKey);
-  const thumbnailResult = await generateImageThumbnail(
-    new Uint8Array(sourceBuffer),
-  );
-
-  if (Result.isError(thumbnailResult)) {
-    throw thumbnailResult.error;
+  const built = await buildThumbnailDerivative(content, sourceKey);
+  if (built.type === "refused") {
+    await refuseDerivative({
+      fieldId: brandedFieldId,
+      jobData,
+      kind: FILE_DERIVATIVE_KIND.THUMBNAIL,
+      reason: built.reason,
+      workspaceId: branded.workspaceId,
+    });
+    return;
   }
+  const thumbnail = built.value;
 
   const thumbnailFileId = resolveQueuedFileObject(derivativeFileId);
   const sourceFileId = content.id;
@@ -753,7 +1073,7 @@ const processImageThumbnailJob = async ({
         async (signal) =>
           await putS3ObjectWithSignal(
             thumbnailKey,
-            thumbnailResult.value.webp,
+            thumbnail.webp,
             THUMBNAIL_MIME_TYPE,
             signal,
           ),
@@ -766,8 +1086,8 @@ const processImageThumbnailJob = async ({
       const fileWrite = await writeOrganizationFile({
         organizationId: branded.organizationId,
         objectKey: thumbnailKey,
-        sizeBytes: thumbnailResult.value.webp.byteLength,
-        content: thumbnailResult.value.webp,
+        sizeBytes: thumbnail.webp.byteLength,
+        content: thumbnail.webp,
         write: async ({
           content: checkedContent,
           objectKey: checkedObjectKey,
@@ -801,7 +1121,7 @@ const processImageThumbnailJob = async ({
         .set({
           content: readyThumbnailContent(
             thumbnailFileId,
-            thumbnailResult.value.placeholder,
+            thumbnail.placeholder,
           ),
         })
         .where(

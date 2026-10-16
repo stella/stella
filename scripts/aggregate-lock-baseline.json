@@ -1627,9 +1627,9 @@
   },
   {
     "file": "apps/api/src/handlers/organization-settings/update.ts",
-    "fingerprint": "7843812a9e82c0d0c2210a81644ffbae6d902dad34a10c8845c0d8cbdb8ad035",
+    "fingerprint": "4d2058b9fb2319e60f536fc5503c12fa6839589dfb61971a049376d97c39328b",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/organization-settings/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The same serialized settings read, now also selecting matterNumberingEnabled for its audit entry."
   },
   {
     "file": "apps/api/src/handlers/organization-settings/update.ts",
@@ -1771,7 +1771,7 @@
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
-    "fingerprint": "a3eb4c10538f8f681732e56ee7e8b4e0a1895d47ac6bb27bd984eb3fa115b51e",
+    "fingerprint": "362b7954c5875a3730ec3e485c127c17f540ff820cc646e548ed27b9fefd1476",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/skills/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -2029,15 +2029,9 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
-    "fingerprint": "150520f3dce8dc2db91735108bce5744da523b6988445a460efc14d078091c06",
+    "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/update.ts",
-    "fingerprint": "15ca13f4c0e068dc47e84d66df239720c69f67acb091d39a2f5f569dd7f9eec1",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The same client contact lock, now keyed on clientId alone after the separate attach-client body field was removed."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",

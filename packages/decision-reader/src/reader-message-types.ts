@@ -10,6 +10,8 @@ export type ReaderMessageKey =
   | "caseLaw.reader.headMatter"
   | "caseLaw.notesFilter.ai"
   | "common.court"
-  | "statutes.currentWording"
   | "statutes.wordingVersionUnknown"
-  | "statutes.openProvision";
+  | "statutes.openProvision"
+  | "statutes.provisionTextUnavailable"
+  | "statutes.showCitedPartOnly"
+  | "statutes.showFullProvision";

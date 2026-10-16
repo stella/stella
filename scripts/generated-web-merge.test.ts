@@ -95,15 +95,14 @@ const run = (directory: string, command: string[]) => {
   return result.stdout.toString().trim();
 };
 
-const generate = (directory: string, check = false) => {
-  for (const generator of generators) {
+const generate = (directory: string, check = false) =>
+  generators.map((generator) =>
     run(directory, [
       process.execPath,
       generator,
       ...(check ? ["--check"] : []),
-    ]);
-  }
-};
+    ]),
+  );
 
 const fixture = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "stella-generated-merge-"));
@@ -248,7 +247,15 @@ test("independent source routes merge cleanly and the generated API output remai
       expect(generated).toContain("alpha");
       expect(generated).toContain("beta");
     }
-    generate(directory);
+    // Unchanged compiler inputs restore the last printout without a program,
+    // including after the output itself is removed.
+    for (const output of outputs) {
+      rmSync(path.join(directory, output));
+    }
+    for (const log of generate(directory)) {
+      expect(log).toContain("compiler inputs unchanged");
+      expect(log).not.toContain("printed in");
+    }
     expect(
       outputs.map((output) =>
         readFileSync(path.join(directory, output), "utf-8"),

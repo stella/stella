@@ -41,6 +41,7 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal
@@ -198,10 +199,10 @@ export const createWorkspaceHandler = async function* ({
         );
       }
 
-      const newName =
-        duplicatedNames.length > 0
-          ? `${body.name} (${duplicatedNames.length})`
-          : body.name;
+      const newName = nextAvailableMatterName(
+        body.name,
+        duplicatedNames.map(({ name }) => name),
+      );
 
       const pattern =
         settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
