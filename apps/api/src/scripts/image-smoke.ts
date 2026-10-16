@@ -176,6 +176,34 @@ await probe("anonymize native engine", () => {
   }
 });
 
+await probe("model ingress script bundle", async () => {
+  const subprocess = Bun.spawn(["bun", "/app/image-smoke-model-ingress.js"], {
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: 30_000,
+    // The guard's observability imports validate base configuration;
+    // this probe never opens a database or storage connection.
+    env: {
+      ...process.env,
+      DATABASE_URL: "postgres://smoke:smoke@localhost:5432/smoke",
+      S3_ENDPOINT: "http://localhost",
+      S3_BUCKET: "smoke",
+      S3_REGION: "eu-central-1",
+    },
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
+  if (exitCode !== 0) {
+    panic(`model ingress script exited with ${exitCode}: ${stderr.trim()}`);
+  }
+  if (stdout.trim() !== "image-smoke ok: model ingress guard") {
+    panic("model ingress script did not finish its native matcher probe");
+  }
+});
+
 // Literal tenant identifier redaction uses Aho-Corasick; both matching and
 // replacement must execute through the native binding in the compiled image.
 await probe("text-search native binding", () => {
