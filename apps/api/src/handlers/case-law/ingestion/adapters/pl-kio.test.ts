@@ -37,6 +37,12 @@ import {
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+import {
+  inspectPlKioHtmlBudget,
+  PL_KIO_DOCUMENT_REJECTION,
+  PL_KIO_HTML_BUDGET,
+} from "./pl-kio-response-budget";
+
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 const fixtureText = async (name: string): Promise<string> =>
@@ -216,7 +222,7 @@ describe("reading a record page", () => {
         assemblePlKioDecision({
           item: { id },
           detailHtml: await fixtureText(`pl-kio-detail-${id}.html`),
-          documentHtml: undefined,
+          document: { type: "unavailable" },
         }),
       );
       expect({ id, unmapped: decision.metadata["unmappedFields"] }).toEqual({
@@ -235,7 +241,7 @@ describe("reading a record page", () => {
       assemblePlKioDecision({
         item: { id: "30308" },
         detailHtml: page,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(
@@ -258,7 +264,10 @@ describe("building a ruling from its three pages", () => {
           issueDate: "01-09-2025",
         },
         detailHtml: await fixtureText("pl-kio-detail-30308.html"),
-        documentHtml: await gzFixtureText("pl-kio-content-30308.html.gz"),
+        document: {
+          type: "read",
+          html: await gzFixtureText("pl-kio-content-30308.html.gz"),
+        },
       }),
     );
 
@@ -310,7 +319,10 @@ describe("building a ruling from its three pages", () => {
       assemblePlKioDecision({
         item: { id: "8247" },
         detailHtml: await fixtureText("pl-kio-detail-8247.html"),
-        documentHtml: await gzFixtureText("pl-kio-content-8247.html.gz"),
+        document: {
+          type: "read",
+          html: await gzFixtureText("pl-kio-content-8247.html.gz"),
+        },
       }),
     );
     expect(decision.caseNumber === "VIII Ga 248/09").toBe(true);
@@ -327,7 +339,10 @@ describe("building a ruling from its three pages", () => {
       assemblePlKioDecision({
         item: { id: "13694", signature: "KIO 1090/20" },
         detailHtml: await fixtureText("pl-kio-detail-13694.html"),
-        documentHtml: await gzFixtureText("pl-kio-content-13694.html.gz"),
+        document: {
+          type: "read",
+          html: await gzFixtureText("pl-kio-content-13694.html.gz"),
+        },
       }),
     );
     expect(decision.caseNumber === "KIO 1090/20").toBe(true);
@@ -352,7 +367,7 @@ describe("building a ruling from its three pages", () => {
     const outcome = assemblePlKioDecision({
       item: { id: "9019" },
       detailHtml: await fixtureText("pl-kio-detail-9019.html"),
-      documentHtml: "",
+      document: { type: "read", html: "" },
     });
     expect(outcome.type).toBe("built");
     const decision = built(outcome);
@@ -363,6 +378,40 @@ describe("building a ruling from its three pages", () => {
       decision.metadata["challengedAuthority"] ===
         "Prezes Urzędu Zamówień Publicznych",
     ).toBe(true);
+  });
+
+  test("markup beyond the allocation budget is typed and preserved for replay", async () => {
+    const documentHtml = `<p>${"<span>text</span>".repeat(PL_KIO_HTML_BUDGET.maxMarkupTokens)}</p>`;
+    expect(inspectPlKioHtmlBudget(documentHtml).type).toBe(
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+    );
+    const decision = built(
+      assemblePlKioDecision({
+        item: { id: "30308", signature: "KIO 2845/25" },
+        detailHtml: await fixtureText("pl-kio-detail-30308.html"),
+        document: { type: "read", html: documentHtml },
+      }),
+    );
+    expect(decision.fulltext).toBeUndefined();
+    expect(decision.metadata["documentStatus"]).toBe(
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+    );
+    expect(
+      Object.values(decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {}),
+    ).toContain(documentHtml);
+    expect(plKioAdapter.reconciliation?.heldWithoutDocument?.reasons).toContain(
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+    );
+  });
+
+  test("listing and detail readers reject excessive markup before building their DOM", async () => {
+    const markup = "<span></span>".repeat(PL_KIO_HTML_BUDGET.maxMarkupTokens);
+    const listing = await fixtureText("pl-kio-listing-2025-09-01-p1.html");
+    const detail = await fixtureText("pl-kio-detail-30308.html");
+    expect(readPlKioListing(listing)).not.toBeNull();
+    expect(readPlKioDetail(detail)).not.toBeNull();
+    expect(readPlKioListing(`${listing}${markup}`)).toBeNull();
+    expect(readPlKioDetail(`${detail}${markup}`)).toBeNull();
   });
 
   test("issuing bodies at the storage boundary retain exact text or the listing-only row", async () => {
@@ -381,7 +430,7 @@ describe("building a ruling from its three pages", () => {
           const outcome = assemblePlKioDecision({
             item: { id: "30308", signature: "KIO 2845/25", court },
             detailHtml,
-            documentHtml: undefined,
+            document: { type: "unavailable" },
           });
           const decision = built(outcome);
           const refused =
@@ -412,7 +461,7 @@ describe("building a ruling from its three pages", () => {
       assemblePlKioDecision({
         item: { id: "30308", signature: "KIO 2845/25", court },
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(Array.from(court).length).toBe(CITATION_STORAGE_WIDTHS.court);
@@ -432,7 +481,7 @@ describe("building a ruling from its three pages", () => {
       assemblePlKioDecision({
         item: { id: "30308", signature: "😀".repeat(512), court },
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(decision.court === court).toBe(true);
@@ -460,7 +509,7 @@ describe("building a ruling from its three pages", () => {
         issueDate: "01-09-2025",
       },
       detailHtml: undefined,
-      documentHtml: undefined,
+      document: { type: "unavailable" },
     });
     expect(outcome.type).toBe("detail-unavailable");
     expect(built(outcome).isListingOnly).toBe(true);
@@ -476,7 +525,7 @@ describe("building a ruling from its three pages", () => {
       assemblePlKioDecision({
         item: row ?? {},
         detailHtml: await fixtureText("pl-kio-detail-30308.html"),
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
@@ -658,7 +707,21 @@ const stubPublisher = async (
         : html("<html>Brak strony</html>", overrides.detailStatus);
     }
     if (overrides.contentBytes !== undefined) {
-      return html("x".repeat(overrides.contentBytes));
+      let remaining = overrides.contentBytes;
+      return new Response(
+        new ReadableStream({
+          pull(controller) {
+            if (remaining === 0) {
+              controller.close();
+              return;
+            }
+            const bytes = Math.min(remaining, 64 * 1024);
+            remaining -= bytes;
+            controller.enqueue(new Uint8Array(bytes).fill(120));
+          },
+        }),
+        { headers: { "Content-Type": "text/html; charset=utf-8" } },
+      );
     }
     if (overrides.contentHtml !== undefined) {
       return html(overrides.contentHtml);
@@ -796,11 +859,11 @@ describe("walking a month", () => {
     ).toBe(true);
   });
 
-  test("a converted document larger than a record retains its text and raw HTML", async () => {
+  test("a converted document at the byte budget retains its text and raw HTML", async () => {
     const content = await gzFixtureText("pl-kio-content-30308.html.gz");
-    const documentHtml = `<!--${"x".repeat(16 * 1024 * 1024)}-->${content}`;
-    expect(new TextEncoder().encode(documentHtml).byteLength).toBeGreaterThan(
-      16 * 1024 * 1024,
+    const documentHtml = `<!--${"x".repeat(PL_KIO_HTML_BUDGET.maxBytes - new TextEncoder().encode(content).byteLength - 7)}-->${content}`;
+    expect(new TextEncoder().encode(documentHtml).byteLength).toBe(
+      PL_KIO_HTML_BUDGET.maxBytes,
     );
     await stubPublisher({
       contentHtml: documentHtml,
@@ -816,15 +879,15 @@ describe("walking a month", () => {
     expect(page.value.decisions).toHaveLength(1);
     const decision = page.value.decisions.at(0);
     expect(decision?.fulltext).toContain("KIO");
-    expect(decision?.documentAst?.blocks.length).toBeGreaterThan(0);
+    expect(decision?.documentAst.blocks.length).toBeGreaterThan(0);
     expect(
       Object.values(decodeSourceRawEnvelope(decision?.sourceRaw ?? "") ?? {}),
     ).toContain(documentHtml);
   });
 
-  test("a detail record still obeys the smaller record budget", async () => {
+  test("a detail record obeys the HTML byte budget", async () => {
     await stubPublisher({
-      detailBytes: 16 * 1024 * 1024 + 1,
+      detailBytes: PL_KIO_HTML_BUDGET.maxBytes + 1,
       monthPages: {
         "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
       },
@@ -832,13 +895,13 @@ describe("walking a month", () => {
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isError(page)).toBe(true);
     if (Result.isError(page)) {
-      expect(page.error.message).toContain("answered more than 16777216 bytes");
+      expect(page.error.message).toContain("answered more than 2097152 bytes");
     }
   });
 
-  test("a document past the size cap keeps the record with no document", async () => {
+  test("a document past the byte budget keeps a typed oversized record", async () => {
     await stubPublisher({
-      contentBytes: 32 * 1024 * 1024 + 1,
+      contentBytes: 32 * 1024 * 1024,
       monthPages: {
         "1": listingPage(1, [listingRow("30308", "KIO 2845/25", "01-09-2025")]),
       },
@@ -850,6 +913,29 @@ describe("walking a month", () => {
       for (const decision of page.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
+        expect(decision.metadata["documentStatus"]).toBe(
+          PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        );
+        const replay = plKioAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          sourceDocumentId: "30308",
+          caseNumber: decision.caseNumber,
+          language: "pl",
+          court: decision.court,
+          ecli: null,
+          decisionDate: decision.decisionDate ?? null,
+          decisionType: decision.decisionType ?? null,
+          sourceUrl: decision.sourceUrl ?? null,
+          documentUrl: decision.documentUrl ?? null,
+          metadata: decision.metadata,
+        });
+        expect(replay?.type).toBe("parsed");
+        if (replay?.type === "parsed") {
+          expect(replay.result.metadata["documentStatus"]).toBe(
+            PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+          );
+        }
         expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
       }
     }
@@ -899,7 +985,7 @@ describe("walking a month", () => {
           issueDate: "01-09-2025",
         },
         detailHtml: await fixtureText("pl-kio-detail-30308.html"),
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(recovered.sourceDocumentIdRepairAliases).toHaveLength(1);
@@ -1148,7 +1234,7 @@ test.each(["script", "style"])(
       assemblePlKioDecision({
         item,
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(recovered.sourceDocumentId).toBe("30306");
@@ -1160,7 +1246,7 @@ test.each(["script", "style"])(
       assemblePlKioDecision({
         item: { ...item, id: undefined },
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
     expect(held.sourceDocumentId).not.toBe(storedLegacyId);
