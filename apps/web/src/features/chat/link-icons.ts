@@ -17,11 +17,9 @@ export const linkIconOptions = (hostname: string) =>
   queryOptions({
     queryKey: ["chat-link-icon", hostname],
     retry: false,
-    staleTime: (query) =>
-      query.state.data?.type === "temporary" ? 0 : LINK_ICON_CACHE_MS,
     gcTime: 60 * 1000,
     queryFn: async ({ signal }): Promise<LinkIcon> => {
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         linkIconsApi({ hostname }).get({
           fetch: {
             signal: AbortSignal.any([
@@ -43,7 +41,7 @@ export const linkIconOptions = (hostname: string) =>
       }
       const bytes = result.value.data;
       if (!(bytes instanceof Blob)) {
-        return bytes?.type === "no-icon"
+        return bytes.type === "no-icon"
           ? { type: "no-icon" }
           : { type: "temporary" };
       }
@@ -61,4 +59,6 @@ export const linkIconOptions = (hostname: string) =>
       }
       return { type: "icon", blob: bytes };
     },
+    staleTime: (query) =>
+      query.state.data?.type === "temporary" ? 0 : LINK_ICON_CACHE_MS,
   });

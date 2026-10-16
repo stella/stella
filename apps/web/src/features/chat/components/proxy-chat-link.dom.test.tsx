@@ -241,7 +241,7 @@ for (const { disposition, requestsExpected } of [
   { disposition: "temporary", requestsExpected: 2 },
   { disposition: "no-icon", requestsExpected: 1 },
   { disposition: "icon", requestsExpected: 1 },
-]) {
+] as const) {
   test(`only temporary icon outcomes become stale immediately: ${disposition}`, async () => {
     const originalFetch = globalThis.fetch;
     let requests = 0;
@@ -259,9 +259,9 @@ for (const { disposition, requestsExpected } of [
     const client = new QueryClient();
     try {
       const options = linkIconOptions("retry.example");
-      const first = await client.fetchQuery(options);
+      const first = await client.query(options);
       expect(first.type).toBe(disposition);
-      await client.fetchQuery(options);
+      await client.query(options);
       expect(requests).toBe(requestsExpected);
     } finally {
       client.clear();
