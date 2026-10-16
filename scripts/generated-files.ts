@@ -600,7 +600,8 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "--filter", "@stll/web", "generate:messages"],
     check: null,
-    checkedBy: "Check i18n sync",
+    unchecked:
+      "derived on demand; the web i18n check validates the source catalogs",
     autofix: true,
     after: [],
   },
