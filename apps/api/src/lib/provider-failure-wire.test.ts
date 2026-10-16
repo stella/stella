@@ -200,3 +200,36 @@ test("provider message recovery accepts only complete known envelopes", () => {
     error: { code: 429 },
   });
 });
+
+describe("wrapped provider message evidence", () => {
+  for (const depth of [1, 2]) {
+    test(`preserves status through ${depth} wrappers and a cause cycle`, () => {
+      const inner = Object.assign(
+        new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}'),
+        { isRetryable: true },
+      );
+      let wrapped: Error = inner;
+      for (let level = 0; level < depth; level += 1) {
+        wrapped = new Error("Wrapped", { cause: wrapped });
+      }
+      inner.cause = wrapped;
+      expect(classifyAIError(wrapped)).toBe("quota_exhausted");
+      expect(providerStatusCode(wrapped)).toBe(429);
+      const error = createProviderCallError({
+        model: { provider: "google", keySource: "byok" },
+        evidence: wrapped,
+        status: 502,
+      });
+      expect(error.kind).toBe("quota_exhausted");
+      expect(error.providerStatus).toBe(429);
+      expect(error.cause).toMatchObject({ status: 429, isRetryable: true });
+      expect(gradeFailure(readEvidence(error), sink).grade).toBe("transient");
+    });
+  }
+  test("terminates when a cause cycle carries no provider envelope", () => {
+    const error = new Error("Wrapped");
+    error.cause = new Error("Wrapped again", { cause: error });
+    expect(providerStatusCode(error)).toBeNull();
+    expect(classifyAIError(error)).toBe("unknown");
+  });
+});
