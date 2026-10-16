@@ -234,7 +234,7 @@ describe("required dependency review workflow boundary", () => {
         "needs.ci-plan.outputs.dependency_changes_required == 'true'",
       ),
     );
-    expect(job["needs"]).toBe("ci-plan");
+    expect(job.needs).toBe("ci-plan");
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
     expect(job.permissions).toEqual({
       contents: "read",
