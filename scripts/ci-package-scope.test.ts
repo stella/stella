@@ -193,6 +193,22 @@ test("dependency metadata selects tooling, runtime consumers, shared base, and u
         .type,
     ).toBe("shared-base");
 
+    // Any other top-level lockfile change reaches every workspace.
+    const patchBase = head;
+    lock.patchedDependencies = { "runtime@1.0.0": "patches/runtime.patch" };
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    const patched = commit("patch an already-locked package");
+    expect(
+      dependencyScope({
+        base: patchBase,
+        head: patched,
+        changed: ["bun.lock"],
+      }),
+    ).toEqual({ type: "shared-base", files: ["bun.lock"] });
+    delete lock.patchedDependencies;
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    head = commit("drop the patch again");
+
     // Already-locked packages: no package record changes, but the dependency
     // edges do, so neither change is tooling-only.
     const edgesBase = head;

@@ -277,8 +277,22 @@ export const dependencyScope = ({
   ) {
     return { type: "shared-base", files: allFiles(changed) };
   }
-  const before = parseLockfile(parseOrUndefined(base, "bun.lock"));
-  const after = parseLockfile(parseOrUndefined(head, "bun.lock"));
+  const beforeLock = parseOrUndefined(base, "bun.lock");
+  const afterLock = parseOrUndefined(head, "bun.lock");
+  // Only package records and workspace edges are classified below; any other
+  // lockfile change (overrides, patched dependencies, trusted dependencies,
+  // format version) reaches every workspace.
+  if (
+    isRecord(beforeLock) &&
+    isRecord(afterLock) &&
+    manifestChangedKeys(beforeLock, afterLock).some(
+      (key) => key !== "packages" && key !== "workspaces",
+    )
+  ) {
+    return { type: "shared-base", files: allFiles(changed) };
+  }
+  const before = parseLockfile(beforeLock);
+  const after = parseLockfile(afterLock);
   if (before === undefined || after === undefined) {
     return unknownScope(changed, "bun.lock is unreadable");
   }
