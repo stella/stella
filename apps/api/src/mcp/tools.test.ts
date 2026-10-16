@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import {
   afterAll,
@@ -68,6 +69,7 @@ import {
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
+import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -5619,6 +5621,9 @@ describe("OpenAI-compatible MCP tools", () => {
       });
 
     test("reports every jurisdiction with only public coverage facts and the data timestamp", async () => {
+      expect(
+        Value.Check(coverageResponseSchema, CASE_LAW_COVERAGE_FIXTURE),
+      ).toBe(true);
       const result = await call({});
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toEqual(CASE_LAW_COVERAGE_EXPECTED);

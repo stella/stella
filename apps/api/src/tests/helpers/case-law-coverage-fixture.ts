@@ -4,6 +4,7 @@ import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contra
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
 const census = {
+  aggregateUnit: "slice-memberships",
   verdict: "incomplete",
   scopeStatus: "full-publisher",
   outcome: "publisher-count",
