@@ -156,6 +156,7 @@ export const aggregateFences = () => {
       mode: "update",
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },
