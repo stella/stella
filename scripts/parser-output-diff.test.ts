@@ -9,6 +9,7 @@ import {
   compareCheckouts,
   compareParserOutputs,
   firstDifference,
+  formatParserOutputReport,
 } from "./parser-output-diff";
 
 const git = async (cwd: string, args: string[]) => {
@@ -164,6 +165,160 @@ test("compares all fields, missing keys, ordered arrays and warnings determinist
     compareParserOutputs({ base: { adapter: {} }, head: { adapter: {} } }),
   ).toThrow("Missing fixture coverage");
 });
+
+test("JSONL reports distinguish exceptional scalar values without dropping fields", () => {
+  expect(
+    JSON.parse(
+      formatParserOutputReport({
+        values: [
+          undefined,
+          Number.NaN,
+          Number.POSITIVE_INFINITY,
+          Number.NEGATIVE_INFINITY,
+          -0,
+          1n,
+          null,
+          0,
+        ],
+        slug: undefined,
+      }),
+    ),
+  ).toEqual({
+    values: [
+      { type: "undefined" },
+      { type: "number", value: "NaN" },
+      { type: "number", value: "Infinity" },
+      { type: "number", value: "-Infinity" },
+      { type: "number", value: "-0" },
+      { type: "bigint", value: "1" },
+      null,
+      0,
+    ],
+    slug: { type: "undefined" },
+  });
+});
+
+test.each([
+  {
+    name: "undefined object properties",
+    before: "{}",
+    after: "{ slug: undefined }",
+    field: "$.slug",
+    base: undefined,
+    head: undefined,
+  },
+  {
+    name: "undefined array entries",
+    before: "{ value: [undefined] }",
+    after: "{ value: [null] }",
+    field: "$.value[0]",
+    base: undefined,
+    head: null,
+  },
+  {
+    name: "NaN",
+    before: "{ value: NaN }",
+    after: "{ value: null }",
+    field: "$.value",
+    base: Number.NaN,
+    head: null,
+  },
+  {
+    name: "positive infinity",
+    before: "{ value: Infinity }",
+    after: "{ value: null }",
+    field: "$.value",
+    base: Number.POSITIVE_INFINITY,
+    head: null,
+  },
+  {
+    name: "negative infinity",
+    before: "{ value: -Infinity }",
+    after: "{ value: null }",
+    field: "$.value",
+    base: Number.NEGATIVE_INFINITY,
+    head: null,
+  },
+  {
+    name: "negative zero",
+    before: "{ value: -0 }",
+    after: "{ value: 0 }",
+    field: "$.value",
+    base: -0,
+    head: 0,
+  },
+  {
+    name: "bigint",
+    before: "{ value: 1n }",
+    after: "{ value: 2n }",
+    field: "$.value",
+    base: 1n,
+    head: 2n,
+  },
+])(
+  "worker transport preserves $name",
+  async ({ before, after, field, base, head }) => {
+    const root = await mkdtemp(path.join(tmpdir(), "parser-transport-test-"));
+    try {
+      await git(root, ["init", "--quiet"]);
+      await Bun.write(path.join(root, "tsconfig.scripts.json"), "{}");
+      await Bun.write(
+        path.join(root, "parser.ts"),
+        `export const value = ${before};`,
+      );
+      await Bun.write(
+        path.join(root, "runner.ts"),
+        'import { value } from "../parser"; export const collectParserOutputs = async () => ({ synthetic: { fixture: value } });',
+      );
+      await git(root, [
+        "add",
+        "--",
+        "tsconfig.scripts.json",
+        "parser.ts",
+        "runner.ts",
+      ]);
+      await git(root, [
+        "-c",
+        "user.name=Parser test",
+        "-c",
+        "user.email=parser@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--quiet",
+        "-m",
+        "test: seed transport fixture",
+      ]);
+      await Bun.write(
+        path.join(root, "parser.ts"),
+        `export const value = ${after};`,
+      );
+      expect(
+        await compareCheckouts({ root, base: "HEAD", runner: "runner.ts" }),
+      ).toEqual([
+        {
+          adapter: "synthetic",
+          status: "different",
+          fixture: "fixture",
+          field,
+          base,
+          head,
+        },
+      ]);
+      await Bun.write(
+        path.join(root, "parser.ts"),
+        `/* no-op */ export const value = ${before};`,
+      );
+      expect(
+        await compareCheckouts({ root, base: "HEAD", runner: "runner.ts" }),
+      ).toEqual([{ adapter: "synthetic", status: "identical" }]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test("workspace imports bind to each checkout rather than the installed head symlink", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "parser-workspace-test-"));

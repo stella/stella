@@ -3,9 +3,30 @@ import { panic } from "better-result";
 import { cp, mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { deserialize } from "node:v8";
 
 export type ParserOutputs = Record<string, Record<string, unknown>>;
 export type OutputDifference = { field: string; base: unknown; head: unknown };
+
+export const formatParserOutputReport = (report: unknown) =>
+  JSON.stringify(report, (_key, value: unknown) => {
+    if (value === undefined) {
+      return { type: "undefined" };
+    }
+    if (typeof value === "bigint") {
+      return { type: "bigint", value: value.toString() };
+    }
+    if (
+      typeof value === "number" &&
+      (!Number.isFinite(value) || Object.is(value, -0))
+    ) {
+      return {
+        type: "number",
+        value: Object.is(value, -0) ? "-0" : String(value),
+      };
+    }
+    return value;
+  });
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -305,6 +326,7 @@ export const compareCheckouts = async ({
     }
     const worker = `
 import { createRequire } from "node:module";
+import { serialize } from "node:v8";
 const require = createRequire(import.meta.url);
 const forbiddenNetwork = () => { throw new Error("Network forbidden in parser-output-diff"); };
 globalThis.fetch = forbiddenNetwork;
@@ -339,7 +361,7 @@ Math.random = () => { throw new Error("Randomness forbidden in parser-output-dif
 const { collectParserOutputs } = await import("./harness.ts");
 parsing = true;
 const result = await collectParserOutputs(process.argv[2]);
-await Bun.write(process.argv[3], JSON.stringify(result));
+await Bun.write(process.argv[3], serialize(result));
 `;
     type EvaluateOptions = { tree: string; name: string };
     const evaluate = async ({
@@ -350,7 +372,7 @@ await Bun.write(process.argv[3], JSON.stringify(result));
       await cp(harness, directory, { recursive: true });
       try {
         await Bun.write(path.join(directory, "worker.ts"), worker);
-        const output = path.join(temporary, `${name}.json`);
+        const output = path.join(temporary, `${name}.bin`);
         await command(tree, [
           process.execPath,
           "--no-env-file",
@@ -360,7 +382,7 @@ await Bun.write(process.argv[3], JSON.stringify(result));
           after,
           output,
         ]);
-        const parsed: unknown = await Bun.file(output).json();
+        const parsed: unknown = deserialize(await Bun.file(output).bytes());
         if (!isParserOutputs(parsed)) {
           return panic("Invalid parser fixture output envelope");
         }
@@ -441,11 +463,7 @@ if (import.meta.main) {
       base: options.get("--base") ?? "origin/main",
       head: options.get("--head"),
     });
-    const rows = results.map((result) =>
-      JSON.stringify(result, (_key, value: unknown) =>
-        value === undefined ? "<absent>" : value,
-      ),
-    );
+    const rows = results.map(formatParserOutputReport);
     const output = options.get("--output");
     if (output !== undefined) {
       await Bun.write(output, `${rows.join("\n")}\n`);
