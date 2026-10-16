@@ -2,12 +2,13 @@
 // The census covers policy/config expiry keys; prose-only review promises need
 // an explicit adapter (see docs/maintenance/dated-waivers.md).
 import { panic } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   DOC_SOURCE_EXCLUSIONS,
@@ -20,14 +21,8 @@ import {
   readTemporaryExcludes,
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
-import { waiverKey } from "./dated-waiver-fix-task";
-import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
-import {
-  expiryBlocksFiles,
-  readExpiryCheckScope,
-  type ExpiryCheckScope,
-} from "./expiry-check-scope";
+import { expiryBlocksFiles, type ExpiryCheckScope } from "./expiry-check-scope";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -72,6 +67,12 @@ export type DatedWaiver = {
   probe: WaiverProbe;
   checkedAt?: string;
 };
+
+/** The stable identity of one dated exception entry. */
+export const waiverKey = (
+  entry: Pick<DatedWaiver, "kind" | "source" | "id">,
+): string =>
+  sha256Hex(JSON.stringify([entry.kind, entry.source, entry.id])).slice(0, 24);
 
 // Date-only owners accept through the entire UTC day. Preserve that boundary.
 export const expiryInstant = (date: string): string => {
@@ -390,7 +391,7 @@ const waiverReferenceSchema = v.object({
   id: v.string(),
   expiresAt: v.string(),
 });
-type WaiverReference = v.InferOutput<typeof waiverReferenceSchema>;
+export type WaiverReference = v.InferOutput<typeof waiverReferenceSchema>;
 const proposalSchema = v.object({
   schemaVersion: v.literal(1),
   kind: v.literal("extension"),
@@ -742,7 +743,7 @@ export const loadWaivers = (
   });
 };
 
-const contextSchema = v.object({
+export const contextSchema = v.object({
   scope: v.variant("type", [
     v.object({ type: v.literal("all") }),
     v.object({
@@ -756,303 +757,94 @@ const contextSchema = v.object({
   baseProposals: v.record(v.string(), v.string()),
   baseEntries: v.nullable(v.array(waiverReferenceSchema)),
 });
-const prepareCheck = (file: string): void => {
-  const tracked = trackedPolicyFiles();
-  writeFileSync(file, `${tracked.join("\0")}\0`);
-  const scope = readExpiryCheckScope();
-  const baseBunfigs = new Map<string, string>();
-  const basePackageManifests = new Map<string, string>();
-  const baseProposals = new Map<string, string>();
-  let baseEntries: WaiverReference[] | null = null;
-  if (scope.type === "changes") {
-    if (!scope.baseSha) {
-      panic("Expiry scope base is required");
-    }
-    const files = Bun.spawnSync([
-      "git",
-      "ls-tree",
-      "-r",
-      "--name-only",
-      "-z",
-      scope.baseSha,
-    ]);
-    if (files.exitCode !== 0) {
-      panic("Cannot enumerate expiry base files");
-    }
-    const baseFiles = files.stdout.toString().split("\0").filter(Boolean);
-    for (const source of baseFiles.filter(
-      (candidate) =>
-        quarantineBunfigFiles([candidate]).length > 0 ||
-        candidate.startsWith(".github/dated-exception-proposals/") ||
-        (scope.changedFiles.has(candidate) &&
-          (candidate === "package.json" ||
-            candidate.endsWith("/package.json"))),
-    )) {
-      const contents = Bun.spawnSync([
-        "git",
-        "show",
-        `${scope.baseSha}:${source}`,
-      ]);
-      if (contents.exitCode !== 0) {
-        panic(`Cannot read expiry base owner ${source}`);
-      }
-      if (source.endsWith("bunfig.toml")) {
-        baseBunfigs.set(source, contents.stdout.toString());
-      } else if (source.startsWith(".github/dated-exception-proposals/")) {
-        baseProposals.set(source, contents.stdout.toString());
-      } else {
-        basePackageManifests.set(source, contents.stdout.toString());
-      }
-    }
-    // A new proposal's reference is checked against the base inventory, so
-    // its recorded deadline cannot be chosen by the proposal itself.
-    if (
-      tracked.some(
-        (candidate) =>
-          candidate.startsWith(".github/dated-exception-proposals/") &&
-          !baseFiles.includes(candidate),
-      )
-    ) {
-      baseEntries = baseWaiverReferences(scope.baseSha, baseFiles);
-    }
-  }
-  writeFileSync(
-    `${file}.context.json`,
-    JSON.stringify({
-      scope:
-        scope.type === "all"
-          ? scope
-          : { ...scope, changedFiles: [...scope.changedFiles] },
-      baseBunfigs: Object.fromEntries(baseBunfigs),
-      basePackageManifests: Object.fromEntries(basePackageManifests),
-      baseProposals: Object.fromEntries(baseProposals),
-      baseEntries,
-    }),
-  );
-};
-
-// Reads many files of one commit with a single `git cat-file --batch`.
-const readCommitFiles = (
-  sha: string,
-  files: readonly string[],
-): Map<string, string> => {
-  const batch = Bun.spawnSync(["git", "cat-file", "--batch"], {
-    stdin: Buffer.from(files.map((file) => `${sha}:${file}\n`).join("")),
-  });
-  if (batch.exitCode !== 0) {
-    panic("Cannot read expiry base owners");
-  }
-  const output = batch.stdout;
-  const contents = new Map<string, string>();
-  let offset = 0;
-  for (const file of files) {
-    const headerEnd = output.indexOf(10, offset);
-    const header = output.subarray(offset, headerEnd).toString();
-    const size = Number(/^[0-9a-f]+ blob (\d+)$/u.exec(header)?.at(1));
-    if (headerEnd === -1 || !Number.isSafeInteger(size)) {
-      panic(`Cannot read expiry base owner ${file}`);
-    }
-    const start = headerEnd + 1;
-    contents.set(file, output.subarray(start, start + size).toString());
-    offset = start + size + 1;
-  }
-  return contents;
-};
-
-/**
- * The inventory of a base commit. Which files the inventory reads is known
- * only while it runs, so each round records the files it was missing and the
- * next round reads them all at once.
- */
-export const baseWaiverReferences = (
-  baseSha: string,
-  baseFiles: readonly string[],
-): WaiverReference[] => {
-  // Only test files carrying the quarantine marker can contribute entries.
-  const marked = Bun.spawnSync([
-    "git",
-    "grep",
-    "-l",
-    "-z",
-    "test-quarantine-expires:",
-    baseSha,
-  ]);
-  if (marked.exitCode !== 0 && marked.exitCode !== 1) {
-    panic("Cannot search expiry base quarantines");
-  }
-  const quarantined = new Set(
-    marked.stdout
-      .toString()
-      .split("\0")
-      .filter(Boolean)
-      .map((match) => match.slice(baseSha.length + 1)),
-  );
-  const files = baseFiles.filter(
-    (file) =>
-      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) || quarantined.has(file),
-  );
-  const contents = new Map<string, string>();
-  for (let round = 0; round < 8; round += 1) {
-    const missing = new Set<string>();
-    const read = (file: string): string => {
-      const text = contents.get(file);
-      if (text === undefined) {
-        missing.add(file);
-        return "";
-      }
-      return text;
-    };
-    let entries: DatedWaiver[] | undefined;
-    try {
-      entries = loadWaivers(files, read);
-    } catch (error) {
-      // A placeholder for an unread file can fail parsing; only an error in
-      // a round that read every file it needed is real.
-      if (missing.size === 0) {
-        throw error;
-      }
-    }
-    if (missing.size === 0 && entries) {
-      return entries.map(({ kind, source, id, expiresAt }) => ({
-        kind,
-        source,
-        id,
-        expiresAt,
-      }));
-    }
-    for (const [file, text] of readCommitFiles(baseSha, [...missing])) {
-      contents.set(file, text);
-    }
-  }
-  return panic("Expiry base inventory did not settle");
-};
-
 if (import.meta.main) {
-  const check = process.argv.includes("--check");
   const trackedFilesFlag = process.argv.indexOf("--tracked-files");
-  if (check && trackedFilesFlag === -1) {
-    panic("--check requires --tracked-files <NUL-separated-file>");
-  }
   const trackedFilesPath =
     trackedFilesFlag === -1 ? undefined : process.argv.at(trackedFilesFlag + 1);
-  if (trackedFilesFlag !== -1 && !trackedFilesPath) {
-    panic("--tracked-files requires a path");
+  // The offline check only reads prepared files; preparing and listing need
+  // git and live in dated-waiver-inventory.ts.
+  if (!process.argv.includes("--check") || !trackedFilesPath) {
+    panic("--check requires --tracked-files <NUL-separated-file>");
   }
-  if (process.argv.includes("--prepare")) {
-    if (trackedFilesPath === undefined) {
-      panic("--prepare requires --tracked-files");
-    }
-    prepareCheck(trackedFilesPath);
-    process.exit(0);
+  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
+  const now = new Date();
+  const contextFile = `${trackedFilesPath}.context.json`;
+  if (process.env["GITHUB_ACTIONS"] === "true" && !existsSync(contextFile)) {
+    panic("CI expiry check requires prepared context");
   }
-  const tracked =
-    trackedFilesPath === undefined
-      ? trackedPolicyFiles()
-      : readTrackedPolicyFiles(trackedFilesPath);
-  const entries = loadWaivers(tracked);
-  if (check) {
-    const now = new Date();
-    const contextFile = `${trackedFilesPath}.context.json`;
-    if (process.env["GITHUB_ACTIONS"] === "true" && !existsSync(contextFile)) {
-      panic("CI expiry check requires prepared context");
-    }
-    const context = existsSync(contextFile)
-      ? v.parse(contextSchema, JSON.parse(readFileSync(contextFile, "utf-8")))
-      : {
-          scope: { type: "all" as const },
-          baseBunfigs: {},
-          basePackageManifests: {},
-          baseProposals: {},
-          baseEntries: null,
-        };
-    const read = (file: string) =>
-      readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
-    const packageManifests = Object.fromEntries(
-      tracked
-        .filter(
-          (file) => file === "package.json" || file.endsWith("/package.json"),
-        )
-        .map((file) => [file, read(file)]),
-    );
-    const expiryContext = {
-      scope:
-        context.scope.type === "all"
-          ? context.scope
-          : {
-              type: "changes" as const,
-              changedFiles: new Set(context.scope.changedFiles),
-              baseSha: context.scope.baseSha,
-            },
-      packageManifests,
-      basePackageManifests: context.basePackageManifests,
-    };
-    for (const annotation of expiredWaiverAnnotations(
-      entries,
-      now,
-      expiryContext,
-    )) {
-      console.log(annotation);
-    }
-    const event = process.env["GITHUB_EVENT_PATH"]
-      ? v.parse(
-          v.object({
-            pull_request: v.optional(v.object({ body: v.nullish(v.string()) })),
-          }),
-          JSON.parse(readFileSync(process.env["GITHUB_EVENT_PATH"], "utf-8")),
-        )
-      : undefined;
-    const failures = [
-      ...expiredWaiverFailures(entries, now, expiryContext),
-      ...prematureExclusionRemovals(
-        context.baseBunfigs,
-        Object.fromEntries(
-          quarantineBunfigFiles(tracked).map((file) => [file, read(file)]),
-        ),
-        now,
+  const context = existsSync(contextFile)
+    ? v.parse(contextSchema, JSON.parse(readFileSync(contextFile, "utf-8")))
+    : {
+        scope: { type: "all" as const },
+        baseBunfigs: {},
+        basePackageManifests: {},
+        baseProposals: {},
+        baseEntries: null,
+      };
+  const read = (file: string) =>
+    readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
+  const packageManifests = Object.fromEntries(
+    tracked
+      .filter(
+        (file) => file === "package.json" || file.endsWith("/package.json"),
+      )
+      .map((file) => [file, read(file)]),
+  );
+  const expiryContext = {
+    scope:
+      context.scope.type === "all"
+        ? context.scope
+        : {
+            type: "changes" as const,
+            changedFiles: new Set(context.scope.changedFiles),
+            baseSha: context.scope.baseSha,
+          },
+    packageManifests,
+    basePackageManifests: context.basePackageManifests,
+  };
+  for (const annotation of expiredWaiverAnnotations(
+    entries,
+    now,
+    expiryContext,
+  )) {
+    console.log(annotation);
+  }
+  const event = process.env["GITHUB_EVENT_PATH"]
+    ? v.parse(
+        v.object({
+          pull_request: v.optional(v.object({ body: v.nullish(v.string()) })),
+        }),
+        JSON.parse(readFileSync(process.env["GITHUB_EVENT_PATH"], "utf-8")),
+      )
+    : undefined;
+  const failures = [
+    ...expiredWaiverFailures(entries, now, expiryContext),
+    ...prematureExclusionRemovals(
+      context.baseBunfigs,
+      Object.fromEntries(
+        quarantineBunfigFiles(tracked).map((file) => [file, read(file)]),
       ),
-      ...extensionProposalFailures({
-        proposals: Object.fromEntries(
-          tracked
-            .filter(
-              (file) =>
-                file.startsWith(".github/dated-exception-proposals/") &&
-                file.endsWith(".json"),
-            )
-            .map((file) => [file, read(file)]),
-        ),
-        entries,
-        scope: expiryContext.scope,
-        baseProposals: context.baseProposals,
-        baseEntries: context.baseEntries,
-        body: event?.pull_request ? (event.pull_request.body ?? "") : undefined,
-      }),
-    ];
-    if (failures.length > 0) {
-      console.error(failures.join("\n"));
-      process.exitCode = 1;
-    }
-  } else if (
-    process.argv.includes("--json") ||
-    process.argv.includes("--within")
-  ) {
-    const index = process.argv.indexOf("--within");
-    const value = process.argv.at(index + 1);
-    const now = new Date();
-    if (index !== -1 && value === undefined) {
-      panic("--within requires a duration");
-    }
-    const selected =
-      index === -1
-        ? entries
-        : dueWaivers(entries, now, withinHours(value ?? "") / 24);
-    console.log(JSON.stringify(exceptionInventory(selected, now), null, 2));
-  } else if (process.argv.includes("--due")) {
-    console.log(dueWaivers(entries, new Date()).length > 0);
-  } else if (process.argv.includes("--warn")) {
-    for (const warning of waiverWarnings(entries, new Date())) {
-      console.log(warning);
-    }
-  } else {
-    console.log(JSON.stringify(entries, null, 2));
+      now,
+    ),
+    ...extensionProposalFailures({
+      proposals: Object.fromEntries(
+        tracked
+          .filter(
+            (file) =>
+              file.startsWith(".github/dated-exception-proposals/") &&
+              file.endsWith(".json"),
+          )
+          .map((file) => [file, read(file)]),
+      ),
+      entries,
+      scope: expiryContext.scope,
+      baseProposals: context.baseProposals,
+      baseEntries: context.baseEntries,
+      body: event?.pull_request ? (event.pull_request.body ?? "") : undefined,
+    }),
+  ];
+  if (failures.length > 0) {
+    console.error(failures.join("\n"));
+    process.exitCode = 1;
   }
 }

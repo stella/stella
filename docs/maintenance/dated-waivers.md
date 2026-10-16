@@ -34,7 +34,7 @@ contexts use their exact event base commit and fail closed if it cannot be read.
 
 ## Inventory JSON contract
 
-Run `bun scripts/dated-waivers.ts --within 72h --json`.
+Run `bun scripts/dated-waiver-inventory.ts --within 72h --json`.
 Omit `--within` for the complete inventory. The horizon includes overdue entries
 and the exact boundary. Invalid durations fail; durations use whole hours.
 

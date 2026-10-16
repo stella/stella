@@ -6,10 +6,9 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { waiverKey } from "./dated-waiver-fix-task";
+import { baseWaiverReferences } from "./dated-waiver-inventory";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
-  baseWaiverReferences,
   collectWaivers,
   DAY_MS,
   DOC_SOURCE_FILE,
@@ -23,6 +22,7 @@ import {
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
+  waiverKey,
 } from "./dated-waivers";
 
 const doc = {

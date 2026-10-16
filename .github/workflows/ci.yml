@@ -1136,7 +1136,7 @@ jobs:
             # cleared the release-age quarantine: a frozen install never
             # checks. Also runs when the check itself changes.
             case "$file" in
-              bun.lock|*/bun.lock|scripts/check-lockfile-release-ages.ts|scripts/check-lockfile-release-ages.test.ts|scripts/check-stll-quarantine-excludes.ts|scripts/bun-lock-text.ts)
+              bun.lock|*/bun.lock|scripts/check-lockfile-release-ages.ts|scripts/check-lockfile-release-ages.test.ts|scripts/check-stll-quarantine-excludes.ts|scripts/check-stll-quarantine-excludes-cli.ts|scripts/bun-lock-text.ts)
                 lockfile_ages_required=true
                 ;;
             esac
@@ -3052,7 +3052,7 @@ jobs:
         # check also fails once Bun's release-age gate can take over again.
         run: |
           bun test scripts/check-stll-quarantine-excludes.test.ts
-          bun scripts/check-stll-quarantine-excludes.ts
+          bun scripts/check-stll-quarantine-excludes-cli.ts
 
       - name: Policy evidence
         env:
@@ -3574,10 +3574,10 @@ jobs:
         # suppression is a reviewable ledger edit and a stale entry cannot rot
         # in place. Temporary waivers fail once their expiry passes. The
         # --self-test run first proves the guard still detects each kind of
-        # drift. Draft entries: `bun scripts/suppression-waivers.ts --seed`.
+        # drift. Draft entries: `bun scripts/suppression-waivers-cli.ts --seed`.
         run: |
-          bun scripts/suppression-waivers.ts --self-test
-          bun scripts/suppression-waivers.ts --check
+          bun scripts/suppression-waivers-cli.ts --self-test
+          bun scripts/suppression-waivers-cli.ts --check
 
       - name: Crawl posture guard
         env:
@@ -8147,7 +8147,7 @@ jobs:
       # The job condition is this part's condition, so it always runs here.
       - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
         if: ${{ !cancelled() }}
-        run: bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
+        run: bun scripts/dated-waiver-inventory.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
 
       - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
         if: ${{ !cancelled() }}

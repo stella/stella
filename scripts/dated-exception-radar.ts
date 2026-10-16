@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { waiverKey } from "./dated-waiver-fix-task";
 import { disarmRemoval, probeEntry } from "./dated-waiver-healing";
 import { createProbeBudget, removeWaiver } from "./dated-waiver-probes";
 import {
@@ -22,6 +21,7 @@ import {
   expiryInstant,
   loadWaivers,
   type DatedWaiver,
+  waiverKey,
 } from "./dated-waivers";
 
 const root = path.resolve(import.meta.dir, "..");

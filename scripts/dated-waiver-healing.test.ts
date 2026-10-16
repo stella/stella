@@ -15,7 +15,6 @@ import {
   EXPIRY_ALERT_LABEL,
   probeSourceFingerprint,
   RESOLUTION_POLICY,
-  waiverKey,
 } from "./dated-waiver-fix-task";
 import type { FixEvidence } from "./dated-waiver-fix-task";
 import {
@@ -53,6 +52,7 @@ import {
   dueWaivers,
   RECHECK_INSTRUCTIONS,
   type DatedWaiver,
+  waiverKey,
 } from "./dated-waivers";
 
 const entry = {

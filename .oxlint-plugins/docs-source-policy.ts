@@ -17,10 +17,10 @@ import {
   type DocSource,
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources.ts";
+import { readExpiryCheckScope } from "../scripts/expiry-check-scope-git.ts";
 import {
   expiryBlocksFiles,
   expiryWarning,
-  readExpiryCheckScope,
   type ExpiryCheckScope,
 } from "../scripts/expiry-check-scope.ts";
 import {

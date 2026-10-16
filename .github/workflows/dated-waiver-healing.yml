@@ -74,7 +74,7 @@ jobs:
       - name: Check main expiry after publication
         if: always() && steps.probe.outcome == 'success'
         run: |
-          bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-exception-files"
+          bun scripts/dated-waiver-inventory.ts --prepare --tracked-files "$RUNNER_TEMP/dated-exception-files"
           bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-exception-files"
 
       - name: Remove runner evidence

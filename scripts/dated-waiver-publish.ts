@@ -3,8 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
-import { waiverKey } from "./dated-waiver-fix-task";
-import type { DatedWaiver } from "./dated-waivers";
+import { type DatedWaiver, waiverKey } from "./dated-waivers";
 
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";
 type RemovalPr = { number: number; body: string; title: string };

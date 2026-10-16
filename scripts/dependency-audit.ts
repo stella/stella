@@ -41,10 +41,8 @@ import {
   type LapsedAcceptance,
 } from "./dependency-audit-acceptance";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
-import {
-  readExpiryCheckScope,
-  type ExpiryCheckScope,
-} from "./expiry-check-scope";
+import type { ExpiryCheckScope } from "./expiry-check-scope";
+import { readExpiryCheckScope } from "./expiry-check-scope-git";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");

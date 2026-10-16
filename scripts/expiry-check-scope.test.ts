@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { changedFilesSince } from "./expiry-check-scope";
+import { changedFilesSince } from "./expiry-check-scope-git";
 
 const git = (cwd: string, args: readonly string[]) => {
   const result = spawnSync("git", args, { cwd, encoding: "utf-8" });

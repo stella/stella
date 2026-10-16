@@ -40,7 +40,6 @@ import { isPathStrictlyInside } from "@stll/portable-path";
 import {
   expiryBlocksFiles,
   expiryWarning,
-  readExpiryCheckScope,
   type ExpiryCheckScope,
 } from "./expiry-check-scope";
 import {
@@ -470,7 +469,7 @@ const observeRepo = (root: string): Observation =>
     readFileSync(path.join(root, file), "utf-8"),
   );
 
-const runCheck = (): number => {
+export const runCheck = (expiryScope: ExpiryCheckScope): number => {
   const ledger = readLedger();
   const errors = inspectLedger({
     ledger,
@@ -479,7 +478,7 @@ const runCheck = (): number => {
     evidenceContains: (file, symbol) =>
       readFileSync(path.join(REPO_ROOT, file), "utf-8").includes(symbol),
     today: today(),
-    expiryScope: readExpiryCheckScope(),
+    expiryScope,
   });
 
   if (errors.length === 0) {
@@ -501,7 +500,7 @@ const runCheck = (): number => {
   return 1;
 };
 
-const runReport = (): number => {
+export const runReport = (): number => {
   const { observed, bare } = observeRepo(REPO_ROOT);
   console.log(`security-tier suppressions in the tree (${observed.length}):\n`);
   for (const entry of observed) {
@@ -517,7 +516,7 @@ const runReport = (): number => {
 // directive's own `-- reason` trailer across. Evidence defaults to the file's
 // adjacent test when one exists and to the anchoring symbol otherwise; both
 // are starting points a reviewer is expected to replace with the real locator.
-const runSeed = (): number => {
+export const runSeed = (): number => {
   const ledger = readLedger();
   const { observed } = observeRepo(REPO_ROOT);
   const declared = new Set(ledger.waivers.map(identityKey));
@@ -720,7 +719,7 @@ const NAMESPACE_FIXTURE_LINES = [
 ];
 const NAMESPACE_FIXTURE = `${NAMESPACE_FIXTURE_LINES.join("\n")}\n`;
 
-const runSelfTest = (): number => {
+export const runSelfTest = (): number => {
   const failures: string[] = [];
 
   const expectClean = (name: string, errors: readonly string[]): void => {
@@ -976,22 +975,3 @@ const runSelfTest = (): number => {
   console.log("suppression-waivers --self-test: PASS");
   return 0;
 };
-
-// --- Entry ------------------------------------------------------------------
-
-const main = (): number => {
-  if (process.argv.includes("--self-test")) {
-    return runSelfTest();
-  }
-  if (process.argv.includes("--seed")) {
-    return runSeed();
-  }
-  if (process.argv.includes("--check")) {
-    return runCheck();
-  }
-  return runReport();
-};
-
-if (import.meta.main) {
-  process.exit(main());
-}

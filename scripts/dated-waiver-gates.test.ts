@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { waiverKey } from "./dated-waiver-fix-task";
 import {
   extensionProposalFailures,
   prematureExclusionRemovals,
   type DatedWaiver,
+  waiverKey,
 } from "./dated-waivers";
 
 const expiresAt = "2026-10-18T12:00:00.000Z";
