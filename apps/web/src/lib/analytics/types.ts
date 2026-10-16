@@ -24,6 +24,8 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
+  pageHangSuspected: "web_page_hang_suspected",
+  longAnimationFrame: "web_long_animation_frame",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -45,6 +47,8 @@ export type Analytics = {
     context?: ErrorCaptureContext,
   ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
+  capturePageHangSuspected: (properties: PageHangSuspectedProperties) => void;
+  captureLongAnimationFrame: (properties: LongAnimationFrameProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   captureFeedbackDialogOpened: (
     properties: FeedbackDialogOpenedProperties,
@@ -136,4 +140,20 @@ type AnalyticsUserIdentity = {
   // Attached as the `organization` group so insights can aggregate and
   // break down by organization, not just by person.
   activeOrganizationId: string;
+};
+
+export type PageHangSuspectedProperties = {
+  routeTemplate: string;
+  phase: "boot" | "session";
+  build: string;
+  restoredState: readonly { key: string; bytes: number }[];
+};
+
+export type LongAnimationFrameProperties = {
+  duration: number;
+  scripts: readonly {
+    invoker: string;
+    sourceURL: string;
+    sourceFunctionName: string;
+  }[];
 };

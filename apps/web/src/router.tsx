@@ -22,7 +22,9 @@ import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
+import { getWebHangDetector } from "@/lib/web-hang-detector";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -92,6 +94,10 @@ export function getRouter() {
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
   });
+  getWebHangDetector()?.attach({
+    analytics: analyticsValue.analytics,
+    routeTemplates: new Set(WEB_ROUTE_TEMPLATES),
+  });
   readCaughtRouteTemplate = () =>
     resolveCaughtRouteTemplate(router.state.matches);
 
@@ -107,6 +113,7 @@ export function getRouter() {
     if (path === undefined) {
       return;
     }
+    getWebHangDetector()?.routeReady(path);
     routeErrorLifecycle.routeResolved(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });

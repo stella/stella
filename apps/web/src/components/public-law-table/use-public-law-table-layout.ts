@@ -7,6 +7,7 @@ import type { PublicLawTableLayout } from "@/components/public-law-table/public-
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
+import type { PersistedDeviceUiStateKey } from "@/lib/persisted-ui-state";
 
 /**
  * Where one public-law table keeps its arrangements and what they mean. A
@@ -14,7 +15,7 @@ import { ClientOperationError } from "@/lib/errors/client";
  */
 export type PublicLawTableLayoutStore<TLayout extends PublicLawTableLayout> = {
   /** The browser storage key; renaming it forgets every stored arrangement. */
-  storageKey: string;
+  storageKey: PersistedDeviceUiStateKey;
   /** Every stored arrangement, normalised once, from the raw stored value. */
   read: (raw: string | null) => Record<string, TLayout>;
   defaultLayout: TLayout;

@@ -17,6 +17,20 @@ import {
   checkRouteTreeDeterminism,
   generateRouteTree,
 } from "./generate-route-tree";
+import { routeTemplateManifest } from "./route-template-manifest";
+
+test("route template manifest derives only full-path keys without runtime imports", () => {
+  const generated = routeTemplateManifest(
+    `import { Route } from './private-store'\nexport interface FileRoutesByFullPath {\n  '/chat/$threadId': typeof ChatRoute\n  '/': typeof IndexRoute\n}\nexport interface FileRoutesByTo {\n  '/ignored': typeof OtherRoute\n}`,
+  );
+  expect(generated).toContain('"/chat/$threadId"');
+  expect(generated).toContain('"/"');
+  expect(generated).not.toContain("private-store");
+  expect(generated).not.toContain("/ignored");
+  expect(() => routeTemplateManifest("not a generated tree")).toThrow(
+    "Generated route tree has no full-path interface",
+  );
+});
 
 const withDirectory = async (run: (directory: string) => Promise<void>) => {
   const directory = await mkdtemp(
@@ -35,10 +49,17 @@ describe("route tree determinism", () => {
       const output = path.join(directory, "routeTree.gen.ts");
       await generateRouteTree(output, "serve");
       const development = await readFile(output, "utf-8");
+      const templates = path.join(directory, "route-templates.gen.ts");
+      expect(await readFile(templates, "utf-8")).toBe(
+        routeTemplateManifest(development),
+      );
       expect(development).toContain("/dev");
       expect(development).toContain("routes/dev");
       await generateRouteTree(output, "build");
       const production = await readFile(output, "utf-8");
+      expect(await readFile(templates, "utf-8")).toBe(
+        routeTemplateManifest(production),
+      );
       expect(production).not.toMatch(/['"]\/dev(?:['"/])/u);
       expect(production).not.toMatch(/routes\/dev(?:[.'"/])/u);
       expect(production).not.toContain("playground");

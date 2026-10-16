@@ -51,6 +51,7 @@
         "src/routes/**",
         "vite.config.ts",
         "route-tree.config.ts",
+        "scripts/route-template-manifest.ts",
         "scripts/generate-route-tree.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
@@ -59,7 +60,7 @@
         "package.json",
         "$TURBO_ROOT$/bun.lock"
       ],
-      "outputs": ["src/routeTree.gen.ts"]
+      "outputs": ["src/routeTree.gen.ts", "src/route-templates.gen.ts"]
     },
     "@stll/web#build": {
       "dependsOn": ["^build", "generate:route-tree", "generate:api-types"]
@@ -104,7 +105,8 @@
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-catalog.ts",
         "!$TURBO_ROOT$/apps/api/src/mcp/generated/capability-feature-bindings.ts",
         "!src/generated/api-routes.gen.ts",
-        "!src/routeTree.gen.ts"
+        "!src/routeTree.gen.ts",
+        "!src/route-templates.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },

@@ -18,6 +18,7 @@ import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnosti
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -779,6 +780,9 @@ export const createPostHogAnalytics = ({
             : sanitizeExceptionEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
           return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+        case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+          return sanitizeHangDiagnosticEvent(event, env.VITE_PUBLIC_APP_URL);
         case WEB_ANALYTICS_EVENTS.webVitals:
           return sanitizeWebVitalsEvent(event, routeTemplateHistory);
         case WEB_ANALYTICS_EVENTS.pageViewed:
@@ -893,6 +897,12 @@ export const createPostHogAnalytics = ({
         $pathname: path,
         path,
       });
+    },
+    capturePageHangSuspected: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+    },
+    captureLongAnimationFrame: (properties) => {
+      posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
     },
     captureGuideStepSkipped: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);

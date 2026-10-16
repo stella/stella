@@ -2039,6 +2039,7 @@
       "ZH-HANT": "kínai (hagyományos)"
     },
     "lastUpdated": "Utoljára frissítve",
+    "layoutResetAfterProblem": "Egy probléma miatt visszaállítottuk az alapértelmezett elrendezést.",
     "legalDatabase": "Jogi adatbázis",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",

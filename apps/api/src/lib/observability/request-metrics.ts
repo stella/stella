@@ -34,6 +34,26 @@ const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
 
+/** Client recovery reports contain only the bounded lifecycle phase. */
+export const emitWebPageHangSuspectedMetric = (
+  phase: "boot" | "session",
+): void => {
+  writeMetricLine({
+    phase,
+    WebPageHangSuspected: 1,
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["phase"]],
+          Metrics: [{ Name: "WebPageHangSuspected", Unit: "Count" }],
+        },
+      ],
+    },
+  });
+};
+
 /** One rejection per budget name; caller identifiers are never dimensions. */
 export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
   writeMetricLine({

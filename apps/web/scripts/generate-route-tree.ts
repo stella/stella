@@ -1,16 +1,21 @@
 import { Generator, getConfig } from "@tanstack/router-generator";
 import { panic } from "better-result";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
 import { ROUTE_TREE_OPTIONS, routeTreeOptions } from "../route-tree.config.ts";
+import {
+  routeTemplateManifest,
+  routeTemplateManifestPlugin,
+} from "./route-template-manifest.ts";
 
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
 // The Start plugin resolves both paths under `srcDirectory`; so does this.
 const srcRoot = path.join(webRoot, ROUTE_TREE_OPTIONS.srcDirectory);
 const output = path.join(srcRoot, ROUTE_TREE_OPTIONS.generatedRouteTree);
+
 export const generateRouteTree = async (
   generatedRouteTree: string,
   command: "serve" | "build" = "serve",
@@ -21,6 +26,7 @@ export const generateRouteTree = async (
       routesDirectory: path.join(srcRoot, ROUTE_TREE_OPTIONS.routesDirectory),
       generatedRouteTree,
       routeFileIgnorePattern,
+      plugins: [routeTemplateManifestPlugin(generatedRouteTree)],
     },
     webRoot,
   );
@@ -54,6 +60,8 @@ export const checkRouteTreeDeterminism = async (
     await Promise.all([
       rm(first, { force: true }),
       rm(second, { force: true }),
+      rm(`${first}.templates.ts`, { force: true }),
+      rm(`${second}.templates.ts`, { force: true }),
     ]);
     await rm(checkDirectory, { recursive: true, force: true });
   }
@@ -70,5 +78,11 @@ if (import.meta.main) {
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
     await generateRouteTree(output);
+  } else {
+    // Keep direct prepared invocations derived from the verified route tree.
+    await writeFile(
+      path.join(srcRoot, "route-templates.gen.ts"),
+      routeTemplateManifest(await readFile(output, "utf-8")),
+    );
   }
 }
