@@ -122,6 +122,7 @@ import {
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
 import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
+import { createFormattedArtifactCache } from "./lib/formatted-artifact-cache";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
@@ -149,7 +150,7 @@ const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
  * format gate can never disagree. The temp file lives outside the repo so no
  * ignore rules apply to it.
  */
-const formatGeneratedArtifacts = async (
+const formatArtifactBatch = async (
   artifacts: ReadonlyMap<string, string>,
 ): Promise<Map<string, string>> => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "capability-artifact-"));
@@ -175,6 +176,14 @@ const formatGeneratedArtifacts = async (
     await rm(dir, { force: true, recursive: true });
   }
 };
+
+// Repeated exports in one process format only new or changed shards. Every
+// cache key holds the shard's file name, unformatted source and the formatter
+// configuration bytes, so a hit returns exactly what a fresh oxfmt run writes.
+const formatCachedArtifacts = createFormattedArtifactCache(formatArtifactBatch);
+const formatGeneratedArtifacts = async (
+  artifacts: ReadonlyMap<string, string>,
+) => formatCachedArtifacts(artifacts, await Bun.file(OXFMT_CONFIG).text());
 
 /**
  * MCP OAuth WRITE/consent scope per capability domain (the first id segment).

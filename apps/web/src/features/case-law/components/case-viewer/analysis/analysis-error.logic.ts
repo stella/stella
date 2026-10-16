@@ -60,6 +60,14 @@ const keyedMessage = (
       : { source: "platform", provider: "" },
 });
 
+/**
+ * The time a failed run's provider asked not to be retried before, if it
+ * named one. The server refuses a new run until then regardless, so the
+ * reader is told when instead of being offered a retry that cannot help.
+ */
+export const analysisRetryAt = (error: AnalysisError): Date | undefined =>
+  error.kind === "failed" ? error.retryAt : undefined;
+
 export const analysisErrorMessage = (
   error: AnalysisError,
 ): AnalysisErrorMessage => {
