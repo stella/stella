@@ -1,3 +1,6 @@
+import { isValidElement } from "react";
+import type { ReactNode } from "react";
+
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -44,6 +47,46 @@ const trimWrappingMarks = (text: string): string => {
  * as located at all.
  */
 const MIN_EVIDENCE_LENGTH = 24;
+
+// Markdown elements that start a new line of text. Inline elements
+// (emphasis, links, code) join their neighbours directly, so formatting
+// inside a word keeps the word whole.
+const BLOCK_ELEMENTS: ReadonlySet<string> = new Set([
+  "blockquote",
+  "br",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "ul",
+]);
+
+const textOfNode = (node: ReactNode): string => {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map((child: ReactNode) => textOfNode(child)).join("");
+  }
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    const inner = textOfNode(node.props.children);
+    return typeof node.type === "string" && BLOCK_ELEMENTS.has(node.type)
+      ? ` ${inner} `
+      : inner;
+  }
+  return "";
+};
+
+/** The displayed text of rendered Markdown children, blocks set apart by a space. */
+export const quoteTextOf = (node: ReactNode): string =>
+  textOfNode(node).replaceAll(/\s+/gu, " ").trim();
 
 /** The quotation's own words, split at its elisions. */
 export const quotePieces = (quote: string): string[] =>

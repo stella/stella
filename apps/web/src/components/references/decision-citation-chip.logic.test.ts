@@ -25,4 +25,16 @@ describe("citation text naming its case", () => {
     expect(citationTextNamesCase("tento nález", "III.ÚS 2429/24")).toBe(false);
     expect(citationTextNamesCase("III. ÚS 2429/24", "")).toBe(false);
   });
+
+  test("requires the case number to stand on its own", () => {
+    expect(citationTextNamesCase("VIII. ÚS 2429/24", "III.ÚS 2429/24")).toBe(
+      false,
+    );
+    expect(citationTextNamesCase("III. ÚS 2429/240", "III.ÚS 2429/24")).toBe(
+      false,
+    );
+    expect(citationTextNamesCase("(III. ÚS 2429/24).", "III.ÚS 2429/24")).toBe(
+      true,
+    );
+  });
 });

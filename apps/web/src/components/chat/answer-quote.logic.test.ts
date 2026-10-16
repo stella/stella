@@ -1,3 +1,5 @@
+import { createElement } from "react";
+
 import { describe, expect, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -5,6 +7,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import {
   locateQuoteInBlocks,
   quotePieces,
+  quoteTextOf,
 } from "@/components/chat/answer-quote.logic";
 
 // Paragraphs of the Constitutional Court's III. ÚS 2429/24 (public court
@@ -80,6 +83,27 @@ describe("a quotation located in the decision", () => {
       anchorId: "p-27",
       paragraph: 15,
     });
+  });
+
+  test("reads rendered Markdown as displayed: inline formatting joins, blocks part", () => {
+    const rendered = [
+      createElement(
+        "p",
+        { key: "a" },
+        createElement("strong", null, "The court rejected the application"),
+        ".",
+      ),
+      createElement(
+        "p",
+        { key: "b" },
+        "the ",
+        createElement("em", null, "dovol"),
+        "ání",
+      ),
+    ];
+    expect(quoteTextOf(rendered)).toBe(
+      "The court rejected the application. the dovolání",
+    );
   });
 
   test("one changed word is a misquote, not a match", () => {

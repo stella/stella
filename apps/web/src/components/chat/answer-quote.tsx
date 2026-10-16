@@ -1,4 +1,4 @@
-import { isValidElement, useState } from "react";
+import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -19,6 +19,7 @@ import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import {
   locateQuoteInBlocks,
   quotePieces,
+  quoteTextOf,
 } from "@/components/chat/answer-quote.logic";
 import type { LocatedQuote } from "@/components/chat/answer-quote.logic";
 import { openReadCaseLawDecision } from "@/components/chat/case-law-open";
@@ -32,23 +33,6 @@ import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-
-/** The words of rendered Markdown children, paragraphs joined by a space. */
-const textOf = (node: ReactNode): string => {
-  if (typeof node === "string" || typeof node === "number") {
-    return String(node);
-  }
-  if (Array.isArray(node)) {
-    return node
-      .map((child: ReactNode) => textOf(child))
-      .filter((text) => text.length > 0)
-      .join(" ");
-  }
-  if (isValidElement<{ children?: ReactNode }>(node)) {
-    return textOf(node.props.children);
-  }
-  return "";
-};
 
 type VerifiedQuote = {
   decision: PublicCaseLawDecision;
@@ -180,7 +164,7 @@ const QuoteAttribution = ({
  */
 export const AnswerQuote = ({ children }: { children?: ReactNode }) => {
   const decisions = useAnswerCitedDecisions();
-  const text = textOf(children);
+  const text = quoteTextOf(children);
   const verified = text.length === 0 ? null : verifyQuote(text, decisions);
 
   return (
