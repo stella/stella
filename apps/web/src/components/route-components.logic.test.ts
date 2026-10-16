@@ -20,6 +20,7 @@ describe("route error recovery", () => {
       "Failed to fetch dynamically imported module: https://example.test/chunk.js",
       "error loading dynamically imported module: https://example.test/chunk.js",
       "Importing a module script failed.",
+      "Unable to preload CSS for /assets/chunk.css",
     ];
 
     for (const message of messages) {

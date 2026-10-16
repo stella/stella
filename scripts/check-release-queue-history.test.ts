@@ -423,7 +423,11 @@ describe("release queue history", () => {
 
 describe("release queue history options", () => {
   test("parses both options in either order", () => {
-    const expected = { baseSha: BASE_SHA, previousTag: "v1.2.3" };
+    const expected = {
+      baseSha: BASE_SHA,
+      previousTag: "v1.2.3",
+      strict: false,
+    };
 
     expect(parseOptions(["--from", "v1.2.3", "--base", BASE_SHA])).toEqual(
       expected,
@@ -440,5 +444,129 @@ describe("release queue history options", () => {
     ]) {
       expect(() => parseOptions(args)).toThrow("Usage:");
     }
+  });
+
+  test("parses strict mode and the checkout to read", () => {
+    expect(
+      parseOptions([
+        "--require",
+        "--from",
+        "v1.2.3",
+        "--base",
+        BASE_SHA,
+        "--repo-dir",
+        "/checkout",
+      ]),
+    ).toEqual({
+      baseSha: BASE_SHA,
+      previousTag: "v1.2.3",
+      strict: true,
+      repoDir: "/checkout",
+    });
+  });
+
+  test("rejects unknown, repeated or missing options", () => {
+    for (const args of [
+      ["--from", "v1.2.3"],
+      ["--from", "v1.2.3", "--base", BASE_SHA, "--extra"],
+      ["--from", "v1.2.3", "--base", BASE_SHA, "--require", "--require"],
+      ["--from", "v1.2.3", "--from", "v1.2.4", "--base", BASE_SHA],
+      ["--from", "v1.2.3", "--base", BASE_SHA, "--repo-dir"],
+    ]) {
+      expect(() => parseOptions(args)).toThrow("Usage:");
+    }
+  });
+});
+
+describe("strict release queue history", () => {
+  const STRICT_ARGS = ["--require", "--from", "v1.2.3", "--base", BASE_SHA];
+  const runStrict = (
+    args: readonly string[],
+    command: ReturnType<typeof fakeCommand>,
+  ) => {
+    const lines: string[] = [];
+    const exitCode = runReleaseQueueHistoryCli(
+      args,
+      (message) => {
+        lines.push(message);
+        return true;
+      },
+      (options) =>
+        assertReleaseQueueHistory({
+          ...options,
+          command,
+          ghRetryScript: "/fake/gh-retry.sh",
+        }),
+    );
+    return { exitCode, lines };
+  };
+
+  test("passes silently when the queue validated every commit", () => {
+    expect(runStrict(STRICT_ARGS, fakeCommand())).toEqual({
+      exitCode: 0,
+      lines: [],
+    });
+  });
+
+  test("fails with an error naming a pull request that bypassed the queue", () => {
+    const { exitCode, lines } = runStrict(
+      STRICT_ARGS,
+      fakeCommand({ direct: [303] }),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(lines).toHaveLength(1);
+    expect(lines.at(0)).toStartWith("::error::Release history");
+    expect(lines.at(0)).toContain("#303 Change 303");
+  });
+
+  test("fails for a commit without a merged pull request", () => {
+    const { exitCode, lines } = runStrict(
+      STRICT_ARGS,
+      fakeCommand({ missingPullRequestFor: [SECOND_SHA] }),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(lines.at(0)).toContain("2222222 Direct release adjustment");
+  });
+
+  test("a green heavy run on the base does not excuse a bypass", () => {
+    const command = fakeCommand({ direct: [202], heavySha: BASE_SHA });
+
+    expect(runStrict(STRICT_ARGS, command).exitCode).toBe(1);
+    expect(command.heavyRequests).toHaveLength(0);
+    expect(command.dispatchRequests).toHaveLength(0);
+  });
+
+  test("fails when the history cannot be read", () => {
+    const { exitCode, lines } = runStrict(
+      STRICT_ARGS,
+      fakeCommand({ truncated: [101] }),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(lines.at(0)).toStartWith(
+      "::error::Release queue history could not be checked:",
+    );
+  });
+
+  test("fails on unusable arguments", () => {
+    const { exitCode, lines } = runStrict(
+      ["--require", "--from", "v1.2.3"],
+      fakeCommand(),
+    );
+
+    expect(exitCode).toBe(1);
+    expect(lines.at(0)).toContain("Usage:");
+  });
+
+  test("the same unvalidated history stays advisory without --require", () => {
+    const { exitCode, lines } = runStrict(
+      ["--from", "v1.2.3", "--base", BASE_SHA],
+      fakeCommand({ direct: [303] }),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(lines.at(0)).toStartWith("::warning::Release history");
   });
 });

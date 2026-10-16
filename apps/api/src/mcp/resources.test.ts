@@ -471,7 +471,7 @@ describe("MCP resources", () => {
       homepage: "https://stll.app",
       documentation: "https://stll.app/product/cli-mcp",
       source: "https://github.com/stella/stella",
-      support: "https://github.com/stella/stella/issues",
+      support: "https://stll.app/support/",
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
     });

@@ -24,6 +24,8 @@ export type AnnotationAnchorSource = {
   startOffset: number;
   /** How a highlight is drawn; null for a comment. */
   style: AnnotationStyle | null;
+  /** Accessible activation label for an anchored answer. */
+  activationLabel?: string | undefined;
 };
 
 const STYLE_VARIANT = {
@@ -67,21 +69,38 @@ const renderAnnotation = (
     {...annotationMark(annotation)}
     className="cursor-pointer"
     data-annotation-id={annotation.id}
+    aria-label={annotation.activationLabel}
+    role={annotation.activationLabel === undefined ? undefined : "button"}
+    tabIndex={annotation.activationLabel === undefined ? undefined : 0}
+    onKeyDown={
+      annotation.activationLabel === undefined
+        ? undefined
+        : (event) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.click();
+          }
+    }
   >
     {children}
   </TextMark>
 );
 
-/** One run of text and the single mark that draws it. */
+/** One text run, its normal mark, and independently activatable answers. */
 export type AnnotationSegment = {
   annotation: AnnotationAnchorSource;
+  overlays: AnnotationAnchorSource[];
   end: number;
   start: number;
 };
 
 /**
- * Which of the marks covering a run draws it: the innermost one, and among
- * equals the lower id. A reader who highlights a phrase inside a paragraph
+ * Which normal mark covering a run draws it: the innermost one, and among
+ * equals the lower id. Answer activations remain independent overlays.
+ * A reader who highlights a phrase inside a paragraph
  * they had already marked means the phrase, so the narrower mark is the one
  * they see and the one a click on those words activates. The id breaks the
  * remaining tie so the same marks always produce the same reading.
@@ -109,7 +128,8 @@ const drawsRun = (
  * behind it, so two marks over the same words would print those words twice;
  * splitting at every boundary is what keeps the text on screen exactly the
  * text the document holds. Runs that the same mark draws end to end are
- * merged again, so a mark nothing overlaps stays one element.
+ * merged again when their overlays also match, so a mark nothing overlaps
+ * stays one element and every answered selection remains activatable.
  */
 export const annotationSegments = (
   annotations: readonly AnnotationAnchorSource[],
@@ -137,17 +157,31 @@ export const annotationSegments = (
       (annotation) =>
         annotation.startOffset <= start && annotation.endOffset >= end,
     );
-    const annotation = covering.toSorted(drawsRun).at(0);
+    const ordered = covering.toSorted(drawsRun);
+    // Answers must not replace a user's chosen highlight or comment style.
+    const annotation =
+      ordered.find((mark) => mark.activationLabel === undefined) ??
+      ordered.at(0);
     if (annotation === undefined) {
       // A gap between two marks that do not touch.
       continue;
     }
+    const overlays = ordered.filter(
+      (mark) => mark !== annotation && mark.activationLabel !== undefined,
+    );
     const previous = segments.at(-1);
-    if (previous?.annotation === annotation && previous.end === start) {
+    if (
+      previous?.annotation === annotation &&
+      previous.end === start &&
+      previous.overlays.length === overlays.length &&
+      previous.overlays.every(
+        (mark, overlayIndex) => mark === overlays.at(overlayIndex),
+      )
+    ) {
       previous.end = end;
       continue;
     }
-    segments.push({ annotation, end, start });
+    segments.push({ annotation, overlays, end, start });
   }
   return segments;
 };
@@ -157,12 +191,20 @@ export const annotationTextAnchors = (
   annotations: readonly AnnotationAnchorSource[],
   offset = 0,
 ): TextAnchor[] =>
-  annotationSegments(annotations).map(({ annotation, end, start }) => ({
-    end: offset + end,
-    key: `annotation:${annotation.id}:${String(start)}`,
-    render: (children): ReactElement => renderAnnotation(annotation, children),
-    start: offset + start,
-  }));
+  annotationSegments(annotations).map(
+    ({ annotation, overlays, end, start }) => ({
+      end: offset + end,
+      key: `annotation:${annotation.id}:${String(start)}`,
+      render: (children): ReactElement => {
+        let marked = children;
+        for (const overlay of overlays.toReversed()) {
+          marked = renderAnnotation(overlay, marked);
+        }
+        return renderAnnotation(annotation, marked);
+      },
+      start: offset + start,
+    }),
+  );
 
 /**
  * Every mark by the piece it is drawn in. A mark is stored against the

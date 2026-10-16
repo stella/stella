@@ -4,16 +4,23 @@ defaults:
   run:
     shell: bash
 
+# Every few minutes this steward drops queued pull request work that can no
+# longer matter (superseded heads, closed or draft pull requests), defers
+# pull request runs whose remaining jobs are all still queued while the merge
+# queue has waiting work, and, once the merge queue has no waiting work,
+# re-runs the pull request runs that deferred to it. A pull request labelled
+# ci-protect is never cancelled by any of these steps.
 on:
   schedule:
-    - cron: "23 3 * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   actions: write
   pull-requests: read
+  statuses: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:
@@ -26,6 +33,7 @@ jobs:
         with:
           script: |
             const repo = context.repo;
+            const PROTECT_LABEL = "ci-protect";
             const prEvents = new Set(["pull_request", "pull_request_target"]);
             const cutoff = Date.now() - 6 * 60 * 60 * 1000;
             const isNotQueuedRefusal = error => error.status === 409
@@ -37,10 +45,51 @@ jobs:
             });
             const reasonFor = async run => {
               if (run.status !== "queued" || !prEvents.has(run.event)) return null;
-              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
+              // One read per pull request per decision; a later recheck reads again.
+              const pullCache = new Map();
+              const currentPull = async (number) => {
+                if (!pullCache.has(number)) {
+                  pullCache.set(number, github.rest.pulls.get({ ...repo, pull_number: number })
+                    .then(({ data }) => data));
+                }
+                return pullCache.get(number);
+              };
               const associated = run.pull_requests?.length
                 ? run.pull_requests
                 : context.payload.pull_request ? [context.payload.pull_request] : [];
+              // A protected pull request is never cancelled, whatever the
+              // reason, including the six-hour rule below. A run without an
+              // association is matched to pull requests by its commit; if that
+              // lookup fails, protection is unknown and the run is left alone.
+              if (associated.length === 0) {
+                // A target run's head_sha is the base commit, which does not
+                // identify the pull request that triggered it: leave it alone.
+                if (run.event !== "pull_request") return null;
+                let byCommit;
+                try {
+                  byCommit = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                    ...repo, commit_sha: run.head_sha, per_page: 100,
+                  });
+                } catch {
+                  core.warning(`Cleanup skipped for ${run.id}: pull requests of ${run.head_sha} unavailable`);
+                  return null;
+                }
+                if (byCommit.some((pull) => pull.labels?.some((label) => label.name === PROTECT_LABEL))) return null;
+              }
+              for (const pull of associated) {
+                if (!pull.number) continue;
+                const current = await currentPull(pull.number).catch((error) => {
+                  if (error.status !== 403 && error.status !== 404) throw error;
+                  return null;
+                });
+                // Labels that cannot be read cannot prove the run unprotected.
+                if (!current) {
+                  core.warning(`Cleanup skipped for ${run.id}: PR #${pull.number} labels unavailable`);
+                  return null;
+                }
+                if (current.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
+              }
+              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
               if (associated.length === 0) return null;
               for (const pull of associated) {
                 // Target runs use the base SHA as head_sha. Only their
@@ -50,14 +99,14 @@ jobs:
                 if (!pull.number || !recordedHead) return null;
                 let current;
                 try {
-                  ({ data: current } = await github.rest.pulls.get({
-                    ...repo, pull_number: pull.number,
-                  }));
+                  current = await currentPull(pull.number);
                 } catch (error) {
                   if (error.status !== 403 && error.status !== 404) throw error;
                   core.warning(`Superseded-head cleanup skipped for ${run.id}: PR metadata unavailable`);
                   return null;
                 }
+                if (current.state !== "open") return "pull request closed";
+                if (current.draft) return "draft pull request";
                 if (!current.head?.sha || current.head.sha === recordedHead) return null;
               }
               return "superseded head";
@@ -107,3 +156,206 @@ jobs:
               }
             }
             if (failed > 0) core.setFailed(`${failed} queued PR run(s) could not be cancelled`);
+
+      - name: Resume pull request runs that deferred to the merge queue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const YIELD_CONTEXT = "ci/merge-queue-yield";
+            // Resume a few at a time so deferred work cannot flood the pool again.
+            const RESUMES_PER_TICK = 4;
+            const waiting = async () => {
+              for (const status of ["queued", "waiting", "pending", "requested"]) {
+                const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                  ...repo, event: "merge_group", status, per_page: 1,
+                });
+                if (data.total_count > 0) return true;
+              }
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                ...repo, event: "merge_group", status: "in_progress", per_page: 20,
+              });
+              for (const run of data.workflow_runs) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  ...repo, run_id: run.id, filter: "latest", per_page: 100,
+                });
+                if (jobs.some((job) => job.status === "queued" || job.status === "waiting")) return true;
+              }
+              return false;
+            };
+            // A busy queue may never drain, so deferred heads keep resuming while it
+            // waits, but one at a time: a resumed run never yields again and holds
+            // dozens of runners, so several at once starve the merge queue. The
+            // oldest deferral goes first, so every head still resumes in turn.
+            // Every unfinished run state counts, including runs held by
+            // concurrency (pending) or approval (waiting). States are read in
+            // lifecycle order: a run only moves forward, so one that changes
+            // state between two reads shows up in a later read.
+            const resumedRunInFlight = async () => {
+              for (const status of ["requested", "waiting", "pending", "queued", "in_progress"]) {
+                const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                  ...repo, workflow_id: "ci.yml", event: "pull_request", status, per_page: 100,
+                });
+                if (runs.some((run) => run.run_attempt > 1)) return true;
+              }
+              return false;
+            };
+            const busy = await waiting();
+            // Open pull requests whose head carries a pending yield status are the
+            // durable record of deferred work, however long the queue stayed busy.
+            // Runs cancelled for runner relief carry the same record
+            // (scripts/relief-cancel-pr-runs.ts), so they resume here too.
+            const deferredPulls = [];
+            let after = null;
+            do {
+              const page = await github.graphql(
+                `query($owner: String!, $repo: String!, $after: String) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequests(states: OPEN, first: 100, after: $after) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        number
+                        isDraft
+                        headRefOid
+                        headRepository { nameWithOwner }
+                        commits(last: 1) {
+                          nodes { commit { status { context(name: "ci/merge-queue-yield") { state createdAt } } } }
+                        }
+                      }
+                    }
+                  }
+                }`,
+                { owner: repo.owner, repo: repo.repo, after },
+              );
+              const pulls = page.repository.pullRequests;
+              for (const pull of pulls.nodes) {
+                const yieldStatus = pull.commits.nodes[0]?.commit.status?.context;
+                if (yieldStatus?.state === "PENDING" && !pull.isDraft
+                    && pull.headRepository?.nameWithOwner === `${repo.owner}/${repo.repo}`) {
+                  deferredPulls.push({ ...pull, deferredAt: Date.parse(yieldStatus.createdAt) });
+                }
+              }
+              after = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
+            } while (after);
+            deferredPulls.sort((left, right) => left.deferredAt - right.deferredAt);
+            const budget = !busy ? RESUMES_PER_TICK : (await resumedRunInFlight()) ? 0 : 1;
+            if (busy) {
+              core.info(`Merge queue still has waiting work; resuming at most ${budget} deferred run(s), oldest first.`);
+            }
+            let resumed = 0;
+            for (const pull of deferredPulls) {
+              if (resumed >= budget) break;
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...repo, workflow_id: "ci.yml", head_sha: pull.headRefOid, per_page: 1,
+              });
+              const run = data.workflow_runs[0];
+              // Only the head's latest run, and only once its cancellation settled.
+              if (!run || run.status !== "completed" || run.conclusion !== "cancelled") continue;
+              const target_url = `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${run.id}`;
+              // Mark the head resumed before dispatching: if the re-run defers
+              // again, its newer pending status lands after this one.
+              await github.rest.repos.createCommitStatus({
+                ...repo, sha: pull.headRefOid, state: "success", context: YIELD_CONTEXT,
+                description: "Resumed after the merge queue cleared", target_url,
+              });
+              try {
+                // Re-run only the cancelled jobs: a run deferred after planning
+                // keeps the jobs that already finished.
+                await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs", {
+                  ...repo, run_id: run.id,
+                });
+              } catch (error) {
+                await github.rest.repos.createCommitStatus({
+                  ...repo, sha: pull.headRefOid, state: "pending", context: YIELD_CONTEXT,
+                  description: "Deferred while the merge queue runs; resumes automatically", target_url,
+                });
+                throw error;
+              }
+              resumed += 1;
+              core.info(`Resumed run ${run.id} for #${pull.number}`);
+            }
+            core.info(`Resumed ${resumed} deferred pull request run(s).`);
+
+      - name: Defer queued pull request work while the merge queue waits
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const YIELD_CONTEXT = "ci/merge-queue-yield";
+            const PROTECT_LABEL = "ci-protect";
+            const waiting = async () => {
+              for (const status of ["queued", "waiting", "pending", "requested"]) {
+                const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                  ...repo, event: "merge_group", status, per_page: 1,
+                });
+                if (data.total_count > 0) return true;
+              }
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                ...repo, event: "merge_group", status: "in_progress", per_page: 20,
+              });
+              for (const run of data.workflow_runs) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  ...repo, run_id: run.id, filter: "latest", per_page: 100,
+                });
+                if (jobs.some((job) => job.status === "queued" || job.status === "waiting")) return true;
+              }
+              return false;
+            };
+            if (!(await waiting())) {
+              core.info("Merge queue has no waiting work; nothing to defer.");
+              return;
+            }
+            // Runners are handed out roughly in job creation order, so queued
+            // pull request jobs sit ahead of every later merge-group stage. A run
+            // with nothing in progress loses no work when it is cancelled; the
+            // resume step re-runs its cancelled jobs once the queue clears.
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...repo, workflow_id: "ci.yml", event: "pull_request", status: "in_progress", per_page: 100,
+            });
+            let deferred = 0;
+            for (const run of runs) {
+              // A resumed run never defers again, matching the yield step.
+              if (run.run_attempt > 1) continue;
+              if (run.head_repository?.full_name !== `${repo.owner}/${repo.repo}`) continue;
+              if (run.triggering_actor?.login === "dependabot[bot]") continue;
+              // A protected pull request is never deferred; one whose pull
+              // request cannot be resolved is left running (fail closed).
+              const numbers = (run.pull_requests ?? []).map((pull) => pull.number).filter(Boolean);
+              if (numbers.length === 0) continue;
+              let protectedOrUnknown = false;
+              for (const number of numbers) {
+                const pull = await github.rest.pulls.get({ ...repo, pull_number: number })
+                  .then(({ data }) => data, () => null);
+                if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) {
+                  protectedOrUnknown = true;
+                  break;
+                }
+              }
+              if (protectedOrUnknown) continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...repo, run_id: run.id, filter: "latest", per_page: 100,
+              });
+              const queued = jobs.some((job) => job.status === "queued" || job.status === "waiting");
+              const running = jobs.some((job) => job.status === "in_progress");
+              if (!queued || running) continue;
+              const target_url = `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${run.id}`;
+              await github.rest.repos.createCommitStatus({
+                ...repo, sha: run.head_sha, state: "pending", context: YIELD_CONTEXT,
+                description: "Deferred while the merge queue runs; resumes automatically", target_url,
+              });
+              try {
+                await github.rest.actions.cancelWorkflowRun({ ...repo, run_id: run.id });
+              } catch (error) {
+                // The run was not deferred: clear the record so nothing resumes it.
+                await github.rest.repos.createCommitStatus({
+                  ...repo, sha: run.head_sha, state: "success", context: YIELD_CONTEXT,
+                  description: "Not deferred", target_url,
+                });
+                core.warning(`Unable to defer run ${run.id}: ${error.message}`);
+                continue;
+              }
+              deferred += 1;
+              core.info(`Deferred run ${run.id} (${run.head_sha})`);
+            }
+            core.info(`Deferred ${deferred} pull request run(s) with only queued jobs left.`);
