@@ -203,7 +203,7 @@
     "apps/web/src/components/ai-suggestions/host.tsx": 6,
     "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 3,
     "apps/web/src/components/auth/sign-in-panel.tsx": 3,
-    "apps/web/src/components/chat/chat-thread-messages.tsx": 10,
+    "apps/web/src/components/chat/chat-thread-messages.tsx": 7,
     "apps/web/src/components/chat/prompt-suggestions.tsx": 1,
     "apps/web/src/components/inspector/desktop-open-button.tsx": 1,
     "apps/web/src/components/inspector/entity-metadata-panel.tsx": 1,
