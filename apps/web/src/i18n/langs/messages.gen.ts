@@ -176,6 +176,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
@@ -1328,6 +1329,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";
@@ -1493,6 +1495,7 @@ type Messages = {
     };
     "tool": {
       "add_comment": "Adding comment";
+      "add_matter_member": "Add matter member";
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
@@ -1549,7 +1552,6 @@ type Messages = {
       "list_stories": "Listing document parts";
       "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
-      "manage_organization": "Manage organization";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
@@ -1559,6 +1561,7 @@ type Messages = {
       "read_section": "Reading a section";
       "read_story": "Reading a document part";
       "remember": "Remembering";
+      "remove_matter_member": "Remove matter member";
       "reply_comment": "Replying to comment";
       "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
@@ -1592,6 +1595,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_organization_settings": "Update team settings";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
       "use_connector_secret": "Using connector credential";
@@ -2557,6 +2561,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";

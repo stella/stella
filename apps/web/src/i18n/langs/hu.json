@@ -173,6 +173,7 @@
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
+      "inScoring": "Pontozásban",
       "includeInScoring": "Bevonás a pontozásba",
       "interpretationNote": "Értelmezési megjegyzés",
       "interpretationNotePlaceholder": "Ha e bizonyíték jelentése vitatott, írja le, miben. Ha nem, hagyja üresen.",
@@ -1325,6 +1326,7 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "messageUnavailable": "Ez az üzenet nem jeleníthető meg.",
     "mockModel": {
       "description": "Előre megírt válaszok a helyi szimulált modelltől",
       "label": "Szimulált AI"
@@ -1490,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
+      "add_matter_member": "Ügytag hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
       "ares_lookup_company": "Cégadatok keresése",
       "ares_search_companies": "Cégadatok keresése",
@@ -1546,7 +1549,6 @@
       "list_stories": "Dokumentumrészek listázása",
       "list_templates": "Sablonok listázása",
       "load-skill": "Útmutató olvasása",
-      "manage_organization": "Szervezet kezelése",
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
       "read-skill-resource": "Útmutató olvasása",
@@ -1556,6 +1558,7 @@
       "read_section": "Szakasz olvasása",
       "read_story": "Dokumentumrész olvasása",
       "remember": "Mentés a memóriába",
+      "remove_matter_member": "Ügytag eltávolítása",
       "reply_comment": "Megjegyzés megválaszolása",
       "request_secret": "Privát hitelesítő adat kérése",
       "resolve_comment": "Megjegyzés megoldása",
@@ -1589,6 +1592,7 @@
       "suggest_template_fields": "Sablonmezők javaslása",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
+      "update_organization_settings": "Csapatbeállítások frissítése",
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
@@ -2554,6 +2558,10 @@
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
+      "validationInvalid": "Egy mező olyan értéket tartalmaz, amely nem menthető.",
+      "validationRequired": "Egy kötelező mező üres.",
+      "validationTooLong": "Túl hosszú: legfeljebb {limit, number} karakter lehet.",
+      "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
       "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
       "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."

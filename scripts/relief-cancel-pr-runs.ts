@@ -9,7 +9,9 @@
  * cancellation never depends on its owner remembering to re-run it.
  *
  * Only same-repository `pull_request` runs of `ci.yml` are touched; anything
- * else (merge groups, pushes, schedules, forks) is refused.
+ * else (merge groups, pushes, schedules, forks) is refused, and so is a run of
+ * a pull request labelled `ci-protect` or one whose pull request cannot be
+ * resolved.
  *
  * Run: `bun scripts/relief-cancel-pr-runs.ts <run-id>...`
  */
@@ -19,6 +21,7 @@ import * as v from "valibot";
 import { githubRequest } from "./dated-waiver-publish";
 
 export const YIELD_CONTEXT = "ci/merge-queue-yield";
+export const PROTECT_LABEL = "ci-protect";
 export const RELIEF_DESCRIPTION =
   "Cancelled for runner relief; resumes automatically";
 const REPO = "stella/stella";
@@ -32,6 +35,10 @@ const runSchema = v.object({
   head_sha: v.string(),
   html_url: v.string(),
   head_repository: v.nullish(v.object({ full_name: v.string() })),
+  pull_requests: v.nullish(v.array(v.object({ number: v.number() })), []),
+});
+const pullSchema = v.object({
+  labels: v.array(v.object({ name: v.string() })),
 });
 
 export type ReliefOutcome =
@@ -85,6 +92,20 @@ const reliefCancelOne = async (
   }
   if (run.status === "completed") {
     return { runId, outcome: "skipped", reason: "already completed" };
+  }
+  if (run.pull_requests.length === 0) {
+    return { runId, outcome: "skipped", reason: "pull request unresolved" };
+  }
+  // Every associated pull request must be readable and unprotected; a failed
+  // read throws, so this run is reported as failed and never cancelled.
+  for (const { number } of run.pull_requests) {
+    const pull = v.parse(
+      pullSchema,
+      await request([`repos/${REPO}/pulls/${number}`]),
+    );
+    if (pull.labels.some(({ name }) => name === PROTECT_LABEL)) {
+      return { runId, outcome: "skipped", reason: "protected" };
+    }
   }
   // Record the deferral before cancelling: a cancelled run without the
   // record would never resume.

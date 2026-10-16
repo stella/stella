@@ -173,6 +173,7 @@
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
       "heldForReview": "Kontrolli ootel",
       "holdOutOfScoring": "Jäta hindamisest välja",
+      "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
       "interpretationNote": "Tõlgendusmärkus",
       "interpretationNotePlaceholder": "Kui selle tõendi tähendus on vaidlustatud, kirjeldage, kuidas. Kui ei ole, jätke väli tühjaks.",
@@ -1325,6 +1326,7 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "messageUnavailable": "Seda sõnumit ei saa kuvada.",
     "mockModel": {
       "description": "Valmisvastused kohalikult simuleeritud mudelilt",
       "label": "Simuleeritud AI"
@@ -1490,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Kommentaari lisamine",
+      "add_matter_member": "Lisa toimiku liige",
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",
       "ares_lookup_company": "Ettevõtte andmete otsimine",
       "ares_search_companies": "Ettevõtete andmete otsimine",
@@ -1546,7 +1549,6 @@
       "list_stories": "Dokumendi osade loetlemine",
       "list_templates": "Mallide loetlemine",
       "load-skill": "Juhiste lugemine",
-      "manage_organization": "Halda organisatsiooni",
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist toimikutest",
       "read-skill-resource": "Juhiste lugemine",
@@ -1556,6 +1558,7 @@
       "read_section": "Jaotise lugemine",
       "read_story": "Dokumendi osa lugemine",
       "remember": "Mällu salvestamine",
+      "remove_matter_member": "Eemalda toimiku liige",
       "reply_comment": "Kommentaarile vastamine",
       "request_secret": "Privaatse mandaadi küsimine",
       "resolve_comment": "Kommentaari lahendamine",
@@ -1589,6 +1592,7 @@
       "suggest_template_fields": "Pakun malli välju",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
+      "update_organization_settings": "Uuenda meeskonna seadeid",
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
@@ -2554,6 +2558,10 @@
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
+      "validationInvalid": "Väljal on väärtus, mida ei saa salvestada.",
+      "validationRequired": "Kohustuslik väli on tühi.",
+      "validationTooLong": "Liiga pikk: kasuta kuni {limit, number} märki.",
+      "validationTooShort": "Liiga lühike: kasuta vähemalt {limit, number} märki.",
       "verificationActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete kontrollide piirmäärani. Oodake, kuni mõni kontroll lõpeb, ja proovige uuesti.",
       "verificationDailyLimitReached": "Teie organisatsioon on jõudnud kontrollide päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."
