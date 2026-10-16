@@ -154,6 +154,7 @@
     "Test local workflow verification": ["**"],
     "Typecheck cache contract": ["**"],
     "Test CI check partition": ["**"],
+    "Task result cache contract": ["**"],
     "Test install-free CI commands": ["**"],
     "Test pre-push secret scan ranges": ["**"],
     "Test merge-base network comparison": ["**"],

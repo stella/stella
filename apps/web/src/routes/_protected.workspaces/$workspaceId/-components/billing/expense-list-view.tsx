@@ -10,6 +10,8 @@ import { PlusIcon } from "@stll/ui/icons";
 import { ExpenseForm } from "@/components/billing/expense-form";
 import type { ExpenseFormValues } from "@/components/billing/expense-form";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCreateExpense,
@@ -48,6 +50,7 @@ export const ExpenseListView = ({
   const matterNameMap = useMatterNameMap(workspaceId);
 
   const createExpense = useCreateExpense();
+  const createOnce = useSingleFlight();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
 
@@ -69,7 +72,7 @@ export const ExpenseListView = ({
     ? expenses.find((e) => e.id === editingId)
     : null;
 
-  const handleCreate = (values: ExpenseFormValues) => {
+  const createFromValues = (values: ExpenseFormValues, settled: () => void) => {
     createExpense.mutate(
       {
         workspaceId,
@@ -84,11 +87,18 @@ export const ExpenseListView = ({
         markup: values.markup,
       },
       {
+        onSettled: settled,
         onSuccess: () => setFormOpen(false),
         onError: (error) => {
           notifyUserError(error, t("billing.failedToSave"));
         },
       },
+    );
+  };
+  const handleCreate = (values: ExpenseFormValues) => {
+    detached(
+      createOnce.runSettled((settled) => createFromValues(values, settled)),
+      "expense-list-view.create",
     );
   };
 

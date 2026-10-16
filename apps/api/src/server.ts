@@ -211,6 +211,7 @@ import {
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
@@ -261,6 +262,16 @@ const startMemoryPressureHandler = () => {
   );
 };
 
+const readProcessMemoryReport = () => {
+  const usage = process.memoryUsage();
+  return {
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    arrayBuffersBytes: usage.arrayBuffers,
+    uploadFinalizeInFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+  };
+};
+
 // One stall on this loop delays every request the task is serving, so it is
 // reported as soon as the loop is free, and its window's delay as a metric.
 const startEventLoopDelayReporting = () => {
@@ -271,7 +282,13 @@ const startEventLoopDelayReporting = () => {
         return;
       }
       reporting = readRootPoolReport()
-        .then((rootPool) => emitEventLoopDelayMetric({ ...delay, rootPool }))
+        .then((rootPool) =>
+          emitEventLoopDelayMetric({
+            ...delay,
+            rootPool,
+            memory: readProcessMemoryReport(),
+          }),
+        )
         .finally(() => {
           reporting = undefined;
         });

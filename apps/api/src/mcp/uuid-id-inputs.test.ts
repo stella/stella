@@ -24,7 +24,8 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   "save_task.add_assignee_user_id": "better-auth user id (text column)",
   "save_task.remove_assignee_user_id": "better-auth user id (text column)",
   "list_audit_log.user_id": "better-auth user id (text column)",
-  "manage_organization.user_id": "better-auth user id (text column)",
+  "add_matter_member.user_id": "better-auth user id (text column)",
+  "remove_matter_member.user_id": "better-auth user id (text column)",
   // The audit log records one text `resource_id` for every resource type it
   // audits, including the text user ids above.
   "list_audit_log.resource_id":

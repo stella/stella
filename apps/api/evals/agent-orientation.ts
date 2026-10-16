@@ -530,6 +530,7 @@ const skillFixtureRow = ({
   description,
   displayName: name,
   id: toSafeId<"agentSkill">(`skill_${slug}`),
+  invocation: "auto",
   license: null,
   metadata: {},
   name: slug,
