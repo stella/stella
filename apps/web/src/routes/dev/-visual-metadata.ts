@@ -31,6 +31,7 @@ export const visualRegistry = {
   "chat-status": { label: "Chat status motion", layout: "plain" },
   "chat-citations": { label: "Chat case-law citations", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },

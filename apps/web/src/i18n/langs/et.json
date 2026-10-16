@@ -1733,7 +1733,8 @@
       "toggleLabel": "Veebiotsing",
       "toggleOff": "Lülita veebiotsing välja",
       "toggleOn": "Lülita veebiotsing sisse"
-    }
+    },
+    "workedFor": "Tööaeg: {duration}"
   },
   "clauses": {
     "addVariant": "Lisa variant",

@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { formatDecisionCitation } from "@/features/case-law/citation-format";
+import {
+  formatDecisionCitation,
+  formatDecisionQuotation,
+} from "@/features/case-law/citation-format";
 import type { CitationInput } from "@/features/case-law/citation-format";
 
 describe("decision citation jurisdiction", () => {
@@ -131,5 +134,49 @@ describe("a USA citation follows what the primary reference is", () => {
         pincite: null,
       }),
     ).toBe("Loper Bright Enterprises v. Raimondo, No. 22-451 (U.S.)");
+  });
+});
+
+describe("Hungarian citation typography", () => {
+  const input = {
+    caseNumber: "Pfv.21.123/2019/5.",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    country: "HUN",
+    court: "Kúria",
+    decisionDate: "2019-03-21",
+    decisionType: "ítélet",
+    ecli: null,
+    name: null,
+    pincite: null,
+  } satisfies CitationInput;
+
+  test("keeps docket punctuation and Hungarian calendar order", () => {
+    expect(formatDecisionCitation(input)).toBe(
+      "Kúria, Pfv.21.123/2019/5., 2019. március 21.",
+    );
+    expect(formatDecisionCitation({ ...input, decisionDate: null })).toBe(
+      "Kúria, Pfv.21.123/2019/5.",
+    );
+  });
+
+  test.each([
+    {
+      decisionDate: "2019-03-21",
+      expected: "Kúria, Pfv.21.123/2019/5., 2019. március 21. [12]",
+    },
+    { decisionDate: null, expected: "Kúria, Pfv.21.123/2019/5. [12]" },
+  ])("preserves a supplied locator", ({ decisionDate, expected }) => {
+    expect(
+      formatDecisionCitation({ ...input, decisionDate, pincite: "12" }),
+    ).toBe(expected);
+  });
+
+  test("quotation typography is invariant to route or corpus country form", () => {
+    for (const country of CASE_LAW_BROWSER_COUNTRIES) {
+      expect(formatDecisionQuotation("szöveg", country.toLowerCase())).toBe(
+        formatDecisionQuotation("szöveg", country),
+      );
+    }
+    expect(formatDecisionQuotation("teljesítés", "HUN")).toBe("„teljesítés”");
   });
 });

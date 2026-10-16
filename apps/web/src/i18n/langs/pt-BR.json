@@ -1733,7 +1733,8 @@
       "toggleLabel": "Busca na web",
       "toggleOff": "Desativar busca na web",
       "toggleOn": "Ativar busca na web"
-    }
+    },
+    "workedFor": "Tempo de trabalho: {duration}"
   },
   "clauses": {
     "addVariant": "Adicionar variante",

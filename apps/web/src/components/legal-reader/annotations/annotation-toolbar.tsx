@@ -1,9 +1,12 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
+import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Building2Icon,
@@ -18,6 +21,8 @@ import {
   UnderlineIcon,
   WavesIcon,
 } from "@stll/ui/icons";
+import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -33,11 +38,14 @@ import {
   askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
-  readerTargetCitation,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import {
+  copyTextFor,
+  readerTargetCitation,
+} from "@/components/legal-reader/annotations/reader-copy-text.logic";
 import {
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
@@ -45,14 +53,13 @@ import {
 } from "@/components/legal-reader/annotations/selection-anchor";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
-import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
-import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
@@ -163,6 +170,9 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
+  const [copyPreviewMode, setCopyPreviewMode] = useState<ReaderCopyMode | null>(
+    null,
+  );
   // The dropdown is hand-rolled (a portal menu would collapse the text
   // selection), so it does its own collision handling: open upward when
   // the space below the trigger cannot fit the menu.
@@ -476,7 +486,7 @@ export const AnnotationToolbar = ({
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
       prompt: t("legalReader.annotations.askPassagePrompt", {
-        citation: readerTargetCitation({ locator, target }),
+        citation: readerTargetCitation({ locator, target }).inline,
         quote,
       }),
       quote,
@@ -685,6 +695,7 @@ export const AnnotationToolbar = ({
               setCopyOpensUp(
                 triggerRect.bottom + MENU_ESTIMATED_HEIGHT_PX > viewportHeight,
               );
+              setCopyPreviewMode(null);
               setCopyOpen((open) => !open);
             }}
             onMouseDown={(event) => event.preventDefault()}
@@ -702,23 +713,68 @@ export const AnnotationToolbar = ({
                 copyOpensUp ? "bottom-full mb-1" : "top-full mt-1",
               )}
             >
-              <CitationCopyOptions
-                citation={readerTargetCitation({
-                  locator: selected.locator,
-                  target,
-                })}
-                // The target carries the court's country, not a language: the
-                // country's working language picks the marks.
-                marks={quotationMarksFor({
-                  country: target.country,
-                  language: null,
-                })}
-                onCopied={() => {
-                  setCopyOpen(false);
-                  clearSelection();
-                }}
-                quote={selected.cleanText}
-              />
+              <MenuPreviewLayout
+                preview={
+                  // The submenu paints over the pane rather than in it, so its
+                  // floor is the viewport's, not the pane's.
+                  <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
+                    {copyPreviewMode !== null && (
+                      <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
+                        {copyTextFor({
+                          mode: copyPreviewMode,
+                          selected: {
+                            cleanText:
+                              selected.cleanText.length > 220
+                                ? `${selected.cleanText.slice(0, 220)}…`
+                                : selected.cleanText,
+                            locator: selected.locator,
+                          },
+                          target,
+                        })}
+                      </p>
+                    )}
+                  </PreviewPane>
+                }
+              >
+                {READER_COPY_MODES.map((copyMode) => (
+                  <button
+                    className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+                    key={copyMode}
+                    onClick={() => {
+                      const text = copyTextFor({
+                        mode: copyMode,
+                        selected,
+                        target,
+                      });
+                      detached(
+                        (async () => {
+                          const copied = await copyToClipboard(text);
+                          if (Result.isError(copied)) {
+                            notifyUserError(
+                              copied.error,
+                              t("errors.actionFailed"),
+                            );
+                            return;
+                          }
+                          stellaToast.add({
+                            title: t("common.copied"),
+                            type: "success",
+                          });
+                        })(),
+                        "legal-reader.selection-copy",
+                      );
+                      setCopyOpen(false);
+                      clearSelection();
+                    }}
+                    onFocus={() => setCopyPreviewMode(copyMode)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setCopyPreviewMode(copyMode)}
+                    type="button"
+                  >
+                    {t(`legalReader.copyMenu.${copyMode}`)}
+                  </button>
+                ))}
+              </MenuPreviewLayout>
             </div>
           )}
         </div>

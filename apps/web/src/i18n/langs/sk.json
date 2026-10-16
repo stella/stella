@@ -1733,7 +1733,8 @@
       "toggleLabel": "Vyhľadávanie na webe",
       "toggleOff": "Vypnúť vyhľadávanie na webe",
       "toggleOn": "Zapnúť vyhľadávanie na webe"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Pridať variant",

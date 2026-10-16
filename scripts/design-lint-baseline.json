@@ -126,7 +126,7 @@
     "apps/web/src/features/statutes/components/provision-history.tsx": 5,
     "apps/web/src/features/style-sets/style-set-editor-controls.tsx": 6,
     "apps/web/src/features/style-sets/style-set-editor-dialog.tsx": 4,
-    "apps/web/src/routes/-protected-app.tsx": 3,
+    "apps/web/src/routes/-protected-app.tsx": 2,
     "apps/web/src/routes/_protected.chat/-components/chat-turn-navigator.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-components/add-contact-method-form.tsx": 1,
     "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx": 1,
