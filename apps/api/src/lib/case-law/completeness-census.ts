@@ -122,10 +122,18 @@ export const recordCompletenessCensus = async (
       : "publisher-count";
   const outcome =
     capability.type === "none-exposed" ? capability.type : measuredOutcome;
+  if (
+    options.publisherCount !== undefined &&
+    (!Number.isSafeInteger(options.publisherCount) ||
+      options.publisherCount < 0)
+  ) {
+    panic("Census publisher count is invalid");
+  }
+  // A stated total cannot erase identities already enumerated by the publisher.
   const publisherCount =
     outcome === "none-exposed"
       ? null
-      : (options.publisherCount ?? options.listed);
+      : Math.max(options.publisherCount ?? options.listed, options.listed);
   if (
     publisherCount !== null &&
     (!Number.isSafeInteger(publisherCount) || publisherCount < 0)

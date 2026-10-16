@@ -213,6 +213,72 @@ describe.skipIf(!enabled)(
       });
     }, 120_000);
 
+    test("a stated count below the distinct listing cannot hide a missing decision", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ??
+        panic("Postgres census test requires DATABASE_URL");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const sourceId = createSafeId<"caseLawSource">();
+        const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
+        const scope = { first: "2026", last: "2026", expectedSlices: 1 };
+        await db.insert(caseLawSources).values({
+          id: sourceId,
+          adapterKey: "cz-ns",
+          name: "Contradictory publisher count fixture",
+          ingestionLeaseToken: leaseToken,
+          ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+        });
+        try {
+          await db.insert(caseLawDecisions).values({
+            sourceId,
+            sourceDocumentId: "held",
+            caseNumber: "held",
+            country: "CZE",
+            court: "Fixture",
+            language: "cs",
+            fulltext: "Decision text",
+          });
+          const scopedDb: ScopedDb = async (callback) =>
+            await db.transaction(callback);
+          // The listing has two distinct identities; only one is held with text.
+          // Counts below, equal to and above the listing must all retain the gap.
+          for (const publisherCount of [1, 0, 2, 3, undefined]) {
+            await recordCompletenessCensus(scopedDb, {
+              sourceId,
+              leaseToken,
+              adapterKey: "cz-ns",
+              slice: "2026",
+              scope,
+              identities: [
+                { type: "document", sourceDocumentId: "held" },
+                { type: "document", sourceDocumentId: "missing" },
+              ],
+              listed: 2,
+              publisherCount,
+              observedAt: new Date("2026-10-16T12:00:00Z"),
+            });
+            const rows = await readCompletenessCensusQuery(db, [
+              { id: sourceId, scope },
+            ]);
+            expect(rows.get(String(sourceId))).toMatchObject({
+              verdict: "incomplete",
+              publisher: publisherCount === 3 ? 3 : 2,
+              stored: 1,
+              withText: 1,
+              shortSlices: 1,
+              worstSlices: [{ slice: "2026", stored: 1, withText: 1 }],
+            });
+            expect(countryCensusVerdict([...rows.values()])).toBe("incomplete");
+          }
+        } finally {
+          await db
+            .delete(caseLawSources)
+            .where(eq(caseLawSources.id, sourceId));
+        }
+      });
+    }, 120_000);
+
     test("the registered adapter scope advances at the current publisher year boundary without observing it", async () => {
       const id = createSafeId<"caseLawSource">();
       const sources = [{ id, adapterKey: "cz-us" }];
