@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   listDecisionFacetsHandler,
@@ -279,7 +279,8 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { slug }, query: { country, language } }) => {
     const countryRead = readPublicLawCountry(country, {
-      admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      admitted: PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+      surface: "pages",
     });
     return countryRead.kind !== "read"
       ? countryRead
@@ -309,6 +310,7 @@ const projectDecisionProvisionPage = async (
     page,
     decisionDate,
     legislationDb: legislationPublicReadDb,
+    surface: "pages",
   });
   return projectResponseText(
     {

@@ -46,21 +46,15 @@ describe("buildFlag optionality invariant", () => {
   test("repeatable fields become variadic, non-repeatable do not", () => {
     const variadic = buildFlag(
       flagSpec({ kind: "string-array", repeatable: true }),
-    ) as Record<string, unknown>;
+    );
     expect(variadic).toMatchObject({ kind: "parsed", variadic: true });
 
-    const scalar = buildFlag(flagSpec({ kind: "string" })) as Record<
-      string,
-      unknown
-    >;
-    expect(scalar["variadic"]).toBeUndefined();
+    const scalar = buildFlag(flagSpec({ kind: "string" }));
+    expect(scalar).not.toHaveProperty("variadic");
   });
 
   test("boolean fields build a boolean flag", () => {
-    const boolean = buildFlag(flagSpec({ kind: "boolean" })) as Record<
-      string,
-      unknown
-    >;
+    const boolean = buildFlag(flagSpec({ kind: "boolean" }));
     expect(boolean).toMatchObject({ kind: "boolean", optional: true });
   });
 });
@@ -73,8 +67,7 @@ const generatedFlags = (node: RouteNode): FlagSpec[] => {
 };
 
 describe("flag help facts", () => {
-  const briefOf = (spec: FlagSpec): unknown =>
-    (buildFlag(spec) as Record<string, unknown>)["brief"];
+  const briefOf = (spec: FlagSpec) => buildFlag(spec).brief;
 
   test("facts read as one clause, never as a nested bracket", () => {
     expect(
