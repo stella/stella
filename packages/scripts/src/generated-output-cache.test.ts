@@ -15,6 +15,7 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withGeneratedOutputCache } from "./generated-output-cache";
+import { withGenerationLock } from "./generation-lock";
 
 test("generation restores exact outputs and invalidates on source changes", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
@@ -215,6 +216,52 @@ test("excluded inputs may change during generation while sources may not", async
     expect(Bun.inspect(rejected)).toContain(
       "Generator fixture changed its source inputs",
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a caller that waited for the lock hashes the inputs it finds", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
+  const output = path.join(root, "generated/value.txt");
+  const run = () =>
+    withGeneratedOutputCache({
+      root,
+      name: "fixture",
+      environment: "test",
+      inputs: ["input.txt"],
+      outputs: ["generated/*.txt"],
+      generate: async () => {
+        await mkdir(path.dirname(output), { recursive: true });
+        await writeFile(output, await readFile(path.join(root, "input.txt")));
+      },
+    });
+  try {
+    await writeFile(path.join(root, "input.txt"), "first");
+    await run();
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked = () => {};
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const holder = withGenerationLock({
+      lockPath: path.join(root, ".cache/generated-output/fixture.sqlite"),
+      run: async () => {
+        locked();
+        await released;
+      },
+    });
+    await holding;
+    // This caller has a cache entry for "first" and now waits for the lock.
+    const waiting = run();
+    await writeFile(path.join(root, "input.txt"), "second");
+    release();
+    await holder;
+    await waiting;
+    expect(await readFile(output, "utf-8")).toBe("second");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

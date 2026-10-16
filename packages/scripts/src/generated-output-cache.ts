@@ -134,11 +134,13 @@ export const withGeneratedOutputCache = async ({
       }
     }
   };
-  const identity = inputHash();
-  const cache = path.join(cacheRoot, identity);
   const result = await withGenerationLock({
     lockPath: path.join(root, ".cache/generated-output", `${name}.sqlite`),
     run: async () => {
+      // Hash under the lock: sources can change while another caller holds
+      // it, and a hash taken before waiting would restore stale outputs.
+      const identity = inputHash();
+      const cache = path.join(cacheRoot, identity);
       const manifestPath = path.join(cache, "manifest.json");
       if (await Bun.file(manifestPath).exists()) {
         const manifest = v.parse(
