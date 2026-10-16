@@ -163,6 +163,56 @@ describe("GDP proof anti-forgery rules", () => {
     ).toEqual([message]);
   });
 
+  test("only an inline options literal with a plain safe kind passes", async () => {
+    const message =
+      "MatterReadable and MatterWritable transaction proofs may only be minted by matter-access-proof.ts.";
+    const mint = `import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";`;
+    // Each of these can end with a matter kind although a safe kind is written.
+    for (const options of [
+      `{ kind: "SignalVisible", ...overrides }`,
+      `{ kind: "SignalVisible", kind: "MatterWritable" }`,
+      `{ kind: "SignalVisible", [key]: "MatterWritable" }`,
+      `{ kind: "SignalVisible", [\`kind\`]: "MatterWritable" }`,
+    ]) {
+      expect(
+        await messages(`${mint} withCheckedTransaction(${options});`, [
+          "no-matter-proof-kind-outside-owner",
+        ]),
+      ).toEqual([message]);
+    }
+    expect(
+      await messages(
+        `${mint} let kind = "SignalVisible"; kind = "MatterWritable"; withCheckedTransaction({ kind });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `${mint} const options = { kind: "SignalVisible" }; options.kind = "MatterWritable"; withCheckedTransaction(options);`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `import * as checked from "@/api/lib/proofs/checked-transaction"; const { withCheckedTransaction: mint } = checked; const alias = checked.withCheckedTransaction; mint({ kind: "MatterReadable" }); alias({ kind: "MatterWritable" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message, message]);
+    expect(
+      await messages(
+        `const checked = await import("@/api/lib/proofs/checked-transaction");`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    // The shape every registered predicate uses stays admitted.
+    expect(
+      await messages(
+        `${mint} const kind = "SignalVisibleTo"; withCheckedTransaction({ kind, tx, organizationId, check: async (id) => id, "entityId": entity });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([]);
+  });
+
   test("upstream rejects renamed imports while the wrapper adds named call diagnostics", async () => {
     const source = `import { defineProof as mint } from "@gdp-ts/core";
       const proof = mint("Visible");`;

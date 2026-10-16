@@ -202,7 +202,6 @@ const noMatterProofKindOutsideOwner = {
     const mintBindings = new Set();
     const mintNamespaces = new Set();
     const kindBindings = new Map();
-    const optionBindings = new Map();
     const message =
       "MatterReadable and MatterWritable transaction proofs may only be minted by matter-access-proof.ts.";
     const isMintCall = (callee) =>
@@ -226,21 +225,39 @@ const noMatterProofKindOutsideOwner = {
         ? kindBindings.get(expression.name)
         : undefined;
     };
+    const propertyName = (property) => {
+      if (property.computed) {
+        return property.key.type === "Literal" &&
+          typeof property.key.value === "string"
+          ? property.key.value
+          : undefined;
+      }
+      return property.key.type === "Identifier"
+        ? property.key.name
+        : property.key.value;
+    };
+    // Only an inline object literal can be proven safe: a binding can be
+    // changed before the call, a spread or unresolved computed key can supply
+    // another kind, and the last of duplicate keys wins. Anything else is
+    // unknown and reported.
     const optionsDisposition = (expression) => {
-      if (expression?.type === "Identifier") {
-        return optionBindings.get(expression.name);
-      }
       if (expression?.type !== "ObjectExpression") {
-        return undefined;
+        return "unknown";
       }
-      const property = expression.properties.find(
-        (candidate) =>
-          candidate.type === "Property" &&
-          (candidate.computed
-            ? candidate.key.value === "kind"
-            : candidate.key.name === "kind"),
-      );
-      return property ? kindDisposition(property.value) : undefined;
+      let kind;
+      for (const property of expression.properties) {
+        if (property.type !== "Property") {
+          return "unknown";
+        }
+        const name = propertyName(property);
+        if (name === undefined) {
+          return "unknown";
+        }
+        if (name === "kind") {
+          kind = property.value;
+        }
+      }
+      return kindDisposition(kind) ?? "unknown";
     };
     return {
       ImportDeclaration(node) {
@@ -264,23 +281,48 @@ const noMatterProofKindOutsideOwner = {
           }
         }
       },
+      ImportExpression(node) {
+        // The minting module is never loaded dynamically outside its owners.
+        if (
+          node.source.type === "Literal" &&
+          resolvedModule(node.source.value, filename) ===
+            checkedTransactionModule
+        ) {
+          context.report({ node, message });
+        }
+      },
       VariableDeclarator(node) {
+        if (
+          node.id.type === "ObjectPattern" &&
+          node.init?.type === "Identifier" &&
+          mintNamespaces.has(node.init.name)
+        ) {
+          for (const property of node.id.properties) {
+            if (
+              property.type === "Property" &&
+              propertyName(property) === "withCheckedTransaction" &&
+              property.value.type === "Identifier"
+            ) {
+              mintBindings.add(property.value.name);
+            }
+          }
+          return;
+        }
         if (node.id.type !== "Identifier") {
           return;
         }
         if (
-          node.init?.type === "Identifier" &&
-          mintBindings.has(node.init.name)
+          (node.init?.type === "Identifier" &&
+            mintBindings.has(node.init.name)) ||
+          (node.init?.type === "MemberExpression" && isMintCall(node.init))
         ) {
           mintBindings.add(node.id.name);
         }
-        const kind = kindDisposition(node.init);
+        // A `let` binding can be reassigned to a matter kind before use.
+        const kind =
+          node.parent?.kind === "const" ? kindDisposition(node.init) : undefined;
         if (kind) {
           kindBindings.set(node.id.name, kind);
-        }
-        const options = optionsDisposition(node.init);
-        if (options) {
-          optionBindings.set(node.id.name, options);
         }
       },
       CallExpression(node) {
