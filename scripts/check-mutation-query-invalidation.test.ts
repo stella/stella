@@ -316,7 +316,7 @@ const useForwardingQuery = (options: unknown) => useQuery(options);
 const useIgnoringQuery = (_options: unknown) => useQuery({ queryKey: ["plain"], queryFn: async () => [] });
 const useBothQueries = (options: unknown) => {
   useForwardingQuery(options);
-  return useIgnoringQuery(options);
+  return useIgnoringQuery();
 };
 const tagged = resourceQueryOptions(
   { queryKey: ["tagged"], queryFn: async () => [] },

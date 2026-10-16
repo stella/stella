@@ -1507,10 +1507,10 @@ const wrapperForwardsReaderOptions = ({
   functionLike,
   modules,
   seen,
-}: WrapperForwardsReaderOptionsArgs): boolean => {
+}: WrapperForwardsReaderOptionsArgs): boolean | undefined => {
   const parameter = functionLike.parameters.at(0);
-  if (!parameter || !ts.isIdentifier(parameter.name) || !functionLike.body) {
-    return false;
+  if (!functionLike.body) {
+    return undefined;
   }
   const readerForwards: boolean[] = [];
   const visit = (node: ts.Node) => {
@@ -1528,7 +1528,9 @@ const wrapperForwardsReaderOptions = ({
     if (name && READER_EXECUTORS.has(name)) {
       const options = node.arguments.at(0);
       readerForwards.push(
-        options !== undefined &&
+        parameter !== undefined &&
+          ts.isIdentifier(parameter.name) &&
+          options !== undefined &&
           forwardsReaderOptions({
             module,
             expression: options,
@@ -1549,15 +1551,20 @@ const wrapperForwardsReaderOptions = ({
     if (target) {
       const argument = node.arguments.at(0);
       const key = `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`;
-      if (argument && !seen.has(key)) {
-        const nestedForwards = wrapperForwardsReaderOptions({
-          module: target.module,
-          functionLike: target.functionLike,
-          modules,
-          seen: new Set(seen).add(key),
-        });
+      const nestedForwards = !seen.has(key)
+        ? wrapperForwardsReaderOptions({
+            module: target.module,
+            functionLike: target.functionLike,
+            modules,
+            seen: new Set(seen).add(key),
+          })
+        : false;
+      if (nestedForwards !== undefined) {
         readerForwards.push(
           nestedForwards &&
+            parameter !== undefined &&
+            ts.isIdentifier(parameter.name) &&
+            argument !== undefined &&
             forwardsReaderOptions({
               module,
               expression: argument,
@@ -1566,13 +1573,13 @@ const wrapperForwardsReaderOptions = ({
               seen: new Set(),
             }),
         );
-        return;
       }
+      return;
     }
     ts.forEachChild(node, visit);
   };
   visit(functionLike.body);
-  return readerForwards.length > 0 && readerForwards.every(Boolean);
+  return readerForwards.length > 0 ? readerForwards.every(Boolean) : undefined;
 };
 
 const isTaggedReaderValue = ({
@@ -1722,7 +1729,7 @@ const createReaderStates = ({
           seen: new Set([
             `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`,
           ]),
-        }) &&
+        }) === true &&
         isTaggedReaderValue({
           module,
           expression: options,
