@@ -1326,6 +1326,7 @@
       "loadError": "Nepodařilo se načíst položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "messageUnavailable": "Tuto zprávu nelze zobrazit.",
     "mockModel": {
       "description": "Předpřipravené odpovědi místního simulovaného modelu",
       "label": "Simulovaná AI"
@@ -1491,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Přidávání komentáře",
+      "add_matter_member": "Přidat člena spisu",
       "apply-active-docx-edits": "Připravuji úpravy dokumentu",
       "ares_lookup_company": "Hledám záznamy o firmě",
       "ares_search_companies": "Hledám záznamy o firmách",
@@ -1547,7 +1549,6 @@
       "list_stories": "Výpis částí dokumentu",
       "list_templates": "Výpis vzorů",
       "load-skill": "Čtu pokyny",
-      "manage_organization": "Spravovat organizaci",
       "read-contact": "Čtení kontaktu",
       "read-content-across-matters": "Čtení obsahu napříč spisy",
       "read-skill-resource": "Čtu pokyny",
@@ -1557,6 +1558,7 @@
       "read_section": "Čtení oddílu",
       "read_story": "Čtení části dokumentu",
       "remember": "Ukládání do paměti",
+      "remove_matter_member": "Odebrat člena spisu",
       "reply_comment": "Odpovídání na komentář",
       "request_secret": "Žádost o soukromý přístupový údaj",
       "resolve_comment": "Řešení komentáře",
@@ -1590,6 +1592,7 @@
       "suggest_template_fields": "Navrhuji pole vzoru",
       "unknown": "Použití nástroje",
       "update-entity-fields": "Aktualizace metadat",
+      "update_organization_settings": "Upravit nastavení týmu",
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",

@@ -4,7 +4,6 @@ import { isRecord } from "@/api/lib/type-guards";
 import type { CompareToolInput } from "@/api/mcp/document-compare-tool";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
-import type { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
@@ -87,17 +86,9 @@ export const WRITE_TOOL_SCOPES = {
   create_reader_annotation: organization,
   update_reader_annotation: organization,
   delete_reader_annotation: organization,
-  manage_organization: {
-    path: ["action"],
-    byValue: {
-      add_member: matter,
-      remove_member: matter,
-      update_org_settings: organization,
-    } satisfies Record<
-      (typeof MANAGE_ORG_ACTIONS)[number],
-      WriteToolScopeValue
-    >,
-  },
+  add_matter_member: matter,
+  remove_matter_member: matter,
+  update_organization_settings: organization,
   set_practice_jurisdictions: organization,
   fill_template: organization,
   save_filled_template: matter,
