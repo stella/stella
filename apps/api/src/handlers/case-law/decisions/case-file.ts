@@ -115,7 +115,10 @@ export const listCaseFileDocuments = async ({
           : eq(caseLawDecisions.languageGroupKey, decision.languageGroupKey),
       ),
     );
-  const documentKey = sql<string>`coalesce(${caseLawDecisions.languageGroupKey}, ${caseLawDecisions.id}::text)`;
+  const documentKey = sql<string>`CASE
+    WHEN ${caseLawDecisions.languageGroupKey} IS NULL THEN 'document:' || ${caseLawDecisions.id}::text
+    ELSE 'language:' || ${caseLawDecisions.languageGroupKey}
+  END`;
   const versions = tx
     .select({
       id: caseLawDecisions.id,

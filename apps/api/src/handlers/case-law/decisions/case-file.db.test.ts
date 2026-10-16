@@ -21,6 +21,7 @@ let client: PGlite;
 const sourceId = createSafeId<"caseLawSource">();
 const otherSourceId = createSafeId<"caseLawSource">();
 const restrictedSourceId = createSafeId<"caseLawSource">();
+const ungroupedId = createSafeId<"caseLawDecision">();
 const subject = {
   caseNumber: "8 As 123/2020",
   caseNumberType: "case-number",
@@ -121,6 +122,12 @@ beforeAll(async () => {
           },
         },
       },
+      { ...base, id: ungroupedId, languageGroupKey: null },
+      {
+        ...base,
+        id: createSafeId<"caseLawDecision">(),
+        languageGroupKey: ungroupedId,
+      },
       ...Array.from({ length: LIMITS.caseLawCaseFilePageSize }, (_, index) => ({
         ...base,
         id: createSafeId<"caseLawDecision">(),
@@ -158,9 +165,13 @@ test("case file collapses languages and pages every document without crossing co
   }
   expect(second.nextCursor).toBeNull();
   const items = [...first.items, ...second.items];
-  expect(items).toHaveLength(LIMITS.caseLawCaseFilePageSize + 3);
+  expect(items).toHaveLength(LIMITS.caseLawCaseFilePageSize + 5);
   expect(new Set(items.map((item) => item.languageGroupKey)).size).toBe(
     items.length,
+  );
+  expect(items.some((item) => item.id === ungroupedId)).toBe(true);
+  expect(items.some((item) => item.languageGroupKey === ungroupedId)).toBe(
+    true,
   );
   expect(items.every((item) => item.language === "en")).toBe(true);
   expect(items.filter((item) => item.decisionType === "judgment")).toHaveLength(
