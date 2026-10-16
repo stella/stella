@@ -65,7 +65,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
   definePublicLawSharedQuery(
     PUBLIC_LAW_SHARED_QUERY.caseLawLanguageAlternates,
     async (
-      tx: CaseLawPublicReadTransaction,
+      tx: Pick<CaseLawPublicReadTransaction, "select">,
       languageGroupKeys: readonly string[],
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
       const versions = tx
@@ -220,7 +220,7 @@ export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
  * page as selected (nulls and repeats included), one read for all of them.
  */
 export const readPublicDecisionLanguageAlternatesInTx = async (
-  tx: CaseLawPublicReadTransaction,
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
   languageGroupKeys: readonly (string | null)[],
 ): Promise<PublicDecisionLanguageAlternatesByGroup> => {
   const keys = [

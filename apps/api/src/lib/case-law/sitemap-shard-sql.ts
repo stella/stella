@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
+import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution-sql";
 import { groupableSql } from "@/api/lib/groupable-sql";
 
 /**
@@ -13,6 +15,26 @@ const SITEMAP_SHARD_BUCKET_WIDTH = 2;
 export const SITEMAP_UNDATED_YEAR = "undated";
 export const SITEMAP_UNDATED_MONTH = "00";
 export const SITEMAP_ALL_BUCKET = "all";
+
+/**
+ * One stable eligible row per document, chosen across all dates and buckets.
+ * Filtering a shard's rows afterwards would repeat documents whose language
+ * versions have different ids (and therefore different hashed buckets).
+ * A scalar, capped sibling probe keeps the language-group index condition;
+ * null group keys match no sibling and therefore remain representatives.
+ */
+export const sitemapDocumentRepresentative = sql`${caseLawDecisions.redactedAt} IS NULL AND (
+    SELECT 1
+    FROM case_law_decisions AS sitemap_sibling
+    INNER JOIN case_law_sources AS sitemap_sibling_source
+      ON sitemap_sibling_source.id = sitemap_sibling.source_id
+    WHERE sitemap_sibling.country = ${caseLawDecisions.country}
+      AND sitemap_sibling.language_group_key = ${caseLawDecisions.languageGroupKey}
+      AND sitemap_sibling.id < ${caseLawDecisions.id}
+      AND ${sql.raw(publishedUnredactedCaseLawDecisionSqlFor("sitemap_sibling"))}
+      AND ${sql.raw(redistributableCaseLawSourceSqlFor("sitemap_sibling_source"))}
+    LIMIT 1
+) IS NULL`;
 
 // These fragments are rendered into both the SELECT list and the GROUP BY of
 // the refresh's grouped read. Postgres identifies a grouped SELECT expression

@@ -128,6 +128,7 @@ const decisionWithText = (text: string) => {
       },
     ],
     citationsNextCursor: null,
+    caseFile: { items: [], nextCursor: null, limit: 50 },
     languageAlternates: [
       {
         id: text,

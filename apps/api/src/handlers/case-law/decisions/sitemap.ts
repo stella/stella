@@ -24,6 +24,7 @@ import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
   decisionBucketSql,
+  sitemapDocumentRepresentative,
   SITEMAP_ALL_BUCKET,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
@@ -183,6 +184,7 @@ export const sitemapShardDecisionsQuery = (
         redistributableCaseLawSource,
         publishedCaseLawDecision,
         ...conditions,
+        sitemapDocumentRepresentative,
       ),
     )
     .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))

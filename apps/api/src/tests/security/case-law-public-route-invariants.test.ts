@@ -200,6 +200,9 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
   },
+  "apps/api/src/handlers/case-law/decisions/case-file.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },

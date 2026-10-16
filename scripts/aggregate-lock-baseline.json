@@ -79,12 +79,6 @@
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
-    "fingerprint": "03b54134994bf150aa5bca1635a922368a85490cdfc505a160c169a72c2fac96",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
     "count": 1,
     "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
