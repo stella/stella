@@ -1558,6 +1558,18 @@ type Messages = {
       "rejected": "Rejected";
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
+    "tableChart": {
+      "bar": "Bar";
+      "kind": "Chart type";
+      "line": "Line";
+      "loading": "Choosing a chart…";
+      "pie": "Pie";
+      "scatter": "Scatter";
+      "showChart": "Show as chart";
+      "summary": "Values shown: {n, number}.";
+      "unavailable": "A chart could not be selected. The table is shown.";
+      "values": "{label}: {value, number}";
+    };
     "thinking": "Working with context";
     "threadFiles": {
       "title": "Files in this chat";
@@ -4740,9 +4752,19 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
+      "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.";
+      "desktopCardApproveTitle": "stella desktop is asking to connect";
+      "desktopCardConnectedDetail": "Linked to <bdi>{identity}</bdi> on {host} · version {version}";
+      "desktopCardConnectedDetailNoVersion": "Linked to <bdi>{identity}</bdi> on {host}";
+      "desktopCardConnectedTitle": "stella desktop is linked";
+      "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.";
+      "desktopCardMissingTitle": "stella desktop isn't linked yet";
+      "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.";
+      "desktopCardOutdatedTitle": "stella desktop needs an update";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
+      "desktopConnectInstalled": "It's installed, connect";
       "desktopConnectedAs": "Connected as <bdi>{email}</bdi>";
       "desktopDescription": "Clipboard history and document tools on your computer";
       "desktopDocumentsDescription": "Open stella files in desktop apps; revisions return to the right matter.";

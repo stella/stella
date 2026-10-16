@@ -1555,6 +1555,18 @@
       "rejected": "Noraidīts"
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
+    "tableChart": {
+      "bar": "Stabiņu",
+      "kind": "Diagrammas veids",
+      "line": "Līniju",
+      "loading": "Tiek izvēlēta diagramma…",
+      "pie": "Sektoru",
+      "scatter": "Izkliedes",
+      "showChart": "Rādīt kā diagrammu",
+      "summary": "Attēloto vērtību skaits: {n, number}.",
+      "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Strādāju ar kontekstu",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
@@ -4737,9 +4749,19 @@
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atrodiet visu kopēto un atveriet stella dokumentus jau izmantotajās datora lietotnēs.",
+      "desktopCardApproveDetail": "Apstipriniet, lai saistītu šo datoru ar <bdi>{identity}</bdi> serverī {host}.",
+      "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
+      "desktopCardConnectedDetail": "Saistīts ar <bdi>{identity}</bdi> serverī {host} · versija {version}",
+      "desktopCardConnectedDetailNoVersion": "Saistīts ar <bdi>{identity}</bdi> serverī {host}",
+      "desktopCardConnectedTitle": "stella desktop ir sasaistīts",
+      "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
+      "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
+      "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",
+      "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
       "desktopClipboardTitle": "Meklējama starpliktuves vēsture",
       "desktopConnectFailed": "Neizdevās izveidot savienojumu ar stella desktop.",
+      "desktopConnectInstalled": "Ir instalēts, savienot",
       "desktopConnectedAs": "Savienots kā <bdi>{email}</bdi>",
       "desktopDescription": "Starpliktuves vēsture un dokumentu rīki jūsu datorā",
       "desktopDocumentsDescription": "Atveriet stella failus datora lietotnēs; labojumi atgriezīsies pareizajā lietā.",

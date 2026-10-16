@@ -475,6 +475,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/catalogue/install-skill": "crud",
   "POST /v1/chat/": "stream",
   "POST /v1/chat/improve-prompt": "crud",
+  "POST /v1/chat/table-chart": "ai",
   "POST /v1/chat/template-thread": "crud",
   "POST /v1/chat/template-thread/rotate": "crud",
   "POST /v1/chat/threads/:threadId/export": "crud",
