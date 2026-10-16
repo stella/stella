@@ -242,6 +242,51 @@ test("plain mutation wrappers inherit primitive writes and unresolved options wi
   }
 });
 
+test("outside ownership scans skip canonical factory callbacks but retain eager and shadowed writes", () => {
+  const census = inspectMutationQuerySources([
+    {
+      file: "apps/web/src/lib/workspace-realtime.ts",
+      text: `export const resourceMutation = (options: unknown) => options;`,
+    },
+    {
+      file: "apps/web/src/mutation-wrapper.ts",
+      text: `
+        import { useMutation } from "@tanstack/react-query";
+        import * as realtime from "./lib/workspace-realtime";
+        import { resourceMutation } from "./lib/workspace-realtime";
+        import { api } from "@/api";
+        const request = () => api.entities({ workspaceId }).rename.patch({ name });
+        const useRegistered = () => {
+          const eagerMutation = realtime.resourceMutation({
+            queryClient: api.entities({ workspaceId }).delete.delete({ id }),
+            mutationFn: request,
+          });
+          return useMutation({ mutationFn: eagerMutation });
+        };
+        const useRegisteredCaller = () => useRegistered();
+        const useShadowed = (resourceMutation: (options: unknown) => unknown) => {
+          const mutation = resourceMutation({ mutationFn: request });
+          return useMutation({ mutationFn: mutation });
+        };
+        const useShadowedCaller = () => useShadowed((options) => options);
+      `,
+    },
+  ]);
+  const wrapper = (callee: string) =>
+    census.mutations.find(
+      (entry) => entry.kind === "wrapper" && entry.callee === callee,
+    );
+  expect(wrapper("useRegistered")?.ownWrites).toMatchObject([
+    { route: "/entities/:workspaceId/delete", method: "delete" },
+  ]);
+  expect(wrapper("useRegistered")?.ownWrites).not.toMatchObject([
+    { route: "/entities/:workspaceId/rename", method: "patch" },
+  ]);
+  expect(wrapper("useShadowed")?.ownWrites).toMatchObject([
+    { route: "/entities/:workspaceId/rename", method: "patch" },
+  ]);
+});
+
 test("raw helper calls remain owned even when an inherited primitive invokes the identical helper", () => {
   const census = inspectMutationQuerySources([
     {

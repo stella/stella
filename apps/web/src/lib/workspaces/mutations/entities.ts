@@ -150,6 +150,12 @@ export const useRenameEntity = (
     return unwrapEden(response);
   };
 
+  const renameMutation = resourceMutation({
+    mutation: "renameEntity",
+    queryClient,
+    mutationFn: renameEntityRequest,
+  });
+
   const mutation = useMutation({
     onMutate: async ({
       workspaceId,
@@ -199,11 +205,7 @@ export const useRenameEntity = (
       }
       return optimistic.value;
     },
-    mutationFn: resourceMutation({
-      mutation: "renameEntity",
-      queryClient,
-      mutationFn: renameEntityRequest,
-    }),
+    mutationFn: renameMutation,
     onSuccess: (data, { workspaceId, entityId }, context) => {
       const reconciled = Result.try(() => {
         const store = inspectorStore

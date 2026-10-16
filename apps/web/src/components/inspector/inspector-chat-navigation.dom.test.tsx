@@ -3,6 +3,7 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -66,6 +67,9 @@ for (const { destination, expectedScope } of [
     });
     store.setMinimized(true);
     const existingTab = useInspectorTabsStore.getState().tabs.at(0);
+    if (existingTab === undefined) {
+      throw new Error("Expected the existing matter conversation tab");
+    }
     expect(existingTab).toMatchObject({ workspaceId: "matter-A" });
 
     const client = new QueryClient({
@@ -140,7 +144,14 @@ for (const { destination, expectedScope } of [
     );
     try {
       await act(async () => {
-        await router.navigate({ to: destination });
+        if (destination === "/chat") {
+          await router.navigate({ to: "/chat" });
+          return;
+        }
+        await router.navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId: toSafeId<"workspace">("matter-B") },
+        });
       });
       await waitFor(() =>
         expect(router.state.location.pathname).toBe(destination),
@@ -154,7 +165,7 @@ for (const { destination, expectedScope } of [
         view.unmount();
       });
       const { activeId, tabs } = useInspectorTabsStore.getState();
-      expect(tabs.find((tab) => tab.id === existingTab?.id)).toEqual(
+      expect(tabs.find((tab) => tab.id === existingTab.id)).toEqual(
         existingTab,
       );
       expect(tabs).toHaveLength(2);

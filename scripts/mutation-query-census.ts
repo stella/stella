@@ -422,6 +422,20 @@ class CallScanner {
         this.mode satisfies never;
         return panic("Unhandled mutation census scan mode");
     }
+    if (
+      this.mode === "outside-mutations" &&
+      this.analyzer.isResourceMutationFactory(node)
+    ) {
+      const options = node.arguments.at(0);
+      if (options) {
+        this.scanFactoryOptions({
+          value: { node: options, env: current.env },
+          depth: depth + 1,
+          active: nextActive,
+        });
+      }
+      return;
+    }
     const route = this.analyzer.routeOf(node);
     if (this.analyzer.isExecutingReader(node)) {
       this.readerOf.add(this.analyzer.location(node).id);
@@ -497,6 +511,49 @@ class CallScanner {
       });
     }
     return;
+  };
+  scanFactoryOptions = ({ value, depth, active = new Set() }: ScanArgs) => {
+    if (depth > 12) {
+      this.unknown("helper-depth-limit", value.node);
+      return;
+    }
+    if (active.has(value.node)) {
+      this.unknown("dynamic-options-spread", value.node);
+      return;
+    }
+    const options = this.analyzer.resolve(value);
+    if (!ts.isObjectLiteralExpression(options.node)) {
+      this.scan({ value: options, depth, active });
+      return;
+    }
+    const nextActive = new Set(active).add(options.node);
+    for (const property of options.node.properties) {
+      if (ts.isSpreadAssignment(property)) {
+        this.scanFactoryOptions({
+          value: { node: property.expression, env: options.env },
+          depth: depth + 1,
+          active: nextActive,
+        });
+        continue;
+      }
+      if (
+        ts.isPropertyAssignment(property) &&
+        propertyName(property.name) === "mutationFn" &&
+        functionNode(
+          this.analyzer.resolve({
+            node: property.initializer,
+            env: options.env,
+          }).node,
+        )
+      ) {
+        continue;
+      }
+      this.scan({
+        value: { node: property, env: options.env },
+        depth,
+        active: nextActive,
+      });
+    }
   };
   scan = ({ value, depth, active = new Set<ts.Node>() }: ScanArgs) => {
     const current = value;
@@ -629,6 +686,45 @@ class CensusAnalyzer {
   }
   moduleFor = (node: ts.Node) =>
     this.modules.get(node.getSourceFile().fileName);
+  isResourceMutationFactory = (call: ts.CallExpression) => {
+    const module = this.moduleFor(call);
+    if (!module) {
+      return false;
+    }
+    const expression = unwrap(call.expression);
+    if (ts.isIdentifier(expression)) {
+      const imported = module.imports.get(expression.text);
+      const target = imported
+        ? this.resolveModule(module.file, imported.module)
+        : undefined;
+      return (
+        this.bindingFor(expression) === undefined &&
+        imported?.imported === "resourceMutation" &&
+        target?.file === "apps/web/src/lib/workspace-realtime.ts" &&
+        this.exportedFrom({ module: target, name: "resourceMutation" }) !==
+          undefined
+      );
+    }
+    if (ts.isPropertyAccessExpression(expression)) {
+      const owner = unwrap(expression.expression);
+      if (!ts.isIdentifier(owner)) {
+        return false;
+      }
+      const imported = module.imports.get(owner.text);
+      const target = imported
+        ? this.resolveModule(module.file, imported.module)
+        : undefined;
+      return (
+        this.bindingFor(owner) === undefined &&
+        imported?.imported === "*" &&
+        expression.name.text === "resourceMutation" &&
+        target?.file === "apps/web/src/lib/workspace-realtime.ts" &&
+        this.exportedFrom({ module: target, name: "resourceMutation" }) !==
+          undefined
+      );
+    }
+    return false;
+  };
   moduleBase = (from: string, specifier: string) => {
     const exported = this.packageExports.get(specifier);
     if (exported !== undefined) {

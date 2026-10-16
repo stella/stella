@@ -609,11 +609,19 @@ const mutationContracts = (
   return result;
 };
 
-const mutationContractError = (
-  call: ts.CallExpression,
-  entry: MutationQueryCensus["mutations"][number],
-  contracts: ReadonlyMap<string, MutationContract>,
-): string | undefined => {
+type MutationContractErrorArgs = {
+  call: ts.CallExpression;
+  mutationFn: ts.Expression;
+  entry: MutationQueryCensus["mutations"][number];
+  contracts: ReadonlyMap<string, MutationContract>;
+};
+
+const mutationContractError = ({
+  call,
+  mutationFn,
+  entry,
+  contracts,
+}: MutationContractErrorArgs): string | undefined => {
   const options = call.arguments.at(0);
   if (
     !options ||
@@ -634,11 +642,16 @@ const mutationContractError = (
     return `resourceMutation names unknown contract ${mutationValue.text}.`;
   }
   const normalizedHelperCall = call.getText().replace(/\s+/gu, " ").trim();
+  const normalizedMutationFn = mutationFn
+    .getText()
+    .replace(/\s+/gu, " ")
+    .trim();
   const unresolvedIsOnlyHelperReturn =
     entry.unresolved.length === 1 &&
     entry.unresolved[0]?.reason === "dynamic-operation-function" &&
-    entry.unresolved[0].expression.replace(/\s+/gu, " ").trim() ===
-      normalizedHelperCall;
+    [normalizedHelperCall, normalizedMutationFn].includes(
+      entry.unresolved[0].expression.replace(/\s+/gu, " ").trim(),
+    );
   if (entry.unresolved.length > 0 && !unresolvedIsOnlyHelperReturn) {
     return "resourceMutation write analysis has unresolved operations.";
   }
@@ -1005,7 +1018,12 @@ const inspectMutationExecution = ({
           "resourceMutation must be the effective mutationFn and cannot be discarded or overridden.",
       };
     }
-    const error = mutationContractError(selectedHelper, entry, contracts);
+    const error = mutationContractError({
+      call: selectedHelper,
+      mutationFn: finalMutationFunction,
+      entry,
+      contracts,
+    });
     return error === undefined
       ? { status: "valid" }
       : { status: "invalid", reason: error };
