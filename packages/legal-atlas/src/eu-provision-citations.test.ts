@@ -302,3 +302,22 @@ describe("EU act numbering with a citing date", () => {
     }
   });
 });
+
+test("eu-explicit-number-marker-preserves-legacy-two-digit-years", () => {
+  assertProperty(
+    "eu-explicit-number-marker-preserves-legacy-two-digit-years",
+    fc.property(
+      fc.integer({ min: 1, max: 9999 }),
+      fc.integer({ min: 1950, max: 2014 }),
+      fc.constantFrom("No", "Nr.", "č."),
+      (number, year, marker) => {
+        const printed = `Article 5 of Regulation (EC) ${marker} ${number}/${String(year % 100).padStart(2, "0")}`;
+        const citations = locateEuProvisionCitations(printed, {
+          citedOn: "2020-01-01",
+        });
+        expect(citations).toHaveLength(1);
+        expect(citations.at(0)?.act).toMatchObject({ number, year });
+      },
+    ),
+  );
+});

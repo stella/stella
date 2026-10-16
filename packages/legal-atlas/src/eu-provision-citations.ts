@@ -237,9 +237,10 @@ const numberedActIdentity = ({
   for (const order of ["year-number", "number-year"] as const) {
     const rawYear = order === "year-number" ? first : second;
     const rawNumber = order === "year-number" ? second : first;
-    // A sole four-digit component is the year, even when it is invalid.
+    // Without an explicit number marker, a sole four-digit component is the year.
     // Do not rescue a future year by treating it as an older act's number.
     if (
+      !explicitlyNumberFirst &&
       (first.length === 4) !== (second.length === 4) &&
       rawYear.length !== 4
     ) {
