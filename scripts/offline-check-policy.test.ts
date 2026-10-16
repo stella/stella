@@ -271,8 +271,8 @@ test("the offline baseline reader uses the merge base and preserves absent files
       "head",
     ]);
     const headObjects = runPreloaded(
-      `import { readGitHeadBlobIds } from './scripts/offline-git-read.ts';
-       const objects = readGitHeadBlobIds(${JSON.stringify(directory)});
+      `import { readGitWorkingTreeBlobIds } from './scripts/offline-git-read.ts';
+       const objects = readGitWorkingTreeBlobIds(${JSON.stringify(directory)});
        console.log(JSON.stringify({ changed: objects.get('data/font.ttf'), absent: objects.get('data/missing.ttf') ?? null }));`,
       "--check",
     );

@@ -1520,6 +1520,10 @@ export const EXTERNAL_CONTRACTS = {
         path: "apps/web/src/testing/dom-network-guard.ts",
         role: "primary",
       },
+      {
+        path: "packages/test-kit/src/network.ts",
+        role: "primary",
+      },
     ],
     sdks: [],
     pinSources: [],
@@ -1676,6 +1680,10 @@ export const EXTERNAL_CONTRACTS = {
       },
       {
         path: "apps/web/src/features/case-law/queries/decision-analysis.ts",
+        role: "primary",
+      },
+      {
+        path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
         role: "primary",
       },
     ],

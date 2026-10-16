@@ -39,7 +39,7 @@ import {
 } from "./external-contract-pin-allowances";
 import {
   createGitBaselineReader,
-  readGitHeadBlobIds,
+  readGitWorkingTreeBlobIds,
 } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
@@ -1154,7 +1154,7 @@ export const checkContractEntry = ({
   const currentObjects =
     baseline?.files === undefined || admitted === undefined
       ? undefined
-      : readGitHeadBlobIds(root);
+      : readGitWorkingTreeBlobIds(root);
   const usageChanged =
     baseline !== undefined &&
     admitted !== undefined &&

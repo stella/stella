@@ -3,7 +3,7 @@
     "apps/api/package.json#dependencies.@aws-sdk/client-s3": "^3.1145.0",
     "apps/api/package.json#dependencies.@aws-sdk/client-sts": "^3.1145.0",
     "apps/api/package.json#dependencies.@aws-sdk/s3-request-presigner": "^3.1145.0",
-    "scripts/ci-service-images.json#rustfs": "docker.io/rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff",
+    "scripts/ci-service-images.json#rustfs": "docker.io/rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c",
     "bun.lock#@aws-sdk/client-s3": "@aws-sdk/client-s3@3.1145.0",
     "bun.lock#@aws-sdk/client-sts": "@aws-sdk/client-sts@3.1145.0",
     "bun.lock#@aws-sdk/s3-request-presigner": "@aws-sdk/s3-request-presigner@3.1145.0"

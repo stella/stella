@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
+import path from "node:path";
 
 // The preload imports this owner before denying general subprocess access.
 // Keep the captured primitive private: callers can only read baseline objects.
@@ -185,12 +187,37 @@ const snapshotBlobIds = ({ root, commit }: GitBlobIdsOptions) => {
   return objects;
 };
 
-export const readGitHeadBlobIds = (root: string) => {
+export const readGitWorkingTreeBlobIds = (root: string) => {
   const commit = readOfflineGit({
     root,
     operation: { type: "merge-base", ref: "HEAD" },
   }).trim();
-  return snapshotBlobIds({ root, commit });
+  const objects = snapshotBlobIds({ root, commit });
+  const identities = new Map<string, string | undefined>();
+  const get = (file: string) => {
+    if (identities.has(file)) {
+      return identities.get(file);
+    }
+    if (!objects.has(file)) {
+      return undefined;
+    }
+    const absolute = path.join(root, file);
+    if (!existsSync(absolute)) {
+      identities.set(file, undefined);
+      return undefined;
+    }
+    const bytes = lstatSync(absolute).isSymbolicLink()
+      ? new TextEncoder().encode(readlinkSync(absolute))
+      : readFileSync(absolute);
+    const header = new TextEncoder().encode(`blob ${bytes.byteLength}\0`);
+    const hash = new Bun.CryptoHasher("sha1");
+    hash.update(header);
+    hash.update(bytes);
+    const identity = hash.digest("hex");
+    identities.set(file, identity);
+    return identity;
+  };
+  return { get, keys: () => objects.keys() };
 };
 
 type GitBaselineReaderOptions = { root: string; base: string };

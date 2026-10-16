@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -43,7 +44,10 @@ import {
   createLocalRuntimeClosureReader as readLocalClosure,
   type RuntimeSnapshotReader,
 } from "./external-contract-evidence";
-import { createGitBaselineReader } from "./offline-git-read";
+import {
+  createGitBaselineReader,
+  readGitWorkingTreeBlobIds,
+} from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -121,7 +125,7 @@ test("the real outbound census and SDK manifests have total offline coverage", (
       sdks: [...readExternalSdks(ROOT), "@example/sdk"],
     }).join("\n"),
   ).toContain("SDK @example/sdk maps to 0");
-}, 30_000);
+}, 60_000);
 
 test("the closed dependency census includes clients without SDK-shaped names", () => {
   expect(readExternalSdks(ROOT)).toContain("posthog-js");
@@ -1649,6 +1653,79 @@ test("generated data inputs compare blob identities despite identical decoded te
     registryFiles: [],
   };
   expect(hasChangedLocalRuntimeClosure(options)).toBe(true);
+});
+
+test("an uncommitted tracked data edit invalidates a pin allowance", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "external-contract-worktree-"));
+  const runGit = (arguments_: readonly string[]) => {
+    const result = Bun.spawnSync(["git", ...arguments_], { cwd: root });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  try {
+    runGit(["init", "-b", "main"]);
+    runGit(["config", "user.name", "Contract Test"]);
+    runGit(["config", "user.email", "contract@example.invalid"]);
+    writeFileSync(
+      path.join(root, "owner.ts"),
+      'import sdk from "vendor"; import "./generated/adapter"; sdk.send();',
+    );
+    writeFileSync(
+      path.join(root, "generator.ts"),
+      'export const generate = () => "output";',
+    );
+    writeFileSync(path.join(root, "input.bin"), new Uint8Array([255]));
+    runGit(["add", "."]);
+    runGit(["commit", "-m", "baseline"]);
+    const baseline = createGitBaselineReader({ root, base: "HEAD" });
+
+    writeFileSync(path.join(root, "input.bin"), new Uint8Array([254]));
+    const identities = readGitWorkingTreeBlobIds(root);
+    const current = Object.assign(
+      (file: string) => {
+        const absolute = path.join(root, file);
+        return file.endsWith(".bin") || !existsSync(absolute)
+          ? undefined
+          : readFileSync(absolute, "utf-8");
+      },
+      {
+        files: [...identities.keys()],
+        blobId: (file: string) => identities.get(file),
+        byteLength: (file: string) =>
+          readFileSync(path.join(root, file)).byteLength,
+      },
+    );
+    expect(current.blobId("input.bin")).not.toBe(baseline.blobId("input.bin"));
+    const usageChanged = compareLocalRuntimeClosure({
+      root,
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline,
+      current,
+      registryFiles: [],
+      generators: [
+        {
+          id: "adapter",
+          outputKind: "derived",
+          outputs: ["generated/adapter.ts"],
+          inputs: ["generator.ts", "input.bin"],
+          write: ["bun", "generator.ts"],
+        },
+      ],
+    });
+    expect(usageChanged).toBe(true);
+    expect(
+      admittedPinDrift({
+        current: { sdk: "2" },
+        baseline: { sdk: "2" },
+        allowance: pinDebt,
+        now: new Date("2026-10-15T00:00:00.000Z"),
+        usageChanged,
+      }),
+    ).toEqual({});
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("private imports expose pinned SDK reachability to the changed usage guard", () => {

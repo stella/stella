@@ -191,6 +191,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/template-packs":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/test-kit":
+    "Workspace package used as an internal test utility; implementation stays within the monorepo.",
   "@stll/text-normalize":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/time":
@@ -377,6 +379,7 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   immer:
     "In-process application utility, validation, formatting, or UI component.",
+  "linkify-it": "Local URL detection and parsing utility.",
   "input-otp":
     "In-process application utility, validation, formatting, or UI component.",
   isbot: "Local user-agent classification for server-side rendering.",
