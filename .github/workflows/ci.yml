@@ -4609,12 +4609,13 @@ jobs:
         # runs widen affected packages through scripts/test-scope.ts.
         env:
           COMPARISON_BASE: ${{ needs.ci-plan.outputs.comparison_base }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
-          # Without the planner's comparison base, test the full tree rather
-          # than let Turbo guess a base.
-          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" || -z "$COMPARISON_BASE" ]]; then
+          # Without the planner's comparison base or test scope (a planner
+          # fallback), test the full tree rather than let Turbo guess.
+          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" || -z "$COMPARISON_BASE" || -z "$TEST_SCOPE" ]]; then
             echo "flag=" >> "$GITHUB_OUTPUT"
           else
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
