@@ -9,9 +9,9 @@ import * as v from "valibot";
  * - `pending_public`: nothing is public.
  * - `identity_public`: exact decision identities and decision IDs are readable;
  *   public pages and search remain closed.
- * - `pages_public`: the country's decision and statute pages are served,
- *   listed in the sitemaps and open to crawlers, but the country is not yet
- *   part of search, the API search surfaces or MCP.
+ * - `pages_public`: decision and statute pages are served, listed in sitemaps
+ *   and open to crawlers; exact decision reads are available, but search
+ *   and listing remain closed.
  * - `admitted`: pages are public and the country is admitted to search, the
  *   API search surfaces and MCP.
  * - `withdrawn`: nothing is public any more.
