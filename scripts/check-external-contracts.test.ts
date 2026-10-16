@@ -23,6 +23,7 @@ import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry"
 import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
 import {
   admittedPinDrift,
+  baselinePinSourceFiles,
   checkContractEntry,
   readBaselinePins,
   hasChangedExecutableUsage,
@@ -84,6 +85,85 @@ const createLocalRuntimeClosureReader = (
 ) => readLocalClosure({ ...options, read: withBlobIds(options.read) });
 
 const ROOT = path.resolve(import.meta.dir, "..");
+
+test("baseline hydration derives every file read for declared pin sources", () => {
+  const files = baselinePinSourceFiles(EXTERNAL_CONTRACTS);
+  expect(files).toContain("scripts/ci-service-images.json");
+  expect(files).toContain("package.json");
+  expect(files).toContain("bun.lock");
+
+  for (const entry of Object.values(EXTERNAL_CONTRACTS)) {
+    for (const source of entry.pinSources) {
+      expect(files).toContain(source.file);
+    }
+  }
+});
+
+test("a partial clone hydrates a changed baseline service-image pin before offline comparison", () => {
+  const fixture = mkdtempSync(path.join(tmpdir(), "external-pin-partial-"));
+  try {
+    const source = path.join(fixture, "source");
+    const checkout = path.join(fixture, "checkout");
+    const runGit = (cwd: string, args: readonly string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    runGit(fixture, ["init", "-b", "main", source]);
+    runGit(source, ["config", "user.name", "Contract Test"]);
+    runGit(source, ["config", "user.email", "contract@example.invalid"]);
+    runGit(source, ["config", "uploadpack.allowFilter", "true"]);
+    writeFileSync(path.join(source, "package.json"), "{}");
+    writeFileSync(path.join(source, "bun.lock"), '{"packages":{}}');
+    mkdirSync(path.join(source, "scripts"));
+    const imageFile = "scripts/ci-service-images.json";
+    writeFileSync(
+      path.join(source, imageFile),
+      '[{"name":"postgres","source":"postgres@sha256:old"}]',
+    );
+    runGit(source, ["add", "."]);
+    runGit(source, ["commit", "-m", "baseline"]);
+    const base = runGit(source, ["rev-parse", "HEAD"]);
+    writeFileSync(
+      path.join(source, imageFile),
+      '[{"name":"postgres","source":"postgres@sha256:new"}]',
+    );
+    runGit(source, ["commit", "-am", "head"]);
+    runGit(fixture, [
+      "clone",
+      "--filter=blob:none",
+      `file://${source}`,
+      checkout,
+    ]);
+
+    const entry = {
+      owners: [],
+      sdks: [],
+      pinSources: [{ type: "image", file: imageFile, name: "postgres" }],
+      driftTriggers: ["pin-bump"],
+      status: "uncharacterised",
+      reason: "Fixture-only contract.",
+    } as const satisfies ExternalContractEntry;
+    for (const file of baselinePinSourceFiles({ fixture: entry })) {
+      runGit(checkout, ["show", `${base}:${file}`]);
+    }
+    const baseline = readBaselinePins(
+      entry,
+      createGitBaselineReader({ root: checkout, base }),
+    );
+    const current = readCurrentPins(checkout, entry);
+    const report = findVersionDrift({
+      system: "postgres",
+      fixture: "receipt",
+      current,
+      characterisedAt: baseline,
+    }).join("\n");
+    expect(report).toContain("re-characterise postgres at postgres@sha256:new");
+    expect(report).not.toContain("ExternalContractBaselineUnavailable");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
 const directDependencies = readDirectDependencies(ROOT);
 const realBaseline = createGitBaselineReader({
   root: ROOT,

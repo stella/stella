@@ -82,6 +82,20 @@ const pinMetadataSchema = v.object({
     }),
   ]),
 });
+
+/** Every declared file whose baseline contents can contribute a contract pin. */
+export const baselinePinSourceFiles = (
+  registry: Readonly<
+    Record<string, ExternalContractEntry>
+  > = EXTERNAL_CONTRACTS,
+): string[] =>
+  [
+    "bun.lock",
+    "package.json",
+    ...Object.values(registry).flatMap(({ pinSources }) =>
+      pinSources.map(({ file }) => file),
+    ),
+  ].filter((file, index, files) => files.indexOf(file) === index);
 const json = (root: string, file: string): unknown =>
   JSON.parse(readFileSync(path.join(root, file), "utf-8"));
 
@@ -267,8 +281,16 @@ const readPinsFromFiles = ({
 export const readBaselinePins = (
   entry: ExternalContractEntry,
   read: (file: string) => string | undefined,
-): Record<string, string> =>
-  readPinsFromFiles({ entry, read, snapshot: "baseline" });
+): Record<string, string> => {
+  const pinSources = new Map(
+    baselinePinSourceFiles({ entry }).map((file) => [file, read(file)]),
+  );
+  return readPinsFromFiles({
+    entry,
+    read: (file) => (pinSources.has(file) ? pinSources.get(file) : read(file)),
+    snapshot: "baseline",
+  });
+};
 
 export const readCurrentPins = (
   root: string,
@@ -1350,5 +1372,9 @@ export const runExternalContractCheck = (): void => {
 };
 
 if (import.meta.main) {
-  runExternalContractCheck();
+  if (process.argv.includes("--list-baseline-pin-source-files")) {
+    console.log(baselinePinSourceFiles().join("\n"));
+  } else {
+    runExternalContractCheck();
+  }
 }

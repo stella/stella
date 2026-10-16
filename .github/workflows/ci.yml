@@ -3512,6 +3512,9 @@ jobs:
                 printf '%s:%s\n' "$base" "$file" ;;
             esac
           done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"
+          while IFS= read -r file; do
+            printf '%s:%s\n' "$base" "$file"
+          done < <(bun scripts/check-external-contracts.ts --list-baseline-pin-source-files) >> "$RUNNER_TEMP/external-contract-baseline-objects"
           git cat-file --batch < "$RUNNER_TEMP/external-contract-baseline-objects" > /dev/null
           # A changed patch pin can also reference a patch removed from the head.
           git ls-tree -r --name-only "$base" -- patches > "$RUNNER_TEMP/external-contract-baseline-patches"
