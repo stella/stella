@@ -82,10 +82,11 @@ export const OrganizationJurisdictionsCard = () => {
                 // The error toast is surfaced via the mutation's `onError`.
                 // Settling as a Result lets the transition resolve, and React
                 // reverts `optimisticSelected` to the server value.
-                await Result.tryPromise({
+                const result = await Result.tryPromise({
                   try: async () => await updateMutation.mutateAsync(next),
                   catch: (error) => error,
                 });
+                result.unwrapOr(undefined);
                 if (selectionGenerationRef.current === generation) {
                   setImmediateSelected(null);
                 }
