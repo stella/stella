@@ -81,6 +81,19 @@ export const CENSUS_COLUMN_GRANTS_BY_RELATION = {
   },
 } as const satisfies PublicLawColumnGrantsByRelation;
 
+/**
+ * Deploy this expansion before the alias migration, grants and readers.
+ * Promote these columns to required in the following release; preceding
+ * supported tasks must tolerate the grants throughout the rollover.
+ */
+export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
+  legislation_work_identifiers: {
+    source_id: "permitted",
+    identifier: "permitted",
+    eli: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /** Expanded before the follow-up release grants the reviewed doctrine capability. */
 export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
   case_law_citations: {
@@ -161,6 +174,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  */
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+  ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
   case_law_citation_doctrine_reviews:
     DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
   case_law_citations: {
