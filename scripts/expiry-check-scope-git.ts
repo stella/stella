@@ -6,11 +6,12 @@ import {
   ExpiryScopeError,
   expiryScopeBase,
   type ExpiryCheckScope,
-} from "./expiry-check-scope";
+} from "./expiry-check-scope.ts";
 
 // The git side of the expiry scope. Offline checks import only
 // `expiry-check-scope.ts` and receive the scope from a preparing step.
-// Like that module, this runs before any dependency install.
+// Like that module, this runs before any dependency install; the lint plugin
+// loads it as plain ESM, so the import names its file extension.
 
 export const readExpiryCheckScope = (): ExpiryCheckScope => {
   const eventName = process.env["GITHUB_EVENT_NAME"] ?? "";
