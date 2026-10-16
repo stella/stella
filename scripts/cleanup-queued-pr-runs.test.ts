@@ -233,6 +233,19 @@ test("a protected pull request's run is not cancelled even after six hours", asy
   expect(result.forced).toEqual([]);
 });
 
+test("an old run whose pull request labels cannot be read is not cancelled", async () => {
+  const run = {
+    ...queued("pull_request"),
+    pull_requests: [{ number: 12, head: { sha: "current" } }],
+    created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+  };
+  for (const metadataStatus of [403, 404]) {
+    const result = await cleanup({ run, metadataStatus });
+    expect(result.cancelled, String(metadataStatus)).toEqual([]);
+    expect(result.forced, String(metadataStatus)).toEqual([]);
+  }
+});
+
 test("non-PR events and runs that already started are never cancelled", async () => {
   for (const event of [
     "push",
@@ -720,6 +733,8 @@ type PullRun = {
   jobs: string[];
   protected?: boolean;
   noPull?: boolean;
+  // Extra associated pull requests, after the run's own (number = run id).
+  extraPulls?: { number: number; protected?: boolean }[];
 };
 const defer = async ({
   waiting = true,
@@ -755,7 +770,12 @@ const defer = async ({
             full_name: run.fork ? "fork/test" : "test/test",
           },
           triggering_actor: { login: run.actor ?? "octocat" },
-          pull_requests: run.noPull ? [] : [{ number: run.id }],
+          pull_requests: run.noPull
+            ? []
+            : [
+                { number: run.id },
+                ...(run.extraPulls ?? []).map(({ number }) => ({ number })),
+              ],
         }));
       },
       rest: {
@@ -777,13 +797,20 @@ const defer = async ({
           },
         },
         pulls: {
-          get: async ({ pull_number }: { pull_number: number }) => ({
-            data: {
-              labels: runs.find((run) => run.id === pull_number)?.protected
-                ? [{ name: "ci-protect" }]
-                : [],
-            },
-          }),
+          get: async ({ pull_number }: { pull_number: number }) => {
+            const own = runs.find((run) => run.id === pull_number);
+            const extra = runs
+              .flatMap((run) => run.extraPulls ?? [])
+              .find((pull) => pull.number === pull_number);
+            return {
+              data: {
+                labels:
+                  (own?.protected ?? extra?.protected)
+                    ? [{ name: "ci-protect" }]
+                    : [],
+              },
+            };
+          },
         },
         repos: {
           createCommitStatus: async ({
@@ -876,4 +903,19 @@ test("every steward step that cancels a run honours the ci-protect label", () =>
       /labels\?\.some\(\(label\) => label\.name === PROTECT_LABEL\)/u,
     );
   }
+});
+
+test("a run is not deferred when any of its pull requests is protected", async () => {
+  const result = await defer({
+    runs: [
+      {
+        id: 1,
+        head: "head-1",
+        jobs: ["queued"],
+        extraPulls: [{ number: 77, protected: true }],
+      },
+    ],
+  });
+  expect(result.cancelled).toEqual([]);
+  expect(result.events).toEqual([]);
 });

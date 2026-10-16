@@ -177,6 +177,18 @@ test("a protected pull request's run is never touched", async () => {
   expect(calls.some((call) => call.endsWith("/cancel"))).toBe(false);
 });
 
+test("a run is never touched when a later associated pull request is protected", async () => {
+  const { request, calls, statuses } = fake(
+    [prRun(19, { pull_requests: [{ number: 1900 }, { number: 1901 }] })],
+    { protectedPulls: [1901] },
+  );
+  expect(await reliefCancel([19], request)).toEqual([
+    { runId: 19, outcome: "skipped", reason: "protected" },
+  ]);
+  expect(statuses).toEqual([]);
+  expect(calls.some((call) => call.endsWith("/cancel"))).toBe(false);
+});
+
 test("a run without a resolvable pull request is never touched", async () => {
   const { request, statuses } = fake([prRun(18, { pull_requests: [] })]);
   expect(await reliefCancel([18], request)).toEqual([

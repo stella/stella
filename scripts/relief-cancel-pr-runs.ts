@@ -93,16 +93,19 @@ const reliefCancelOne = async (
   if (run.status === "completed") {
     return { runId, outcome: "skipped", reason: "already completed" };
   }
-  const pullNumber = run.pull_requests.at(0)?.number;
-  if (pullNumber === undefined) {
+  if (run.pull_requests.length === 0) {
     return { runId, outcome: "skipped", reason: "pull request unresolved" };
   }
-  const pull = v.parse(
-    pullSchema,
-    await request([`repos/${REPO}/pulls/${pullNumber}`]),
-  );
-  if (pull.labels.some(({ name }) => name === PROTECT_LABEL)) {
-    return { runId, outcome: "skipped", reason: "protected" };
+  // Every associated pull request must be readable and unprotected; a failed
+  // read throws, so this run is reported as failed and never cancelled.
+  for (const { number } of run.pull_requests) {
+    const pull = v.parse(
+      pullSchema,
+      await request([`repos/${REPO}/pulls/${number}`]),
+    );
+    if (pull.labels.some(({ name }) => name === PROTECT_LABEL)) {
+      return { runId, outcome: "skipped", reason: "protected" };
+    }
   }
   // Record the deferral before cancelling: a cancelled run without the
   // record would never resume.

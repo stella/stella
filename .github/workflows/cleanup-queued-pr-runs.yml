@@ -65,7 +65,12 @@ jobs:
                   if (error.status !== 403 && error.status !== 404) throw error;
                   return null;
                 });
-                if (current?.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
+                // Labels that cannot be read cannot prove the run unprotected.
+                if (!current) {
+                  core.warning(`Cleanup skipped for ${run.id}: PR #${pull.number} labels unavailable`);
+                  return null;
+                }
+                if (current.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
               }
               if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
               if (associated.length === 0) return null;
@@ -299,11 +304,18 @@ jobs:
               if (run.triggering_actor?.login === "dependabot[bot]") continue;
               // A protected pull request is never deferred; one whose pull
               // request cannot be resolved is left running (fail closed).
-              const pullNumber = run.pull_requests?.[0]?.number;
-              if (!pullNumber) continue;
-              const pull = await github.rest.pulls.get({ ...repo, pull_number: pullNumber })
-                .then(({ data }) => data, () => null);
-              if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) continue;
+              const numbers = (run.pull_requests ?? []).map((pull) => pull.number).filter(Boolean);
+              if (numbers.length === 0) continue;
+              let protectedOrUnknown = false;
+              for (const number of numbers) {
+                const pull = await github.rest.pulls.get({ ...repo, pull_number: number })
+                  .then(({ data }) => data, () => null);
+                if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) {
+                  protectedOrUnknown = true;
+                  break;
+                }
+              }
+              if (protectedOrUnknown) continue;
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 ...repo, run_id: run.id, filter: "latest", per_page: 100,
               });
