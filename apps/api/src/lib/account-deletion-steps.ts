@@ -316,19 +316,19 @@ export const clearWorkspaceLeadRole = async (
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
   const ledMatters = await tx
-    .update(workspaces)
-    .set({ leadUserId: null })
-    .where(eq(workspaces.leadUserId, currentUserId))
-    .returning({
+    .select({
       id: workspaces.id,
       organizationId: workspaces.organizationId,
-    });
+    })
+    .from(workspaces)
+    .where(eq(workspaces.leadUserId, currentUserId));
   for (const [organizationId, matters] of Map.groupBy(
     ledMatters,
     (matter) => matter.organizationId,
   )) {
     // db-await-in-loop: one repair statement per organization whose matters the account led
     await restoreMatterStewards(tx, {
+      organizationId,
       workspaceIds: matters.map(({ id }) => id),
       departingUserId: currentUserId,
       recordAuditEvent: accountDeletionAuditRecorder(
@@ -337,6 +337,10 @@ export const clearWorkspaceLeadRole = async (
       ),
     });
   }
+  await tx
+    .update(workspaces)
+    .set({ leadUserId: null })
+    .where(eq(workspaces.leadUserId, currentUserId));
 };
 
 export type ReassignActiveTaskAssignmentsParams = {

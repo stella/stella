@@ -358,8 +358,8 @@ describe("changing a matter's lead", () => {
 });
 
 describe("keeping a steward when a lead leaves", () => {
-  // Assignment removal, organization offboarding and account deletion clear
-  // the departing lead and then restore the steward through this one call.
+  // Assignment removal, organization offboarding and account deletion restore
+  // the steward before removing the departing lead through this one call.
   // The caller's recorder carries the actor (the removing member, the
   // offboarding run or the account-deletion run); the repair supplies the
   // events it records.
@@ -373,6 +373,7 @@ describe("keeping a steward when a lead leaves", () => {
     };
     await restoreMatterStewards(asTestRaw<Transaction>(testDb), {
       workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
       departingUserId,
       recordAuditEvent,
     });
@@ -395,7 +396,7 @@ describe("keeping a steward when a lead leaves", () => {
         action: "update",
         resourceType: "workspace",
         resourceId: workspaceId,
-        changes: { leadUserId: { old: null, new: ids.userA2 } },
+        changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
         metadata: { cause: "matter_steward_restored" },
       },
     ]);
@@ -417,6 +418,7 @@ describe("keeping a steward when a lead leaves", () => {
         resourceType: "workspace",
         resourceId: workspaceId,
         changes: {
+          leadUserId: { old: ids.userA1, new: null },
           visibility: { old: "assigned_only", new: "admins_and_assigned" },
         },
         metadata: {

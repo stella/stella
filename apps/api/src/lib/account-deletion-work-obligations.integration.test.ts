@@ -7,7 +7,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -20,13 +22,19 @@ import {
   WORK_OBLIGATION_STATUS,
   workObligationEvents,
   workObligations,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
-import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
+import {
+  clearWorkspaceLeadRole,
+  reassignActiveTaskAssignmentsAndDropMemberships,
+} from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,
+  removeOrganizationMemberInTransaction,
   selectMemberCleanupWorkspaceIds,
 } from "@/api/lib/member-assignment-offboarding";
 import { cents } from "@/api/lib/money";
@@ -57,7 +65,210 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
+test("organization offboarding hands a private matter to its remaining internal assignee", async () => {
+  const outcome = await Result.tryPromise(
+    async () =>
+      await testDb.transaction(async (tx) => {
+        await tx.insert(workspaceMembers).values({
+          id: createSafeId<"workspaceMember">(),
+          workspaceId: ids.wsA1,
+          userId: ids.userA2,
+        });
+        await tx
+          .update(workspaces)
+          .set({
+            leadUserId: ids.userA1,
+            visibility: MATTER_VISIBILITY.assignedOnly,
+          })
+          .where(eq(workspaces.id, ids.wsA1));
+        const departingMember =
+          (
+            await tx
+              .select({ id: member.id })
+              .from(member)
+              .where(
+                and(
+                  eq(member.organizationId, ids.orgA),
+                  eq(member.userId, ids.userA1),
+                ),
+              )
+          ).at(0) ??
+          expect.unreachable("Expected the departing organization member");
+        await removeOrganizationMemberInTransaction(
+          asTestRaw<Transaction>(tx),
+          {
+            organizationId: ids.orgA,
+            memberId: departingMember.id,
+            userId: ids.userA1,
+            actorUserId: ids.userAdmin,
+            reassignTo: ids.userA2,
+          },
+        );
+        await tx.execute(sql`RESET ROLE`);
+        expect(
+          await tx
+            .select({
+              leadUserId: workspaces.leadUserId,
+              visibility: workspaces.visibility,
+              role: member.role,
+            })
+            .from(workspaces)
+            .innerJoin(
+              workspaceMembers,
+              and(
+                eq(workspaceMembers.workspaceId, workspaces.id),
+                eq(workspaceMembers.userId, workspaces.leadUserId),
+              ),
+            )
+            .innerJoin(
+              member,
+              and(
+                eq(member.organizationId, workspaces.organizationId),
+                eq(member.userId, workspaces.leadUserId),
+              ),
+            )
+            .where(eq(workspaces.id, ids.wsA1)),
+        ).toEqual([
+          {
+            leadUserId: ids.userA2,
+            visibility: MATTER_VISIBILITY.assignedOnly,
+            role: "member",
+          },
+        ]);
+        expect(await tx.$count(member, eq(member.id, departingMember.id))).toBe(
+          0,
+        );
+        expect(
+          await tx.$count(
+            workspaceMembers,
+            and(
+              eq(workspaceMembers.workspaceId, ids.wsA1),
+              eq(workspaceMembers.userId, ids.userA1),
+            ),
+          ),
+        ).toBe(0);
+        expect(
+          await tx
+            .select({
+              changes: auditLogs.changes,
+              metadata: auditLogs.metadata,
+            })
+            .from(auditLogs)
+            .where(eq(auditLogs.resourceId, ids.wsA1)),
+        ).toEqual([
+          {
+            changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
+            metadata: expect.objectContaining({
+              cause: "matter_steward_restored",
+            }),
+          },
+        ]);
+        tx.rollback();
+      }),
+  );
+  if (outcome.isErr()) {
+    expect(outcome.error.cause).toBeInstanceOf(TransactionRollbackError);
+    return;
+  }
+  expect.unreachable("Expected the integration test transaction to roll back");
+});
+
 describe("account deletion governed ownership", () => {
+  test("account erasure repairs private matter stewardship before dropping memberships", async () => {
+    const outcome = await Result.tryPromise(
+      async () =>
+        await testDb.transaction(async (tx) => {
+          await tx
+            .update(workspaces)
+            .set({
+              leadUserId: ids.userA1,
+              visibility: MATTER_VISIBILITY.assignedOnly,
+            })
+            .where(inArray(workspaces.id, [ids.wsA1, ids.wsA2]));
+          const transaction = asTestRaw<Transaction>(tx);
+          await clearWorkspaceLeadRole(transaction, ids.userA1);
+          await reassignActiveTaskAssignmentsAndDropMemberships({
+            tx: transaction,
+            currentUserId: ids.userA1,
+            deletionRequestId: createSafeId<"accountDeletionRequest">(),
+            reassignments: undefined,
+          });
+          expect(
+            await tx
+              .select({
+                id: workspaces.id,
+                leadUserId: workspaces.leadUserId,
+                visibility: workspaces.visibility,
+              })
+              .from(workspaces)
+              .where(inArray(workspaces.id, [ids.wsA1, ids.wsA2])),
+          ).toEqual(
+            expect.arrayContaining([
+              {
+                id: ids.wsA1,
+                leadUserId: null,
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
+              },
+              {
+                id: ids.wsA2,
+                leadUserId: ids.userA2,
+                visibility: MATTER_VISIBILITY.assignedOnly,
+              },
+            ]),
+          );
+          expect(await tx.$count(member, eq(member.userId, ids.userA1))).toBe(
+            0,
+          );
+          expect(
+            await tx.$count(
+              workspaceMembers,
+              eq(workspaceMembers.userId, ids.userA1),
+            ),
+          ).toBe(0);
+          expect(
+            await tx
+              .select({ userId: workspaceMembers.userId })
+              .from(workspaceMembers)
+              .where(eq(workspaceMembers.workspaceId, ids.wsA2)),
+          ).toEqual([{ userId: ids.userA2 }]);
+          const stewardAudits = await tx
+            .select({
+              resourceId: auditLogs.resourceId,
+              changes: auditLogs.changes,
+            })
+            .from(auditLogs)
+            .where(inArray(auditLogs.resourceId, [ids.wsA1, ids.wsA2]));
+          expect(stewardAudits).toHaveLength(2);
+          expect(stewardAudits).toEqual(
+            expect.arrayContaining([
+              {
+                resourceId: ids.wsA1,
+                changes: {
+                  leadUserId: { old: ids.userA1, new: null },
+                  visibility: {
+                    old: MATTER_VISIBILITY.assignedOnly,
+                    new: MATTER_VISIBILITY.adminsAndAssigned,
+                  },
+                },
+              },
+              {
+                resourceId: ids.wsA2,
+                changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
+              },
+            ]),
+          );
+          tx.rollback();
+        }),
+    );
+    if (outcome.isErr()) {
+      expect(outcome.error.cause).toBeInstanceOf(TransactionRollbackError);
+      return;
+    }
+    expect.unreachable(
+      "Expected the integration test transaction to roll back",
+    );
+  });
+
   test("hands off reassigned work, unassigns other mutable work, and retains closed history", async () => {
     try {
       await testDb.transaction(async (tx) => {

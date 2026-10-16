@@ -2005,6 +2005,12 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/members/remove.ts",
+    "fingerprint": "48566d006d6427a93e31a251c4503a31d443aad042f78357f65baf8adeb8c04c",
+    "count": 1,
+    "reason": "Existing matter membership removal lock now selects organization ownership for steward restoration; the locked row and lock scope are unchanged."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/members/remove.ts",
     "fingerprint": "9ceb08121a80c4c5d65fcadedbc64137b27685673106c57bb092a8615cbce201",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/workspaces/members/remove.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2012,12 +2018,6 @@
   {
     "file": "apps/api/src/handlers/workspaces/members/remove.ts",
     "fingerprint": "aa7ffafc452f1e0246a945b296b68a8f582c785321d1bde48bfc1f8ddd681b03",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/members/remove.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/members/remove.ts",
-    "fingerprint": "ba1a1d7aa4a573add1f207d1da3ab3199a0ad1743393d7e6b63466864c53906b",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/workspaces/members/remove.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

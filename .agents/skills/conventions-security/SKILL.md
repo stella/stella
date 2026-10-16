@@ -21,18 +21,13 @@ handling, or external APIs. Stella handles privileged legal data
   validated and sanitised before processing.
 - **Workspace isolation** — data from one workspace must never
   leak to another.
-- **Ethical walls** — workspace (matter) boundaries enforce
-  information barriers for the `member` role at the RLS layer (not
-  just the UI): a member has zero visibility into workspaces they
-  are not assigned to via `workspace_members` — no names, no
-  members, no metadata. **Known limitation:** org `owner`/`admin`
-  roles carry a deliberate firm-admin override granting access to
-  every client matter (`client_id IS NOT NULL`) regardless of
-  assignment, and there is no per-matter screening to wall a
-  specific admin out of a specific matter. Do not describe admin
-  access as "absolute confidentiality." Screening a matter from an
-  admin requires a matter-level exclusion consulted by the RLS
-  view (`stella_authorized_workspaces`), which is not yet built.
+- **Matter visibility** — enforce the matter's explicit visibility at the RLS
+  layer, independently of its client. `assigned_only` requires assignment for
+  everyone, including organization owners and admins. `admins_and_assigned`
+  admits owners, admins, and assigned members. `all_members` admits every
+  internal organization member; external users still require assignment.
+  Organization roles continue to determine permissions within an accessible
+  matter. Attaching or changing a client does not change visibility.
 - **Access control** — every endpoint enforces auth and
   authorisation. No "internal-only" endpoints without guards.
 - **Dependency hygiene** — minimal, pinned, audited.
@@ -62,6 +57,21 @@ tables whose RLS posture denies ordinary application access. Enforced by
 When an identifier comes from a related row, authorize it in the same query or
 transaction that uses it. A prior UI filter, cache lookup, or separate
 read-then-write check is not an access-control boundary.
+
+### Matter visibility and stewardship
+
+Use `apps/api/src/lib/workspaces/visibility.ts` as the application owner of
+visibility predicates and steward checks. Creation defaults belong to
+`defaultMatterVisibilityFor` in `@stll/api-contract`, shared by the API and web
+client. Read authorized matter sets
+through `apps/api/src/lib/workspaces/authorized-workspace-ids.ts`; do not
+recreate the rule in individual readers.
+
+An `assigned_only` matter needs a usable lead: an internal organization member
+assigned to that matter. Preserve this invariant when changing visibility,
+lead, matter membership, or organization membership and role. The database
+refuses writes that leave such a matter without a usable lead; application
+checks provide the actionable error before that constraint is reached.
 
 ### Server-bound audit events
 

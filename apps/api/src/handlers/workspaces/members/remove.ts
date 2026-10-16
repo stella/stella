@@ -241,7 +241,10 @@ export const removeWorkspaceMemberHandler = async function* ({
       );
 
       const workspaceRows = await tx
-        .select({ leadUserId: workspaces.leadUserId })
+        .select({
+          leadUserId: workspaces.leadUserId,
+          organizationId: workspaces.organizationId,
+        })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
         .for("update");
@@ -320,6 +323,27 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
+      let leadWasCleared = false;
+      if (workspace.leadUserId === userId) {
+        await restoreMatterStewards(tx, {
+          organizationId: workspace.organizationId,
+          workspaceIds: [workspaceId],
+          departingUserId: userId,
+          recordAuditEvent,
+        });
+        const clearedLeads = await tx
+          .update(workspaces)
+          .set({ leadUserId: null })
+          .where(
+            and(
+              eq(workspaces.id, workspaceId),
+              eq(workspaces.leadUserId, userId),
+            ),
+          )
+          .returning({ id: workspaces.id });
+        leadWasCleared = clearedLeads.length > 0;
+      }
+
       await clearMemberAssignments({
         tx,
         scope: { type: "workspace", workspaceId },
@@ -393,19 +417,6 @@ export const removeWorkspaceMemberHandler = async function* ({
             now,
           }),
         );
-      }
-
-      const leadWasCleared = workspace.leadUserId === userId;
-      if (leadWasCleared) {
-        await tx
-          .update(workspaces)
-          .set({ leadUserId: null })
-          .where(eq(workspaces.id, workspaceId));
-        await restoreMatterStewards(tx, {
-          workspaceIds: [workspaceId],
-          departingUserId: userId,
-          recordAuditEvent,
-        });
       }
 
       const closedSessions = await tx

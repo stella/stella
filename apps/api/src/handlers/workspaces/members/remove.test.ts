@@ -134,15 +134,10 @@ describe("removeWorkspaceMember", () => {
     const updates: { table: string; value: unknown }[] = [];
     const insertedAuditLogs: unknown[] = [];
     const deletedWorkspaceMembers: unknown[] = [];
-    let stewardRepairs = 0;
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      // The lead's matter restores its steward in the same transaction.
-      execute: async () => {
-        stewardRepairs += 1;
-        return [];
-      },
+      execute: async () => [],
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
@@ -152,13 +147,24 @@ describe("removeWorkspaceMember", () => {
             }),
           }),
           where: () => ({
-            orderBy: async () => await createSelectQueryMock([]).from().where(),
+            orderBy: () => ({
+              limit: () => ({
+                for: async () =>
+                  table === workspaces ? [{ id: "ws_test123" }] : [],
+              }),
+            }),
             limit: () => ({
               for: async () => [],
             }),
             for: async () => {
               if (table === workspaces) {
-                return [{ leadUserId: "user_lead" }];
+                return [
+                  {
+                    id: "ws_test123",
+                    leadUserId: "user_lead",
+                    organizationId: "org_test123",
+                  },
+                ];
               }
               if (table === workspaceMembers) {
                 return [
@@ -211,6 +217,7 @@ describe("removeWorkspaceMember", () => {
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     // Signing transitions require a held session; this fixture has none.
     expect(updates).toEqual([
+      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
@@ -223,7 +230,6 @@ describe("removeWorkspaceMember", () => {
         table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
-      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { status: "cancelled", closedAt: expect.any(Date) },
@@ -258,6 +264,5 @@ describe("removeWorkspaceMember", () => {
       "ws_test123",
       "user_lead",
     );
-    expect(stewardRepairs).toBe(1);
   });
 });

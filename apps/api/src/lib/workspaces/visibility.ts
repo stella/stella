@@ -17,7 +17,10 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import {
+  lockMatterAccessWorkspaceRows,
+  withAggregateRowQuery,
+} from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 
 /** The visibilities owners and admins reach without an assignment. */
@@ -123,7 +126,7 @@ export const hasUsableSteward = async (
   }
   // The matter row is the invariant's lock: holding it before reading the
   // lead's role and assignment means a concurrent role change (whose member
-  // trigger share-locks this row) or lead removal either committed already
+  // trigger locks this row) or lead removal either committed already
   // and is read here, or waits for this transaction and then sees its result.
   await withAggregateRowQuery({
     tx,
@@ -176,28 +179,24 @@ const internalRoles = sql.join(
 const restoredSteward = v.object({
   id: v.string(),
   lead_user_id: v.nullable(v.string()),
+  old_lead_user_id: v.nullable(v.string()),
 });
 
 /**
- * Restore the steward invariant on these matters after a lead lost their
- * assignment or membership: an assigned-only matter without a usable lead
- * takes its earliest assigned internal member (by assignment time, then id)
- * as lead; with none left it reopens to owners and admins plus assigned
- * members, so it can always be managed. The departing user is never chosen,
- * whether or not their rows are already gone. Each repair is audited.
- *
- * Callers hold the matter rows already (they cleared the lead with an
- * UPDATE in the same transaction), so a concurrent role change of the chosen
- * lead, whose member trigger share-locks those rows, waits for this
- * transaction and then refuses, or committed first and is read here.
+ * Hand over assigned-only matters before a lead's assignment or membership
+ * leaves. With no other internal assignee, widen to admins-and-assigned in
+ * the same audited update that clears the lead. The departing user is never
+ * chosen. Locks serialize the candidate read with membership/assignment loss.
  */
 export const restoreMatterStewards = async (
   tx: Transaction,
   {
+    organizationId,
     workspaceIds,
     departingUserId,
     recordAuditEvent,
   }: {
+    organizationId: SafeId<"organization">;
     workspaceIds: readonly SafeId<"workspace">[];
     departingUserId: string;
     recordAuditEvent: AuditRecorder;
@@ -206,16 +205,27 @@ export const restoreMatterStewards = async (
   if (workspaceIds.length === 0) {
     return;
   }
+  const requested = [...new Set(workspaceIds)];
+  const locked = await lockMatterAccessWorkspaceRows({
+    tx,
+    organizationId,
+    workspaceIds: requested,
+    mode: "update",
+  });
+  if (locked.length !== requested.length) {
+    panic("Cannot repair a missing or out-of-organization matter");
+  }
   const ids = sql.join(
-    workspaceIds.map((id) => sql`${id}::uuid`),
+    requested.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
   const repaired = executedRows(
     await tx.execute(sql`
       WITH broken AS (
-        SELECT w.id, w.organization_id
+        SELECT w.id, w.organization_id, w.lead_user_id AS old_lead_user_id
         FROM workspaces AS w
         WHERE w.id IN (${ids})
+          AND w.organization_id = ${organizationId}
           AND w.visibility = ${MATTER_VISIBILITY.assignedOnly}
           AND NOT EXISTS (
             SELECT 1
@@ -250,7 +260,7 @@ export const restoreMatterStewards = async (
       FROM broken
       LEFT JOIN steward ON steward.workspace_id = broken.id
       WHERE w.id = broken.id
-      RETURNING w.id, w.lead_user_id
+      RETURNING w.id, w.lead_user_id, broken.old_lead_user_id
     `),
   ).map((row) => v.parse(restoredSteward, row));
   if (repaired.length === 0) {
@@ -258,24 +268,28 @@ export const restoreMatterStewards = async (
   }
   await recordAuditEvent(
     tx,
-    repaired.map(({ id, lead_user_id: leadUserId }) => ({
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-      resourceId: id,
-      changes:
-        leadUserId === null
-          ? {
-              visibility: {
-                old: MATTER_VISIBILITY.assignedOnly,
-                new: MATTER_VISIBILITY.adminsAndAssigned,
-              },
-            }
-          : { leadUserId: { old: null, new: leadUserId } },
-      metadata: {
-        cause: "matter_steward_restored",
-        ...(leadUserId === null ? { visibilityChange: "widened" } : {}),
-      },
-    })),
+    repaired.map(
+      ({ id, lead_user_id: leadUserId, old_lead_user_id: oldLeadUserId }) => ({
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: id,
+        changes: {
+          leadUserId: { old: oldLeadUserId, new: leadUserId },
+          ...(leadUserId === null
+            ? {
+                visibility: {
+                  old: MATTER_VISIBILITY.assignedOnly,
+                  new: MATTER_VISIBILITY.adminsAndAssigned,
+                },
+              }
+            : {}),
+        },
+        metadata: {
+          cause: "matter_steward_restored",
+          ...(leadUserId === null ? { visibilityChange: "widened" } : {}),
+        },
+      }),
+    ),
   );
 };
 

@@ -1467,16 +1467,11 @@ export const removeOrganizationMemberInTransaction = async (
     abortTransaction(timerClose.error);
   }
   if (reassignTo) {
-    const replacement = await tx
-      .select({ id: member.id })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, reassignTo),
-        ),
-      );
-    if (reassignTo === userId || replacement.length === 0) {
+    const replacement = await tx.query.member.findFirst({
+      columns: { id: true },
+      where: { organizationId, userId: reassignTo },
+    });
+    if (reassignTo === userId || replacement === undefined) {
       abortTransaction(
         new HandlerError({
           status: 400,
@@ -1485,6 +1480,39 @@ export const removeOrganizationMemberInTransaction = async (
       );
     }
   }
+  const ledMatters = await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.leadUserId, userId),
+      ),
+    );
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId: null,
+    userId: actorUserId,
+    execution: {
+      performer: { type: "user", id: actorUserId },
+      trigger: { type: "system", source: "membership_removal" },
+    },
+  });
+  await restoreMatterStewards(tx, {
+    organizationId,
+    workspaceIds: ledMatters.map(({ id }) => id),
+    departingUserId: userId,
+    recordAuditEvent,
+  });
+  await tx
+    .update(workspaces)
+    .set({ leadUserId: null })
+    .where(
+      and(
+        eq(workspaces.organizationId, organizationId),
+        eq(workspaces.leadUserId, userId),
+      ),
+    );
   // Workspace locks precede run, step, obligation and entity cleanup.
   await cancelMemberFlowRuns({
     tx,
@@ -1501,35 +1529,11 @@ export const removeOrganizationMemberInTransaction = async (
     actorUserId,
     reassignTo,
   });
-  const ledMatters = await tx
-    .update(workspaces)
-    .set({ leadUserId: null })
-    .where(
-      and(
-        eq(workspaces.organizationId, organizationId),
-        eq(workspaces.leadUserId, userId),
-      ),
-    )
-    .returning({ id: workspaces.id });
   await cancelMemberDesktopSessions({
     tx,
     organizationId,
     userId,
     actorUserId,
-  });
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    organizationId,
-    workspaceId: null,
-    userId: actorUserId,
-    execution: {
-      performer: { type: "user", id: actorUserId },
-      trigger: { type: "system", source: "membership_removal" },
-    },
-  });
-  await restoreMatterStewards(tx, {
-    workspaceIds: ledMatters.map(({ id }) => id),
-    departingUserId: userId,
-    recordAuditEvent,
   });
   await clearMemberPresence({
     tx,

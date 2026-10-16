@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -252,6 +254,94 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
     }
 
     throw new Error("Expected the integration test transaction to roll back");
+  });
+
+  test("removing a private matter lead hands stewardship to its remaining internal assignee", async () => {
+    const outcome = await Result.tryPromise(
+      async () =>
+        await testDb.transaction(async (outerTx) => {
+          await outerTx
+            .update(workspaces)
+            .set({
+              leadUserId: ids.userA1,
+              visibility: MATTER_VISIBILITY.assignedOnly,
+            })
+            .where(eq(workspaces.id, ids.wsA2));
+          const rlsTx = markRlsDatabase(outerTx);
+          const safeDb = asTestRaw<SafeDb>(
+            createMembershipSafeDb(rlsTx, {
+              organizationId: ids.orgA,
+              serverValidatedWorkspaceIds: [ids.wsA2],
+              userId: ids.userA2,
+            }),
+          );
+          const recordAuditEvent = createAuditRecorder({
+            organizationId: ids.orgA,
+            workspaceId: ids.wsA2,
+            userId: ids.userA2,
+            request: new Request(
+              `https://api.example.test/v1/workspaces/${ids.wsA2}/members/${ids.userA1}`,
+            ),
+            server: null,
+          });
+          const result = await Result.gen(() =>
+            removeWorkspaceMemberHandler({
+              safeDb,
+              workspaceId: ids.wsA2,
+              userId: ids.userA1,
+              actorUserId: ids.userA2,
+              recordAuditEvent,
+              dependencies,
+            }),
+          );
+          expect(result).toEqual(Result.ok({ id: ids.memberA1wsA2 }));
+          await outerTx.execute(sql`RESET ROLE`);
+          expect(
+            await outerTx
+              .select({
+                leadUserId: workspaces.leadUserId,
+                visibility: workspaces.visibility,
+              })
+              .from(workspaces)
+              .where(eq(workspaces.id, ids.wsA2)),
+          ).toEqual([
+            {
+              leadUserId: ids.userA2,
+              visibility: MATTER_VISIBILITY.assignedOnly,
+            },
+          ]);
+          expect(
+            await outerTx
+              .select({ userId: workspaceMembers.userId })
+              .from(workspaceMembers)
+              .where(eq(workspaceMembers.workspaceId, ids.wsA2)),
+          ).toEqual([{ userId: ids.userA2 }]);
+          expect(
+            await outerTx
+              .select({
+                changes: auditLogs.changes,
+                metadata: auditLogs.metadata,
+              })
+              .from(auditLogs)
+              .where(eq(auditLogs.resourceId, ids.wsA2)),
+          ).toEqual([
+            {
+              changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
+              metadata: expect.objectContaining({
+                cause: "matter_steward_restored",
+              }),
+            },
+          ]);
+          outerTx.rollback();
+        }),
+    );
+    if (outcome.isErr()) {
+      expect(outcome.error.cause).toBeInstanceOf(TransactionRollbackError);
+      return;
+    }
+    expect.unreachable(
+      "Expected the integration test transaction to roll back",
+    );
   });
 
   test("the synchronous cap excludes closed ownership history", async () => {

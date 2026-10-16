@@ -58,7 +58,7 @@ EXECUTE FUNCTION public.workspaces_legacy_visibility();
 
 -- No database default: the application always states a visibility. A writer
 -- that predates this column (an API instance still rolling out) omits it, and
--- the trigger below gives that row the visibility the old rule implied, so a
+-- the preceding trigger gives that row the visibility the old rule implied, so a
 -- clientless matter created mid-rollout stays assigned_only rather than
 -- defaulting to admins_and_assigned. CONTRACT STEP: drop the trigger and the
 -- function in a later release, once no such writer can remain.
@@ -66,15 +66,10 @@ EXECUTE FUNCTION public.workspaces_legacy_visibility();
 ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
 --> statement-breakpoint
 
--- The steward invariant under concurrency. A role change runs in the
--- membership plugin's own transaction, after the readable refusal in its
--- hook, so the guard holding the invariant lives here, on the member row the
--- change updates. Lock order matches the registered aggregate ranks: the
--- member row first (held by the UPDATE), then the matters the member is
--- assigned to FOR SHARE. Narrowing a matter or changing its lead holds the
--- matter row FOR UPDATE before reading the lead's role, so the two serialize
--- on the matter row: whichever commits second sees the first and is refused.
--- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked; runs only as a member role-update trigger, writes nothing, and share-locks then reads the matters the updated member is assigned to in that member's organization
+-- Membership loss locks all affected matters before checking the current
+-- state in a separate statement. This serializes with narrowing and handoff,
+-- including writers that predate application-level steward repair.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the persisted member's organization and assignments, locks affected matter rows, refuses stewardship loss, and writes nothing
 CREATE FUNCTION "enforce_member_role_keeps_matter_leads"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -82,29 +77,42 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-  -- Lock every assignment before checking visibility. A filtered EXISTS can
-  -- skip an open matter that another transaction is concurrently narrowing.
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.organization_id = OLD.organization_id
+      AND NEW.user_id = OLD.user_id
+      AND NEW.role IN ('owner', 'admin', 'member', 'intern') THEN
+      RETURN NEW;
+    END IF;
+  ELSE
+    -- Deleting the organization removes its matters too. Its parent row is
+    -- already gone when cascading membership deletes run.
+    IF NOT EXISTS (SELECT 1 FROM public.organization WHERE id = OLD.organization_id) THEN
+      RETURN OLD;
+    END IF;
+  END IF;
+
   PERFORM w.id
   FROM public.workspaces AS w
-  JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
-  WHERE wm.user_id = NEW.user_id
-    AND w.organization_id = NEW.organization_id
+  WHERE w.organization_id = OLD.organization_id
+    AND (w.lead_user_id = OLD.user_id OR EXISTS (
+      SELECT 1 FROM public.workspace_members AS wm
+      WHERE wm.workspace_id = w.id AND wm.user_id = OLD.user_id
+    ))
   ORDER BY w.id
-  FOR SHARE OF w;
+  FOR UPDATE OF w;
 
-  -- This separate statement sees changes committed while the lock waited.
   IF EXISTS (
-    SELECT 1
-    FROM public.workspaces AS w
-    JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
-    WHERE wm.user_id = NEW.user_id
-      AND w.organization_id = NEW.organization_id
+    SELECT 1 FROM public.workspaces AS w
+    WHERE w.organization_id = OLD.organization_id
       AND w.visibility = 'assigned_only'
-      AND w.lead_user_id = NEW.user_id
+      AND w.lead_user_id = OLD.user_id
   ) THEN
     RAISE EXCEPTION 'member leads a matter visible to assigned members only'
       USING ERRCODE = 'check_violation',
             CONSTRAINT = 'member_role_keeps_matter_leads';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
   END IF;
   RETURN NEW;
 END;
@@ -117,6 +125,100 @@ BEFORE UPDATE OF "role" ON "member"
 FOR EACH ROW
 WHEN (NEW.role NOT IN ('owner', 'admin', 'member', 'intern'))
 EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();
+--> statement-breakpoint
+
+CREATE TRIGGER "member_identity_keeps_matter_leads"
+BEFORE DELETE OR UPDATE OF "organization_id", "user_id" ON "member"
+FOR EACH ROW
+EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();
+--> statement-breakpoint
+
+-- UPDATE already holds the decisive matter row. The membership and assignment
+-- loss triggers take that same row FOR UPDATE before deciding whether to refuse.
+-- A usable steward is internal, belongs to this organization, and is assigned.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; read-only trigger checks the updated matter's persisted membership and assignment under its existing row lock
+CREATE FUNCTION public.enforce_workspace_keeps_matter_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF NEW.visibility = 'assigned_only' AND NOT EXISTS (
+    SELECT 1 FROM public.member AS m
+    JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
+    WHERE m.organization_id = NEW.organization_id
+      AND m.user_id = NEW.lead_user_id
+      AND m.role IN ('owner', 'admin', 'member', 'intern')
+      AND wm.workspace_id = NEW.id
+  ) THEN
+    RAISE EXCEPTION 'assigned-only matter requires an assigned internal steward'
+      USING ERRCODE = 'check_violation',
+            CONSTRAINT = 'workspace_keeps_matter_lead';
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.enforce_workspace_keeps_matter_lead() FROM PUBLIC;--> statement-breakpoint
+
+CREATE TRIGGER "workspace_keeps_matter_lead"
+BEFORE UPDATE OF "lead_user_id", "visibility", "organization_id" ON "workspaces"
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_workspace_keeps_matter_lead();
+--> statement-breakpoint
+
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; locks the old assignment's matter, reads only its persisted steward rows, refuses losing a usable steward, and writes nothing
+CREATE FUNCTION public.enforce_assignment_keeps_matter_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.workspace_id = OLD.workspace_id AND NEW.user_id = OLD.user_id THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  -- An absent parent means the whole matter or organization is being deleted.
+  PERFORM w.id FROM public.workspaces AS w
+  JOIN public.organization AS o ON o.id = w.organization_id
+  WHERE w.id = OLD.workspace_id
+  FOR UPDATE OF w;
+
+  IF EXISTS (
+    SELECT 1 FROM public.workspaces AS w
+    JOIN public.organization AS o ON o.id = w.organization_id
+    WHERE w.id = OLD.workspace_id AND w.visibility = 'assigned_only'
+      AND NOT EXISTS (
+        SELECT 1 FROM public.member AS m
+        JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
+        WHERE m.organization_id = w.organization_id
+          AND m.user_id = w.lead_user_id
+          AND m.role IN ('owner', 'admin', 'member', 'intern')
+          AND wm.workspace_id = w.id
+          AND wm.id <> OLD.id
+      )
+  ) THEN
+    RAISE EXCEPTION 'assignment removal would leave an assigned-only matter without a steward'
+      USING ERRCODE = 'check_violation',
+            CONSTRAINT = 'assignment_keeps_matter_lead';
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.enforce_assignment_keeps_matter_lead() FROM PUBLIC;--> statement-breakpoint
+
+CREATE TRIGGER "assignment_keeps_matter_lead"
+BEFORE DELETE OR UPDATE OF "workspace_id", "user_id" ON "workspace_members"
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_assignment_keeps_matter_lead();
 --> statement-breakpoint
 
 -- Creating a matter: inserts the matter in the transaction's organization and,
