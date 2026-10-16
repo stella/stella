@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
       "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
+      "matterStewardHandoverRequired": "Übertragen Sie die betroffenen Akten einem anderen zugewiesenen internen Mitglied, bevor Sie fortfahren.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Name der Akte",
-      "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
+      "personalDescription": "Ohne Mandanten sehen nur Sie diese Akte. Sie können sie später teilen, indem Sie ändern, wer sie sehen kann."
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Keine passenden Mitglieder"
     },
+    "leadReadOnly": "Nur der aktuelle Lead oder ein Administrator kann den Lead ändern.",
     "lockMatter": "Sperren",
     "matterInfo": "Akteninformationen",
     "mattersCount": "{count, plural, one {# Akte} other {# Akten}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Dritte Partei",
         "witness": "Zeuge"
       },
-      "personalDescription": "Persönliche Akten sind nur für Sie sichtbar. Stufen Sie sie auf einen Klienten hoch, um sie mit dem Team zu teilen.",
-      "personalLabel": "Persönlich",
-      "promoteCta": "Zu Klient hochstufen",
-      "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
-      "promotedSuccess": "Akte hochgestuft",
+      "personalDescription": "Diese Akte hat keinen Klienten. Einen Klienten hinzuzufügen ändert nicht, wer die Akte sieht.",
+      "personalLabel": "Ohne Klient",
+      "promoteCta": "Klient festlegen",
+      "promoteDescription": "Wählen Sie den Klienten für diese Akte. Wer die Akte sieht, bleibt unverändert.",
+      "promotedSuccess": "Klient festgelegt",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Voreinstellung verwenden…",
       "viewSettings": "Ansichtseinstellungen"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratoren und zugewiesene Mitglieder",
+      "adminsAndAssignedDescription": "Eigentümer und Administratoren des Teams sowie die Personen, die Sie zur Akte hinzufügen.",
+      "adminsAndAssignedSummary": "Eigentümer und Administratoren des Teams sowie die Mitglieder der Akte.",
+      "allMembers": "Alle internen Teammitglieder",
+      "allMembersDescription": "Jedes interne Teammitglied kann sie öffnen, ohne hinzugefügt zu werden. Externe Nutzer nicht.",
+      "allMembersSummary": "Jedes interne Teammitglied sowie die Mitglieder der Akte.",
+      "assignedOnly": "Nur zugewiesene Mitglieder",
+      "assignedOnlyDescription": "Nur die Personen, die Sie zur Akte hinzufügen. Eigentümer und Administratoren können sie erst öffnen, wenn sie hinzugefügt werden.",
+      "assignedOnlySummary": "Nur die Mitglieder der Akte.",
+      "badgeAllMembers": "Ganzes Team",
+      "badgeAllMembersTitle": "Jedes interne Teammitglied kann diese Akte öffnen",
+      "badgeAssignedOnly": "Nur zugewiesen",
+      "badgeAssignedOnlyTitle": "Nur die zur Akte hinzugefügten Personen können sie öffnen",
+      "confirmAction": "Mehr Personen zeigen",
+      "confirmCancel": "Zugriff beibehalten",
+      "confirmDescriptionAdmins": "Eigentümer und Administratoren des Teams können dann <bdi>{matterName}</bdi> und alles darin öffnen: Dokumente, Aufgaben, Zeiteinträge und KI-Chats zur Akte.",
+      "confirmDescriptionAllMembers": "Jedes interne Teammitglied kann dann <bdi>{matterName}</bdi> und alles darin öffnen: Dokumente, Aufgaben, Zeiteinträge und KI-Chats zur Akte.",
+      "confirmNote": "Bisherige Mitglieder behalten ihren Zugriff. Die Änderung wird im Aktivitätsprotokoll festgehalten, und Sie können sie später wieder einschränken.",
+      "confirmTitle": "Akte für mehr Personen sichtbar machen?",
+      "label": "Wer diese Akte sehen kann",
+      "settingLabel": "Wer sieht",
+      "summaryReadOnly": "{summary} Nur der Lead der Akte oder ein Administrator kann das ändern.",
+      "updated": "Zugriff aktualisiert"
     },
     "workflow": {
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",

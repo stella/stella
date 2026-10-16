@@ -12,6 +12,7 @@ import {
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
@@ -308,12 +309,14 @@ describe("duplicate name collisions", () => {
     });
     await tx.insert(workspaces).values([
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: targetWorkspaceId,
         organizationId: seededOrganizationId,
         name: "Target matter",
         reference: "copy-target",
       },
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: otherWorkspaceId,
         organizationId: seededOrganizationId,
         name: "Other matter",

@@ -4,7 +4,11 @@ import { eq, inArray } from "drizzle-orm";
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb } from "@/api/db/root";
-import { desktopEditHandoffs, workspaces } from "@/api/db/schema";
+import {
+  desktopEditHandoffs,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -17,6 +21,7 @@ import {
   createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -33,7 +38,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let db: Pick<typeof rootDb, "update" | "select">;
 const handoffIds: SafeId<"desktopEditHandoff">[] = [];
-/** A matter without a client, reached through membership only. */
+/** A matter without a client, visible to assigned members only. */
 const personalMatterId = createSafeId<"workspace">();
 
 beforeAll(async () => {
@@ -41,13 +46,27 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
-  await testDb.insert(workspaces).values({
-    id: personalMatterId,
-    organizationId: ids.orgA,
-    clientId: null,
-    name: "Personal matter",
-    reference: `REF-${personalMatterId}`,
-    status: "active",
+  await testDb.transaction(async (tx) => {
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
+        {
+          id: personalMatterId,
+          organizationId: ids.orgA,
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA2,
+          name: "Personal matter",
+          reference: `REF-${personalMatterId}`,
+          status: "active",
+        },
+      ],
+    });
+    await tx.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: personalMatterId,
+      userId: ids.userA2,
+    });
   });
 });
 

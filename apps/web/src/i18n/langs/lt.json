@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
       "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
       "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
+      "matterStewardHandoverRequired": "Prieš tęsdami perduokite susijusias bylas kitam joms priskirtam vidiniam nariui.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Bylos pavadinimas",
-      "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
+      "personalDescription": "Be kliento bylą matote tik jūs. Vėliau galite ja pasidalyti pakeisdami, kas ją gali matyti."
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Atitinkančių narių nėra"
     },
+    "leadReadOnly": "Atsakingą asmenį gali pakeisti tik dabartinis atsakingas asmuo arba administratorius.",
     "lockMatter": "Užrakinti",
     "matterInfo": "Bylos informacija",
     "mattersCount": "{count, plural, one {# byla} few {# bylos} many {# bylos} other {# bylų}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Trečioji šalis",
         "witness": "Liudytojas"
       },
-      "personalDescription": "Asmeninės bylos yra privačios. Paaukštinkite į klientinę, kad pasidalintumėte su komanda.",
-      "personalLabel": "Asmeninė",
-      "promoteCta": "Paaukštinti į klientinę",
-      "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
-      "promotedSuccess": "Byla paaukštinta",
+      "personalDescription": "Ši byla neturi kliento. Pridėjus klientą nesikeičia, kas mato bylą.",
+      "personalLabel": "Be kliento",
+      "promoteCta": "Nustatyti klientą",
+      "promoteDescription": "Pasirinkite šios bylos klientą. Kas mato bylą, nesikeičia.",
+      "promotedSuccess": "Klientas nustatytas",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Naudoti išankstinį nustatymą…",
       "viewSettings": "Rodinio nustatymai"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratoriai ir priskirti nariai",
+      "adminsAndAssignedDescription": "Komandos savininkai ir administratoriai bei žmonės, kuriuos pridėsite prie bylos.",
+      "adminsAndAssignedSummary": "Komandos savininkai ir administratoriai bei bylos nariai.",
+      "allMembers": "Visi vidiniai komandos nariai",
+      "allMembersDescription": "Kiekvienas vidinis komandos narys gali ją atidaryti nebūdamas pridėtas. Išoriniai naudotojai – ne.",
+      "allMembersSummary": "Kiekvienas vidinis komandos narys ir bylos nariai.",
+      "assignedOnly": "Tik priskirti nariai",
+      "assignedOnlyDescription": "Tik žmonės, kuriuos pridėsite prie bylos. Savininkai ir administratoriai negali jos atidaryti, kol nėra pridėti.",
+      "assignedOnlySummary": "Tik bylos nariai.",
+      "badgeAllMembers": "Visa komanda",
+      "badgeAllMembersTitle": "Šią bylą gali atidaryti kiekvienas vidinis komandos narys",
+      "badgeAssignedOnly": "Tik priskirti",
+      "badgeAssignedOnlyTitle": "Šią bylą gali atidaryti tik prie jos pridėti žmonės",
+      "confirmAction": "Rodyti daugiau žmonių",
+      "confirmCancel": "Palikti dabartinę prieigą",
+      "confirmDescriptionAdmins": "Komandos savininkai ir administratoriai galės atidaryti bylą <bdi>{matterName}</bdi> ir visą jos turinį: su byla susietus dokumentus, užduotis, laiko įrašus ir DI pokalbius.",
+      "confirmDescriptionAllMembers": "Kiekvienas vidinis komandos narys galės atidaryti bylą <bdi>{matterName}</bdi> ir visą jos turinį: su byla susietus dokumentus, užduotis, laiko įrašus ir DI pokalbius.",
+      "confirmNote": "Esami nariai išsaugo prieigą. Pakeitimas įrašomas į veiklos žurnalą, o vėliau prieigą galite vėl susiaurinti.",
+      "confirmTitle": "Rodyti bylą daugiau žmonių?",
+      "label": "Kas mato šią bylą",
+      "settingLabel": "Kas mato",
+      "summaryReadOnly": "{summary} Tai pakeisti gali tik už bylą atsakingas asmuo arba administratorius.",
+      "updated": "Prieiga atnaujinta"
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną DI savybę",

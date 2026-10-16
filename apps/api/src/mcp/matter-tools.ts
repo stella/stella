@@ -5,6 +5,7 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
+  MATTER_VISIBILITIES,
   resourceRef,
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
@@ -70,6 +71,7 @@ import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
@@ -93,7 +95,10 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -317,6 +322,14 @@ const saveMatterArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      visibility: v.optional(
+        v.pipe(
+          v.picklist(MATTER_VISIBILITIES),
+          v.description(
+            "Access: all_members = internal members; admins_and_assigned = owners, admins and assigned members; assigned_only = assigned members. Defaults: with client, admins_and_assigned; otherwise assigned_only. Later client changes preserve visibility. Only the lead, owner or admin may update it.",
+          ),
+        ),
+      ),
     }),
     // Creating (no matter_id) requires a name.
     v.forward(
@@ -346,15 +359,25 @@ const saveMatterArgsSchema = nullAsAbsent(
         ["reference"],
         ["billing_reference"],
         ["status"],
+        ["visibility"],
       ],
-      ({ matter_id, name, client_id, reference, billing_reference, status }) =>
+      ({
+        matter_id,
+        name,
+        client_id,
+        reference,
+        billing_reference,
+        status,
+        visibility,
+      }) =>
         matter_id === undefined ||
         name !== undefined ||
         client_id !== undefined ||
         reference !== undefined ||
         billing_reference !== undefined ||
-        status !== undefined,
-      "Provide at least one change: name, client_id, reference, billing_reference, or status",
+        status !== undefined ||
+        visibility !== undefined,
+      "Provide at least one change: name, client_id, reference, billing_reference, status, or visibility",
     ),
   ),
 );
@@ -407,6 +430,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.client_id === undefined
             ? {}
             : { clientId: brandPersistedContactId(input.client_id) }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
         },
       }),
     );
@@ -443,7 +469,8 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       input.name === undefined &&
       input.client_id === undefined &&
       input.reference === undefined &&
-      input.billing_reference === undefined;
+      input.billing_reference === undefined &&
+      input.visibility === undefined;
     if (!isPureUnarchive) {
       if (input.status === "archived") {
         return errorResult("Matter is already archived");
@@ -458,10 +485,18 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     input.name !== undefined ||
     input.client_id !== undefined ||
     input.reference !== undefined ||
-    input.billing_reference !== undefined
+    input.billing_reference !== undefined ||
+    input.visibility !== undefined
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: context.userId,
+          managesOrganizationMatters: hasManagementPermission(
+            mcpMemberAuthority(context),
+            { workspace: ["update"] },
+          ),
+        },
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -477,6 +512,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.billing_reference === undefined
             ? {}
             : { billingReference: input.billing_reference }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
         },
       }),
     );

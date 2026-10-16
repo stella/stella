@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
       "matterContactCapacityExceeded": "Ce dossier contient plus de contacts qu’il n’est possible d’afficher. Retirez des liens visibles vers des contacts pour afficher les contacts restants.",
       "matterContactCapacityReached": "Ce dossier a atteint la limite de contacts. Retirez un lien vers un contact avant d’en ajouter un autre.",
+      "matterStewardHandoverRequired": "Avant de continuer, confiez les dossiers concernés à un autre membre interne qui y est affecté.",
       "mcpAuthorizationApprovalRequired": "Un administrateur doit approuver ce connecteur avant que vous puissiez vous connecter.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Nom du dossier",
-      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
+      "personalDescription": "Sans client, vous êtes seul à voir ce dossier. Vous pourrez le partager plus tard en modifiant qui peut le voir."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Aucun membre correspondant"
     },
+    "leadReadOnly": "Seul le responsable actuel ou un administrateur peut changer le responsable.",
     "lockMatter": "Verrouiller",
     "matterInfo": "Informations sur le dossier",
     "mattersCount": "{count, plural, one {# dossier} other {# dossiers}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
-      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
-      "personalLabel": "Personnel",
-      "promoteCta": "Promouvoir au client",
-      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
-      "promotedSuccess": "Dossier promu",
+      "personalDescription": "Ce dossier n'a pas de client. En ajouter un ne change pas qui peut le voir.",
+      "personalLabel": "Sans client",
+      "promoteCta": "Définir le client",
+      "promoteDescription": "Choisissez le client de ce dossier. Les personnes qui peuvent voir le dossier restent les mêmes.",
+      "promotedSuccess": "Client défini",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Utiliser le préréglage…",
       "viewSettings": "Paramètres de la vue"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administrateurs et membres affectés",
+      "adminsAndAssignedDescription": "Les propriétaires et administrateurs de l'équipe, et les personnes que vous ajoutez au dossier.",
+      "adminsAndAssignedSummary": "Les propriétaires et administrateurs de l'équipe, et les membres du dossier.",
+      "allMembers": "Tous les membres internes de l'équipe",
+      "allMembersDescription": "Chaque membre interne de l'équipe peut l'ouvrir sans y être ajouté. Les utilisateurs externes, non.",
+      "allMembersSummary": "Chaque membre interne de l'équipe, et les membres du dossier.",
+      "assignedOnly": "Membres affectés uniquement",
+      "assignedOnlyDescription": "Seulement les personnes que vous ajoutez au dossier. Les propriétaires et administrateurs ne peuvent pas l'ouvrir sans y être ajoutés.",
+      "assignedOnlySummary": "Seuls les membres du dossier.",
+      "badgeAllMembers": "Toute l'équipe",
+      "badgeAllMembersTitle": "Chaque membre interne de l'équipe peut ouvrir ce dossier",
+      "badgeAssignedOnly": "Affectés uniquement",
+      "badgeAssignedOnlyTitle": "Seules les personnes ajoutées à ce dossier peuvent l'ouvrir",
+      "confirmAction": "Montrer à plus de personnes",
+      "confirmCancel": "Garder l'accès actuel",
+      "confirmDescriptionAdmins": "Les propriétaires et administrateurs de l'équipe pourront ouvrir <bdi>{matterName}</bdi> et tout son contenu : documents, tâches, saisies de temps et conversations IA liées au dossier.",
+      "confirmDescriptionAllMembers": "Chaque membre interne de l'équipe pourra ouvrir <bdi>{matterName}</bdi> et tout son contenu : documents, tâches, saisies de temps et conversations IA liées au dossier.",
+      "confirmNote": "Les membres actuels conservent leur accès. La modification est inscrite au journal d'activité, et vous pourrez la restreindre à nouveau.",
+      "confirmTitle": "Montrer ce dossier à plus de personnes ?",
+      "label": "Qui peut voir ce dossier",
+      "settingLabel": "Qui voit",
+      "summaryReadOnly": "{summary} Seul le responsable du dossier ou un administrateur peut modifier ce réglage.",
+      "updated": "Accès mis à jour"
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",

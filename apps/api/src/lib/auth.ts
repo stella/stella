@@ -21,19 +21,11 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import {
-  and,
-  count,
-  eq,
-  exists,
-  inArray,
-  isNotNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -43,7 +35,7 @@ import { errorOutputLogger } from "@stll/errors";
 import {
   ac,
   assignableRoles,
-  CLIENT_MATTER_ADMIN_ROLES,
+  INTERNAL_MEMBER_ROLES,
   roles,
 } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
@@ -52,7 +44,7 @@ import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import { withMemberRoleStewardship, rootDb, rlsDb } from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -288,6 +280,10 @@ import {
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
+import {
+  leadsAssignedOnlyMatter,
+  reachesMatterWithoutAssignmentSql,
+} from "@/api/lib/workspaces/visibility";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -1284,11 +1280,35 @@ export const createAuth = (
     });
     return {
       ...adapter,
-      // The hook's preflight cannot hold a lock across this plugin write.
-      // Translate the database's final refusal at the adapter boundary.
+      // The plugin hook is outside its adapter write transaction. Acquire the
+      // stewardship prefix and perform role writes on the same connection.
       update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
         const update = await Result.tryPromise({
-          try: async () => await adapter.update<T>(args),
+          try: async () => {
+            if (args.model !== "member" || !("role" in args.update)) {
+              return await adapter.update<T>(args);
+            }
+            const selector = args.where.at(0);
+            if (
+              args.where.length !== 1 ||
+              selector?.field !== "id" ||
+              (selector.operator !== undefined && selector.operator !== "eq") ||
+              typeof selector.value !== "string"
+            ) {
+              return panic(
+                "Membership role update requires one member ID selector",
+              );
+            }
+            const memberId = selector.value;
+            return await withMemberRoleStewardship({
+              memberId,
+              write: async (tx) =>
+                await drizzleAdapter(
+                  tx,
+                  AUTH_DATABASE_ADAPTER_OPTIONS,
+                )(options).update<T>(args),
+            });
+          },
           catch: mapMembershipInvariantError,
         });
         if (Result.isError(update)) {
@@ -1554,6 +1574,27 @@ export const createAuth = (
           brandPersistedOrganizationId(org.id),
           newRole,
         );
+        if (
+          !INTERNAL_MEMBER_ROLES.some((role) => role === newRole) &&
+          (await createMembershipScopedDb(rlsDb, {
+            organizationId: brandPersistedOrganizationId(org.id),
+            userId: brandPersistedUserId(updatedMember.userId),
+            serverValidatedWorkspaceIds: [],
+          })(
+            async (tx) =>
+              await leadsAssignedOnlyMatter(tx, {
+                organizationId: brandPersistedOrganizationId(org.id),
+                userId: brandPersistedUserId(updatedMember.userId),
+              }),
+          ))
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+            affectedMatters: [],
+            message:
+              "Hand over the matters this member leads that are visible to assigned members only before changing their role.",
+          });
+        }
         if (newRole !== "owner") {
           await refuseLastOwnerChange(
             brandPersistedOrganizationId(org.id),
@@ -1625,6 +1666,9 @@ export const createAuth = (
                   {
                     message: error.message,
                     ...(error.code === undefined ? {} : { code: error.code }),
+                    ...(error.affectedMatters === undefined
+                      ? {}
+                      : { affectedMatters: error.affectedMatters }),
                     ...(error.retryable === undefined
                       ? {}
                       : { retryable: error.retryable }),
@@ -2553,13 +2597,7 @@ const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
       ),
   );
   // sql-perf-allow: bounded by one target workspace and organization membership keys
-  return or(
-    membershipExists,
-    and(
-      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-      isNotNull(workspaces.clientId),
-    ),
-  );
+  return or(membershipExists, reachesMatterWithoutAssignmentSql(member.role));
 };
 
 type WorkspaceMemberLookup = {

@@ -109,6 +109,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import { restoreMatterStewards } from "@/api/lib/workspaces/visibility";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
 //
@@ -133,20 +134,18 @@ export const ACCOUNT_DELETION_ERROR_CODE = {
 } as const;
 
 /**
- * 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction.
- * Fetch all organizations where the user is an owner, locking the member
- * rows to prevent concurrent modifications.
+ * Refuse erasure of the sole organization owner under the complete membership prefix.
  */
 export const assertUserIsNotSoleOrgOwner = async (
   tx: Transaction,
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<void> => {
+  await tryLockAccountMemberCleanup(tx, currentUserId);
   const ownedOrgs = await tx
     .select({ orgId: member.organizationId, orgName: organization.name })
     .from(member)
     .innerJoin(organization, eq(organization.id, member.organizationId))
-    .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")))
-    .for("update");
+    .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")));
 
   const ownedOrgIds = ownedOrgs.map((org) => org.orgId);
   const orgIdsWithOtherOwners = new Set(
@@ -162,7 +161,6 @@ export const assertUserIsNotSoleOrgOwner = async (
                 ne(member.userId, currentUserId),
               ),
             )
-            .for("update")
         ).map((row) => row.orgId)
       : [],
   );
@@ -312,8 +310,32 @@ export const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
  */
 export const clearWorkspaceLeadRole = async (
   tx: Transaction,
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<void> => {
+  await tryLockAccountMemberCleanup(tx, currentUserId);
+  const ledMatters = await tx
+    .select({
+      id: workspaces.id,
+      organizationId: workspaces.organizationId,
+    })
+    .from(workspaces)
+    .where(eq(workspaces.leadUserId, currentUserId));
+  for (const [organizationId, matters] of Map.groupBy(
+    ledMatters,
+    (matter) => matter.organizationId,
+  )) {
+    // db-await-in-loop: one repair statement per organization whose matters the account led
+    await restoreMatterStewards(tx, {
+      organizationId,
+      workspaceIds: matters.map(({ id }) => id),
+      departingUserId: currentUserId,
+      actorUserId: currentUserId,
+      recordAuditEvent: accountDeletionAuditRecorder(
+        organizationId,
+        currentUserId,
+      ),
+    });
+  }
   await tx
     .update(workspaces)
     .set({ leadUserId: null })
@@ -412,8 +434,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
-  // Organization membership -> affected matters (try) -> matter membership ->
-  // obligation/entity. Re-entrant when the caller already holds the prefix.
+  // Re-entrant when the account entry already holds the complete stewardship prefix.
   await tryLockAccountMemberCleanup(tx, currentUserId);
 
   const currentTaskAssignments = await selectActiveTaskAssignments(
@@ -728,6 +749,25 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   return taskReassignmentCount;
 };
 
+/** The account-deletion run's audit recorder for one organization. */
+const accountDeletionAuditRecorder = (
+  organizationId: SafeId<"organization">,
+  userId: SafeId<"user">,
+) =>
+  createBackgroundAuditRecorder({
+    execution: {
+      performer: {
+        id: "account-deletion",
+        name: "Account deletion",
+        type: "service",
+      },
+      trigger: { source: "account-deletion", type: "system" },
+    },
+    organizationId,
+    workspaceId: null,
+    userId,
+  });
+
 type AccountDeletionAuditEnvelope = {
   organizationId: SafeId<"organization">;
   event: AuditEvent;
@@ -749,19 +789,10 @@ const recordAccountDeletionAuditEvents = async (
   }
 
   for (const [organizationId, events] of eventsByOrganization) {
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      execution: {
-        performer: {
-          id: "account-deletion",
-          name: "Account deletion",
-          type: "service",
-        },
-        trigger: { source: "account-deletion", type: "system" },
-      },
+    const recordAuditEvent = accountDeletionAuditRecorder(
       organizationId,
-      workspaceId: null,
       userId,
-    });
+    );
     // db-await-in-loop: each organization's events already insert in one statement per org-bound recorder
     await recordAuditEvent(tx, events);
   }

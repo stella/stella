@@ -2933,6 +2933,11 @@
           "enum": ["active", "archived"],
           "type": "string",
           "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+        },
+        "visibility": {
+          "enum": ["all_members", "admins_and_assigned", "assigned_only"],
+          "type": "string",
+          "description": "Access: all_members = internal members; admins_and_assigned = owners, admins and assigned members; assigned_only = assigned members. Defaults: with client, admins_and_assigned; otherwise assigned_only. Later client changes preserve visibility. Only the lead, owner or admin may update it."
         }
       }
     },

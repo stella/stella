@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import { organization } from "@/api/db/auth-schema";
@@ -88,6 +89,7 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           });
           await setup.db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Projection matter",
@@ -95,6 +97,7 @@ if (!databaseUrl || !runPostgresTests) {
           });
           if (kind === "workspace" && parent === "workspace") {
             await setup.db.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: survivingWorkspaceId,
               organizationId,
               name: "Surviving matter",
@@ -440,6 +443,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         await setup.db.insert(workspaces).values(
           workspaceIds.map((id, index) => ({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id,
             organizationId,
             name: `Matter ${index}`,

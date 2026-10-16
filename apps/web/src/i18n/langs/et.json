@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
       "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
+      "matterStewardHandoverRequired": "Enne jätkamist andke asjaomased toimikud üle teisele neile määratud siseliikmele.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Toimiku nimi",
-      "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
+      "personalDescription": "Ilma kliendita näete toimikut ainult teie. Hiljem saate seda jagada, muutes, kes seda näeb."
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Sobivaid liikmeid pole"
     },
+    "leadReadOnly": "Vastutajat saab muuta ainult praegune vastutaja või administraator.",
     "lockMatter": "Lukusta",
     "matterInfo": "Toimiku andmed",
     "mattersCount": "{count, plural, one {# toimik} other {# toimikut}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Kolmas isik",
         "witness": "Tunnistaja"
       },
-      "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
-      "personalLabel": "Isiklik",
-      "promoteCta": "Eduta kliendile",
-      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
-      "promotedSuccess": "Toimik edutatud",
+      "personalDescription": "Sellel toimikul pole klienti. Kliendi lisamine ei muuda, kes toimikut näeb.",
+      "personalLabel": "Kliendita",
+      "promoteCta": "Määra klient",
+      "promoteDescription": "Valige selle toimiku klient. See, kes toimikut näeb, jääb samaks.",
+      "promotedSuccess": "Klient määratud",
       "removeClient": "Eemalda klient",
       "removeParty": "Eemalda osapool",
       "removePartyConfirm": "Kas olete kindel, et soovite selle osapoole toimikust eemaldada?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Kasuta eelseadet…",
       "viewSettings": "Vaate seaded"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administraatorid ja määratud liikmed",
+      "adminsAndAssignedDescription": "Meeskonna omanikud ja administraatorid ning inimesed, kelle toimikusse lisate.",
+      "adminsAndAssignedSummary": "Meeskonna omanikud ja administraatorid ning toimiku liikmed.",
+      "allMembers": "Kõik meeskonna sisemised liikmed",
+      "allMembersDescription": "Iga meeskonna sisemine liige saab selle avada ilma lisamata. Välised kasutajad mitte.",
+      "allMembersSummary": "Iga meeskonna sisemine liige ning toimiku liikmed.",
+      "assignedOnly": "Ainult määratud liikmed",
+      "assignedOnlyDescription": "Ainult inimesed, kelle toimikusse lisate. Omanikud ja administraatorid ei saa seda avada, kui neid pole lisatud.",
+      "assignedOnlySummary": "Ainult toimiku liikmed.",
+      "badgeAllMembers": "Kogu meeskond",
+      "badgeAllMembersTitle": "Seda toimikut saab avada iga meeskonna sisemine liige",
+      "badgeAssignedOnly": "Ainult määratud",
+      "badgeAssignedOnlyTitle": "Seda toimikut saavad avada ainult sinna lisatud inimesed",
+      "confirmAction": "Näita rohkematele",
+      "confirmCancel": "Jäta praegune juurdepääs",
+      "confirmDescriptionAdmins": "Meeskonna omanikud ja administraatorid saavad avada toimiku <bdi>{matterName}</bdi> ja kogu selle sisu: toimikuga seotud dokumendid, ülesanded, ajakanded ja AI-vestlused.",
+      "confirmDescriptionAllMembers": "Iga meeskonna sisemine liige saab avada toimiku <bdi>{matterName}</bdi> ja kogu selle sisu: toimikuga seotud dokumendid, ülesanded, ajakanded ja AI-vestlused.",
+      "confirmNote": "Praegused liikmed säilitavad juurdepääsu. Muudatus salvestatakse tegevuslogisse ja hiljem saab juurdepääsu uuesti piirata.",
+      "confirmTitle": "Kas näidata toimikut rohkematele inimestele?",
+      "label": "Kes seda toimikut näeb",
+      "settingLabel": "Kes näeb",
+      "summaryReadOnly": "{summary} Seda saab muuta ainult toimiku vastutaja või administraator.",
+      "updated": "Juurdepääs uuendatud"
     },
     "workflow": {
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",

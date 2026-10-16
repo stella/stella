@@ -7,6 +7,7 @@ import nodePath from "node:path";
 
 import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
 
+import { readMatterVisibilityCutoverSql } from "@/api/db/matter-visibility-sql";
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
@@ -15,6 +16,11 @@ const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260710173000_scalable_workspace_authorization",
+  "migration.sql",
+);
+const MATTER_VISIBILITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261016100100_matter_visibility",
   "migration.sql",
 );
 const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
@@ -284,6 +290,21 @@ export const installPgliteWorkspaceAccessObjects = async (
   ];
   for (const migrationPath of migrationPaths) {
     await installPgliteMigration({ db, migrationPath });
+  }
+  // The schema push supplies the column; replay only functions/triggers and
+  // the online phase's access cutover over main's authorization objects.
+  const visibilityStatements = readMigrationStatements(
+    MATTER_VISIBILITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    /^(?:CREATE (?:OR REPLACE )?FUNCTION|CREATE (?:CONSTRAINT )?TRIGGER|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+      executableSql(statement),
+    ),
+  );
+  for (const statement of visibilityStatements) {
+    await db.execute(sql.raw(statement));
+  }
+  for (const statement of readMatterVisibilityCutoverSql()) {
+    await db.execute(sql.raw(statement));
   }
   // The replay above rewrites every `workspace_*` policy to the plain matter
   // check, so a table whose policies carry a further predicate in the schema

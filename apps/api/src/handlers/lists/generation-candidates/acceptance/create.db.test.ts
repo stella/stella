@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
 
@@ -220,6 +221,7 @@ const seedAcceptance = async ({
       createdAt: new Date(),
     });
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Candidate acceptance matter",

@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
       "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
       "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
+      "matterStewardHandoverRequired": "Pirms turpināšanas nododiet attiecīgās lietas citam tām piešķirtam iekšējam dalībniekam.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Lietas nosaukums",
-      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
+      "personalDescription": "Bez klienta lietu redzat tikai jūs. Vēlāk to varat kopīgot, mainot, kas to var redzēt."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Nav atbilstošu dalībnieku"
     },
+    "leadReadOnly": "Atbildīgo var mainīt tikai pašreizējais atbildīgais vai administrators.",
     "lockMatter": "Bloķēt",
     "matterInfo": "Lietas informācija",
     "mattersCount": "{count, plural, zero {# lietu} one {# lieta} other {# lietas}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
-      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
-      "personalLabel": "Personīga",
-      "promoteCta": "Paaugstināt klientam",
-      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
-      "promotedSuccess": "Lieta paaugstināta",
+      "personalDescription": "Šai lietai nav klienta. Klienta pievienošana nemaina, kas redz lietu.",
+      "personalLabel": "Bez klienta",
+      "promoteCta": "Iestatīt klientu",
+      "promoteDescription": "Izvēlieties šīs lietas klientu. Tas, kas redz lietu, nemainās.",
+      "promotedSuccess": "Klients iestatīts",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Lietot iepriekšiestatījumu…",
       "viewSettings": "Skata iestatījumi"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratori un piešķirtie dalībnieki",
+      "adminsAndAssignedDescription": "Komandas īpašnieki un administratori, kā arī cilvēki, kurus pievienosiet lietai.",
+      "adminsAndAssignedSummary": "Komandas īpašnieki un administratori, kā arī lietas dalībnieki.",
+      "allMembers": "Visi komandas iekšējie dalībnieki",
+      "allMembersDescription": "Ikviens komandas iekšējais dalībnieks to var atvērt, netiekot pievienots. Ārējie lietotāji nevar.",
+      "allMembersSummary": "Ikviens komandas iekšējais dalībnieks, kā arī lietas dalībnieki.",
+      "assignedOnly": "Tikai piešķirtie dalībnieki",
+      "assignedOnlyDescription": "Tikai cilvēki, kurus pievienosiet lietai. Īpašnieki un administratori to nevar atvērt, ja vien viņi nav pievienoti.",
+      "assignedOnlySummary": "Tikai lietas dalībnieki.",
+      "badgeAllMembers": "Visa komanda",
+      "badgeAllMembersTitle": "Šo lietu var atvērt ikviens komandas iekšējais dalībnieks",
+      "badgeAssignedOnly": "Tikai piešķirtie",
+      "badgeAssignedOnlyTitle": "Šo lietu var atvērt tikai tai pievienotie cilvēki",
+      "confirmAction": "Rādīt vairāk cilvēkiem",
+      "confirmCancel": "Saglabāt pašreizējo piekļuvi",
+      "confirmDescriptionAdmins": "Komandas īpašnieki un administratori varēs atvērt lietu <bdi>{matterName}</bdi> un visu tās saturu: ar lietu saistītos dokumentus, uzdevumus, laika ierakstus un AI tērzēšanas.",
+      "confirmDescriptionAllMembers": "Ikviens komandas iekšējais dalībnieks varēs atvērt lietu <bdi>{matterName}</bdi> un visu tās saturu: ar lietu saistītos dokumentus, uzdevumus, laika ierakstus un AI tērzēšanas.",
+      "confirmNote": "Esošie dalībnieki saglabā piekļuvi. Izmaiņas tiek ierakstītas darbību žurnālā, un vēlāk piekļuvi var atkal sašaurināt.",
+      "confirmTitle": "Rādīt lietu vairāk cilvēkiem?",
+      "label": "Kas var redzēt šo lietu",
+      "settingLabel": "Kas redz",
+      "summaryReadOnly": "{summary} To var mainīt tikai lietas atbildīgais vai administrators.",
+      "updated": "Piekļuve atjaunināta"
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

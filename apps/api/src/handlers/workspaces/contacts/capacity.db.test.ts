@@ -10,6 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 import fc from "fast-check";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
@@ -52,6 +53,7 @@ beforeEach(async () => {
   });
   await db.insert(workspaces).values(
     [sourceId, targetId].map((id) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId,
       name: "Contact capacity",
@@ -271,6 +273,7 @@ test("a new matter accepts a bulk copy at capacity and cascade deletion releases
   await db.delete(workspaces).where(eq(workspaces.id, targetId));
   await db.transaction(async (tx) => {
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: targetId,
       organizationId,
       name: "Copied matter",

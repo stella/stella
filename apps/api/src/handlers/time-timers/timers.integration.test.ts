@@ -13,13 +13,17 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  TIME_ENTRY_ACTIVITY_GROUP,
+} from "@stll/api-contract";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
+  auditLogs,
   organizationSettings,
   rateTables,
   timeEntries,
@@ -31,6 +35,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -157,6 +162,54 @@ const confirm = async (
   );
 
 describe("global timer lifecycle", () => {
+  test("starting in a foreign or missing matter has the same opaque refusal and preserves running timers", async () => {
+    const running = await start();
+    const missingMatterId = createSafeId<"workspace">();
+    expect(
+      await db.query.workspaces.findFirst({ where: { id: { eq: ids.wsB1 } } }),
+    ).toBeDefined();
+    expect(
+      await db.query.workspaces.findFirst({
+        where: { id: { eq: missingMatterId } },
+      }),
+    ).toBeUndefined();
+    const snapshot = async () => {
+      const [timers, entries, audits, matters, assignments] = await Promise.all(
+        [
+          db.select().from(timeTimers).orderBy(timeTimers.id),
+          db.select().from(timeEntries).orderBy(timeEntries.id),
+          db.select().from(auditLogs).orderBy(auditLogs.id),
+          db.select().from(workspaces).orderBy(workspaces.id),
+          db.select().from(workspaceMembers).orderBy(workspaceMembers.id),
+        ],
+      );
+      return { timers, entries, audits, matters, assignments };
+    };
+    const before = await snapshot();
+    const eventsBefore = [...auditEvents];
+    const refusals = [];
+    for (const matterId of [ids.wsB1, missingMatterId]) {
+      const result = await startTimer.handler(
+        createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+          ...context(),
+          body: checkedBody(startTimer.config.body, {
+            matterId,
+            description: "Research and drafting",
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        code: 404,
+        response: { message: "Matter not found or not accessible" },
+      });
+      refusals.push(result);
+      expect(await snapshot()).toEqual(before);
+      expect(auditEvents).toEqual(eventsBefore);
+    }
+    expect(refusals.at(0)).toEqual(refusals.at(1));
+    expect(await readTimer(running.id)).toMatchObject({ state: "running" });
+  });
+
   test("start and resume transfer the running state without counting paused time", async () => {
     const first = await start();
     setSystemTime(new Date("2026-09-02T00:01:00.000Z"));
@@ -635,6 +688,7 @@ describe("global timer lifecycle", () => {
   test("a migrated draft completed in another matter starts its billing fields over", async () => {
     const originalMatterId = createSafeId<"workspace">();
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: originalMatterId,
       organizationId: ids.orgA,
       name: "Original timer matter",
@@ -723,6 +777,7 @@ describe("global timer lifecycle", () => {
   test("a timer survives matter membership removal and confirms after reassignment", async () => {
     const originalMatterId = createSafeId<"workspace">();
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: originalMatterId,
       organizationId: ids.orgA,
       name: "Timer matter",
@@ -754,10 +809,23 @@ describe("global timer lifecycle", () => {
       legacyTimeEntryId: null,
       state: "running",
     });
-    const removed = await db
-      .delete(workspaceMembers)
-      .where(eq(workspaceMembers.id, membershipId))
-      .returning({ id: workspaceMembers.id });
+    const removed = await db.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [originalMatterId],
+            userIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
+      return await tx
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, membershipId))
+        .returning({ id: workspaceMembers.id });
+    });
     expect(removed).toEqual([{ id: membershipId }]);
     const beforeEntries = await db
       .select({ id: timeEntries.id })

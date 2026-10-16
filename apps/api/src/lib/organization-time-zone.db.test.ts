@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { parseTimeZoneId } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
@@ -67,12 +68,14 @@ beforeAll(async () => {
   ]);
   await db.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: chosenWorkspaceId,
       organizationId: ORGANIZATIONS.chosen,
       name: "Chosen zone matter",
       reference: chosenWorkspaceId,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: neverSavedWorkspaceId,
       organizationId: ORGANIZATIONS.neverSaved,
       name: "Default zone matter",

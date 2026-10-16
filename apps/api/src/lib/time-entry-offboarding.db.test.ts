@@ -12,6 +12,7 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import {
+  MATTER_VISIBILITY,
   TIME_ENTRY_ACTIVITY_GROUP,
   type TimeEntryActivityGroup,
 } from "@stll/api-contract";
@@ -99,6 +100,7 @@ const createMemberWithActiveTimer = async (
   const workspaceId = createSafeId<"workspace">();
   const timerId = createSafeId<"timeEntry">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Timer matter",

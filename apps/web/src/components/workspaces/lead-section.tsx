@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/utils";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { leadSectionContent } from "@/components/workspaces/lead-section.logic";
+import { useCanStewardMatter } from "@/components/workspaces/matter-visibility";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -40,6 +41,11 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
     members: membersView,
   });
   const updateWorkspace = useUpdateWorkspace();
+  // Only the current lead or a team owner/admin may hand the matter on.
+  const canSteward = useCanStewardMatter(
+    workspaceView.type === "items" ? workspaceView.items.leadUserId : null,
+  );
+  const canChangeLead = canUpdate && canSteward;
 
   switch (content.type) {
     case "pending":
@@ -109,7 +115,7 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
         <QueryViewFeedback view={membersView} />
         <div className="flex min-w-0 items-center gap-1">
           <Select
-            disabled={!canUpdate || updateWorkspace.isPending}
+            disabled={!canChangeLead || updateWorkspace.isPending}
             onValueChange={(value) => {
               if (typeof value !== "string") {
                 return;
@@ -160,7 +166,7 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
               ))}
             </SelectPopup>
           </Select>
-          {canUpdate && leadUserId && (
+          {canChangeLead && leadUserId && (
             <Button
               aria-label={t("common.remove")}
               disabled={updateWorkspace.isPending}
@@ -172,6 +178,11 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
             </Button>
           )}
         </div>
+        {canUpdate && !canSteward ? (
+          <p className="text-muted-foreground pb-1 text-xs text-pretty">
+            {t("workspaces.leadReadOnly")}
+          </p>
+        ) : null}
       </div>
     </section>
   );

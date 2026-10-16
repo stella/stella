@@ -1,6 +1,11 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  DEFAULT_MATTER_VISIBILITY,
+  MATTER_VISIBILITIES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -311,13 +316,20 @@ export const workspaces = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
-    // Nullable: a null client_id encodes a personal matter (visible
-    // only to the creator via workspace_members). A non-null client_id
-    // is a normal client matter. Setting clientId on update turns a
-    // personal matter into a client matter; members are added apart.
+    // Optional client contact. Whether the matter has a client says nothing
+    // about who can see it; `visibility` decides that.
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
+    // Who can see the matter: `all_members` reaches every internal member,
+    // `admins_and_assigned` owners and admins plus assigned members,
+    // `assigned_only` assigned members only (see MATTER_VISIBILITIES). The database has no default (a transitional insert
+    // trigger derives a value for writers that omit it); application inserts
+    // always carry one.
+    visibility: p
+      .text({ enum: MATTER_VISIBILITIES })
+      .notNull()
+      .$defaultFn(() => DEFAULT_MATTER_VISIBILITY),
     // Optional per-matter lead. Decouples the lead from the client's
     // responsible attorney so co-counsels can split matters under a
     // shared client. ON DELETE SET NULL: removing the user must not
@@ -349,6 +361,13 @@ export const workspaces = p.pgTable(
       .index("workspaces_org_client_id_idx")
       .on(table.organizationId, table.clientId)
       .where(isNotNull(table.clientId)),
+    p.check(
+      "workspaces_visibility_check",
+      sql`${table.visibility} IN (${sql.join(
+        MATTER_VISIBILITIES.map((visibility) => sql.raw(`'${visibility}'`)),
+        sql`, `,
+      )})`,
+    ),
     p
       .index("workspaces_org_activity_id_non_deleting_idx")
       .on(table.organizationId, table.lastActivityAt.desc(), table.id.desc())

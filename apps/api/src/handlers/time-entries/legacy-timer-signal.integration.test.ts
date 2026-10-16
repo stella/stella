@@ -19,6 +19,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { cents } from "@/api/lib/money";
 import {
   createTestIds,
@@ -144,14 +145,27 @@ test("members see the running signal even when the linked timer is private", asy
 test("pause and resume update the guard without requiring matter access", async () => {
   const entryId = await createEntry();
   const timerId = await createLinkedTimer(entryId);
-  await db
-    .delete(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, ids.wsA2),
-        eq(workspaceMembers.userId, ids.userA1),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [ids.wsA2],
+          userIds: [ids.userA1],
+        },
+      ],
+      mode: "update",
+    });
+    await tx
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, ids.wsA2),
+          eq(workspaceMembers.userId, ids.userA1),
+        ),
+      );
+  });
   await ownerDb()((tx) =>
     tx
       .update(timeTimers)

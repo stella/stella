@@ -21,6 +21,7 @@ import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-del
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { LIST_VERIFICATION_CONSTRAINT_VALIDATION } from "./list-verification-constraint-validation";
+import { MATTER_VISIBILITY_REPAIR } from "./matter-visibility-repair";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexGate } from "./online-index-gate";
@@ -546,6 +547,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  MATTER_VISIBILITY_REPAIR,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,

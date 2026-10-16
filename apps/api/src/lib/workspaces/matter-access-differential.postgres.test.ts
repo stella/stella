@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
+import {
+  defaultMatterVisibilityFor,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import { assertProperty } from "@stll/property-testing";
 
@@ -12,6 +16,7 @@ import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
@@ -76,6 +81,7 @@ type World = typeof worldArbitrary extends fc.Arbitrary<infer T> ? T : never;
 type SeededWorld = {
   organizationId: SafeId<"organization">;
   userIds: SafeId<"user">[];
+  stewardUserId: SafeId<"user">;
   matterIds: SafeId<"workspace">[];
 };
 
@@ -103,11 +109,12 @@ const seedWorld = async (tx: Transaction, world: World) => {
   const seeded: SeededWorld = {
     organizationId: mintAuthProviderId<"organization">(),
     userIds: world.roles.map(() => mintAuthProviderId<"user">()),
+    stewardUserId: mintAuthProviderId<"user">(),
     matterIds: world.matters.map(() => createSafeId<"workspace">()),
   };
   const clientId = await insertOrganization(tx, seeded.organizationId);
   await tx.insert(user).values(
-    seeded.userIds.map((id) => ({
+    [...seeded.userIds, seeded.stewardUserId].map((id) => ({
       id,
       name: "Matter access differential",
       email: `${id}@example.test`,
@@ -127,18 +134,39 @@ const seedWorld = async (tx: Transaction, world: World) => {
           },
         ];
   });
-  if (members.length > 0) {
-    await tx.insert(member).values(members);
-  }
+  await tx.insert(member).values([
+    ...members,
+    {
+      id: mintAuthProviderIdValue(),
+      organizationId: seeded.organizationId,
+      userId: seeded.stewardUserId,
+      role: "member",
+      createdAt: new Date(),
+    },
+  ]);
   await tx.insert(workspaces).values(
     world.matters.map((matter, index) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: seeded.matterIds[index] ?? panic("matter id"),
       organizationId: seeded.organizationId,
       clientId: matter.client ? clientId : null,
+      leadUserId: matter.client ? null : seeded.stewardUserId,
       name: `Matter ${String(index)}`,
       reference: `DIFF-${String(index)}`,
       status: matter.deleting ? ("deleting" as const) : ("active" as const),
     })),
+  );
+  // Keep every private matter valid without changing any generated actor's
+  // assignments: even all-owner, unassigned worlds need to remain screened.
+  const stewardAssignments = world.matters.flatMap((matter, index) =>
+    matter.client
+      ? []
+      : [
+          {
+            workspaceId: seeded.matterIds[index] ?? panic("matter id"),
+            userId: seeded.stewardUserId,
+          },
+        ],
   );
   // Matter membership requires organization membership (a trigger enforces
   // it), so a removed member holds no assignment.
@@ -151,8 +179,34 @@ const seedWorld = async (tx: Transaction, world: World) => {
             : [],
         ),
   );
-  if (assignments.length > 0) {
-    await tx.insert(workspaceMembers).values(assignments);
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId: seeded.organizationId,
+        workspaceIds: seeded.matterIds,
+        userIds: [...members.map(({ userId }) => userId), seeded.stewardUserId],
+      },
+    ],
+    mode: "update",
+  });
+  const allAssignments = [...stewardAssignments, ...assignments];
+  if (allAssignments.length > 0) {
+    await tx.insert(workspaceMembers).values(allAssignments);
+  }
+  if (stewardAssignments.length > 0) {
+    await tx
+      .update(workspaces)
+      .set({
+        visibility: defaultMatterVisibilityFor({ hasClient: false }),
+        leadUserId: seeded.stewardUserId,
+      })
+      .where(
+        inArray(
+          workspaces.id,
+          stewardAssignments.map(({ workspaceId }) => workspaceId),
+        ),
+      );
   }
   return seeded;
 };
@@ -234,7 +288,9 @@ const withWorld = async (
       await db
         .delete(organization)
         .where(eq(organization.id, seeded.organizationId));
-      await db.delete(user).where(inArray(user.id, seeded.userIds));
+      await db
+        .delete(user)
+        .where(inArray(user.id, [...seeded.userIds, seeded.stewardUserId]));
     }
   });
 };

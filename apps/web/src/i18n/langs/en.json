@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
+      "matterStewardHandoverRequired": "Hand over the affected matters to another assigned internal member before continuing.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
       "notOrganizationMember": "You are not a member of this organization.",
       "providerKeyRejected": "The provider rejected the API key.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Matter name",
-      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team."
+      "personalDescription": "Without a client, the matter is visible only to you. You can share it later by changing who can see it."
     },
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "No matching members"
     },
+    "leadReadOnly": "Only the current lead or an admin can change the lead.",
     "lockMatter": "Lock",
     "matterInfo": "Matter info",
     "mattersCount": "{count, plural, one {# matter} other {# matters}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Third party",
         "witness": "Witness"
       },
-      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.",
-      "personalLabel": "Personal",
-      "promoteCta": "Promote to client",
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
-      "promotedSuccess": "Matter promoted",
+      "personalDescription": "This matter has no client. Adding one does not change who can see it.",
+      "personalLabel": "No client",
+      "promoteCta": "Set client",
+      "promoteDescription": "Choose the client for this matter. Who can see the matter stays the same.",
+      "promotedSuccess": "Client set",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Use preset…",
       "viewSettings": "View settings"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Admins and assigned members",
+      "adminsAndAssignedDescription": "Team owners and admins, and the people you add to this matter.",
+      "adminsAndAssignedSummary": "Team owners and admins, and this matter's members.",
+      "allMembers": "All internal team members",
+      "allMembersDescription": "Every internal team member can open it without being added. External users can't.",
+      "allMembersSummary": "Every internal team member, and this matter's members.",
+      "assignedOnly": "Assigned members only",
+      "assignedOnlyDescription": "Only the people you add to this matter. Owners and admins can't open it unless they're added.",
+      "assignedOnlySummary": "Only this matter's members.",
+      "badgeAllMembers": "Everyone",
+      "badgeAllMembersTitle": "Every internal team member can open this matter",
+      "badgeAssignedOnly": "Assigned only",
+      "badgeAssignedOnlyTitle": "Only the people added to this matter can open it",
+      "confirmAction": "Show to more people",
+      "confirmCancel": "Keep current access",
+      "confirmDescriptionAdmins": "Team owners and admins will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.",
+      "confirmDescriptionAllMembers": "Every internal team member will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.",
+      "confirmNote": "Current members keep their access. The change is recorded in the activity log, and you can narrow it again later.",
+      "confirmTitle": "Show this matter to more people?",
+      "label": "Who can see this matter",
+      "settingLabel": "Who can see",
+      "summaryReadOnly": "{summary} Only the matter lead or an admin can change this.",
+      "updated": "Access updated"
     },
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow",

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondenceAllowedSenderMatters,
@@ -259,9 +261,27 @@ if (!databaseUrl || !runPostgresTests) {
         },
       ]);
       await db.insert(workspaces).values([
-        { id: wsA1, organizationId: orgA, name: "Matter A1", reference: "A1" },
-        { id: wsA2, organizationId: orgA, name: "Matter A2", reference: "A2" },
-        { id: wsB1, organizationId: orgB, name: "Matter B1", reference: "B1" },
+        {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: wsA1,
+          organizationId: orgA,
+          name: "Matter A1",
+          reference: "A1",
+        },
+        {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: wsA2,
+          organizationId: orgA,
+          name: "Matter A2",
+          reference: "A2",
+        },
+        {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: wsB1,
+          organizationId: orgB,
+          name: "Matter B1",
+          reference: "B1",
+        },
       ]);
       await db.insert(workspaceMembers).values([
         { id: memberAWorkspaceId, workspaceId: wsA1, userId: memberA },

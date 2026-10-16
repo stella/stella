@@ -1,11 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray } from "drizzle-orm";
 import { t } from "elysia";
+import { isDeepStrictEqual } from "node:util";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member } from "@/api/db/auth-schema";
-import { resultTx } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   type fields,
   properties,
@@ -32,6 +34,7 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -85,6 +88,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { readMatterMutationAuthority } from "@/api/lib/workspaces/visibility";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -443,6 +447,95 @@ const cleanupCopiedS3Keys = async ({
   }
 };
 
+const DUPLICATE_WORKSPACE_COLUMNS = {
+  id: true,
+  name: true,
+  clientId: true,
+  billingReference: true,
+  color: true,
+  leadUserId: true,
+  visibility: true,
+  status: true,
+} as const;
+
+type DuplicateSourceWorkspace = Pick<
+  typeof workspaces.$inferSelect,
+  keyof typeof DUPLICATE_WORKSPACE_COLUMNS
+>;
+
+type DuplicateSourceAccessOptions = {
+  organizationId: SafeId<"organization">;
+  targetWorkspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  source: DuplicateSourceWorkspace;
+  members: readonly Pick<typeof workspaceMembers.$inferSelect, "userId">[];
+};
+
+/** Freeze the copy's complete access policy, not just the caller's reach. */
+const readDuplicateSource = async (
+  tx: Transaction,
+  {
+    organizationId,
+    targetWorkspaceId,
+    userId,
+    source,
+    members,
+  }: DuplicateSourceAccessOptions,
+) => {
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId,
+        workspaceIds: [source.id, targetWorkspaceId],
+        userIds: [
+          userId,
+          ...members.map((row) => row.userId),
+          ...(source.leadUserId === null ? [] : [source.leadUserId]),
+        ],
+      },
+    ],
+    mode: "update",
+  });
+  const authority = await readMatterMutationAuthority(tx, {
+    permissions: config.permissions,
+    organizationId,
+    workspaceId: source.id,
+    userId,
+  });
+  if (authority === null) {
+    abortTransaction(
+      new HandlerError({ status: 404, message: "Workspace not found" }),
+    );
+  }
+  const [current, currentMembers] = await Promise.all([
+    tx.query.workspaces.findFirst({
+      where: { id: { eq: source.id }, organizationId: { eq: organizationId } },
+      columns: DUPLICATE_WORKSPACE_COLUMNS,
+    }),
+    tx.query.workspaceMembers.findMany({
+      where: { workspaceId: { eq: source.id } },
+      columns: { userId: true },
+      limit: LIMITS.workspaceMembersCount + 1,
+    }),
+  ]);
+  const currentUserIds = new Set(currentMembers.map((row) => row.userId));
+  if (
+    !current ||
+    !isDeepStrictEqual(current, source) ||
+    currentUserIds.size !== members.length ||
+    !members.every((row) => currentUserIds.has(row.userId))
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Source matter changed; retry duplication",
+      }),
+    );
+  }
+  return { workspace: current, members: currentMembers };
+};
+
 export const createDuplicateWorkspace = (
   dependencies: DuplicateWorkspaceDependencies = defaultDuplicateWorkspaceDependencies,
 ) =>
@@ -470,14 +563,7 @@ export const createDuplicateWorkspace = (
         safeDb(async (tx) => {
           const workspace = await tx.query.workspaces.findFirst({
             where: { id: { eq: sourceWorkspaceId } },
-            columns: {
-              id: true,
-              name: true,
-              clientId: true,
-              billingReference: true,
-              color: true,
-              leadUserId: true,
-            },
+            columns: DUPLICATE_WORKSPACE_COLUMNS,
           });
 
           if (!workspace) {
@@ -621,6 +707,13 @@ export const createDuplicateWorkspace = (
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
       const txResult = await resultTx(safeDb, async (tx) => {
+        const lockedSource = await readDuplicateSource(tx, {
+          organizationId,
+          targetWorkspaceId,
+          userId: user.id,
+          source: snapshot.workspace,
+          members: snapshot.members,
+        });
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -635,7 +728,7 @@ export const createDuplicateWorkspace = (
                   eq(workspaces.organizationId, organizationId),
                   ilike(
                     workspaces.name,
-                    `${escapeLike(snapshot.workspace.name)}%`,
+                    `${escapeLike(lockedSource.workspace.name)}%`,
                   ),
                 ),
               ),
@@ -646,7 +739,7 @@ export const createDuplicateWorkspace = (
                 matterNumberPadding: true,
               },
             }),
-            snapshot.members.length > 0
+            lockedSource.members.length > 0
               ? tx
                   .select({ userId: member.userId })
                   .from(member)
@@ -655,14 +748,12 @@ export const createDuplicateWorkspace = (
                       eq(member.organizationId, organizationId),
                       inArray(
                         member.userId,
-                        snapshot.members.map((m) => m.userId),
+                        lockedSource.members.map((m) => m.userId),
                       ),
                     ),
                   )
-                  // Same order as organization removal's membership locks.
-                  .orderBy(member.userId)
-                  .limit(snapshot.members.length)
-                  .for("key share")
+                  .orderBy(member.id)
+                  .limit(lockedSource.members.length)
               : Promise.resolve([]),
           ]);
 
@@ -674,7 +765,7 @@ export const createDuplicateWorkspace = (
           });
         }
 
-        if (orgMembers.length !== snapshot.members.length) {
+        if (orgMembers.length !== lockedSource.members.length) {
           throw new HandlerError({
             status: 400,
             message: "Some users are not members of this organization",
@@ -683,8 +774,8 @@ export const createDuplicateWorkspace = (
 
         const newName =
           duplicatedNames.length > 0
-            ? `${snapshot.workspace.name} (${duplicatedNames.length})`
-            : snapshot.workspace.name;
+            ? `${lockedSource.workspace.name} (${duplicatedNames.length})`
+            : lockedSource.workspace.name;
         const pattern =
           settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
         const padding =
@@ -705,19 +796,22 @@ export const createDuplicateWorkspace = (
 
         await createWorkspaceInTransaction(tx, {
           id: targetWorkspaceId,
-          clientId: snapshot.workspace.clientId,
-          billingReference: snapshot.workspace.billingReference,
-          color: snapshot.workspace.color,
-          leadUserId: snapshot.workspace.leadUserId,
+          clientId: lockedSource.workspace.clientId,
+          billingReference: lockedSource.workspace.billingReference,
+          color: lockedSource.workspace.color,
+          leadUserId: lockedSource.workspace.leadUserId,
           name: newName,
           reference,
+          // A copy is seen by exactly who could see the original; duplicating
+          // a private matter must not open it to the organization.
+          visibility: lockedSource.workspace.visibility,
         });
 
-        if (snapshot.members.length > 0) {
+        if (lockedSource.members.length > 0) {
           await tx
             .insert(workspaceMembers)
             .values(
-              snapshot.members.map((workspaceMember) => ({
+              lockedSource.members.map((workspaceMember) => ({
                 workspaceId: targetWorkspaceId,
                 userId: workspaceMember.userId,
               })),

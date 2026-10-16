@@ -659,6 +659,7 @@ type SafeErrorBody = {
   retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  affectedMatters?: HandlerError["affectedMatters"];
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -1971,6 +1972,9 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.affectedMatters === undefined
+    ? {}
+    : { affectedMatters: error.affectedMatters }),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage

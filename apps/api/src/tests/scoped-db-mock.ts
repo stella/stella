@@ -191,9 +191,7 @@ export const createScopedDbMock = (
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
     const transaction = {
-      execute: async () => {
-        await Promise.resolve();
-      },
+      execute: async () => await Promise.resolve([]),
       ...(typeof tx === "object" && tx !== null ? tx : {}),
       select: fixtureSelect(tx, options),
     };

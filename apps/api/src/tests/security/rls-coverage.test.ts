@@ -3,7 +3,8 @@ import { is, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import {
-  CLIENT_MATTER_ADMIN_ROLES,
+  INTERNAL_MEMBER_ROLES,
+  ORGANIZATION_MATTER_ADMIN_ROLES,
   ORGANIZATION_MANAGEMENT_ROLES,
 } from "@stll/permissions";
 
@@ -41,11 +42,19 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 let testDb: TestDatabase;
 
-/** The literal lists Postgres prints for `role IN (...)` in a definition. */
+/** Role lists from a deparsed view or the stored SQL function body. */
 const roleListsIn = (definition: string): Set<string>[] =>
-  [...definition.matchAll(/role = ANY \(+ARRAY\[([^\]]*)\]/gu)].map(
-    ([, list = ""]) =>
-      new Set([...list.matchAll(/'([^']*)'/gu)].map(([, role = ""]) => role)),
+  [
+    ...definition.matchAll(
+      /role\s*(?:= ANY \(+ARRAY\[([^\]]*)\]|IN\s*\(([^)]*)\))/giu,
+    ),
+  ].map(
+    ([, normalized, stored]) =>
+      new Set(
+        [...(normalized ?? stored ?? "").matchAll(/'([^']*)'/gu)].map(
+          ([, role = ""]) => role,
+        ),
+      ),
   );
 
 const isSameSet = (
@@ -542,23 +551,28 @@ describe("policy coverage", () => {
     });
   });
 
-  test("workspace access view grants client matters to CLIENT_MATTER_ADMIN_ROLES", async () => {
+  test("workspace access rule grants unassigned matters only to ORGANIZATION_MATTER_ADMIN_ROLES and INTERNAL_MEMBER_ROLES", async () => {
     const result = await testDb.execute<{ definition: string }>(sql`
-      SELECT pg_catalog.pg_get_viewdef(
-        ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
+      SELECT pg_catalog.pg_get_functiondef(
+        'public.stella_authorized_workspace_ids(text,text)'::regprocedure
       ) AS definition
     `);
     const definition = result.rows.at(0)?.definition ?? "";
 
     expect(roleListsIn(definition)).toEqual([
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+      new Set(ORGANIZATION_MATTER_ADMIN_ROLES),
+      new Set(INTERNAL_MEMBER_ROLES),
     ]);
+    // External members never reach a matter without an assignment.
+    expect(
+      INTERNAL_MEMBER_ROLES.some((role: string) => role === "external"),
+    ).toBe(false);
   });
 
   test("every policy role list is a named role set", async () => {
     const namedSets = [
       new Set(ORGANIZATION_MANAGEMENT_ROLES),
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+      new Set(ORGANIZATION_MATTER_ADMIN_ROLES),
     ];
     const policies = await fetchStellaPolicies(testDb);
     const roleLists = policies.flatMap((policy) =>

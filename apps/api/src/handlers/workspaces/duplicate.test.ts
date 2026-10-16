@@ -233,199 +233,215 @@ const createContext = ({
 
 describe("duplicateWorkspace", () => {
   for (const featureStatus of ["hidden", "colleague", "enabled"] as const) {
-    test(`${featureStatus} copies a matter with permitted views and its lead`, async () => {
-      const createdWorkspaces: unknown[][] = [];
-      const insertedViews: unknown[] = [];
-      const insertedWorkspaceMembers: unknown[] = [];
-      const insertedAuditLogs: unknown[] = [];
+    for (const access of ["current", "revoked"] as const) {
+      test(`${featureStatus} ${access} source access determines whether a duplicate is created`, async () => {
+        const createdWorkspaces: unknown[][] = [];
+        const insertedViews: unknown[] = [];
+        const insertedWorkspaceMembers: unknown[] = [];
+        const insertedAuditLogs: unknown[] = [];
 
-      const { safeDb, scopedDb } = createScopedDbMock({
-        query: {
-          workspaces: {
-            findFirst: async () => ({
-              id: "ws_source123",
-              name: "Smith v Jones",
-              clientId: "contact_client123",
-              billingReference: "BILL-123",
-              color: "blue",
-              leadUserId: "user_lead123",
-            }),
-          },
-          properties: {
-            findMany: async () => [],
-          },
-          propertyDependencies: {
-            findMany: async () => [],
-          },
-          workspaceViews: {
-            findMany: async () => [
-              {
-                id: "019c0c90-0000-7000-8000-000000000103",
-                name: "Ordinary",
-                position: 0,
-                layout: {
-                  type: "filesystem",
-                  version: 1,
-                  filters: [],
-                  sorts: [],
-                  hiddenProperties: [],
-                  calculations: [],
-                },
-              },
-              {
-                id: "019c0c90-0000-7000-8000-000000000104",
-                name: "Verification",
-                position: 1,
-                layout: {
-                  type: "avt",
-                  version: 1,
-                  listId: null,
-                  filters: [],
-                  sorts: [],
-                  hiddenProperties: [],
-                  calculations: [],
-                },
-              },
-            ],
-          },
-          workspaceMembers: {
-            findMany: async () => [{ userId: "user_lead123" }],
-          },
-          workspaceContacts: {
-            findMany: async () => [],
-          },
-          organizationSettings: {
-            findFirst: async () => null,
-          },
-        },
-        select: (selectedFields: Record<string, unknown>) => {
-          if (
-            selectedFields["reference"] === documentReferenceCounters.reference
-          ) {
-            return createSelectQueryMock([]);
-          }
-          if ("total" in selectedFields) {
-            return {
-              from: () => ({
-                where: async () => [{ total: 0 }],
+        const { safeDb, scopedDb } = createScopedDbMock({
+          query: {
+            workspaces: {
+              findFirst: async () => ({
+                id: "ws_source123",
+                status: "active",
+                name: "Smith v Jones",
+                clientId: "contact_client123",
+                billingReference: "BILL-123",
+                color: "blue",
+                leadUserId: "user_lead123",
+                visibility: "assigned_only",
               }),
-            };
-          }
-
-          if ("name" in selectedFields) {
-            return {
-              from: () => ({
-                where: async () => [],
-              }),
-            };
-          }
-
-          if ("userId" in selectedFields) {
-            return {
-              from: (table: unknown) => {
-                expect(table).toBe(member);
-                return {
-                  where: () => ({
-                    orderBy: (column: unknown) => {
-                      // Copied memberships lock in the order removal uses.
-                      expect(column).toBe(member.userId);
-                      return {
-                        limit: () => ({
-                          for: async (strength: string) => {
-                            expect(strength).toBe("key share");
-                            return [{ userId: "user_lead123" }];
-                          },
-                        }),
-                      };
-                    },
-                  }),
-                };
-              },
-            };
-          }
-
-          throw new Error("Unexpected select fields");
-        },
-        insert: (table: unknown) => ({
-          values: (value: unknown) => {
-            if (table === matterCounters) {
+            },
+            properties: {
+              findMany: async () => [],
+            },
+            propertyDependencies: {
+              findMany: async () => [],
+            },
+            workspaceViews: {
+              findMany: async () => [
+                {
+                  id: "019c0c90-0000-7000-8000-000000000103",
+                  name: "Ordinary",
+                  position: 0,
+                  layout: {
+                    type: "filesystem",
+                    version: 1,
+                    filters: [],
+                    sorts: [],
+                    hiddenProperties: [],
+                    calculations: [],
+                  },
+                },
+                {
+                  id: "019c0c90-0000-7000-8000-000000000104",
+                  name: "Verification",
+                  position: 1,
+                  layout: {
+                    type: "avt",
+                    version: 1,
+                    listId: null,
+                    filters: [],
+                    sorts: [],
+                    hiddenProperties: [],
+                    calculations: [],
+                  },
+                },
+              ],
+            },
+            workspaceMembers: {
+              findMany: async () => [{ userId: "user_lead123" }],
+            },
+            workspaceContacts: {
+              findMany: async () => [],
+            },
+            organizationSettings: {
+              findFirst: async () => null,
+            },
+          },
+          select: (selectedFields: Record<string, unknown>) => {
+            if ("role" in selectedFields) {
+              return createSelectQueryMock(
+                access === "current" ? [{ role: "owner" }] : [],
+              );
+            }
+            if (
+              selectedFields["reference"] ===
+              documentReferenceCounters.reference
+            ) {
+              return createSelectQueryMock([]);
+            }
+            if ("total" in selectedFields) {
               return {
-                onConflictDoUpdate: () => ({
-                  returning: async () => [
-                    {
-                      lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
-                    },
-                  ],
+                from: () => ({
+                  where: async () => [{ total: 0 }],
                 }),
               };
             }
 
-            if (table === workspaceViews) {
-              insertedViews.push(value);
-              return undefined;
-            }
-            if (table === workspaceMembers) {
-              insertedWorkspaceMembers.push(value);
-              return { onConflictDoNothing: async () => undefined };
-            }
-
-            if (table === auditLogs) {
-              insertedAuditLogs.push(value);
-              return undefined;
+            if ("name" in selectedFields) {
+              return {
+                from: () => ({
+                  where: async () => [],
+                }),
+              };
             }
 
-            throw new Error("Unexpected insert table");
+            if ("userId" in selectedFields) {
+              return {
+                from: (table: unknown) => {
+                  expect(table).toBe(member);
+                  return {
+                    where: () => ({
+                      orderBy: (column: unknown) => {
+                        expect(column).toBe(member.id);
+                        return {
+                          limit: async () => [{ userId: "user_lead123" }],
+                        };
+                      },
+                    }),
+                  };
+                },
+              };
+            }
+
+            throw new Error("Unexpected select fields");
           },
-        }),
-        update: (table: unknown) => {
-          expect(table).toBe(matterCounters);
-          return { set: () => ({ where: async () => undefined }) };
-        },
-        execute: async (query: SQL) => {
-          const statement = new PgDialect().sqlToQuery(query);
-          if (statement.sql.includes("stella_create_workspace")) {
-            createdWorkspaces.push(statement.params);
-          }
-          return undefined;
-        },
-      });
+          insert: (table: unknown) => ({
+            values: (value: unknown) => {
+              if (table === matterCounters) {
+                return {
+                  onConflictDoUpdate: () => ({
+                    returning: async () => [
+                      {
+                        lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+                      },
+                    ],
+                  }),
+                };
+              }
 
-      const result = await duplicateWorkspace.handler(
-        createContext({ safeDb, scopedDb, featureStatus }),
-      );
+              if (table === workspaceViews) {
+                insertedViews.push(value);
+                return undefined;
+              }
+              if (table === workspaceMembers) {
+                insertedWorkspaceMembers.push(value);
+                return { onConflictDoNothing: async () => undefined };
+              }
 
-      expect(result).toEqual({ workspaceId: expect.any(String) });
-      // The database creates the matter: id, client, name, reference,
-      // billing reference, color and lead.
-      expect(createdWorkspaces).toEqual([
-        [
-          expect.any(String),
-          "contact_client123",
-          "Smith v Jones",
-          expect.any(String),
-          "BILL-123",
-          "blue",
-          "user_lead123",
-        ],
-      ]);
-      expect(insertedWorkspaceMembers).toEqual([
-        [
-          expect.objectContaining({
-            userId: "user_lead123",
+              if (table === auditLogs) {
+                insertedAuditLogs.push(value);
+                return undefined;
+              }
+
+              throw new Error("Unexpected insert table");
+            },
           }),
-        ],
-      ]);
-      expect(insertedAuditLogs).toHaveLength(1);
-      expect(insertedViews).toHaveLength(1);
-      expect(insertedViews.at(0)).toEqual(
-        featureStatus === "enabled"
-          ? [
-              expect.objectContaining({ name: "Ordinary" }),
-              expect.objectContaining({ name: "Verification" }),
-            ]
-          : [expect.objectContaining({ name: "Ordinary" })],
-      );
-    });
+          update: (table: unknown) => {
+            expect(table).toBe(matterCounters);
+            return { set: () => ({ where: async () => undefined }) };
+          },
+          execute: async (query: SQL) => {
+            const statement = new PgDialect().sqlToQuery(query);
+            if (statement.sql.includes("stella_create_workspace")) {
+              createdWorkspaces.push(statement.params);
+            }
+            return [];
+          },
+        });
+
+        const result = await duplicateWorkspace.handler(
+          createContext({ safeDb, scopedDb, featureStatus }),
+        );
+
+        if (access === "revoked") {
+          expect(result).toMatchObject({
+            code: 404,
+            response: { message: "Workspace not found" },
+          });
+          expect(createdWorkspaces).toEqual([]);
+          expect(insertedWorkspaceMembers).toEqual([]);
+          expect(insertedAuditLogs).toEqual([]);
+          expect(insertedViews).toEqual([]);
+          return;
+        }
+        expect(result).toEqual({ workspaceId: expect.any(String) });
+        // The database creates the matter: id, client, name, reference,
+        // billing reference, color, lead and visibility.
+        expect(createdWorkspaces).toEqual([
+          [
+            expect.any(String),
+            "contact_client123",
+            "Smith v Jones",
+            expect.any(String),
+            "BILL-123",
+            "blue",
+            "user_lead123",
+            "assigned_only",
+          ],
+        ]);
+        expect(insertedWorkspaceMembers).toEqual([
+          [
+            expect.objectContaining({
+              userId: "user_lead123",
+            }),
+          ],
+        ]);
+        expect(insertedAuditLogs).toHaveLength(1);
+        expect(insertedViews).toHaveLength(1);
+        expect(insertedViews.at(0)).toEqual(
+          featureStatus === "enabled"
+            ? [
+                expect.objectContaining({ name: "Ordinary" }),
+                expect.objectContaining({ name: "Verification" }),
+              ]
+            : [expect.objectContaining({ name: "Ordinary" })],
+        );
+      });
+    }
   }
 
   test("preserves property roles when duplicating a matter", async () => {
@@ -442,11 +458,13 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -485,6 +503,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -538,7 +559,7 @@ describe("duplicateWorkspace", () => {
         expect(table).toBe(matterCounters);
         return { set: () => ({ where: async () => undefined }) };
       },
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(
@@ -593,11 +614,13 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -665,6 +688,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -740,7 +766,7 @@ describe("duplicateWorkspace", () => {
           where: async () => undefined,
         }),
       }),
-      execute: async () => undefined,
+      execute: async () => [],
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx);
@@ -853,11 +879,13 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -917,6 +945,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -977,7 +1008,7 @@ describe("duplicateWorkspace", () => {
         },
       }),
       update: () => ({ set: () => ({ where: async () => undefined }) }),
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(
@@ -1005,128 +1036,188 @@ describe("duplicateWorkspace", () => {
     ]);
   });
 
-  test("returns every object copied for an aborted duplicate", async () => {
-    const sourceKey = seedSourceObject("source-file-id", "image/png");
-    enqueueEntitySearchRepairsMock.mockClear();
-    enqueueWorkspaceSearchRepairsMock.mockClear();
+  test.each([
+    { field: "unchanged", patch: {} },
+    { field: "name", patch: { name: "Changed matter" } },
+    { field: "client", patch: { clientId: "contact_changed" } },
+    { field: "billing reference", patch: { billingReference: "CHANGED" } },
+    { field: "color", patch: { color: "red" } },
+    { field: "lead", patch: { leadUserId: "user_changed" } },
+    { field: "visibility", patch: { visibility: "assigned_only" } },
+    { field: "status", patch: { status: "archived" } },
+    { field: "assignment removed", patch: {} },
+    { field: "assignment added", patch: {} },
+  ])(
+    "returns copied objects and writes nothing when source $field aborts duplication",
+    async (sourceChange) => {
+      const sourceKey = seedSourceObject("source-file-id", "image/png");
+      enqueueEntitySearchRepairsMock.mockClear();
+      enqueueWorkspaceSearchRepairsMock.mockClear();
 
-    const filePropertyId = toSafeId<"property">("prop_file");
-    const insertedTables: unknown[] = [];
+      const filePropertyId = toSafeId<"property">("prop_file");
+      const insertedTables: unknown[] = [];
+      const executedWrites: string[] = [];
+      let sourceReads = 0;
+      let memberReads = 0;
+      const sourceWorkspace = {
+        id: "ws_source123",
+        status: "active",
+        name: "Smith v Jones",
+        clientId: null,
+        billingReference: null,
+        color: null,
+        leadUserId: null,
+        visibility: "admins_and_assigned",
+      };
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      query: {
-        workspaces: {
-          findFirst: async () => ({
-            id: "ws_source123",
-            name: "Smith v Jones",
-            clientId: null,
-            billingReference: null,
-            color: null,
-            leadUserId: null,
-          }),
-        },
-        properties: {
-          findMany: async () => [
-            {
-              id: filePropertyId,
-              workspaceId: "ws_source123",
-              name: "Document",
-              status: "active",
-              content: { type: "file", version: 1 },
-              tool: null,
-              system: false,
-              kinds: ["document"],
+      const { safeDb, scopedDb } = createScopedDbMock({
+        query: {
+          workspaces: {
+            findFirst: async () => {
+              sourceReads += 1;
+              return sourceReads === 1
+                ? sourceWorkspace
+                : { ...sourceWorkspace, ...sourceChange.patch };
             },
-          ],
-        },
-        propertyDependencies: { findMany: async () => [] },
-        workspaceViews: { findMany: async () => [] },
-        workspaceMembers: { findMany: async () => [] },
-        workspaceContacts: { findMany: async () => [] },
-        organizationSettings: { findFirst: async () => null },
-        entities: {
-          findMany: async () => [
-            {
-              id: "entity_document",
-              kind: "document",
-              name: "evidence.png",
-              parentId: null,
-              currentVersion: {
-                id: "version_document",
-                fields: [
-                  {
-                    propertyId: filePropertyId,
-                    content: {
-                      type: "file",
-                      version: 1,
-                      id: "source-file-id",
-                      fileName: "evidence.png",
-                      mimeType: "image/png",
-                      sizeBytes: 1024,
-                      encrypted: false,
-                      sha256Hex: "a".repeat(64),
-                      pdfFileId: null,
-                    },
-                  },
-                ],
+          },
+          properties: {
+            findMany: async () => [
+              {
+                id: filePropertyId,
+                workspaceId: "ws_source123",
+                name: "Document",
+                status: "active",
+                content: { type: "file", version: 1 },
+                tool: null,
+                system: false,
+                kinds: ["document"],
               },
+            ],
+          },
+          propertyDependencies: { findMany: async () => [] },
+          workspaceViews: { findMany: async () => [] },
+          workspaceMembers: {
+            findMany: async () => {
+              memberReads += 1;
+              if (
+                sourceChange.field === "assignment removed" &&
+                memberReads === 1
+              ) {
+                return [{ userId: "user_assigned123" }];
+              }
+              if (
+                sourceChange.field === "assignment added" &&
+                memberReads === 2
+              ) {
+                return [{ userId: "user_assigned123" }];
+              }
+              return [];
             },
-          ],
+          },
+          workspaceContacts: { findMany: async () => [] },
+          organizationSettings: { findFirst: async () => null },
+          entities: {
+            findMany: async () => [
+              {
+                id: "entity_document",
+                kind: "document",
+                name: "evidence.png",
+                parentId: null,
+                currentVersion: {
+                  id: "version_document",
+                  fields: [
+                    {
+                      propertyId: filePropertyId,
+                      content: {
+                        type: "file",
+                        version: 1,
+                        id: "source-file-id",
+                        fileName: "evidence.png",
+                        mimeType: "image/png",
+                        sizeBytes: 1024,
+                        encrypted: false,
+                        sha256Hex: "a".repeat(64),
+                        pdfFileId: null,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
         },
-      },
-      select: (selectedFields: Record<string, unknown>) =>
-        "total" in selectedFields
-          ? {
+        select: (selectedFields: Record<string, unknown>) => {
+          if ("role" in selectedFields) {
+            return createSelectQueryMock([{ role: "owner" }]);
+          }
+          if ("total" in selectedFields) {
+            return {
               from: () => ({
                 where: async () => [{ total: LIMITS.workspacesCount }],
               }),
-            }
-          : { from: () => ({ where: async () => [] }) },
-      insert: (table: unknown) => ({
-        values: () => {
-          insertedTables.push(table);
-          return {
-            onConflictDoUpdate: () => ({
-              returning: async () => [
-                {
-                  lastValue:
-                    table === matterCounters
-                      ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
-                      : 1,
-                },
-              ],
-            }),
-          };
+            };
+          }
+          return { from: () => ({ where: async () => [] }) };
         },
-      }),
-      update: () => ({ set: () => ({ where: async () => undefined }) }),
-      execute: async () => undefined,
-    });
+        insert: (table: unknown) => ({
+          values: () => {
+            insertedTables.push(table);
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [
+                  {
+                    lastValue:
+                      table === matterCounters
+                        ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
+                        : 1,
+                  },
+                ],
+              }),
+            };
+          },
+        }),
+        update: () => ({ set: () => ({ where: async () => undefined }) }),
+        execute: async (query: SQL) => {
+          const statement = new PgDialect().sqlToQuery(query);
+          if (statement.sql.includes("stella_create_workspace")) {
+            executedWrites.push(statement.sql);
+          }
+          return [];
+        },
+      });
 
-    expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
-    const result = await duplicateWorkspace.handler(
-      createContext({ includeContent: true, safeDb, scopedDb }),
-    );
+      expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
+      const result = await duplicateWorkspace.handler(
+        createContext({ includeContent: true, safeDb, scopedDb }),
+      );
 
-    // The abort travels as the same rejection the caller always answered.
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspaces limit reached" },
-    });
-    expect(insertedTables).toEqual([]);
+      // The abort travels as the same rejection the caller always answered.
+      const expectedRefusal =
+        sourceChange.field === "unchanged"
+          ? { code: 400, response: { message: "Workspaces limit reached" } }
+          : {
+              code: 409,
+              response: { message: "Source matter changed; retry duplication" },
+            };
+      expect(result).toEqual(expectedRefusal);
+      expect(insertedTables).toEqual([]);
+      expect(executedWrites).toEqual([]);
+      expect(sourceReads).toBe(2);
+      expect(memberReads).toBe(2);
 
-    // No row survives the abort, so every object copied for it is an orphan
-    // and all of them go back.
-    const copiedKeys = requestKeys("COPY");
-    const deletedKeys = requestKeys("DELETE");
-    expect(copiedKeys).toHaveLength(1);
-    expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
-    // The store is back to the source object alone.
-    expect([...fake.objects.keys()]).toEqual([sourceKey]);
+      // No row survives the abort, so every object copied for it is an orphan
+      // and all of them go back.
+      const copiedKeys = requestKeys("COPY");
+      const deletedKeys = requestKeys("DELETE");
+      expect(copiedKeys).toHaveLength(1);
+      expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+      // The store is back to the source object alone.
+      expect([...fake.objects.keys()]).toEqual([sourceKey]);
 
-    expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
-    expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
-  });
+      expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
+      expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
+    },
+  );
 
   test("rejects an oversized source before the duplicate writes anything", async () => {
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -1134,11 +1225,13 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "admins_and_assigned",
           }),
         },
         properties: { findMany: async () => [] },
@@ -1168,7 +1261,7 @@ describe("duplicateWorkspace", () => {
       insert: () => {
         throw new Error("Duplicate wrote before validating the source size");
       },
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(

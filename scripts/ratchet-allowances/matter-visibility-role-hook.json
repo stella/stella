@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 2,
+  "reason": "Two error boundaries: the organization role-update framework hook throws its expected handover APIError; the web API-error decoder rejects malformed handover refusal metadata from the transport before rendering links. Both refuse at trust boundaries; database guards enforce concurrent stewardship separately."
+}

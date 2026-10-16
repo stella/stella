@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
       "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",
       "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
+      "matterStewardHandoverRequired": "Než budete pokračovat, předejte dotčené spisy jinému přiřazenému internímu členovi.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Název spisu",
-      "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."
+      "personalDescription": "Bez klienta vidíte spis jen vy. Později ji můžete sdílet změnou toho, kdo ji vidí."
     },
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Žádní odpovídající členové"
     },
+    "leadReadOnly": "Vedoucího může změnit jen současný vedoucí nebo administrátor.",
     "lockMatter": "Zamknout",
     "matterInfo": "Informace o spisu",
     "mattersCount": "{count, plural, one {# spis} few {# spisy} other {# spisů}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Třetí strana",
         "witness": "Svědek"
       },
-      "personalDescription": "Osobní spisy jsou jen pro vás. Povýšením na klientský spis je sdílíte s týmem.",
-      "personalLabel": "Osobní",
-      "promoteCta": "Povýšit na klientský spis",
-      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
-      "promotedSuccess": "Spis povýšen",
+      "personalDescription": "Tento spis nemá klienta. Přidání klienta nemění, kdo spis vidí.",
+      "personalLabel": "Bez klienta",
+      "promoteCta": "Nastavit klienta",
+      "promoteDescription": "Vyberte klienta pro tento spis. Kdo spis vidí, se nezmění.",
+      "promotedSuccess": "Klient nastaven",
       "removeClient": "Odebrat klienta",
       "removeParty": "Odebrat stranu",
       "removePartyConfirm": "Opravdu chcete odebrat tuto stranu ze spisu?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Použít předvolbu…",
       "viewSettings": "Nastavení zobrazení"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administrátoři a přiřazení členové",
+      "adminsAndAssignedDescription": "Vlastníci a administrátoři týmu a lidé, které do spisu přidáte.",
+      "adminsAndAssignedSummary": "Vlastníci a administrátoři týmu a členové spisu.",
+      "allMembers": "Všichni interní členové týmu",
+      "allMembersDescription": "Každý interní člen týmu jej otevře, aniž by byl přidán. Externí uživatelé ne.",
+      "allMembersSummary": "Každý interní člen týmu a členové spisu.",
+      "assignedOnly": "Jen přiřazení členové",
+      "assignedOnlyDescription": "Jen lidé, které do spisu přidáte. Vlastníci a administrátoři jej neotevřou, dokud je nepřidáte.",
+      "assignedOnlySummary": "Jen členové spisu.",
+      "badgeAllMembers": "Celý tým",
+      "badgeAllMembersTitle": "Tento spis otevře každý interní člen týmu",
+      "badgeAssignedOnly": "Jen přiřazení",
+      "badgeAssignedOnlyTitle": "Tento spis otevřou jen lidé do něj přidaní",
+      "confirmAction": "Zpřístupnit",
+      "confirmCancel": "Ponechat současný přístup",
+      "confirmDescriptionAdmins": "Vlastníci a administrátoři týmu budou moci otevřít spis <bdi>{matterName}</bdi> a vše v něm: dokumenty, úkoly, časové záznamy a AI chaty navázané na spis.",
+      "confirmDescriptionAllMembers": "Každý interní člen týmu bude moci otevřít spis <bdi>{matterName}</bdi> a vše v něm: dokumenty, úkoly, časové záznamy a AI chaty navázané na spis.",
+      "confirmNote": "Současní členové si přístup ponechají. Změna se zapíše do záznamu všech aktivit a později ji můžete znovu omezit.",
+      "confirmTitle": "Zpřístupnit spis dalším lidem?",
+      "label": "Kdo spis uvidí",
+      "settingLabel": "Kdo vidí",
+      "summaryReadOnly": "{summary} Změnit to může jen vedoucí spisu nebo administrátor.",
+      "updated": "Přístup upraven"
     },
     "workflow": {
       "allManualInputsDescription": "Pro spuštění pracovního postupu přidejte alespoň jednu AI vlastnost",

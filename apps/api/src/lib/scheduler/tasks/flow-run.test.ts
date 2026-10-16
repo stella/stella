@@ -1,10 +1,3 @@
-/**
- * A scheduled flow's weekly / monthly day is the day of the slot the job was
- * due for, whatever the wall clock says when the runner gets to it. Driven
- * against a real (PGlite) database so the task's definition and workspace
- * checks run as in production; only the run starter is recorded.
- */
-
 import {
   afterAll,
   afterEach,
@@ -14,6 +7,14 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+/**
+ * A scheduled flow's weekly / monthly day is the day of the slot the job was
+ * due for, whatever the wall clock says when the runner gets to it. Driven
+ * against a real (PGlite) database so the task's definition and workspace
+ * checks run as in production; only the run starter is recorded.
+ */
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { flowDefinitions, workspaces } from "@/api/db/schema";
@@ -74,6 +75,7 @@ describe("scheduled flow due day", () => {
       createdAt: new Date(),
     });
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       clientId: null,

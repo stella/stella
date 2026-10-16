@@ -21,18 +21,13 @@ handling, or external APIs. Stella handles privileged legal data
   validated and sanitised before processing.
 - **Workspace isolation** — data from one workspace must never
   leak to another.
-- **Ethical walls** — workspace (matter) boundaries enforce
-  information barriers for the `member` role at the RLS layer (not
-  just the UI): a member has zero visibility into workspaces they
-  are not assigned to via `workspace_members` — no names, no
-  members, no metadata. **Known limitation:** org `owner`/`admin`
-  roles carry a deliberate firm-admin override granting access to
-  every client matter (`client_id IS NOT NULL`) regardless of
-  assignment, and there is no per-matter screening to wall a
-  specific admin out of a specific matter. Do not describe admin
-  access as "absolute confidentiality." Screening a matter from an
-  admin requires a matter-level exclusion consulted by the RLS
-  view (`stella_authorized_workspaces`), which is not yet built.
+- **Matter visibility** — enforce the matter's explicit visibility at the RLS
+  layer, independently of its client. `assigned_only` requires assignment for
+  everyone, including organization owners and admins. `admins_and_assigned`
+  admits owners, admins, and assigned members. `all_members` admits every
+  internal organization member; external users still require assignment.
+  Organization roles continue to determine permissions within an accessible
+  matter. Attaching or changing a client does not change visibility.
 - **Access control** — every endpoint enforces auth and
   authorisation. No "internal-only" endpoints without guards.
 - **Dependency hygiene** — minimal, pinned, audited.
@@ -62,6 +57,57 @@ tables whose RLS posture denies ordinary application access. Enforced by
 When an identifier comes from a related row, authorize it in the same query or
 transaction that uses it. A prior UI filter, cache lookup, or separate
 read-then-write check is not an access-control boundary.
+
+### Matter visibility and stewardship
+
+Use `apps/api/src/lib/workspaces/visibility.ts` as the application owner of
+visibility predicates and steward checks. Creation defaults belong to
+`defaultMatterVisibilityFor` in `@stll/api-contract`, shared by the API and web
+client. Read authorized matter sets
+through `apps/api/src/lib/workspaces/authorized-workspace-ids.ts`; do not
+recreate the rule in individual readers.
+
+An `assigned_only` matter needs a usable lead: an internal organization member
+assigned to that matter. Preserve this invariant when changing visibility,
+lead, matter membership, or organization membership and role. The database
+refuses writes that leave such a matter without a usable lead; application
+checks provide the actionable error before that constraint is reached.
+Never widen matter visibility automatically during offboarding, assignment
+removal, role changes, account deletion, or migration repair. Refuse the
+operation until an authorized person explicitly hands the matter to another
+assigned internal member. Refusal responses list only affected matters the
+caller already reaches; hidden matter names, identifiers and counts stay hidden.
+
+Acquire stewardship locks through `lockMatterStewardship` in
+`lib/db/aggregate-lock.ts`: lifecycle IDs, all candidate membership rows by
+member ID, then matter rows by ID. Pass all organizations and matters in one
+request before acquiring any part of that prefix. Revalidate after acquisition;
+retry the whole transaction if discovery grows. Never extend a prefix below an
+already locked matter or upgrade a shared reach hold into a writer.
+Database triggers validate the completed prefix and steward state without
+acquiring further locks. Removal triggers require proof only for losing a
+usable assigned-only steward, and still refuse that loss. Safe removals and
+non-private matter removals remain compatible with older API instances during
+rollout without a proof requirement. Clearing an already unusable legacy lead
+preserves its assigned-only state; deferred creation validation still prevents
+new orphaned matters. Completion proofs are root-owned; mutable session
+settings cannot authorize a mutation. Reach holds, creation, recovery, repair, membership
+changes and deletion use this same protocol. Creation uses
+`create-workspace-row.ts`: scoped creators call `createWorkspaceInTransaction`;
+system seeds and fixtures use `insertWorkspaceRowsInTransaction` or its
+`withWorkspaceCreation` boundary. That owner acquires the complete batch
+prefix before inserting, including generated IDs and future assignees.
+`no-unowned-workspace-insert` rejects private or unresolved inserts outside
+the owner; historical fixtures must prove their schema predates visibility.
+After a mutation acquires its prefix, re-read reach and current authority
+through `readMatterMutationAuthority` before acting on an earlier authorized
+matter ID. Refuse lost reach with the same not-found response as a missing
+matter. Multi-phase copies re-read every copied matter-row field and its
+assignments under the prefix, using the same projection as the snapshot.
+Refuse changed snapshots before inserting a copy and clean up staged files.
+Recovery cannot assign its acting
+administrator; hidden healthy, missing and foreign-organization matters produce
+the same not-found response.
 
 ### Server-bound audit events
 

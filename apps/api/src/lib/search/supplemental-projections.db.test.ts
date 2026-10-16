@@ -11,6 +11,7 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
@@ -158,6 +159,7 @@ const seedContacts = async (org: number, count: number) => {
 const seedWorkspaces = async (org: number, count: number) => {
   await db.insert(workspaces).values(
     Array.from({ length: count }, (_, index) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       createdAt: SEED_AT,
       id: workspaceId(org, index + 1),
       lastActivityAt: SEED_AT,
@@ -440,6 +442,7 @@ describe("batched rebuild parity", () => {
     ]);
     await db.insert(workspaces).values([
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         billingReference: "INV-7",
         clientId: contactId(4, 1),
         createdAt: SEED_AT,
@@ -450,6 +453,7 @@ describe("batched rebuild parity", () => {
         reference: "M-1",
       },
       {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         createdAt: SEED_AT,
         id: workspaceId(4, 2),
         lastActivityAt: SEED_AT,

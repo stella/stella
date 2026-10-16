@@ -28,12 +28,6 @@
       "memberWorkspaceAccess.membershipExists.id": 1
     }
   },
-  "apps/api/src/lib/auth.ts::names-matter-role-rule": {
-    "reason": "Request authorization checks matter reach in the query that reads the member on every request, as an indexed point lookup; it moves onto the database access function when the view and policies are rebuilt on it.",
-    "sites": {
-      "memberWorkspaceAccess": 1
-    }
-  },
   "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
     "reason": "Builds the request matter set from the authorization view inside a scoped transaction; the set only ever holds ids the row policies admitted, and later reads still pass the policies.",
     "sites": {
@@ -70,12 +64,6 @@
       "resolveValidateAuth.getActiveWorkspaceIds.activeWorkspaceIds": 1,
       "resolveValidateAuth.getWorkspaceAccess#rootDb": 1,
       "resolveValidateAuth.orgSettings#rootDb": 1
-    }
-  },
-  "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
-    "reason": "The role condition selects only the existing unassigned-client-matter row lock scope. The later statement decides access with the database rule; lock-order unification is a separate follow-up.",
-    "sites": {
-      "holdMemberAccessOnTx.reachesClientMatters": 1
     }
   },
   "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
@@ -120,24 +108,6 @@
       "rebuildSupplementalSearchIndex#rootDb": 1,
       "syncWorkspaceSearchActivity#rootDb": 1,
       "writeWorkspaceProjections": 2
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": {
-    "reason": "The timer retains the original role/client/assignment predicate only to preserve row-lock scope and the client-admin assignment-lock exemption. A later statement decides access with the database rule; lock-order changes are a separate follow-up.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::names-matter-role-rule": {
-    "reason": "The timer retains the original role/client/assignment predicate only to preserve row-lock scope and the client-admin assignment-lock exemption. A later statement decides access with the database rule; lock-order changes are a separate follow-up.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/workspace-deletion.ts::names-matter-role-rule": {
-    "reason": "The role condition only preserves the assignment-row lock scope for client-matter deletion. A later statement decides matter access with the database rule.",
-    "sites": {
-      "actorCanAccessWorkspace": 1
     }
   }
 }

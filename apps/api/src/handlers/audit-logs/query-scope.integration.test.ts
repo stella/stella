@@ -11,7 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, workspaces } from "@/api/db/schema";
+import { auditLogs, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeDb, createMembershipSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
@@ -19,8 +19,9 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -185,12 +186,26 @@ describe("audit log compliance filter", () => {
       }),
     );
     const personalMatterId = toSafeId<"workspace">(Bun.randomUUIDv7());
-    await testDb.insert(workspaces).values({
-      id: personalMatterId,
-      organizationId: ids.orgA,
-      name: "Matter C",
-      reference: personalMatterId,
-      status: "active",
+    await testDb.transaction(async (tx) => {
+      await insertWorkspaceRowsInTransaction({
+        tx,
+        rows: [
+          {
+            id: personalMatterId,
+            organizationId: ids.orgA,
+            name: "Matter C",
+            reference: personalMatterId,
+            status: "active",
+            visibility: "assigned_only",
+            leadUserId: ids.userA1,
+          },
+        ],
+      });
+      await tx.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: personalMatterId,
+        userId: ids.userA1,
+      });
     });
     seededWorkspaceIds.push(personalMatterId);
     await seedAuditEntry({

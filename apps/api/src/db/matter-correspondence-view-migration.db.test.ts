@@ -1,11 +1,13 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { LIMITS } from "@/api/lib/limits";
 import { getDefaultViews } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 /**
  * The correspondence-view backfill, applied to matters as deployments hold
@@ -32,7 +34,7 @@ const MATTER = {
 /** LIMITS.viewsCount, which the migration hardcodes. */
 const VIEWS_CAP = LIMITS.viewsCount;
 
-const PRE_MIGRATION = `
+const PRE_MIGRATION_SCHEMA = `
 CREATE TABLE workspaces (
   id uuid PRIMARY KEY,
   status text NOT NULL DEFAULT 'active'
@@ -44,6 +46,8 @@ CREATE TABLE workspace_views (
   layout jsonb NOT NULL,
   position integer NOT NULL
 );
+`;
+const PRE_MIGRATION_ROWS = `
 INSERT INTO workspaces (id, status) VALUES
   ('${MATTER.defaults}', 'active'),
   ('${MATTER.hasOne}', 'active'),
@@ -102,7 +106,11 @@ const allViewIds = async (database: PGlite) =>
 test("appends one correspondence view to each matter that lacks one, and replays", async () => {
   const database = new PGlite();
   try {
-    await database.exec(PRE_MIGRATION);
+    await database.exec(PRE_MIGRATION_SCHEMA);
+    await withLegacyWorkspaceFixture({
+      tx: drizzle({ client: database }),
+      insert: async () => await database.exec(PRE_MIGRATION_ROWS),
+    });
     const before = await allViewIds(database);
 
     await database.exec(migrationSql);
@@ -152,7 +160,11 @@ test("appends one correspondence view to each matter that lacks one, and replays
 test("writes the same view a new matter is seeded with", async () => {
   const database = new PGlite();
   try {
-    await database.exec(PRE_MIGRATION);
+    await database.exec(PRE_MIGRATION_SCHEMA);
+    await withLegacyWorkspaceFixture({
+      tx: drizzle({ client: database }),
+      insert: async () => await database.exec(PRE_MIGRATION_ROWS),
+    });
     await database.exec(migrationSql);
 
     const seeded = getDefaultViews("en").find(

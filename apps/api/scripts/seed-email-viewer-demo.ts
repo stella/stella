@@ -1,12 +1,12 @@
+import { panic } from "better-result";
 /**
  * Add the representative email fixtures to the existing local email QA matter.
  * Rerunning is idempotent. Set STELLA_SEED_EMAIL_WORKSPACE_ID to target a
  * different matter that already has a file property.
  */
-
-import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
@@ -31,6 +31,7 @@ import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
@@ -127,16 +128,20 @@ const resolveTarget = async () => {
   };
   if (!existingWorkspace) {
     await db.transaction(async (tx) => {
-      const insertedWorkspaces = await tx
-        .insert(workspaces)
-        .values({
-          id: workspace.id,
-          organizationId: workspace.organizationId,
-          name: workspace.name,
-          reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
-        })
-        .onConflictDoNothing()
-        .returning({ id: workspaces.id });
+      const insertedWorkspaces = await insertWorkspaceRowsInTransaction({
+        tx,
+        rows: [
+          {
+            visibility: defaultMatterVisibilityFor({ hasClient: false }),
+            leadUserId: activeSession.userId,
+            id: workspace.id,
+            organizationId: workspace.organizationId,
+            name: workspace.name,
+            reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
+          },
+        ],
+        onConflict: "ignore",
+      });
       if (!insertedWorkspaces.at(0)) {
         panic(
           "The email QA matter already exists but is not an eligible target.",

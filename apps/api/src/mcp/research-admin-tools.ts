@@ -24,6 +24,7 @@ import {
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -31,7 +32,10 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
@@ -912,6 +916,7 @@ const handleAddMember = async ({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,
+      actorUserId: context.userId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { userId: brandPersistedUserId(userId) },
     }),
@@ -951,10 +956,17 @@ const handleRemoveMember = async ({
   }
   const removed = await Result.gen(() =>
     removeWorkspaceMemberHandler({
+      organizationId: context.organizationId,
       safeDb: context.safeDb,
       workspaceId,
       userId: brandPersistedUserId(userId),
       actorUserId: context.userId,
+      managesOrganizationMatters: hasManagementPermission(
+        mcpMemberAuthority(context),
+        {
+          workspace: ["update"],
+        },
+      ),
       reassignTo:
         reassignTo === undefined ? undefined : brandPersistedUserId(reassignTo),
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),

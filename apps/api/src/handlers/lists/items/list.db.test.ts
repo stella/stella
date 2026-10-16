@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The item listing reads each fact's evidential detail through a left join,
  * so an item without a detail row lists `factDetails: null` while an item with
@@ -6,11 +7,10 @@
  * database driver's row mapper, so only a real database shows it. The same
  * holds for the first source each item lists, read through a lateral join.
  */
-
-import { Result } from "better-result";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -98,6 +98,7 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     });
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "List items matter",

@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
       "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
+      "matterStewardHandoverRequired": "A folytatás előtt adja át az érintett ügyeket egy másik, hozzájuk rendelt belső tagnak.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Ügy neve",
-      "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
+      "personalDescription": "Ügyfél nélkül csak Ön látja az ügyet. Később megoszthatja, ha módosítja, ki láthatja."
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Nincs megfelelő tag"
     },
+    "leadReadOnly": "A felelőst csak a jelenlegi felelős vagy egy adminisztrátor módosíthatja.",
     "lockMatter": "Zárolás",
     "matterInfo": "Ügy adatai",
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Harmadik fél",
         "witness": "Tanú"
       },
-      "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
-      "personalLabel": "Személyes",
-      "promoteCta": "Előléptetés ügyfélüggyé",
-      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
-      "promotedSuccess": "Ügy előléptetve",
+      "personalDescription": "Ennek az ügynek nincs ügyfele. Ügyfél hozzáadása nem változtat azon, ki látja az ügyet.",
+      "personalLabel": "Ügyfél nélkül",
+      "promoteCta": "Ügyfél beállítása",
+      "promoteDescription": "Válassza ki az ügy ügyfelét. Az, hogy ki látja az ügyet, nem változik.",
+      "promotedSuccess": "Ügyfél beállítva",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Előbeállítás használata…",
       "viewSettings": "Nézetbeállítások"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Adminisztrátorok és hozzárendelt tagok",
+      "adminsAndAssignedDescription": "A csapat tulajdonosai és adminisztrátorai, valamint az ügyhöz hozzáadott személyek.",
+      "adminsAndAssignedSummary": "A csapat tulajdonosai és adminisztrátorai, valamint az ügy tagjai.",
+      "allMembers": "A csapat összes belső tagja",
+      "allMembersDescription": "A csapat minden belső tagja megnyithatja anélkül, hogy hozzáadnák. Külső felhasználók nem.",
+      "allMembersSummary": "A csapat minden belső tagja, valamint az ügy tagjai.",
+      "assignedOnly": "Csak hozzárendelt tagok",
+      "assignedOnlyDescription": "Csak az ügyhöz hozzáadott személyek. A tulajdonosok és adminisztrátorok csak akkor nyithatják meg, ha hozzáadják őket.",
+      "assignedOnlySummary": "Csak az ügy tagjai.",
+      "badgeAllMembers": "Egész csapat",
+      "badgeAllMembersTitle": "A csapat minden belső tagja megnyithatja ezt az ügyet",
+      "badgeAssignedOnly": "Csak hozzárendeltek",
+      "badgeAssignedOnlyTitle": "Ezt az ügyet csak a hozzáadott személyek nyithatják meg",
+      "confirmAction": "Láthatóvá tétel",
+      "confirmCancel": "Jelenlegi hozzáférés megtartása",
+      "confirmDescriptionAdmins": "A csapat tulajdonosai és adminisztrátorai megnyithatják a(z) <bdi>{matterName}</bdi> ügyet és annak teljes tartalmát: az ügyhöz kapcsolódó dokumentumokat, feladatokat, időbejegyzéseket és AI-csevegéseket.",
+      "confirmDescriptionAllMembers": "A csapat minden belső tagja megnyithatja a(z) <bdi>{matterName}</bdi> ügyet és annak teljes tartalmát: az ügyhöz kapcsolódó dokumentumokat, feladatokat, időbejegyzéseket és AI-csevegéseket.",
+      "confirmNote": "A jelenlegi tagok megtartják a hozzáférésüket. A módosítás bekerül a tevékenységnaplóba, és később ismét szűkítheti.",
+      "confirmTitle": "Több személy számára teszi láthatóvá az ügyet?",
+      "label": "Ki láthatja ezt az ügyet",
+      "settingLabel": "Ki látja",
+      "summaryReadOnly": "{summary} Ezt csak az ügy felelőse vagy egy adminisztrátor módosíthatja.",
+      "updated": "Hozzáférés frissítve"
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

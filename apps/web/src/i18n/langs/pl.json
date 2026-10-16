@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "matterContactCapacityExceeded": "Ta sprawa zawiera więcej kontaktów, niż można wyświetlić. Usuń widoczne powiązania z kontaktami, aby wyświetlić pozostałe kontakty.",
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
+      "matterStewardHandoverRequired": "Przed kontynuowaniem przekaż te sprawy innemu przypisanemu członkowi wewnętrznemu.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Nazwa sprawy",
-      "personalDescription": "Sprawy osobiste są prywatne i nie wymagają klienta. Możesz je później awansować, aby udostępnić zespołowi."
+      "personalDescription": "Bez klienta sprawę widzisz tylko Ty. Możesz ją później udostępnić, zmieniając, kto może ją widzieć."
     },
     "createNewWorkspace": "Utwórz nową sprawę",
     "defaultName": "Bez tytułu",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "Brak pasujących członków"
     },
+    "leadReadOnly": "Prowadzącego może zmienić tylko obecny prowadzący lub administrator.",
     "lockMatter": "Zablokuj",
     "matterInfo": "Informacje o sprawie",
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Strona trzecia",
         "witness": "Świadek"
       },
-      "personalDescription": "Sprawy osobiste są prywatne. Awansuj je na sprawy klienckie, aby udostępnić zespołowi.",
-      "personalLabel": "Osobista",
-      "promoteCta": "Awansuj na sprawę kliencką",
-      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
-      "promotedSuccess": "Sprawa awansowana",
+      "personalDescription": "Ta sprawa nie ma klienta. Dodanie klienta nie zmienia tego, kto widzi sprawę.",
+      "personalLabel": "Bez klienta",
+      "promoteCta": "Ustaw klienta",
+      "promoteDescription": "Wybierz klienta dla tej sprawy. To, kto widzi sprawę, pozostaje bez zmian.",
+      "promotedSuccess": "Ustawiono klienta",
       "removeClient": "Usuń klienta",
       "removeParty": "Usuń stronę",
       "removePartyConfirm": "Czy na pewno chcesz usunąć tę stronę ze sprawy?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Użyj ustawienia wstępnego…",
       "viewSettings": "Ustawienia widoku"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratorzy i przypisani członkowie",
+      "adminsAndAssignedDescription": "Właściciele i administratorzy zespołu oraz osoby, które dodasz do sprawy.",
+      "adminsAndAssignedSummary": "Właściciele i administratorzy zespołu oraz członkowie sprawy.",
+      "allMembers": "Wszyscy wewnętrzni członkowie zespołu",
+      "allMembersDescription": "Każdy wewnętrzny członek zespołu może ją otworzyć bez dodawania. Użytkownicy zewnętrzni nie.",
+      "allMembersSummary": "Każdy wewnętrzny członek zespołu oraz członkowie sprawy.",
+      "assignedOnly": "Tylko przypisani członkowie",
+      "assignedOnlyDescription": "Tylko osoby, które dodasz do sprawy. Właściciele i administratorzy nie otworzą jej, dopóki nie zostaną dodani.",
+      "assignedOnlySummary": "Tylko członkowie sprawy.",
+      "badgeAllMembers": "Cały zespół",
+      "badgeAllMembersTitle": "Każdy wewnętrzny członek zespołu może otworzyć tę sprawę",
+      "badgeAssignedOnly": "Tylko przypisani",
+      "badgeAssignedOnlyTitle": "Tę sprawę mogą otworzyć tylko dodane do niej osoby",
+      "confirmAction": "Pokaż większej liczbie osób",
+      "confirmCancel": "Zachowaj obecny dostęp",
+      "confirmDescriptionAdmins": "Właściciele i administratorzy zespołu będą mogli otworzyć sprawę <bdi>{matterName}</bdi> i wszystko, co w niej jest: dokumenty, zadania, wpisy czasu i czaty AI powiązane ze sprawą.",
+      "confirmDescriptionAllMembers": "Każdy wewnętrzny członek zespołu będzie mógł otworzyć sprawę <bdi>{matterName}</bdi> i wszystko, co w niej jest: dokumenty, zadania, wpisy czasu i czaty AI powiązane ze sprawą.",
+      "confirmNote": "Obecni członkowie zachowają dostęp. Zmiana zostanie zapisana w rejestrze aktywności, a później możesz ją ponownie ograniczyć.",
+      "confirmTitle": "Pokazać sprawę większej liczbie osób?",
+      "label": "Kto widzi tę sprawę",
+      "settingLabel": "Kto widzi",
+      "summaryReadOnly": "{summary} Zmienić to może tylko prowadzący sprawę lub administrator.",
+      "updated": "Zaktualizowano dostęp"
     },
     "workflow": {
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",

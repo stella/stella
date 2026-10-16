@@ -7,6 +7,8 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { stella } from "@/api/db/rls";
 import {
   billingCodes,
@@ -1443,6 +1445,7 @@ describe("workspaces table — wrong scope", () => {
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(async () =>
         tx.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: toSafeId<"workspace">(Bun.randomUUIDv7()),
           organizationId: ids.orgB,
           clientId: ids.contactB,

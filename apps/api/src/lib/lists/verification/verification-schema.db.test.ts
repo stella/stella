@@ -1,12 +1,13 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 // The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * The verdict and review invariants the verification tables state
  * themselves, so no writer (engine, handler, or a future import) can store a
  * claim whose verdict and score disagree, or rewrite a reviewer's action.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { organization } from "@/api/db/auth-schema";
 import {
@@ -43,6 +44,7 @@ beforeAll(async () => {
     createdAt: new Date(),
   });
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Verification matter",

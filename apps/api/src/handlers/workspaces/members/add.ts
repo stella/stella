@@ -13,9 +13,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId } from "@/api/lib/custom-schema";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { readMatterMutationAuthority } from "@/api/lib/workspaces/visibility";
 
 const addWorkspaceMemberBodySchema = t.Object({
   userId: tUserId,
@@ -39,6 +41,7 @@ export type AddWorkspaceMemberProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof addWorkspaceMemberBodySchema>;
 };
@@ -50,11 +53,32 @@ export const addWorkspaceMemberHandler = async function* ({
   safeDb,
   organizationId,
   workspaceId,
+  actorUserId,
   recordAuditEvent,
   body,
 }: AddWorkspaceMemberProps) {
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId,
+            workspaceIds: [workspaceId],
+            userIds: [actorUserId, body.userId],
+          },
+        ],
+        mode: "update",
+      });
+      const authority = await readMatterMutationAuthority(tx, {
+        permissions: config.permissions,
+        organizationId,
+        workspaceId,
+        userId: actorUserId,
+      });
+      if (authority === null) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
       // Lock the workspace row first so concurrent workspace
       // deletion or promotion cannot race this membership insert.
       const workspaceRows = await tx
@@ -68,7 +92,7 @@ export const addWorkspaceMemberHandler = async function* ({
         return { ok: false as const, reason: "not_found" as const };
       }
 
-      // Workspace -> organization membership -> matter memberships, matching promotion.
+      // The canonical protocol already holds the relevant organization memberships.
       const orgMembers = await tx
         .select({ id: member.id })
         .from(member)
@@ -77,8 +101,7 @@ export const addWorkspaceMemberHandler = async function* ({
             eq(member.organizationId, organizationId),
             eq(member.userId, body.userId),
           ),
-        )
-        .for("key share");
+        );
       if (orgMembers.length === 0) {
         return { ok: false as const, reason: "not_member" as const };
       }
@@ -164,11 +187,19 @@ export const addWorkspaceMemberHandler = async function* ({
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* addWorkspaceMemberHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
+      actorUserId: user.id,
       recordAuditEvent,
       body,
     });

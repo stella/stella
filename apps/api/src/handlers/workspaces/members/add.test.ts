@@ -7,7 +7,10 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import addWorkspaceMember from "./add";
 
@@ -53,19 +56,22 @@ const createContext = ({
 
 const selectRowsInOrder = (rowsByCall: unknown[][], isMember = true) => {
   let callIndex = 0;
-
-  return () => ({
-    from: (table: unknown) => ({
-      where: () => ({
-        for: async () => {
-          if (table === member) {
-            return isMember ? [{ id: "member_existing" }] : [];
-          }
-          return rowsByCall.at(callIndex++) ?? [];
-        },
-      }),
-    }),
-  });
+  return (selectedFields: Record<string, unknown>) => {
+    if ("role" in selectedFields) {
+      return createSelectQueryMock([{ role: "owner" }]);
+    }
+    return {
+      from: (table: unknown) => {
+        let rows = rowsByCall.at(callIndex) ?? [];
+        if (table === member) {
+          rows = isMember ? [{ id: "member_existing" }] : [];
+        } else {
+          callIndex += 1;
+        }
+        return createSelectQueryMock(rows).from();
+      },
+    };
+  };
 };
 
 const isArrayWithLength = (
@@ -74,7 +80,7 @@ const isArrayWithLength = (
 ): value is unknown[] => Array.isArray(value) && value.length === length;
 
 describe("addWorkspaceMember", () => {
-  test("adds a member to a personal matter", async () => {
+  test("adds a member to a matter without a client", async () => {
     const createdAt = new Date("2026-01-01T00:00:00.000Z");
     const createdWorkspaceMemberId = toSafeId<"workspaceMember">(
       Bun.randomUUIDv7(),

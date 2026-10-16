@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { apikey, member, session } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -81,6 +83,7 @@ test.each([
     }));
     await db.insert(workspaces).values(
       workspaceIds.map((id) => ({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id,
         organizationId: brandPersistedOrganizationId(org.id),
         name: "Assignment matter",
@@ -132,6 +135,7 @@ test.each([
     const otherWorkspaceId = createSafeId<"workspace">();
     const otherTaskId = createSafeId<"entity">();
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherWorkspaceId,
       organizationId: brandPersistedOrganizationId(otherOrg.id),
       name: "Other matter",
@@ -389,6 +393,7 @@ test("a re-invited member returns without credentials, matters or approvals", as
   const entryId = createSafeId<"timeEntry">();
   const apiKeyId = Bun.randomUUIDv7();
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: brandPersistedOrganizationId(org.id),
     name: "Rejoin matter",

@@ -2640,6 +2640,7 @@
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
       "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
       "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
+      "matterStewardHandoverRequired": "Antes de continuar, transfiera los asuntos afectados a otro miembro interno asignado.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
@@ -5807,7 +5808,7 @@
     },
     "create": {
       "matterName": "Nombre del asunto",
-      "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
+      "personalDescription": "Sin cliente, solo tú puedes ver el asunto. Puedes compartirlo más tarde cambiando quién puede verlo."
     },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
@@ -6126,6 +6127,7 @@
     "leadPicker": {
       "noMatchingMembers": "No hay miembros coincidentes"
     },
+    "leadReadOnly": "Solo el responsable actual o un administrador puede cambiar el responsable.",
     "lockMatter": "Bloquear",
     "matterInfo": "Información del asunto",
     "mattersCount": "{count, plural, one {# asunto} other {# asuntos}}",
@@ -6276,11 +6278,11 @@
         "third_party": "Tercero",
         "witness": "Testigo"
       },
-      "personalDescription": "Los asuntos personales son privados. Promocione a un cliente para compartir con el equipo.",
-      "personalLabel": "Personal",
-      "promoteCta": "Promocionar a cliente",
-      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
-      "promotedSuccess": "Asunto promocionado",
+      "personalDescription": "Este asunto no tiene cliente. Añadir uno no cambia quién puede verlo.",
+      "personalLabel": "Sin cliente",
+      "promoteCta": "Establecer cliente",
+      "promoteDescription": "Elige el cliente de este asunto. Quién puede ver el asunto no cambia.",
+      "promotedSuccess": "Cliente establecido",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
       "removePartyConfirm": "¿Está seguro de que desea eliminar esta parte del asunto?",
@@ -6638,6 +6640,31 @@
       },
       "useTemplate": "Usar preajuste…",
       "viewSettings": "Configuración de vista"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administradores y miembros asignados",
+      "adminsAndAssignedDescription": "Los propietarios y administradores del equipo, y las personas que añadas al asunto.",
+      "adminsAndAssignedSummary": "Los propietarios y administradores del equipo, y los miembros del asunto.",
+      "allMembers": "Todos los miembros internos del equipo",
+      "allMembersDescription": "Cualquier miembro interno del equipo puede abrirlo sin que se le añada. Los usuarios externos no.",
+      "allMembersSummary": "Cualquier miembro interno del equipo, y los miembros del asunto.",
+      "assignedOnly": "Solo miembros asignados",
+      "assignedOnlyDescription": "Solo las personas que añadas al asunto. Los propietarios y administradores no pueden abrirlo salvo que se les añada.",
+      "assignedOnlySummary": "Solo los miembros del asunto.",
+      "badgeAllMembers": "Todo el equipo",
+      "badgeAllMembersTitle": "Cualquier miembro interno del equipo puede abrir este asunto",
+      "badgeAssignedOnly": "Solo asignados",
+      "badgeAssignedOnlyTitle": "Solo las personas añadidas a este asunto pueden abrirlo",
+      "confirmAction": "Mostrar a más personas",
+      "confirmCancel": "Mantener el acceso actual",
+      "confirmDescriptionAdmins": "Los propietarios y administradores del equipo podrán abrir <bdi>{matterName}</bdi> y todo su contenido: documentos, tareas, registros de tiempo y chats de IA vinculados al asunto.",
+      "confirmDescriptionAllMembers": "Cualquier miembro interno del equipo podrá abrir <bdi>{matterName}</bdi> y todo su contenido: documentos, tareas, registros de tiempo y chats de IA vinculados al asunto.",
+      "confirmNote": "Los miembros actuales conservan su acceso. El cambio queda en el registro de actividad y puedes volver a restringirlo más adelante.",
+      "confirmTitle": "¿Mostrar este asunto a más personas?",
+      "label": "Quién puede ver este asunto",
+      "settingLabel": "Quién lo ve",
+      "summaryReadOnly": "{summary} Solo el responsable del asunto o un administrador puede cambiarlo.",
+      "updated": "Acceso actualizado"
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

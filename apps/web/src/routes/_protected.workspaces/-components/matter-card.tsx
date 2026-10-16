@@ -22,6 +22,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { MatterVisibilityBadge } from "@/components/workspaces/matter-visibility";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -138,6 +139,7 @@ export const MatterCard = ({
                   </Link>
                 )}
               </h2>
+              <MatterVisibilityBadge visibility={workspace.visibility} />
               {showMatterNumber &&
                 rename.status !== "editing" &&
                 workspace.reference && (

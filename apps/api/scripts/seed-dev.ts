@@ -24,6 +24,7 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import type {
   ExpenseCategory,
   InvoiceStatus,
@@ -99,6 +100,7 @@ import type {
   Position,
   PositionSeverity,
 } from "@/api/lib/workflow/playbook-positions";
+import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
@@ -5346,22 +5348,32 @@ export async function seed(organizationId?: string, userId?: string) {
     workspaceActivityById.set(ws.id, lastActivityAt);
     await db.transaction(
       async (tx) =>
-        await tx
-          .insert(workspaces)
-          .values({
-            id: ws.id,
-            organizationId: ORG_ID,
-            name: ws.name,
-            reference: ws.reference,
-            clientId: ws.clientId,
-            billingReference:
-              "billingReference" in ws ? ws.billingReference : undefined,
-            lastActivityAt,
-          })
-          .onConflictDoUpdate({
-            target: workspaces.id,
-            set: { lastActivityAt },
-          }),
+        await withWorkspaceCreation({
+          tx,
+          rows: [
+            {
+              visibility: defaultMatterVisibilityFor({
+                hasClient: true,
+              }),
+              id: ws.id,
+              organizationId: ORG_ID,
+              name: ws.name,
+              reference: ws.reference,
+              clientId: ws.clientId,
+              billingReference:
+                "billingReference" in ws ? ws.billingReference : undefined,
+              lastActivityAt,
+            },
+          ],
+          insert: async (normalizedRows) =>
+            await tx
+              .insert(workspaces)
+              .values(normalizedRows)
+              .onConflictDoUpdate({
+                target: workspaces.id,
+                set: { lastActivityAt },
+              }),
+        }),
     );
   }
   // 2b. Additional workspaces (overview stress-testing)
@@ -5376,20 +5388,28 @@ export async function seed(organizationId?: string, userId?: string) {
     workspaceActivityById.set(wsId, lastActivityAt);
     await db.transaction(
       async (tx) =>
-        await tx
-          .insert(workspaces)
-          .values({
-            id: wsId,
-            organizationId: ORG_ID,
-            name: mw.name,
-            reference: mw.reference,
-            clientId,
-            lastActivityAt,
-          })
-          .onConflictDoUpdate({
-            target: workspaces.id,
-            set: { lastActivityAt },
-          }),
+        await withWorkspaceCreation({
+          tx,
+          rows: [
+            {
+              visibility: defaultMatterVisibilityFor({ hasClient: true }),
+              id: wsId,
+              organizationId: ORG_ID,
+              name: mw.name,
+              reference: mw.reference,
+              clientId,
+              lastActivityAt,
+            },
+          ],
+          insert: async (normalizedRows) =>
+            await tx
+              .insert(workspaces)
+              .values(normalizedRows)
+              .onConflictDoUpdate({
+                target: workspaces.id,
+                set: { lastActivityAt },
+              }),
+        }),
     );
 
     moreWsCount++;

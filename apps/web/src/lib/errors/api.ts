@@ -9,11 +9,16 @@ import {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
   MEMBER_REMOVAL_BUSY_CODE,
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  matterStewardHandoverMattersSchema,
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
+import type {
+  MatterStewardHandoverMatter,
+  ApiValidationIssue,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -45,6 +50,7 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  affectedMatters?: MatterStewardHandoverMatter[] | undefined;
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
@@ -117,7 +123,23 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
       message: "Invalid provider diagnostic response",
     });
   }
+  const affectedMatters =
+    code === MATTER_STEWARD_HANDOVER_REQUIRED_CODE
+      ? v.safeParse(
+          matterStewardHandoverMattersSchema,
+          details?.["affectedMatters"],
+        )
+      : undefined;
+  if (affectedMatters !== undefined && !affectedMatters.success) {
+    throw new ClientOperationError({
+      action: "parse-matter-handover-refusal",
+      message: "Invalid matter handover response",
+    });
+  }
   return new APIError({
+    ...(affectedMatters?.success
+      ? { affectedMatters: affectedMatters.output }
+      : {}),
     ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
     ...(code === undefined ? {} : { code }),
     ...(details === undefined ? {} : { details }),
@@ -140,6 +162,8 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
 const CODE_ERROR_KEYS = {
+  [MATTER_STEWARD_HANDOVER_REQUIRED_CODE]:
+    "errors.apiCodes.matterStewardHandoverRequired",
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
