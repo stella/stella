@@ -8,6 +8,7 @@ import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
@@ -34,7 +35,7 @@ const executeManualFixtureQuery = async (query: SQL) => {
       },
     ];
   }
-  return [{ key1: 1, key2: 1, acquired: true }];
+  return aggregateExecutionRows(query);
 };
 
 const manualFixtureRows = (projection: Record<string, unknown>) => {
@@ -78,15 +79,16 @@ const selectManualFixtureRows = (projection: Record<string, unknown>) => {
   return { from: async () => query };
 };
 
-// Organization-scoped writes open a savepoint on the caller transaction; the
-// fixture runs it on the same fake so its rows and counters stay shared.
+// Savepoints share rows and counters, but each transaction level needs its own
+// identity so aggregate lock histories follow PostgreSQL savepoint lifetimes.
 const withSavepoints = <T extends object>(tx: T) => {
   const fake: T & {
     transaction: <R>(run: (savepoint: T) => Promise<R>) => Promise<R>;
-  } = Object.assign(tx, {
+  } = {
+    ...tx,
     transaction: async <R>(run: (savepoint: T) => Promise<R>) =>
-      await run(fake),
-  });
+      await run(withSavepoints(tx)),
+  };
   return fake;
 };
 
