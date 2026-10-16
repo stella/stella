@@ -198,7 +198,7 @@ export const createWebHangDetector = ({
   const suspected = storageReady && prior !== null;
   const safeMode = storageReady && recovery;
   if (suspected && previous) {
-    Result.try(() => local?.removeItem(previous.key));
+    Result.try(() => local?.removeItem(previous.key)).unwrapOr(undefined);
   }
   if (safeMode) {
     resetPersistedUiState(local);
@@ -231,7 +231,7 @@ export const createWebHangDetector = ({
   };
   const onHide = () => {
     stopped = true;
-    Result.try(() => local?.removeItem(key));
+    Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
   };
   const onShow = () => {
     stopped = false;
@@ -287,7 +287,7 @@ export const createWebHangDetector = ({
         // Remove the failed-boot record after recovery; subsequent heartbeats
         // describe the healthy session rather than triggering recovery again.
         if (safeMode) {
-          Result.try(() => local?.removeItem(key));
+          Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
         } else {
           persist();
         }
