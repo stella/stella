@@ -108,6 +108,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
 import { deriveContactDisplayName } from "@/api/mcp/matter-tools";
 import { windowProvisionText } from "@/api/mcp/provision-text-window";
+import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { getMcpResourceModeConfig } from "@/api/mcp/resource-policy-contract";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -5970,6 +5971,70 @@ describe("OpenAI-compatible MCP tools", () => {
         context: createContext(),
         toolName: "read_case_law_decision",
       });
+
+    test.each([null, createCitationDigest()])(
+      "identity-only countries report unavailable citations on MCP and CLI (%#)",
+      async (digest) => {
+        const base = createReadDecisionResult();
+        readGatedDecisionMock.mockResolvedValue({
+          ...base,
+          id: toSafeId<"caseLawDecision">(DECISION_ID),
+          country: "EU",
+          decisionDate: "2024-02-01",
+          documentAst: null,
+          fulltext: "Synthetic EU decision.",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: base.caseNumber,
+            },
+          ],
+          documentPending: false,
+          hasDocument: true,
+          documentReadFailed: false,
+          documentUnavailable: false,
+          courtId: null,
+          courtTier: "other",
+          languageGroupKey: null,
+          projectionDigest: null,
+          documentAstSource: null,
+          sections: null,
+          headnote: base.textFields.headnote,
+          createdAt: new Date("2024-02-01T00:00:00.000Z"),
+          updatedAt: new Date("2024-02-01T00:00:00.000Z"),
+          source: { ...base.source, id: toSafeId<"caseLawSource">("src_1") },
+          judges: [],
+          languageAlternates: [],
+          citationsFrom: [],
+          citationsTo: [],
+        } satisfies ReadCaseLawDecisionSuccess);
+        readGatedDecisionCitationDigestMock.mockResolvedValue(digest);
+        const result = await handleMcpToolCall({
+          args: { decision_ids: [DECISION_ID], include: ["citations"] },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        });
+        const mcp = parseToolPayload(result);
+        expect(mcp).toMatchObject({
+          items: [
+            {
+              status: "found",
+              decision: {
+                citations: {
+                  status: "unavailable",
+                  reason: "country_not_search_admitted",
+                  country: "EU",
+                },
+              },
+            },
+          ],
+        });
+        const cli = renderThroughCli(result, undefined);
+        expect(cli.printed).toEqual(mcp);
+        expect(cli.exitCode).toBe(0);
+        expect(readGatedDecisionCitationDigestMock).not.toHaveBeenCalled();
+      },
+    );
 
     test("query passage identity and enclosing headings survive the MCP to CLI contract", async () => {
       const base = createReadDecisionResult();

@@ -3081,6 +3081,20 @@ const decisionStaticFields = ({
     read.source.name.trim().toLowerCase() === read.court.trim().toLowerCase()
       ? null
       : read.source.name;
+  const citationFields: Pick<FoundDecision, "citations"> = {};
+  if (includedFields.has("citations")) {
+    if (publicCountryUnavailable(read.country, "search") !== null) {
+      citationFields.citations = {
+        status: "unavailable",
+        reason: "country_not_search_admitted",
+        country: read.country,
+      };
+    } else if (digest !== undefined && digest !== null) {
+      citationFields.citations = citationSummaryOutput(digest, (cited) =>
+        caseLawDecisionAppUrlOf(cited),
+      );
+    }
+  }
   return {
     ...(includedFields.has("details")
       ? {
@@ -3114,15 +3128,7 @@ const decisionStaticFields = ({
     ...(includedFields.has("source") && sourceName !== null
       ? { source: sourceName }
       : {}),
-    ...(includedFields.has("citations") &&
-    digest !== undefined &&
-    digest !== null
-      ? {
-          citations: citationSummaryOutput(digest, (cited) =>
-            caseLawDecisionAppUrlOf(cited),
-          ),
-        }
-      : {}),
+    ...citationFields,
   };
 };
 
@@ -3494,9 +3500,8 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     reads.set(decisionId, hydrated);
   }
 
-  // The citation summary, for the entries that answer `found` and asked for
-  // it. Its own gated read: the same gate, so a decision the read could not
-  // see has no summary either.
+  // Citation data requires search admission even when the decision itself
+  // is readable by identity. Closed countries receive a typed disposition.
   const readDigest =
     context.testDependencies?.readGatedDecisionCitationDigest ??
     defaultReadGatedDecisionCitationDigest;
@@ -3506,6 +3511,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         return (
           value !== null &&
           isReadCaseLawDecisionSuccess(value) &&
+          publicCountryUnavailable(value.country, "search") === null &&
           !isDecisionDocumentPending(value, readsSharedCorpus)
         );
       })

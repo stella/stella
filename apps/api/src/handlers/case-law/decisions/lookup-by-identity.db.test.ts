@@ -438,7 +438,7 @@ test("EU ECLI resolution returns one decision with its stored language versions"
     publicLawEnabled: () => true,
   });
   if (Result.isError(admitted)) {
-    return panic("Fixture law read was not admitted");
+    panic("Fixture law read was not admitted");
   }
   const rows = await lookupDecisionsByIdentity({
     caseLawDb,
