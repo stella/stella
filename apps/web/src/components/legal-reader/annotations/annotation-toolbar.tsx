@@ -71,6 +71,7 @@ type AnnotationToolbarProps = {
    * no notes margin, where the bar offers no comment at all rather than an
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
+  onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -189,6 +190,7 @@ export const AnnotationToolbar = ({
   onActivateAnnotation,
   onClearActive,
   onCompose,
+  onExplain,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
@@ -826,6 +828,24 @@ export const AnnotationToolbar = ({
                 </Button>
               )}
             </CapabilityAction>
+            {onExplain !== undefined && (
+              <CapabilityAction action={{ capability: "ai" }} surface="control">
+                {(capabilityProps) => (
+                  <Button
+                    onClick={() => {
+                      onExplain(spans);
+                      clearSelection();
+                    }}
+                    size="sm"
+                    variant="ghost"
+                    {...capabilityProps}
+                  >
+                    <SparklesIcon className="size-3.5" />
+                    {t("readerAnswers.explain")}
+                  </Button>
+                )}
+              </CapabilityAction>
+            )}
           </>
         )}
         {spans.length > 0 && (

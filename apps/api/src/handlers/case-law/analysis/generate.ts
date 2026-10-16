@@ -110,6 +110,7 @@ export const ANALYSIS_OUTPUT_TOKEN_BUDGET = 16_384;
 export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   output_incomplete: "answer_incomplete",
   output_invalid: "answer_incomplete",
+  output_moderated: "provider_refused",
   provider_stream_incomplete: "answer_incomplete",
   empty_completion: "answer_incomplete",
   loop_detected: "answer_incomplete",
@@ -126,6 +127,7 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
 const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   output_incomplete: "incomplete_output",
   output_invalid: "invalid_output",
+  output_moderated: null,
   provider_stream_incomplete: "incomplete_output",
   empty_completion: "incomplete_output",
   loop_detected: "incomplete_output",

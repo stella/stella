@@ -5,12 +5,13 @@
 // from it is still current. Replaying costs some thousands of stat calls and
 // file hashes instead of a full parse and type check.
 import { Result } from "better-result";
-import { type Stats, readFileSync, statSync } from "node:fs";
+import { type Stats, readFileSync, realpathSync, statSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 const pathListSchema = v.array(v.string());
@@ -98,6 +99,130 @@ export type CompilerInputRecorder = {
   /** Records a file the caller reads outside the compiler. */
   readFile: (fileName: string) => string | undefined;
   stamp: (context: string) => CompilerInputStamp;
+  /**
+   * The same answers for another checkout or machine: installed files are
+   * compared by content (another install writes them with other times) and
+   * paths under `root` are stored relative to it (see toPortableStamp).
+   */
+  portableStamp: (context: string, root: string) => CompilerInputStamp;
+};
+
+// Stands for the checkout root, or its real path, in a portable stamp. Real
+// paths leave the root's spelling when it is reached through a symbolic link
+// (macOS /var and /tmp are), so they move with the real root instead. The
+// depth is part of the token: only a checkout with as many ancestors gets the
+// same module-resolution walk, so only it can reuse the stamp.
+const ROOT_TOKEN_PATTERN = /<(?:real-)?root:\d+>/gu;
+const rootToken = (kind: "root" | "real-root", base: string) =>
+  `<${kind}:${base.split(path.sep).filter(Boolean).length}>`;
+
+// Module resolution walks up from the root: each ancestor's node_modules and
+// package.json scope. Those probes follow the checkout to its new parents;
+// any other path outside the root names the same file everywhere.
+const isAncestorWalkProbe = (fromAncestor: string) =>
+  fromAncestor === "" ||
+  fromAncestor === "package.json" ||
+  fromAncestor === "node_modules" ||
+  fromAncestor.startsWith("node_modules/");
+
+const toPortablePath = (value: string, base: string, token: string) => {
+  const relative = repoRelativePath(base, value);
+  if (relative === "") {
+    return token;
+  }
+  if (relative !== ".." && !relative.startsWith("../")) {
+    return `${token}/${relative}`;
+  }
+  const fromAncestor = relative.replace(/^(?:\.\.(?:\/|$))+/u, "");
+  return isAncestorWalkProbe(fromAncestor) ? `${token}/${relative}` : value;
+};
+
+const toLocalPath = (value: string, token: string, base: string) => {
+  if (value === token) {
+    return base;
+  }
+  return value.startsWith(`${token}/`)
+    ? path.join(base, value.slice(token.length + 1))
+    : value;
+};
+
+/** Rewrites every path in a stamp with `move`. */
+const relocateStamp = (
+  stamp: CompilerInputStamp,
+  move: (value: string) => string,
+): CompilerInputStamp => {
+  const moveList = (values: readonly string[]) => values.map(move);
+  const moveKeys = <Value>(
+    record: Record<string, Value>,
+    moveValue: (value: Value) => Value,
+  ) =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        move(key),
+        moveValue(value),
+      ]),
+    );
+  const keep = <Value>(value: Value) => value;
+  return {
+    context: stamp.context,
+    contents: moveKeys(stamp.contents, keep),
+    installed: moveKeys(stamp.installed, keep),
+    files: {
+      present: moveList(stamp.files.present),
+      absent: moveList(stamp.files.absent),
+    },
+    directories: {
+      present: moveList(stamp.directories.present),
+      absent: moveList(stamp.directories.absent),
+    },
+    realpaths: moveKeys(stamp.realpaths, move),
+    subdirectories: moveKeys(stamp.subdirectories, moveList),
+    listings: stamp.listings.map(
+      ([[directory, extensions, excludes, includes, depth], found]) => [
+        [
+          move(directory),
+          extensions,
+          excludes === null ? null : moveList(excludes),
+          includes === null ? null : moveList(includes),
+          depth,
+        ],
+        moveList(found),
+      ],
+    ),
+  };
+};
+
+/**
+ * Stores the paths under a checkout `root`, and the probes module resolution
+ * makes in its ancestors, relative to it.
+ */
+const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  const token = rootToken("root", root);
+  const realToken = rootToken("real-root", realRoot);
+  return relocateStamp(stamp, (value) => {
+    const portable = toPortablePath(value, root, token);
+    return portable === value
+      ? toPortablePath(value, realRoot, realToken)
+      : portable;
+  });
+};
+
+/**
+ * Places a portable stamp's relative paths under the checkout `root`, or
+ * returns undefined when the stamp came from a root at another depth.
+ */
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+  const realRoot = realpathSync(root);
+  const token = rootToken("root", root);
+  const realToken = rootToken("real-root", realRoot);
+  const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
+  if (tokens.some((found) => found !== token && found !== realToken)) {
+    return undefined;
+  }
+  return relocateStamp(stamp, (value) =>
+    toLocalPath(toLocalPath(value, realToken, realRoot), token, root),
+  );
 };
 
 // Paths and keys, not text: a stable code-unit order on every machine.
@@ -121,6 +246,7 @@ const existence = (answers: Map<string, boolean>) => {
 export const createCompilerInputRecorder = (): CompilerInputRecorder => {
   const contents = new Map<string, string | null>();
   const installed = new Map<string, string | null>();
+  const installedContents = new Map<string, string | null>();
   const files = new Map<string, boolean>();
   const directories = new Map<string, boolean>();
   const realpaths = new Map<string, string>();
@@ -137,6 +263,7 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
           ? null
           : installedFingerprint(statSync(fileName, { throwIfNoEntry: false })),
       );
+      installedContents.set(fileName, contentHash(bytes));
     } else {
       contents.set(fileName, contentHash(bytes));
     }
@@ -198,21 +325,31 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     record(host);
     return host;
   };
+  const stamp = (
+    context: string,
+    contentsOf: Map<string, string | null>,
+    installedOf: Map<string, string | null>,
+  ): CompilerInputStamp => ({
+    context,
+    contents: sortedRecord(contentsOf),
+    installed: sortedRecord(installedOf),
+    files: existence(files),
+    directories: existence(directories),
+    realpaths: sortedRecord(realpaths),
+    subdirectories: sortedRecord(subdirectories),
+    listings: [...listings]
+      .toSorted(([left], [right]) => compareKeys(left, right))
+      .map(([, listing]) => listing),
+  });
   return {
     wrap,
     readFile: recordRead,
-    stamp: (context) => ({
-      context,
-      contents: sortedRecord(contents),
-      installed: sortedRecord(installed),
-      files: existence(files),
-      directories: existence(directories),
-      realpaths: sortedRecord(realpaths),
-      subdirectories: sortedRecord(subdirectories),
-      listings: [...listings]
-        .toSorted(([left], [right]) => compareKeys(left, right))
-        .map(([, listing]) => listing),
-    }),
+    stamp: (context) => stamp(context, contents, installed),
+    portableStamp: (context, root) =>
+      toPortableStamp(
+        stamp(context, new Map([...contents, ...installedContents]), new Map()),
+        root,
+      ),
   };
 };
 
@@ -320,7 +457,11 @@ export const isCompilerInputStampCurrent = async (
 /** Hashes the relative and workspace import closure of a script. */
 export const scriptSourceHash = (entry: string): string => {
   const hash = createSha256();
-  const pending = [entry];
+  // Names relative to the entry: checkouts at other paths hash alike. Real
+  // paths, since resolution returns them for the imports.
+  const realEntry = realpathSync(entry);
+  const base = path.dirname(realEntry);
+  const pending = [realEntry];
   const seen = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
@@ -329,7 +470,9 @@ export const scriptSourceHash = (entry: string): string => {
     }
     seen.add(file);
     const source = readFileSync(file, "utf-8");
-    hash.update(JSON.stringify([file, sha256Hex(source)]));
+    hash.update(
+      JSON.stringify([repoRelativePath(base, file), sha256Hex(source)]),
+    );
     for (const { fileName } of ts.preProcessFile(source, true, true)
       .importedFiles) {
       if (fileName.startsWith(".") || fileName.startsWith("@stll/")) {
