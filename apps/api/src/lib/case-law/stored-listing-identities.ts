@@ -2,8 +2,13 @@ import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+  caseLawDecisionSupplements,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
 import {
   rowHoldsDocument,
   rowHoldsDocumentFor,
@@ -18,7 +23,7 @@ type ReadStoredListingIdentitiesOptions = {
   identities: readonly ListingIdentity[];
 };
 
-/** Ingestion-only identity lookup: a current folded supplement is held through its own source's judgment. */
+/** Resolve publisher ownership and current folded supplements within the source. */
 export const readStoredListingIdentities = async ({
   tx,
   sourceId,
@@ -44,10 +49,23 @@ export const readStoredListingIdentities = async ({
       sql`jsonb_to_recordset(${JSON.stringify(incoming)}::text::jsonb) AS incoming(key text, "documentId" text, "caseNumber" text, language text)`,
     )
     .leftJoin(
+      caseLawDecisionSourceIdentities,
+      and(
+        eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+        sql`${caseLawDecisionSourceIdentities.sourceDocumentId} = incoming."documentId"`,
+      ),
+    )
+    .leftJoin(
       caseLawDecisions,
       and(
         eq(caseLawDecisions.sourceId, sourceId),
-        sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.sourceDocumentId} IS NULL AND ${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language))`,
+        or(
+          eq(
+            caseLawDecisions.id,
+            canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId),
+          ),
+          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.sourceDocumentId} IS NULL AND ${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language))`,
+        ),
       ),
     )
     .leftJoin(
