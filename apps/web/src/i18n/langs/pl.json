@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
       "provisionsCited": "Powołane przepisy",
+      "provisionsFailed": "Przetwarzanie cytowań nie powiodło się",
+      "provisionsNoneFound": "Nie znaleziono powołanych przepisów",
+      "provisionsProcessing": "Trwa przetwarzanie cytowań",
+      "provisionsUnavailable": "Cytowania są niedostępne",
+      "provisionsUnplaceable": "Nie można umiejscowić cytowań w tekście orzeczenia",
+      "provisionsUnsupported": "Przetwarzanie cytowań nie jest obsługiwane dla tego orzeczenia",
+      "provisionsWithheld": "Cytowania nie są udostępniane",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
@@ -1555,6 +1562,18 @@
       "rejected": "Odrzucono"
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
+    "tableChart": {
+      "bar": "Słupkowy",
+      "kind": "Typ wykresu",
+      "line": "Liniowy",
+      "loading": "Wybieranie wykresu…",
+      "pie": "Kołowy",
+      "scatter": "Punktowy",
+      "showChart": "Pokaż jako wykres",
+      "summary": "Liczba wyświetlonych wartości: {n, number}.",
+      "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracuję z kontekstem",
     "threadFiles": {
       "title": "Pliki w tym czacie"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Wyszukiwanie w sieci",
       "toggleOff": "Wyłącz wyszukiwanie w sieci",
       "toggleOn": "Włącz wyszukiwanie w sieci"
-    }
+    },
+    "workedFor": "Czas pracy: {duration}"
   },
   "clauses": {
     "addVariant": "Dodaj wariant",
@@ -2580,11 +2600,14 @@
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
+      "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
+      "caseLawSearchUnavailable": "Wyszukiwanie orzecznictwa tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne orzeczenia.",
       "conflict": "Żądanie jest sprzeczne z bieżącym stanem.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
+      "legislationCountryUnavailable": "Przepisy tego kraju nie są dostępne. Wybierz inny kraj.",
+      "legislationSearchUnavailable": "Wyszukiwanie przepisów tego kraju nie jest dostępne. Nadal możesz czytać jego publiczne przepisy.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
-      "publicCountryUnavailable": "Przepisy i orzecznictwo tego kraju nie są dostępne. Wybierz inny kraj.",
       "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie później.",
       "server": "Coś poszło nie tak. Spróbuj ponownie.",
       "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Ukończona historia obszarów roboczych pozostanie przypisana do usuniętego konta.",
       "desktop": "Aplikacja na komputer",
       "desktopAppDescription": "Wracaj do wszystkiego, co kopiujesz, i otwieraj dokumenty stella w używanych już aplikacjach komputerowych.",
+      "desktopCardApproveDetail": "Zatwierdź, aby połączyć ten komputer z <bdi>{identity}</bdi> na {host}.",
+      "desktopCardApproveTitle": "stella desktop prosi o połączenie",
+      "desktopCardConnectedDetail": "Połączono z <bdi>{identity}</bdi> na {host} · wersja {version}",
+      "desktopCardConnectedDetailNoVersion": "Połączono z <bdi>{identity}</bdi> na {host}",
+      "desktopCardConnectedTitle": "stella desktop jest powiązany",
+      "desktopCardMissingDetail": "Zainstaluj go lub połącz, jeśli jest już zainstalowany na tym komputerze.",
+      "desktopCardMissingTitle": "stella desktop nie jest jeszcze połączony",
+      "desktopCardOutdatedDetail": "Wersja {version} jest połączona z <bdi>{identity}</bdi>. Zainstaluj najnowszą wersję, aby dokumenty i aktywność nadal działały.",
+      "desktopCardOutdatedTitle": "stella desktop wymaga aktualizacji",
       "desktopClipboardDescription": "Otwieraj, przeszukuj, porządkuj i ponownie wykorzystuj tekst skopiowany z dowolnej aplikacji.",
       "desktopClipboardTitle": "Przeszukiwalna historia schowka",
       "desktopConnectFailed": "Nie udało się połączyć stella desktop.",
+      "desktopConnectInstalled": "Jest zainstalowany, połącz",
       "desktopConnectedAs": "Połączono jako <bdi>{email}</bdi>",
       "desktopDescription": "Historia schowka i narzędzia do dokumentów na komputerze",
       "desktopDocumentsDescription": "Otwieraj pliki stella w aplikacjach komputerowych; zmiany wrócą do właściwej sprawy.",

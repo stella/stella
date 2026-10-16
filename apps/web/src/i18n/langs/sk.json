@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok}}",
       "provisionsCited": "Dotknuté ustanovenia",
+      "provisionsFailed": "Spracovanie citácií zlyhalo",
+      "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
+      "provisionsProcessing": "Citácie sa spracúvajú",
+      "provisionsUnavailable": "Citácie nie sú dostupné",
+      "provisionsUnplaceable": "Citácie nemožno umiestniť do textu rozhodnutia",
+      "provisionsUnsupported": "Spracovanie citácií nie je pre toto rozhodnutie podporované",
+      "provisionsWithheld": "Citácie nie sú sprístupnené",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
@@ -1555,6 +1562,18 @@
       "rejected": "Odmietnuté"
     },
     "tabToAsk": "→ pre otázku: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Stĺpcový",
+      "kind": "Typ grafu",
+      "line": "Čiarový",
+      "loading": "Vyberá sa graf…",
+      "pie": "Koláčový",
+      "scatter": "Bodový",
+      "showChart": "Zobraziť ako graf",
+      "summary": "Počet zobrazených hodnôt: {n, number}.",
+      "unavailable": "Graf sa nepodarilo vybrať. Zobrazuje sa tabuľka.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracujem s kontextom",
     "threadFiles": {
       "title": "Súbory v tomto chate"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Vyhľadávanie na webe",
       "toggleOff": "Vypnúť vyhľadávanie na webe",
       "toggleOn": "Zapnúť vyhľadávanie na webe"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Pridať variant",
@@ -2580,11 +2600,14 @@
     "actionFailed": "Akcia zlyhala",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
+      "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
+      "caseLawSearchUnavailable": "Vyhľadávanie judikatúry tejto krajiny nie je dostupné. Jej verejné rozhodnutia si môžete naďalej čítať.",
       "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "legislationCountryUnavailable": "Právne predpisy tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
+      "legislationSearchUnavailable": "Vyhľadávanie právnych predpisov tejto krajiny nie je dostupné. Jej verejné právne predpisy si môžete naďalej čítať.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
-      "publicCountryUnavailable": "Právne predpisy a judikatúra tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
       "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
       "server": "Niečo sa pokazilo. Skúste to prosím znova.",
       "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Dokončená história pracovných priestorov zostane priradená k vymazanému účtu.",
       "desktop": "Aplikácia pre počítač",
       "desktopAppDescription": "Vráťte sa ku všetkému, čo skopírujete, a otvárajte dokumenty zo stelly v aplikáciách, ktoré už používate.",
+      "desktopCardApproveDetail": "Schváľte prepojenie tohto počítača s účtom <bdi>{identity}</bdi> na {host}.",
+      "desktopCardApproveTitle": "stella desktop žiada o pripojenie",
+      "desktopCardConnectedDetail": "Prepojené s účtom <bdi>{identity}</bdi> na {host} · verzia {version}",
+      "desktopCardConnectedDetailNoVersion": "Prepojené s účtom <bdi>{identity}</bdi> na {host}",
+      "desktopCardConnectedTitle": "stella desktop je prepojený",
+      "desktopCardMissingDetail": "Nainštalujte ho, alebo ho pripojte, ak už na tomto počítači nainštalovaný je.",
+      "desktopCardMissingTitle": "stella desktop zatiaľ nie je prepojený",
+      "desktopCardOutdatedDetail": "Verzia {version} je prepojená s účtom <bdi>{identity}</bdi>. Nainštalujte najnovšiu verziu, aby dokumenty a aktivita ďalej fungovali.",
+      "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
       "desktopClipboardTitle": "Prehľadávateľná história schránky",
       "desktopConnectFailed": "Aplikáciu stella desktop sa nepodarilo pripojiť.",
+      "desktopConnectInstalled": "Je nainštalovaný, pripojiť",
       "desktopConnectedAs": "Pripojené ako <bdi>{email}</bdi>",
       "desktopDescription": "História schránky a nástroje na dokumenty vo vašom počítači",
       "desktopDocumentsDescription": "Otvárajte súbory zo stelly v počítačových aplikáciách; revízie sa vrátia do správneho spisu.",

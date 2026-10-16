@@ -48,7 +48,7 @@ afterAll(async () => {
 });
 
 test.each([400, 580, 1440])(
-  "the decision reader mounts one zoom control set at %ipx",
+  "the decision reader shares one pinned breadcrumb and zoom row at %ipx",
   async (width) => {
     const view = render(<div />);
     const browserWindow = view.baseElement.ownerDocument.defaultView;
@@ -113,11 +113,17 @@ test.each([400, 580, 1440])(
         }),
       ).toBeTruthy();
     });
+    const breadcrumb = view.baseElement.querySelector(
+      '[data-slot="reader-breadcrumb"]',
+    );
+    const row = breadcrumb?.parentElement;
+    if (row === null || row === undefined) {
+      panic("The rendered reader requires a breadcrumb controls row");
+    }
+    expect(screen.getByRole("banner").contains(row)).toBe(false);
     for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
       expect(screen.getAllByRole("button", { name })).toHaveLength(1);
-      expect(
-        within(screen.getByRole("banner")).getByRole("button", { name }),
-      ).toBeTruthy();
+      expect(within(row).getByRole("button", { name })).toBeTruthy();
       expect(
         view.baseElement.querySelectorAll(`button[aria-label="${name}"]`),
       ).toHaveLength(1);

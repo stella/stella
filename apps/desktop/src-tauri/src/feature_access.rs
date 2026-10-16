@@ -128,9 +128,16 @@ async fn current_decision(app: &AppHandle) -> AccountDecision {
     return closed();
   };
   let request = match account::request_account(&state).await {
-    Ok(Some(request)) => request,
-    Ok(None) => return closed(),
+    Ok(Some(request)) => {
+      account::set_reconnect_needed(app, false);
+      request
+    }
+    Ok(None) => {
+      account::set_reconnect_needed(app, false);
+      return closed();
+    }
     Err(error) => {
+      account::set_reconnect_needed(app, error == crate::device_proof::RECONNECT);
       tracing::warn!(error = %error, "feature access skipped: account is unreadable");
       return closed();
     }

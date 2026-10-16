@@ -310,8 +310,23 @@ for (const view of views) {
     ).toBeAttached({ timeout: 30_000 });
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
+      if (surface === "main" && view.kind !== "statute") {
+        // The authenticated workspace replaces the public loading reader.
+        // Its editable composer identifies the reader that owns interactions.
+        await expect(
+          root.locator(
+            '[data-file-viewer-root="true"] [data-slot="docked-chat-composer"] [role="textbox"][contenteditable="true"]',
+          ),
+        ).toBeVisible();
+      }
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
       await expect(breadcrumb).toHaveCount(1);
+      const pinnedControls = breadcrumb.locator("..");
+      for (const name of ["Zoom in", "Zoom out", "Reset zoom"]) {
+        await expect(
+          pinnedControls.getByRole("button", { name, exact: true }),
+        ).toHaveCount(1);
+      }
       // Attachment precedes layout during inspector restoration and route
       // changes. Read geometry only once the actual scroll viewport has size.
       await expect

@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
       "provisionsCited": "Viidatud sätted",
+      "provisionsFailed": "Viidete töötlemine ebaõnnestus",
+      "provisionsNoneFound": "Viidatud sätteid ei leitud",
+      "provisionsProcessing": "Viiteid töödeldakse",
+      "provisionsUnavailable": "Viited pole saadaval",
+      "provisionsUnplaceable": "Viiteid ei saa lahendi tekstis paigutada",
+      "provisionsUnsupported": "Selle lahendi viidete töötlemist ei toetata",
+      "provisionsWithheld": "Viiteid ei avaldata",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
@@ -1555,6 +1562,18 @@
       "rejected": "Tagasi lükatud"
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Tulpdiagramm",
+      "kind": "Diagrammi tüüp",
+      "line": "Joondiagramm",
+      "loading": "Diagrammi valimine…",
+      "pie": "Sektordiagramm",
+      "scatter": "Hajuvusdiagramm",
+      "showChart": "Kuva diagrammina",
+      "summary": "Kuvatud väärtuste arv: {n, number}.",
+      "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Töötan kontekstiga",
     "threadFiles": {
       "title": "Selle vestluse failid"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Veebiotsing",
       "toggleOff": "Lülita veebiotsing välja",
       "toggleOn": "Lülita veebiotsing sisse"
-    }
+    },
+    "workedFor": "Tööaeg: {duration}"
   },
   "clauses": {
     "addVariant": "Lisa variant",
@@ -2580,11 +2600,14 @@
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
+      "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
+      "caseLawSearchUnavailable": "Selle riigi kohtupraktika otsing ei ole saadaval. Selle avalikke kohtulahendeid saate endiselt lugeda.",
       "conflict": "Päring on praeguse olekuga vastuolus.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
+      "legislationCountryUnavailable": "Selle riigi õigusaktid ei ole saadaval. Valige teine riik.",
+      "legislationSearchUnavailable": "Selle riigi õigusaktide otsing ei ole saadaval. Selle avalikke õigusakte saate endiselt lugeda.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
-      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Lõpetatud tööruumi ajalugu jääb seotuks teie kustutatud kontoga.",
       "desktop": "Töölaud",
       "desktopAppDescription": "Leidke kõik kopeeritu uuesti üles ja avage stella dokumendid juba kasutatavates töölauarakendustes.",
+      "desktopCardApproveDetail": "Kinnitage, et siduda see arvuti kontoga <bdi>{identity}</bdi> serveris {host}.",
+      "desktopCardApproveTitle": "stella desktop soovib ühenduda",
+      "desktopCardConnectedDetail": "Seotud kontoga <bdi>{identity}</bdi> serveris {host} · versioon {version}",
+      "desktopCardConnectedDetailNoVersion": "Seotud kontoga <bdi>{identity}</bdi> serveris {host}",
+      "desktopCardConnectedTitle": "stella desktop on seotud",
+      "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
+      "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
+      "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",
+      "desktopCardOutdatedTitle": "stella desktop vajab uuendust",
       "desktopClipboardDescription": "Avage, otsige, korraldage ja kasutage uuesti mis tahes rakendusest kopeeritud teksti.",
       "desktopClipboardTitle": "Otsitav lõikelaua ajalugu",
       "desktopConnectFailed": "Rakenduse stella desktop ühendamine ebaõnnestus.",
+      "desktopConnectInstalled": "On paigaldatud, ühenda",
       "desktopConnectedAs": "Ühendatud kasutajana <bdi>{email}</bdi>",
       "desktopDescription": "Lõikelaua ajalugu ja dokumenditööriistad teie arvutis",
       "desktopDocumentsDescription": "Avage stella failid töölauarakendustes; parandused jõuavad tagasi õigesse toimikusse.",

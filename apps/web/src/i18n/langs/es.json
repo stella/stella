@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mención} other {# menciones}}",
       "provisionsCited": "Disposiciones citadas",
+      "provisionsFailed": "El procesamiento de citas ha fallado",
+      "provisionsNoneFound": "No se encontraron disposiciones citadas",
+      "provisionsProcessing": "Las citas se están procesando",
+      "provisionsUnavailable": "Las citas no están disponibles",
+      "provisionsUnplaceable": "Las citas no pueden ubicarse en el texto de la resolución",
+      "provisionsUnsupported": "El procesamiento de citas no está disponible para esta resolución",
+      "provisionsWithheld": "Las citas no se divulgan",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
@@ -1555,6 +1562,18 @@
       "rejected": "Rechazado"
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Barras",
+      "kind": "Tipo de gráfico",
+      "line": "Líneas",
+      "loading": "Seleccionando un gráfico…",
+      "pie": "Circular",
+      "scatter": "Dispersión",
+      "showChart": "Mostrar como gráfico",
+      "summary": "Valores mostrados: {n, number}.",
+      "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Trabajando con contexto",
     "threadFiles": {
       "title": "Archivos de este chat"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Búsqueda web",
       "toggleOff": "Desactivar búsqueda web",
       "toggleOn": "Activar búsqueda web"
-    }
+    },
+    "workedFor": "Tiempo de trabajo: {duration}"
   },
   "clauses": {
     "addVariant": "Añadir variante",
@@ -2580,11 +2600,14 @@
     "actionFailed": "Acción fallida",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
+      "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
+      "caseLawSearchUnavailable": "La búsqueda de jurisprudencia de este país no está disponible. Puedes seguir consultando sus resoluciones públicas.",
       "conflict": "La solicitud entra en conflicto con el estado actual.",
       "forbidden": "No tienes permiso para hacer esto.",
+      "legislationCountryUnavailable": "La legislación de este país no está disponible. Elige otro país.",
+      "legislationSearchUnavailable": "La búsqueda de legislación de este país no está disponible. Puedes seguir consultando su legislación pública.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
-      "publicCountryUnavailable": "La legislación y la jurisprudencia de este país no están disponibles. Elige otro país.",
       "rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
       "server": "Algo salió mal. Inténtalo de nuevo.",
       "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",
       "desktopAppDescription": "Recupera todo lo que copies y abre documentos de stella en las aplicaciones de escritorio que ya utilizas.",
+      "desktopCardApproveDetail": "Aprueba para vincular este equipo a <bdi>{identity}</bdi> en {host}.",
+      "desktopCardApproveTitle": "stella desktop pide conectarse",
+      "desktopCardConnectedDetail": "Vinculado a <bdi>{identity}</bdi> en {host} · versión {version}",
+      "desktopCardConnectedDetailNoVersion": "Vinculado a <bdi>{identity}</bdi> en {host}",
+      "desktopCardConnectedTitle": "stella desktop está vinculado",
+      "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
+      "desktopCardMissingTitle": "stella desktop aún no está vinculado",
+      "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
+      "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
       "desktopClipboardTitle": "Historial del portapapeles con búsqueda",
       "desktopConnectFailed": "No se pudo conectar con stella desktop.",
+      "desktopConnectInstalled": "Ya está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
       "desktopDescription": "Historial del portapapeles y herramientas de documentos en tu ordenador",
       "desktopDocumentsDescription": "Abre archivos de stella en aplicaciones de escritorio; las revisiones vuelven al asunto correcto.",

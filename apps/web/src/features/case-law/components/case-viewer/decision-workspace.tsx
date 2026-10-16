@@ -28,7 +28,6 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -711,13 +710,6 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
-        <ZoomControls
-          atMax={textScale.atMax}
-          atMin={textScale.atMin}
-          level={textScale.level}
-          onReset={textScale.reset}
-          onZoom={textScale.zoom}
-        />
         <ReaderProvisionModeToggle mode={provisions} size="page" />
       </ChromeHeaderActions>
       <GuestAnnotationPrompt count={annotations.guestCount} />
@@ -735,7 +727,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           content={contentElement}
           fallbackBreadcrumb={fallbackBreadcrumb}
           viewport={viewportElement}
-          zoomControls={null}
+          zoomControls={textScale}
           key={decisionId}
         />
         <div className="bg-background/80 supports-[backdrop-filter]:bg-background/55 shadow-floating absolute start-3 bottom-3 z-30 flex items-center overflow-hidden rounded-lg border backdrop-blur-xl max-lg:hidden">

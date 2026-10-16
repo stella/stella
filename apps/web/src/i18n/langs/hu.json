@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
       "provisionsCited": "Hivatkozott rendelkezések",
+      "provisionsFailed": "A hivatkozások feldolgozása sikertelen",
+      "provisionsNoneFound": "Nem találhatók hivatkozott rendelkezések",
+      "provisionsProcessing": "A hivatkozások feldolgozása folyamatban van",
+      "provisionsUnavailable": "A hivatkozások nem érhetők el",
+      "provisionsUnplaceable": "A hivatkozások nem helyezhetők el a határozat szövegében",
+      "provisionsUnsupported": "A hivatkozások feldolgozása ennél a határozatnál nem támogatott",
+      "provisionsWithheld": "A hivatkozások nem hozzáférhetők",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"
@@ -1555,6 +1562,18 @@
       "rejected": "Elutasítva"
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
+    "tableChart": {
+      "bar": "Oszlop",
+      "kind": "Diagram típusa",
+      "line": "Vonal",
+      "loading": "Diagram kiválasztása…",
+      "pie": "Kör",
+      "scatter": "Pont",
+      "showChart": "Megjelenítés diagramként",
+      "summary": "Megjelenített értékek száma: {n, number}.",
+      "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Kontextussal dolgozom",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Webes keresés",
       "toggleOff": "Webes keresés kikapcsolása",
       "toggleOn": "Webes keresés bekapcsolása"
-    }
+    },
+    "workedFor": "Munkaidő: {duration}"
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",
@@ -2580,11 +2600,14 @@
     "actionFailed": "A művelet sikertelen",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
+      "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
+      "caseLawSearchUnavailable": "Az ország ítélkezési gyakorlatában nem lehet keresni. Nyilvános határozatait továbbra is olvashatja.",
       "conflict": "A kérés ütközik a jelenlegi állapottal.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "legislationCountryUnavailable": "Az ország jogszabályai nem érhetők el. Válasszon másik országot.",
+      "legislationSearchUnavailable": "Az ország jogszabályaiban nem lehet keresni. Nyilvános jogszabályait továbbra is olvashatja.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",
-      "publicCountryUnavailable": "Az ország jogszabályai és ítélkezési gyakorlata nem érhetők el. Válasszon másik országot.",
       "rateLimited": "Túl sok kérés. Próbálja újra később.",
       "server": "Hiba történt. Próbálja újra.",
       "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",
       "desktopAppDescription": "Találjon meg újra bármit, amit másolt, és nyissa meg a stella dokumentumait a már használt asztali alkalmazásokban.",
+      "desktopCardApproveDetail": "Hagyja jóvá, hogy ez a számítógép összekapcsolódjon ezzel: <bdi>{identity}</bdi> · {host}.",
+      "desktopCardApproveTitle": "A stella desktop csatlakozást kér",
+      "desktopCardConnectedDetail": "Összekapcsolva: <bdi>{identity}</bdi> · {host} · {version} verzió",
+      "desktopCardConnectedDetailNoVersion": "Összekapcsolva: <bdi>{identity}</bdi> · {host}",
+      "desktopCardConnectedTitle": "A stella desktop összekapcsolva",
+      "desktopCardMissingDetail": "Telepítse, vagy kapcsolja össze, ha már telepítve van ezen a számítógépen.",
+      "desktopCardMissingTitle": "A stella desktop még nincs összekapcsolva",
+      "desktopCardOutdatedDetail": "A(z) {version} verzió össze van kapcsolva ezzel: <bdi>{identity}</bdi>. Telepítse a legújabb verziót, hogy a dokumentumok és a tevékenység tovább működjenek.",
+      "desktopCardOutdatedTitle": "A stella desktop frissítésre szorul",
       "desktopClipboardDescription": "Nyissa meg, keresse, rendszerezze és használja újra a bármely alkalmazásból másolt szöveget.",
       "desktopClipboardTitle": "Kereshető vágólapelőzmények",
       "desktopConnectFailed": "A stella desktop csatlakoztatása nem sikerült.",
+      "desktopConnectInstalled": "Telepítve van, csatlakozás",
       "desktopConnectedAs": "Csatlakozva mint <bdi>{email}</bdi>",
       "desktopDescription": "Vágólapelőzmények és dokumentumeszközök a számítógépén",
       "desktopDocumentsDescription": "Nyissa meg a stella fájljait asztali alkalmazásokban; a módosítások a megfelelő ügyhöz kerülnek vissza.",

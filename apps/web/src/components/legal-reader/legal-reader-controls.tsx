@@ -17,7 +17,7 @@ type LegalReaderControlsProps = {
   content: HTMLElement | null;
   fallbackBreadcrumb?: ReaderBreadcrumbModel | undefined;
   viewport: HTMLElement | null;
-  zoomControls: ReturnType<typeof useReaderTextScale> | null;
+  zoomControls: ReturnType<typeof useReaderTextScale>;
 };
 
 export const LegalReaderControls = ({
@@ -34,14 +34,12 @@ export const LegalReaderControls = ({
       fallback={fallbackBreadcrumb}
       viewport={viewport}
     />
-    {zoomControls !== null && (
-      <ZoomControls
-        atMax={zoomControls.atMax}
-        atMin={zoomControls.atMin}
-        level={zoomControls.level}
-        onReset={zoomControls.reset}
-        onZoom={zoomControls.zoom}
-      />
-    )}
+    <ZoomControls
+      atMax={zoomControls.atMax}
+      atMin={zoomControls.atMin}
+      level={zoomControls.level}
+      onReset={zoomControls.reset}
+      onZoom={zoomControls.zoom}
+    />
   </ViewerOverlayBar>
 );

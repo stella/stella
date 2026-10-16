@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
       "provisionsCited": "Citētās normas",
+      "provisionsFailed": "Citātu apstrāde neizdevās",
+      "provisionsNoneFound": "Citētas normas nav atrastas",
+      "provisionsProcessing": "Citāti tiek apstrādāti",
+      "provisionsUnavailable": "Citāti nav pieejami",
+      "provisionsUnplaceable": "Citātus nevar atrast nolēmuma tekstā",
+      "provisionsUnsupported": "Šī nolēmuma citātu apstrāde netiek atbalstīta",
+      "provisionsWithheld": "Citāti netiek izpausti",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
@@ -1555,6 +1562,18 @@
       "rejected": "Noraidīts"
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
+    "tableChart": {
+      "bar": "Stabiņu",
+      "kind": "Diagrammas veids",
+      "line": "Līniju",
+      "loading": "Tiek izvēlēta diagramma…",
+      "pie": "Sektoru",
+      "scatter": "Izkliedes",
+      "showChart": "Rādīt kā diagrammu",
+      "summary": "Attēloto vērtību skaits: {n, number}.",
+      "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Strādāju ar kontekstu",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
@@ -1702,7 +1721,8 @@
       "toggleLabel": "Meklēšana tīmeklī",
       "toggleOff": "Izslēgt meklēšanu tīmeklī",
       "toggleOn": "Ieslēgt meklēšanu tīmeklī"
-    }
+    },
+    "workedFor": "Darba ilgums: {duration}"
   },
   "clauses": {
     "addVariant": "Pievienot variantu",
@@ -2580,11 +2600,14 @@
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
+      "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
+      "caseLawSearchUnavailable": "Šīs valsts judikatūras meklēšana nav pieejama. Tās publiskos tiesu nolēmumus joprojām varat lasīt.",
       "conflict": "Pieprasījums konfliktē ar pašreizējo stāvokli.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
+      "legislationCountryUnavailable": "Šīs valsts tiesību akti nav pieejami. Izvēlieties citu valsti.",
+      "legislationSearchUnavailable": "Šīs valsts tiesību aktu meklēšana nav pieejama. Tās publiskos tiesību aktus joprojām varat lasīt.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
-      "publicCountryUnavailable": "Šīs valsts tiesību akti un judikatūra nav pieejami. Izvēlieties citu valsti.",
       "rateLimited": "Pārāk daudz pieprasījumu. Lūdzu, mēģiniet vēlāk.",
       "server": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "serviceUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, mēģiniet vēlreiz.",
@@ -4737,9 +4760,19 @@
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atrodiet visu kopēto un atveriet stella dokumentus jau izmantotajās datora lietotnēs.",
+      "desktopCardApproveDetail": "Apstipriniet, lai saistītu šo datoru ar <bdi>{identity}</bdi> serverī {host}.",
+      "desktopCardApproveTitle": "stella desktop lūdz savienojumu",
+      "desktopCardConnectedDetail": "Saistīts ar <bdi>{identity}</bdi> serverī {host} · versija {version}",
+      "desktopCardConnectedDetailNoVersion": "Saistīts ar <bdi>{identity}</bdi> serverī {host}",
+      "desktopCardConnectedTitle": "stella desktop ir sasaistīts",
+      "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
+      "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
+      "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",
+      "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
       "desktopClipboardTitle": "Meklējama starpliktuves vēsture",
       "desktopConnectFailed": "Neizdevās izveidot savienojumu ar stella desktop.",
+      "desktopConnectInstalled": "Ir instalēts, savienot",
       "desktopConnectedAs": "Savienots kā <bdi>{email}</bdi>",
       "desktopDescription": "Starpliktuves vēsture un dokumentu rīki jūsu datorā",
       "desktopDocumentsDescription": "Atveriet stella failus datora lietotnēs; labojumi atgriezīsies pareizajā lietā.",
