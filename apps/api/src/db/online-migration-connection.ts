@@ -85,11 +85,12 @@ export type OnlineRepairCompletion =
  *
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
- * one read rather than a pass over the table. A durable pending backfill is
- * resumable and may pass deploy/startup; an unattempted incomplete repair
- * still refuses those gates.
+ * one read rather than a pass over the table. Repair mode may defer a durable
+ * pending backfill. Startup reports unfinished work only for the newest
+ * applied migration; work introduced by an older migration must be complete.
  */
 export type OnlineRepair = {
+  introducedBy: string;
   name: string;
   readCompletion: (
     connection: OnlineMigrationConnection,

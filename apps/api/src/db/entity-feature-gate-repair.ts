@@ -150,6 +150,7 @@ const backfillRelation = async (
 };
 
 export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair = {
+  introducedBy: "20261009112500_entity_feature_row_gates",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (

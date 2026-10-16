@@ -415,6 +415,7 @@ const readCompletion = async (
 };
 
 export const BETTER_AUTH_OAUTH_RESOURCE_REPAIR: OnlineRepair = {
+  introducedBy: "20260917120000_case_law_decisions_search_candidate_idx",
   name: REPAIR_NAME,
   readCompletion,
   repair,

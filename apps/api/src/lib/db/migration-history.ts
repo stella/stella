@@ -23,6 +23,10 @@ export type RequiredMigrationIndex = {
   tableName: string;
 };
 
+export type IntroducedMigrationIndex = RequiredMigrationIndex & {
+  introducedBy: string;
+};
+
 type MigrationAliasEntry = {
   fileName: string;
   priorHash: string;
@@ -41,7 +45,7 @@ export const deriveMigrationAliasHistory = (
       requiredIndexes: RequiredMigrationIndex[];
     }
   > = {};
-  const indexesByName = new Map<string, RequiredMigrationIndex>();
+  const indexesByName = new Map<string, IntroducedMigrationIndex>();
 
   for (const { fileName, priorHash, newHash, repair } of inventory) {
     let history = histories[fileName];
@@ -73,7 +77,7 @@ export const deriveMigrationAliasHistory = (
       if (existing === undefined) {
         history.requiredIndexes.push(index);
       }
-      indexesByName.set(index.name, index);
+      indexesByName.set(index.name, { ...index, introducedBy: fileName });
     }
   }
   return { histories, indexes: [...indexesByName.values()] };
@@ -88,9 +92,8 @@ export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
-export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] = [
-  ...rewrittenMigrationIndexes,
-];
+export const REWRITTEN_MIGRATION_INDEXES: readonly IntroducedMigrationIndex[] =
+  [...rewrittenMigrationIndexes];
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };

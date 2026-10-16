@@ -179,6 +179,7 @@ type RepairRuntimeOptions = {
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
+  introducedBy: "20260902100000_case_law_decision_date_ceiling",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
