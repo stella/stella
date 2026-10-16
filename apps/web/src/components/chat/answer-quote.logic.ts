@@ -15,10 +15,27 @@ export type LocatedQuote = {
 
 // An answer elides with "[…]", "[...]" or a bare "…"; each piece between
 // elisions must be the court's words, in the court's order.
-const ELISION = /\s*(?:\[\s*(?:…|\.\.\.)\s*\]|\(\s*(?:…|\.\.\.)\s*\)|…)\s*/u;
+// Pieces are trimmed after the split, so the pattern needs no surrounding
+// whitespace (which would make it backtrack super-linearly).
+const ELISION = /\[\s*(?:…|\.\.\.)\s*\]|\(\s*(?:…|\.\.\.)\s*\)|…/u;
 
 // The marks an answer wraps a quotation in, which the court's text lacks.
-const WRAPPING_MARKS = /^[\s„“”"«»‚‘’']+|[\s„“”"«»‚‘’']+$/gu;
+const WRAPPING_MARK = /[\s„“”"«»‚‘’']/u;
+
+// A character scan instead of `^[…]+|[…]+$`, whose trailing alternative
+// backtracks quadratically on a long run of marks.
+const trimWrappingMarks = (text: string): string => {
+  const characters = [...text];
+  let start = 0;
+  let end = characters.length;
+  while (start < end && WRAPPING_MARK.test(characters[start] ?? "")) {
+    start += 1;
+  }
+  while (end > start && WRAPPING_MARK.test(characters[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return characters.slice(start, end).join("");
+};
 
 /**
  * Shorter pieces prove nothing: "a to" or "podle § 237" occurs in many
@@ -29,10 +46,9 @@ const MIN_EVIDENCE_LENGTH = 24;
 
 /** The quotation's own words, split at its elisions. */
 export const quotePieces = (quote: string): string[] =>
-  quote
-    .replace(WRAPPING_MARKS, "")
+  trimWrappingMarks(quote)
     .split(ELISION)
-    .map((piece) => piece.replace(WRAPPING_MARKS, "").trim())
+    .map((piece) => trimWrappingMarks(piece))
     .filter((piece) => piece.length > 0);
 
 /**

@@ -12,6 +12,7 @@ import type {
   ChatUIMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
@@ -200,6 +201,9 @@ export function ChatStatusPlayground() {
       onResend={noop}
       showThinkingIndicator
       showToolCalls={showToolCalls}
+      streamdownComponents={{
+        a: (props) => <StreamdownMentionLink {...props} interactive={false} />,
+      }}
     />
   );
 

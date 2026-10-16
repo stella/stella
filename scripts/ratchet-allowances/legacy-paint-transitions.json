@@ -1,0 +1,5 @@
+{
+  "metric": "legacy-paint-transitions",
+  "delta": 3,
+  "reason": "The chat status mark draws its check and cross by transitioning SVG stroke-dashoffset and its colour, and the citation trigger fades its underline colour; neither stroke drawing nor decoration colour can be expressed with transform or opacity, and both run on 16 px inline elements."
+}
