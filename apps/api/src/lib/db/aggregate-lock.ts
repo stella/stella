@@ -21,6 +21,10 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationParam,
+} from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
@@ -77,6 +81,24 @@ export const AGGREGATE_LOCKS = {
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
+
+type OrganizationFencedRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  query: string;
+  params: readonly OnlineMigrationParam[];
+};
+
+/**
+ * Online repairs own native transactions instead of Drizzle transactions.
+ * Their batch query joins organization as tenant; key-share fencing preserves
+ * that parent until dependent metadata commits without locking source rows.
+ */
+export const queryOrganizationFencedRepairBatch = async ({
+  connection,
+  query,
+  params,
+}: OrganizationFencedRepairBatchOptions) =>
+  await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
@@ -1982,6 +2004,42 @@ type DecisionCitationStatsLocksOptions = {
  * stripe: refresh rebuilds each supplied decision, and a visibility update
  * holds its own row while it waits for stripes.
  */
+const lockedDecisionRowSchema = v.object({ id: v.string() });
+
+/**
+ * The citing decisions a reviewed-label run admits: the unredacted ones among
+ * `decisionIds`. A write (`lock: true`) holds them FOR SHARE in id order until
+ * it commits: a redaction updates the decision row, so it either waits for the
+ * write and then erases what it stored, or commits first and the decision is
+ * not returned. A plan writes nothing and may run read-only, so it reads them
+ * without a lock.
+ */
+export const lockUnredactedCitingDecisions = async ({
+  tx,
+  decisionIds,
+  lock,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly string[];
+  lock: boolean;
+}): Promise<Set<string>> => {
+  if (decisionIds.length === 0) {
+    return new Set();
+  }
+  const rows = executedRows(
+    await tx.execute(sql`
+      SELECT id::text AS id FROM case_law_decisions
+      WHERE redacted_at IS NULL
+        AND id IN (${sql.join(
+          decisionIds.map((id) => sql`${id}::uuid`),
+          sql`, `,
+        )})
+      ORDER BY id${lock ? sql` FOR SHARE` : sql``}
+    `),
+  );
+  return new Set(rows.map((row) => v.parse(lockedDecisionRowSchema, row).id));
+};
+
 export const withDecisionCitationStatsLocks = async ({
   tx,
   decisionIds,

@@ -1036,6 +1036,7 @@ describe("public-law reader role", () => {
     try {
       const decision = await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: decisionId },
         async (subject) =>
           await readDecisionHandler({ readCourtWeights, subject }),

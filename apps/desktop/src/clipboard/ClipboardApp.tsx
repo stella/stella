@@ -4,6 +4,7 @@ import {
   useEffect,
   useEffectEvent,
   useRef,
+  useReducer,
   useState,
 } from "react";
 import type {
@@ -150,6 +151,7 @@ import type {
   ClipboardPointerPosition,
   ClipboardSearchScope,
 } from "./clipboard-logic";
+import { clipboardHistory } from "./clipboard-selection";
 import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
@@ -343,6 +345,8 @@ type ClipboardOpenMenuOptions = {
 
 type ClipboardCardProps = {
   active: boolean;
+  selected: boolean;
+  onToggleSelection: (id: string) => void;
   ageReferenceTime: number;
   dragging: boolean;
   groupColor: ClipboardGroupColor | null;
@@ -445,6 +449,8 @@ const ClipboardCardFooterMetadata = ({
 
 const ClipboardCard = ({
   active,
+  selected,
+  onToggleSelection,
   ageReferenceTime,
   dragging,
   groupColor,
@@ -568,6 +574,7 @@ const ClipboardCard = ({
         "motion-safe:transition-opacity motion-safe:duration-150",
         active ? "opacity-100" : "opacity-86 hover:opacity-100",
       )}
+      data-selected={selected ? "" : undefined}
       data-clipboard-id={item.id}
       data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
@@ -581,7 +588,31 @@ const ClipboardCard = ({
         })}
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
-        onClick={() => onCopy(item, "original")}
+        aria-pressed={selected}
+        onClick={(event) => {
+          if (
+            hasClipboardPrimaryModifier({
+              altKey: event.altKey,
+              altGraphKey: event.getModifierState("AltGraph"),
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            })
+          ) {
+            onToggleSelection(item.id);
+            return;
+          }
+          onCopy(item, "original");
+        }}
+        aria-keyshortcuts="Space"
+        onKeyDown={(event) => {
+          if (event.key !== " " || event.nativeEvent.isComposing) {
+            return;
+          }
+          event.preventDefault();
+          if (!event.repeat) {
+            onToggleSelection(item.id);
+          }
+        }}
         onContextMenu={(event) =>
           onOpenMenu({ anchor: "pointer", event, item, index })
         }
@@ -595,26 +626,33 @@ const ClipboardCard = ({
             onImagePreviewStatusChange={setImagePreviewStatus}
             query={query}
           />
-          {/* Renaming takes both keys for itself: Enter commits the name and
-              Shift+Enter is swallowed with it, so the hints would lie. */}
-          {active && !editingName && item.type === "formattedText" ? (
-            <span
-              className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg px-2 py-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-              data-clipboard-format-shortcuts=""
-            >
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">↵</kbd>
-                {t("originalFormatting")}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <kbd className="font-mono">⇧↵</kbd>
-                {t("plainText")}
-              </span>
-            </span>
-          ) : null}
         </div>
       </button>
+
+      {active && !editingName && item.type === "formattedText" ? (
+        <div
+          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+          data-clipboard-format-shortcuts=""
+        >
+          <button
+            type="button"
+            onClick={() => onCopy(item, "original")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">↵</kbd>
+            {t("originalFormatting")}
+          </button>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={() => onCopy(item, "plainText")}
+            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+          >
+            <kbd className="font-mono">⇧↵</kbd>
+            {t("plainText")}
+          </button>
+        </div>
+      ) : null}
 
       <Button
         aria-expanded={menuOpen}
@@ -1540,7 +1578,6 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
-  const [snapshot, setSnapshot] = useState<ClipboardSnapshot>(EMPTY_SNAPSHOT);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1549,6 +1586,13 @@ const ClipboardApp = () => {
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [{ snapshot, selection }, dispatchClipboard] = useReducer(
+    clipboardHistory,
+    {
+      snapshot: EMPTY_SNAPSHOT,
+      selection: { ids: [], session: 0 },
+    },
+  );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
@@ -1597,7 +1641,7 @@ const ClipboardApp = () => {
             setError({ message: errorReadHistory, source: "read" });
             return undefined;
           }
-          setSnapshot(value);
+          dispatchClipboard({ type: "snapshotReceived", snapshot: value });
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1761,6 +1805,7 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     const handleWindowFocus = () => {
+      dispatchClipboard({ type: "sessionStarted" });
       setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
@@ -1831,7 +1876,7 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
-            setSnapshot(value);
+            dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
           }
@@ -1875,8 +1920,14 @@ const ClipboardApp = () => {
     format: ClipboardCopyFormat = "original",
   ) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    void invoke("clipboard_copy_item", { format, id: item.id }).catch(
-      (error: unknown) => {
+    const { ids, session } = selection;
+    const copying =
+      ids.length > 0
+        ? invoke("clipboard_copy_items", { format, ids })
+        : invoke("clipboard_copy_item", { format, id: item.id });
+    void copying
+      .then(() => dispatchClipboard({ type: "copySucceeded", session }))
+      .catch((error: unknown) => {
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
         const feedback = COPY_FAILURE_FEEDBACK[kind];
@@ -1886,8 +1937,7 @@ const ClipboardApp = () => {
           window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
         });
         setError({ message: t(feedback.messageKey), source: "operation" });
-      },
-    );
+      });
   };
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
@@ -2453,6 +2503,10 @@ const ClipboardApp = () => {
       setDialog({ type: "closed" });
       return;
     }
+    if (selection.ids.length > 0) {
+      dispatchClipboard({ type: "clear" });
+      return;
+    }
     requestHide();
   });
 
@@ -2690,6 +2744,10 @@ const ClipboardApp = () => {
                         return (
                           <ClipboardCard
                             active={index === activeIndex}
+                            selected={selection.ids.includes(item.id)}
+                            onToggleSelection={(id) =>
+                              dispatchClipboard({ type: "toggle", id })
+                            }
                             ageReferenceTime={ageReferenceTime}
                             dragging={
                               dragState.type === "dragging" &&
@@ -2864,10 +2922,18 @@ const ClipboardApp = () => {
                   inert={searchSource === "registry"}
                   aria-label={t("groups")}
                   className={cn(
-                    "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
+                    "clipboard-groups-rail border-border flex min-w-0 items-center gap-1 border-s ps-2",
                     searchSource === "registry" && "hidden",
                   )}
-                  onWheel={handleRailWheel}
+                  onFocusCapture={({ target }) => {
+                    if (target instanceof HTMLElement) {
+                      target.scrollIntoView({
+                        block: "nearest",
+                        inline: "nearest",
+                        behavior: "instant",
+                      });
+                    }
+                  }}
                 >
                   <Button
                     aria-pressed={activeGroupId === null}
@@ -2884,7 +2950,7 @@ const ClipboardApp = () => {
                   </Button>
                   <Button
                     aria-label={t("createGroup")}
-                    className="bg-background/80 sticky start-0 z-10 size-11 shrink-0 rounded-full backdrop-blur-sm"
+                    className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
                     onClick={() =>
                       setDialog({
@@ -2900,96 +2966,105 @@ const ClipboardApp = () => {
                   >
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
-                  {snapshot.groups.map((group, groupIndex) => {
-                    const groupStyle: ClipboardGroupStyle = {
-                      "--clipboard-group-accent": group.color,
-                    };
-                    return (
-                      <ContextMenu
-                        actions={[
-                          {
-                            icon: <PencilIcon aria-hidden="true" />,
-                            label: t("editGroup"),
-                            onClick: () =>
-                              setDialog({
-                                color: group.color,
-                                groupId: group.id,
-                                name: group.name,
-                                type: "editGroup",
-                              }),
-                          },
-                          {
-                            disabled: groupIndex === 0,
-                            icon: (
-                              <ArrowLeftIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupEarlier"),
-                            onClick: () => moveGroup(group.id, groupIndex - 1),
-                            separatorBefore: true,
-                          },
-                          {
-                            disabled: groupIndex === snapshot.groups.length - 1,
-                            icon: (
-                              <ArrowRightIcon
-                                aria-hidden="true"
-                                className="rtl:rotate-180"
-                              />
-                            ),
-                            label: t("moveGroupLater"),
-                            onClick: () => moveGroup(group.id, groupIndex + 1),
-                          },
-                          {
-                            icon: <Trash2Icon aria-hidden="true" />,
-                            label: t("deleteGroup"),
-                            onClick: () =>
-                              setDialog({
-                                groupId: group.id,
-                                groupName: group.name,
-                                mode: "keepClips",
-                                type: "deleteGroup",
-                              }),
-                            separatorBefore: true,
-                            variant: "destructive",
-                          },
-                        ]}
-                        key={group.id}
-                      >
-                        <Button
-                          aria-pressed={activeGroupId === group.id}
-                          className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
-                          data-clipboard-group-id={group.id}
-                          data-dragging={
-                            dragState.type === "reordering" &&
-                            dragState.groupId === group.id
-                              ? ""
-                              : undefined
-                          }
-                          data-drop-target={
-                            isDropTarget(group.id) ? "" : undefined
-                          }
-                          data-group-chip=""
-                          onClick={() => {
-                            setSelectedGroupId(group.id);
-                            setSelectedIndex(0);
-                          }}
-                          style={groupStyle}
-                          variant="ghost"
+                  <div
+                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    data-clipboard-groups-scroller=""
+                    onWheel={handleRailWheel}
+                  >
+                    {snapshot.groups.map((group, groupIndex) => {
+                      const groupStyle: ClipboardGroupStyle = {
+                        "--clipboard-group-accent": group.color,
+                      };
+                      return (
+                        <ContextMenu
+                          actions={[
+                            {
+                              icon: <PencilIcon aria-hidden="true" />,
+                              label: t("editGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  color: group.color,
+                                  groupId: group.id,
+                                  name: group.name,
+                                  type: "editGroup",
+                                }),
+                            },
+                            {
+                              disabled: groupIndex === 0,
+                              icon: (
+                                <ArrowLeftIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupEarlier"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex - 1),
+                              separatorBefore: true,
+                            },
+                            {
+                              disabled:
+                                groupIndex === snapshot.groups.length - 1,
+                              icon: (
+                                <ArrowRightIcon
+                                  aria-hidden="true"
+                                  className="rtl:rotate-180"
+                                />
+                              ),
+                              label: t("moveGroupLater"),
+                              onClick: () =>
+                                moveGroup(group.id, groupIndex + 1),
+                            },
+                            {
+                              icon: <Trash2Icon aria-hidden="true" />,
+                              label: t("deleteGroup"),
+                              onClick: () =>
+                                setDialog({
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                  mode: "keepClips",
+                                  type: "deleteGroup",
+                                }),
+                              separatorBefore: true,
+                              variant: "destructive",
+                            },
+                          ]}
+                          key={group.id}
                         >
-                          <span
-                            aria-hidden="true"
-                            className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
-                          />
-                          {group.name}
-                          <InlineDropIndicator
-                            position={reorderPosition(group.id)}
-                          />
-                        </Button>
-                      </ContextMenu>
-                    );
-                  })}
+                          <Button
+                            aria-pressed={activeGroupId === group.id}
+                            className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
+                            data-clipboard-group-id={group.id}
+                            data-dragging={
+                              dragState.type === "reordering" &&
+                              dragState.groupId === group.id
+                                ? ""
+                                : undefined
+                            }
+                            data-drop-target={
+                              isDropTarget(group.id) ? "" : undefined
+                            }
+                            data-group-chip=""
+                            onClick={() => {
+                              setSelectedGroupId(group.id);
+                              setSelectedIndex(0);
+                            }}
+                            style={groupStyle}
+                            variant="ghost"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+                            />
+                            {group.name}
+                            <InlineDropIndicator
+                              position={reorderPosition(group.id)}
+                            />
+                          </Button>
+                        </ContextMenu>
+                      );
+                    })}
+                  </div>
                 </nav>
               </div>
               <div className="flex shrink-0 items-center gap-0.5 justify-self-end">
