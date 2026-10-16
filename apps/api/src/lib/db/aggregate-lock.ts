@@ -21,6 +21,10 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationParam,
+} from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
@@ -77,6 +81,24 @@ export const AGGREGATE_LOCKS = {
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
+
+type OrganizationFencedRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  query: string;
+  params: readonly OnlineMigrationParam[];
+};
+
+/**
+ * Online repairs own native transactions instead of Drizzle transactions.
+ * Their batch query joins organization as tenant; key-share fencing preserves
+ * that parent until dependent metadata commits without locking source rows.
+ */
+export const queryOrganizationFencedRepairBatch = async ({
+  connection,
+  query,
+  params,
+}: OrganizationFencedRepairBatchOptions) =>
+  await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {

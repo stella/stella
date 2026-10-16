@@ -25,8 +25,11 @@ jobs:
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Covers the bounded merge-queue wait below.
+    timeout-minutes: 30
     permissions:
+      # The merge-queue wait reads workflow runs and their jobs.
+      actions: read
       contents: read
       packages: read
     outputs:
@@ -58,6 +61,29 @@ jobs:
           if [[ "$required" == "false" ]]; then
             echo "skipped: no migration change" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Migration checks run nowhere else, so they wait for the merge queue
+      # (bounded) instead of skipping. Only this light job holds a runner.
+      - name: Wait for the merge queue
+        if: github.event_name == 'pull_request' && steps.changes.outputs.required != 'false'
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            const { pathToFileURL } = require("node:url");
+            const { resolve } = require("node:path");
+            const { mergeQueueGate } = await import(pathToFileURL(
+              resolve("scripts/merge-queue-waiting.mjs")).href);
+            await mergeQueueGate({
+              github,
+              context,
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
+              polls: 20,
+              intervalMs: 60_000,
+              sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
+              notice: (message) => core.notice(message),
+            });
 
       # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun

@@ -934,7 +934,7 @@ describe("projectForChat", () => {
       READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
     ];
     for (const country of PUBLIC_COUNTRIES) {
-      const payload = publicCountryUnavailable(country);
+      const payload = publicCountryUnavailable(country, "search");
       if (payload === null) {
         continue;
       }

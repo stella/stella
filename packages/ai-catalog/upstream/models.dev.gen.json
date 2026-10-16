@@ -11037,11 +11037,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11146,11 +11144,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11203,11 +11199,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11240,11 +11234,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11277,11 +11269,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11326,51 +11316,6 @@
         ],
         "release_date": "2026-09-22",
         "temperature": false,
-        "tool_call": true
-      },
-      "anthropic/claude-sonnet-4": {
-        "cost": {
-          "cache_read": 0.3,
-          "cache_write": 3.75,
-          "context_over_200k": {
-            "cache_read": 0.6,
-            "cache_write": 7.5,
-            "input": 6,
-            "output": 22.5
-          },
-          "input": 3,
-          "output": 15,
-          "tiers": [
-            {
-              "cache_read": 0.6,
-              "cache_write": 7.5,
-              "input": 6,
-              "output": 22.5,
-              "tier": {
-                "size": 200000,
-                "type": "context"
-              }
-            }
-          ]
-        },
-        "limit": {
-          "output": 64000
-        },
-        "modalities": {
-          "input": [
-            "image",
-            "text",
-            "pdf"
-          ]
-        },
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          }
-        ],
-        "release_date": "2025-05-22",
-        "temperature": true,
         "tool_call": true
       },
       "anthropic/claude-sonnet-4.5": {
@@ -11456,11 +11401,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11492,11 +11435,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -11686,11 +11627,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high"
@@ -11729,11 +11668,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -11773,11 +11710,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -11949,11 +11884,11 @@
       },
       "deepseek/deepseek-chat": {
         "cost": {
-          "input": 0.32,
-          "output": 0.89
+          "input": 0.2574,
+          "output": 1.0287
         },
         "limit": {
-          "output": 16384
+          "output": 16000
         },
         "modalities": {
           "input": [
@@ -12134,11 +12069,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "high",
               "xhigh"
             ]
@@ -12150,8 +12083,8 @@
       },
       "deepseek/deepseek-v4-flash-0731": {
         "cost": {
-          "cache_read": 0.016,
-          "input": 0.016,
+          "cache_read": 0.0094,
+          "input": 0.0094,
           "output": 0.64
         },
         "limit": {
@@ -12165,11 +12098,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -12198,11 +12129,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -12230,11 +12159,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "high",
               "xhigh"
             ]
@@ -12261,11 +12188,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -12279,8 +12204,8 @@
       "deepseek/deepseek-v4.1-flash": {
         "cost": {
           "cache_read": 0.0054,
-          "input": 0.01368,
-          "output": 0.891
+          "input": 0.018,
+          "output": 0.684
         },
         "limit": {
           "output": 943718
@@ -12294,11 +12219,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -12351,11 +12274,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -12565,11 +12486,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -12644,11 +12563,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "high"
             ]
@@ -12675,11 +12592,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "high"
             ]
@@ -12712,11 +12627,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -12745,11 +12658,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "high"
             ]
@@ -12782,11 +12693,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
@@ -13045,11 +12954,11 @@
       },
       "google/gemini-3.8-flash": {
         "cost": {
-          "cache_read": 0.075,
+          "cache_read": 0.0825,
           "cache_write": 0.041667,
-          "input": 0.75,
-          "output": 3.75,
-          "reasoning": 3.75
+          "input": 0.825,
+          "output": 4.125,
+          "reasoning": 4.125
         },
         "limit": {
           "output": 65536
@@ -13130,11 +13039,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "high"
             ]
@@ -13737,11 +13644,11 @@
       },
       "meta-llama/llama-3.2-3b-instruct": {
         "cost": {
-          "input": 0.0509,
-          "output": 0.335
+          "input": 0.05,
+          "output": 0.33
         },
         "limit": {
-          "output": 72000
+          "output": 117964
         },
         "modalities": {
           "input": [
@@ -14030,6 +13937,40 @@
           }
         ],
         "release_date": "2026-09-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "meta/muse-spark-open": {
+        "cost": {
+          "cache_read": 0.15,
+          "input": 1.25,
+          "output": 4.25
+        },
+        "limit": {
+          "output": 943718
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf",
+            "audio"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
       },
@@ -14638,8 +14579,8 @@
       },
       "mistralai/mistral-small-3.2-24b-instruct": {
         "cost": {
-          "input": 0.075,
-          "output": 0.2
+          "input": 0.09375,
+          "output": 0.25
         },
         "limit": {
           "output": 16384
@@ -14695,6 +14636,54 @@
         "release_date": "2025-07-15",
         "temperature": true,
         "tool_call": true
+      },
+      "moondream/moondream3-preview": {
+        "cost": {
+          "input": 0.3,
+          "output": 2.5
+        },
+        "limit": {
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": false
+      },
+      "moondream/moondream3.1-9b-a2b": {
+        "cost": {
+          "input": 0.3,
+          "output": 2.5
+        },
+        "limit": {
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": false
       },
       "moonshotai/kimi-k2": {
         "cost": {
@@ -14825,9 +14814,9 @@
       },
       "moonshotai/kimi-k3": {
         "cost": {
-          "cache_read": 0.28,
-          "input": 0.45,
-          "output": 15
+          "cache_read": 0.21,
+          "input": 0.304,
+          "output": 11.588
         },
         "limit": {
           "output": 943718
@@ -14842,11 +14831,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -15080,11 +15067,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium"
             ]
@@ -15113,11 +15098,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium"
             ]
@@ -15147,11 +15130,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "medium",
               "high"
             ]
@@ -15180,11 +15161,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "medium",
               "high"
             ]
@@ -15289,6 +15268,57 @@
           }
         ],
         "release_date": "2026-08-11",
+        "temperature": true,
+        "tool_call": true
+      },
+      "nvidia/nemotron-3.5-super-vl": {
+        "cost": {
+          "cache_read": 0.02,
+          "input": 0.15,
+          "output": 0.5
+        },
+        "limit": {
+          "output": 235929
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "release_date": "2026-10-15",
+        "temperature": true,
+        "tool_call": true
+      },
+      "nvidia/nemotron-3.5-super-vl:free": {
+        "cost": {
+          "input": 0,
+          "output": 0
+        },
+        "limit": {
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "release_date": "2026-10-15",
         "temperature": true,
         "tool_call": true
       },
@@ -15867,9 +15897,6 @@
         },
         "reasoning": true,
         "reasoning_options": [
-          {
-            "type": "toggle"
-          },
           {
             "type": "effort",
             "values": [
@@ -17767,11 +17794,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "medium",
               "xhigh"
             ]
@@ -18117,12 +18142,11 @@
       },
       "qwen/qwen3-next-80b-a3b-instruct": {
         "cost": {
-          "cache_read": 0.07,
-          "input": 0.1,
+          "input": 0.09,
           "output": 1.1
         },
         "limit": {
-          "output": 235929
+          "output": 16384
         },
         "modalities": {
           "input": [
@@ -18467,11 +18491,12 @@
       },
       "qwen/qwen3.6-27b": {
         "cost": {
-          "input": 0.32,
-          "output": 3.2
+          "cache_read": 0.025,
+          "input": 0.25,
+          "output": 2
         },
         "limit": {
-          "output": 81920
+          "output": 65536
         },
         "modalities": {
           "input": [
@@ -18769,11 +18794,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "xhigh"
@@ -19284,7 +19307,7 @@
       },
       "stepfun/step-5-preview": {
         "cost": {
-          "cache_read": 0.05,
+          "cache_read": 0.1,
           "input": 1,
           "output": 2.7
         },
@@ -19664,26 +19687,6 @@
           }
         ],
         "release_date": "2026-07-15",
-        "temperature": true,
-        "tool_call": true
-      },
-      "unbiased/pareto-26.10-preview": {
-        "cost": {
-          "cache_read": 0.03,
-          "input": 0.8,
-          "output": 3.2
-        },
-        "limit": {
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2026-10-01",
         "temperature": true,
         "tool_call": true
       },
@@ -20535,9 +20538,9 @@
       },
       "z-ai/glm-5.2": {
         "cost": {
-          "cache_read": 0.036,
-          "input": 0.037,
-          "output": 7
+          "cache_read": 0.14,
+          "input": 0.62,
+          "output": 2.42
         },
         "limit": {
           "output": 943718
@@ -20550,11 +20553,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "high",
               "xhigh"
             ]
@@ -20595,9 +20596,9 @@
       },
       "z-ai/glm-5.3-flash": {
         "cost": {
-          "cache_read": 0.01125,
-          "input": 0.036,
-          "output": 0.9
+          "cache_read": 0.009,
+          "input": 0.01584,
+          "output": 1.125
         },
         "limit": {
           "output": 943718
@@ -20776,11 +20777,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "medium",
               "high",
@@ -20864,8 +20863,8 @@
       "~deepseek/deepseek-flash-latest": {
         "cost": {
           "cache_read": 0.0054,
-          "input": 0.01368,
-          "output": 0.891
+          "input": 0.018,
+          "output": 0.684
         },
         "limit": {
           "output": 943718
@@ -20879,11 +20878,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -20897,7 +20894,7 @@
       "~deepseek/deepseek-pro-latest": {
         "cost": {
           "cache_read": 0.249,
-          "input": 0.26,
+          "input": 0.25,
           "output": 5
         },
         "limit": {
@@ -20911,11 +20908,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -20928,8 +20923,8 @@
       },
       "~deepseek/deepseek-v4-flash-latest": {
         "cost": {
-          "cache_read": 0.0108,
-          "input": 0.0144,
+          "cache_read": 0.00846,
+          "input": 0.00846,
           "output": 0.576
         },
         "limit": {
@@ -20943,11 +20938,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -21046,9 +21039,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.3,
-          "input": 0.32,
-          "output": 14
+          "cache_read": 0.284,
+          "input": 0.294,
+          "output": 28
         },
         "limit": {
           "output": 943718
@@ -21063,11 +21056,9 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "low",
               "high",
               "max"
@@ -21391,9 +21382,9 @@
       },
       "~z-ai/glm-flash-latest": {
         "cost": {
-          "cache_read": 0.01125,
-          "input": 0.036,
-          "output": 0.9
+          "cache_read": 0.009,
+          "input": 0.01584,
+          "output": 1.125
         },
         "limit": {
           "output": 943718
@@ -21422,8 +21413,8 @@
       },
       "~z-ai/glm-latest": {
         "cost": {
-          "cache_read": 0.0558,
-          "input": 0.06,
+          "cache_read": 0.0565,
+          "input": 0.0608,
           "output": 4.4
         },
         "limit": {
