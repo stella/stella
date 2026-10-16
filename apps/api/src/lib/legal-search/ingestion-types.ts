@@ -598,7 +598,7 @@ export type SyncPage = {
    * bootstrap, a search POST, and a per-decision detail fetch are all
    * indistinguishable from outside, so request order cannot name it. Set it
    * where the listing response is parsed, and leave it unset on a page that
-   * read no listing (a skipped or empty page). `update-adapter-fixtures.ts` cites it
+   * read no listing (a skipped or empty page). `update-fixtures.ts` cites it
    * as the recorded provenance of a page fixture and refuses to record an
    * adapter that names nothing.
    */

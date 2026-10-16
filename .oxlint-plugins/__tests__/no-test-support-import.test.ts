@@ -20,3 +20,17 @@ test("rejects every load of a module under the tests tree, types included", asyn
     }),
   ).toEqual([1, 2, 3, 4, 5]);
 });
+
+test("accepts application imports, including look-alike paths outside the tests tree", async () => {
+  expect(
+    await lintSingleRule(
+      "no-test-support-import",
+      [
+        'import { createSafeId } from "@/api/lib/branded-types";',
+        'import { notTests } from "@/api/lib/tests";',
+        'import { latestTestRun } from "@/api/lib/test-runs";',
+      ].join("\n"),
+      { cwd: "scratch", sourcePath: "apps/api/src/lib/planted.ts" },
+    ),
+  ).toEqual([]);
+});
