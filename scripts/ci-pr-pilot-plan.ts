@@ -10,6 +10,9 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api",
   "code-quality-web-rest",
   "query-perf",
+  // Migration checks are cheap and gate on their own scope; PRs run them.
+  "database-migrations-check",
+  "database-migrations-apply-fresh",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
 export const PILOT_ALWAYS = ["ci-quick-checks"] as const;
@@ -20,8 +23,6 @@ export const PILOT_DEFERRED = [
   "service-suites",
   "postgres-service-suites",
   "migration-upgrade-rehearsal",
-  "database-migrations-check",
-  "database-migrations-apply-fresh",
   "release-typecheck",
   "fix-tests-on-base",
   "web-build",
