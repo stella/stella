@@ -506,7 +506,10 @@ export const decisionOptions = (decisionId: string, caseFileCursor?: string) =>
     queryFn: async ({ signal }) => {
       const response = await api.case
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
-        .get({ query: { caseFileCursor }, fetch: { signal } });
+        .get({
+          query: caseFileCursor === undefined ? {} : { caseFileCursor },
+          fetch: { signal },
+        });
 
       const data = unwrapPublicLawEden(response, "readPublicCaseLawDecision");
 
@@ -557,7 +560,7 @@ export const decisionBySlugOptions = ({
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions["by-slug"]({ slug }).get({
         query: {
-          caseFileCursor,
+          ...(caseFileCursor === undefined ? {} : { caseFileCursor }),
           country,
           ...(language !== undefined && { language }),
         },

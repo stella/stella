@@ -20,10 +20,10 @@ export const SITEMAP_ALL_BUCKET = "all";
  * One stable eligible row per document, chosen across all dates and buckets.
  * Filtering a shard's rows afterwards would repeat documents whose language
  * versions have different ids (and therefore different hashed buckets).
+ * A scalar, capped sibling probe keeps the language-group index condition;
+ * null group keys match no sibling and therefore remain representatives.
  */
-// sql-perf-allow: index case_law_decisions_lang_group_idx bounds each correlated sibling probe
 export const sitemapDocumentRepresentative = sql`${caseLawDecisions.redactedAt} IS NULL AND (
-  ${caseLawDecisions.languageGroupKey} IS NULL OR NOT EXISTS (
     SELECT 1
     FROM case_law_decisions AS sitemap_sibling
     INNER JOIN case_law_sources AS sitemap_sibling_source
@@ -33,8 +33,8 @@ export const sitemapDocumentRepresentative = sql`${caseLawDecisions.redactedAt} 
       AND sitemap_sibling.id < ${caseLawDecisions.id}
       AND ${sql.raw(publishedUnredactedCaseLawDecisionSqlFor("sitemap_sibling"))}
       AND ${sql.raw(redistributableCaseLawSourceSqlFor("sitemap_sibling_source"))}
-  )
-)`;
+    LIMIT 1
+) IS NULL`;
 
 // These fragments are rendered into both the SELECT list and the GROUP BY of
 // the refresh's grouped read. Postgres identifies a grouped SELECT expression

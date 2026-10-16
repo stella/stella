@@ -528,7 +528,7 @@ test(
       !opinion ||
       !opinionTranslation
     ) {
-      return panic("Expected seven document version ids");
+      panic("Expected seven document version ids");
     }
     const versions = [
       decision({
@@ -624,7 +624,7 @@ test(
             caseLawDb,
           );
           if (!("items" in page)) {
-            return panic("Expected a readable sitemap bucket");
+            panic("Expected a readable sitemap bucket");
           }
           served.push(...page.items.map(({ id }) => id));
         }

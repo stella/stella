@@ -142,7 +142,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  await client?.close();
+  await client.close();
 });
 
 const readPage = async (cursor?: string | null) =>
