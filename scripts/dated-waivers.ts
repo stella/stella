@@ -1,7 +1,7 @@
 // Add each new dated exception at its owner, then register its adapter here.
 // The census covers policy/config expiry keys; prose-only review promises need
 // an explicit adapter (see docs/maintenance/dated-waivers.md).
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -47,6 +47,10 @@ const documentationExclusionSchema = v.object({
   reason: v.literal("no-llms-txt"),
 });
 
+export class DocumentationExclusionParseError extends TaggedError(
+  "DocumentationExclusionParseError",
+)<{ message: string }> {}
+
 /** Reads the documentation waiver registry without executing its source file. */
 export const readDocumentationExclusions = (
   source: string,
@@ -58,6 +62,7 @@ export const readDocumentationExclusions = (
     true,
   );
   const strings = new Map<string, string>();
+  const constants = new Map<string, ts.Expression>();
   let owner: ts.VariableDeclaration | undefined;
   const visit = (node: ts.Node): void => {
     if (
@@ -65,6 +70,12 @@ export const readDocumentationExclusions = (
       ts.isIdentifier(node.name) &&
       node.initializer
     ) {
+      if (
+        ts.isVariableDeclarationList(node.parent) &&
+        node.parent.flags === ts.NodeFlags.Const
+      ) {
+        constants.set(node.name.text, node.initializer);
+      }
       if (ts.isStringLiteral(node.initializer)) {
         strings.set(node.name.text, node.initializer.text);
       }
@@ -78,12 +89,79 @@ export const readDocumentationExclusions = (
   if (!owner?.initializer) {
     return panic("Documentation waiver owner missing");
   }
-  const value = (expression: ts.Expression): string => {
-    if (ts.isStringLiteral(expression)) {
-      return expression.text;
+  const invalidRegistry = (expression: ts.Expression): never => {
+    throw new DocumentationExclusionParseError({
+      message: `Documentation waiver registry must be a static array literal: ${expression.getText(ast)}`,
+    });
+  };
+  const unwrap = (expression: ts.Expression): ts.Expression => {
+    if (
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression) ||
+      ts.isParenthesizedExpression(expression)
+    ) {
+      return unwrap(expression.expression);
     }
-    if (ts.isIdentifier(expression)) {
-      const resolved = strings.get(expression.text);
+    return expression;
+  };
+  const registryElements = (
+    expression: ts.Expression,
+    resolving = new Set<string>(),
+  ): readonly ts.Expression[] => {
+    const unwrapped = unwrap(expression);
+    if (ts.isArrayLiteralExpression(unwrapped)) {
+      return unwrapped.elements.map((element) => {
+        if (ts.isSpreadElement(element)) {
+          return invalidRegistry(element);
+        }
+        return element;
+      });
+    }
+    if (ts.isIdentifier(unwrapped)) {
+      const initializer = constants.get(unwrapped.text);
+      if (!initializer || resolving.has(unwrapped.text)) {
+        return invalidRegistry(unwrapped);
+      }
+      const next = new Set(resolving);
+      next.add(unwrapped.text);
+      return registryElements(initializer, next);
+    }
+    // This is the registry's established static shorthand. The callback is
+    // fixed, while the receiver still has to resolve to a local array literal.
+    if (
+      ts.isCallExpression(unwrapped) &&
+      ts.isPropertyAccessExpression(unwrapped.expression) &&
+      unwrapped.expression.name.text === "map" &&
+      unwrapped.arguments.length === 1 &&
+      ts.isIdentifier(unwrapped.arguments[0]) &&
+      unwrapped.arguments[0].text === "noLlmsTxt"
+    ) {
+      return registryElements(unwrapped.expression.expression, resolving);
+    }
+    if (
+      ts.isCallExpression(unwrapped) &&
+      ts.isPropertyAccessExpression(unwrapped.expression) &&
+      unwrapped.expression.name.text === "concat"
+    ) {
+      return [
+        ...registryElements(unwrapped.expression.expression, resolving),
+        ...unwrapped.arguments.map((argument) => {
+          if (ts.isSpreadElement(argument)) {
+            return invalidRegistry(argument);
+          }
+          return argument;
+        }),
+      ];
+    }
+    return invalidRegistry(unwrapped);
+  };
+  const value = (expression: ts.Expression): string => {
+    const unwrapped = unwrap(expression);
+    if (ts.isStringLiteral(unwrapped)) {
+      return unwrapped.text;
+    }
+    if (ts.isIdentifier(unwrapped)) {
+      const resolved = strings.get(unwrapped.text);
       if (resolved !== undefined) {
         return resolved;
       }
@@ -97,30 +175,25 @@ export const readDocumentationExclusions = (
     reason: "no-llms-txt",
   };
   const exclusions: unknown[] = [];
-  const collect = (node: ts.Node): void => {
-    if (ts.isObjectLiteralExpression(node)) {
+  for (const element of registryElements(owner.initializer)) {
+    const unwrapped = unwrap(element);
+    if (ts.isObjectLiteralExpression(unwrapped)) {
       const entry = Object.fromEntries(
-        node.properties.flatMap((property) =>
+        unwrapped.properties.flatMap((property) =>
           ts.isPropertyAssignment(property)
             ? [[property.name.getText(ast), value(property.initializer)]]
-            : [],
+            : invalidRegistry(unwrapped),
         ),
       );
-      if ("dependency" in entry) {
-        exclusions.push(entry);
-        return;
-      }
+      exclusions.push(entry);
+      continue;
     }
-    if (ts.isArrayLiteralExpression(node)) {
-      for (const element of node.elements) {
-        if (ts.isStringLiteral(element)) {
-          exclusions.push({ ...defaults, dependency: element.text });
-        }
-      }
+    if (ts.isStringLiteral(unwrapped)) {
+      exclusions.push({ ...defaults, dependency: unwrapped.text });
+      continue;
     }
-    ts.forEachChild(node, collect);
-  };
-  collect(owner.initializer);
+    invalidRegistry(unwrapped);
+  }
   return v.parse(v.array(documentationExclusionSchema), exclusions);
 };
 

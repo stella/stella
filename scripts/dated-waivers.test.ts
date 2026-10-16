@@ -11,6 +11,7 @@ import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
   collectWaivers,
   DAY_MS,
+  DocumentationExclusionParseError,
   DOC_SOURCE_FILE,
   dueWaivers,
   expiredWaiverAnnotations,
@@ -18,6 +19,7 @@ import {
   expiryInstant,
   exceptionInventory as inventoryJson,
   loadWaivers,
+  readDocumentationExclusions,
   withinHours,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
@@ -219,6 +221,42 @@ export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
   const headDeadline = "2026-11-01T00:00:00.000Z";
   expect(inventoryFrom(baseDeadline).at(0)?.expiresAt).toBe(baseDeadline);
   expect(inventoryFrom(headDeadline).at(0)?.expiresAt).toBe(headDeadline);
+});
+test("documentation registry resolves local const array aliases through static wrappers", () => {
+  const entries = readDocumentationExclusions(`
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const exclusions = (["doc-package"] as const) satisfies readonly string[];
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`);
+
+  expect(entries).toEqual([
+    {
+      ...doc,
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      expiresAt: "2026-10-01T00:00:00.000Z",
+    },
+  ]);
+});
+test("documentation registry accepts its direct static array shorthand", () => {
+  const source = `
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-06T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-06T00:00:00.000Z";
+export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
+`;
+
+  expect(readDocumentationExclusions(source)).toEqual([doc]);
+});
+test("documentation registry rejects dynamic and imported spread expressions", () => {
+  for (const registry of ["makeExclusions()", "[...importedExclusions]"]) {
+    expect(() =>
+      readDocumentationExclusions(
+        `export const DOC_SOURCE_EXCLUSIONS = ${registry};`,
+      ),
+    ).toThrow(DocumentationExclusionParseError);
+  }
 });
 test("adjacent literal skipped tests declare twenty samples and lapse at expiry", () => {
   const quarantineSources = {
