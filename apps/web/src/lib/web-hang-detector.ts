@@ -11,6 +11,7 @@ import {
   persistedUiStateFingerprint,
   resetPersistedUiState,
 } from "@/lib/persisted-ui-state";
+import { createEphemeralId } from "@/lib/uuid";
 import { resolveWebRouteTemplate } from "@/lib/web-route-template";
 
 export const HANG_HEARTBEAT_MS = 3000;
@@ -166,7 +167,7 @@ export const createWebHangDetector = ({
   const local = browserStorage("local");
   // sessionStorage is copied by duplicate/opener tabs: identity belongs to
   // this document, so another document can never erase its evidence.
-  const key = `${HANG_MARKER_PREFIX}${browser.crypto.randomUUID()}`;
+  const key = `${HANG_MARKER_PREFIX}${createEphemeralId()}`;
   let previous: { key: string; marker: Marker } | undefined;
   for (const { key: candidate, marker: stored } of readHangMarkers(local)) {
     if (
@@ -318,10 +319,12 @@ export const createWebHangDetector = ({
 };
 
 let detector: ReturnType<typeof createWebHangDetector> | undefined;
-export const startWebHangDetector = () => {
-  detector ??= createWebHangDetector({
-    window,
-    build: __APP_VERSION__,
+export const startWebHangDetector = () =>
+  Result.try(() => {
+    detector ??= createWebHangDetector({
+      window,
+      build: __APP_VERSION__,
+    });
+    return detector;
   });
-};
 export const getWebHangDetector = () => detector;

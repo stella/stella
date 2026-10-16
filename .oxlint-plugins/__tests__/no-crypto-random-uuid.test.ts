@@ -28,7 +28,26 @@ test("rejects ambient crypto UUIDs and direct UUID package generators", async ()
   ).toEqual([1, 2, 3, 4, 6, 8, 9, 10, 11, 11, 14, 14, 16]);
 });
 
-test("allows ordered Bun identifiers and unrelated random UUID methods", async () => {
+test("rejects UUID methods through browser receivers, aliases, parameters and literal computed names", async () => {
+  expect(
+    await lintSingleRule(
+      "no-crypto-random-uuid",
+      [
+        "const browserUuid = (browser: Pick<Window, 'crypto'>) => browser.crypto.randomUUID();",
+        "const parameterUuid = (source: Crypto) => source.randomUUID();",
+        "const alias = browser.crypto; alias.randomUUID();",
+        "browser.crypto['randomUUID']();",
+        "alias[`randomUUID`]();",
+        "source?.randomUUID();",
+        "source.randomUUID?.();",
+        "const method = 'randomUUID'; source[method]();",
+        "source.randomUUIDv7();",
+      ].join("\n"),
+    ),
+  ).toEqual([1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("allows ordered Bun identifiers and runtime UUID owners", async () => {
   expect(
     await lintSingleRule(
       "no-crypto-random-uuid",
@@ -37,8 +56,6 @@ test("allows ordered Bun identifiers and unrelated random UUID methods", async (
         "crypto.getRandomValues(new Uint8Array(8));",
         'import { randomBytes } from "node:crypto";',
         "randomBytes(8);",
-        'const local = { randomUUID: () => "local" };',
-        "local.randomUUID();",
         'import { createRandomValue, createUuid } from "@/lib/uuid";',
         "createUuid(); createRandomValue();",
       ].join("\n"),

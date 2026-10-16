@@ -1,10 +1,12 @@
+import { bootClientRuntime } from "@/lib/client-bootstrap";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
-import { startWebHangDetector } from "@/lib/web-hang-detector";
 
 // The runtime chunk can fail before any of its modules evaluate.
 installPreloadErrorRecovery();
-// Run before importing stores that synchronously restore persisted layout.
-startWebHangDetector();
-import("@/client-runtime").catch((error: unknown) => {
+bootClientRuntime({
+  // Start detection before stores restore layout; load the runtime even if detection fails.
+  loadRuntime: async () => import("@/client-runtime"),
+  captureDetectorError: (error) => reportError(error),
+}).catch((error: unknown) => {
   reportError(error);
 });
