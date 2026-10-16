@@ -23,6 +23,7 @@ import {
   annotationData,
   annotationProperty,
   executeGate,
+  failureAnnotation,
   planRepeats,
   renderReport,
   reportExitCode,
@@ -754,4 +755,13 @@ test("the CI changed-files output round-trips a path list as one compact JSON li
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("a failed file annotation cannot inject workflow commands through its name", () => {
+  const annotation = failureAnnotation({
+    file: "apps/web/a\n::warning::injected.test.ts",
+    failedIterations: [2],
+  });
+  expect(annotation.split("\n")).toHaveLength(1);
+  expect(annotation).not.toContain("\n::warning::");
 });

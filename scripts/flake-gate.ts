@@ -294,6 +294,18 @@ export const annotationData = (value: string) =>
 export const annotationProperty = (value: string) =>
   annotationData(value).replaceAll(",", "%2C").replaceAll(":", "%3A");
 
+/** One workflow error annotation per failed file; the file name is escaped in both the property and the message. */
+export const failureAnnotation = ({
+  file,
+  failedIterations,
+}: {
+  file: string;
+  failedIterations: readonly number[];
+}) =>
+  `::error file=${annotationProperty(file)}::${annotationData(
+    `${file} failed iteration${failedIterations.length === 1 ? "" : "s"} ${failedIterations.join(", ")}`,
+  )}`;
+
 type RunOptions = { target: Target; seed: number; timeoutMs: number };
 export type RunOutcome =
   | { type: "executed"; passed: boolean; status: number; ranTests: boolean }
@@ -570,9 +582,7 @@ if (import.meta.main) {
   for (const result of finalReport.results.filter(
     ({ failures }) => failures > 0,
   )) {
-    console.log(
-      `::error file=${annotationProperty(result.file)}::${result.file} failed iteration${result.failedIterations.length === 1 ? "" : "s"} ${result.failedIterations.join(", ")}`,
-    );
+    console.log(failureAnnotation(result));
   }
   for (const error of finalReport.errors) {
     console.log(`::error::${annotationData(error)}`);
