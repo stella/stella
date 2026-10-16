@@ -21,6 +21,10 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 type CaseFileSubject = Pick<
   typeof caseLawDecisions.$inferSelect,
@@ -199,3 +203,115 @@ export const listCaseFileDocuments = async ({
     ),
   };
 };
+
+// The case-file list carries links and document labels; the detail reader owns
+// payloads, provenance, and derived analysis. Classify every stored column so a
+// schema addition requires an explicit decision about this public projection.
+const UNPROJECTED_CASE_FILE_COLUMNS = [
+  // Source ownership scopes the read; it is not a document label.
+  "sourceId",
+  // The file parser already verified that the primary reference is a docket.
+  "caseNumberType",
+  // Normalized lookup key, not the publisher's reference.
+  "citationKey",
+  // Internal file membership key; the page displays caseNumber.
+  "docketFamilyKey",
+  // Court directory identity scopes the read; the link uses court and country.
+  "courtId",
+  // Whole document text is served by the detail reader.
+  "fulltext",
+  // Ingestion reconciliation scheduling is not public document metadata.
+  "textlessDetailRecheckedAt",
+  // Text sections belong to the detail reader.
+  "sections",
+  // Structured document content belongs to the detail reader.
+  "documentAst",
+  // Persisted AI analysis is not part of a public document link.
+  "analysis",
+  // Parser bookkeeping does not describe a case-file document.
+  "parserVersion",
+  // Raw publisher bytes are not returned in a document list.
+  "sourceRaw",
+  // Internal object-storage address for publisher bytes.
+  "sourceRawS3Key",
+  // Internal content decoder hint for publisher bytes.
+  "sourceRawContentType",
+  // Source attribution is provided by the linked detail reader.
+  "sourceUrl",
+  // Publisher downloads are provided by the linked detail reader.
+  "documentUrl",
+  // Publisher ingestion identity; the public link uses id or slug.
+  "sourceDocumentId",
+  // The file's document labels use the published primary reference.
+  "sheetNumber",
+  // Document-fetch queue priority is internal bookkeeping.
+  "documentFetchRequestedAt",
+  // Document-fetch claim timing is internal bookkeeping.
+  "documentFetchAttemptedAt",
+  // Document-fetch retry state is internal bookkeeping.
+  "documentFetchAttempts",
+  // Open publisher metadata is deliberately absent from compact document links.
+  "metadata",
+  // Source change detection is internal bookkeeping.
+  "sourceHash",
+  // Source observation timing is internal bookkeeping.
+  "sourceObservedAt",
+  // Source observation ordering is internal bookkeeping.
+  "sourceObservationOrder",
+  // Observation replay detection is internal bookkeeping.
+  "sourceObservationHash",
+  // Redacted rows are excluded rather than exposed with a withdrawal marker.
+  "redactedAt",
+  // Corpus replication state is internal bookkeeping.
+  "corpusMirrorStatus",
+  // Ranking is unrelated to membership in a case file.
+  "citationAuthority",
+  // Citation counts are not part of document labels.
+  "citationCount",
+  // Ranking maintenance timing is internal bookkeeping.
+  "citationAuthorityComputedAt",
+  // Internal object-storage address for document text.
+  "textS3Key",
+  // Internal object-storage address for normalized source bytes.
+  "normalizedS3Key",
+  // Internal object-storage address for structured document content.
+  "astS3Key",
+  // Internal corpus payload identity.
+  "contentHash",
+  // Retired search projection bookkeeping.
+  "indexedHash",
+  // Retired search generation bookkeeping.
+  "indexedGeneration",
+  // Retired search projection timestamp.
+  "indexedAt",
+  // Search projection concurrency fence is internal bookkeeping.
+  "projectionEpoch",
+  // Ingestion creation time is not the document's decision date.
+  "createdAt",
+  // Storage update time is not the document's decision date.
+  "updatedAt",
+] as const satisfies readonly (keyof typeof caseLawDecisions.$inferSelect)[];
+
+type CaseFilePage = Exclude<
+  Awaited<ReturnType<typeof listCaseFileDocuments>>,
+  false
+>;
+// Language availability is batch-derived from sibling rows. Every other
+// response field must trace to a classified decision column.
+type CaseFileDocumentColumns = Omit<
+  CaseFilePage["items"][number],
+  "languageAlternates"
+>;
+type MissingCaseFileColumn = UnprojectedColumns<
+  typeof caseLawDecisions.$inferSelect,
+  CaseFileDocumentColumns,
+  (typeof UNPROJECTED_CASE_FILE_COLUMNS)[number]
+>;
+type UnexpectedCaseFileColumn = UnbackedProjectionKeys<
+  typeof caseLawDecisions.$inferSelect,
+  CaseFileDocumentColumns,
+  (typeof UNPROJECTED_CASE_FILE_COLUMNS)[number]
+>;
+
+true satisfies MissingCaseFileColumn extends never ? true : never;
+true satisfies UnexpectedCaseFileColumn extends never ? true : never;
