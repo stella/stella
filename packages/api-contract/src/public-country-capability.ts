@@ -49,6 +49,7 @@ export const PUBLIC_COUNTRY_CAPABILITIES = {
   EU: "pending_public",
   HUN: "pending_public",
   POL: "pending_public",
+  // parser-output-unchanged: [us-courtlistener] only the Slovak entry changes; the United States entry the parser reads is unchanged.
   SVK: "pages_public",
   USA: "pending_public",
 } as const satisfies Record<string, PublicCountryCapability>;
