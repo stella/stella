@@ -61,6 +61,7 @@ import {
  */
 
 const GENERATION = "legislation_v2";
+const AS_OF = "2026-10-16";
 const INDEX_ID = corpusIndexId(GENERATION, "CZE");
 const FINGERPRINT = "a".repeat(64);
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -193,7 +194,7 @@ const rehydrate = async (
   cursorId?: string,
 ) =>
   await rehydrateLegislationCandidates({
-    body: { query, jurisdiction: "CZE" },
+    body: { query, jurisdiction: "CZE", asOf: AS_OF },
     candidates: candidates(...hits),
     generation: GENERATION,
     legislationDb,
@@ -356,6 +357,21 @@ const boundaryOf = (last: { score: number; id: string }): SearchCursor => ({
 });
 
 describe("one hit per act", () => {
+  test("default search keeps the latest wording of an ended act findable", async () => {
+    const result = await rehydrateLegislationCandidates({
+      body: { query: "smlouva", jurisdiction: "CZE" },
+      candidates: candidates([old1990, 0.6], [old1964, 0.4]),
+      generation: GENERATION,
+      legislationDb,
+    });
+
+    expect(ids(result)).toEqual([String(old1990.id)]);
+    expect(result.context.byId.get(String(old1990.id))).toMatchObject({
+      versionValidFrom: old1990.validFrom,
+      versionValidTo: old1990.validTo,
+    });
+  });
+
   test("only the matching version in force becomes the act's hit", async () => {
     const result = await rehydrate("smlouva", [
       [code2014, 0.9],
@@ -574,8 +590,8 @@ describe("acts an earlier scan window showed", () => {
       excludedWorkTokens: [codeToken],
     });
 
-    expect(shown.groups).not.toContain(codeToken);
-    expect(ids(carried)).toEqual([]);
+    expect(shown.groups).toContain(codeToken);
+    expect(ids(carried)).toEqual([String(old1964.id)]);
   });
 });
 
@@ -632,6 +648,7 @@ describe("the Postgres search path", () => {
         {
           query,
           jurisdiction: "CZE",
+          asOf: AS_OF,
           limit,
           ...(cursor === undefined ? {} : { cursor }),
         },
@@ -697,6 +714,24 @@ describe("the Postgres search path", () => {
       [amendment, vat, vatAmendment].map((seed) => String(seed.id)).toSorted(),
     );
     expect(pages.length).toBe(2);
+  });
+
+  test("default Postgres search retains ended acts and excludes future-only text", async () => {
+    const result = await searchLegislationHandler(
+      { query: "smlouva", jurisdiction: "CZE", limit: 10 },
+      legislationDb,
+      "unobserved",
+      searchDependencies,
+    );
+    if (!("items" in result)) {
+      return panic("default historical search was refused");
+    }
+    expect(result.items.map(({ documentId }) => documentId)).toContain(
+      String(old1990.id),
+    );
+    expect(result.items.map(({ documentId }) => documentId)).not.toContain(
+      String(codeFuture.id),
+    );
   });
 
   test("finds future-only text only at that date and returns its snippet and validity window", async () => {

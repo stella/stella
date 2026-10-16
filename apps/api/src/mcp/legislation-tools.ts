@@ -237,7 +237,14 @@ const searchLegislationArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-    as_of: v.optional(asOfInputSchema),
+    as_of: v.optional(
+      v.pipe(
+        asOfInputSchema,
+        v.description(
+          "Search text in force on this ISO date (YYYY-MM-DD); omit it to include historical wording.",
+        ),
+      ),
+    ),
     limit: v.optional(
       v.pipe(
         v.number(),
@@ -369,7 +376,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
-      "YYYY-MM-DD). `as_of` searches the consolidation in force on that ISO date and defaults to today. " +
+      "YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. " +
       "No facets are returned and `total` is not counted, so " +
       "page with the returned nextCursor instead of reasoning about a result " +
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +

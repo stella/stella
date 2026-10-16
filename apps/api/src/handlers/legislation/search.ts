@@ -99,6 +99,8 @@ import {
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
+  openedBy,
+  type LegislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -255,16 +257,27 @@ type RehydrateLegislationCandidatesOptions = {
   hitDispositions?: CorpusHitDispositionCounter | undefined;
 };
 
+/** Undated search keeps historical wording discoverable; an explicit date
+ * restricts matches to the consolidation actually in force on that date. */
+const legislationSearchWindow = (
+  ref: LegislationVersionRef,
+  asOf: string | undefined,
+): SQL =>
+  asOf === undefined
+    ? openedBy(ref, sql`CURRENT_DATE`)
+    : inForceOn(ref, sql`${asOf}::date`);
+
 /** The request filters a stored version must satisfy to stand for a hit. */
 const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
-  const asOf =
-    body.asOf === undefined ? sql`CURRENT_DATE` : sql`${body.asOf}::date`;
   const filters: SQL[] = [
     publishedLegislationDocumentFor("search"),
     // A withdrawn version stays openable by id, never found by a search,
     // including while its index entry still waits to be erased.
     notWithdrawn(legislationVersionRef(legislationDocuments)),
-    inForceOn(legislationVersionRef(legislationDocuments), asOf),
+    legislationSearchWindow(
+      legislationVersionRef(legislationDocuments),
+      body.asOf,
+    ),
   ];
   if (body.jurisdiction) {
     filters.push(eq(legislationDocuments.country, body.jurisdiction));
@@ -776,10 +789,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
         AND ${publishedLegislationCountryFor(sql`d.country`, "search")}
         AND sd.retry_after IS NULL
         AND ${notWithdrawn(legislationVersionRefAt("d"))}
-        AND ${inForceOn(
-          legislationVersionRefAt("d"),
-          body.asOf === undefined ? sql`CURRENT_DATE` : sql`${body.asOf}::date`,
-        )}
+        AND ${legislationSearchWindow(legislationVersionRefAt("d"), body.asOf)}
         ${filters}
     ),
     best AS (
@@ -1453,7 +1463,7 @@ const config = {
     "Full-text search the stella legislation corpus, returning ranked results " +
     "with strict or relaxed match metadata, a highlighted snippet and each document's ELI, title, country, " +
     "language, type, status, effective date, and the matched version's validity window. " +
-    "Use asOf to search the consolidation in force on an ISO date; it defaults to today. Filter by jurisdiction, " +
+    "Use asOf to search the consolidation in force on an ISO date; omit it to include historical wording. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
     `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +
     "are searched. Read a hit in full with legislation.read; use " +

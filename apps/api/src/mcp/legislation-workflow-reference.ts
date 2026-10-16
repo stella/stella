@@ -90,7 +90,7 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       "carries the act's `eli` (the European Legislation Identifier), its " +
       "title, language, document type, publication status, effective date " +
       "and a matched snippet. `as_of` (ISO YYYY-MM-DD) searches the consolidation " +
-      "in force on that date; omit it for today. Each hit carries its " +
+      "in force on that date; omit it to include historical wording. Each hit carries its " +
       "`versionValidFrom`/`versionValidTo`. No facets come back and `total` is not " +
       "counted, so page with the returned `nextCursor` rather than " +
       "reasoning about how many results exist. The `eli` is the handle " +

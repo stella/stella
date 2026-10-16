@@ -48,7 +48,7 @@ export const searchLegislationBodySchema = t.Object({
     t.String({
       format: "date",
       description:
-        "Search the consolidation in force on this date; defaults to today.",
+        "Search the consolidation in force on this date; omitted dates include historical wording.",
     }),
   ),
 });

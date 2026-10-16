@@ -22,6 +22,8 @@ const hit = {
   documentType: "zákon",
   status: "current",
   effectiveDate: null,
+  versionValidFrom: "2024-01-01",
+  versionValidTo: null,
   sourceUrl: null,
   headline: "náhrada <mark>škody</mark>",
   score: 1,
