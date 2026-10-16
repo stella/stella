@@ -15,10 +15,7 @@ import {
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { toDynamicToolTitle } from "@/api/mcp/gateway/list-tools";
-import {
-  GATEWAY_TOOL_KIND,
-  modeAllowsGatewayTools,
-} from "@/api/mcp/gateway/mode-policy";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import {
   loadSkillPrompts,
   readSkillTool,
@@ -167,8 +164,7 @@ const servesSkillPrompts = ({
   mode: McpMode;
   scopes: readonly string[] | undefined;
 }): boolean =>
-  hasGrantedScope(scopes, "stella:skills") &&
-  modeAllowsGatewayTools(mode, GATEWAY_TOOL_KIND.skill);
+  hasGrantedScope(scopes, "stella:skills") && modeAllowsGatewayTools(mode);
 
 const embedResources = async ({
   context,

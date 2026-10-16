@@ -51,6 +51,20 @@ describe("MCP protected resource metadata", () => {
     });
   });
 
+  test("default and advanced challenges point to metadata with their exact grant scopes", () => {
+    for (const [mode, scopes] of [
+      ["default", MCP_DEFAULT_RESOURCE_SCOPES],
+      ["advanced", MCP_ADVANCED_RESOURCE_SCOPES],
+    ] as const) {
+      expect(getMcpWwwAuthenticateHeader({ mode })).toBe(
+        `Bearer resource_metadata="${getMcpProtectedResourceMetadataUrl(mode)}"`,
+      );
+      expect(getMcpProtectedResourceMetadata(mode).scopes_supported).toEqual([
+        ...scopes,
+      ]);
+    }
+  });
+
   test("keeps external gateway consent on the advanced resource", () => {
     expect(getMcpProtectedResourceMetadata().scopes_supported).not.toContain(
       "stella:external_mcps",
