@@ -1,3 +1,4 @@
+// parser-output-unchanged: Optional sourceDocument reuses the same DOM after non-mutating parsing; default validation still loads the original HTML.
 // parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.

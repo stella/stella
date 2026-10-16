@@ -1,3 +1,4 @@
+// parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 /**
  * Polish Courts (SAOS) parser.
