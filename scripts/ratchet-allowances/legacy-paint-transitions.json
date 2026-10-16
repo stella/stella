@@ -1,5 +1,5 @@
 {
   "metric": "legacy-paint-transitions",
-  "delta": 4,
-  "reason": "The chat status mark draws its check and cross by transitioning SVG stroke-dashoffset and its colour, and the citation chip fades its underline colour; the shared app stylesheet built from those components carries the same rule. Neither stroke drawing nor colour can be expressed with transform or opacity, and all run on 16 px inline elements."
+  "delta": 3,
+  "reason": "The chat status mark draws its check and cross by transitioning SVG stroke-dashoffset and its colour, and the citation chip fades its underline colour. Neither stroke drawing nor colour can be expressed with transform or opacity, and all run on 16 px inline elements."
 }
