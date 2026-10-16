@@ -109,36 +109,67 @@ export const locateQuoteInBlocks = (
   if (!pieces.some((piece) => piece.length >= MIN_EVIDENCE_LENGTH)) {
     return null;
   }
-  // The text blocks joined by line breaks, which matching reads as spacing,
-  // so a quotation may run on from one paragraph into the next.
-  const segments: { block: Block; start: number }[] = [];
-  let text = "";
+  // Adjacent text blocks form runs. A non-text block ends a run, so its
+  // omitted contents cannot be mistaken for contiguous source text.
+  const runs: {
+    segments: { block: Block; start: number }[];
+    text: string;
+  }[] = [];
+  let run:
+    | {
+        segments: { block: Block; start: number }[];
+        text: string;
+      }
+    | undefined;
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {
+      run = undefined;
       continue;
     }
-    if (segments.length > 0) {
-      text += "\n";
+    if (run === undefined) {
+      run = { segments: [], text: "" };
+      runs.push(run);
+    } else if (run.segments.length > 0) {
+      run.text += "\n";
     }
-    segments.push({ block, start: text.length });
-    text += plainTextOf(block.inlines);
+    run.segments.push({ block, start: run.text.length });
+    run.text += plainTextOf(block.inlines);
   }
+  let runIndex = 0;
   let from = 0;
-  let firstStart: number | null = null;
+  let first: Block | undefined;
   for (const piece of pieces) {
-    const span = locateQuote(text, piece, from);
-    // `locateQuote` only prefers an occurrence after `from` and falls back
-    // to an earlier one; a piece before its predecessor is out of order.
-    if (span === null || span.start < from) {
+    let match:
+      | { block: Block | undefined; end: number; runIndex: number }
+      | undefined;
+    for (
+      let candidateIndex = runIndex;
+      candidateIndex < runs.length;
+      candidateIndex += 1
+    ) {
+      const candidate = runs[candidateIndex];
+      const candidateFrom = candidateIndex === runIndex ? from : 0;
+      const span = locateQuote(candidate.text, piece, candidateFrom);
+      // `locateQuote` only prefers an occurrence after `from` and falls back
+      // to an earlier one; a piece before its predecessor is out of order.
+      if (span === null || span.start < candidateFrom) {
+        continue;
+      }
+      match = {
+        block: candidate.segments.findLast(({ start }) => start <= span.start)
+          ?.block,
+        end: span.end,
+        runIndex: candidateIndex,
+      };
+      break;
+    }
+    if (match === undefined) {
       return null;
     }
-    firstStart ??= span.start;
-    from = span.end;
+    first ??= match.block;
+    runIndex = match.runIndex;
+    from = match.end;
   }
-  const first =
-    firstStart === null
-      ? undefined
-      : segments.findLast(({ start }) => start <= firstStart)?.block;
   return first === undefined
     ? null
     : { anchorId: first.anchorId, paragraph: courtParagraphNumber(first) };

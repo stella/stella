@@ -29,6 +29,15 @@ const paragraph = (anchorId: string, number: number, text: string) =>
     type: "paragraph",
   }) satisfies Block;
 
+const table = (anchorId: string, text: string) =>
+  ({
+    anchorId,
+    id: anchorId,
+    plainText: text,
+    rows: [],
+    type: "table",
+  }) satisfies Block;
+
 const DECISION_BLOCKS = [
   {
     anchorId: "h-5",
@@ -83,6 +92,24 @@ describe("a quotation located in the decision", () => {
       anchorId: "p-27",
       paragraph: 15,
     });
+  });
+
+  test("a skipped block is a barrier unless the quotation marks an elision", () => {
+    const opening = "The court considered the complete record";
+    const conclusion = "and dismissed the application on the merits.";
+    const blocks = [
+      paragraph("before-table", 1, opening),
+      table("findings-table", "Findings omitted from the rendered quotation"),
+      paragraph("after-table", 2, conclusion),
+    ];
+
+    expect(locateQuoteInBlocks(`${opening} ${conclusion}`, blocks)).toBeNull();
+    expect(locateQuoteInBlocks(`${opening} […] ${conclusion}`, blocks)).toEqual(
+      { anchorId: "before-table", paragraph: 1 },
+    );
+    expect(
+      locateQuoteInBlocks("considered the complete record", blocks),
+    ).toEqual({ anchorId: "before-table", paragraph: 1 });
   });
 
   test("reads rendered Markdown as displayed: inline formatting joins, blocks part", () => {
