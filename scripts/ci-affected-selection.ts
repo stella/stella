@@ -183,17 +183,10 @@ export const readCheckInputs = (
   return checks;
 };
 
-export const affectedPackages = (
-  changed: readonly string[],
-  graph: SelectionGraph,
-) => {
-  const affected = new Set<string>();
+// Generated files need not exist in a clean checkout. Propagate their input
+// identities to consumers, repeatedly, including generator-to-generator edges.
+export const withDerivedOutputs = (changed: readonly string[]) => {
   const files = new Set(changed);
-  if (requiresFullSelection(changed, graph)) {
-    return new Set(graph.packages.keys());
-  }
-  // Generated files need not exist in a clean checkout. Propagate their input
-  // identities to consumers, repeatedly, including generator-to-generator edges.
   let expanded = true;
   while (expanded) {
     expanded = false;
@@ -216,6 +209,18 @@ export const affectedPackages = (
       }
     }
   }
+  return files;
+};
+
+export const affectedPackages = (
+  changed: readonly string[],
+  graph: SelectionGraph,
+) => {
+  const affected = new Set<string>();
+  if (requiresFullSelection(changed, graph)) {
+    return new Set(graph.packages.keys());
+  }
+  const files = withDerivedOutputs(changed);
   for (const file of files) {
     const owner = ownerOf(file, graph);
     if (owner !== undefined) {

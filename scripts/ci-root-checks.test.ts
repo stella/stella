@@ -99,7 +99,7 @@ const reaches = ({ consumer, dependency }: ReachesOptions) =>
 
 // Forward oracle: source owners produced by derived generators, then the
 // actual manifest dependency closures of each check's consuming package.
-const seedsForFile = (file: string) => {
+const derivedFiles = (file: string) => {
   const files = new Set([file]);
   for (let previous = -1; previous !== files.size;) {
     previous = files.size;
@@ -118,17 +118,20 @@ const seedsForFile = (file: string) => {
       }
     }
   }
-  return [...graph.packages]
+  return [...files];
+};
+const seedsForFiles = (files: readonly string[]) =>
+  [...graph.packages]
     .filter(([, { directory }]) =>
-      [...files].some((changed) => changed.startsWith(`${directory}/`)),
+      files.some((changed) => changed.startsWith(`${directory}/`)),
     )
     .map(([name]) => name);
-};
 
 const assertEnumeration = (table = inputs) => {
   for (const [name, { directory }] of graph.packages) {
     const file = `${directory}/src/probe.ts`;
-    const seeds = seedsForFile(file);
+    const files = derivedFiles(file);
+    const seeds = seedsForFiles(files);
     const selected = new Set(
       selectRootChecks({
         changed: [file],
@@ -145,7 +148,7 @@ const assertEnumeration = (table = inputs) => {
             ? seeds.some((dependency) =>
                 reaches({ consumer: input, dependency }),
               )
-            : new Bun.Glob(input).match(file)),
+            : files.some((derived) => new Bun.Glob(input).match(derived))),
       );
       expect(selected.has(check), `${name} -> ${check}`).toBe(expected);
     }

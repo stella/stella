@@ -73,3 +73,17 @@ test.each(CASES)(
     expect(select(outside)).not.toContain(check);
   },
 );
+
+test("path inputs see derived outputs of a changed generator input", () => {
+  // CLI capability shards generate apps/api/src/mcp/generated/*.ts, which CI
+  // restores before the census scans apps/api/src.
+  const check = "ci-checks-rest/Failure-as-empty baseline";
+  expect(inputs.get(check)).not.toContain("@stll/cli");
+  expect(
+    selectRootChecks({
+      changed: ["packages/cli/capabilities/probe.json"],
+      graph,
+      pathChange: "content",
+    }),
+  ).toContain(check);
+});

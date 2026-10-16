@@ -8,6 +8,7 @@ import {
   readSelectionGraph,
   requiresFullSelection,
   type SelectionGraph,
+  withDerivedOutputs,
 } from "./ci-affected-selection";
 import { rootCheckGate } from "./ci-root-check-gate";
 import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };
@@ -132,6 +133,9 @@ export const selectRootChecks = ({
   // A package test that reads another package is not a source dependency of
   // these CLI checks. Their source imports follow the workspace graph only.
   const affected = affectedPackages(changed, { ...graph, inputs: new Map() });
+  // CI restores derived outputs before these checks, so a path reader sees
+  // the outputs of every changed generator input.
+  const files = [...withDerivedOutputs(changed)];
   return [...inputs]
     .filter(([, paths]) =>
       paths.some((input) => {
@@ -141,7 +145,7 @@ export const selectRootChecks = ({
         if (input.startsWith("@stll/")) {
           return affected.has(input);
         }
-        return changed.some(
+        return files.some(
           (file) => file === input || new Bun.Glob(input).match(file),
         );
       }),
