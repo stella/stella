@@ -25,7 +25,9 @@ import {
   LIST_TEMPLATES_PROJECTION,
   LIST_TIME_ENTRIES_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
-  MANAGE_ORGANIZATION_PROJECTION,
+  ADD_MATTER_MEMBER_PROJECTION,
+  REMOVE_MATTER_MEMBER_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
@@ -546,13 +548,20 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Organization ---------------------------------------------------------
-  manage_organization: {
+  add_matter_member: {
     chatProjectable: true,
-    // `user_id` is a workspace-member (user) handle, not a chat ref: passes
-    // through. `matter_id` is a matter ref (used by the add/remove member
-    // actions that scope to a matter).
     inputRefs: [{ kind: "matter", param: "matter_id" }],
-    projection: MANAGE_ORGANIZATION_PROJECTION,
+    projection: ADD_MATTER_MEMBER_PROJECTION,
+  },
+  remove_matter_member: {
+    chatProjectable: true,
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
+    projection: REMOVE_MATTER_MEMBER_PROJECTION,
+  },
+  update_organization_settings: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   },
 
   // --- Practice profile -----------------------------------------------------

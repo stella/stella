@@ -20,7 +20,10 @@ import type {
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
@@ -70,6 +73,7 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -164,6 +168,11 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
+    /** Reads a provision's citing set once per agent search. */
+    readCaseLawProvisionScope?: (
+      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+    ) => ReturnType<typeof readCaseLawProvisionScope>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */

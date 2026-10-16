@@ -107,6 +107,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/workspaces/$workspaceId/correspondence/$correspondenceId":
     "private-no-store",
   "/workspaces/$workspaceId/invoices/$invoiceId": "private-no-store",
+  "/workspaces/$workspaceId/invoices/new": "private-no-store",
   "/workspaces/$workspaceId/reports/$exportId": "private-no-store",
   "/knowledge/templates/catalogue/$packId/$templateId": "public-indexable",
   "/law/$country/cases/$court/$slug": "public-indexable",

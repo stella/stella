@@ -34,6 +34,7 @@ import {
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { matterAccessFunctionStatements } from "@/api/tests/helpers/matter-access-functions";
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
@@ -128,6 +129,9 @@ if (!databaseUrl || !enabled) {
           expect(
             fixtureRelations.map(({ tableName }) => tableName).toSorted(),
           ).toEqual(tables.map((table) => getTableName(table)).toSorted());
+          for (const statement of matterAccessFunctionStatements(schema, [])) {
+            await db.execute(sql.raw(statement));
+          }
           const transaction = async <T>(
             work: (tx: Transaction) => Promise<T>,
           ) =>

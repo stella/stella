@@ -380,7 +380,9 @@ export const planServiceSuites = (
       !files.some(
         (file) =>
           file.startsWith(`apps/${SUITES[suite].app}/`) ||
-          file.startsWith("packages/"),
+          file.startsWith("packages/") ||
+          // Suites import repository scripts too (rehearsal helpers).
+          file.startsWith("scripts/"),
       )
     ) {
       return false;

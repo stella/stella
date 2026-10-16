@@ -24,6 +24,7 @@ import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
+import tableChart from "@/api/handlers/chat/table-chart";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
@@ -103,6 +104,11 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     permissions: listUnavailableChatSkills.config.permissions,
     accountAccess: listUnavailableChatSkills.config.accountAccess,
     query: listUnavailableChatSkills.config.query,
+  })
+  .post("/table-chart", tableChart.handler, {
+    body: tableChart.config.body,
+    permissions: tableChart.config.permissions,
+    accountAccess: tableChart.config.accountAccess,
   })
   .post("/improve-prompt", improvePrompt.handler, {
     body: improvePrompt.config.body,

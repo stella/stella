@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -200,7 +200,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -214,7 +213,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -263,6 +262,12 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -1569,9 +1574,9 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "scope": "stella:templates",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Fill template changes state or starts stateful work.",
-      "destructiveHint": "Fill template is additive and does not overwrite or remove existing state.",
-      "openWorldHint": "Fill template can access public or external entities outside the private workspace."
+      "readOnlyHint": "Records template execution, fill history, and usage before returning the rendered output.",
+      "destructiveHint": "Renders a transient result without overwriting or deleting an existing document.",
+      "openWorldHint": "Registry fields query external business registries; AI fields and conditions can call model providers."
     },
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
@@ -3663,7 +3668,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Check counterparty does not change state.",
       "openWorldHint": "Check counterparty can access public or external entities outside the private workspace."
     },
-    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear or possible-match (resembling entries with score and conflicting fields; each needs human review, none is confirmed), naming the edition screened; or unavailable (stale, not loaded, or the company name unreadable: NOT cleared), whose edition fields name the latest edition on file, not one screened. Top-level status is clear only when every list is. Person matches rest on name and birth date: compare the record first.",
+    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear; possible-match (resembling entries with score and conflicting fields; each needs human review, none confirmed); incomplete (only a bounded subset screened, nothing matched: NOT cleared); or unavailable (stale, not loaded, or company name unreadable: NOT cleared, edition not screened). Top level is clear only if every list was fully screened clear. Person matches rest on name and birth date: compare the record first.",
     "annotations": {
       "title": "Check counterparty",
       "destructiveHint": false,
@@ -5898,64 +5903,123 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
-    "name": "manage_organization",
+    "name": "add_matter_member",
     "scope": "stella:admin_write",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Manage organization changes state or starts stateful work.",
-      "destructiveHint": "Manage organization can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
-      "openWorldHint": "Manage organization is confined to the private workspace or a bounded computation."
+      "readOnlyHint": "Add matter member changes state or starts stateful work.",
+      "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
-      "title": "Manage organization",
-      "destructiveHint": true,
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     },
     "inputSchema": {
       "type": "object",
       "required": [
-        "action"
+        "matter_id",
+        "user_id"
       ],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "add_member",
-            "remove_member",
-            "update_org_settings"
-          ],
-          "type": "string",
-          "description": "Administrative action; the settings fields apply only to update_org_settings"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Existing organization member ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "remove_matter_member",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Remove matter member changes state or starts stateful work.",
+      "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
+    },
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id",
+        "user_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member ID"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Reassign work to this member; omit to unassign"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
+        }
+      }
+    }
+  },
+  {
+    "name": "update_organization_settings",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Update organization settings changes state or starts stateful work.",
+      "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
+    },
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "annotations": {
+      "title": "Update organization settings",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+          "description": "Zero-padding width"
         },
         "matter_numbering_enabled": {
           "type": "boolean",
@@ -5971,18 +6035,18 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction"
+          "description": "Automatic PDF text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60"
+          "description": "Minutes per increment; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry"
+          "description": "Entry edit window in days"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5994,11 +6058,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock"
+          "description": "Locked month-end date; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries"
+          "description": "Require time-entry narrative"
         },
         "time_zone": {
           "anyOf": [
@@ -6011,11 +6075,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
+          "description": "IANA zone; null follows the primary practice jurisdiction"
         }
       }
     }
@@ -6711,7 +6771,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6721,7 +6781,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -6735,7 +6794,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -6784,6 +6843,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -8090,9 +8155,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:templates",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Fill template changes state or starts stateful work.",
-      "destructiveHint": "Fill template is additive and does not overwrite or remove existing state.",
-      "openWorldHint": "Fill template can access public or external entities outside the private workspace."
+      "readOnlyHint": "Records template execution, fill history, and usage before returning the rendered output.",
+      "destructiveHint": "Renders a transient result without overwriting or deleting an existing document.",
+      "openWorldHint": "Registry fields query external business registries; AI fields and conditions can call model providers."
     },
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
@@ -10184,7 +10249,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Check counterparty does not change state.",
       "openWorldHint": "Check counterparty can access public or external entities outside the private workspace."
     },
-    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear or possible-match (resembling entries with score and conflicting fields; each needs human review, none is confirmed), naming the edition screened; or unavailable (stale, not loaded, or the company name unreadable: NOT cleared), whose edition fields name the latest edition on file, not one screened. Top-level status is clear only when every list is. Person matches rest on name and birth date: compare the record first.",
+    "description": "Screen a company or person for due diligence. \`check\` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in \`lists\`, with whether it binds the firm: clear; possible-match (resembling entries with score and conflicting fields; each needs human review, none confirmed); incomplete (only a bounded subset screened, nothing matched: NOT cleared); or unavailable (stale, not loaded, or company name unreadable: NOT cleared, edition not screened). Top level is clear only if every list was fully screened clear. Person matches rest on name and birth date: compare the record first.",
     "annotations": {
       "title": "Check counterparty",
       "destructiveHint": false,
@@ -12419,64 +12484,123 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "manage_organization",
+    "name": "add_matter_member",
     "scope": "stella:admin_write",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Manage organization changes state or starts stateful work.",
-      "destructiveHint": "Manage organization can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
-      "openWorldHint": "Manage organization is confined to the private workspace or a bounded computation."
+      "readOnlyHint": "Add matter member changes state or starts stateful work.",
+      "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
-      "title": "Manage organization",
-      "destructiveHint": true,
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     },
     "inputSchema": {
       "type": "object",
       "required": [
-        "action"
+        "matter_id",
+        "user_id"
       ],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "add_member",
-            "remove_member",
-            "update_org_settings"
-          ],
-          "type": "string",
-          "description": "Administrative action; the settings fields apply only to update_org_settings"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Existing organization member ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "remove_matter_member",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Remove matter member changes state or starts stateful work.",
+      "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
+    },
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id",
+        "user_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member ID"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Reassign work to this member; omit to unassign"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
+        }
+      }
+    }
+  },
+  {
+    "name": "update_organization_settings",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Update organization settings changes state or starts stateful work.",
+      "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
+    },
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "annotations": {
+      "title": "Update organization settings",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+          "description": "Zero-padding width"
         },
         "matter_numbering_enabled": {
           "type": "boolean",
@@ -12492,18 +12616,18 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction"
+          "description": "Automatic PDF text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60"
+          "description": "Minutes per increment; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry"
+          "description": "Entry edit window in days"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -12515,11 +12639,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock"
+          "description": "Locked month-end date; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries"
+          "description": "Require time-entry narrative"
         },
         "time_zone": {
           "anyOf": [
@@ -12532,11 +12656,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
+          "description": "IANA zone; null follows the primary practice jurisdiction"
         }
       }
     }
@@ -14014,7 +14134,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14024,7 +14144,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -14038,7 +14157,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -14087,6 +14206,12 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -15993,7 +16118,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law within one country. \`queries\` merges phrasings of one question; matchedQueries names those behind each hit. \`limit\` is the merged page, split evenly across them. Filters: court, language, dates, decision type, provision, source_id (a \`facets.source\` bucket's \`value\`). Facets describe the first phrasing on page one, null later. Total is uncounted for multiple phrasings. Function words are not required terms; \`searches[]\` gives each phrasing's \`queryUsed\` and warnings, and \`strict\` requires every word. Hits carry citationAuthority (blended into ranking), matchingPassages, resourceName and caseNumber (a citable reference, not always a docket). read_case_law_decision types it; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16003,7 +16128,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -16017,7 +16141,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -16066,6 +16190,12 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "x-stella-agent-input": {
             "kind": "filter"
           }
+        },
+        "provision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
         },
         "has_legal_sentence": {
           "type": "boolean",

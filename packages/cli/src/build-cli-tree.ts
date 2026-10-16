@@ -20,6 +20,7 @@ import type {
   Command,
   CommandBuilderArguments,
   RouteMap,
+  TypedFlagParameter,
 } from "@stricli/core";
 
 import packageJson from "../package.json" with { type: "json" };
@@ -43,6 +44,7 @@ import {
 } from "./local-file-flag.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
+import type { CommonFlagValues } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
 import type {
   CapabilityLeafSpec,
@@ -73,7 +75,11 @@ const identity = (value: string): string => value;
  * exactly the bug that made optional array flags (e.g. `--assignee-ids`)
  * unusable when left off.
  */
-type OptionalStricliFlag = { readonly optional: true };
+type OptionalStricliFlag = (
+  | TypedFlagParameter<string | undefined, Context>
+  | TypedFlagParameter<boolean | undefined, Context>
+  | TypedFlagParameter<readonly string[] | undefined, Context>
+) & { readonly optional: true };
 
 const parsedStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: identity }) as const;
@@ -129,8 +135,10 @@ const hasLimitProp = (spec: LeafCommandSpec): boolean => {
   return "limit" in properties;
 };
 
-const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildCommonFlags();
+const buildLeafFlags = (
+  spec: LeafCommandSpec,
+): Record<string, OptionalStricliFlag> => {
+  const flags: Record<string, OptionalStricliFlag> = buildCommonFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -297,12 +305,10 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
       await runLeafCommand({ context: this, flags: parsedFlags, spec });
     },
   };
-  // SAFETY: flags is assembled from FlagSpecs at build time, so the concrete
-  // FLAGS generic cannot be spelled out; every entry is a valid stricli flag
-  // parameter and the executor reads flags by name.
+  // SAFETY: each dynamic flag is checked above; stricli cannot express mixed flag kinds under one string index signature.
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment above
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+    builderArgs as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
 
@@ -337,8 +343,8 @@ const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
 
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,
-): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildCommonFlags();
+): Record<string, OptionalStricliFlag> => {
+  const flags: Record<string, OptionalStricliFlag> = buildCommonFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -418,9 +424,10 @@ const buildCapabilityLeafCommand = (
       await runCapabilityCommand({ context: this, flags: parsedFlags, spec });
     },
   };
+  // SAFETY: each dynamic flag is checked above; stricli cannot express mixed flag kinds under one string index signature.
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment above
+    builderArgs as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
 
@@ -478,15 +485,12 @@ const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
     parameters: { flags: buildCommonFlags() },
     func: async function func(
       this: Context,
-      parsedFlags: Record<string, unknown>,
+      parsedFlags: CommonFlagValues,
     ): Promise<void> {
       await runResourceCommand({ context: this, flags: parsedFlags, spec });
     },
   };
-  const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
-  return buildCommand(typedArgs);
+  return buildCommand(builderArgs);
 };
 
 const buildResourceNode = (
