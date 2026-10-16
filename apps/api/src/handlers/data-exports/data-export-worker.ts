@@ -147,6 +147,14 @@ class DataExportNotAuthorizedError extends TaggedError(
   "DataExportNotAuthorizedError",
 )<{ message: string }> {}
 
+/**
+ * A newer attempt owns the run: a fenced write matched no row. The stale
+ * worker stops without touching the row the newer attempt now drives.
+ */
+class DataExportSupersededError extends TaggedError(
+  "DataExportSupersededError",
+)<{ message: string }> {}
+
 /** One part would exceed the largest object multipart upload can write. */
 class DataExportPartTooLargeError extends TaggedError(
   "DataExportPartTooLargeError",
@@ -411,26 +419,33 @@ const writeHeartbeat = async ({
   checkpoint,
   now,
 }: WriteHeartbeatArgs) => {
-  await db(async (tx) => {
-    // audit: skip - progress counters and checkpoints on an export whose status changes are audited
-    await tx
-      .update(organizationDataExports)
-      .set({
-        heartbeatAt: now,
-        mattersDone: progress?.mattersDone,
-        bytesDone: progress?.bytesDone,
-        problemCount: progress?.problemCount,
-        plan,
-        mattersTotal: plan?.mattersTotal,
-        bytesTotal: plan?.bytesTotal,
-        partCount: plan?.parts.length,
-        parts:
-          checkpoint === undefined
-            ? undefined
-            : sql`${organizationDataExports.parts} || ${JSON.stringify([checkpoint])}::text::jsonb`,
-      })
-      .where(ownRun(ids, attempt));
-  });
+  const updated = await db(
+    async (tx) =>
+      // audit: skip - progress counters and checkpoints on an export whose status changes are audited
+      await tx
+        .update(organizationDataExports)
+        .set({
+          heartbeatAt: now,
+          mattersDone: progress?.mattersDone,
+          bytesDone: progress?.bytesDone,
+          problemCount: progress?.problemCount,
+          plan,
+          mattersTotal: plan?.mattersTotal,
+          bytesTotal: plan?.bytesTotal,
+          partCount: plan?.parts.length,
+          parts:
+            checkpoint === undefined
+              ? undefined
+              : sql`${organizationDataExports.parts} || ${JSON.stringify([checkpoint])}::text::jsonb`,
+        })
+        .where(ownRun(ids, attempt))
+        .returning({ id: organizationDataExports.id }),
+  );
+  if (updated.length === 0) {
+    throw new DataExportSupersededError({
+      message: "A newer attempt owns this export",
+    });
+  }
 };
 
 /**
@@ -481,6 +496,10 @@ export const runDataExport = async (
       await heartbeat({});
     },
     onError: (error) => {
+      // The run's next fenced write stops a superseded attempt.
+      if (error instanceof DataExportSupersededError) {
+        return;
+      }
       captureError(error, { exportId, operation: "data_export.heartbeat" });
     },
   });
@@ -557,7 +576,11 @@ export const runDataExport = async (
       ? DATA_EXPORT_RUN_OUTCOME.READY
       : DATA_EXPORT_RUN_OUTCOME.SKIPPED;
   } catch (error) {
-    // Boundary of a background job: every failure ends in a row state.
+    // Boundary of a background job: every failure ends in a row state,
+    // except a superseded attempt, whose row the newer attempt owns.
+    if (error instanceof DataExportSupersededError) {
+      return DATA_EXPORT_RUN_OUTCOME.SKIPPED;
+    }
     if (error instanceof DataExportNotAuthorizedError) {
       await markFailed(deps.db, ids, run.attempt, error.message);
       return DATA_EXPORT_RUN_OUTCOME.FAILED;

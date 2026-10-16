@@ -90,11 +90,14 @@ const downloadDataExport = createSafeRootHandler(
           return { type: "not_found" } as const;
         }
         const now = new Date();
-        if (
-          row.status !== "ready" ||
-          row.expiresAt === null ||
-          row.expiresAt <= now
-        ) {
+        if (row.status !== "ready" || row.expiresAt === null) {
+          return { type: "unavailable", status: row.status } as const;
+        }
+        // A link must live at least one whole second; less is already expired.
+        const remainingSeconds = Math.floor(
+          (row.expiresAt.getTime() - now.getTime()) / 1000,
+        );
+        if (remainingSeconds < 1) {
           return { type: "unavailable", status: row.status } as const;
         }
         const requested = body.file;
@@ -111,7 +114,7 @@ const downloadDataExport = createSafeRootHandler(
         }
         const expiresInSeconds = Math.min(
           DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS,
-          Math.floor((row.expiresAt.getTime() - now.getTime()) / 1000),
+          remainingSeconds,
         );
         // Part names are generated server-side; sanitising is idempotent.
         const fileName = sanitizeFilename(file.fileName);

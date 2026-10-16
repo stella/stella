@@ -5,7 +5,7 @@
  */
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -111,6 +111,37 @@ const run = async (
     .where(eq(organizationDataExports.id, exportId));
   return { outcome, parts, row };
 };
+
+describe("organisation data export supersession", () => {
+  test("a run taken over by a newer attempt stops at its next fenced write", async () => {
+    await setRole("admin");
+    try {
+      const exportId = await queueExport();
+      const { outcome, parts, row } = await run(exportId, (source) => ({
+        ...source,
+        listMatters: async (scope) => {
+          // The maintenance sweep hands the live run to a newer attempt.
+          await testDb
+            .update(organizationDataExports)
+            .set({ attempt: sql`${organizationDataExports.attempt} + 1` })
+            .where(eq(organizationDataExports.id, exportId));
+          return await source.listMatters(scope);
+        },
+      }));
+      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.SKIPPED);
+      expect(parts).toEqual([]);
+      expect(row?.status).toBe("running");
+      expect(row?.error).toBeNull();
+      const [stored] = await testDb
+        .select({ plan: organizationDataExports.plan })
+        .from(organizationDataExports)
+        .where(eq(organizationDataExports.id, exportId));
+      expect(stored?.plan).toBeNull();
+    } finally {
+      await setRole("member");
+    }
+  });
+});
 
 describe("organisation data export revocation", () => {
   test("a run stops when its requester no longer has access to the matter", async () => {
