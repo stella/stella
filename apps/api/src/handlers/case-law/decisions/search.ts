@@ -195,6 +195,7 @@ import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  CorpusCandidateRankingInput,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -1604,9 +1605,8 @@ export const readCaseLawPageDecisionRows = async ({
   return new Map(read.rows.map((row) => [String(row.id), row]));
 };
 
-type RehydrateCaseLawCandidatesOptions = {
+type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchDecisionsBody;
-  candidates: readonly ScoredCandidate[];
   caseLawDb: CaseLawPublicReadDb;
   /**
    * The court rank registry, read once for the request. Every court a
@@ -1714,6 +1714,7 @@ const rankCaseLawCandidates = ({
 export const rehydrateCaseLawCandidates = async ({
   body,
   candidates,
+  selectAppliedCandidates,
   caseLawDb,
   courtWeights,
   generation,
@@ -1755,6 +1756,10 @@ export const rehydrateCaseLawCandidates = async ({
       revisionById.set(id, row.appliedRevision);
     }
   }
+  const appliedCandidates =
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(revisionById);
   const authorityById = new Map<string, number>();
   // The court a decision comes from is known the day it is published, which
   // is what citation authority cannot say about a judgment nothing cites yet.
@@ -1774,7 +1779,7 @@ export const rehydrateCaseLawCandidates = async ({
   // emitted page, so the representative is the same on every rescan.
   const ranked = rankCaseLawCandidates({
     authorityById,
-    candidates: candidates.filter((candidate) => byId.has(candidate.id)),
+    candidates: appliedCandidates.filter((candidate) => byId.has(candidate.id)),
     courtTierById,
     sort: body.sort ?? DEFAULT_SEARCH_SORT,
   });
@@ -1789,7 +1794,7 @@ export const rehydrateCaseLawCandidates = async ({
   return {
     context: null,
     revisionById,
-    rehydratedCandidateCount: candidates.filter((candidate) =>
+    rehydratedCandidateCount: appliedCandidates.filter((candidate) =>
       byId.has(candidate.id),
     ).length,
     ranked: representatives.filter((hit) => {
@@ -2715,11 +2720,15 @@ export const searchCorpusIndexDecisions = async ({
     unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
     // The scan names the groups to leave out: a page addressed by offset
     // walks windows the request's own cursor never named.
-    rankCandidates: async (candidates, { excludedGroups }) =>
+    rankCandidates: async (
+      candidates,
+      { excludedGroups, selectAppliedCandidates },
+    ) =>
       await rehydrateCaseLawCandidates({
         hitDispositions,
         body,
         candidates,
+        selectAppliedCandidates,
         caseLawDb,
         courtWeights,
         generation,

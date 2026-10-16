@@ -722,7 +722,7 @@ test("global counts equal a single copy after the flip and before purge", async 
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
         const rows = await db
           .select({
             id: caseLawDecisions.id,
@@ -746,7 +746,7 @@ test("global counts equal a single copy after the flip and before purge", async 
         return {
           context: { decisionCount: rows.length },
           groups: [],
-          ranked: candidates
+          ranked: selectAppliedCandidates(revisionById)
             .filter(({ id }) =>
               revisionById.has(toSafeId<"caseLawDecision">(id)),
             )

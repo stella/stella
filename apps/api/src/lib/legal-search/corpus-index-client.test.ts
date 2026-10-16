@@ -41,7 +41,10 @@ import {
   runObservedAction,
   type ActionCostObservation,
 } from "@/api/lib/usage/action-costs/context";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -589,7 +592,9 @@ test("search rejects a malformed object response", async () => {
 const readSortedPage = async (order: CorpusSearchOrder) => {
   responseBody = {
     num_hits: 1,
-    hits: [{ document_id: "doc-1" }],
+    hits: [
+      { document_id: "doc-1", projection_revision: testRevisionOf("doc-1") },
+    ],
     snippets: [{ text: ["snippet"] }],
   };
 
@@ -607,19 +612,23 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: candidates.map((candidate) =>
-        corpusSearchGroupToken(candidate.id),
-      ),
-      ranked: candidates.map((candidate) => ({
-        id: candidate.id,
-        score: candidate.score,
-        lexicalScore: candidate.score,
-        citationAuthority: 0,
-      })),
-      revisionById: testRevisionsFor(candidates),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = testRevisionsFor(probes);
+      const candidates = selectAppliedCandidates(revisionById);
+      return {
+        context: null,
+        groups: candidates.map((candidate) =>
+          corpusSearchGroupToken(candidate.id),
+        ),
+        ranked: candidates.map((candidate) => ({
+          id: candidate.id,
+          score: candidate.score,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+        revisionById,
+      };
+    },
   });
 };
 

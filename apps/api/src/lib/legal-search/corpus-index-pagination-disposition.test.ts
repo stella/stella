@@ -115,16 +115,19 @@ const readDispositionPage = async (
       return typeof first === "string" ? first : null;
     },
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: [],
-      ranked: candidates.map((candidate) => ({
-        ...candidate,
-        lexicalScore: candidate.score,
-        citationAuthority: 0,
-      })),
-      revisionById: testRevisionsFor(candidates),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+      return {
+        context: null,
+        groups: [],
+        ranked: candidates.map((candidate) => ({
+          ...candidate,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+        revisionById: testRevisionsFor(candidates),
+      };
+    },
   });
 
 test.each(modes)(

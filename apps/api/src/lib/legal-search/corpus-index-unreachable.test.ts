@@ -176,8 +176,9 @@ const readPage = async (scanTransport: CorpusIndexScanTransport) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) =>
-      await Promise.resolve({
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(testRevisionsFor(probes));
+      return {
         context: null,
         groups: candidates.map((candidate) =>
           corpusSearchGroupToken(candidate.id),
@@ -189,7 +190,8 @@ const readPage = async (scanTransport: CorpusIndexScanTransport) =>
           citationAuthority: 0,
         })),
         revisionById: testRevisionsFor(candidates),
-      }),
+      };
+    },
   });
 
 /** What a scan threw, or a failure of the test when it threw nothing. */

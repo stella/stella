@@ -465,29 +465,33 @@ const readScanPage = async ({
     },
     unseenScoreUpperBound: (next) =>
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
-    rankCandidates: async (candidates) => ({
-      context: null,
-      // Every fixture document was ingested under this one revision.
-      revisionById: new Map(candidates.map(({ id }) => [id, REVISION])),
-      groups: candidates
-        .filter(({ id }) => {
-          const count = physicalPassagesByDocument.get(id);
-          if (count === undefined) {
-            return panic("Candidate has no ingested projection count");
-          }
-          return count > 1;
-        })
-        .map(({ id }) => corpusSearchGroupToken(id)),
-      ranked: blendStableCitationAuthority({
-        candidates: candidates.filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
-        ),
-        authorityById: new Map(),
-      }),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = new Map(probes.map(({ id }) => [id, REVISION]));
+      const candidates = selectAppliedCandidates(revisionById);
+      return {
+        context: null,
+        // Every fixture document was ingested under this one revision.
+        revisionById,
+        groups: candidates
+          .filter(({ id }) => {
+            const count = physicalPassagesByDocument.get(id);
+            if (count === undefined) {
+              return panic("Candidate has no ingested projection count");
+            }
+            return count > 1;
+          })
+          .map(({ id }) => corpusSearchGroupToken(id)),
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          ),
+          authorityById: new Map(),
+        }),
+      };
+    },
   });
 
 describe.skipIf(!runEngineTests)(

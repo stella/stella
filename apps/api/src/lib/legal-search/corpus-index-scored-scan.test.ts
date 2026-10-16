@@ -339,23 +339,27 @@ const readFixturePage = async (
       return Array.isArray(text) ? String(text.at(0)) : null;
     },
     unseenScoreUpperBound: (next) => stableBlendUpperBound(next, BLEND_WEIGHT),
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: candidates.map((candidate) =>
-        corpusSearchGroupToken(candidate.id),
-      ),
-      ranked: blendStableCitationAuthority({
-        candidates: candidates.filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = testRevisionsFor(probes);
+      const candidates = selectAppliedCandidates(revisionById);
+      return {
+        context: null,
+        groups: candidates.map((candidate) =>
+          corpusSearchGroupToken(candidate.id),
         ),
-        authorityById: fixture.authorityById,
-        signals: [courtTierSignal(fixture.tierById)],
-      }),
-      revisionById: testRevisionsFor(candidates),
-    }),
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          ),
+          authorityById: fixture.authorityById,
+          signals: [courtTierSignal(fixture.tierById)],
+        }),
+        revisionById,
+      };
+    },
   });
 };
 

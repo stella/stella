@@ -45,12 +45,16 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  corpusIndexLexicalScore,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   rankCorpusIndexProviderCandidates,
   rehydrateCorpusIndexProviderCandidatesQuery,
   rehydrateCorpusIndexProviderCandidatesStatement,
 } from "@/api/lib/legal-search/corpus-index-provider";
+import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
@@ -59,7 +63,10 @@ import {
 } from "@/api/lib/pagination";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
+import {
+  installCorpusDispositionScan,
+  installCorpusRevisionScan,
+} from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -84,6 +91,7 @@ const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 const sourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
+const withheldIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const withheldId = createSafeId<"caseLawDecision">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const czechId = createSafeId<"caseLawDecision">();
@@ -358,7 +366,7 @@ beforeAll(
         entityId: withheldId,
         generation: GENERATION,
         indexId: INDEX_ID,
-        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+        intentId: withheldIntentId,
       },
       {
         entityId: czechId,
@@ -617,7 +625,13 @@ test.each(["unchanged", "refreshed"] as const)(
       }
       return Result.ok({
         numHits: 1,
-        hits: [{ document_id: czechId, anchor_id: anchorId }],
+        hits: [
+          {
+            document_id: czechId,
+            anchor_id: anchorId,
+            projection_revision: originalRevision,
+          },
+        ],
         snippets: options.snippetFields?.includes("text")
           ? [{ text: [snippet] }]
           : [],
@@ -1327,11 +1341,11 @@ test("the database returns no content columns for excluded canonical ids", async
 test("provider scan counts retained omissions once as eligible candidates grow", async () => {
   const hitDispositions = createCorpusHitDispositionCounter();
   const missingId = createSafeId<"caseLawDecision">();
-  const eligibleIds = [czechId, slovakId];
   const restoreFetch = installCorpusDispositionScan([
-    closedId,
-    missingId,
-    ...eligibleIds,
+    { id: closedId, revision: closedIntentId },
+    { id: missingId, revision: createSafeId<"corpusIndexProjectionIntent">() },
+    { id: czechId, revision: czechIntentId },
+    { id: slovakId, revision: slovakIntentId },
   ]);
   const candidateCounts: number[] = [];
   const eligibleCounts: number[] = [];
@@ -1352,7 +1366,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
         candidateCounts.push(candidates.length);
         const result = await rankCorpusIndexProviderCandidates({
           generation: GENERATION,
@@ -1360,6 +1374,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
           hitDispositions,
           candidates,
           excludedGroups: undefined,
+          selectAppliedCandidates,
         });
         eligibleCounts.push(result.ranked.length);
         return result;
@@ -1458,3 +1473,74 @@ test("full text search reads the source permission beside human excerpts", async
     rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
   ).toContain("sampleword");
 });
+
+test.each(["off", "bm25-ratio"] as const)(
+  "applied revision alone supplies query matches and candidate scores in %s scans",
+  async (rankingMode) => {
+    const oldRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const oldText = "obsolete common common common common";
+    const currentText = "current common";
+    expect(oldRevision).not.toBe(czechIntentId);
+    expect(oldText).not.toBe(currentText);
+    expect(currentText).not.toContain("obsolete");
+    const restoreFetch = installCorpusRevisionScan([
+      { id: czechId, revision: oldRevision, text: oldText },
+      { id: czechId, revision: czechIntentId, text: currentText },
+      { id: withheldId, revision: withheldIntentId, text: "common common" },
+    ]);
+    try {
+      const search = async (query: string) =>
+        await readCorpusIndexSearchPage({
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: INDEX_ID,
+          query: `text:${query}`,
+          limit: 40,
+          order: RELEVANCE_ORDER,
+          parsedCursor: null,
+          rankingMode,
+          scanTransport:
+            rankingMode === "bm25-ratio"
+              ? { type: "scored" }
+              : { type: "native" },
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: () => 0,
+          rankCandidates: async (candidates, scope) =>
+            await rehydrateCaseLawCandidates({
+              body: { country: "CZE", query, sort: "newest" },
+              caseLawDb,
+              courtWeights,
+              generation: GENERATION,
+              candidates,
+              selectAppliedCandidates: scope.selectAppliedCandidates,
+            }),
+        });
+      const obsolete = await search("obsolete");
+      expect(obsolete.scan.passagesScanned).toBe(1);
+      expect(reads).toBe(1);
+      expect(obsolete.pageRanked).toEqual([]);
+      const common = await search("common");
+      expect(common.scan.passagesScanned).toBe(3);
+      expect(reads).toBe(2);
+      expect(common.pageRanked.map(({ id }) => id)).toEqual([
+        withheldId,
+        czechId,
+      ]);
+      const applied = common.pageRanked.find(({ id }) => id === czechId);
+      expect(applied?.lexicalScore).toBeCloseTo(
+        rankingMode === "off"
+          ? corpusIndexLexicalScore(2)
+          : (1 / 4) ** CORPUS_BM25_RATIO_POWER,
+        10,
+      );
+      expect(common.passageCountById.get(czechId)).toBe(1);
+      expect(common.passageClauseById.get(czechId)).toContain("passage-1");
+    } finally {
+      restoreFetch();
+    }
+  },
+);

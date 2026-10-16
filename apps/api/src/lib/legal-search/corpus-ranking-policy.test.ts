@@ -47,15 +47,19 @@ const rankingTestOptions = {
     typeof hit["document_id"] === "string" ? hit["document_id"] : null,
   extractSnippet: () => null,
   unseenScoreUpperBound: stableBlendUpperBound,
-  rankCandidates: async (candidates) => ({
-    context: null,
-    groups: [],
-    ranked: blendStableCitationAuthority({
-      candidates,
-      authorityById: new Map(),
-    }),
-    revisionById: testRevisionsFor(candidates),
-  }),
+  rankCandidates: async (probes, { selectAppliedCandidates }) => {
+    const revisionById = testRevisionsFor(probes);
+    const candidates = selectAppliedCandidates(revisionById);
+    return {
+      context: null,
+      groups: [],
+      ranked: blendStableCitationAuthority({
+        candidates,
+        authorityById: new Map(),
+      }),
+      revisionById,
+    };
+  },
 } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
 
 const stubRankingScores = (
@@ -333,7 +337,9 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       // The old position bound would stop immediately; it cannot truncate
       // the experiment's fixed BM25 universe.
       unseenScoreUpperBound: () => 0,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const revisionById = testRevisionsFor(probes);
+        const candidates = selectAppliedCandidates(revisionById);
         hydrationRounds += 1;
         hydratedIds = candidates.map(({ id }) => id);
         const ranked = blendStableCitationAuthority({
@@ -351,7 +357,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
           groups: [...groupTokenById]
             .filter(([id]) => id === "doc-9" || id === "doc-10")
             .map(([, token]) => token),
-          revisionById: testRevisionsFor(candidates),
+          revisionById,
         };
       },
     });
@@ -409,7 +415,9 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
       rankingMode: "bm25-ratio",
       limit: 1,
       parsedCursor,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const revisionById = testRevisionsFor(probes);
+        const candidates = selectAppliedCandidates(revisionById);
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           blendStableCitationAuthority({
             candidates,
@@ -429,7 +437,7 @@ test("BM25 pages honor and carry the groups their cursor excludes", async () => 
           groups: [...groupTokenById]
             .filter(([id]) => groupKeyOf(id) !== null)
             .map(([, token]) => token),
-          revisionById: testRevisionsFor(candidates),
+          revisionById,
         };
       },
     });
