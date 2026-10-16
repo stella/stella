@@ -257,25 +257,29 @@ export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
 
   // A stamp made elsewhere cannot describe destination-only ancestors. An
   // unrecorded package scope or dependency directory there could turn a
-  // formerly unresolved import into a different program.
-  for (
-    let ancestor = path.dirname(realRoot);
-    ;
-    ancestor = path.dirname(ancestor)
-  ) {
-    for (const candidate of [
-      path.join(ancestor, "node_modules"),
-      path.join(ancestor, "package.json"),
-    ]) {
-      if (
-        !recorded.has(candidate) &&
-        statSync(candidate, { throwIfNoEntry: false }) !== undefined
-      ) {
-        return undefined;
+  // formerly unresolved import into a different program. TypeScript probes
+  // the checkout's literal path as well as its resolved one, so a checkout
+  // reached through a symlink has two ancestor chains.
+  for (const start of new Set([path.resolve(root), realRoot])) {
+    for (
+      let ancestor = path.dirname(start);
+      ;
+      ancestor = path.dirname(ancestor)
+    ) {
+      for (const candidate of [
+        path.join(ancestor, "node_modules"),
+        path.join(ancestor, "package.json"),
+      ]) {
+        if (
+          !recorded.has(candidate) &&
+          statSync(candidate, { throwIfNoEntry: false }) !== undefined
+        ) {
+          return undefined;
+        }
       }
-    }
-    if (path.dirname(ancestor) === ancestor) {
-      break;
+      if (path.dirname(ancestor) === ancestor) {
+        break;
+      }
     }
   }
   return localized;

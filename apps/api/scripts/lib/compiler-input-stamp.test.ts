@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -245,5 +246,65 @@ test("a portable stamp rejects an unrecorded destination ancestor dependency", (
     expect(localizeStamp(portable, destination)).toBeDefined();
   } finally {
     rmSync(destinationRoot, { recursive: true, force: true });
+  }
+});
+
+test("a portable stamp rejects a dependency in an unrecorded ancestor of a symlinked checkout path", () => {
+  const packageName = `stamp-link-ancestor-${process.pid}`;
+  write(
+    "src/a.ts",
+    `import type { Missing } from ${JSON.stringify(packageName)};\nexport type A = Missing;\n`,
+  );
+  const recorder = createCompilerInputRecorder();
+  const config = ts.getParsedCommandLineOfConfigFile(
+    path.join(directory, "tsconfig.json"),
+    {},
+    recorder.wrap({
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: () => panic("unreadable tsconfig"),
+    }),
+  );
+  if (config === undefined) {
+    panic("tsconfig not parsed");
+  }
+  ts.createProgram({
+    rootNames: config.fileNames,
+    options: config.options,
+    host: recorder.wrap(ts.createCompilerHost(config.options)),
+  });
+  const portable = recorder.portableStamp(CONTEXT, directory);
+  // The checkout's resolved path is shallow; only the path it is reached
+  // through is nested deeper than the source, under a dependency directory.
+  const linkRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "compiler-input-link-")),
+  );
+  const target = path.join(linkRoot, "checkout");
+  mkdirSync(target);
+  const linkParent = path.join(
+    linkRoot,
+    "lexical",
+    ...directory.split(path.sep).map((_, index) => `depth-${String(index)}`),
+  );
+  mkdirSync(linkParent, { recursive: true });
+  const destination = path.join(linkParent, "stella");
+  symlinkSync(target, destination, "dir");
+  const dependency = path.join(
+    linkRoot,
+    "lexical",
+    "node_modules",
+    packageName,
+    "index.d.ts",
+  );
+  mkdirSync(path.dirname(dependency), { recursive: true });
+  writeFileSync(dependency, "export interface Missing {}\n");
+  try {
+    expect(localizeStamp(portable, destination)).toBeUndefined();
+    rmSync(path.join(linkRoot, "lexical", "node_modules"), {
+      recursive: true,
+      force: true,
+    });
+    expect(localizeStamp(portable, destination)).toBeDefined();
+  } finally {
+    rmSync(linkRoot, { recursive: true, force: true });
   }
 });
