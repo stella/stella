@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -13,7 +14,7 @@ const expandBraces = (pattern: string): string[] => {
   if (match === null) {
     return [pattern];
   }
-  const [expression, alternatives] = match;
+  const [expression, alternatives = ""] = match;
   const start = match.index;
   return alternatives
     .split(",")
@@ -62,26 +63,21 @@ export const uncoveredCompilerInputs = (
     .toSorted();
 };
 
+const turboConfigSchema = v.object({
+  tasks: v.object({
+    "@stll/web#generate:api-types": v.object({ inputs: v.array(v.string()) }),
+  }),
+});
+
 export const webApiTurboInputs = (repoRoot: string): string[] => {
-  const config = Bun.JSONC.parse(
-    readFileSync(path.join(repoRoot, "turbo.json"), "utf-8"),
+  const config = v.safeParse(
+    turboConfigSchema,
+    Bun.JSONC.parse(readFileSync(path.join(repoRoot, "turbo.json"), "utf-8")),
   );
-  if (typeof config !== "object" || config === null || !("tasks" in config)) {
-    return panic("generate-web-api-types: turbo.json has no tasks");
+  if (!config.success) {
+    return panic(
+      "generate-web-api-types: turbo.json has no string inputs for @stll/web#generate:api-types",
+    );
   }
-  const tasks = config.tasks;
-  if (typeof tasks !== "object" || tasks === null) {
-    return panic("generate-web-api-types: turbo.json tasks are invalid");
-  }
-  const task = tasks["@stll/web#generate:api-types"];
-  if (typeof task !== "object" || task === null || !("inputs" in task)) {
-    return panic("generate-web-api-types: Turbo task has no inputs");
-  }
-  if (
-    !Array.isArray(task.inputs) ||
-    !task.inputs.every((input) => typeof input === "string")
-  ) {
-    return panic("generate-web-api-types: Turbo task inputs are invalid");
-  }
-  return task.inputs;
+  return config.output.tasks["@stll/web#generate:api-types"].inputs;
 };
