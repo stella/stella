@@ -186,6 +186,40 @@ test("documentation inventory derives from injected typed owners including none"
     );
   }
 });
+test("documentation inventory preserves the deadline from each supplied tree reader", () => {
+  const documentationSource = (expiresAt: string) =>
+    `
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = __EXPIRES_AT__;
+const noLlmsTxt = (dependency: string) => ({
+  checkedAt: NO_LLMS_TXT_CHECKED_AT,
+  dependency,
+  explanation: NO_LLMS_TXT_EXPLANATION,
+  expiresAt: NO_LLMS_TXT_EXPIRES_AT,
+  reason: "no-llms-txt",
+});
+export const DOC_SOURCE_EXCLUSIONS = ["doc-package"].map(noLlmsTxt);
+`.replace("__EXPIRES_AT__", () => JSON.stringify(expiresAt));
+  const inventoryFrom = (expiresAt: string) =>
+    loadWaivers([DOC_SOURCE_FILE], (file) => {
+      if (file === DOC_SOURCE_FILE) {
+        return documentationSource(expiresAt);
+      }
+      if (file === "scripts/dependency-audit-baseline.json") {
+        return '{"accepted":[]}';
+      }
+      if (file === "scripts/suppression-waivers.json") {
+        return '{"waivers":[]}';
+      }
+      return "";
+    });
+
+  const baseDeadline = "2026-10-01T00:00:00.000Z";
+  const headDeadline = "2026-11-01T00:00:00.000Z";
+  expect(inventoryFrom(baseDeadline).at(0)?.expiresAt).toBe(baseDeadline);
+  expect(inventoryFrom(headDeadline).at(0)?.expiresAt).toBe(headDeadline);
+});
 test("adjacent literal skipped tests declare twenty samples and lapse at expiry", () => {
   const quarantineSources = {
     "packages/example/src/a.test.ts":

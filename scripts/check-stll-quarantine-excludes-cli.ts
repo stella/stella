@@ -32,8 +32,9 @@ const readBasePackageManifests = (
   if (scope.type === "all" || scope.baseSha === undefined) {
     return {};
   }
+  const baseSha = scope.baseSha;
   const listed = Bun.spawnSync(
-    ["git", "ls-tree", "-r", "--name-only", "-z", scope.baseSha],
+    ["git", "ls-tree", "-r", "--name-only", "-z", baseSha],
     { cwd: REPO_ROOT },
   );
   if (listed.exitCode !== 0) {
@@ -51,10 +52,9 @@ const readBasePackageManifests = (
     );
   return Object.fromEntries(
     files.map((file) => {
-      const contents = Bun.spawnSync(
-        ["git", "show", `${scope.baseSha}:${file}`],
-        { cwd: REPO_ROOT },
-      );
+      const contents = Bun.spawnSync(["git", "show", `${baseSha}:${file}`], {
+        cwd: REPO_ROOT,
+      });
       if (contents.exitCode !== 0) {
         throw new ExpiryScopeError(
           "Cannot read base manifest for expiry ownership",

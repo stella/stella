@@ -10,10 +10,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import {
-  DOC_SOURCE_EXCLUSIONS,
-  type NoLlmsTxtExclusion,
-} from "../.claude/mcp/doc-sources";
+import type { NoLlmsTxtExclusion } from "../.claude/mcp/doc-sources";
 import {
   quarantineBunfigFiles,
   quarantineOwningFiles,
@@ -41,6 +38,91 @@ export const ZERO_AGE_OVERRIDE =
   /[ \t]--minimum-release-age(?:=|[ \t]+)0(?=$|[\s"'`;&|)])/u;
 
 export const DOC_SOURCE_FILE = ".claude/mcp/doc-sources.ts";
+
+const documentationExclusionSchema = v.object({
+  checkedAt: v.string(),
+  dependency: v.string(),
+  explanation: v.string(),
+  expiresAt: v.string(),
+  reason: v.literal("no-llms-txt"),
+});
+
+/** Reads the documentation waiver registry without executing its source file. */
+export const readDocumentationExclusions = (
+  source: string,
+): NoLlmsTxtExclusion[] => {
+  const ast = ts.createSourceFile(
+    DOC_SOURCE_FILE,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const strings = new Map<string, string>();
+  let owner: ts.VariableDeclaration | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer
+    ) {
+      if (ts.isStringLiteral(node.initializer)) {
+        strings.set(node.name.text, node.initializer.text);
+      }
+      if (node.name.text === "DOC_SOURCE_EXCLUSIONS") {
+        owner = node;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  if (!owner?.initializer) {
+    return panic("Documentation waiver owner missing");
+  }
+  const value = (expression: ts.Expression): string => {
+    if (ts.isStringLiteral(expression)) {
+      return expression.text;
+    }
+    if (ts.isIdentifier(expression)) {
+      const resolved = strings.get(expression.text);
+      if (resolved !== undefined) {
+        return resolved;
+      }
+    }
+    return panic("Documentation waiver value must be a static string");
+  };
+  const defaults = {
+    checkedAt: strings.get("NO_LLMS_TXT_CHECKED_AT"),
+    explanation: strings.get("NO_LLMS_TXT_EXPLANATION"),
+    expiresAt: strings.get("NO_LLMS_TXT_EXPIRES_AT"),
+    reason: "no-llms-txt",
+  };
+  const exclusions: unknown[] = [];
+  const collect = (node: ts.Node): void => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const entry = Object.fromEntries(
+        node.properties.flatMap((property) =>
+          ts.isPropertyAssignment(property)
+            ? [[property.name.getText(ast), value(property.initializer)]]
+            : [],
+        ),
+      );
+      if ("dependency" in entry) {
+        exclusions.push(entry);
+        return;
+      }
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      for (const element of node.elements) {
+        if (ts.isStringLiteral(element)) {
+          exclusions.push({ ...defaults, dependency: element.text });
+        }
+      }
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(owner.initializer);
+  return v.parse(v.array(documentationExclusionSchema), exclusions);
+};
 
 export const RECHECK_INSTRUCTIONS = {
   "no-llms-txt": "Check canonical llms.txt and register an available source.",
@@ -770,7 +852,7 @@ export const loadWaivers = (
       : [];
   return collectWaivers({
     read,
-    docs: DOC_SOURCE_EXCLUSIONS,
+    docs: readDocumentationExclusions(read(DOC_SOURCE_FILE)),
     audit,
     bunfigs: files,
     releaseAgeSources: configSources,
