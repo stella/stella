@@ -35,6 +35,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -78,6 +79,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
   signingSession: { rank: 900, kind: "row" },
@@ -160,6 +162,7 @@ export const AGGREGATE_CHAINS = {
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
@@ -201,6 +204,7 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   dataBoxDirection: { organizationId: SafeId<"organization"> };
@@ -594,6 +598,81 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
     completeAcquisition(history);
     return value;
   });
+};
+
+const executorSavepoints = new WeakSet<object>();
+
+type ExecutorSavepointDecision<T> = {
+  type: "commit" | "rollback";
+  value: T;
+};
+
+export class ExecutorSavepointError extends TaggedError(
+  "ExecutorSavepointError",
+)<{
+  message: string;
+  cause: unknown;
+  phase: "setup" | "callback" | "cleanup";
+}> {}
+
+/**
+ * A savepoint for execute-only callbacks. The callback must not acquire typed
+ * aggregate handles: those require withAggregateSavepoint and its lock history.
+ * One executor cannot own overlapping or nested scopes. Admission covers timeout
+ * capture through restoration, including savepoint cleanup.
+ */
+export const withExecutorSavepoint = async <T>(
+  tx: { execute: (statement: SQL) => Promise<unknown> },
+  run: (previous: {
+    statementTimeoutMs: number;
+    lockTimeoutMs: number;
+  }) => Promise<ExecutorSavepointDecision<T>>,
+): Promise<Result<T, ExecutorSavepointError>> => {
+  if (executorSavepoints.has(tx)) {
+    return panic("Await the executor savepoint before reusing its transaction");
+  }
+  executorSavepoints.add(tx);
+  const name = sql.identifier(
+    `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+  );
+  let phase: ExecutorSavepointError["phase"] = "setup";
+  try {
+    const scope = await Result.tryPromise({
+      try: async () =>
+        await withSharedTransactionTimeoutRestoration(tx, async (previous) => {
+          await tx.execute(sql`SAVEPOINT ${name}`);
+          const outcome = await Result.tryPromise({
+            try: async () => await run(previous),
+            catch: (cause) =>
+              new ExecutorSavepointError({
+                message: "Executor savepoint callback failed",
+                cause,
+                phase: "callback",
+              }),
+          });
+          phase = "cleanup";
+          if (outcome.isErr() || outcome.value.type === "rollback") {
+            await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+          }
+          await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+          if (outcome.isErr()) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value.value;
+        }),
+      catch: (cause) =>
+        cause instanceof ExecutorSavepointError
+          ? cause
+          : new ExecutorSavepointError({
+              message: `Executor savepoint ${phase} failed`,
+              cause,
+              phase,
+            }),
+    });
+    return scope;
+  } finally {
+    executorSavepoints.delete(tx);
+  }
 };
 
 /** Track the public savepoint callback without inspecting driver internals. */
@@ -1119,6 +1198,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('data-box-direction')`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
+      };
+    case "sampleCase":
+      return {
+        first: sql`hashtext('lists.sample-case')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
       };
     case "professionalUseAcceptance":
       return {

@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok}}",
       "provisionsCited": "Dotknuté ustanovenia",
+      "provisionsFailed": "Spracovanie citácií zlyhalo",
+      "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
+      "provisionsProcessing": "Citácie sa spracúvajú",
+      "provisionsUnavailable": "Citácie nie sú dostupné",
+      "provisionsUnplaceable": "Citácie nemožno umiestniť do textu rozhodnutia",
+      "provisionsUnsupported": "Spracovanie citácií nie je pre toto rozhodnutie podporované",
+      "provisionsWithheld": "Citácie nie sú sprístupnené",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
@@ -1714,7 +1721,8 @@
       "toggleLabel": "Vyhľadávanie na webe",
       "toggleOff": "Vypnúť vyhľadávanie na webe",
       "toggleOn": "Zapnúť vyhľadávanie na webe"
-    }
+    },
+    "workedFor": "Pracovalo {duration}"
   },
   "clauses": {
     "addVariant": "Pridať variant",
@@ -2614,11 +2622,14 @@
     "actionFailed": "Akcia zlyhala",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
+      "caseLawCountryUnavailable": "Judikatúra tejto krajiny nie je dostupná. Vyberte inú krajinu.",
+      "caseLawSearchUnavailable": "Vyhľadávanie judikatúry tejto krajiny nie je dostupné. Jej verejné rozhodnutia si môžete naďalej čítať.",
       "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "legislationCountryUnavailable": "Právne predpisy tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
+      "legislationSearchUnavailable": "Vyhľadávanie právnych predpisov tejto krajiny nie je dostupné. Jej verejné právne predpisy si môžete naďalej čítať.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
-      "publicCountryUnavailable": "Právne predpisy a judikatúra tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
       "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
       "server": "Niečo sa pokazilo. Skúste to prosím znova.",
       "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",

@@ -1116,6 +1116,13 @@ type Messages = {
       "provisionMentions": "{count, number}×";
       "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";
+      "provisionsFailed": "Citation processing failed";
+      "provisionsNoneFound": "No cited provisions found";
+      "provisionsProcessing": "Citations are being processed";
+      "provisionsUnavailable": "Citations are unavailable";
+      "provisionsUnplaceable": "Citations cannot be placed in the decision text";
+      "provisionsUnsupported": "Citation processing is not supported for this decision";
+      "provisionsWithheld": "Citations are withheld";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -1718,6 +1725,7 @@ type Messages = {
       "toggleOff": "Turn off web search";
       "toggleOn": "Turn on web search";
     };
+    "workedFor": "Worked for {duration}";
   };
   "clauses": {
     "addVariant": "Add variant";
@@ -2617,11 +2625,14 @@ type Messages = {
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";
+      "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.";
+      "caseLawSearchUnavailable": "Case-law search is not available for this country. You can still read its public decisions.";
       "conflict": "The request conflicts with the current state.";
       "forbidden": "You do not have permission to do this.";
+      "legislationCountryUnavailable": "Legislation for this country is not available. Choose another country.";
+      "legislationSearchUnavailable": "Legislation search is not available for this country. You can still read its public legislation.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
-      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";

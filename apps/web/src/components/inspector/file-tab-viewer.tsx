@@ -15,6 +15,7 @@ import {
 } from "@/components/inspector/email-html-viewer.logic";
 import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.logic";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
+import { InspectorRestoreHold } from "@/components/inspector/inspector-restore-hold";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
 import { PlainTextFileViewer } from "@/components/inspector/plain-text-file-viewer";
@@ -212,6 +213,7 @@ export const FileTabViewer = ({
             fileFieldId={tab.id}
             workspaceId={tab.workspaceId}
           />
+          <InspectorRestoreHold ready={docxEditor.isDocumentReady} />
           <DocxEditorSlot
             bindings={docxEditor.bindings}
             canUnlock={canUpdateEntity}

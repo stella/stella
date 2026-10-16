@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",
+      "provisionsFailed": "Le traitement des citations a échoué",
+      "provisionsNoneFound": "Aucune disposition citée trouvée",
+      "provisionsProcessing": "Les citations sont en cours de traitement",
+      "provisionsUnavailable": "Les citations ne sont pas disponibles",
+      "provisionsUnplaceable": "Les citations ne peuvent pas être situées dans le texte de la décision",
+      "provisionsUnsupported": "Le traitement des citations n’est pas pris en charge pour cette décision",
+      "provisionsWithheld": "Les citations ne sont pas communiquées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
@@ -1714,7 +1721,8 @@
       "toggleLabel": "Recherche web",
       "toggleOff": "Désactiver la recherche web",
       "toggleOn": "Activer la recherche web"
-    }
+    },
+    "workedFor": "Temps de travail : {duration}"
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
@@ -2614,11 +2622,14 @@
     "actionFailed": "Action échouée",
     "api": {
       "badRequest": "La requête n’a pas pu être terminée.",
+      "caseLawCountryUnavailable": "La jurisprudence de ce pays n’est pas disponible. Choisissez un autre pays.",
+      "caseLawSearchUnavailable": "La recherche dans la jurisprudence de ce pays n’est pas disponible. Vous pouvez toujours consulter ses décisions publiques.",
       "conflict": "La requête est en conflit avec l’état actuel.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "legislationCountryUnavailable": "Les textes législatifs de ce pays ne sont pas disponibles. Choisissez un autre pays.",
+      "legislationSearchUnavailable": "La recherche dans les textes législatifs de ce pays n’est pas disponible. Vous pouvez toujours consulter ses textes législatifs publics.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
-      "publicCountryUnavailable": "Les textes législatifs et la jurisprudence de ce pays ne sont pas disponibles. Choisissez un autre pays.",
       "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
       "server": "Une erreur s’est produite. Veuillez réessayer.",
       "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",
