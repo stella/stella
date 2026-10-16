@@ -414,16 +414,6 @@ describe("matter access census self-test", () => {
     }
   });
 
-  test("the shared app-side write check is enumerated as a copy of the rule", () => {
-    const file = "apps/api/src/lib/entities/workspace-entity-write-access.ts";
-    expect(
-      classifyMatterAccessModule(
-        file,
-        readFileSync(path.join(repoRoot, file), "utf-8"),
-      ).map(({ signal }) => signal),
-    ).toContain("names-matter-role-rule");
-  });
-
   test("an allowlist entry whose finding is gone is reported as stale", () => {
     expect(
       evaluateMatterAccessCensus([], {

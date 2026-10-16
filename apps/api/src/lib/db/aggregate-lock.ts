@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -20,13 +21,18 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationParam,
+} from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
   fields,
   pdfSigningSessions,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -77,6 +83,24 @@ export const AGGREGATE_LOCKS = {
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
+
+type OrganizationFencedRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  query: string;
+  params: readonly OnlineMigrationParam[];
+};
+
+/**
+ * Online repairs own native transactions instead of Drizzle transactions.
+ * Their batch query joins organization as tenant; key-share fencing preserves
+ * that parent until dependent metadata commits without locking source rows.
+ */
+export const queryOrganizationFencedRepairBatch = async ({
+  connection,
+  query,
+  params,
+}: OrganizationFencedRepairBatchOptions) =>
+  await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
@@ -2040,4 +2064,166 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+type MemberAccessRowLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  mode: "share" | "no key update" | "update";
+};
+
+/** Lock the member within the caller's lifecycle or access-hold sequence. */
+export const lockMemberAccessRow = async ({
+  tx,
+  organizationId,
+  userId,
+  mode,
+}: MemberAccessRowLockOptions) =>
+  (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for(mode)
+  ).at(0);
+
+type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
+  workspaceIds: readonly SafeId<"workspace">[];
+  /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */
+  where?: SQL | undefined;
+};
+
+/** Lock assignments after the caller's member and optional matter prefix. */
+export const lockMatterAccessAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        inArray(workspaceMembers.workspaceId, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaceMembers.workspaceId, workspaceMembers.id)
+    .limit(workspaceIds.length)
+    .for(mode, { of: workspaceMembers });
+};
+
+type MatterAccessWorkspaceRowsLockOptions = Omit<
+  MatterAccessRowsLockOptions,
+  "userId"
+>;
+
+/**
+ * Lock in stable matter order. A narrowing predicate can
+ * select the unassigned matters whose reach depends on their row. Decide
+ * access in a later statement, using only identities covered by held locks.
+ */
+export const lockMatterAccessWorkspaceRows = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessWorkspaceRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaces.id)
+    .limit(workspaceIds.length)
+    .for(mode);
+};
+
+/** Shares the lifecycle fence used by matter deletion and timer writes. */
+export const lockWorkspaceLifecycle = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+};
+
+export const TIMER_MATTER_LOCK_SCOPE = {
+  assignment: "assignment",
+  client: "client",
+} as const;
+
+type TimerMatterAccessRowsLockOptions = Omit<
+  MemberAccessRowLockOptions,
+  "mode"
+> & {
+  workspaceId: SafeId<"workspace">;
+  lockScope: SQL;
+};
+
+/**
+ * Preserve the timer's joint matter/member SHARE statement. The supplied
+ * scope only selects the original rows to lock; access is decided later.
+ */
+export const lockTimerMatterAccessRows = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceId,
+  lockScope,
+}: TimerMatterAccessRowsLockOptions) => {
+  const rows = executedRows(
+    await tx.execute(sql`
+    SELECT ${lockScope} AS "lockScope"
+    FROM workspaces AS workspace
+    INNER JOIN member AS organization_member
+      ON organization_member.organization_id = workspace.organization_id
+      AND organization_member.user_id = ${userId}
+    WHERE workspace.id = ${workspaceId}
+      AND workspace.organization_id = ${organizationId}
+      AND workspace.status = 'active'
+      AND (${lockScope}) IS NOT NULL
+    LIMIT 1
+    FOR SHARE OF workspace, organization_member
+  `),
+  );
+  const row = rows.at(0);
+  if (row === undefined) {
+    return null;
+  }
+  if (!isRecord(row)) {
+    return panic("Invalid timer matter lock result");
+  }
+  const scope = row["lockScope"];
+  switch (scope) {
+    case TIMER_MATTER_LOCK_SCOPE.assignment:
+    case TIMER_MATTER_LOCK_SCOPE.client:
+      return scope;
+    default:
+      return panic("Invalid timer matter lock scope");
+  }
 };

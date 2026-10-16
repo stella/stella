@@ -610,6 +610,7 @@ export const readCompatDecision = async ({
     // counts as demand for the publisher document.
     caller: "attributed",
     documentHydration: documentHydrationFor(context.thirdPartyOutboundPermit),
+    surface: "search",
   });
   if (decision === null || !isReadCaseLawDecisionSuccess(decision)) {
     return { type: "not_found" };
@@ -669,7 +670,7 @@ export const readCompatStatute = async ({
   const resolved = await (
     context.testDependencies?.resolveStatuteExpression ??
     defaultResolveStatuteExpression
-  )({ eli }, legislationPublicReadDb);
+  )({ eli }, legislationPublicReadDb, "search");
   if (resolved.type !== "expression") {
     return { type: "not_found" };
   }
@@ -677,7 +678,7 @@ export const readCompatStatute = async ({
   const document = await (
     context.testDependencies?.readPublicLegislationHandler ??
     defaultReadPublicLegislationHandler
-  )(resolved.id, legislationPublicReadDb);
+  )(resolved.id, legislationPublicReadDb, "search");
   if (!isStatuteDocument(document)) {
     return { type: "not_found" };
   }

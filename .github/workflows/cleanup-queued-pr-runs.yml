@@ -8,7 +8,8 @@ defaults:
 # longer matter (superseded heads, closed or draft pull requests), defers
 # pull request runs whose remaining jobs are all still queued while the merge
 # queue has waiting work, and, once the merge queue has no waiting work,
-# re-runs the pull request runs that deferred to it.
+# re-runs the pull request runs that deferred to it. A pull request labelled
+# ci-protect is never cancelled by any of these steps.
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -32,6 +33,7 @@ jobs:
         with:
           script: |
             const repo = context.repo;
+            const PROTECT_LABEL = "ci-protect";
             const prEvents = new Set(["pull_request", "pull_request_target"]);
             const cutoff = Date.now() - 6 * 60 * 60 * 1000;
             const isNotQueuedRefusal = error => error.status === 409
@@ -43,10 +45,51 @@ jobs:
             });
             const reasonFor = async run => {
               if (run.status !== "queued" || !prEvents.has(run.event)) return null;
-              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
+              // One read per pull request per decision; a later recheck reads again.
+              const pullCache = new Map();
+              const currentPull = async (number) => {
+                if (!pullCache.has(number)) {
+                  pullCache.set(number, github.rest.pulls.get({ ...repo, pull_number: number })
+                    .then(({ data }) => data));
+                }
+                return pullCache.get(number);
+              };
               const associated = run.pull_requests?.length
                 ? run.pull_requests
                 : context.payload.pull_request ? [context.payload.pull_request] : [];
+              // A protected pull request is never cancelled, whatever the
+              // reason, including the six-hour rule below. A run without an
+              // association is matched to pull requests by its commit; if that
+              // lookup fails, protection is unknown and the run is left alone.
+              if (associated.length === 0) {
+                // A target run's head_sha is the base commit, which does not
+                // identify the pull request that triggered it: leave it alone.
+                if (run.event !== "pull_request") return null;
+                let byCommit;
+                try {
+                  byCommit = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                    ...repo, commit_sha: run.head_sha, per_page: 100,
+                  });
+                } catch {
+                  core.warning(`Cleanup skipped for ${run.id}: pull requests of ${run.head_sha} unavailable`);
+                  return null;
+                }
+                if (byCommit.some((pull) => pull.labels?.some((label) => label.name === PROTECT_LABEL))) return null;
+              }
+              for (const pull of associated) {
+                if (!pull.number) continue;
+                const current = await currentPull(pull.number).catch((error) => {
+                  if (error.status !== 403 && error.status !== 404) throw error;
+                  return null;
+                });
+                // Labels that cannot be read cannot prove the run unprotected.
+                if (!current) {
+                  core.warning(`Cleanup skipped for ${run.id}: PR #${pull.number} labels unavailable`);
+                  return null;
+                }
+                if (current.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
+              }
+              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
               if (associated.length === 0) return null;
               for (const pull of associated) {
                 // Target runs use the base SHA as head_sha. Only their
@@ -56,9 +99,7 @@ jobs:
                 if (!pull.number || !recordedHead) return null;
                 let current;
                 try {
-                  ({ data: current } = await github.rest.pulls.get({
-                    ...repo, pull_number: pull.number,
-                  }));
+                  current = await currentPull(pull.number);
                 } catch (error) {
                   if (error.status !== 403 && error.status !== 404) throw error;
                   core.warning(`Superseded-head cleanup skipped for ${run.id}: PR metadata unavailable`);
@@ -142,12 +183,28 @@ jobs:
               }
               return false;
             };
-            // A busy queue may never drain, so a deferral is bounded: heads deferred
-            // this long resume anyway, and at least one head resumes every tick.
-            const MAX_DEFER_MS = 30 * 60 * 1000;
+            // A busy queue may never drain, so deferred heads keep resuming while it
+            // waits, but one at a time: a resumed run never yields again and holds
+            // dozens of runners, so several at once starve the merge queue. The
+            // oldest deferral goes first, so every head still resumes in turn.
+            // Every unfinished run state counts, including runs held by
+            // concurrency (pending) or approval (waiting). States are read in
+            // lifecycle order: a run only moves forward, so one that changes
+            // state between two reads shows up in a later read.
+            const resumedRunInFlight = async () => {
+              for (const status of ["requested", "waiting", "pending", "queued", "in_progress"]) {
+                const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                  ...repo, workflow_id: "ci.yml", event: "pull_request", status, per_page: 100,
+                });
+                if (runs.some((run) => run.run_attempt > 1)) return true;
+              }
+              return false;
+            };
             const busy = await waiting();
             // Open pull requests whose head carries a pending yield status are the
             // durable record of deferred work, however long the queue stayed busy.
+            // Runs cancelled for runner relief carry the same record
+            // (scripts/relief-cancel-pr-runs.ts), so they resume here too.
             const deferredPulls = [];
             let after = null;
             do {
@@ -181,14 +238,12 @@ jobs:
               after = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
             } while (after);
             deferredPulls.sort((left, right) => left.deferredAt - right.deferredAt);
-            const overdue = deferredPulls.filter((pull) => Date.now() - pull.deferredAt >= MAX_DEFER_MS);
-            const candidates = busy && overdue.length > 0 ? overdue : deferredPulls;
-            const budget = busy && overdue.length === 0 ? 1 : RESUMES_PER_TICK;
+            const budget = !busy ? RESUMES_PER_TICK : (await resumedRunInFlight()) ? 0 : 1;
             if (busy) {
               core.info(`Merge queue still has waiting work; resuming at most ${budget} deferred run(s), oldest first.`);
             }
             let resumed = 0;
-            for (const pull of candidates) {
+            for (const pull of deferredPulls) {
               if (resumed >= budget) break;
               const { data } = await github.rest.actions.listWorkflowRuns({
                 ...repo, workflow_id: "ci.yml", head_sha: pull.headRefOid, per_page: 1,
@@ -221,13 +276,16 @@ jobs:
             }
             core.info(`Resumed ${resumed} deferred pull request run(s).`);
 
+      # Deferring is on only while CI_YIELD_TO_MERGE_QUEUE is `on`; the resume
+      # step above keeps releasing heads that were already deferred.
       - name: Defer queued pull request work while the merge queue waits
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && vars.CI_YIELD_TO_MERGE_QUEUE == 'on' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const repo = context.repo;
             const YIELD_CONTEXT = "ci/merge-queue-yield";
+            const PROTECT_LABEL = "ci-protect";
             const waiting = async () => {
               for (const status of ["queued", "waiting", "pending", "requested"]) {
                 const { data } = await github.rest.actions.listWorkflowRunsForRepo({
@@ -263,6 +321,20 @@ jobs:
               if (run.run_attempt > 1) continue;
               if (run.head_repository?.full_name !== `${repo.owner}/${repo.repo}`) continue;
               if (run.triggering_actor?.login === "dependabot[bot]") continue;
+              // A protected pull request is never deferred; one whose pull
+              // request cannot be resolved is left running (fail closed).
+              const numbers = (run.pull_requests ?? []).map((pull) => pull.number).filter(Boolean);
+              if (numbers.length === 0) continue;
+              let protectedOrUnknown = false;
+              for (const number of numbers) {
+                const pull = await github.rest.pulls.get({ ...repo, pull_number: number })
+                  .then(({ data }) => data, () => null);
+                if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) {
+                  protectedOrUnknown = true;
+                  break;
+                }
+              }
+              if (protectedOrUnknown) continue;
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 ...repo, run_id: run.id, filter: "latest", per_page: 100,
               });
