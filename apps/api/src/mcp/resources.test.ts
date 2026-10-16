@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@stll/api-contract";
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -474,6 +475,15 @@ describe("MCP resources", () => {
       support: "https://stll.app/support/",
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
+      connection: {
+        endpoint: "https://api.stll.app/mcp",
+        oauth_scopes: MCP_DEFAULT_RESOURCE_SCOPES,
+        install: {
+          claude:
+            "claude mcp add --transport http stella https://api.stll.app/mcp",
+          codex: "codex mcp add stella --url https://api.stll.app/mcp",
+        },
+      },
     });
   });
 

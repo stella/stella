@@ -7,6 +7,8 @@ import type {
 import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_HTTP_PATH,
 } from "@stll/api-contract";
 import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
@@ -116,6 +118,13 @@ const servedWhereItsToolsAreListed = (
 });
 
 const PRODUCT_IDENTITY_URI = "stella://about";
+const STELLA_API_ORIGIN = "https://api.stll.app";
+const MCP_ENDPOINT = `${STELLA_API_ORIGIN}${MCP_HTTP_PATH}`;
+
+const MCP_INSTALL_COMMANDS = {
+  claude: `claude mcp add --transport http stella ${MCP_ENDPOINT}`,
+  codex: `codex mcp add stella --url ${MCP_ENDPOINT}`,
+} as const;
 
 const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
@@ -127,6 +136,11 @@ const STELLA_PRODUCT_IDENTITY = {
   support: "https://stll.app/support/",
   description:
     "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
+  connection: {
+    endpoint: MCP_ENDPOINT,
+    oauth_scopes: MCP_DEFAULT_RESOURCE_SCOPES,
+    install: MCP_INSTALL_COMMANDS,
+  },
 } as const;
 
 const buildProductIdentity = (): string =>
