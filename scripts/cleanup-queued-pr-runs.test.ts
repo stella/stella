@@ -857,11 +857,11 @@ test("every steward step that cancels a run honours the ci-protect label", () =>
     /cancelWorkflowRun|force-cancel/u.test(step.with.script),
   );
   expect(cancelling.length).toBeGreaterThan(0);
-  for (const step of cancelling) {
-    expect(step.with.script, step.name).toContain(
+  for (const [index, step] of cancelling.entries()) {
+    expect(step.with.script, `cancelling step ${index}`).toContain(
       'PROTECT_LABEL = "ci-protect"',
     );
-    expect(step.with.script, step.name).toMatch(
+    expect(step.with.script, `cancelling step ${index}`).toMatch(
       /labels\?\.some\(\(label\) => label\.name === PROTECT_LABEL\)/u,
     );
   }
