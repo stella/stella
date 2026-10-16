@@ -1,3 +1,10 @@
+import {
+  checkPoolJob,
+  readCheckPool,
+  readWorkingTreeCheckPool,
+  type ReadCheckPool,
+} from "./ci-check-pool-registry";
+
 // Pre-install guards cannot import better-result; keep their errors tagged locally.
 class WorkflowStepsInvariantError extends Error {
   override name = "WorkflowStepsInvariantError";
@@ -35,9 +42,14 @@ export const workflowCiInstallFlags = (
   return flags;
 };
 
-/** Enumerate leaf steps without letting a parallel group hide checks from guards. */
+/**
+ * Enumerate leaf steps without letting a parallel group or a check pool hide
+ * checks from guards. A pool step is followed by the checks it runs, read
+ * through `readPool` (the working tree unless a caller audits another tree).
+ */
 export const flattenWorkflowSteps = (
   steps: unknown,
+  readPool: ReadCheckPool = readWorkingTreeCheckPool,
 ): Record<string, unknown>[] => {
   if (!Array.isArray(steps)) {
     throw new WorkflowStepsInvariantError("Workflow steps must be an array");
@@ -53,10 +65,16 @@ export const flattenWorkflowSteps = (
           "Parallel groups cannot declare leaf step fields",
         );
       }
-      leaves.push(...flattenWorkflowSteps(step.parallel));
+      leaves.push(...flattenWorkflowSteps(step.parallel, readPool));
       continue;
     }
     leaves.push(step);
+    const pool = checkPoolJob(step);
+    if (pool !== undefined) {
+      leaves.push(
+        ...readCheckPool(pool, readPool).map((check) => ({ ...check.step })),
+      );
+    }
   }
   return leaves;
 };
@@ -65,6 +83,7 @@ export const flattenWorkflowSteps = (
 export const workflowJobSteps = (
   workflow: unknown,
   jobId: string,
+  readPool: ReadCheckPool = readWorkingTreeCheckPool,
 ): Record<string, unknown>[] => {
   if (
     typeof workflow !== "object" ||
@@ -80,7 +99,7 @@ export const workflowJobSteps = (
   if (typeof job !== "object" || job === null || !("steps" in job)) {
     throw new WorkflowStepsInvariantError(`Missing workflow steps: ${jobId}`);
   }
-  return flattenWorkflowSteps(job.steps);
+  return flattenWorkflowSteps(job.steps, readPool);
 };
 
 /** Named script extraction must fail on absent or ambiguous workflow steps. */

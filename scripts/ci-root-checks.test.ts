@@ -14,6 +14,7 @@ import {
 } from "./ci-root-checks";
 import { GENERATORS } from "./generated-files";
 import { evaluate } from "./github-expression";
+import { workflowJobSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dir, "..");
 const graph = readSelectionGraph(root);
@@ -136,12 +137,16 @@ test("all root workflow commands have declarations and narrow gates use the same
     "utf-8",
   );
   validateRootCheckCensus(source);
+  const workflow: unknown = Bun.YAML.parse(source);
   for (const [job, checks] of Object.entries(ROOT_CHECK_INPUTS)) {
+    // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+    const steps = workflowJobSteps(workflow, job);
     for (const [name, paths] of Object.entries(checks)) {
       if (paths.includes("**")) {
         continue;
       }
-      expect(source).toContain(rootCheckGate({ job, name }));
+      const step = steps.find((candidate) => candidate["name"] === name);
+      expect(String(step?.["if"])).toContain(rootCheckGate({ job, name }));
     }
   }
   const broken = structuredClone(ROOT_CHECK_INPUTS);
