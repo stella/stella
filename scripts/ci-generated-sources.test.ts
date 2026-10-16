@@ -538,6 +538,29 @@ test("generated-source production remains required in every result gate", () => 
   }
 });
 
+// A cache hit skips the producer script, so the entry must come from a run
+// that passed its tracking guard, and every consumer restore repeats it.
+test("every producer and restore path proves MCP outputs untracked", () => {
+  const producer = readFileSync(
+    new URL("ci-generated-sources.ts", import.meta.url),
+    "utf-8",
+  );
+  const guard = producer.indexOf("checkMcpGeneratedTracking(root);");
+  expect(guard).toBeGreaterThan(-1);
+  expect(guard).toBeLessThan(producer.indexOf("const mode ="));
+  const steps = workflow.jobs["generated-sources"]?.steps ?? [];
+  const produce = steps.findIndex(({ id }) => id === "generate");
+  const save = steps.findIndex(({ name }) => name === "Save generated sources");
+  expect(save).toBeGreaterThan(produce);
+  expect(steps.at(save)?.if).toBe(producerGate);
+  for (const id of consumerIds(workflow)) {
+    expect(
+      workflow.jobs[id]?.steps.some(({ run }) => run === restoreCommand),
+      id,
+    ).toBe(true);
+  }
+});
+
 test("CLI runtime determinism remains a fresh generation proof", () => {
   const source = readFileSync(
     new URL("check-cli-runtime-generation.ts", import.meta.url),

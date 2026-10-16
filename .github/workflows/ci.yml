@@ -1678,6 +1678,9 @@ jobs:
 
       # The manifest binds the outputs to this exact commit, so the commit is
       # the input identity: a re-run of the same tree skips the generators.
+      # Only a successful producer saves an entry, and the producer first
+      # proves MCP generated outputs untracked, a fact of the commit alone;
+      # every consumer's restore repeats that check on its own checkout.
       - name: Identify generated source inputs
         id: identity
         run: echo "key=generated-sources-v1-$RUNNER_OS-$RUNNER_ARCH-$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
