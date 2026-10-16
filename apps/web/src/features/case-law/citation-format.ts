@@ -20,9 +20,9 @@ type IntlFormatter = ReturnType<typeof createFormatter>;
  * legal copy modes. The convention follows the COURT's jurisdiction, never
  * the UI language: a Czech decision is cited in Czech form everywhere.
  *
- * v1 limits, deliberate: pincites are emitted only where the convention
- * uses reporter pages (USA); paragraph-number pincites (EU, CZ "bod N")
- * need the block's ¶ number threaded through and come later. Czech and
+ * Pincites are emitted for USA reporter pages and Hungarian bracketed
+ * locators. Court paragraph numbers still need to be threaded from the
+ * selected block; Czech, Slovak and EU paragraph pincites are not emitted. Czech and
  * Slovak court names are inflected to the genitive by a suffix rule that
  * covers the standing court names; an unrecognized name passes through
  * unchanged rather than guessing.
@@ -39,7 +39,7 @@ export type CitationInput = {
   ecli: string | null;
   /** Citable case name where the tradition uses one (USA, EU). */
   name: string | null;
-  /** Reporter page the quotation starts on (USA convention only). */
+  /** Supplied pinpoint locator, formatted by the cited jurisdiction. */
   pincite: string | null;
 };
 
@@ -224,15 +224,16 @@ const HUNGARIAN_FORMATTER = createFormatter({
 });
 
 const hungarianCitation = (input: CitationInput): string => {
+  const locator = input.pincite === null ? "" : ` [${input.pincite}]`;
   const date = parseDecisionDate(input.decisionDate);
   if (date === null) {
-    return `${input.court}, ${input.caseNumber}`;
+    return `${input.court}, ${input.caseNumber}${locator}`;
   }
   const dated = HUNGARIAN_FORMATTER.dateTime(
     date.toZonedDateTime("UTC").epochMilliseconds,
     { year: "numeric", month: "long", day: "numeric" },
   );
-  return `${input.court}, ${input.caseNumber}, ${dated}`;
+  return `${input.court}, ${input.caseNumber}, ${dated}${locator}`;
 };
 
 /** Quotation typography follows the cited jurisdiction, like the citation. */

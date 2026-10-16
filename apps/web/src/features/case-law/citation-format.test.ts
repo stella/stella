@@ -132,6 +132,18 @@ describe("Hungarian citation typography", () => {
     );
   });
 
+  test.each([
+    {
+      decisionDate: "2019-03-21",
+      expected: "Kúria, Pfv.21.123/2019/5., 2019. március 21. [12]",
+    },
+    { decisionDate: null, expected: "Kúria, Pfv.21.123/2019/5. [12]" },
+  ])("preserves a supplied locator", ({ decisionDate, expected }) => {
+    expect(
+      formatDecisionCitation({ ...input, decisionDate, pincite: "12" }),
+    ).toBe(expected);
+  });
+
   test("quotation typography is invariant to route or corpus country form", () => {
     for (const country of CASE_LAW_BROWSER_COUNTRIES) {
       expect(formatDecisionQuotation("szöveg", country.toLowerCase())).toBe(

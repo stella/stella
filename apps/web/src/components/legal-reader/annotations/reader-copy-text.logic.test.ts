@@ -7,8 +7,6 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { copyTextFor } from "@/components/legal-reader/annotations/reader-copy-text.logic";
 
-const selected = { cleanText: "teljesítés", locator: null };
-
 for (const { decisionDate, caseNumber, inlineCitation, citation } of [
   {
     decisionDate: "2019-03-21",
@@ -43,21 +41,27 @@ for (const { decisionDate, caseNumber, inlineCitation, citation } of [
       name: null,
     } satisfies ReaderAnnotationTarget;
 
-    const expected = {
-      quoteWithCitation: `„teljesítés” ${citation}`,
-      citationWithQuote: `${inlineCitation} („teljesítés”).`,
-      blockQuoteWithCitation: `teljesítés\n\n${citation}`,
-      textOnly: "teljesítés",
-      citationOnly: citation,
-    } satisfies Record<ReaderCopyMode, string>;
+    for (const locator of [null, "12", "13"]) {
+      const selected = { cleanText: "teljesítés", locator };
+      const locatedInline =
+        locator === null ? inlineCitation : `${inlineCitation} [${locator}]`;
+      const locatedSentence = locator === null ? citation : `${locatedInline}.`;
+      const expected = {
+        quoteWithCitation: `„teljesítés” ${locatedSentence}`,
+        citationWithQuote: `${locatedInline} („teljesítés”).`,
+        blockQuoteWithCitation: `teljesítés\n\n${locatedSentence}`,
+        textOnly: "teljesítés",
+        citationOnly: locatedSentence,
+      } satisfies Record<ReaderCopyMode, string>;
 
-    test.each(READER_COPY_MODES)(
-      "%s formats the passage and citation",
-      (mode) => {
-        const text = copyTextFor({ mode, selected, target });
-        expect(text).toBe(expected[mode]);
-        expect(text).not.toContain("..");
-      },
-    );
+      test.each(READER_COPY_MODES)(
+        `%s formats the passage with locator ${locator ?? "none"}`,
+        (mode) => {
+          const text = copyTextFor({ mode, selected, target });
+          expect(text).toBe(expected[mode]);
+          expect(text).not.toContain("..");
+        },
+      );
+    }
   });
 }
