@@ -42,6 +42,7 @@ export const PUBLIC_COUNTRY_SURFACE_OPEN = {
   Record<PublicCountryCapability, boolean>
 >;
 
+// parser-output-unchanged: per-domain publication capabilities only gate public reads; ingestion identities and parsed document output remain unchanged.
 export type PublicLawDomain = "caseLaw" | "legislation";
 
 /** Public admission, independent of whether ingestion holds rows for a country. */

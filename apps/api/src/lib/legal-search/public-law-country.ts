@@ -168,7 +168,7 @@ export const readPublicLawCountry = (
   input: unknown,
   {
     admitted,
-    capabilities,
+    capabilities = PUBLIC_COUNTRY_CAPABILITIES,
     domain,
     parameter,
     surface,

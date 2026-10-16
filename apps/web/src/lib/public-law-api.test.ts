@@ -81,7 +81,10 @@ describe("isSearchUnavailableError", () => {
   test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
     const refusal = {
       status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      value: publicCountryUnavailable("SVK", "search"),
+      value: publicCountryUnavailable("SVK", {
+        domain: "caseLaw",
+        surface: "search",
+      }),
     };
     expect(isPublicLawMiss(refusal, "searchPublicCaseLawDecisions")).toBe(
       false,
