@@ -173,6 +173,7 @@
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
+      "inScoring": "Zahrnuté do hodnotenia",
       "includeInScoring": "Zahrnúť do hodnotenia",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",
@@ -528,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
+    "invoiceComposer": {
+      "addSellerProfile": "Pridajte profil dodávateľa v nastaveniach fakturácie",
+      "billedHours": "Účtované hodiny",
+      "buyer": "Klient (odberateľ)",
+      "continueToDetails": "Pokračovať na údaje",
+      "continueToIssue": "Pokračovať na vystavenie",
+      "datesAndPayment": "Dátumy a platba",
+      "days": "{days, plural, one {# deň} few {# dni} many {# dňa} other {# dní}}",
+      "draftSavedTitle": "Koncept faktúry uložený",
+      "dueIn": "Splatnosť",
+      "dueOn": "splatná {date}",
+      "flatFee": "Tento spis má paušálnu odmenu: faktúra účtuje dohodnutých {amount} a čas uvedený nižšie je v nej zahrnutý.",
+      "flatFeeLine": "Dohodnutá paušálna odmena",
+      "include": "Zahrnúť do tejto faktúry",
+      "issueFailed": "Koncept sa uložil, ale faktúru sa nepodarilo vystaviť.",
+      "issueInvoice": "Vystaviť faktúru",
+      "issuedTitle": "Faktúra {number} vystavená",
+      "lines": "Riadky faktúry",
+      "loggedHours": "zapísané {hours} h",
+      "noCharge": "Bez úhrady",
+      "noClient": "Tento spis nemá klienta, faktúra preto zatiaľ nemá odberateľa.",
+      "noExpenses": "V spise nie sú žiadne schválené nevyfakturované výdavky.",
+      "noTime": "V spise nie je žiadny schválený nevyfakturovaný čas.",
+      "noVat": "Bez DPH",
+      "nothingToBill": "Zatiaľ nie je čo fakturovať. Schváľte v spise časové záznamy alebo výdavky a budete ich môcť vyfakturovať.",
+      "openInvoice": "Otvoriť faktúru",
+      "otherCurrency": "{count, plural, one {# položka je vedená} few {# položky sú vedené} many {# položky je vedených} other {# položiek je vedených}} v inej mene ako {currency} a fakturujú sa samostatne.",
+      "outsideScope": "Nie je predmetom dane v tuzemsku, 0 %",
+      "rate": "Sadzba",
+      "readyDescription": "Vystavením sa faktúre pridelí ďalšie číslo z vášho číselného radu a faktúra sa uzamkne. Koncept sa dá ďalej upravovať.",
+      "readyTitle": "Pripravené na vystavenie",
+      "reverseCharge": "Prenesenie daňovej povinnosti, 0 %",
+      "saveDraft": "Uložiť ako koncept",
+      "seller": "Dodávateľ",
+      "sources": {
+        "client": "Prevzaté od klienta spisu",
+        "clientTerm": "Splatnosť dohodnutá s klientom",
+        "defaultSeller": "Váš predvolený profil dodávateľa",
+        "defaultTerm": "Štandardná splatnosť",
+        "lastWorkDay": "Posledný deň zahrnutej práce"
+      },
+      "steps": {
+        "issue": "Kontrola a vystavenie",
+        "items": "Čas a výdavky"
+      },
+      "tax": "Daň a mena",
+      "taxableSupplyDate": "Dátum dodania",
+      "timeEntries": "Časové záznamy",
+      "timeSummary": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamov}} · {hours} h",
+      "title": "Nová faktúra",
+      "totalsSummary": "Bez DPH {net} · DPH {vat} · Spolu {total}",
+      "vat": "Režim DPH",
+      "vatRate": "DPH {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Krajinu klienta sa nepodarilo overiť: IČ DPH a adresa neuvádzajú rovnakú krajinu, preto sa použije základná sadzba",
+        "clientVatIdInvalid": "IČ DPH klienta nemá formát IČ DPH jeho štátu, uplatní sa preto základná sadzba",
+        "domesticRate": "Vaša najvyššia sadzba DPH platná ku dňu dodania",
+        "noSellerProfile": "Chýba profil dodávateľa, DPH sa preto neúčtuje, kým ju na faktúre nenastavíte",
+        "noVatRate": "V nastaveniach fakturácie nie je nastavená žiadna sadzba DPH",
+        "outsideScope": "IČ DPH klienta je registrované mimo EÚ, miesto plnenia je preto v zahraničí",
+        "reverseCharge": "IČ DPH klienta je registrované v inej krajine",
+        "sellerNotVatPayer": "Dodávateľ nie je platiteľom DPH"
+      }
+    },
     "invoiceNarrative": "Popis faktúry",
     "invoiceNarrativePlaceholder": "Popis pre klienta (nepovinné)",
     "invoices": {
@@ -670,7 +735,10 @@
       "registrationId": "Registračné číslo",
       "setDefault": "Nastaviť ako predvolený",
       "title": "Profily dodávateľov",
-      "vatId": "IČ DPH"
+      "vatId": "IČ DPH",
+      "vatPayer": "Platiteľ DPH",
+      "vatPayerHelp": "Faktúry tohto dodávateľa účtujú DPH. Vypnite pri registrovanej osobe, ktorá má IČ DPH, ale nie je platiteľom DPH.",
+      "vatPayerRequiresVatId": "Na vystavovanie faktúr ako platiteľ DPH zadajte IČ DPH."
     },
     "settingsTitle": "Fakturácia",
     "split": {
@@ -748,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
+        "retryAfter": "Znova to môžete skúsiť po {time}.",
         "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
@@ -1044,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok}}",
       "provisionsCited": "Dotknuté ustanovenia",
+      "provisionsFailed": "Spracovanie citácií zlyhalo",
+      "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
+      "provisionsProcessing": "Citácie sa spracúvajú",
+      "provisionsUnavailable": "Citácie nie sú dostupné",
+      "provisionsUnplaceable": "Citácie nemožno umiestniť do textu rozhodnutia",
+      "provisionsUnsupported": "Spracovanie citácií nie je pre toto rozhodnutie podporované",
+      "provisionsWithheld": "Citácie nie sú sprístupnené",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"
@@ -1294,6 +1370,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
     },
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
@@ -1325,6 +1402,7 @@
       "loadError": "Nepodarilo sa načítať položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "messageUnavailable": "Túto správu nemožno zobraziť.",
     "mockModel": {
       "description": "Vopred pripravené odpovede lokálneho simulovaného modelu",
       "label": "Simulovaná AI"
@@ -1484,12 +1562,25 @@
       "rejected": "Odmietnuté"
     },
     "tabToAsk": "→ pre otázku: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Stĺpcový",
+      "kind": "Typ grafu",
+      "line": "Čiarový",
+      "loading": "Vyberá sa graf…",
+      "pie": "Koláčový",
+      "scatter": "Bodový",
+      "showChart": "Zobraziť ako graf",
+      "summary": "Počet zobrazených hodnôt: {n, number}.",
+      "unavailable": "Graf sa nepodarilo vybrať. Zobrazuje sa tabuľka.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracujem s kontextom",
     "threadFiles": {
       "title": "Súbory v tomto chate"
     },
     "tool": {
       "add_comment": "Pridávanie komentára",
+      "add_matter_member": "Pridať člena spisu",
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",
       "ares_lookup_company": "Hľadám záznamy o firme",
       "ares_search_companies": "Hľadám záznamy o firmách",
@@ -1546,7 +1637,6 @@
       "list_stories": "Výpis častí dokumentu",
       "list_templates": "Výpis vzorov",
       "load-skill": "Čítam pokyny",
-      "manage_organization": "Spravovať organizáciu",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč spismi",
       "read-skill-resource": "Čítam pokyny",
@@ -1556,6 +1646,7 @@
       "read_section": "Čítanie oddielu",
       "read_story": "Čítanie časti dokumentu",
       "remember": "Ukladanie do pamäte",
+      "remove_matter_member": "Odobrať člena spisu",
       "reply_comment": "Odpovedanie na komentár",
       "request_secret": "Žiadosť o súkromný prístupový údaj",
       "resolve_comment": "Riešenie komentára",
@@ -1589,6 +1680,7 @@
       "suggest_template_fields": "Navrhujem polia vzoru",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát",
+      "update_organization_settings": "Upraviť nastavenia tímu",
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
@@ -2075,6 +2167,7 @@
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
     "website": "Web",
+    "whenToUse": "Kedy použiť",
     "workflow": "Pracovný postup",
     "workflows": "Pracovné postupy",
     "zoomIn": "Priblížiť",
@@ -2554,6 +2647,10 @@
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
+      "validationInvalid": "Pole obsahuje hodnotu, ktorú nemožno uložiť.",
+      "validationRequired": "Povinné pole je prázdne.",
+      "validationTooLong": "Príliš dlhé: použite najviac {limit, number} znakov.",
+      "validationTooShort": "Príliš krátke: použite aspoň {limit, number} znakov.",
       "verificationActiveLimitReached": "Vaša organizácia dosiahla limit súčasne prebiehajúcich overení. Počkajte na dokončenie niektorého overenia a skúste to znova.",
       "verificationDailyLimitReached": "Vaša organizácia dosiahla denný limit overení. Skúste to znova po polnoci (Europe/Prague).",
       "versionConflict": "Niekto iný to počas vašej úpravy zmenil. Načítajte znova aktuálnu verziu."
@@ -3649,6 +3746,10 @@
       "importTitle": "Importovať zručnosť",
       "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností}}",
       "invalidPath": "Cesta smie obsahovať iba malé písmená, číslice, bodky, spojovníky alebo podčiarkovníky",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
+      "invocationManual": "Iba na vyžiadanie",
+      "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
       "license": "Licencia: {license}",
       "newFile": "Nový súbor",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4339,6 +4440,8 @@
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
       },
+      "showInTitle": "Zobraziť číslo vedľa názvu spisu",
+      "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
       "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
@@ -4509,6 +4612,25 @@
     "tokenHelp": "Ako získať token",
     "viewOnGithub": "Zobraziť na GitHube"
   },
+  "readerAnswers": {
+    "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozbaliť odpoveď",
+    "explain": "Vysvetliť",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Položiť doplňujúcu otázku",
+    "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.}}",
+    "loading": "Generovanie odpovede…",
+    "minimise": "Zbaliť odpoveď",
+    "modelError": "Model nedokázal túto odpoveď dokončiť.",
+    "networkError": "Spojenie bolo prerušené. Skúste to znova.",
+    "regenerate": "Vygenerovať odpoveď znova",
+    "selectionError": "Vyberte text v rámci jedného odseku (najviac 2 000 znakov).",
+    "send": "Odoslať doplňujúcu otázku",
+    "share": "Zdieľať s tímom",
+    "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
+    "title": "Odpoveď k vybranému textu"
+  },
   "routeError": {
     "backToMatters": "Späť na spisy",
     "copyReference": "Kopírovať referenciu chyby",
@@ -4635,9 +4757,19 @@
       "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Dokončená história pracovných priestorov zostane priradená k vymazanému účtu.",
       "desktop": "Aplikácia pre počítač",
       "desktopAppDescription": "Vráťte sa ku všetkému, čo skopírujete, a otvárajte dokumenty zo stelly v aplikáciách, ktoré už používate.",
+      "desktopCardApproveDetail": "Schváľte prepojenie tohto počítača s účtom <bdi>{identity}</bdi> na {host}.",
+      "desktopCardApproveTitle": "stella desktop žiada o pripojenie",
+      "desktopCardConnectedDetail": "Prepojené s účtom <bdi>{identity}</bdi> na {host} · verzia {version}",
+      "desktopCardConnectedDetailNoVersion": "Prepojené s účtom <bdi>{identity}</bdi> na {host}",
+      "desktopCardConnectedTitle": "stella desktop je prepojený",
+      "desktopCardMissingDetail": "Nainštalujte ho, alebo ho pripojte, ak už na tomto počítači nainštalovaný je.",
+      "desktopCardMissingTitle": "stella desktop zatiaľ nie je prepojený",
+      "desktopCardOutdatedDetail": "Verzia {version} je prepojená s účtom <bdi>{identity}</bdi>. Nainštalujte najnovšiu verziu, aby dokumenty a aktivita ďalej fungovali.",
+      "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
       "desktopClipboardTitle": "Prehľadávateľná história schránky",
       "desktopConnectFailed": "Aplikáciu stella desktop sa nepodarilo pripojiť.",
+      "desktopConnectInstalled": "Je nainštalovaný, pripojiť",
       "desktopConnectedAs": "Pripojené ako <bdi>{email}</bdi>",
       "desktopDescription": "História schránky a nástroje na dokumenty vo vašom počítači",
       "desktopDocumentsDescription": "Otvárajte súbory zo stelly v počítačových aplikáciách; revízie sa vrátia do správneho spisu.",
@@ -4972,17 +5104,22 @@
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
     "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
+    "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
@@ -4998,7 +5135,6 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
@@ -5551,7 +5687,6 @@
     "viewVersion": "Zobraziť",
     "whenNotToUse": "Kedy nepoužívať",
     "whenNotToUsePlaceholder": "Kedy sa tomuto vzoru vyhnúť?",
-    "whenToUse": "Kedy použiť",
     "whenToUsePlaceholder": "Kedy sa má tento vzor použiť? (pomáha AI s výberom vzoru)"
   },
   "timesheets": {
@@ -5672,7 +5807,7 @@
       "title": "Kopírovať do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Názov spisu",
       "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
@@ -6124,15 +6259,12 @@
       "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobný"
-    },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "noClient": "Žiadny klient nepriradený",
+      "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
         "co_counsel": "Spolupracujúci advokát",

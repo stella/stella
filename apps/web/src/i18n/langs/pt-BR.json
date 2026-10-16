@@ -173,6 +173,7 @@
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong> — o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
       "heldForReview": "Em espera para revisão",
       "holdOutOfScoring": "Excluir da pontuação",
+      "inScoring": "Na pontuação",
       "includeInScoring": "Incluir na pontuação",
       "interpretationNote": "Nota de interpretação",
       "interpretationNotePlaceholder": "Se o significado desta evidência é contestado, explique como. Deixe em branco se não for.",
@@ -528,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
+    "invoiceComposer": {
+      "addSellerProfile": "Adicione um perfil de vendedor nas configurações de faturamento",
+      "billedHours": "Horas faturadas",
+      "buyer": "Cliente (comprador)",
+      "continueToDetails": "Continuar para os dados",
+      "continueToIssue": "Continuar para a emissão",
+      "datesAndPayment": "Datas e pagamento",
+      "days": "{days, plural, one {# dia} other {# dias}}",
+      "draftSavedTitle": "Rascunho da fatura salvo",
+      "dueIn": "Vence em",
+      "dueOn": "vence em {date}",
+      "flatFee": "Este caso tem honorários fixos: a fatura cobra os {amount} acordados e o tempo abaixo já está coberto por eles.",
+      "flatFeeLine": "Honorários fixos acordados",
+      "include": "Incluir nesta fatura",
+      "issueFailed": "O rascunho foi salvo, mas não foi possível emitir a fatura.",
+      "issueInvoice": "Emitir fatura",
+      "issuedTitle": "Fatura {number} emitida",
+      "lines": "Linhas da fatura",
+      "loggedHours": "{hours} h lançadas",
+      "noCharge": "Sem cobrança",
+      "noClient": "Este caso não tem cliente, então a fatura ainda não tem comprador.",
+      "noExpenses": "Não há despesas aprovadas e não faturadas neste caso.",
+      "noTime": "Não há tempo aprovado e não faturado neste caso.",
+      "noVat": "Sem IVA",
+      "nothingToBill": "Ainda não há nada a faturar. Aprove lançamentos de tempo ou despesas deste caso para faturá-los.",
+      "openInvoice": "Abrir fatura",
+      "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
+      "outsideScope": "Fora do âmbito do IVA, 0 %",
+      "rate": "Valor/hora",
+      "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
+      "readyTitle": "Pronta para emitir",
+      "reverseCharge": "Autoliquidação, 0 %",
+      "saveDraft": "Salvar como rascunho",
+      "seller": "Vendedor",
+      "sources": {
+        "client": "Copiado do cliente do caso",
+        "clientTerm": "Prazo de pagamento do cliente",
+        "defaultSeller": "Seu perfil de vendedor padrão",
+        "defaultTerm": "Prazo de pagamento padrão",
+        "lastWorkDay": "Último dia do trabalho incluído"
+      },
+      "steps": {
+        "issue": "Revisar e emitir",
+        "items": "Tempo e despesas"
+      },
+      "tax": "Impostos e moeda",
+      "taxableSupplyDate": "Data do fato gerador",
+      "timeEntries": "Lançamentos de tempo",
+      "timeSummary": "{count, plural, one {# lançamento} other {# lançamentos}} · {hours} h",
+      "title": "Nova fatura",
+      "totalsSummary": "Sem IVA {net} · IVA {vat} · Total {total}",
+      "vat": "Tratamento do IVA",
+      "vatRate": "IVA de {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Não foi possível confirmar o país do cliente: o número de IVA e o endereço não indicam o mesmo país, então se aplica a alíquota padrão",
+        "clientVatIdInvalid": "O número de IVA do cliente não tem o formato do seu país, por isso aplica-se a taxa normal",
+        "domesticRate": "Sua alíquota de IVA mais alta em vigor na data do fato gerador",
+        "noSellerProfile": "Sem perfil de vendedor, nenhum IVA é cobrado até você defini-lo na fatura",
+        "noVatRate": "Nenhuma alíquota de IVA configurada no faturamento",
+        "outsideScope": "O número de IVA do cliente está registrado fora da UE, por isso o local da prestação é no exterior",
+        "reverseCharge": "O número de IVA do cliente está registrado em outro país",
+        "sellerNotVatPayer": "O vendedor não é contribuinte de IVA"
+      }
+    },
     "invoiceNarrative": "Narrativa da fatura",
     "invoiceNarrativePlaceholder": "Descrição voltada para o cliente (opcional)",
     "invoices": {
@@ -670,7 +735,10 @@
       "registrationId": "Número de registro",
       "setDefault": "Definir como padrão",
       "title": "Perfis de vendedor",
-      "vatId": "Número de IVA"
+      "vatId": "Número de IVA",
+      "vatPayer": "Contribuinte de IVA",
+      "vatPayerHelp": "As faturas deste vendedor cobram IVA. Desative para uma pessoa registrada que tem número de IVA, mas não é contribuinte.",
+      "vatPayerRequiresVatId": "Informe o número de IVA para emitir faturas como contribuinte de IVA."
     },
     "settingsTitle": "Faturamento",
     "split": {
@@ -748,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
+        "retryAfter": "Você poderá tentar novamente a partir de {time}.",
         "timedOut": "{source, select, organization {{provider} não respondeu a tempo com a chave da sua organização.} other {O modelo de IA não respondeu a tempo.}}",
         "unavailable": "A análise por IA não está disponível para esta decisão."
       },
@@ -1044,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
       "provisionsCited": "Dispositivos citados",
+      "provisionsFailed": "O processamento das citações falhou",
+      "provisionsNoneFound": "Nenhum dispositivo citado encontrado",
+      "provisionsProcessing": "As citações estão sendo processadas",
+      "provisionsUnavailable": "As citações não estão disponíveis",
+      "provisionsUnplaceable": "As citações não podem ser localizadas no texto da decisão",
+      "provisionsUnsupported": "O processamento de citações não é compatível com esta decisão",
+      "provisionsWithheld": "As citações não são divulgadas",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
@@ -1294,6 +1370,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
     },
+    "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
@@ -1325,6 +1402,7 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "messageUnavailable": "Não é possível exibir esta mensagem.",
     "mockModel": {
       "description": "Respostas prontas do modelo simulado local",
       "label": "IA simulada"
@@ -1484,12 +1562,25 @@
       "rejected": "Rejeitado"
     },
     "tabToAsk": "→ para perguntar: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Barras",
+      "kind": "Tipo de gráfico",
+      "line": "Linhas",
+      "loading": "Selecionando um gráfico…",
+      "pie": "Pizza",
+      "scatter": "Dispersão",
+      "showChart": "Mostrar como gráfico",
+      "summary": "Valores exibidos: {n, number}.",
+      "unavailable": "Não foi possível selecionar um gráfico. A tabela é exibida.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Trabalhando com contexto",
     "threadFiles": {
       "title": "Arquivos deste chat"
     },
     "tool": {
       "add_comment": "Adicionando comentário",
+      "add_matter_member": "Adicionar membro ao caso",
       "apply-active-docx-edits": "Preparando edições no documento",
       "ares_lookup_company": "Pesquisando registros da empresa",
       "ares_search_companies": "Pesquisando registros de empresas",
@@ -1546,7 +1637,6 @@
       "list_stories": "Listando partes do documento",
       "list_templates": "Listando modelos",
       "load-skill": "Lendo orientações",
-      "manage_organization": "Gerenciar organização",
       "read-contact": "Lendo contato",
       "read-content-across-matters": "Lendo conteúdo em casos",
       "read-skill-resource": "Lendo orientações",
@@ -1556,6 +1646,7 @@
       "read_section": "Lendo uma seção",
       "read_story": "Lendo uma parte do documento",
       "remember": "Salvando na memória",
+      "remove_matter_member": "Remover membro do caso",
       "reply_comment": "Respondendo ao comentário",
       "request_secret": "Solicitando uma credencial privada",
       "resolve_comment": "Resolvendo comentário",
@@ -1589,6 +1680,7 @@
       "suggest_template_fields": "Sugerindo campos do modelo",
       "unknown": "Usando ferramenta",
       "update-entity-fields": "Atualizando metadados",
+      "update_organization_settings": "Atualizar configurações da equipe",
       "update_reader_annotation": "Editar destaque ou comentário",
       "use-browser": "Usando seu navegador",
       "use_connector_secret": "Usando a credencial do conector",
@@ -2075,6 +2167,7 @@
     "versionLabel": "Versão {version}",
     "viewSource": "Ver fonte",
     "website": "Site",
+    "whenToUse": "Quando usar",
     "workflow": "Fluxo de trabalho",
     "workflows": "Fluxos de trabalho",
     "zoomIn": "Ampliar",
@@ -2554,6 +2647,10 @@
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
       "usageLimitExceeded": "Limite de uso atingido.",
+      "validationInvalid": "Um campo tem um valor que não pode ser salvo.",
+      "validationRequired": "Um campo obrigatório está vazio.",
+      "validationTooLong": "Muito longo: use no máximo {limit, number} caracteres.",
+      "validationTooShort": "Muito curto: use pelo menos {limit, number} caracteres.",
       "verificationActiveLimitReached": "Sua organização atingiu o limite de verificações simultâneas. Aguarde a conclusão de uma verificação e tente novamente.",
       "verificationDailyLimitReached": "Sua organização atingiu o limite diário de verificações. Tente novamente após a meia-noite (Europe/Prague).",
       "versionConflict": "Outra pessoa alterou isto enquanto você editava. Recarregue para obter a versão atual."
@@ -3649,6 +3746,10 @@
       "importTitle": "Importar habilidade",
       "importedSkills": "{count, plural, one {# habilidade importada} other {# habilidades importadas}}",
       "invalidPath": "O caminho deve usar letras minúsculas, dígitos, pontos, hifens ou sublinhados",
+      "invocationAuto": "Automaticamente",
+      "invocationAutoHelp": "A IA pode usar esta habilidade por conta própria quando ela se encaixar no pedido.",
+      "invocationManual": "Somente quando invocada",
+      "invocationManualHelp": "Usada somente quando você a chama com / ou a adiciona à sua mensagem.",
       "license": "Licença: {license}",
       "newFile": "Novo arquivo",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4339,6 +4440,8 @@
         "yearMonthSequential": "Ano-Mês / Sequencial (2026-02/001)",
         "yearSequential": "Ano/Sequencial (2026/001)"
       },
+      "showInTitle": "Mostrar o número ao lado do nome do caso",
+      "showInTitleDescription": "Quando desligado, o título é exatamente o nome informado.",
       "title": "Numeração de casos",
       "tokenHelp": "Tokens disponíveis: '{'SEQ'}' (sequência), '{'YYYY'}' (ano), '{'YY'}' (ano de 2 dígitos), '{'MM'}' (mês)"
     },
@@ -4509,6 +4612,25 @@
     "tokenHelp": "Como obter um token",
     "viewOnGithub": "Ver no GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "O orçamento para respostas foi esgotado.",
+    "citation": "¶{paragraph}",
+    "expand": "Expandir resposta",
+    "explain": "Explicar",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Fazer uma pergunta de acompanhamento",
+    "invalidCitations": "{count, plural, one {Não foi possível verificar # citação.} many {Não foi possível verificar # citações.} other {Não foi possível verificar # citações.}}",
+    "loading": "Gerando resposta…",
+    "minimise": "Recolher resposta",
+    "modelError": "O modelo não conseguiu concluir esta resposta.",
+    "networkError": "A conexão foi interrompida. Tente novamente.",
+    "regenerate": "Gerar resposta novamente",
+    "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
+    "send": "Enviar pergunta de acompanhamento",
+    "share": "Compartilhar com a equipe",
+    "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
+    "title": "Resposta sobre o texto selecionado"
+  },
   "routeError": {
     "backToMatters": "Voltar aos casos",
     "copyReference": "Copiar referência do erro",
@@ -4635,9 +4757,19 @@
       "deleteAccountWarningExplanation": "Enviaremos um código de verificação para o seu endereço de e-mail para confirmar esta solicitação. O histórico concluído do espaço de trabalho permanecerá atribuído à sua conta excluída.",
       "desktop": "Área de trabalho",
       "desktopAppDescription": "Recupere tudo o que copiar e abra documentos da stella nos aplicativos que você já usa no computador.",
+      "desktopCardApproveDetail": "Aprove para vincular este computador a <bdi>{identity}</bdi> em {host}.",
+      "desktopCardApproveTitle": "stella desktop está pedindo para conectar",
+      "desktopCardConnectedDetail": "Vinculado a <bdi>{identity}</bdi> em {host} · versão {version}",
+      "desktopCardConnectedDetailNoVersion": "Vinculado a <bdi>{identity}</bdi> em {host}",
+      "desktopCardConnectedTitle": "stella desktop está vinculado",
+      "desktopCardMissingDetail": "Instale-o, ou conecte-o se já estiver instalado neste computador.",
+      "desktopCardMissingTitle": "stella desktop ainda não está vinculado",
+      "desktopCardOutdatedDetail": "A versão {version} está vinculada a <bdi>{identity}</bdi>. Instale a versão mais recente para que documentos e atividade continuem funcionando.",
+      "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
       "desktopClipboardTitle": "Histórico pesquisável da área de transferência",
       "desktopConnectFailed": "Não foi possível conectar o stella desktop.",
+      "desktopConnectInstalled": "Já está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
       "desktopDescription": "Histórico da área de transferência e ferramentas de documentos no seu computador",
       "desktopDocumentsDescription": "Abra arquivos da stella em aplicativos do computador; as revisões voltam ao caso correto.",
@@ -4972,17 +5104,22 @@
     "provisionAskSummarize": "Resumir como os tribunais aplicam este dispositivo",
     "provisionAskSummarizePrompt": "Resuma como os tribunais aplicam {subject}, citando as decisões em que se basear.",
     "provisionDetailsFor": "Detalhes de {provision}",
+    "provisionEffectiveFrom": "em vigor desde {date}",
     "provisionHistoryEarliest": "Versão mais antiga disponível.",
     "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
     "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
+    "provisionPartTextUnavailable": "O texto de {provisionLabel} não está disponível",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texto indisponível para esta versão",
     "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar apenas a parte citada",
+    "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
@@ -4998,7 +5135,6 @@
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
     "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redação em vigor desde {date}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {
@@ -5551,7 +5687,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Quando não usar",
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
-    "whenToUse": "Quando usar",
     "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
   },
   "timesheets": {
@@ -5672,7 +5807,7 @@
       "title": "Copiar para caso"
     },
     "create": {
-      "ownerTypeToggle": "Tipo de caso",
+      "matterName": "Nome do caso",
       "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
     },
     "createNewWorkspace": "Criar novo caso",
@@ -6124,15 +6259,12 @@
       "upcomingTasks": "Próxima agenda",
       "uploaded": "enviado"
     },
-    "ownerType": {
-      "client": "Cliente",
-      "personal": "Pessoal"
-    },
     "parties": {
       "addParty": "Adicionar parte",
       "changeClient": "Alterar cliente",
       "client": "Cliente",
       "noClient": "Nenhum cliente atribuído",
+      "noClientOptional": "Sem cliente (opcional)",
       "noParties": "Nenhuma parte adicionada a este caso.",
       "partyRoles": {
         "co_counsel": "Coadvogado",

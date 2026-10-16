@@ -11,7 +11,6 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import {
-  CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
@@ -20,10 +19,7 @@ import {
   generatedVisualPartSchema,
 } from "@stll/api-contract/generated-visual";
 
-import {
-  legacyChatToolExecutor,
-  normalizeLegacyRawToolInputs,
-} from "@/api/handlers/chat/legacy-tool-compat";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
@@ -34,7 +30,6 @@ import type {
   ChatAttachmentPart,
   ChatMessage,
   ChatMessageContentCandidate,
-  ChatMessageContent,
   ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
@@ -43,11 +38,9 @@ import type {
   PersistableChatMessageCandidate,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
-  PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
-import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   isPersistedJsonValue,
@@ -63,9 +56,7 @@ import type {
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
 import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
@@ -106,26 +97,13 @@ const isPersistableTerminalAssistantMessage = (
 ): message is PersistableTerminalAssistantMessage =>
   message.role === "assistant" && message.metadata?.turnOutcome !== undefined;
 
-export type LegacyAiSdkFilePart = {
-  filename?: string | undefined;
-  mediaType: string;
-  placeholder?: string | undefined;
-  type: "file";
-  url: string;
-};
-
-type LegacyAiSdkTextPart = {
-  text: string;
-  type: "text";
-};
-
-export type NormalizedLegacyMessageParts = {
+export type NormalizedChatMessageParts = {
   metadata: ChatMessageMetadata;
   parts: ChatPart[];
 };
 
 type PersistedChatMessageRow = {
-  content: StoredChatMessageContent;
+  content: StoredChatMessageContentV3;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
 };
@@ -211,79 +189,6 @@ export const createChatAttachmentPart = ({
   };
 };
 
-const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
-  isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
-
-const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
-  isRecord(part) &&
-  part["type"] === "file" &&
-  typeof part["mediaType"] === "string" &&
-  typeof part["url"] === "string";
-
-const legacyAiSdkTextPartToTanStack = (
-  part: LegacyAiSdkTextPart,
-): Extract<ChatTanStackPart, { type: "text" }> => ({
-  type: "text",
-  content: part.text,
-});
-
-export const legacyAiSdkFilePartToTanStack = (
-  part: LegacyAiSdkFilePart,
-): ChatAttachmentPart =>
-  createChatAttachmentPart({
-    filename:
-      part.filename === undefined ? undefined : sanitizeFilename(part.filename),
-    mimeType: part.mediaType,
-    placeholder: part.placeholder,
-    url: part.url,
-  });
-
-const normalizeLegacyMessagePartsToTanStack = (
-  parts: readonly unknown[],
-): NormalizedLegacyMessageParts => {
-  const normalized: ChatPart[] = [];
-  const metadata: ChatMessageMetadata = {};
-  for (const part of parts) {
-    if (isLegacyAiSdkTextPart(part)) {
-      normalized.push(legacyAiSdkTextPartToTanStack(part));
-      continue;
-    }
-    if (isLegacyAiSdkFilePart(part)) {
-      normalized.push(legacyAiSdkFilePartToTanStack(part));
-      continue;
-    }
-    if (isLegacyAnonRestorationsPart(part)) {
-      // Legacy parts predate thread-wide placeholder numbering, so a repeated
-      // placeholder here is expected history, not a fault: not reported.
-      metadata.anonRestorations = mergeAnonRestorations(
-        metadata.anonRestorations,
-        part.data,
-      ).restorations;
-      continue;
-    }
-    if (isLegacyMentionsPart(part)) {
-      metadata.mentions = part.data;
-      continue;
-    }
-    if (isLegacySourceDocumentPart(part)) {
-      const sourceDocuments = metadata.sourceDocuments;
-      metadata.sourceDocuments = [...arrayOrEmpty(sourceDocuments), part.data];
-      continue;
-    }
-    if (isLegacyToolPart(part)) {
-      const converted = legacyToolPartToTanStack(part);
-      if (converted) {
-        normalized.push(converted);
-      }
-      continue;
-    }
-    if (isChatPart(part)) {
-      normalized.push(part);
-    }
-  }
-  return { metadata, parts: normalized };
-};
-
 // Stored rows may predate executor metadata; the writer output remains strict.
 type StoredChatMessageContentV3 = Omit<
   PersistedChatMessageContentV3,
@@ -296,104 +201,20 @@ type StoredChatMessageContentV3 = Omit<
       })
   )[];
 };
-type StoredChatMessageContent =
-  | Exclude<PersistedChatMessageContent, { version: 3 }>
-  | StoredChatMessageContentV3;
-
 export const normalizePersistedChatMessageContent = (
-  content: StoredChatMessageContent,
-): NormalizedLegacyMessageParts => {
-  let normalized: NormalizedLegacyMessageParts;
-  if (content.version === 3) {
-    normalized = normalizePersistedV3ChatMessageContent(content);
-  } else if (content.version === 2) {
-    normalized = {
-      metadata: content.metadata ?? {},
-      parts: normalizeLegacyPersistedToolInputs(content.data),
-    };
-  } else {
-    const legacy = normalizeLegacyMessagePartsToTanStack(
-      normalizeLegacyRawToolInputs(content.data),
-    );
-    normalized = {
-      metadata: legacy.metadata,
-      parts: normalizeLegacyPersistedToolInputs(legacy.parts),
-    };
-  }
+  content: StoredChatMessageContentV3,
+): NormalizedChatMessageParts => {
+  const normalized = normalizePersistedV3ChatMessageContent(content);
   return {
     ...normalized,
-    parts: normalized.parts.map((part) => {
-      if (part.type !== "tool-call" || chatToolExecutor(part) !== null) {
-        return part;
-      }
-      const metadata = part.metadata;
-      if (
-        metadata !== undefined &&
-        (!isRecord(metadata) || Array.isArray(metadata))
-      ) {
-        throw new HandlerError({
-          status: 422,
-          code: "CHAT_STORED_TOOL_METADATA_INVALID",
-          message: "Stored tool call has invalid metadata",
-        });
-      }
-      const provider = isRecord(metadata) ? metadata : {};
-      if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
-        throw new HandlerError({
-          status: 422,
-          code: "CHAT_STORED_TOOL_EXECUTOR_INVALID",
-          message: "Stored tool call has invalid executor ownership",
-        });
-      }
-      // Legacy rows predate recorded ownership and deferred server calls.
-      // Preserve every historically client-executed name, including tools
-      // that now have server variants. All readers use this fixed catalog;
-      // a request registry must never change ownership of a stored call.
-      return {
-        ...part,
-        metadata: {
-          ...provider,
-          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: legacyChatToolExecutor(part.name),
-        },
-      } satisfies ChatPart;
-    }),
+    parts: normalized.parts.map(normalizeStoredChatToolExecutor),
   };
 };
-
-const normalizeLegacyPersistedToolInputs = (
-  parts: readonly ChatPart[],
-): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
-
-const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
-  if (
-    part.type !== "tool-call" ||
-    part.input !== undefined ||
-    part.state === "awaiting-input" ||
-    part.state === "input-streaming"
-  ) {
-    return part;
-  }
-
-  const parsed = Result.try((): unknown => JSON.parse(part.arguments));
-  if (Result.isError(parsed)) {
-    return part;
-  }
-  const input =
-    parsed.value !== null && typeof parsed.value === "object"
-      ? parsed.value
-      : {};
-  const candidate: unknown = { ...part, input };
-  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
-    panic(`Stored legacy tool call ${part.id} has invalid input`);
-  }
-  return candidate;
-};
-
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
   content: StoredChatMessageContentV3,
-): NormalizedLegacyMessageParts => {
+): NormalizedChatMessageParts => {
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
   }
@@ -1422,39 +1243,13 @@ export const toPersistableChatMessage = (
   return normalized;
 };
 
-const isChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): content is ChatMessageContent => content.data.every(isChatPart);
-
-export const toChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): ChatMessageContent => {
-  if (!isChatMessageContent(content)) {
-    panic("Cannot persist chat message content with unsupported parts");
-  }
-  const normalized = {
-    version: content.version,
-    data: normalizeChatPartsForPersistence(content.data),
-    ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
-  };
-  if (!isChatMessageContent(normalized)) {
-    panic("Normalized chat content violates the persistence policy");
-  }
-  return normalized;
-};
-
 /**
  * Encode one message for the v3 JSONB representation. Canonical tool input and
  * output are stored directly; TanStack wire strings are reconstructed only by
  * `normalizePersisted...` on read.
  */
-type PersistedChatMessageContentV3Source = Omit<
-  ChatMessageContentCandidate,
-  "version"
->;
-
 export const toPersistedChatMessageContentV3 = (
-  content: PersistedChatMessageContentV3Source,
+  content: ChatMessageContentCandidate,
 ): PersistedChatMessageContentV3 => {
   if (!content.data.every(isChatPart)) {
     panic("Cannot persist chat message content with unsupported parts");
@@ -1575,135 +1370,6 @@ const isPersistedV3Part = (part: PersistedV3Part): boolean => {
   return isChatPart(part);
 };
 
-const isLegacyAnonRestorationsPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["anonRestorations"]>;
-  type: "data-stella-anon-restorations";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-anon-restorations" &&
-  isRecord(part["data"]) &&
-  Array.isArray(part["data"]["pairs"]);
-
-const isLegacyMentionsPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["mentions"]>;
-  type: "data-stella-mentions";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-mentions" &&
-  isRecord(part["data"]) &&
-  Array.isArray(part["data"]["mentions"]);
-
-const isLegacySourceDocumentPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["sourceDocuments"]>[number];
-  type: "data-stella-source-document";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-source-document" &&
-  isRecord(part["data"]);
-
-const isLegacyToolPart = (
-  part: unknown,
-): part is Record<string, unknown> & { type: string } => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
-    return false;
-  }
-  if (part["type"] === "dynamic-tool") {
-    return typeof part["toolName"] === "string";
-  }
-  return part["type"].startsWith("tool-") && part["type"] !== "tool-result";
-};
-
-const legacyToolPartToTanStack = (
-  part: Record<string, unknown> & { type: string },
-): ChatPart | null => {
-  const name = legacyToolName(part);
-  const id =
-    getStringProperty(part, "toolCallId") ?? getStringProperty(part, "id");
-  if (!name || !id) {
-    return null;
-  }
-
-  const input = Reflect.get(part, "input");
-  const next: unknown = {
-    type: "tool-call" as const,
-    id,
-    name,
-    arguments: safeStringifyToolArguments(input ?? {}),
-    state: legacyToolStateToTanStack(part["state"]),
-    ...("input" in part ? { input } : {}),
-    ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
-    ...("metadata" in part ? { metadata: part["metadata"] } : {}),
-    ...legacyToolApprovalToTanStack(part["approval"]),
-  };
-
-  return isChatPart(next) ? next : null;
-};
-
-const legacyToolName = (
-  part: Record<string, unknown> & { type: string },
-): string | null => {
-  if (part.type === "dynamic-tool") {
-    const toolName = getStringProperty(part, "toolName");
-    return toolName?.startsWith("mcp__") ? toolName : null;
-  }
-  return part.type.slice("tool-".length);
-};
-
-const legacyToolStateToTanStack = (state: unknown) => {
-  switch (state) {
-    case "input-streaming":
-      return "input-streaming" as const;
-    case "input-available":
-    case "input-complete":
-      return "input-complete" as const;
-    case "approval-requested":
-      return "approval-requested" as const;
-    case "approval-responded":
-      return "approval-responded" as const;
-    case "output-available":
-    case "output-error":
-    case "complete":
-      return "complete" as const;
-    default:
-      return "input-complete" as const;
-  }
-};
-
-const legacyToolApprovalToTanStack = (
-  approval: unknown,
-):
-  | {
-      approval: {
-        approved?: boolean | undefined;
-        id: string;
-        needsApproval: boolean;
-      };
-    }
-  | Record<string, never> => {
-  if (!isRecord(approval)) {
-    return {};
-  }
-  const id = getStringProperty(approval, "id");
-  const needsApproval = approval["needsApproval"];
-  if (!id || typeof needsApproval !== "boolean") {
-    return {};
-  }
-  const approved = approval["approved"];
-  return {
-    approval: {
-      id,
-      needsApproval,
-      ...(typeof approved === "boolean" ? { approved } : {}),
-    },
-  };
-};
-
 const isTanStackToolCallState = (
   value: unknown,
 ): value is TanStackToolCallState =>
@@ -1775,6 +1441,7 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.contextNotice === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
@@ -1785,20 +1452,3 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.turnTiming === undefined &&
   metadata.turnModel === undefined &&
   metadata.usage === undefined;
-
-const safeStringifyToolArguments = (value: unknown): string => {
-  try {
-    const serialized: unknown = JSON.stringify(value);
-    return typeof serialized === "string" ? serialized : "{}";
-  } catch {
-    return "{}";
-  }
-};
-
-const getStringProperty = (
-  value: Record<string, unknown>,
-  key: string,
-): string | null => {
-  const property = value[key];
-  return typeof property === "string" ? property : null;
-};

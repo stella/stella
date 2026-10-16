@@ -41,6 +41,9 @@ const vatCategoryOf = (
       return "E";
     case "reverse_charge":
       return "AE";
+    // A service whose place of supply is outside the EU.
+    case "outside_scope":
+      return "O";
     case "not_vat_payer":
       return "O";
     default: {

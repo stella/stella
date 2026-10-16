@@ -8,6 +8,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   readChatTurnTiming,
   settleChatTurnOnTx,
@@ -112,7 +113,9 @@ if (!databaseUrl || !runPostgresTests) {
         threadId,
         userId,
         role: "user",
-        content: { version: 1, data: [{ type: "text", text: "Continue" }] },
+        content: toPersistedChatMessageContentV3({
+          data: [{ type: "text", content: "Continue" }],
+        }),
       });
       await db.insert(chatTurns).values({
         id: turnId,

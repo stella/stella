@@ -42,7 +42,7 @@ export const legislationFacetRefreshQuery = (db: Pick<Transaction, "select">) =>
     .from(legislationDocuments)
     .where(
       and(
-        publishedLegislationCountryFor(legislationDocuments.country),
+        publishedLegislationCountryFor(legislationDocuments.country, "search"),
         isLatestOpenedVersionOfWorkAt(sql`CURRENT_DATE`),
         sql`${legislationDocuments.documentType} <> ''`,
       ),

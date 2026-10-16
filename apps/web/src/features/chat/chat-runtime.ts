@@ -17,6 +17,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
@@ -237,15 +238,12 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const isRejectedChatContinuation = (error: unknown): boolean => {
+const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
   while (current instanceof Error && !visited.has(current)) {
-    if (
-      APIError.is(current) &&
-      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
-    ) {
+    if (APIError.is(current) && current.code === code) {
       return true;
     }
     visited.add(current);
@@ -254,6 +252,14 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
 
   return false;
 };
+
+const isRejectedChatContinuation = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_CONTINUATION_REJECTED_ERROR_CODE);
+
+/** The server refused a request for a turn it already settled (failed,
+ *  completed or superseded): its stored outcome is the answer. */
+const isSettledTurnRefusal = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
@@ -356,11 +362,17 @@ export const createChatRuntime = ({
   let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** The server refused the latest request for a turn it had already
+   *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
+   *  a generic replay of the same failure stays quiet too; the next request
+   *  clears it. */
+  let settledTurnRefused = false;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
+    settledTurnRefused = false;
     stopBeforeHeaders = "none";
     if (snapshot.stop.status !== "idle") {
       setSnapshot({ stop: { status: "idle" } });
@@ -676,6 +688,22 @@ export const createChatRuntime = ({
       if (isStoppedTurn()) {
         return;
       }
+      // The same holds for a turn the server settled on its own: a
+      // continuation posted after it ended is refused as not owned, and the
+      // page shows what the server stored instead of reporting a failure.
+      if (isSettledTurnRefusal(error)) {
+        if (activeToolResultOperation !== undefined) {
+          activeToolResultOperation.rejection = error;
+        }
+        if (!settledTurnRefused) {
+          settledTurnRefused = true;
+          reloadThread();
+        }
+        return;
+      }
+      if (settledTurnRefused) {
+        return;
+      }
       if (
         activeToolResultOperation !== undefined &&
         isRejectedChatContinuation(error)
@@ -692,6 +720,11 @@ export const createChatRuntime = ({
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
       // reporting its typed cause. A new request clears the error first.
+      if (error === undefined) {
+        settledTurnRefused = false;
+      } else if (settledTurnRefused) {
+        return;
+      }
       if (
         error !== undefined &&
         ((actionAdmissionOutcome(snapshot.error) &&
@@ -706,7 +739,10 @@ export const createChatRuntime = ({
       ) {
         return;
       }
-      if (error === undefined || !isStoppedTurn()) {
+      if (
+        error === undefined ||
+        (!isStoppedTurn() && !isSettledTurnRefusal(error))
+      ) {
         setSnapshot({
           error:
             error === undefined
@@ -1113,6 +1149,16 @@ export const createChatRuntime = ({
                   ? {}
                   : { errorText: result.errorText }),
               });
+              if (
+                operation.rejection !== undefined &&
+                isSettledTurnRefusal(operation.rejection)
+              ) {
+                // The turn had settled: the result was never stored, and the
+                // reload shows the turn as the server ended it.
+                client.setMessagesManually(messagesBeforeResult);
+                setSnapshot({ messages: messagesBeforeResult });
+                return;
+              }
               if (
                 snapshot.error !== undefined &&
                 snapshot.error !== errorBeforeResult

@@ -70,8 +70,9 @@
         "src/lib/__fixtures__/*.ts",
         "src/handlers/case-law/seed-court-weights.ts",
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
-        "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
+        "src/tests/case-law/update-adapter-fixtures.ts",
         "src/tests/load/*.ts",
+        "src/tests/exact-mirror-guard.ts",
         // Passed to Bun by the API test command builder.
         "src/tests/publisher-gate-preload.ts",
         "drizzle.config.ts",
@@ -227,6 +228,14 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/test-kit": {
+      "entry": [
+        "src/index.ts",
+        "src/db-clock.ts",
+        "src/forbid-network.ts",
+        "src/**/*.test.ts"
+      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]

@@ -7,6 +7,7 @@ import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-pub
 
 import { legislationDocuments } from "@/api/db/schema";
 import { projectResolveStatutesResponse } from "@/api/handlers/legislation/catalog-response";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
 import type { WorkAtDateRequest } from "@/api/lib/legal-search/legislation-works-at-date";
 import {
@@ -69,6 +70,7 @@ export const resolveStatutesHandler = async (
   for (const [index, work] of body.works.entries()) {
     const countryRead = readPublicLawCountry(work.country, {
       admitted: PUBLIC_LEGISLATION_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "read") {
       requests.push({
@@ -82,7 +84,13 @@ export const resolveStatutesHandler = async (
 
   const { idByKey, inconsistentKeys, statutes } = await legislationDb(
     async (tx) => {
-      const resolved = await resolveWorksAtDate(tx, requests);
+      // The batch read admits search countries only (above), so it resolves
+      // against the same list.
+      const resolved = await resolveWorksAtDate(
+        tx,
+        requests,
+        legislationCountriesFor("search"),
+      );
       const ids = [...new Set(resolved.idByKey.values())];
 
       return {
@@ -105,6 +113,7 @@ export const resolveStatutesHandler = async (
     items: body.works.map((work, index) => {
       const countryRead = readPublicLawCountry(work.country, {
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
+        surface: "search",
       });
       if (countryRead.kind === "unavailable") {
         return {

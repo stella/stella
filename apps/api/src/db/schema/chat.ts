@@ -376,7 +376,72 @@ export const chatMessages = p.pgTable(
     // message/turn same-thread link declarative without locking chat history.
     p.uniqueIndex("chat_messages_id_thread_uidx").on(table.id, table.threadId),
     p.check("chat_messages_revision_nonnegative", sql`${table.revision} >= 0`),
+    p.check(
+      "chat_messages_content_v3_check",
+      sql`(${table.content} -> 'version') IS NOT DISTINCT FROM '3'::jsonb`,
+    ),
+    p
+      .index("chat_messages_content_v3_pending_idx")
+      .on(table.id)
+      .where(sql`(${table.content} -> 'version') IS DISTINCT FROM '3'::jsonb`),
     ...chatMessagePolicies(),
+  ],
+);
+
+const CHAT_CONTENT_V3_BACKFILL_SOURCES = ["message", "revision"] as const;
+export const CHAT_CONTENT_V3_BACKFILL_OUTCOMES = [
+  "converted",
+  "skipped",
+  "failed",
+  "deleted-concurrently",
+] as const;
+const CHAT_CONTENT_V3_BACKFILL_SOURCE_SQL_VALUES =
+  CHAT_CONTENT_V3_BACKFILL_SOURCES.map((source) => sql.raw(`'${source}'`));
+const CHAT_CONTENT_V3_BACKFILL_OUTCOME_SQL_VALUES =
+  CHAT_CONTENT_V3_BACKFILL_OUTCOMES.map((outcome) => sql.raw(`'${outcome}'`));
+
+/** Owner-only repair receipts retain identifiers and fixed reasons after deletion, never chat content. */
+export const chatContentV3BackfillReceipts = p.pgTable.withRLS(
+  "chat_content_v3_backfill_receipts",
+  {
+    source: p.text({ enum: CHAT_CONTENT_V3_BACKFILL_SOURCES }).notNull(),
+    rowId: p.uuid("row_id").notNull(),
+    messageId: safeUuid<"chatMessage">("message_id").notNull(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    /** Null means the stored value has no recognizable integer version. */
+    fromVersion: p.integer("from_version"),
+    outcome: p.text({ enum: CHAT_CONTENT_V3_BACKFILL_OUTCOMES }).notNull(),
+    reason: p.text().notNull(),
+    recordedAt: timestamptz("recorded_at").defaultNow().notNull(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.source, table.rowId] }),
+    p
+      .foreignKey({
+        name: "chat_content_v3_receipts_org_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p.index("chat_content_v3_receipts_org_idx").on(table.organizationId),
+    p
+      .index("chat_content_v3_backfill_receipts_message_idx")
+      .on(table.messageId),
+    p.check(
+      "chat_content_v3_backfill_receipts_source_check",
+      sql`${table.source} IN (${sql.join(CHAT_CONTENT_V3_BACKFILL_SOURCE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "chat_content_v3_backfill_receipts_outcome_check",
+      sql`${table.outcome} IN (${sql.join(CHAT_CONTENT_V3_BACKFILL_OUTCOME_SQL_VALUES, sql`, `)})`,
+    ),
+    // RLS is forced in the migration; only the owning role passes this policy.
+    p.pgPolicy("chat_content_v3_backfill_receipts_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_content_v3_backfill_receipts'::regclass)`,
+    }),
   ],
 );
 
@@ -418,9 +483,17 @@ export const chatMessageRevisions = p.pgTable(
       .on(table.workspaceId, table.threadId),
     p.index("chat_message_revisions_thread_idx").on(table.threadId),
     p.index("chat_message_revisions_created_by_idx").on(table.createdBy),
+    p
+      .index("chat_message_revisions_content_v3_pending_idx")
+      .on(table.id)
+      .where(sql`(${table.content} -> 'version') IS DISTINCT FROM '3'::jsonb`),
     p.check(
       "chat_message_revisions_revision_nonnegative",
       sql`${table.revision} >= 0`,
+    ),
+    p.check(
+      "chat_message_revisions_content_v3_check",
+      sql`(${table.content} -> 'version') IS NOT DISTINCT FROM '3'::jsonb`,
     ),
     ...chatMessageRevisionPolicies(),
   ],

@@ -167,6 +167,10 @@ export const AI_ERROR_KIND_SHAPES = {
     notAShape:
       "A structured answer its schema rejects (`generateTanStackObjectForRole`); a chat turn carries no schema.",
   },
+  output_moderated: {
+    notAShape:
+      "A text generation the provider filtered (`generateTanStackTextForRole`); a chat turn keeps a `content_filter` answer.",
+  },
   deadline_exceeded: {
     notAShape:
       "A caller's own deadline on an awaited generation (`deadlineMs`); a chat turn is bounded by its lease instead.",

@@ -29,9 +29,9 @@ test("timing expansion admits status-only terminal writes", async () => {
       status text NOT NULL
     );
   `);
-  await db.exec(await migrationSql("20261008160100_chat_turn_active_timing"));
+  await db.exec(await migrationSql("20261016100200_chat_turn_active_timing"));
   await db.exec(
-    await migrationSql("20261008160200_chat_turn_active_timing_validate"),
+    await migrationSql("20261016100300_chat_turn_active_timing_validate"),
   );
   await db.exec("COMMIT");
 

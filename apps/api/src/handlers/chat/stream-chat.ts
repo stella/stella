@@ -181,6 +181,8 @@ import {
   type ChatTool,
   type ChatToolMap,
 } from "@/api/lib/chat/chat-tool-types";
+import { createContextNoticeStamp } from "@/api/lib/chat/context-notice";
+import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
 import {
   guardMcpToolSource,
   guardModelMessages,
@@ -316,6 +318,12 @@ type StreamChatProps = {
   parentRunId?: string | undefined;
   resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
+  /**
+   * What the history `messages` came from left out: set when the thread's
+   * earlier history could not be summarized before the turn. The answer
+   * carries it live and in its stored metadata.
+   */
+  contextNotice?: ChatContextNotice | null | undefined;
   owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
   /**
    * Store the finished turn, and say what its row now holds: the run counts
@@ -484,6 +492,7 @@ export const streamChat = async ({
   parentRunId,
   resume,
   messages: rawMessages,
+  contextNotice: preflightContextNotice,
   owningAssistantMessageId,
   onFinish,
   organizationId,
@@ -709,6 +718,11 @@ export const streamChat = async ({
       : resolvedFallbackModel;
   const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
+  // Set before the turn by the send path's compaction, or during it by a
+  // step's own; the answer carries whichever it has.
+  const contextNotice = createContextNoticeStamp(
+    preflightContextNotice ?? null,
+  );
 
   let servedTurnModel: ChatTurnModel = {
     provider: primaryModel.provider,
@@ -724,6 +738,8 @@ export const streamChat = async ({
         ? deadlineSignal
         : AbortSignal.any([deadlineSignal, run.control.admissionSignal]),
     devModelId: turnModelSelection.modelId,
+    onAttemptStarted: contextNotice.beginAttempt,
+    onHistoryTrimmed: contextNotice.record,
     onModelDispatched: (model) => {
       servedTurnModel = {
         provider: model.provider,
@@ -846,6 +862,7 @@ export const streamChat = async ({
                 ...event.responseMessage,
                 metadata: {
                   ...event.responseMessage.metadata,
+                  ...contextNotice.metadata(),
                   turnModel: servedTurnModel,
                 },
               },
@@ -877,25 +894,27 @@ export const streamChat = async ({
   const output = (async function* () {
     settlement.source = "started";
     const finalChunks: StreamChunk[] = [];
-    for await (const chunk of visibleOutput) {
-      if (
-        settlement.event !== undefined &&
-        (chunk.type === EventType.RUN_FINISHED ||
-          chunk.type === EventType.RUN_ERROR)
-      ) {
+    for await (const visibleChunk of visibleOutput) {
+      for (const chunk of contextNotice.stamp(visibleChunk)) {
         if (
-          chunk.type === EventType.RUN_FINISHED &&
-          chunk.outcome?.type === "interrupt"
+          settlement.event !== undefined &&
+          (chunk.type === EventType.RUN_FINISHED ||
+            chunk.type === EventType.RUN_ERROR)
         ) {
-          settlement.resumeSnapshot = {
-            resumeState: { threadId, runId },
-            pendingInterrupts: chunk.outcome.interrupts,
-          };
+          if (
+            chunk.type === EventType.RUN_FINISHED &&
+            chunk.outcome?.type === "interrupt"
+          ) {
+            settlement.resumeSnapshot = {
+              resumeState: { threadId, runId },
+              pendingInterrupts: chunk.outcome.interrupts,
+            };
+          }
+          finalChunks.push(chunk);
+          continue;
         }
-        finalChunks.push(chunk);
-        continue;
+        yield chunk;
       }
-      yield chunk;
     }
     const terminalEvent = settlement.event;
     if (
@@ -1340,6 +1359,9 @@ export type GuardedChatSurfaces = {
 };
 
 type RunChatAttemptsProps = {
+  /** A model attempt is about to run; only the last one answers. */
+  onAttemptStarted: () => void;
+  onHistoryTrimmed: (notice: ChatContextNotice) => void;
   onModelDispatched: (model: ResolvedTanStackTextModel) => void;
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1373,6 +1395,8 @@ const runChatAttempts = async function* ({
   abortController,
   abortSignal,
   devModelId,
+  onAttemptStarted,
+  onHistoryTrimmed,
   onModelDispatched,
   externalMcpToolSource,
   fallbackModel,
@@ -1402,11 +1426,13 @@ const runChatAttempts = async function* ({
   // incoming message. A normal chat never carries a plan, even when the engine
   // is enabled, so BYOK/model-selected turns keep the chosen adapter.
   onModelDispatched(primaryModel);
+  onAttemptStarted();
   yield* runChatAttempt({
     abortController,
     abortSignal,
     compactionFeature: "chat.step_compaction",
     externalMcpToolSource,
+    onHistoryTrimmed,
     feature: "chat.stream",
     model: primaryModel,
     modelId: devModelId,
@@ -1456,11 +1482,13 @@ const runChatAttempts = async function* ({
 
   const fallbackState = createChatAttemptState();
   onModelDispatched(fallbackModel);
+  onAttemptStarted();
   yield* runChatAttempt({
     abortController,
     abortSignal,
     compactionFeature: "chat.step_compaction_fallback",
     externalMcpToolSource,
+    onHistoryTrimmed,
     feature: "chat.stream_fallback",
     model: fallbackModel,
     modelId: undefined,
@@ -1494,6 +1522,8 @@ type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
   compactionFeature: string;
+  /** A step's compaction left earlier history out of the request. */
+  onHistoryTrimmed: (notice: ChatContextNotice) => void;
   /** Budget lane this turn's consumption settles against. */
   usageLane: UsageEventLane;
   externalMcpToolSource: StellaMcpToolSource | undefined;
@@ -1532,6 +1562,7 @@ const runChatAttempt = async function* ({
   abortController,
   abortSignal,
   compactionFeature,
+  onHistoryTrimmed,
   externalMcpToolSource,
   feature,
   model,
@@ -1645,6 +1676,7 @@ const runChatAttempt = async function* ({
           caching,
           compactionAnalytics,
           compactionFeature,
+          onHistoryTrimmed,
           model,
           modelId,
           organizationId,
@@ -1702,6 +1734,7 @@ const runChatAttempt = async function* ({
         caching,
         compactionAnalytics,
         compactionFeature,
+        onHistoryTrimmed,
         model,
         modelId,
         organizationId,
@@ -1787,6 +1820,7 @@ type ChatRuntimeMiddlewareProps = {
   caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
   compactionFeature: string;
+  onHistoryTrimmed: (notice: ChatContextNotice) => void;
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
@@ -1806,6 +1840,7 @@ const createChatRuntimeMiddleware = ({
   caching,
   compactionAnalytics,
   compactionFeature,
+  onHistoryTrimmed,
   model,
   modelId,
   organizationId,
@@ -1900,9 +1935,12 @@ const createChatRuntimeMiddleware = ({
       if (Result.isError(compactedMessages)) {
         throw compactedMessages.error;
       }
+      if (compactedMessages.value.notice !== null) {
+        onHistoryTrimmed(compactedMessages.value.notice);
+      }
 
       const guardedCompaction = guardedCompactedMessages({
-        compacted: compactedMessages.value,
+        compacted: compactedMessages.value.messages,
         previous: config.messages,
         tenantWorkspaceIds,
       });

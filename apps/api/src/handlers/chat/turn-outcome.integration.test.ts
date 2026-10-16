@@ -17,7 +17,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_TURN_INTERACTION_TYPES } from "@/api/handlers/chat/chat-turn-state";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
@@ -656,9 +656,8 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   });
   await testDb.insert(chatMessages).values(
     TRANSCRIPT.map((text, index) => ({
-      content: toChatMessageContent({
+      content: toPersistedChatMessageContentV3({
         data: [{ content: text, type: "text" }],
-        version: 2,
       }),
       createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
