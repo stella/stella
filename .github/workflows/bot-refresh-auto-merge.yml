@@ -125,10 +125,11 @@ jobs:
 
       - name: Setup Bun for removal verification
         if: steps.refresh.outputs.dated == 'true'
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        # Privileged workflow_run jobs neither read nor write the Actions cache.
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
-          save: ${{ github.ref == 'refs/heads/main' }}
+          no-cache: true
 
       - name: Install trusted verifier dependencies
         if: steps.refresh.outputs.dated == 'true'
