@@ -68,6 +68,25 @@ const LABOUR_CODE_SUCCESSION = {
 export const SK_PROFILE = {
   jurisdiction: "SVK",
   language: "sk",
+  citationTerms: {
+    section: "§",
+    article: "čl.",
+    subsection: "ods.",
+    letter: "písm.",
+    point: "bod",
+  },
+  versionYearLeadIns: [
+    "roku",
+    "rok",
+    "r.",
+    "znení",
+    "účinnom",
+    "stav k",
+    "k",
+    "od",
+    "do",
+    "z",
+  ],
   versionGrammar: {
     dateStatements: [
       { prefix: "v znení účinnom do", relation: "until" },
