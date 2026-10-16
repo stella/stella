@@ -369,14 +369,26 @@ const seconds = (value: number) => `${value.toFixed(1)} s`;
 const mebibytes = (bytes: number | undefined) =>
   bytes === undefined ? "" : String(Math.round(bytes / 1_048_576));
 
+// Markdown table cell: a pipe would end the cell and a line break the row.
+const cell = (value: string) =>
+  value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("|", "\\|")
+    .replaceAll(/\r?\n/gu, " ");
+
 export const summaryTable = (results: readonly CheckResult[]) =>
   [
     "| Check | Result | Seconds | Peak RSS (MiB) |",
     "| --- | --- | ---: | ---: |",
-    ...results.map(
-      (result) =>
-        `| ${result.name.replaceAll("|", "\\|")} | ${result.outcome === "failure" ? `failure: ${result.detail}` : result.outcome} | ${result.outcome === "skipped" ? "" : result.seconds.toFixed(1)} | ${mebibytes(result.maxRssBytes)} |`,
-    ),
+    ...results.map((result) => {
+      const outcome =
+        result.outcome === "failure"
+          ? `failure: ${result.detail}`
+          : result.outcome;
+      const elapsed =
+        result.outcome === "skipped" ? "" : result.seconds.toFixed(1);
+      return `| ${cell(result.name)} | ${cell(outcome)} | ${elapsed} | ${mebibytes(result.maxRssBytes)} |`;
+    }),
   ].join("\n");
 
 // One synchronous writer: a large asynchronous stdout write could otherwise

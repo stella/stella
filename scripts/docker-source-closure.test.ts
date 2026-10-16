@@ -28,6 +28,7 @@ import {
 } from "./docker-source-closure";
 import { GENERATORS } from "./generated-files";
 import { lexShell, parseBunFlags, programWords } from "./install-free-ci";
+import { workflowJobSteps } from "./workflow-steps";
 
 const root = mkdtempSync(path.join(tmpdir(), "docker-source-fixtures-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -1328,29 +1329,26 @@ describe("Docker source closure", () => {
   }, 30_000);
 
   test("runs after source hydration in the installed light job with a fixed total budget", () => {
-    const workflow = v.parse(
-      v.object({
-        jobs: v.object({
-          "ci-checks-rest": v.object({
-            steps: v.array(
-              v.object({
-                name: v.optional(v.string()),
-                run: v.optional(v.string()),
-                if: v.optional(v.string()),
-                "timeout-minutes": v.optional(v.number()),
-              }),
-            ),
-          }),
+    // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+    const steps = v.parse(
+      v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          run: v.optional(v.string()),
+          if: v.optional(v.string()),
+          "timeout-minutes": v.optional(v.number()),
         }),
-      }),
-      Bun.YAML.parse(
-        readFileSync(
-          new URL("../.github/workflows/ci.yml", import.meta.url),
-          "utf-8",
+      ),
+      workflowJobSteps(
+        Bun.YAML.parse(
+          readFileSync(
+            new URL("../.github/workflows/ci.yml", import.meta.url),
+            "utf-8",
+          ),
         ),
+        "ci-checks-rest",
       ),
     );
-    const steps = workflow.jobs["ci-checks-rest"].steps;
     const restore = steps.findIndex((step) =>
       step.run?.includes("ci-generated-sources.ts restore"),
     );

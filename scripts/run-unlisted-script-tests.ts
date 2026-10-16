@@ -17,10 +17,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  CHECK_POOL_JOBS,
-  checkPoolRegistryPath,
-} from "./ci-check-pool-registry";
+import { readCiCheckCommandText } from "./ci-check-pool-registry";
 
 type ScriptTestArguments =
   | { readonly type: "valid"; readonly timeout: number | undefined }
@@ -129,7 +126,6 @@ export const unlistedTestCommands = ({
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
-const WORKFLOW = ".github/workflows/ci.yml";
 
 /** Workflow text minus comment lines: a mention in a comment runs nothing. */
 const withoutComments = (workflowText: string): string =>
@@ -189,12 +185,7 @@ if (import.meta.main) {
     process.exitCode = 2;
   } else {
     // Pooled checks run their commands from the check pool registries.
-    const workflowText = [
-      WORKFLOW,
-      ...CHECK_POOL_JOBS.map((job) => checkPoolRegistryPath(job)),
-    ]
-      .map((file) => readFileSync(path.join(REPO_ROOT, file), "utf-8"))
-      .join("\n");
+    const workflowText = readCiCheckCommandText(REPO_ROOT);
     const unlisted = unlistedTests(
       scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
       workflowText,

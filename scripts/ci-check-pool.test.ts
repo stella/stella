@@ -12,6 +12,7 @@ import {
   processLauncher,
   resolveEnv,
   runChecks,
+  summaryTable,
   type CheckResult,
   type Launched,
   type PlannedCheck,
@@ -282,4 +283,30 @@ test("flattening steps that already carry their pooled checks adds none", () => 
       steps.map(({ name }) => name),
     );
   }
+});
+
+test("the summary table keeps one row per check whatever a failure says", () => {
+  const table = summaryTable([
+    {
+      name: "A | B",
+      id: undefined,
+      outcome: "failure",
+      detail: "exit code 1\nsee a|b \\ c",
+      seconds: 1.25,
+      maxRssBytes: 2 * 1_048_576,
+    },
+    {
+      name: "C",
+      id: undefined,
+      outcome: "skipped",
+      detail: "condition false",
+      seconds: 0,
+      maxRssBytes: undefined,
+    },
+  ]).split("\n");
+  expect(table).toHaveLength(4);
+  expect(table[2]).toBe(
+    String.raw`| A \| B | failure: exit code 1 see a\|b \\ c | 1.3 | 2 |`,
+  );
+  expect(table[3]).toBe("| C | skipped |  |  |");
 });

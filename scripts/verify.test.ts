@@ -14,6 +14,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import {
+  CHECK_POOL_JOBS,
+  checkPoolRegistryPath,
+} from "./ci-check-pool-registry";
 import { parseVerifyArgs, runAutofixSteps, runVerifySteps } from "./verify";
 import {
   admitLocal,
@@ -405,6 +409,7 @@ for (const conflict of [false, true]) {
         "verify-workflow.ts",
         "verify-error.ts",
         "workflow-steps.ts",
+        "ci-check-pool-registry.ts",
       ]) {
         copyFileSync(
           path.join(root, "scripts", file),
@@ -739,6 +744,7 @@ exit 0
             "verify-workflow.ts",
             "verify-error.ts",
             "workflow-steps.ts",
+            "ci-check-pool-registry.ts",
             "verify.sh",
             "autofix-local.sh",
             "prepare-typecheck-base.sh",
@@ -756,6 +762,16 @@ exit 0
                 path.join(root, workflow),
                 path.join(fixture, workflow),
               );
+              // The CI workflow runs its pooled checks from these registries.
+              mkdirSync(path.join(fixture, ".github/ci-checks"), {
+                recursive: true,
+              });
+              for (const job of CHECK_POOL_JOBS) {
+                copyFileSync(
+                  path.join(root, checkPoolRegistryPath(job)),
+                  path.join(fixture, checkPoolRegistryPath(job)),
+                );
+              }
               continue;
             }
             writeFileSync(

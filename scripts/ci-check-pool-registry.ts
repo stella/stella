@@ -144,3 +144,12 @@ export const readCheckPool = (
 /** Where the pool leaves per-check outcomes for the receipt recorder. */
 export const checkPoolResultsPath = (job: CheckPoolJob, runnerTemp: string) =>
   path.join(runnerTemp, `ci-check-pool-${job}`, "results.json");
+
+/**
+ * The CI workflow text followed by every check pool registry: the commands
+ * the CI checks workflow runs, for guards that look for a command's text.
+ */
+export const readCiCheckCommandText = (root: string = ROOT) =>
+  [".github/workflows/ci.yml", ...CHECK_POOL_JOBS.map(checkPoolRegistryPath)]
+    .map((file) => readFileSync(path.join(root, file), "utf-8"))
+    .join("\n");

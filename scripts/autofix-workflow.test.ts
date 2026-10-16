@@ -605,21 +605,27 @@ describe("changed-file autofix boundary", () => {
 });
 
 test("type-aware autofix fixtures require a successful dependency install", async () => {
-  const ci = await Bun.file(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-  ).text();
-  const start = ci.indexOf("      - name: Test type-aware autofix\n");
-  expect(start).toBeGreaterThanOrEqual(0);
-  const step = ci.slice(start, ci.indexOf("\n      - name:", start + 1));
-  expect(step).toContain("steps.install.outcome == 'success'");
-  expect(step).toContain(
+  // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+      ).text(),
+    ),
+    "ci-checks-rest",
+  );
+  const named = (name: string) => {
+    const step = steps.find((candidate) => candidate["name"] === name);
+    expect(step, name).toBeDefined();
+    return { condition: String(step?.["if"]), run: String(step?.["run"]) };
+  };
+  const step = named("Test type-aware autofix");
+  expect(step.condition).toContain("steps.install.outcome == 'success'");
+  expect(step.condition).toContain(
     "needs.ci-plan.outputs.package_checks_required == 'true'",
   );
-  expect(step).toContain("bun test scripts/autofix-type-aware.test.ts");
-  const invariants = ci.slice(
-    ci.indexOf("      - name: Test CI workflow invariants\n"),
-    start,
-  );
+  expect(step.run).toContain("bun test scripts/autofix-type-aware.test.ts");
+  const invariants = named("Test CI workflow invariants").run;
   expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",
