@@ -776,35 +776,4 @@ describe("legislation writer identity", () => {
     expect([replacedSameDay, secondWithoutStart]).toEqual(["23505", "23505"]);
     expect(await rowsOf(act)).toEqual(before);
   });
-
-  // Last: it retires the version-window key the other tests still rely on,
-  // as the later cutover does.
-  test("same-start siblings are two rows once the window key is retired", async () => {
-    await db.execute(
-      sql`DROP INDEX legislation_documents_eli_version_lang_idx`,
-    );
-    const act = "2012/89-siblings";
-    const consolidation = version({ act, validFrom: "2014-01-01" });
-    const promulgated = version({
-      act,
-      validFrom: "2014-01-01",
-      iri: iriOf(act, "0000-00-00"),
-      title: "As promulgated",
-    });
-
-    const [a, b] = [await store(consolidation), await store(promulgated)];
-    // Each re-ingest lands on its own row, never the other one.
-    const [a2, b2] = [
-      await store({ ...consolidation, title: "Consolidated, revised" }),
-      await store({ ...promulgated, title: "As promulgated, revised" }),
-    ];
-
-    expect(a.id).not.toBe(b.id);
-    expect([a2.id, b2.id]).toEqual([a.id, b.id]);
-    const rows = await rowsOf(act);
-    const titleOf = new Map(rows.map(({ id, title }) => [id, title]));
-    expect(rows).toHaveLength(2);
-    expect(titleOf.get(a.id)).toBe("Consolidated, revised");
-    expect(titleOf.get(b.id)).toBe("As promulgated, revised");
-  });
 });

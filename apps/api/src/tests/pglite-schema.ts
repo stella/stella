@@ -781,11 +781,21 @@ export const installPgliteLegislationExpressionIdentity = async (
 ): Promise<void> => {
   const statements = readMigrationStatements(
     LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
-  ).filter((statement) =>
-    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
-      executableSql(statement).startsWith(prefix),
-    ),
-  );
+  )
+    .concat(
+      readMigrationStatements(
+        nodePath.join(
+          DRIZZLE_DIR,
+          "20261016203000_legislation_publisher_identity",
+          "migration.sql",
+        ),
+      ),
+    )
+    .filter((statement) =>
+      LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
+        executableSql(statement).startsWith(prefix),
+      ),
+    );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
