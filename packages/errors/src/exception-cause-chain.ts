@@ -1,4 +1,4 @@
-// parser-output-unchanged: bounded error class projection affects exception grouping only.
+// parser-output-unchanged: class and positional discriminator projections affect exception grouping only.
 import { Result } from "better-result";
 
 export const MAX_EXCEPTION_CAUSE_DEPTH = 6;
@@ -41,3 +41,33 @@ export const exceptionCauseChainIdentity = <TNode>({
   }
   return classes.length === 0 ? ["UnknownError"] : classes;
 };
+
+export type ExceptionIdentityNode = {
+  type: string;
+  discriminators?: Readonly<Record<string, string>> | undefined;
+};
+
+type ExceptionDiscriminatorEntry = readonly [
+  index: number,
+  type: string,
+  field: string,
+  value: string,
+];
+
+/** Preserve causal position before canonicalizing each node's declared fields. */
+export const exceptionDiscriminatorIdentity = (
+  nodes: readonly ExceptionIdentityNode[],
+): readonly ExceptionDiscriminatorEntry[] =>
+  nodes.slice(0, MAX_EXCEPTION_CAUSE_DEPTH).flatMap((node, index) =>
+    Object.entries(node.discriminators ?? {})
+      .toSorted(([left], [right]) => {
+        if (left === right) {
+          return 0;
+        }
+        return left < right ? -1 : 1;
+      })
+      .map(
+        ([field, value]) =>
+          [index, classIdentity(node.type), field, value] as const,
+      ),
+  );

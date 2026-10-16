@@ -2,13 +2,18 @@ import { Result } from "better-result";
 
 import {
   exceptionCauseChainIdentity,
+  exceptionDiscriminatorIdentity,
   MAX_EXCEPTION_CAUSE_DEPTH,
 } from "@stll/errors/exception-cause-chain";
+import type { ExceptionIdentityNode } from "@stll/errors/exception-cause-chain";
 import type { ExceptionScope } from "@stll/errors/exception-scope";
 import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
 import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
 
-import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
+import {
+  telemetryErrorType,
+  normalizeTelemetryErrorTypeName,
+} from "@/lib/analytics/error-diagnostics";
 
 // Capture owners declare these keys in source. Engine-inferred symbols can
 // contain computed user data and minified names, so they are never identity.
@@ -20,10 +25,6 @@ export const isExceptionFingerprintKey = (
   typeof value === "string" &&
   /^[A-Za-z][A-Za-z0-9_.-]{0,159}:[A-Za-z0-9_.%~-]{1,511}$/u.test(value);
 
-type FingerprintEntry = {
-  type: string;
-};
-
 /** Validated API response classifications; response text never enters identity. */
 export type ApiErrorIdentity = {
   status: number;
@@ -31,11 +32,10 @@ export type ApiErrorIdentity = {
 };
 
 type ExceptionFingerprintInput = {
-  entries: readonly FingerprintEntry[];
+  entries: readonly ExceptionIdentityNode[];
   key: ExceptionFingerprintKey;
   scopeIdentity: ExceptionScopeFingerprint;
   http?: ApiErrorIdentity | undefined;
-  fields?: Readonly<Record<string, string>> | undefined;
 };
 
 // Every causal class participates; source positions and messages do not.
@@ -44,7 +44,6 @@ export const fingerprintExceptionEvent = ({
   key,
   scopeIdentity,
   http,
-  fields,
 }: ExceptionFingerprintInput): string =>
   JSON.stringify([
     exceptionCauseChainIdentity({
@@ -58,12 +57,7 @@ export const fingerprintExceptionEvent = ({
     scopeIdentity,
     http?.status ?? null,
     http?.code ?? null,
-    Object.entries(fields ?? {}).toSorted(([left], [right]) => {
-      if (left === right) {
-        return 0;
-      }
-      return left < right ? -1 : 1;
-    }),
+    exceptionDiscriminatorIdentity(entries),
   ]);
 
 /** Read classifications before stack redaction removes error objects and causes. */
@@ -73,7 +67,6 @@ export const capturedExceptionIdentity = (error: unknown) =>
   Result.try(() => {
     let current = error;
     const seen = new Set<Error>();
-    const fields = new Map<string, string>();
     const reads = new WeakMap<object, Map<string, unknown>>();
     const read = (value: object, key: string): unknown => {
       let cached = reads.get(value);
@@ -88,7 +81,7 @@ export const capturedExceptionIdentity = (error: unknown) =>
       cached.set(key, result);
       return result;
     };
-    const types: string[] = [];
+    const entries: ExceptionIdentityNode[] = [];
     while (
       current instanceof Error &&
       !seen.has(current) &&
@@ -96,7 +89,6 @@ export const capturedExceptionIdentity = (error: unknown) =>
     ) {
       seen.add(current);
       const type = telemetryErrorType(current);
-      types.push(type);
       const prototypes: object[] = [];
       let prototype: unknown = Object.getPrototypeOf(current);
       while (
@@ -112,20 +104,18 @@ export const capturedExceptionIdentity = (error: unknown) =>
         prototypes,
         read,
       });
-      for (const [field, value] of Object.entries(declared ?? {})) {
-        fields.set(`${type}.${field}`, value);
-      }
+      entries.push({ type, discriminators: declared ?? {} });
       current = current.cause;
     }
     return {
-      types: types.length > 0 ? types : [telemetryErrorType(error)],
-      fields: Object.fromEntries(fields),
+      entries:
+        entries.length > 0
+          ? entries
+          : [{ type: telemetryErrorType(error), discriminators: {} }],
     };
-  }).unwrapOr({ types: ["UnknownError"], fields: {} });
+  }).unwrapOr({ entries: [{ type: "UnknownError", discriminators: {} }] });
 
-export const sanitizeFingerprintFields = (
-  value: unknown,
-): Record<string, string> =>
+const sanitizeDiscriminators = (value: unknown): Record<string, string> =>
   Result.try(() => {
     const fields = new Map<string, string>();
     if (typeof value !== "object" || value === null) {
@@ -133,7 +123,7 @@ export const sanitizeFingerprintFields = (
     }
     for (const [key, field] of Object.entries(value)) {
       if (
-        /^[A-Za-z][A-Za-z0-9_.-]{0,159}\.(?:reason|phase|stage|termination)(?:\.(?:reason|phase|stage|termination))*$/u.test(
+        /^(?:reason|phase|stage|termination)(?:\.(?:reason|phase|stage|termination))*$/u.test(
           key,
         ) &&
         typeof field === "string" &&
@@ -144,6 +134,32 @@ export const sanitizeFingerprintFields = (
     }
     return Object.fromEntries(fields);
   }).unwrapOr({});
+
+/** Only source-declared per-node classifications cross the SDK boundary. */
+export const sanitizeExceptionIdentityEntries = (
+  value: unknown,
+): ExceptionIdentityNode[] | undefined =>
+  Result.try(() => {
+    if (!Array.isArray(value) || value.length === 0) {
+      return undefined;
+    }
+    return value.slice(0, MAX_EXCEPTION_CAUSE_DEPTH).map((entry: unknown) =>
+      Result.try(() => {
+        if (typeof entry !== "object" || entry === null) {
+          return { type: "UnknownError", discriminators: {} };
+        }
+        const type: unknown = Reflect.get(entry, "type");
+        return {
+          type: normalizeTelemetryErrorTypeName(
+            typeof type === "string" ? type : "",
+          ),
+          discriminators: sanitizeDiscriminators(
+            Reflect.get(entry, "discriminators"),
+          ),
+        };
+      }).unwrapOr({ type: "UnknownError", discriminators: {} }),
+    );
+  }).unwrapOr(undefined);
 
 /** Route templates come from the router, before dynamic parameters resolve. */
 export const routeExceptionFingerprintKey = (

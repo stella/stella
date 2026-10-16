@@ -1,5 +1,8 @@
 import { exceptionScopeIdentity, type ExceptionScope } from "@stll/errors";
-import { exceptionCauseChainIdentity } from "@stll/errors/exception-cause-chain";
+import {
+  exceptionCauseChainIdentity,
+  exceptionDiscriminatorIdentity,
+} from "@stll/errors/exception-cause-chain";
 
 import { identityFields } from "@/api/lib/observability/failure";
 import type { FailureEvidence } from "@/api/lib/observability/failure-evidence";
@@ -23,12 +26,16 @@ export const exceptionFingerprint = (
   { fingerprintKey, scope, inheritedScopes = [] }: ExceptionFingerprintOptions,
 ): string => {
   const fields = identityFields(evidence);
+  const nodes = evidence.nodes.map(({ tag, discriminators }) => ({
+    type: tag,
+    discriminators,
+  }));
   return JSON.stringify([
     exceptionCauseChainIdentity({
       root: 0,
       readNode: (index) => ({
-        type: evidence.nodes.at(index)?.tag ?? "UnknownError",
-        cause: index + 1 < evidence.nodes.length ? index + 1 : undefined,
+        type: nodes.at(index)?.type ?? "UnknownError",
+        cause: index + 1 < nodes.length ? index + 1 : undefined,
       }),
     }),
     fingerprintKey,
@@ -37,12 +44,6 @@ export const exceptionFingerprint = (
     ].toSorted(),
     fields["error.code"] ?? "",
     fields["error.cause.pg_code"] ?? "",
-    evidence.nodes
-      .flatMap((node) =>
-        Object.entries(node.discriminators ?? {}).map(([field, value]) =>
-          JSON.stringify([node.tag, field, value]),
-        ),
-      )
-      .toSorted(),
+    exceptionDiscriminatorIdentity(nodes),
   ]);
 };

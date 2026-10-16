@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/analytics/capture";
 import { setAnalyticsForTesting } from "@/api/lib/analytics/client";
 import {
+  SandboxError,
   extractionWorkerErrorCode,
   ExtractionWorkerError,
   type ExtractionWorkerTermination,
@@ -172,6 +173,30 @@ describe("captureError issue grouping", () => {
     );
     captureError(
       new UnhandledException({ cause: new ReferenceError("failure") }),
+      options,
+    );
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties.$exception_fingerprint).not.toBe(
+      captured.at(1)?.properties.$exception_fingerprint,
+    );
+  });
+
+  test("reversed nested sandbox reasons emit separate captures before suppression", () => {
+    const options = handlerErrorContext("sandbox.execute");
+    captureError(
+      new SandboxError({
+        message: "failure",
+        reason: "runtime",
+        cause: new SandboxError({ message: "failure", reason: "timeout" }),
+      }),
+      options,
+    );
+    captureError(
+      new SandboxError({
+        message: "failure",
+        reason: "timeout",
+        cause: new SandboxError({ message: "failure", reason: "runtime" }),
+      }),
       options,
     );
     expect(captured).toHaveLength(2);

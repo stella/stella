@@ -139,9 +139,12 @@ describe("stable exception identity", () => {
 });
 
 class ClassifiedError extends Error {
-  readonly reason: "decode" | "encode";
-  constructor(reason: "decode" | "encode") {
-    super("Private text");
+  readonly reason: "decode" | "encode" | "runtime" | "timeout";
+  constructor(
+    reason: "decode" | "encode" | "runtime" | "timeout",
+    cause?: Error,
+  ) {
+    super("Private text", { cause });
     this.name = "ClassifiedError";
     this.reason = reason;
   }
@@ -152,16 +155,14 @@ test("registered finite reasons split identities through reporter wrappers", () 
   const decode = new ClassifiedError("decode");
   const encode = new ClassifiedError("encode");
   const wrapped = new Error("Private wrapper", { cause: decode });
-  expect(capturedExceptionIdentity(wrapped).types).toEqual([
-    "Error",
-    "ClassifiedError",
-  ]);
+  expect(
+    capturedExceptionIdentity(wrapped).entries.map((entry) => entry.type),
+  ).toEqual(["Error", "ClassifiedError"]);
   const identify = (error: unknown) => {
-    const { types, fields } = capturedExceptionIdentity(error);
+    const { entries } = capturedExceptionIdentity(error);
     return fingerprintExceptionEvent({
       ...fixture,
-      entries: types.map((type) => ({ type })),
-      fields,
+      entries,
     });
   };
   expect(identify(decode)).not.toBe(identify(encode));
@@ -176,8 +177,7 @@ test("throwing error accessors cannot interrupt capture identity", () => {
     },
   });
   expect(capturedExceptionIdentity(error)).toEqual({
-    types: ["UnknownError"],
-    fields: {},
+    entries: [{ type: "UnknownError", discriminators: {} }],
   });
 });
 
@@ -302,26 +302,36 @@ test("every bounded causal class position participates in identity", () => {
     "every bounded causal class position participates in identity",
     fc.property(
       fc.constantFrom(...chain.keys()),
-      fc.boolean(),
-      (position, changeScope) => {
+      fc.constantFrom("class", "scope", "discriminator"),
+      (position, change) => {
         const changed = chain.map((type, index) => ({
-          type: index === position && !changeScope ? "TypeError" : type,
+          type: index === position && change === "class" ? "TypeError" : type,
+          discriminators: {
+            reason:
+              index === position && change === "discriminator"
+                ? "timeout"
+                : "runtime",
+          },
         }));
         expect(
           fingerprintExceptionEvent({
             ...fixture,
-            entries: chain.map((type) => ({ type })),
+            entries: chain.map((type) => ({
+              type,
+              discriminators: { reason: "runtime" },
+            })),
           }),
         ).not.toBe(
           fingerprintExceptionEvent({
             ...fixture,
             entries: changed,
-            scopeIdentity: changeScope
-              ? fingerprintExceptionScope({
-                  type: "handler",
-                  handlerId: "different.owner",
-                })
-              : fixture.scopeIdentity,
+            scopeIdentity:
+              change === "scope"
+                ? fingerprintExceptionScope({
+                    type: "handler",
+                    handlerId: "different.owner",
+                  })
+                : fixture.scopeIdentity,
           }),
         );
       },
@@ -331,11 +341,10 @@ test("every bounded causal class position participates in identity", () => {
 
 test("wrapped native cause classes remain distinct without messages or positions", () => {
   const identify = (error: Error) => {
-    const { types, fields } = capturedExceptionIdentity(error);
+    const { entries } = capturedExceptionIdentity(error);
     return fingerprintExceptionEvent({
       ...fixture,
-      entries: types.map((type) => ({ type })),
-      fields,
+      entries,
     });
   };
   expect(
@@ -355,8 +364,26 @@ test("captured causal class sequences terminate at repeated error objects", () =
   const outer = new TypeError("private outer");
   const inner = new ReferenceError("private inner", { cause: outer });
   outer.cause = inner;
-  expect(capturedExceptionIdentity(outer).types).toEqual([
-    "TypeError",
-    "ReferenceError",
-  ]);
+  expect(
+    capturedExceptionIdentity(outer).entries.map((entry) => entry.type),
+  ).toEqual(["TypeError", "ReferenceError"]);
+});
+
+test("same-class reason positions survive repeated outer causes", () => {
+  const first = new ClassifiedError(
+    "runtime",
+    new ClassifiedError("timeout", new ClassifiedError("decode")),
+  );
+  const swapped = new ClassifiedError(
+    "timeout",
+    new ClassifiedError("runtime", new ClassifiedError("decode")),
+  );
+  const before = capturedExceptionIdentity(first);
+  const after = capturedExceptionIdentity(swapped);
+  expect(
+    before.entries.map((entry) => entry.discriminators?.["reason"]),
+  ).toEqual(["runtime", "timeout", "decode"]);
+  expect(fingerprintExceptionEvent({ ...fixture, ...before })).not.toBe(
+    fingerprintExceptionEvent({ ...fixture, ...after }),
+  );
 });

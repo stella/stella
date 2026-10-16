@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   exceptionCauseChainIdentity,
+  exceptionDiscriminatorIdentity,
   MAX_EXCEPTION_CAUSE_DEPTH,
 } from "./exception-cause-chain";
 
@@ -85,4 +86,61 @@ test("cause-chain identity excludes non-class text and handles absent errors", (
       readNode,
     }),
   ).toEqual(["UnknownError"]);
+});
+
+test("discriminator identity distinguishes equal bags at different cause positions", () => {
+  const forward = [
+    { type: "SandboxError", discriminators: { reason: "runtime" } },
+    { type: "SandboxError", discriminators: { reason: "timeout" } },
+  ];
+  expect(exceptionDiscriminatorIdentity(forward)).toEqual([
+    [0, "SandboxError", "reason", "runtime"],
+    [1, "SandboxError", "reason", "timeout"],
+  ]);
+  expect(exceptionDiscriminatorIdentity(forward)).not.toEqual(
+    exceptionDiscriminatorIdentity(forward.toReversed()),
+  );
+});
+
+test("discriminator identity keeps positions of nodes without declared fields", () => {
+  expect(
+    exceptionDiscriminatorIdentity([
+      { type: "Error" },
+      { type: "SandboxError", discriminators: { reason: "timeout" } },
+    ]),
+  ).toEqual([[1, "SandboxError", "reason", "timeout"]]);
+});
+
+test("discriminator identity canonicalizes field order within each node", () => {
+  expect(
+    exceptionDiscriminatorIdentity([
+      {
+        type: "SandboxError",
+        discriminators: { reason: "runtime", phase: "execute" },
+      },
+    ]),
+  ).toEqual(
+    exceptionDiscriminatorIdentity([
+      {
+        type: "SandboxError",
+        discriminators: { phase: "execute", reason: "runtime" },
+      },
+    ]),
+  );
+});
+
+test("discriminator identity never reads fields beyond the cause depth bound", () => {
+  let tailReads = 0;
+  const tail = {
+    type: "SandboxError",
+    get discriminators() {
+      tailReads += 1;
+      return { reason: "timeout" };
+    },
+  };
+  const nodes = Array.from({ length: MAX_EXCEPTION_CAUSE_DEPTH }, () => ({
+    type: "Error",
+  }));
+  expect(exceptionDiscriminatorIdentity([...nodes, tail])).toEqual([]);
+  expect(tailReads).toBe(0);
 });

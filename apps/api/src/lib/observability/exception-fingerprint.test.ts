@@ -136,9 +136,44 @@ const locatedChain = (
   return cause;
 };
 
-test("scope or cause-class differences survive line shifts and rebuilds", () => {
+const locatedSandboxChain = (
+  reasons: SandboxError["reason"][],
+  location: { line: number; chunk: string },
+) => {
+  let cause: SandboxError | undefined;
+  for (const reason of reasons.toReversed()) {
+    const error = new SandboxError({ message: "failure", reason, cause });
+    error.stack = `SandboxError: failure\n    at owner (/app/${location.chunk}.js:${location.line}:51)`;
+    cause = error;
+  }
+  return cause;
+};
+
+test("same-class nested reasons retain their cause-chain positions", () => {
+  const options = {
+    fingerprintKey: "sandbox.execute",
+    scope: { type: "handler", handlerId: "sandbox.execute" },
+  } as const;
+  const first = readEvidence(
+    locatedSandboxChain(["runtime", "timeout"], { line: 10, chunk: "before" }),
+  );
+  const reversed = readEvidence(
+    locatedSandboxChain(["timeout", "runtime"], { line: 10, chunk: "before" }),
+  );
+  expect(first.nodes.map((node) => node.tag)).toEqual(
+    reversed.nodes.map((node) => node.tag),
+  );
+  expect(first.nodes.map((node) => node.discriminators)).not.toEqual(
+    reversed.nodes.map((node) => node.discriminators),
+  );
+  expect(exceptionFingerprint(first, options)).not.toBe(
+    exceptionFingerprint(reversed, options),
+  );
+});
+
+test("scope, cause class, or discriminator positions survive line shifts and rebuilds", () => {
   assertProperty(
-    "scope or cause-class differences survive line shifts and rebuilds",
+    "scope, cause class, or discriminator positions survive line shifts and rebuilds",
     fc.property(
       scopeArbitrary,
       scopeArbitrary,
@@ -148,7 +183,13 @@ test("scope or cause-class differences survive line shifts and rebuilds", () => 
       }),
       fc.nat(),
       errorClassArbitrary,
-      fc.constantFrom("scope", "cause", "both"),
+      fc.constantFrom(
+        "scope",
+        "cause",
+        "both",
+        "discriminator",
+        "swapped-discriminators",
+      ),
       fc.nat({ max: 1_000_000 }),
       fc.uuid(),
       (
@@ -162,20 +203,51 @@ test("scope or cause-class differences survive line shifts and rebuilds", () => 
         chunk,
       ) => {
         fc.pre(JSON.stringify(left) !== JSON.stringify(right));
+        fc.pre(difference !== "swapped-discriminators" || classes.length > 1);
         const changedIndex = position % classes.length;
         fc.pre(classes.at(changedIndex) !== replacement);
         const otherClasses = classes.map((name, index) =>
-          difference !== "scope" && index === changedIndex ? replacement : name,
+          (difference === "cause" || difference === "both") &&
+          index === changedIndex
+            ? replacement
+            : name,
         );
-        const otherScope = difference === "cause" ? left : right;
+        const otherScope =
+          difference === "scope" || difference === "both" ? right : left;
+        const reasons = classes.map((_, index) =>
+          index === changedIndex ? "timeout" : "runtime",
+        );
+        const otherReasons = reasons.map((reason, index) => {
+          if (difference === "discriminator" && index === changedIndex) {
+            return "transpile";
+          }
+          if (difference === "swapped-discriminators") {
+            if (index === changedIndex) {
+              return "runtime";
+            }
+            if (index === (changedIndex + 1) % classes.length) {
+              return "timeout";
+            }
+          }
+          return reason;
+        });
+        const discriminatorDifference =
+          difference === "discriminator" ||
+          difference === "swapped-discriminators";
         const evidence = readEvidence(
-          locatedChain(classes, { line: 10, chunk: "before" }),
+          discriminatorDifference
+            ? locatedSandboxChain(reasons, { line: 10, chunk: "before" })
+            : locatedChain(classes, { line: 10, chunk: "before" }),
         );
         const other = readEvidence(
-          locatedChain(otherClasses, { line: 10, chunk: "before" }),
+          discriminatorDifference
+            ? locatedSandboxChain(otherReasons, { line: 10, chunk: "before" })
+            : locatedChain(otherClasses, { line: 10, chunk: "before" }),
         );
         const moved = readEvidence(
-          locatedChain(classes, { line: 11 + shift, chunk }),
+          discriminatorDifference
+            ? locatedSandboxChain(reasons, { line: 11 + shift, chunk })
+            : locatedChain(classes, { line: 11 + shift, chunk }),
         );
         const fingerprintKey = "shared.reportFailure";
         const first = exceptionFingerprint(evidence, {
