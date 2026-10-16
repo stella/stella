@@ -453,6 +453,89 @@ if (!databaseUrl || !runPostgresTests) {
       20_000,
     );
 
+    test("matter deletion lets a matter-first path read the deleting member without a deadlock", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: matterFirstDb } = openClient({
+          max: 1,
+          connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+        });
+        const { db: deletionDb } = openClient({
+          max: 1,
+          connection: { lock_timeout: 5000, statement_timeout: 10_000 },
+        });
+        const seeded = await seedAdminClientMatter(matterFirstDb, "assigned");
+        const matterLocked = Promise.withResolvers<undefined>();
+        const deletionStarted = Promise.withResolvers<number>();
+        // Deletion retries a deadlock victim, so a lost first attempt would
+        // still delete the matter; one attempt proves there was no cycle.
+        let attempts = 0;
+        try {
+          // Adding a member locks the matter row, then the added user's
+          // organization member row FOR KEY SHARE. Here the added user is the
+          // admin deleting the same matter, who already holds that member row
+          // and waits for the matter row.
+          const matterFirst = matterFirstDb.transaction(async (tx) => {
+            await tx
+              .select({ id: workspaces.id })
+              .from(workspaces)
+              .where(eq(workspaces.id, seeded.workspaceId))
+              .for("update");
+            matterLocked.resolve(undefined);
+            const deletionPid = await deletionStarted.promise;
+            await expectTransactionToBlockClient(tx, deletionPid);
+            const members = await tx
+              .select({ id: member.id })
+              .from(member)
+              .where(eq(member.id, seeded.memberId))
+              .for("key share");
+            return members.length;
+          });
+          const deleting = (async () => {
+            await matterLocked.promise;
+            return await executeAuthorizedWorkspaceDeletion(
+              {
+                actorUserId: seeded.userId,
+                organizationId: seeded.organizationId,
+                workspaceId: seeded.workspaceId,
+                recordAuditEvent: async () => await Promise.resolve(),
+              },
+              {
+                database: {
+                  transaction: async (run) =>
+                    await deletionDb.transaction(async (tx) => {
+                      attempts += 1;
+                      const rows = await tx.execute<{ pid: number }>(
+                        sql`SELECT pg_backend_pid() AS pid`,
+                      );
+                      deletionStarted.resolve(
+                        rows.at(0)?.pid ?? panic("Missing deletion pid"),
+                      );
+                      return await run(tx);
+                    }),
+                },
+                enqueueCleanup: async () => await Promise.resolve(),
+              },
+            );
+          })();
+          try {
+            const [members, deletion] = await Promise.all([
+              matterFirst,
+              deleting,
+            ]);
+            expect(members).toBe(1);
+            expect(deletion.unwrap()).toEqual({ status: "deleted" });
+            expect(attempts).toBe(1);
+          } finally {
+            matterLocked.resolve(undefined);
+            deletionStarted.resolve(-1);
+            await Promise.allSettled([matterFirst, deleting]);
+          }
+        } finally {
+          await seeded.cleanUp();
+        }
+      });
+    }, 20_000);
+
     test("a removal committed first is reported by the hold", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient({ max: 1 });
