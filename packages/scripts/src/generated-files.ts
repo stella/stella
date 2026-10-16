@@ -61,7 +61,7 @@ export const CAPABILITY_RUNTIME_INPUTS = [
   "apps/api/scripts/lib/**",
   "apps/api/src/handlers/**/*.ts",
   "apps/api/src/lib/capability-transport*",
-  "packages/cli/capabilities/*.json",
+  "packages/cli/capabilities/**",
   "packages/cli/src/capability-catalog-data.ts",
   "packages/scripts/src/*.ts",
   "packages/api-contract/src/**",
