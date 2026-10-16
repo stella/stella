@@ -1,5 +1,5 @@
 name: Capture marketing screenshots
-run-name: Capture marketing screenshots ${{ inputs.request }}
+run-name: Capture marketing screenshots ${{ inputs.sha }} ${{ inputs.request }}
 
 defaults:
   run:
@@ -54,6 +54,16 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.sha }}
           submodules: true
+
+      - name: Verify the checked-out capture commit
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$SHA" ]]; then
+            echo "::error::Checked-out capture commit differs from the requested SHA"
+            exit 1
+          fi
 
       - name: Capture marketing screenshots
         uses: ./.github/actions/marketing-capture

@@ -149,6 +149,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: write
+      contents: read
     outputs:
       run-id: ${{ steps.capture.outputs.run-id }}
     steps:
@@ -167,6 +168,11 @@ jobs:
             if (!branch || branch === 'main' || !/^[0-9a-f]{40}$/u.test(head))
               throw new Error('Capture needs a release branch and a full commit SHA');
             const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const title = `Capture marketing screenshots ${head} ${request}`;
+            const { data: main } = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            const workflowHead = main.object.sha;
+            if (!/^[0-9a-f]{40}$/u.test(workflowHead))
+              throw new Error('Main workflow commit must be a full SHA');
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const deadline = Date.now() + 40 * 60 * 1000;
             const dispatched = await github.rest.actions.createWorkflowDispatch({
@@ -183,8 +189,8 @@ jobs:
               if (Date.now() > deadline) throw new Error(`Capture run ${run.html_url} did not finish in time`);
               await sleep(30000);
             }
-            // Bind the artifact source to the dispatched run and selected commit.
-            if (run.id !== id || run.head_sha !== head
+            // The run commit identifies the workflow; its title binds the capture input.
+            if (run.id !== id || run.head_sha !== workflowHead || run.display_title !== title
               || run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
               || run.head_branch !== 'main'
               || run.head_repository?.full_name !== `${owner}/${repo}`)

@@ -245,6 +245,25 @@ describe("pre-release screenshot workflow", () => {
     expect(captureSource).not.toContain("github-token");
     const steps = stepsOf(captureWorkflow, "capture");
     expect(
+      v.parse(v.looseObject({ "run-name": v.string() }), captureWorkflow)[
+        "run-name"
+      ],
+    ).toBe(
+      `Capture marketing screenshots ${githubExpression("inputs.sha")} ${githubExpression("inputs.request")}`,
+    );
+    const checkoutPosition = steps.findIndex(
+      (step) => step.name === "Checkout the release tree",
+    );
+    const assertionPosition = steps.findIndex(
+      (step) => step.name === "Verify the checked-out capture commit",
+    );
+    const executionPosition = steps.findIndex((step) =>
+      step.uses?.startsWith("./"),
+    );
+    expect(assertionPosition).toBeGreaterThan(checkoutPosition);
+    expect(assertionPosition).toBeLessThan(executionPosition);
+
+    expect(
       steps.find((step) => step.name === "Checkout the release tree")?.with,
     ).toMatchObject({
       ref: githubExpression("inputs.sha"),
@@ -266,7 +285,10 @@ describe("pre-release screenshot workflow", () => {
     // The main-ref jobs that hold privileged writes never share a job with
     // branch code: the capture job only dispatches and waits.
     const updateJobs = jobsOf(publishWorkflow);
-    expect(updateJobs["capture"]?.permissions).toEqual({ actions: "write" });
+    expect(updateJobs["capture"]?.permissions).toEqual({
+      actions: "write",
+      contents: "read",
+    });
     expect(updateJobs["capture"]?.environment).toBeUndefined();
     expect(JSON.stringify(updateJobs["capture"])).not.toContain(
       "STELLA_RELEASE_APP_PRIVATE_KEY",
@@ -379,9 +401,67 @@ describe("pre-release screenshot workflow", () => {
   });
 });
 
+describe("capture checkout validation", () => {
+  const step = v.parse(
+    v.object({ run: v.string(), env: v.record(v.string(), v.string()) }),
+    workflowStepByName(
+      workflowJobSteps(captureWorkflow, "capture"),
+      "Verify the checked-out capture commit",
+    ),
+  );
+  test("accepts only the requested commit before executing capture code", () => {
+    expect(step.env["SHA"]).toBe(githubExpression("inputs.sha"));
+    const root = mkdtempSync(path.join(tmpdir(), "marketing-checkout-"));
+    try {
+      const initialized = Bun.spawnSync(["git", "init", "--quiet"], {
+        cwd: root,
+      });
+      expect(initialized.exitCode).toBe(0);
+      const committed = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.test",
+          "commit",
+          "--allow-empty",
+          "--no-verify",
+          "--quiet",
+          "-m",
+          "Capture fixture",
+        ],
+        { cwd: root },
+      );
+      expect(committed.exitCode, committed.stderr.toString()).toBe(0);
+      const selected = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+        cwd: root,
+      });
+      expect(selected.exitCode).toBe(0);
+      const sha = selected.stdout.toString().trim();
+      expect(sha).not.toBe(HEAD);
+      for (const expected of [sha, HEAD]) {
+        const result = Bun.spawnSync(["bash", "-c", step.run], {
+          cwd: root,
+          env: { ...process.env, SHA: expected },
+        });
+        expect(result.exitCode).toBe(expected === sha ? 0 : 1);
+        if (expected !== sha) {
+          expect(result.stdout.toString()).toContain(
+            "differs from the requested SHA",
+          );
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("capture dispatch from main", () => {
   const dispatch = executable("capture", "Capture on the release branch");
   const BRANCH = "changeset-release/main";
+  const WORKFLOW_HEAD = "c".repeat(40);
   const scenario = () => ({
     branch: BRANCH,
     head: HEAD,
@@ -393,8 +473,8 @@ describe("capture dispatch from main", () => {
       path: ".github/workflows/marketing-screenshots-capture.yml",
       event: "workflow_dispatch",
       head_branch: "main",
-      head_sha: HEAD,
-      display_title: "Capture marketing screenshots 7-1",
+      head_sha: WORKFLOW_HEAD,
+      display_title: `Capture marketing screenshots ${HEAD} 7-1`,
       head_repository: { full_name: "stella/stella" },
       html_url: "https://github.com/stella/stella/actions/runs/42",
     },
@@ -428,6 +508,17 @@ describe("capture dispatch from main", () => {
       },
       github: {
         rest: {
+          git: {
+            getRef: async (params: unknown) => {
+              expect(params).toEqual({
+                owner: "stella",
+                repo: "stella",
+                ref: "heads/main",
+              });
+              expect(dispatches).toEqual([]);
+              return { data: { object: { sha: WORKFLOW_HEAD } } };
+            },
+          },
           actions: {
             createWorkflowDispatch: async (params: unknown) => {
               dispatches.push(params);
@@ -444,7 +535,9 @@ describe("capture dispatch from main", () => {
   };
 
   test("dispatches main with the selected branch as input and returns its run", async () => {
-    expect(await dispatchFor(scenario())).toEqual({
+    const input = scenario();
+    expect(input.run.head_sha).not.toBe(input.head);
+    expect(await dispatchFor(input)).toEqual({
       outputs: { "run-id": "42" },
       dispatches: [
         {
@@ -465,9 +558,6 @@ describe("capture dispatch from main", () => {
     expect(await rejectionOf(dispatchFor(input))).toMatchObject({
       message: "Dispatch did not return a capture run id",
     });
-    expect(scriptOf("capture", "Capture on the release branch")).not.toContain(
-      "display_title",
-    );
     expect(scriptOf("capture", "Capture on the release branch")).not.toContain(
       "listWorkflowRuns",
     );
@@ -510,9 +600,16 @@ describe("capture dispatch from main", () => {
       "is not this capture",
     ],
     [
-      "a different captured head",
+      "a different workflow head",
       (input: ReturnType<typeof scenario>) => {
         input.run.head_sha = PUBLISHED;
+      },
+      "is not this capture",
+    ],
+    [
+      "a different selected head in the run title",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.display_title = `Capture marketing screenshots ${PUBLISHED} 7-1`;
       },
       "is not this capture",
     ],
