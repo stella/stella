@@ -2710,7 +2710,7 @@ export const searchCorpusIndexDecisions = async ({
 
   // The strict page and the relaxed top-up are the same scan over different
   // queries; `omit` names decisions the relaxed one must leave out.
-  const readTextPage = (
+  const readTextPage = async (
     query: string,
     pageLimit: number,
     omit: RelaxedExclusions | null,

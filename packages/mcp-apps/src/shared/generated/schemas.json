@@ -739,6 +739,10 @@
             "matchingPassages": {
               "type": "number"
             },
+            "match": {
+              "enum": ["all_terms", "some_terms"],
+              "type": "string"
+            },
             "sourceUrl": {
               "type": ["string", "null"]
             },
@@ -789,6 +793,7 @@
             "language",
             "matchedQueries",
             "matchingPassages",
+            "match",
             "sourceUrl",
             "keywords",
             "headnote"
