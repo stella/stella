@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
@@ -236,6 +237,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
         ),
       ),
     ),
+    as_of: v.optional(asOfInputSchema),
     limit: v.optional(
       v.pipe(
         v.number(),
@@ -367,7 +369,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
-      "YYYY-MM-DD). No facets are returned and `total` is not counted, so " +
+      "YYYY-MM-DD). `as_of` searches the consolidation in force on that ISO date and defaults to today. " +
+      "No facets are returned and `total` is not counted, so " +
       "page with the returned nextCursor instead of reasoning about a result " +
       "count. A hit is metadata only: pass its `eli` to read_statute for the " +
       "text, the outline of anchors and the consolidated versions. " +
@@ -382,6 +385,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       document_type: FILTER_NORMALIZATION,
       status: FILTER_NORMALIZATION,
       language: FILTER_NORMALIZATION,
+      as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
     readClass: "public",
@@ -555,6 +559,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   }
   const {
     country,
+    as_of: asOf,
     cursor,
     date_from: dateFrom,
     date_to: dateTo,
@@ -597,6 +602,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(language === undefined ? {} : { language }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
+      ...(asOf === undefined ? {} : { asOf }),
     },
     legislationPublicReadDb,
     observer,
@@ -629,6 +635,8 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
         documentId: hit.documentId,
         documentType: hit.documentType,
         effectiveDate: hit.effectiveDate,
+        versionValidFrom: hit.versionValidFrom,
+        versionValidTo: hit.versionValidTo,
         eli: hit.eli,
         language: hit.language,
         match: hit.match,

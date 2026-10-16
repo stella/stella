@@ -94,6 +94,7 @@ import {
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
+  inForceOn,
   inForceToday,
   legislationVersionRef,
   legislationVersionRefAt,
@@ -256,11 +257,14 @@ type RehydrateLegislationCandidatesOptions = {
 
 /** The request filters a stored version must satisfy to stand for a hit. */
 const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
+  const asOf =
+    body.asOf === undefined ? sql`CURRENT_DATE` : sql`${body.asOf}::date`;
   const filters: SQL[] = [
     publishedLegislationDocumentFor("search"),
     // A withdrawn version stays openable by id, never found by a search,
     // including while its index entry still waits to be erased.
     notWithdrawn(legislationVersionRef(legislationDocuments)),
+    inForceOn(legislationVersionRef(legislationDocuments), asOf),
   ];
   if (body.jurisdiction) {
     filters.push(eq(legislationDocuments.country, body.jurisdiction));
@@ -300,6 +304,8 @@ type LegislationSearchRow = {
   documentType: string | null;
   statusValue: string;
   effectiveDate: string | null;
+  versionValidFrom: string | null;
+  versionValidTo: string | null;
   sourceUrl: string | null;
   citationAuthority: number;
 };
@@ -344,6 +350,8 @@ export const legislationWorkRepresentativesQuery = ({
       r.document_type,
       r.status,
       r.effective_date,
+      r.version_valid_from,
+      r.version_valid_to,
       r.source_url,
       r.citation_authority,
       r.is_current
@@ -360,6 +368,8 @@ export const legislationWorkRepresentativesQuery = ({
         ${legislationDocuments.documentType} AS document_type,
         ${legislationDocuments.status} AS status,
         ${legislationDocuments.effectiveDate}::text AS effective_date,
+        ${legislationDocuments.versionValidFrom}::text AS version_valid_from,
+        ${legislationDocuments.versionValidTo}::text AS version_valid_to,
         ${legislationDocuments.sourceUrl} AS source_url,
         ${legislationDocuments.citationAuthority} AS citation_authority,
         (${inForceToday(documentRef)} AND ${isCurrentVersionOfWork}) AS is_current,
@@ -398,6 +408,8 @@ const representativeRow = (row: RawRow): RepresentativeRow => ({
   documentType: toNullableString(row["document_type"]),
   statusValue: requireString(row, "status"),
   effectiveDate: toNullableString(row["effective_date"]),
+  versionValidFrom: toNullableString(row["version_valid_from"]),
+  versionValidTo: toNullableString(row["version_valid_to"]),
   sourceUrl: toNullableString(row["source_url"]),
   citationAuthority: Number(row["citation_authority"]) || 0,
   isCurrent: row["is_current"] === true,
@@ -456,6 +468,8 @@ export const legislationCandidateRowsStatement = (
       documentType: legislationDocuments.documentType,
       statusValue: legislationDocuments.status,
       effectiveDate: legislationDocuments.effectiveDate,
+      versionValidFrom: legislationDocuments.versionValidFrom,
+      versionValidTo: legislationDocuments.versionValidTo,
       sourceUrl: legislationDocuments.sourceUrl,
       citationAuthority: legislationDocuments.citationAuthority,
       canRecur: legislationCorpusWorkCanRecur(generation).as("can_recur"),
@@ -762,6 +776,10 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
         AND ${publishedLegislationCountryFor(sql`d.country`, "search")}
         AND sd.retry_after IS NULL
         AND ${notWithdrawn(legislationVersionRefAt("d"))}
+        AND ${inForceOn(
+          legislationVersionRefAt("d"),
+          body.asOf === undefined ? sql`CURRENT_DATE` : sql`${body.asOf}::date`,
+        )}
         ${filters}
     ),
     best AS (
@@ -797,6 +815,8 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
       d.document_type,
       d.status,
       d.effective_date::text AS effective_date,
+      d.version_valid_from::text AS version_valid_from,
+      d.version_valid_to::text AS version_valid_to,
       d.source_url,
       CASE WHEN page.matched THEN ts_headline(
         ${headlineRegconfig},
@@ -851,6 +871,8 @@ const pgWorkRow = (row: RawRow): PgWorkRow => {
       documentType: toNullableString(row["document_type"]),
       statusValue: requireString(row, "status"),
       effectiveDate: toNullableString(row["effective_date"]),
+      versionValidFrom: toNullableString(row["version_valid_from"]),
+      versionValidTo: toNullableString(row["version_valid_to"]),
       sourceUrl: toNullableString(row["source_url"]),
       citationAuthority: 0,
     },
@@ -996,6 +1018,8 @@ const pgSearch = async (
       documentType: shown.documentType,
       status: shown.statusValue,
       effectiveDate: shown.effectiveDate,
+      versionValidFrom: shown.versionValidFrom,
+      versionValidTo: shown.versionValidTo,
       sourceUrl: shown.sourceUrl,
       headline: headline ? escapeAndHighlight(headline) : null,
       score: row.score,
@@ -1018,8 +1042,39 @@ export const legislationQueryFingerprint = (
       body.language ?? null,
       body.dateFrom ?? null,
       body.dateTo ?? null,
+      body.asOf ?? null,
     ]),
   );
+
+type ProjectCorpusLegislationHitOptions = {
+  row: LegislationSearchRow;
+  matchType: CorpusSearchPhase["type"];
+  headline: string | null;
+  score: number;
+};
+
+const projectCorpusLegislationHit = ({
+  row,
+  matchType,
+  headline,
+  score,
+}: ProjectCorpusLegislationHitOptions): LegislationHit => ({
+  match: { type: matchType },
+  documentId: row.id,
+  eli: row.eli,
+  slug: row.slug,
+  title: row.title,
+  country: row.country,
+  language: row.language,
+  documentType: toNullableString(row.documentType),
+  status: row.statusValue,
+  effectiveDate: toNullableString(row.effectiveDate),
+  versionValidFrom: toNullableString(row.versionValidFrom),
+  versionValidTo: toNullableString(row.versionValidTo),
+  sourceUrl: toNullableString(row.sourceUrl),
+  headline,
+  score,
+});
 
 type CorpusLegislationSearchOptions = {
   body: SearchLegislationBody;
@@ -1136,21 +1191,12 @@ const corpusIndexSearch = async ({
         return panic("Ranked legislation hit has no hydrated row");
       }
       return [
-        {
-          match: { type: active.type },
-          documentId: row.id,
-          eli: row.eli,
-          slug: row.slug,
-          title: row.title,
-          country: row.country,
-          language: row.language,
-          documentType: toNullableString(row.documentType),
-          status: row.statusValue,
-          effectiveDate: toNullableString(row.effectiveDate),
-          sourceUrl: toNullableString(row.sourceUrl),
+        projectCorpusLegislationHit({
+          row,
+          matchType: active.type,
           headline: page.snippetById.get(hit.id) ?? null,
           score: hit.score,
-        },
+        }),
       ];
     });
   const cursorOf = (
@@ -1406,7 +1452,8 @@ const config = {
   description:
     "Full-text search the stella legislation corpus, returning ranked results " +
     "with strict or relaxed match metadata, a highlighted snippet and each document's ELI, title, country, " +
-    "language, type, status, and effective date. Filter by jurisdiction, " +
+    "language, type, status, effective date, and the matched version's validity window. " +
+    "Use asOf to search the consolidation in force on an ISO date; it defaults to today. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
     `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +
     "are searched. Read a hit in full with legislation.read; use " +

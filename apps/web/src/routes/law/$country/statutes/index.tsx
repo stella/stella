@@ -288,6 +288,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   }, 300);
   const dataQuery = useInfiniteQuery({
     ...statuteSearchInfiniteOptions({
+      ...(search.asOf === undefined ? {} : { asOf: search.asOf }),
       country: country.toUpperCase(),
       query,
       ...(search.type === undefined ? {} : { documentType: search.type }),

@@ -18,8 +18,8 @@ import { namedToolNames as namedToolNamesIn } from "@/api/mcp/tool-mentions";
  * The order to drive the stella legislation corpus in. The tool descriptions
  * say what each tool takes; none of them says that an ELI is the handle every
  * later call needs, that anchors come from a read rather than from a section
- * number, or that a point-in-time question is answered by `as_of` on the read
- * rather than by a filter on the search. An agent holding only the tool list
+ * number, or that `as_of` selects the same consolidation date on search
+ * and read. An agent holding only the tool list
  * has to discover that order by trial, so it is written down here.
  *
  * Every tool this document names is typed as {@link McpToolName} and every
@@ -89,7 +89,9 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `${SEARCH_LEGISLATION} with \`query\` and a \`country\`. Each hit ` +
       "carries the act's `eli` (the European Legislation Identifier), its " +
       "title, language, document type, publication status, effective date " +
-      "and a matched snippet. No facets come back and `total` is not " +
+      "and a matched snippet. `as_of` (ISO YYYY-MM-DD) searches the consolidation " +
+      "in force on that date; omit it for today. Each hit carries its " +
+      "`versionValidFrom`/`versionValidTo`. No facets come back and `total` is not " +
       "counted, so page with the returned `nextCursor` rather than " +
       "reasoning about how many results exist. The `eli` is the handle " +
       "every later call takes: it addresses the act, not one consolidation " +
@@ -100,8 +102,8 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
     detail:
       `${READ_STATUTE} with that \`eli\`. \`as_of\` (ISO YYYY-MM-DD) picks ` +
       "the consolidation in force on that day; omit it for the text in " +
-      "force today. There is no as-of filter on the search, so a " +
-      "point-in-time question is answered here. The reply carries the " +
+      "force today. Pass the same `as_of` used in search to read the matched " +
+      "consolidation. The reply carries the " +
       "text's `versionValidFrom`/`versionValidTo`, `versions` (up to " +
       `${LIMITS.legislationVersionsPageSizeDefault} of the work's ` +
       "versions, newest window first), `outline` (its heading " +

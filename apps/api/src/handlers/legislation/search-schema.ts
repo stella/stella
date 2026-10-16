@@ -44,6 +44,13 @@ export const searchLegislationBodySchema = t.Object({
   language: t.Optional(t.String({ maxLength: 8 })),
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
+  asOf: t.Optional(
+    t.String({
+      format: "date",
+      description:
+        "Search the consolidation in force on this date; defaults to today.",
+    }),
+  ),
 });
 
 export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
@@ -70,6 +77,8 @@ export const searchLegislationSuccessResponseSchema = t.Object(
           documentType: nullableBoundedString(textBytes.documentType),
           status: boundedString(textBytes.status),
           effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+          versionValidFrom: nullableBoundedString(textBytes.versionValidFrom),
+          versionValidTo: nullableBoundedString(textBytes.versionValidTo),
           sourceUrl: nullableBoundedString(textBytes.sourceUrl),
           headline: nullableBoundedString(textBytes.headline),
           score: t.Number(),

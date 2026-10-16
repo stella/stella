@@ -1847,6 +1847,8 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           documentId: passthroughId(),
           documentType: v.nullable(v.string()),
           effectiveDate: v.nullable(v.string()),
+          versionValidFrom: v.nullable(v.string()),
+          versionValidTo: v.nullable(v.string()),
           eli: v.string(),
           language: v.string(),
           match: v.strictObject({
