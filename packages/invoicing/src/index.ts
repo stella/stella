@@ -12,6 +12,7 @@ export {
   type CzechQrPaymentInput,
   type CzechQrPaymentResult,
 } from "./qr-payment";
+export { standardVatRateOn, type VatRatePeriod } from "./vat-rate-period";
 export type {
   BankPaymentDetails,
   InvoiceDocument,

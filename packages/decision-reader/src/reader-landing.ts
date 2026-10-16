@@ -7,7 +7,7 @@ const READER_SCROLL_INPUT = [
   "pointerdown",
   "touchstart",
   "wheel",
-] as const;
+] satisfies readonly (keyof DocumentEventMap)[];
 
 const scrollingAncestor = (element: HTMLElement): HTMLElement | null => {
   for (

@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * The memory extractor acts for each compaction's thread owner as they stand
  * when it runs: an owner who left the organization has nothing read or
  * suggested, and an owner who left the matter gets no matter memory from it.
  * Driven against a real (PGlite) database; the model is a fake.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -30,6 +29,7 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -144,7 +144,9 @@ const seedThread = async ({
     userId: ids.userA1,
     workspaceId,
     role: "user",
-    content: { version: 1, data: [{ type: "text", text }] },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text", content: text }],
+    }),
   });
   const compactionId = await seedActiveChatCompaction({
     firstKeptMessageId: messageId,

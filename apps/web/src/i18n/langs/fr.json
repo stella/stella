@@ -529,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
+    "invoiceComposer": {
+      "addSellerProfile": "Ajoutez un profil vendeur dans les paramètres de facturation",
+      "billedHours": "Heures facturées",
+      "buyer": "Client (acheteur)",
+      "continueToDetails": "Continuer vers les informations",
+      "continueToIssue": "Continuer vers l’émission",
+      "datesAndPayment": "Dates et paiement",
+      "days": "{days, plural, one {# jour} other {# jours}}",
+      "draftSavedTitle": "Brouillon de facture enregistré",
+      "dueIn": "Échéance",
+      "dueOn": "échéance le {date}",
+      "flatFee": "Ce dossier est au forfait : la facture porte sur les {amount} convenus et le temps ci-dessous est couvert par le forfait.",
+      "flatFeeLine": "Forfait convenu",
+      "include": "Inclure dans cette facture",
+      "issueFailed": "Le brouillon a été enregistré, mais la facture n’a pas pu être émise.",
+      "issueInvoice": "Émettre la facture",
+      "issuedTitle": "Facture {number} émise",
+      "lines": "Lignes de facture",
+      "loggedHours": "{hours} h saisies",
+      "noCharge": "Non facturé",
+      "noClient": "Ce dossier n’a pas de client, la facture n’a donc pas encore d’acheteur.",
+      "noExpenses": "Aucun débours approuvé et non facturé dans ce dossier.",
+      "noTime": "Aucun temps approuvé et non facturé dans ce dossier.",
+      "noVat": "Sans TVA",
+      "nothingToBill": "Rien à facturer pour l’instant. Approuvez des saisies de temps ou des débours de ce dossier pour les facturer.",
+      "openInvoice": "Ouvrir la facture",
+      "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
+      "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "rate": "Taux",
+      "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
+      "readyTitle": "Prête à émettre",
+      "reverseCharge": "Autoliquidation, 0 %",
+      "saveDraft": "Enregistrer en brouillon",
+      "seller": "Vendeur",
+      "sources": {
+        "client": "Repris du client du dossier",
+        "clientTerm": "Délai de paiement du client",
+        "defaultSeller": "Votre profil vendeur par défaut",
+        "defaultTerm": "Délai de paiement habituel",
+        "lastWorkDay": "Dernier jour du travail inclus"
+      },
+      "steps": {
+        "issue": "Vérifier et émettre",
+        "items": "Temps et débours"
+      },
+      "tax": "Taxe et devise",
+      "taxableSupplyDate": "Date de la prestation",
+      "timeEntries": "Saisies de temps",
+      "timeSummary": "{count, plural, one {# saisie} other {# saisies}} · {hours} h",
+      "title": "Nouvelle facture",
+      "totalsSummary": "HT {net} · TVA {vat} · Total {total}",
+      "vat": "Régime de TVA",
+      "vatRate": "TVA {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Impossible de confirmer le pays du client : son numéro de TVA et son adresse n’indiquent pas le même pays, le taux normal s’applique donc",
+        "clientVatIdInvalid": "Le numéro de TVA du client n'a pas le format de son pays, le taux normal s'applique donc",
+        "domesticRate": "Votre taux de TVA le plus élevé en vigueur à la date de la prestation",
+        "noSellerProfile": "Aucun profil vendeur : pas de TVA tant que vous ne la fixez pas sur la facture",
+        "noVatRate": "Aucun taux de TVA n’est configuré dans la facturation",
+        "outsideScope": "Le numéro de TVA du client est enregistré hors de l'UE, le lieu de prestation est donc à l'étranger",
+        "reverseCharge": "Le numéro de TVA du client est enregistré dans un autre pays",
+        "sellerNotVatPayer": "Le vendeur n’est pas assujetti à la TVA"
+      }
+    },
     "invoiceNarrative": "Description de la facture",
     "invoiceNarrativePlaceholder": "Description destinée au client (facultatif)",
     "invoices": {
@@ -671,7 +735,10 @@
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
-      "vatId": "Numéro de TVA"
+      "vatId": "Numéro de TVA",
+      "vatPayer": "Assujetti à la TVA",
+      "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
+      "vatPayerRequiresVatId": "Saisissez le numéro de TVA pour facturer en tant qu’assujetti à la TVA."
     },
     "settingsTitle": "Facturation",
     "split": {
@@ -749,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
         "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
         "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
+        "retryAfter": "Vous pourrez réessayer à partir du {time}.",
         "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
@@ -1045,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",
+      "provisionsFailed": "Le traitement des citations a échoué",
+      "provisionsNoneFound": "Aucune disposition citée trouvée",
+      "provisionsProcessing": "Les citations sont en cours de traitement",
+      "provisionsUnavailable": "Les citations ne sont pas disponibles",
+      "provisionsUnplaceable": "Les citations ne peuvent pas être situées dans le texte de la décision",
+      "provisionsUnsupported": "Le traitement des citations n’est pas pris en charge pour cette décision",
+      "provisionsWithheld": "Les citations ne sont pas communiquées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
@@ -1295,6 +1370,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
     },
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "improvePrompt": "Améliorer le prompt",
     "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
     "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",
@@ -1326,6 +1402,7 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "messageUnavailable": "Ce message ne peut pas être affiché.",
     "mockModel": {
       "description": "Réponses prédéfinies du modèle simulé local",
       "label": "IA simulée"
@@ -1485,6 +1562,18 @@
       "rejected": "Rejeté"
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
+    "tableChart": {
+      "bar": "Barres",
+      "kind": "Type de graphique",
+      "line": "Courbes",
+      "loading": "Sélection du graphique…",
+      "pie": "Secteurs",
+      "scatter": "Nuage de points",
+      "showChart": "Afficher sous forme de graphique",
+      "summary": "Valeurs affichées : {n, number}.",
+      "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
+      "values": "{label} : {value, number}"
+    },
     "thinking": "Traitement du contexte",
     "threadFiles": {
       "title": "Fichiers de cette conversation"
@@ -4667,9 +4756,19 @@
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
       "desktopAppDescription": "Retrouvez tout ce que vous copiez et ouvrez les documents stella dans les applications que vous utilisez déjà.",
+      "desktopCardApproveDetail": "Approuvez pour lier cet ordinateur à <bdi>{identity}</bdi> sur {host}.",
+      "desktopCardApproveTitle": "stella desktop demande à se connecter",
+      "desktopCardConnectedDetail": "Lié à <bdi>{identity}</bdi> sur {host} · version {version}",
+      "desktopCardConnectedDetailNoVersion": "Lié à <bdi>{identity}</bdi> sur {host}",
+      "desktopCardConnectedTitle": "stella desktop est associé",
+      "desktopCardMissingDetail": "Installez-le, ou connectez-le s'il est déjà installé sur cet ordinateur.",
+      "desktopCardMissingTitle": "stella desktop n'est pas encore associé",
+      "desktopCardOutdatedDetail": "La version {version} est liée à <bdi>{identity}</bdi>. Installez la dernière version pour que les documents et l'activité continuent de fonctionner.",
+      "desktopCardOutdatedTitle": "stella desktop doit être mis à jour",
       "desktopClipboardDescription": "Ouvrez, recherchez, organisez et réutilisez le texte copié depuis n’importe quelle application.",
       "desktopClipboardTitle": "Historique du presse-papiers consultable",
       "desktopConnectFailed": "Impossible de connecter stella desktop.",
+      "desktopConnectInstalled": "Déjà installé, connecter",
       "desktopConnectedAs": "Connecté en tant que <bdi>{email}</bdi>",
       "desktopDescription": "Historique du presse-papiers et outils documentaires sur votre ordinateur",
       "desktopDocumentsDescription": "Ouvrez les fichiers stella dans vos applications ; les révisions reviennent dans le bon dossier.",

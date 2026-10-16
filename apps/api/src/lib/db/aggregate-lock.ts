@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -20,15 +21,21 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
+import type {
+  OnlineMigrationConnection,
+  OnlineMigrationParam,
+} from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersions,
   fields,
   pdfSigningSessions,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -71,12 +78,31 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
   signingSession: { rank: 900, kind: "row" },
 } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
+
+type OrganizationFencedRepairBatchOptions = {
+  connection: Pick<OnlineMigrationConnection, "query">;
+  query: string;
+  params: readonly OnlineMigrationParam[];
+};
+
+/**
+ * Online repairs own native transactions instead of Drizzle transactions.
+ * Their batch query joins organization as tenant; key-share fencing preserves
+ * that parent until dependent metadata commits without locking source rows.
+ */
+export const queryOrganizationFencedRepairBatch = async ({
+  connection,
+  query,
+  params,
+}: OrganizationFencedRepairBatchOptions) =>
+  await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
 /** Derive rank proofs from the same registry used for acquisitions. */
 export const AGGREGATE_CHAINS = {
@@ -134,6 +160,7 @@ export const AGGREGATE_CHAINS = {
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
@@ -175,6 +202,7 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
@@ -567,6 +595,81 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
     completeAcquisition(history);
     return value;
   });
+};
+
+const executorSavepoints = new WeakSet<object>();
+
+type ExecutorSavepointDecision<T> = {
+  type: "commit" | "rollback";
+  value: T;
+};
+
+export class ExecutorSavepointError extends TaggedError(
+  "ExecutorSavepointError",
+)<{
+  message: string;
+  cause: unknown;
+  phase: "setup" | "callback" | "cleanup";
+}> {}
+
+/**
+ * A savepoint for execute-only callbacks. The callback must not acquire typed
+ * aggregate handles: those require withAggregateSavepoint and its lock history.
+ * One executor cannot own overlapping or nested scopes. Admission covers timeout
+ * capture through restoration, including savepoint cleanup.
+ */
+export const withExecutorSavepoint = async <T>(
+  tx: { execute: (statement: SQL) => Promise<unknown> },
+  run: (previous: {
+    statementTimeoutMs: number;
+    lockTimeoutMs: number;
+  }) => Promise<ExecutorSavepointDecision<T>>,
+): Promise<Result<T, ExecutorSavepointError>> => {
+  if (executorSavepoints.has(tx)) {
+    return panic("Await the executor savepoint before reusing its transaction");
+  }
+  executorSavepoints.add(tx);
+  const name = sql.identifier(
+    `stella_scope_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+  );
+  let phase: ExecutorSavepointError["phase"] = "setup";
+  try {
+    const scope = await Result.tryPromise({
+      try: async () =>
+        await withSharedTransactionTimeoutRestoration(tx, async (previous) => {
+          await tx.execute(sql`SAVEPOINT ${name}`);
+          const outcome = await Result.tryPromise({
+            try: async () => await run(previous),
+            catch: (cause) =>
+              new ExecutorSavepointError({
+                message: "Executor savepoint callback failed",
+                cause,
+                phase: "callback",
+              }),
+          });
+          phase = "cleanup";
+          if (outcome.isErr() || outcome.value.type === "rollback") {
+            await tx.execute(sql`ROLLBACK TO SAVEPOINT ${name}`);
+          }
+          await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
+          if (outcome.isErr()) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value.value;
+        }),
+      catch: (cause) =>
+        cause instanceof ExecutorSavepointError
+          ? cause
+          : new ExecutorSavepointError({
+              message: `Executor savepoint ${phase} failed`,
+              cause,
+              phase,
+            }),
+    });
+    return scope;
+  } finally {
+    executorSavepoints.delete(tx);
+  }
 };
 
 /** Track the public savepoint callback without inspecting driver internals. */
@@ -1086,6 +1189,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "sampleCase":
+      return {
+        first: sql`hashtext('lists.sample-case')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
       };
     case "professionalUseAcceptance":
       return {
@@ -2040,4 +2149,166 @@ export const withDecisionCitationStatsLocks = async ({
       ORDER BY key
     ) anchors
   `);
+};
+
+type MemberAccessRowLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  mode: "share" | "no key update" | "update";
+};
+
+/** Lock the member within the caller's lifecycle or access-hold sequence. */
+export const lockMemberAccessRow = async ({
+  tx,
+  organizationId,
+  userId,
+  mode,
+}: MemberAccessRowLockOptions) =>
+  (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for(mode)
+  ).at(0);
+
+type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
+  workspaceIds: readonly SafeId<"workspace">[];
+  /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */
+  where?: SQL | undefined;
+};
+
+/** Lock assignments after the caller's member and optional matter prefix. */
+export const lockMatterAccessAssignments = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ workspaceId: workspaceMembers.workspaceId })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        inArray(workspaceMembers.workspaceId, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaceMembers.workspaceId, workspaceMembers.id)
+    .limit(workspaceIds.length)
+    .for(mode, { of: workspaceMembers });
+};
+
+type MatterAccessWorkspaceRowsLockOptions = Omit<
+  MatterAccessRowsLockOptions,
+  "userId"
+>;
+
+/**
+ * Lock in stable matter order. A narrowing predicate can
+ * select the unassigned matters whose reach depends on their row. Decide
+ * access in a later statement, using only identities covered by held locks.
+ */
+export const lockMatterAccessWorkspaceRows = async ({
+  tx,
+  organizationId,
+  workspaceIds,
+  mode,
+  where,
+}: MatterAccessWorkspaceRowsLockOptions) => {
+  if (workspaceIds.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(
+      and(
+        inArray(workspaces.id, workspaceIds),
+        eq(workspaces.organizationId, organizationId),
+        where,
+      ),
+    )
+    .orderBy(workspaces.id)
+    .limit(workspaceIds.length)
+    .for(mode);
+};
+
+/** Shares the lifecycle fence used by matter deletion and timer writes. */
+export const lockWorkspaceLifecycle = async (
+  tx: ExecuteTransaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+};
+
+export const TIMER_MATTER_LOCK_SCOPE = {
+  assignment: "assignment",
+  client: "client",
+} as const;
+
+type TimerMatterAccessRowsLockOptions = Omit<
+  MemberAccessRowLockOptions,
+  "mode"
+> & {
+  workspaceId: SafeId<"workspace">;
+  lockScope: SQL;
+};
+
+/**
+ * Preserve the timer's joint matter/member SHARE statement. The supplied
+ * scope only selects the original rows to lock; access is decided later.
+ */
+export const lockTimerMatterAccessRows = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceId,
+  lockScope,
+}: TimerMatterAccessRowsLockOptions) => {
+  const rows = executedRows(
+    await tx.execute(sql`
+    SELECT ${lockScope} AS "lockScope"
+    FROM workspaces AS workspace
+    INNER JOIN member AS organization_member
+      ON organization_member.organization_id = workspace.organization_id
+      AND organization_member.user_id = ${userId}
+    WHERE workspace.id = ${workspaceId}
+      AND workspace.organization_id = ${organizationId}
+      AND workspace.status = 'active'
+      AND (${lockScope}) IS NOT NULL
+    LIMIT 1
+    FOR SHARE OF workspace, organization_member
+  `),
+  );
+  const row = rows.at(0);
+  if (row === undefined) {
+    return null;
+  }
+  if (!isRecord(row)) {
+    return panic("Invalid timer matter lock result");
+  }
+  const scope = row["lockScope"];
+  switch (scope) {
+    case TIMER_MATTER_LOCK_SCOPE.assignment:
+    case TIMER_MATTER_LOCK_SCOPE.client:
+      return scope;
+    default:
+      return panic("Invalid timer matter lock scope");
+  }
 };
