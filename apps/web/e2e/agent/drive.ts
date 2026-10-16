@@ -23,6 +23,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { createNetworkCollector, summarizeCapture } from "../helpers/network";
 import { createBrowserErrorCollector } from "../helpers/test";
+import { collectSeparateNavigationMeasurements } from "./drive-measure";
 import {
   formatFindings,
   formatSummaryTable,
@@ -431,7 +432,7 @@ const readDomContentLoaded = async (page: Page) =>
       : null;
   });
 
-const measureOnce = async (
+const measurePerformanceOnce = async (
   session: Session,
   target: string,
   options: DriveOptions,
@@ -446,23 +447,67 @@ const measureOnce = async (
   }, LCP_GLOBAL);
   const tracked = await trackPage(context);
   const startedAt = performance.now();
-  await tracked.network.measureRounds(tracked.page);
   await tracked.page.goto(target, { waitUntil: "domcontentloaded" });
   const ready = await waitUntilReady(tracked, options.waitFor);
   const settledMs = performance.now() - startedAt - QUIET.idleMs;
-  tracked.network.finishRounds();
   const networkCapture = await tracked.network.capture();
-  const sample: MeasureSample = {
+  const sample = {
     ...pageTotals(networkCapture),
     domContentLoadedMs: await readDomContentLoaded(tracked.page),
     largestContentfulPaintMs: await readLcp(tracked.page),
     settledMs,
-    waterfallDepth: summarizeCapture(networkCapture).depth,
   };
   const findings = await tracked.finish();
   findings.navigationProblems.push(...ready.problems);
   await context.close();
   return { findings, sample };
+};
+
+const measureDepthOnce = async (
+  session: Session,
+  target: string,
+  options: DriveOptions,
+) => {
+  const context = await session.newContext();
+  const tracked = await trackPage(context);
+  await tracked.network.measureRounds(tracked.page);
+  await tracked.page.goto(target, { waitUntil: "domcontentloaded" });
+  const ready = await waitUntilReady(tracked, options.waitFor);
+  tracked.network.finishRounds();
+  const depth = summarizeCapture(await tracked.network.capture()).depth;
+  const findings = await tracked.finish();
+  findings.navigationProblems.push(...ready.problems);
+  await context.close();
+  return { depth, findings };
+};
+
+const measureOnce = async (
+  session: Session,
+  target: string,
+  options: DriveOptions,
+) => {
+  const { depth, performance } = await collectSeparateNavigationMeasurements({
+    collectPerformance: async () =>
+      await measurePerformanceOnce(session, target, options),
+    collectDepth: async () => await measureDepthOnce(session, target, options),
+  });
+  return {
+    findings: {
+      browserErrors: [
+        ...performance.findings.browserErrors,
+        ...depth.findings.browserErrors,
+      ],
+      failedRequests: [
+        ...performance.findings.failedRequests,
+        ...depth.findings.failedRequests,
+      ],
+      navigationProblems: [
+        ...performance.findings.navigationProblems,
+        ...depth.findings.navigationProblems,
+      ],
+    },
+    sample: { ...performance.sample, waterfallDepth: depth.depth },
+  };
 };
 
 const measure = async (target: string, options: DriveOptions) => {

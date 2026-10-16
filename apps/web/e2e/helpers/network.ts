@@ -141,6 +141,25 @@ type NetworkRecord = {
   responseBytesUnavailable: boolean;
 };
 
+const BACKGROUND_POLL_PATHS = new Set(["/health"]);
+
+type WaterfallRequest = {
+  pathname: string;
+  resourceType: string;
+};
+
+/** Background work remains budgeted, but cannot affect route-load depth. */
+export const countsTowardsWaterfall = ({
+  pathname,
+  resourceType,
+}: WaterfallRequest): boolean =>
+  resourceType !== "eventsource" && !BACKGROUND_POLL_PATHS.has(pathname);
+
+const requestDetails = (request: Request): WaterfallRequest => ({
+  pathname: new URL(request.url()).pathname,
+  resourceType: request.resourceType(),
+});
+
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
     return false;
@@ -193,7 +212,11 @@ export const createNetworkCollector = (
         (url) => url.origin === apiOrigin,
         async (route) => {
           const request = route.request();
-          if (!isTrackedApiRequest(request, apiOrigin) || rounds.loaded) {
+          if (
+            !isTrackedApiRequest(request, apiOrigin) ||
+            !countsTowardsWaterfall(requestDetails(request)) ||
+            rounds.loaded
+          ) {
             await route.continue();
             return;
           }
@@ -240,7 +263,9 @@ export const createNetworkCollector = (
       };
 
       const onSettled = (request: Request) => {
-        rounds.complete(request, Date.now());
+        if (countsTowardsWaterfall(requestDetails(request))) {
+          rounds.complete(request, Date.now());
+        }
         const record = byRequest.get(request);
         if (record) {
           markActivity();
@@ -262,7 +287,9 @@ export const createNetworkCollector = (
 
         if (isStreamedResponse(response)) {
           // Streams never finish; headers establish that the channel opened.
-          rounds.complete(response.request(), Date.now());
+          if (countsTowardsWaterfall(requestDetails(response.request()))) {
+            rounds.complete(response.request(), Date.now());
+          }
           return;
         }
         pendingBodyReads.push(readResponseBytes(response, record));

@@ -4,6 +4,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { countsTowardsWaterfall } from "./network";
 import {
   createNetworkRoundController,
   NETWORK_ROUND_SETTLE_MS,
@@ -196,4 +197,35 @@ test("a request aborted while held adds no round and blocks none", () => {
   controller.complete("kept", 400);
   expect(controller.pending).toBe(false);
   expect(controller.rounds).toEqual([["GET /kept"]]);
+});
+
+test("a background poll before release never joins a round", () => {
+  const controller = createNetworkRoundController<string>();
+  const arrive = (token: string, pathname: string, now: number) => {
+    if (countsTowardsWaterfall({ pathname, resourceType: "fetch" })) {
+      controller.arrive({ token, key: `GET ${pathname}`, now });
+    }
+  };
+
+  arrive("route", "/v1/matters", 0);
+  arrive("poll", "/health", 100);
+  expect(controller.release(150)).toEqual(["route"]);
+  controller.complete("route", 200);
+  expect(controller.rounds).toEqual([["GET /v1/matters"]]);
+});
+
+test("a background poll while a round is in flight never adds depth", () => {
+  const controller = createNetworkRoundController<string>();
+  const arrive = (token: string, pathname: string, now: number) => {
+    if (countsTowardsWaterfall({ pathname, resourceType: "fetch" })) {
+      controller.arrive({ token, key: `GET ${pathname}`, now });
+    }
+  };
+
+  arrive("route", "/v1/matters", 0);
+  expect(controller.release(150)).toEqual(["route"]);
+  arrive("poll", "/health", 200);
+  controller.complete("route", 300);
+  expect(controller.release(1000)).toEqual([]);
+  expect(controller.rounds).toEqual([["GET /v1/matters"]]);
 });
