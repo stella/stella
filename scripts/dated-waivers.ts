@@ -831,19 +831,44 @@ const prepareCheck = (file: string): void => {
   );
 };
 
+// Reads many files of one commit with a single `git cat-file --batch`.
+const readCommitFiles = (
+  sha: string,
+  files: readonly string[],
+): Map<string, string> => {
+  const batch = Bun.spawnSync(["git", "cat-file", "--batch"], {
+    stdin: Buffer.from(files.map((file) => `${sha}:${file}\n`).join("")),
+  });
+  if (batch.exitCode !== 0) {
+    panic("Cannot read expiry base owners");
+  }
+  const output = batch.stdout;
+  const contents = new Map<string, string>();
+  let offset = 0;
+  for (const file of files) {
+    const headerEnd = output.indexOf(10, offset);
+    const header = output.subarray(offset, headerEnd).toString();
+    const size = Number(/^[0-9a-f]+ blob (\d+)$/u.exec(header)?.at(1));
+    if (headerEnd === -1 || !Number.isSafeInteger(size)) {
+      panic(`Cannot read expiry base owner ${file}`);
+    }
+    const start = headerEnd + 1;
+    contents.set(file, output.subarray(start, start + size).toString());
+    offset = start + size + 1;
+  }
+  return contents;
+};
+
+/**
+ * The inventory of a base commit. Which files the inventory reads is known
+ * only while it runs, so each round records the files it was missing and the
+ * next round reads them all at once.
+ */
 export const baseWaiverReferences = (
   baseSha: string,
   baseFiles: readonly string[],
 ): WaiverReference[] => {
-  const read = (file: string): string => {
-    const contents = Bun.spawnSync(["git", "show", `${baseSha}:${file}`]);
-    if (contents.exitCode !== 0) {
-      panic(`Cannot read expiry base owner ${file}`);
-    }
-    return contents.stdout.toString();
-  };
-  // Reading every base test file one process at a time is slow; only files
-  // carrying the quarantine marker can contribute entries.
+  // Only test files carrying the quarantine marker can contribute entries.
   const marked = Bun.spawnSync([
     "git",
     "grep",
@@ -862,18 +887,44 @@ export const baseWaiverReferences = (
       .filter(Boolean)
       .map((match) => match.slice(baseSha.length + 1)),
   );
-  return loadWaivers(
-    baseFiles.filter(
-      (file) =>
-        !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) || quarantined.has(file),
-    ),
-    read,
-  ).map(({ kind, source, id, expiresAt }) => ({
-    kind,
-    source,
-    id,
-    expiresAt,
-  }));
+  const files = baseFiles.filter(
+    (file) =>
+      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) || quarantined.has(file),
+  );
+  const contents = new Map<string, string>();
+  for (let round = 0; round < 8; round += 1) {
+    const missing = new Set<string>();
+    const read = (file: string): string => {
+      const text = contents.get(file);
+      if (text === undefined) {
+        missing.add(file);
+        return "";
+      }
+      return text;
+    };
+    let entries: DatedWaiver[] | undefined;
+    try {
+      entries = loadWaivers(files, read);
+    } catch (error) {
+      // A placeholder for an unread file can fail parsing; only an error in
+      // a round that read every file it needed is real.
+      if (missing.size === 0) {
+        throw error;
+      }
+    }
+    if (missing.size === 0 && entries) {
+      return entries.map(({ kind, source, id, expiresAt }) => ({
+        kind,
+        source,
+        id,
+        expiresAt,
+      }));
+    }
+    for (const [file, text] of readCommitFiles(baseSha, [...missing])) {
+      contents.set(file, text);
+    }
+  }
+  return panic("Expiry base inventory did not settle");
 };
 
 if (import.meta.main) {
