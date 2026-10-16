@@ -54,7 +54,7 @@ type Workflow = v.InferOutput<typeof workflowSchema>;
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      (id.startsWith("ci-checks-") && id !== "ci-checks-docs") ||
+      id.startsWith("ci-checks-") ||
       id.startsWith("code-quality-") ||
       id === "typecheck-baseline",
   );
@@ -331,18 +331,19 @@ test("generated-source uploads include ignored compiler configs", () => {
 });
 
 test("the documentation job consumes Markdown without generated-source hydration", () => {
-  const job = workflow.jobs["ci-checks-docs"];
+  const job = workflow.jobs["ci-quick-checks"];
   expect(job?.needs).toBe("ci-plan");
-  expect(job?.["if"]).toContain(
+  const markdown = job?.steps.filter(({ run }) =>
+    run?.includes("--run-markdown-checks"),
+  );
+  expect(markdown).toHaveLength(1);
+  expect(markdown?.at(0)?.if).toContain(
     "needs.ci-plan.outputs.docs_checks_required == 'true'",
   );
   expect(
-    job?.steps.filter(({ run }) => run?.includes("--run-markdown-checks")),
-  ).toHaveLength(1);
-  expect(
     job?.steps.some(({ name }) => name === "Restore generated sources"),
   ).toBe(false);
-  expect(consumerIds(workflow)).not.toContain("ci-checks-docs");
+  expect(consumerIds(workflow)).not.toContain("ci-quick-checks");
   const mutated = structuredClone(workflow);
   mutated.jobs["ci-checks-new"] = {
     needs: "ci-plan",
@@ -390,7 +391,7 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
       }
       switch (mutation) {
         case "dependency":
-          job.needs = ["ci-plan", "dated-waiver-expiry"];
+          job.needs = ["ci-plan", "ci-quick-checks"];
           break;
         case "manifest":
           delete job.env["CI_GENERATED_SOURCES_MANIFEST"];
