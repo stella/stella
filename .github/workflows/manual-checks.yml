@@ -99,6 +99,22 @@ jobs:
       - name: Generate sources
         run: bun run generate
 
+      - name: Locate Tailwind design-system cache
+        if: inputs.check == 'lint'
+        id: tailwind-cache
+        run: echo "path=$(bun scripts/warm-tailwind-design-systems.ts --cache-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Tailwind design-system cache
+        if: inputs.check == 'lint'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.tailwind-cache.outputs.path }}
+          key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
+
+      - name: Warm Tailwind design systems
+        if: inputs.check == 'lint'
+        run: bun run lint:tailwind:warm
+
       - name: Run check
         id: run-check
         continue-on-error: true

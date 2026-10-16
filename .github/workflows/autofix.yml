@@ -504,6 +504,19 @@ jobs:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""
 
+      - name: Locate Tailwind design-system cache
+        id: tailwind-cache
+        run: echo "path=$(bun scripts/warm-tailwind-design-systems.ts --cache-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Tailwind design-system cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.tailwind-cache.outputs.path }}
+          key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
+
+      - name: Warm Tailwind design systems
+        run: bun run lint:tailwind:warm
+
       - name: Prepare environment
         env:
           STELLA_LOCAL_AUTOFIX: "true"
