@@ -1450,7 +1450,7 @@ const reuseStoredOutput = async (
     storeDir: STORE_DIR,
     root: REPO_ROOT,
     context,
-    onUnrecordedAncestor,
+    ...(onUnrecordedAncestor === undefined ? {} : { onUnrecordedAncestor }),
   });
   if (stored === undefined) {
     return false;
