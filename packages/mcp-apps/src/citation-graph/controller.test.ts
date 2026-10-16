@@ -22,7 +22,13 @@ const page = ({
   nextCursor?: string | null;
   citations?: CitationPage["citations"];
 } = {}) =>
-  ({ decisionId, direction, nextCursor, citations }) satisfies CitationPage;
+  ({
+    doctrineAvailability: "unavailable",
+    decisionId,
+    direction,
+    nextCursor,
+    citations,
+  }) satisfies CitationPage;
 
 const citation = (citationId: string, decisionId = "synthetic-target") =>
   ({
@@ -30,6 +36,7 @@ const citation = (citationId: string, decisionId = "synthetic-target") =>
     citationText: `Synthetic citation ${citationId}`,
     textWithheldReason: null,
     polarity: "unclassified",
+    doctrine: null,
     decision: {
       appUrl: `https://stll.app/case-law/${decisionId}`,
       url: `https://example.org/cases/${decisionId}`,

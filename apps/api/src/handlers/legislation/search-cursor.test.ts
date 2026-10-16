@@ -65,7 +65,7 @@ test.each(["DEU", "cze", "cz", "*"])(
 
 test.each(
   PUBLIC_COUNTRIES.filter(
-    (country) => publicCountryUnavailable(country) !== null,
+    (country) => publicCountryUnavailable(country, "search") !== null,
   ),
 )(
   "pending jurisdiction %s returns its capability before reading",
@@ -78,7 +78,7 @@ test.each(
     );
     expect(result).toMatchObject({
       code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      response: publicCountryUnavailable(jurisdiction),
+      response: publicCountryUnavailable(jurisdiction, "search"),
     });
     expect(reads()).toBe(0);
   },

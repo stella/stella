@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
@@ -17,6 +18,7 @@ import { passthroughId, publicUrl } from "./projection-fields";
  * text, withheld where the source bars derived AI use.
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
+  doctrineAvailability: v.picklist(["available", "unavailable"]),
   // The decision the citations were read from, echoed so a paged reply still
   // says what it is about.
   decisionId: passthroughId(),
@@ -34,6 +36,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       // the classifier never reached and one it could not answer for are both
       // the absence of a reading, never a neutral one.
       polarity: v.picklist(CITATION_TREATMENTS),
+      doctrine: v.nullable(v.picklist([...DOCTRINAL_TREATMENTS, "unread"])),
       // Null for a citation the corpus holds no decision for.
       decision: v.nullable(
         v.strictObject({
@@ -61,6 +64,8 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           text: v.string(),
           truncated: v.boolean(),
           mention: v.picklist(CITATION_PASSAGE_MENTIONS),
+          evidenceQuote: v.optional(v.string()),
+          evidenceAnchorId: v.optional(v.nullable(passthroughId())),
         }),
       ),
     }),

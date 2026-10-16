@@ -569,7 +569,7 @@
         "type": "string"
       },
       "reason": {
-        "enum": ["pending_public", "withdrawn"],
+        "enum": ["pages_public", "pending_public", "withdrawn"],
         "type": "string"
       },
       "message": {
@@ -961,6 +961,10 @@
   "read_case_law_citations": {
     "type": "object",
     "properties": {
+      "doctrineAvailability": {
+        "enum": ["available", "unavailable"],
+        "type": "string"
+      },
       "decisionId": {
         "type": "string"
       },
@@ -1004,6 +1008,17 @@
               ],
               "type": "string"
             },
+            "doctrine": {
+              "anyOf": [
+                {
+                  "enum": ["distinguishes", "limits", "not_stated", "unread"],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "decision": {
               "type": ["object", "null"],
               "additionalProperties": true
@@ -1018,6 +1033,7 @@
             "citationText",
             "textWithheldReason",
             "polarity",
+            "doctrine",
             "decision",
             "passage"
           ],
@@ -1025,7 +1041,13 @@
         }
       }
     },
-    "required": ["decisionId", "direction", "nextCursor", "citations"],
+    "required": [
+      "doctrineAvailability",
+      "decisionId",
+      "direction",
+      "nextCursor",
+      "citations"
+    ],
     "additionalProperties": false
   }
 }

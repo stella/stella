@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
-import { CITATION_TREATMENTS } from "./citation-treatments.test-support";
+import { GRAPH_TEST_CITATION_TREATMENTS } from "./citation-treatments.test-support";
 import { parseCitationPage } from "./parse";
 import type { CitationPage } from "./parse";
 
@@ -11,11 +11,13 @@ const validCitation = {
   citationText: "Synthetic citation text",
   textWithheldReason: null,
   polarity: "unclassified",
+  doctrine: null,
   decision: null,
   passage: null,
 } satisfies CitationPage["citations"][number];
 
 const validPage = {
+  doctrineAvailability: "unavailable",
   decisionId: "synthetic-subject",
   direction: "cites",
   nextCursor: null,
@@ -68,7 +70,7 @@ describe("citation page parsing", () => {
   });
 
   test("accepts every declared polarity, including unclassified", () => {
-    for (const polarity of CITATION_TREATMENTS) {
+    for (const polarity of GRAPH_TEST_CITATION_TREATMENTS) {
       expect(
         parseCitationPage({
           ...validPage,

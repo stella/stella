@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
-import { CITATION_TREATMENTS } from "./citation-treatments.test-support";
+import { GRAPH_TEST_CITATION_TREATMENTS } from "./citation-treatments.test-support";
 import {
   canExpand,
   createGraph,
@@ -24,6 +24,7 @@ const citationPage = ({
   citations?: CitationPage["citations"];
 } = {}) =>
   ({
+    doctrineAvailability: "unavailable",
     decisionId,
     direction,
     nextCursor: null,
@@ -51,6 +52,7 @@ const citation = ({
   citationText,
   textWithheldReason,
   polarity,
+  doctrine: null,
   decision: decision
     ? {
         appUrl: `https://stll.app/case-law/${decisionId}`,
@@ -69,22 +71,22 @@ const citation = ({
 
 describe("citation graph model", () => {
   test("preserves resolved and unresolved citations and every polarity", () => {
-    const citations = CITATION_TREATMENTS.map((polarity, index) =>
+    const citations = GRAPH_TEST_CITATION_TREATMENTS.map((polarity, index) =>
       citation({
         citationId: `synthetic-citation-${index}`,
         polarity,
-        decision: index !== CITATION_TREATMENTS.length - 1,
+        decision: index !== GRAPH_TEST_CITATION_TREATMENTS.length - 1,
         decisionId: `synthetic-decision-${index}`,
       }),
     );
     const graph = graphElements(createGraph(citationPage({ citations })));
 
     expect(graph.edges.map(({ polarity }) => polarity)).toEqual([
-      ...CITATION_TREATMENTS,
+      ...GRAPH_TEST_CITATION_TREATMENTS,
     ]);
-    expect(graph.edges).toHaveLength(CITATION_TREATMENTS.length);
+    expect(graph.edges).toHaveLength(GRAPH_TEST_CITATION_TREATMENTS.length);
     expect(graph.nodes.filter(({ type }) => type === "resolved")).toHaveLength(
-      CITATION_TREATMENTS.length - 1,
+      GRAPH_TEST_CITATION_TREATMENTS.length - 1,
     );
     const unresolved =
       citations.at(-1) ?? panic("Missing unresolved citation fixture");

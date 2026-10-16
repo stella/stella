@@ -47,6 +47,7 @@ const citation = (
     citationText: `Fixture reference ${index + 1}`,
     textWithheldReason: null,
     polarity,
+    doctrine: null,
     decision:
       decisionId === null
         ? null
@@ -81,12 +82,14 @@ const firstCitations = [
   citation(6, "unclassified", null),
 ] satisfies CitationPage["citations"];
 const firstPage = {
+  doctrineAvailability: "unavailable",
   decisionId: SUBJECT_ID,
   direction: "cites",
   nextCursor: "fixture-cites-more",
   citations: firstCitations,
 } satisfies CitationPage;
 const morePage = {
+  doctrineAvailability: "unavailable",
   decisionId: SUBJECT_ID,
   direction: "cites",
   nextCursor: null,
@@ -98,6 +101,7 @@ const morePage = {
   ],
 } satisfies CitationPage;
 const expandedPage = {
+  doctrineAvailability: "unavailable",
   decisionId: DECISION_IDS[0],
   direction: "cites",
   nextCursor: null,
@@ -430,6 +434,7 @@ for (const direction of ["cites", "cited_by"] as const) {
       const subjectCitation = citation(10, "neutral", SUBJECT_ID);
       const expansionPages = [
         {
+          doctrineAvailability: "unavailable",
           decisionId: DECISION_IDS[0],
           direction,
           nextCursor: null,
@@ -440,6 +445,7 @@ for (const direction of ["cites", "cited_by"] as const) {
           ],
         },
         {
+          doctrineAvailability: "unavailable",
           decisionId: DECISION_IDS[1],
           direction,
           nextCursor: null,

@@ -4,6 +4,7 @@ import type * as v from "valibot";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 export type CitationPage = {
+  doctrineAvailability: "available" | "unavailable";
   decisionId: string;
   direction: "cites" | "cited_by";
   nextCursor: string | null;
@@ -18,6 +19,7 @@ export type CitationPage = {
       | "supportive"
       | "mixed"
       | "unclassified";
+    doctrine: "distinguishes" | "limits" | "not_stated" | "unread" | null;
     decision: {
       appUrl: string | null;
       url: string | null;
@@ -40,6 +42,8 @@ export type CitationPage = {
       text: string;
       truncated: boolean;
       mention: "sole" | "classified_section" | "latest_of_several";
+      evidenceQuote?: string | undefined;
+      evidenceAnchorId?: string | null | undefined;
     } | null;
   }>;
 };

@@ -382,6 +382,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
+    "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
+  ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
@@ -1630,6 +1633,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -3170,6 +3174,25 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/legal-reader/*chat*.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
+        "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
+        "packages/chat/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.tsx",
+        // These are settings/navigation chrome, outside message content.
+        "apps/web/src/components/chat/chat-model-options-menu.tsx",
+        "apps/web/src/components/chat/chat-matter-picker.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
+      },
+    },
+    {
       // The reader's face is inherited from the reader root, which reader.css
       // sets from `--reader-body-font`. A font utility on one element inside
       // it mixes two faces in one document; chrome that is sans on purpose
@@ -4186,6 +4209,9 @@ const config = defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
+              // The test network guard refuses to install while the process
+              // routes fetch through a remote proxy from the environment.
+              "packages/test-kit/src/network.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.

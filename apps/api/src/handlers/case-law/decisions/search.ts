@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  getColumns,
+  inArray,
+  isNotNull,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
@@ -27,6 +35,7 @@ import {
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -126,6 +135,14 @@ import {
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
+import {
+  type CaseLawProvisionFilter,
+  type CaseLawProvisionScope,
+  citingDecisionIdsSubquery,
+  provisionCitedSql,
+  readCaseLawProvisionScope,
+  readProvisionCitingSentences,
+} from "@/api/lib/case-law/provision-filter";
 import {
   loadPublicCourtWeights,
   loadPublicFtsSearchConfigs,
@@ -255,11 +272,19 @@ import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-in
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
+} from "@/api/lib/pagination";
+import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { escapeAndHighlight } from "@/api/lib/search/highlight";
+import {
+  escapeAndHighlight,
+  escapeSearchHtml,
+} from "@/api/lib/search/highlight";
 
 import { projectCaseLawSearchResponse } from "./search-response";
 
@@ -313,6 +338,18 @@ type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
   sentenceAlignedExcerpt?: boolean;
   /** Internal MCP reading policy; HTTP rows retain the compact preview. */
   headnotePresentation?: "expanded";
+  /**
+   * Every decision citing `provision`, read from the provision links before
+   * the engine runs: the engine filters by the set natively. Absent when the
+   * provision is cited too widely for a set, and then each ranked candidate
+   * is checked against the links instead.
+   */
+  provisionDecisionIds?: readonly SafeId<"caseLawDecision">[];
+  /**
+   * The provision's citing set, when the caller read it already (an agent
+   * search reads it once for all its phrasings and warns when it is broad).
+   */
+  provisionScope?: CaseLawProvisionScope;
 };
 
 type PostgresSearchBody = Omit<
@@ -335,6 +372,7 @@ export const searchDecisionsHandler = async ({
 }: SearchDecisionsHandlerArgs) => {
   const countryRead = readPublicLawCountry(body.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -360,8 +398,23 @@ export const searchDecisionsHandler = async ({
   }
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
+    const { provision } = scopedBody;
+    const provisionScope =
+      scopedBody.provisionScope ??
+      (provision === undefined
+        ? null
+        : await caseLawDb(
+            async (tx) =>
+              await readCaseLawProvisionScope(tx, {
+                jurisdiction: country,
+                provision,
+              }),
+          ));
     return await searchCorpusIndexDecisions({
-      body: scopedBody,
+      body:
+        provisionScope?.type === "decisions"
+          ? { ...scopedBody, provisionDecisionIds: provisionScope.decisionIds }
+          : scopedBody,
       caseLawDb,
       observer,
     });
@@ -465,6 +518,13 @@ export const caseLawSearchPlan = ({
   const languageFilter = body.language
     ? sql`AND d.language = ${body.language}`
     : sql``;
+  const provisionFilter = body.provision
+    ? sql`AND ${provisionCitedSql({
+        decisionId: sql`d.id`,
+        jurisdiction: body.country,
+        provision: body.provision,
+      })}`
+    : sql``;
 
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
@@ -501,6 +561,7 @@ export const caseLawSearchPlan = ({
     ${typeFilter}
     ${sourceFilter}
     ${languageFilter}
+    ${provisionFilter}
   `;
 
   // The citing court can belong to any jurisdiction — citation graphs cross
@@ -659,6 +720,7 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${typeFilter}
@@ -679,6 +741,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${typeFilter}
       ${sourceFilter}
       ${languageFilter}
@@ -701,6 +764,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${sourceFilter}
@@ -720,6 +784,7 @@ export const caseLawSearchPlan = ({
         ${courtFilter}
         ${courtListFilter}
         ${countryFilter}
+        ${provisionFilter}
         ${dateFromFilter}
         ${dateToFilter}
         ${typeFilter}
@@ -759,6 +824,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${typeFilter}
@@ -1078,6 +1144,7 @@ const buildCorpusIndexQuery = ({
       courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
+      decisionIds: body.provisionDecisionIds,
       documentType: body.decisionType,
       jurisdiction: jurisdictionClause,
       language: body.language,
@@ -1274,6 +1341,7 @@ type CaseLawSearchRowFilterBody = Pick<
   | "courts"
   | "category"
   | "hasLegalSentence"
+  | "provision"
   | "dateFrom"
   | "dateTo"
   | "decisionType"
@@ -1306,6 +1374,15 @@ export const caseLawSearchRowFilters = (
   if (body.hasLegalSentence !== undefined) {
     filters.push(
       sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
+  }
+  if (body.provision !== undefined) {
+    filters.push(
+      provisionCitedSql({
+        decisionId: sql`${caseLawDecisions.id}`,
+        jurisdiction: body.country,
+        provision: body.provision,
+      }),
     );
   }
   filters.push(eq(caseLawDecisions.country, body.country));
@@ -2056,7 +2133,10 @@ const readCaseLawSearchFacets = async ({
   if (
     queryFor === null ||
     body.category !== undefined ||
-    body.hasLegalSentence !== undefined
+    body.hasLegalSentence !== undefined ||
+    // An id-set provision filter is the engine's own; only the candidate
+    // check a broad provision falls back to is invisible to aggregations.
+    (body.provision !== undefined && body.provisionDecisionIds === undefined)
   ) {
     return null;
   }
@@ -2775,6 +2855,250 @@ export const searchCorpusIndexDecisions = async ({
         countsResultSet:
           isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
       }),
+    },
+    decisionHeadnoteMaxChars(body.headnotePresentation),
+  );
+};
+
+type ListCaseLawProvisionDecisionsOptions = {
+  body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
+  caseLawDb: CaseLawPublicReadDb;
+  dependencies?: {
+    /** The serving generation, read from the enrollment store when absent. */
+    servingGeneration?: string;
+    /** The search provider, `LEGAL_SEARCH_PROVIDER` when absent. */
+    provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
+    /** The court registry, the public one when absent, as search takes it. */
+    loadCourtWeights?: typeof loadPublicCourtWeights;
+  };
+};
+
+type ProvisionListCursor = {
+  key: number | string;
+  id: SafeId<"caseLawDecision">;
+};
+
+/**
+ * Whether a cursor key is a value the order's column can hold: an authority
+ * is a finite number, a date a calendar date. Anything else is refused
+ * before it reaches the comparison.
+ */
+const isProvisionListKey = (sort: SearchSort, key: unknown): boolean => {
+  switch (sort) {
+    case "relevance":
+      return typeof key === "number" && Number.isFinite(key);
+    case "newest":
+      return isDateOnlyPaginationCursorPart(key);
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
+};
+
+/**
+ * The page boundary a provision list resumes after, bound to the request it
+ * was issued for: a cursor from a different provision, filter set or order
+ * is refused rather than read as a position in this one.
+ */
+const readProvisionListCursor = (
+  cursor: string,
+  context: string,
+  sort: SearchSort,
+): ProvisionListCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (parts?.length !== 3) {
+    return null;
+  }
+  const [cursorContext, key, id] = parts;
+  if (
+    cursorContext !== context ||
+    !(typeof key === "number" || typeof key === "string") ||
+    !isProvisionListKey(sort, key) ||
+    typeof id !== "string" ||
+    !isUuid(id)
+  ) {
+    return null;
+  }
+  return { key, id: toSafeId<"caseLawDecision">(id) };
+};
+
+/**
+ * Every decision citing a provision, with no topic to rank by: the complete
+ * list, read from the provision links (driven by their work index), ordered
+ * by citation authority or, for `newest`, by decision date, with an exact
+ * total and keyset pagination. Each hit's excerpt is the first sentence of
+ * the decision that cites the provision. The rows are re-checked against the
+ * serving generation like every search page.
+ */
+export const listCaseLawProvisionDecisions = async ({
+  body,
+  caseLawDb,
+  dependencies = {},
+}: ListCaseLawProvisionDecisionsOptions) => {
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
+  const sort = body.sort ?? DEFAULT_SEARCH_SORT;
+  const scope = { jurisdiction: body.country, provision: body.provision };
+  // Total over the row filters the page applies, so a filter added there
+  // cannot be left out of what a cursor is bound to.
+  const filtersBound = {
+    country: body.country,
+    court: body.court ?? null,
+    courts: body.courts ?? null,
+    category: body.category ?? null,
+    hasLegalSentence: body.hasLegalSentence ?? null,
+    provision: body.provision,
+    dateFrom: body.dateFrom ?? null,
+    dateTo: body.dateTo ?? null,
+    decisionType: body.decisionType ?? null,
+    sourceId: body.sourceId ?? null,
+    language: body.language ?? null,
+  } satisfies Record<keyof CaseLawSearchRowFilterBody, unknown>;
+  const context = sha256Hex(JSON.stringify([filtersBound, sort]));
+  const cursor =
+    body.cursor === undefined
+      ? null
+      : readProvisionListCursor(body.cursor, context, sort);
+  if (body.cursor !== undefined && cursor === null) {
+    return status(400, { message: "Invalid cursor" });
+  }
+  // Every page is re-checked against the serving generation's projection,
+  // which only the corpus-index provider keeps, as the category and
+  // legal-sentence filters are.
+  if (
+    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) !== "corpus-index"
+  ) {
+    return status(400, {
+      message:
+        "A provision-only list requires corpus-index search. Pass queries with the provision, or use a corpus-index deployment.",
+    });
+  }
+  let generation = dependencies.servingGeneration;
+  if (generation === undefined) {
+    const target = await caseLawDb(
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction: body.country,
+        }),
+    );
+    if (Result.isError(target)) {
+      return servingTargetRefusal(target.error);
+    }
+    generation = target.value.serving.generation;
+  }
+  const keyColumn =
+    sort === "newest"
+      ? caseLawDecisions.decisionDate
+      : caseLawDecisions.citationAuthority;
+  // One transaction is one snapshot (public reads are repeatable read): the
+  // ids, the total, the citing sentences and the page rows all describe the
+  // same state, so an excerpt cannot be paired with a later revision.
+  const { rows, total, sentences, byId } = await caseLawDb(async (tx) => {
+    const filters = and(
+      inArray(caseLawDecisions.id, citingDecisionIdsSubquery(tx, scope)),
+      ...caseLawSearchRowFilters(body, generation),
+      // `newest` lists dated decisions only, as the search's order does.
+      ...(sort === "newest" ? [isNotNull(caseLawDecisions.decisionDate)] : []),
+    );
+    const page = await tx
+      .select({
+        id: caseLawDecisions.id,
+        key: keyColumn,
+        citationAuthority: caseLawDecisions.citationAuthority,
+      })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(
+        cursor === null
+          ? filters
+          : and(
+              filters,
+              sql`(${keyColumn}, ${caseLawDecisions.id}) < (${cursor.key}, ${cursor.id})`,
+            ),
+      )
+      .orderBy(desc(keyColumn), desc(caseLawDecisions.id))
+      .limit(limit + 1);
+    // sql-perf-allow: bounded by the provision's own links, read through their work index
+    const [counted] = await tx
+      .select({ total: sql<number>`count(*)::int` })
+      .from(caseLawDecisions)
+      .innerJoin(
+        caseLawSources,
+        eq(caseLawSources.id, caseLawDecisions.sourceId),
+      )
+      .where(filters);
+    const pageIds = page.slice(0, limit).map(({ id }) => id);
+    const hydrated = await pageDecisionRowsQuery(tx, {
+      body,
+      generation,
+      ids: pageIds,
+    });
+    return {
+      rows: page,
+      total: counted?.total ?? panic("A count query returned no row"),
+      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+      byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
+    };
+  });
+  const emitted = rows.slice(0, limit);
+  const last = emitted.at(-1);
+  const nextCursor =
+    rows.length > limit && last !== undefined && last.key !== null
+      ? encodePaginationCursor([context, last.key, last.id])
+      : null;
+  const pageRanked: RankedHit[] = emitted.map((row) => ({
+    id: String(row.id),
+    score: row.citationAuthority,
+    lexicalScore: 0,
+    citationAuthority: row.citationAuthority,
+  }));
+  const alternates = await readPublicDecisionLanguageAlternatesByGroup({
+    caseLawDb,
+    languageGroupKeys: languageGroupKeysOf(pageRanked, byId),
+  });
+  const courtWeights = await (
+    dependencies.loadCourtWeights ?? loadPublicCourtWeights
+  )();
+  const page = decisionHitsPage({
+    alternatesByGroupKey: alternates,
+    anchorIdById: new Map(),
+    byId,
+    courtWeights,
+    facets: null,
+    nextCursor,
+    pageRanked,
+    passageCountById: new Map(),
+    // A headline is rendered as markup; a citing sentence is stored text,
+    // so it is escaped like any snippet (it carries no highlights).
+    snippetById: new Map(
+      [...sentences].map(([id, sentence]) => [id, escapeSearchHtml(sentence)]),
+    ),
+    // The sentences and the rows share one snapshot, so each excerpt belongs
+    // to the revision its row was read at.
+    // A row with no applied revision pairs with no excerpt revision, so its
+    // sentence is not shown, as on the search page.
+    snippetRevisionById: new Map(
+      [...byId.values()].flatMap((row) =>
+        row.appliedRevision === null
+          ? []
+          : [[String(row.id), row.appliedRevision] as const],
+      ),
+    ),
+    headnotePresentation: body.headnotePresentation,
+    total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, total),
+  });
+  return projectCaseLawSearchResponse(
+    {
+      ...page,
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      pageReach: SEARCH_PAGE_REACH.REACHED,
+      queryUsed: "",
+      warnings: [],
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
