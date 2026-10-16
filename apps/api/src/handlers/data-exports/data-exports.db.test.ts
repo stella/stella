@@ -404,6 +404,68 @@ describe("data export run", () => {
 });
 
 describe("data export maintenance", () => {
+  test("expires ready exports in bounded batches and continues the remainder", async () => {
+    const now = new Date("2026-10-14T12:00:00.000Z");
+    const exportIds: SafeId<"dataExport">[] = [];
+    for (let index = 0; index < 9; index += 1) {
+      exportIds.push(
+        await insertExport({
+          organizationId: ids.orgA,
+          status: "ready",
+          expiresAt: new Date(now.getTime() - 9000 + index * 1000),
+        }),
+      );
+    }
+
+    const continuations: Date[] = [];
+    const task = createMaintainDataExportsTask({
+      enqueue: async () => "requeued",
+    });
+    const runMaintenance = async (nextRunAt: Date) =>
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          dueAt: DueSlot.of({ nextRunAt }),
+          logger: { info: () => {}, warn: () => {}, error: () => {} },
+          scheduleContinuation: (continuationAt: Date) =>
+            continuations.push(continuationAt),
+          signal: new AbortController().signal,
+        }),
+      );
+
+    const firstResult = await runMaintenance(now);
+    expect(firstResult !== undefined && Result.isOk(firstResult)).toBe(true);
+    const continuationAt = new Date(now.getTime() + 1000);
+    expect(continuations).toEqual([continuationAt]);
+
+    const readStatuses = async () =>
+      new Map(
+        (
+          await testDb
+            .select({
+              id: organizationDataExports.id,
+              status: organizationDataExports.status,
+            })
+            .from(organizationDataExports)
+            .where(inArray(organizationDataExports.id, exportIds))
+        ).map((row) => [row.id, row.status]),
+      );
+
+    const firstStatuses = await readStatuses();
+    for (const [index, exportId] of exportIds.entries()) {
+      expect(firstStatuses.get(exportId)).toBe(index < 8 ? "expired" : "ready");
+    }
+
+    const secondResult = await runMaintenance(continuationAt);
+    expect(secondResult !== undefined && Result.isOk(secondResult)).toBe(true);
+    expect(continuations).toHaveLength(1);
+
+    const finalStatuses = await readStatuses();
+    for (const exportId of exportIds) {
+      expect(finalStatuses.get(exportId)).toBe("expired");
+    }
+  });
+
   test("marks exports expired without deleting objects, and refuses their downloads", async () => {
     // Export objects are deleted by the bucket lifecycle, never by the app:
     // the maintenance task only stops offering them.

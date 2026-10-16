@@ -160,7 +160,7 @@ const createPagedReader = ({
     let afterId: string | null = null;
     for (;;) {
       signal.throwIfAborted();
-      // db-await-in-loop: keyset pages are sequential by design, each in its own short transaction; the loop ends at the first short page
+      // Keyset pages are sequential by design, each in its own short transaction; the loop ends at the first short page
       const page = await readPage(afterId);
       rows.push(...page);
       const last = page.at(-1);
@@ -175,7 +175,7 @@ const createPagedReader = ({
     const rows: Awaited<ReturnType<typeof readChunk>> = [];
     for (const ids of chunk(parentIds, DATA_EXPORT_PAGE_SIZE)) {
       signal.throwIfAborted();
-      // db-await-in-loop: one bounded child read per parent page, sequential to keep load low
+      // One bounded child read per parent page, sequential to keep load low
       rows.push(...(await readChunk(ids)));
       await pace();
     }

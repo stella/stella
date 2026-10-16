@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/handlers/data-exports/export-source.ts",
-  "delta": 2,
-  "reason": "Organization data exports read keyset pages and bounded child pages one after another on purpose: each page is its own short transaction with a pause between pages, so a low-priority export never holds a long transaction or runs queries in parallel against interactive traffic."
-}

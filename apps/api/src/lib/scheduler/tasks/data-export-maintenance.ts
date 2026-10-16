@@ -32,7 +32,7 @@ import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
 
 /** Rows handled per state per tick; a continuation takes the rest. */
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 8;
 const CONTINUATION_DELAY_MS = 1000;
 /** A queued export older than this has lost its queue handoff. */
 const QUEUED_HANDOFF_SETTLE_MS = 5 * 60 * 1000;
@@ -107,27 +107,26 @@ const recordSweepChange =
     });
   };
 
-/** Apply `move` to every row in its own short transaction; count the moved. */
+/** Apply one bounded page sequentially, keeping each export in its own transaction. */
 const moveEach = async (
   db: SchedulerDb,
   rows: readonly SweepRow[],
   move: (tx: Transaction, row: SweepRow) => Promise<{ type: string }>,
   summary: MaintenanceSummary,
 ): Promise<number> => {
-  const results = await Promise.all(
-    rows.map(
-      async (row) =>
-        await Result.tryPromise(
-          async () =>
-            await withAggregateTransaction(
-              db,
-              async (tx: Transaction) => await move(tx, row),
-            ),
-        ),
-    ),
-  );
   let moved = 0;
-  for (const result of results) {
+  for (let index = 0; index < BATCH_SIZE; index += 1) {
+    const row = rows.at(index);
+    if (row === undefined) {
+      break;
+    }
+    const result = await Result.tryPromise(
+      async () =>
+        await withAggregateTransaction(
+          db,
+          async (tx: Transaction) => await move(tx, row),
+        ),
+    );
     if (Result.isError(result)) {
       summary.errors.push(result.error);
       continue;
