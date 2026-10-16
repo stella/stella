@@ -207,12 +207,40 @@ export const createWebHangDetector = ({
   let reported = false;
   let notified = false;
   let analytics: HangAnalytics | undefined;
-  let idlePending = false;
+  let bootCompletion: "waiting-for-route" | "ready" | "scheduled" =
+    "waiting-for-route";
   const persist = () => {
     if (!storageReady || stopped) {
       return;
     }
     writeHangMarker({ storage: local, key, marker });
+  };
+  const scheduleBootCompletion = () => {
+    if (bootCompletion !== "ready" || marker.phase === "session" || stopped) {
+      return;
+    }
+    bootCompletion = "scheduled";
+    const interactive = () => {
+      bootCompletion = "ready";
+      if (stopped) {
+        return;
+      }
+      marker = { ...marker, phase: "session", heartbeat: now() };
+      // Remove the failed-boot record after recovery; subsequent heartbeats
+      // describe the healthy session rather than triggering recovery again.
+      if (safeMode) {
+        Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
+      } else {
+        persist();
+      }
+    };
+    if (typeof browser.requestIdleCallback === "function") {
+      browser.requestIdleCallback(interactive);
+    } else {
+      browser.requestAnimationFrame(() => {
+        browser.setTimeout(interactive, 0);
+      });
+    }
   };
   const pulse = () => {
     if (browser.document.visibilityState !== "visible") {
@@ -236,6 +264,7 @@ export const createWebHangDetector = ({
   const onShow = () => {
     stopped = false;
     onVisibility();
+    scheduleBootCompletion();
   };
   const timer = browser.setInterval(pulse, HANG_HEARTBEAT_MS);
   browser.document.addEventListener("visibilitychange", onVisibility);
@@ -275,30 +304,10 @@ export const createWebHangDetector = ({
     routeReady: (routeTemplate: string) => {
       marker = { ...marker, routeTemplate };
       persist();
-      if (idlePending || marker.phase === "session") {
-        return;
+      if (bootCompletion === "waiting-for-route") {
+        bootCompletion = "ready";
       }
-      idlePending = true;
-      const interactive = () => {
-        if (stopped) {
-          return;
-        }
-        marker = { ...marker, phase: "session", heartbeat: now() };
-        // Remove the failed-boot record after recovery; subsequent heartbeats
-        // describe the healthy session rather than triggering recovery again.
-        if (safeMode) {
-          Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
-        } else {
-          persist();
-        }
-      };
-      if (typeof browser.requestIdleCallback === "function") {
-        browser.requestIdleCallback(interactive);
-      } else {
-        browser.requestAnimationFrame(() => {
-          browser.setTimeout(interactive, 0);
-        });
-      }
+      scheduleBootCompletion();
     },
     notifyRecovery: (notify: () => void) => {
       if (!safeMode || notified) {

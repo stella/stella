@@ -259,6 +259,51 @@ test("boot markers contain a template immediately and complete only after router
     }
   }
 });
+test("a restored page completes boot after its idle callback ran while stopped", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    window,
+    "requestIdleCallback",
+  );
+  const idleTasks: (() => void)[] = [];
+  Object.defineProperty(window, "requestIdleCallback", {
+    configurable: true,
+    value: (task: () => void) => {
+      idleTasks.push(task);
+      return idleTasks.length;
+    },
+  });
+  let clock = 100;
+  try {
+    const { detector, markerKey } = setup({ now: () => clock });
+    if (markerKey === undefined) {
+      throw new DOMException("Document marker required");
+    }
+    detector.routeReady("/chat/$threadId");
+    expect(idleTasks).toHaveLength(1);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(local.getItem(markerKey)).toBeNull();
+    idleTasks.shift()?.();
+    expect(idleTasks).toHaveLength(0);
+    expect(local.getItem(markerKey)).toBeNull();
+    window.dispatchEvent(new Event("pageshow"));
+    expect(local.getItem(markerKey)).toContain('"phase":"boot"');
+    expect(idleTasks).toHaveLength(1);
+    idleTasks.shift()?.();
+    expect(local.getItem(markerKey)).toContain('"phase":"session"');
+    detector.dispose();
+    clock += HANG_STALE_MS + 1;
+    const next = setup({ now: () => clock });
+    expect(next.hangs).toHaveLength(1);
+    expect(next.hangs.at(0)?.phase).toBe("session");
+    expect(next.detector.safeMode).toBe(false);
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(window, "requestIdleCallback", descriptor);
+    } else {
+      Reflect.deleteProperty(window, "requestIdleCallback");
+    }
+  }
+});
 test("a successful safe boot clears its marker before monitoring the healthy session", () => {
   seed("boot");
   const descriptor = Object.getOwnPropertyDescriptor(
