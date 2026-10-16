@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmínka} few {# zmínky} other {# zmínek}}",
       "provisionsCited": "Dotčená ustanovení",
+      "provisionsFailed": "Zpracování citací selhalo",
+      "provisionsNoneFound": "Nenalezena žádná citovaná ustanovení",
+      "provisionsProcessing": "Citace se zpracovávají",
+      "provisionsUnavailable": "Citace nejsou dostupné",
+      "provisionsUnplaceable": "Citace nelze umístit do textu rozhodnutí",
+      "provisionsUnsupported": "Zpracování citací není pro toto rozhodnutí podporováno",
+      "provisionsWithheld": "Citace nejsou zpřístupněny",
       "sourceFields": {
         "decisionCategory": "Kategorie rozhodnutí",
         "publishedOnWeb": "Zveřejněno na webu"
