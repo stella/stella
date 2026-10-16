@@ -35,7 +35,7 @@ import {
   isLatestOpenedVersionOfWorkAt,
   listedLegislationRef,
 } from "@/api/lib/legal-search/legislation-listed-version";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   applicableKind,
   eligibleExpression,
@@ -272,6 +272,7 @@ export const listStatutesHandler = async (
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -371,7 +372,7 @@ export const buildListStatutesQuery = (
   { country, query, limit, cursor, asOf }: BuildListStatutesQueryOptions,
 ) => {
   const conditions: SQL[] = [
-    publishedLegislationDocument,
+    publishedLegislationDocumentFor("search"),
     eq(legislationDocuments.country, country),
     isLatestOpenedVersionOfWorkAt(asOf),
   ];

@@ -121,7 +121,7 @@ const mcpContext = (
   },
   safeDb,
   scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(() => {
-    throw new Error("manage_organization reads through safeDb");
+    throw new Error("update_organization_settings reads through safeDb");
   }),
   userId: toSafeId<"user">("user_1"),
   userEmail: "admin@example.test",
@@ -152,10 +152,11 @@ const updateOverMcp = async ({
 }) => {
   const db = capturingDb(stored);
   const audits: Parameters<AuditRecorder>[1][] = [];
-  const response = await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
-    args: { action: "update_org_settings", ...args },
-    context: mcpContext(memberRole, db.safeDb, audits),
-  });
+  const response =
+    await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+      args,
+      context: mcpContext(memberRole, db.safeDb, audits),
+    });
   return { ...toolPayload(response), writes: db.writes(), audits };
 };
 
@@ -267,7 +268,7 @@ describe("organization time zone REST/MCP/CLI parity", () => {
   test("the MCP input and the REST body accept the same values", async () => {
     expect(
       DEFAULT_MCP_TOOL_DEFINITIONS.find(
-        (tool) => tool.name === "manage_organization",
+        (tool) => tool.name === "update_organization_settings",
       )?.inputSchema.properties,
     ).toHaveProperty("time_zone");
 

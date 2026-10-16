@@ -50,204 +50,219 @@ chat_messages.memory_extraction_eligible  boolean          default,not null  cha
 chat_messages.created_at                  timestamptz      default,not null  chat.ts:358
 ```
 
-## chat_message_revisions · `chatMessageRevisions` · chat.ts:377 · rls
+## chat_content_v3_backfill_receipts · `chatContentV3BackfillReceipts` · chat.ts:397 · rls
+
+Owner-only repair receipts retain identifiers and fixed reasons after deletion, never chat content.
+
+```text
+chat_content_v3_backfill_receipts.source           text                not null          chat.ts:400
+chat_content_v3_backfill_receipts.row_id           uuid                not null          chat.ts:401
+chat_content_v3_backfill_receipts.message_id       safeUuid            not null          chat.ts:402
+chat_content_v3_backfill_receipts.organization_id  safeOrganizationId  not null          chat.ts:403
+chat_content_v3_backfill_receipts.from_version     integer             null              chat.ts:405  Null means the stored value has no recognizable integer version.
+chat_content_v3_backfill_receipts.outcome          text                not null          chat.ts:406
+chat_content_v3_backfill_receipts.reason           text                not null          chat.ts:407
+chat_content_v3_backfill_receipts.recorded_at      timestamptz         default,not null  chat.ts:408
+```
+
+## chat_message_revisions · `chatMessageRevisions` · chat.ts:442 · rls
 
 Immutable snapshots of the content replaced by each accepted edit.
 
 ```text
-chat_message_revisions.id            pUuid            pk,not null       chat.ts:380
-chat_message_revisions.message_id    safeUuid         not null          chat.ts:381
-chat_message_revisions.thread_id     safeUuid         fk,not null       chat.ts:382
-chat_message_revisions.workspace_id  safeWorkspaceId  fk,null           chat.ts:385
-chat_message_revisions.revision      integer          not null          chat.ts:390  Revision of the replaced content; revision zero is the original.
-chat_message_revisions.content       jsonb            not null          chat.ts:391
-chat_message_revisions.edit          jsonb            not null          chat.ts:392
-chat_message_revisions.created_by    text             fk,null           chat.ts:393
-chat_message_revisions.created_at    timestamptz      default,not null  chat.ts:396
+chat_message_revisions.id            pUuid            pk,not null       chat.ts:445
+chat_message_revisions.message_id    safeUuid         not null          chat.ts:446
+chat_message_revisions.thread_id     safeUuid         fk,not null       chat.ts:447
+chat_message_revisions.workspace_id  safeWorkspaceId  fk,null           chat.ts:450
+chat_message_revisions.revision      integer          not null          chat.ts:455  Revision of the replaced content; revision zero is the original.
+chat_message_revisions.content       jsonb            not null          chat.ts:456
+chat_message_revisions.edit          jsonb            not null          chat.ts:457
+chat_message_revisions.created_by    text             fk,null           chat.ts:458
+chat_message_revisions.created_at    timestamptz      default,not null  chat.ts:461
 ```
 
-## chat_turns · `chatTurns` · chat.ts:427 · rls
+## chat_turns · `chatTurns` · chat.ts:500 · rls
 
 Durable ownership and settlement for one assistant turn.
 
 ```text
-chat_turns.id                        pUuid               pk,not null       chat.ts:430
-chat_turns.organization_id           safeOrganizationId  fk,not null       chat.ts:431
-chat_turns.workspace_id              safeWorkspaceId     fk,null           chat.ts:434
-chat_turns.user_id                   text                fk,not null       chat.ts:438
-chat_turns.thread_id                 safeUuid            fk,not null       chat.ts:442
-chat_turns.user_message_id           safeUuid            not null          chat.ts:445
-chat_turns.assistant_message_id      safeUuid            null              chat.ts:446
-chat_turns.status                    text                default,not null  chat.ts:447
-chat_turns.execution_id              uuid                null              chat.ts:448
-chat_turns.lease_expires_at          timestamptz         null              chat.ts:449
-chat_turns.interaction_type          text                null              chat.ts:450
-chat_turns.interaction_tool_call_id  text                null              chat.ts:453
-chat_turns.failure_code              text                null              chat.ts:454
-chat_turns.failure_retryable         boolean             null              chat.ts:455
-chat_turns.cancellation_reason       text                null              chat.ts:456
-chat_turns.interruption_reason       text                null              chat.ts:459
-chat_turns.settled_at                timestamptz         null              chat.ts:462
-chat_turns.cancel_requested_at       timestamptz         null              chat.ts:464  The first stop request; the execution owner settles on it.
-chat_turns.run_id                    text                null              chat.ts:469  The client-minted id of the turn's latest run, bound when the run starts and kept once the turn settles.
-chat_turns.created_at                timestamptz         default,not null  chat.ts:470
-chat_turns.updated_at                timestamptz         default,not null  chat.ts:471
+chat_turns.id                        pUuid               pk,not null       chat.ts:503
+chat_turns.organization_id           safeOrganizationId  fk,not null       chat.ts:504
+chat_turns.workspace_id              safeWorkspaceId     fk,null           chat.ts:507
+chat_turns.user_id                   text                fk,not null       chat.ts:511
+chat_turns.thread_id                 safeUuid            fk,not null       chat.ts:515
+chat_turns.user_message_id           safeUuid            not null          chat.ts:518
+chat_turns.assistant_message_id      safeUuid            null              chat.ts:519
+chat_turns.status                    text                default,not null  chat.ts:520
+chat_turns.execution_id              uuid                null              chat.ts:521
+chat_turns.lease_expires_at          timestamptz         null              chat.ts:522
+chat_turns.interaction_type          text                null              chat.ts:523
+chat_turns.interaction_tool_call_id  text                null              chat.ts:526
+chat_turns.failure_code              text                null              chat.ts:527
+chat_turns.failure_retryable         boolean             null              chat.ts:528
+chat_turns.cancellation_reason       text                null              chat.ts:529
+chat_turns.interruption_reason       text                null              chat.ts:532
+chat_turns.settled_at                timestamptz         null              chat.ts:535
+chat_turns.cancel_requested_at       timestamptz         null              chat.ts:537  The first stop request; the execution owner settles on it.
+chat_turns.run_id                    text                null              chat.ts:542  The client-minted id of the turn's latest run, bound when the run starts and kept once the turn settles.
+chat_turns.created_at                timestamptz         default,not null  chat.ts:543
+chat_turns.updated_at                timestamptz         default,not null  chat.ts:544
 ```
 
-## chat_run_logs · `chatRunLogs` · chat.ts:644 · rls
+## chat_run_logs · `chatRunLogs` · chat.ts:717 · rls
 
 Transient delivery log for one execution run; the turn remains authoritative.
 
 ```text
-chat_run_logs.organization_id  safeOrganizationId  not null          chat.ts:647
-chat_run_logs.run_id           text                not null          chat.ts:648
-chat_run_logs.turn_id          safeUuid            fk,not null       chat.ts:649
-chat_run_logs.next_seq         bigint              default,not null  chat.ts:652
-chat_run_logs.bytes_used       bigint              default,not null  chat.ts:653
-chat_run_logs.created_at       timestamptz         default,not null  chat.ts:654
-chat_run_logs.closed_at        timestamptz         null              chat.ts:655
+chat_run_logs.organization_id  safeOrganizationId  not null          chat.ts:720
+chat_run_logs.run_id           text                not null          chat.ts:721
+chat_run_logs.turn_id          safeUuid            fk,not null       chat.ts:722
+chat_run_logs.next_seq         bigint              default,not null  chat.ts:725
+chat_run_logs.bytes_used       bigint              default,not null  chat.ts:726
+chat_run_logs.created_at       timestamptz         default,not null  chat.ts:727
+chat_run_logs.closed_at        timestamptz         null              chat.ts:728
 ```
 
-## chat_run_log_entries · `chatRunLogEntries` · chat.ts:682 · rls
+## chat_run_log_entries · `chatRunLogEntries` · chat.ts:755 · rls
 
 Ordered chunks; deleting a log header removes its whole transient prefix.
 
 ```text
-chat_run_log_entries.organization_id  safeOrganizationId  not null  chat.ts:685
-chat_run_log_entries.run_id           text                not null  chat.ts:686
-chat_run_log_entries.seq              bigint              not null  chat.ts:687
-chat_run_log_entries.batch_id         uuid                not null  chat.ts:688
-chat_run_log_entries.batch_index      integer             not null  chat.ts:689
-chat_run_log_entries.chunk            jsonb               not null  chat.ts:690
+chat_run_log_entries.organization_id  safeOrganizationId  not null  chat.ts:758
+chat_run_log_entries.run_id           text                not null  chat.ts:759
+chat_run_log_entries.seq              bigint              not null  chat.ts:760
+chat_run_log_entries.batch_id         uuid                not null  chat.ts:761
+chat_run_log_entries.batch_index      integer             not null  chat.ts:762
+chat_run_log_entries.chunk            jsonb               not null  chat.ts:763
 ```
 
-## file_chat_threads · `fileChatThreads` · chat.ts:722 · rls
+## file_chat_threads · `fileChatThreads` · chat.ts:795 · rls
 
 ```text
-file_chat_threads.{...entityFeatureGateColumns()}           spread                                chat.ts:725
-file_chat_threads.{...entityFeatureWorkspaceGateColumns()}  spread                                chat.ts:726
-file_chat_threads.id                                        pUuid               pk,not null       chat.ts:727
-file_chat_threads.organization_id                           safeOrganizationId  fk,not null       chat.ts:728
-file_chat_threads.workspace_id                              safeWorkspaceId     not null          chat.ts:731
-file_chat_threads.user_id                                   text                fk,not null       chat.ts:732
-file_chat_threads.entity_id                                 safeUuid            not null          chat.ts:736
-file_chat_threads.field_id                                  safeUuid            not null          chat.ts:737
-file_chat_threads.chat_thread_id                            safeUuid            fk,not null       chat.ts:738
-file_chat_threads.created_at                                timestamptz         default,not null  chat.ts:741
-file_chat_threads.updated_at                                timestamptz         default,not null  chat.ts:742
+file_chat_threads.{...entityFeatureGateColumns()}           spread                                chat.ts:798
+file_chat_threads.{...entityFeatureWorkspaceGateColumns()}  spread                                chat.ts:799
+file_chat_threads.id                                        pUuid               pk,not null       chat.ts:800
+file_chat_threads.organization_id                           safeOrganizationId  fk,not null       chat.ts:801
+file_chat_threads.workspace_id                              safeWorkspaceId     not null          chat.ts:804
+file_chat_threads.user_id                                   text                fk,not null       chat.ts:805
+file_chat_threads.entity_id                                 safeUuid            not null          chat.ts:809
+file_chat_threads.field_id                                  safeUuid            not null          chat.ts:810
+file_chat_threads.chat_thread_id                            safeUuid            fk,not null       chat.ts:811
+file_chat_threads.created_at                                timestamptz         default,not null  chat.ts:814
+file_chat_threads.updated_at                                timestamptz         default,not null  chat.ts:815
 ```
 
-## template_chat_threads · `templateChatThreads` · chat.ts:811 · rls
+## template_chat_threads · `templateChatThreads` · chat.ts:884 · rls
 
 Per-user mapping of an org-scoped template to its latest chat thread, so reopening a template in the Template Studio resumes the conversation.
 
 ```text
-template_chat_threads.id               pUuid               pk,not null       chat.ts:814
-template_chat_threads.organization_id  safeOrganizationId  fk,not null       chat.ts:815
-template_chat_threads.user_id          text                fk,not null       chat.ts:818
-template_chat_threads.template_id      safeUuid            not null          chat.ts:822
-template_chat_threads.chat_thread_id   safeUuid            fk,not null       chat.ts:823
-template_chat_threads.created_at       timestamptz         default,not null  chat.ts:826
-template_chat_threads.updated_at       timestamptz         default,not null  chat.ts:827
+template_chat_threads.id               pUuid               pk,not null       chat.ts:887
+template_chat_threads.organization_id  safeOrganizationId  fk,not null       chat.ts:888
+template_chat_threads.user_id          text                fk,not null       chat.ts:891
+template_chat_threads.template_id      safeUuid            not null          chat.ts:895
+template_chat_threads.chat_thread_id   safeUuid            fk,not null       chat.ts:896
+template_chat_threads.created_at       timestamptz         default,not null  chat.ts:899
+template_chat_threads.updated_at       timestamptz         default,not null  chat.ts:900
 ```
 
-## chat_thread_search_documents · `chatThreadSearchDocuments` · chat.ts:850 · rls
+## chat_thread_search_documents · `chatThreadSearchDocuments` · chat.ts:923 · rls
 
 ```text
-chat_thread_search_documents.thread_id           safeUuid     pk,fk,not null    chat.ts:853
-chat_thread_search_documents.title               text         default,not null  chat.ts:856
-chat_thread_search_documents.searchable_text     text         default,not null  chat.ts:857
-chat_thread_search_documents.preview_generation  uuid         null              chat.ts:858
-chat_thread_search_documents.tsv                 tsvector     null              chat.ts:859
-chat_thread_search_documents.updated_at          timestamptz  default,not null  chat.ts:860
+chat_thread_search_documents.thread_id           safeUuid     pk,fk,not null    chat.ts:926
+chat_thread_search_documents.title               text         default,not null  chat.ts:929
+chat_thread_search_documents.searchable_text     text         default,not null  chat.ts:930
+chat_thread_search_documents.preview_generation  uuid         null              chat.ts:931
+chat_thread_search_documents.tsv                 tsvector     null              chat.ts:932
+chat_thread_search_documents.updated_at          timestamptz  default,not null  chat.ts:933
 ```
 
-## chat_thread_search_preview_passages · `chatThreadSearchPreviewPassages` · chat.ts:868 · rls
+## chat_thread_search_preview_passages · `chatThreadSearchPreviewPassages` · chat.ts:941 · rls
 
 ```text
-chat_thread_search_preview_passages.thread_id   safeUuid  fk,not null  chat.ts:871
-chat_thread_search_preview_passages.generation  uuid      not null     chat.ts:876
-chat_thread_search_preview_passages.ordinal     integer   not null     chat.ts:877
-chat_thread_search_preview_passages.content     text      not null     chat.ts:878
-chat_thread_search_preview_passages.tsv         tsvector  not null     chat.ts:879
+chat_thread_search_preview_passages.thread_id   safeUuid  fk,not null  chat.ts:944
+chat_thread_search_preview_passages.generation  uuid      not null     chat.ts:949
+chat_thread_search_preview_passages.ordinal     integer   not null     chat.ts:950
+chat_thread_search_preview_passages.content     text      not null     chat.ts:951
+chat_thread_search_preview_passages.tsv         tsvector  not null     chat.ts:952
 ```
 
-## chat_message_search_documents · `chatMessageSearchDocuments` · chat.ts:894 · rls
+## chat_message_search_documents · `chatMessageSearchDocuments` · chat.ts:967 · rls
 
 ```text
-chat_message_search_documents.message_id       safeUuid     pk,fk,not null    chat.ts:897
-chat_message_search_documents.thread_id        safeUuid     fk,not null       chat.ts:900
-chat_message_search_documents.role             varchar      not null          chat.ts:903
-chat_message_search_documents.searchable_text  text         default,not null  chat.ts:904
-chat_message_search_documents.tsv              tsvector     null              chat.ts:905
-chat_message_search_documents.created_at       timestamptz  not null          chat.ts:906
-chat_message_search_documents.updated_at       timestamptz  default,not null  chat.ts:907
+chat_message_search_documents.message_id       safeUuid     pk,fk,not null    chat.ts:970
+chat_message_search_documents.thread_id        safeUuid     fk,not null       chat.ts:973
+chat_message_search_documents.role             varchar      not null          chat.ts:976
+chat_message_search_documents.searchable_text  text         default,not null  chat.ts:977
+chat_message_search_documents.tsv              tsvector     null              chat.ts:978
+chat_message_search_documents.created_at       timestamptz  not null          chat.ts:979
+chat_message_search_documents.updated_at       timestamptz  default,not null  chat.ts:980
 ```
 
-## chat_thread_names · `chatThreadNames` · chat.ts:924 · rls
+## chat_thread_names · `chatThreadNames` · chat.ts:997 · rls
 
 The names a thread's requests minted that later requests must read the same way (`ChatThreadNameKind`), so each request reads them with one indexed query inste…
 
 ```text
-chat_thread_names.thread_id   safeUuid     fk,not null       chat.ts:927
-chat_thread_names.kind        varchar      not null          chat.ts:930
-chat_thread_names.name        text         not null          chat.ts:931
-chat_thread_names.target      jsonb        null              chat.ts:934  What a `ref-binding` names (`ChatRefBinding`); null for any other kind.
-chat_thread_names.created_at  timestamptz  default,not null  chat.ts:935
+chat_thread_names.thread_id   safeUuid     fk,not null       chat.ts:1000
+chat_thread_names.kind        varchar      not null          chat.ts:1003
+chat_thread_names.name        text         not null          chat.ts:1004
+chat_thread_names.target      jsonb        null              chat.ts:1007  What a `ref-binding` names (`ChatRefBinding`); null for any other kind.
+chat_thread_names.created_at  timestamptz  default,not null  chat.ts:1008
 ```
 
-## chat_thread_compactions · `chatThreadCompactions` · chat.ts:954 · rls
+## chat_thread_compactions · `chatThreadCompactions` · chat.ts:1027 · rls
 
 ```text
-chat_thread_compactions.id                                    pUuid               pk,not null             chat.ts:957
-chat_thread_compactions.thread_id                             safeUuid            fk,not null             chat.ts:958
-chat_thread_compactions.status                                varchar             default,not null        chat.ts:961
-chat_thread_compactions.summary                               jsonb               not null                chat.ts:966
-chat_thread_compactions.summary_markdown                      text                not null                chat.ts:967
-chat_thread_compactions.first_summarized_message_id           safeUuid            not null                chat.ts:968
-chat_thread_compactions.last_summarized_message_id            safeUuid            not null                chat.ts:971
-chat_thread_compactions.first_kept_message_id                 safeUuid            not null                chat.ts:974
-chat_thread_compactions.summarized_message_count              integer             not null                chat.ts:977
-chat_thread_compactions.delta_cursor                          text                null                    chat.ts:985   Encoded `(created_at, id)` keyset cursor for the last message this checkpoint chain summarized.
-chat_thread_compactions.total_summarized_message_count        integer             default,not null        chat.ts:992   Messages summarized by the whole checkpoint chain, not just this run.
-chat_thread_compactions.total_tokens                          integer             not null                chat.ts:996
-chat_thread_compactions.preserved_tokens                      integer             not null                chat.ts:997
-chat_thread_compactions.prompt_version                        smallint            not null                chat.ts:998
-chat_thread_compactions.model_provider                        text                null                    chat.ts:999
-chat_thread_compactions.model_id                              text                null                    chat.ts:1000
-chat_thread_compactions.memory_eligibility                    varchar             default,not null        chat.ts:1007  Whether this summary may be mined for AI memory, and when not, why.
-chat_thread_compactions.memory_extracted_at                   timestamptz         null                    chat.ts:1014  Set by the memory extractor once it has proposed memories from this compaction, so the background job stays idempotent.
-chat_thread_compactions.memory_extraction_attempted_at        timestamptz         null                    chat.ts:1017  Failed attempts stay eligible, but rotate behind untouched work so a permanently bad compaction cannot monopolize its tenant's queue slice.
-chat_thread_compactions.memory_extraction_organization_id     safeOrganizationId  null                    chat.ts:1022  Stamped from the owning thread by a database trigger on insert.
-chat_thread_compactions.memory_extraction_consent_at          timestamptz         null                    chat.ts:1028  Copies organization_settings.memory_extraction_enabled_at only when extraction consent is active at insert time.
-chat_thread_compactions.memory_extraction_data_workspace_ids  safeWorkspaceId     array,default,not null  chat.ts:1032  Snapshot of the thread's validated matter-data scope when this compaction was created.
-chat_thread_compactions.created_at                            timestamptz         default,not null        chat.ts:1038
+chat_thread_compactions.id                                    pUuid               pk,not null             chat.ts:1030
+chat_thread_compactions.thread_id                             safeUuid            fk,not null             chat.ts:1031
+chat_thread_compactions.status                                varchar             default,not null        chat.ts:1034
+chat_thread_compactions.summary                               jsonb               not null                chat.ts:1039
+chat_thread_compactions.summary_markdown                      text                not null                chat.ts:1040
+chat_thread_compactions.first_summarized_message_id           safeUuid            not null                chat.ts:1041
+chat_thread_compactions.last_summarized_message_id            safeUuid            not null                chat.ts:1044
+chat_thread_compactions.first_kept_message_id                 safeUuid            not null                chat.ts:1047
+chat_thread_compactions.summarized_message_count              integer             not null                chat.ts:1050
+chat_thread_compactions.delta_cursor                          text                null                    chat.ts:1058  Encoded `(created_at, id)` keyset cursor for the last message this checkpoint chain summarized.
+chat_thread_compactions.total_summarized_message_count        integer             default,not null        chat.ts:1065  Messages summarized by the whole checkpoint chain, not just this run.
+chat_thread_compactions.total_tokens                          integer             not null                chat.ts:1069
+chat_thread_compactions.preserved_tokens                      integer             not null                chat.ts:1070
+chat_thread_compactions.prompt_version                        smallint            not null                chat.ts:1071
+chat_thread_compactions.model_provider                        text                null                    chat.ts:1072
+chat_thread_compactions.model_id                              text                null                    chat.ts:1073
+chat_thread_compactions.memory_eligibility                    varchar             default,not null        chat.ts:1080  Whether this summary may be mined for AI memory, and when not, why.
+chat_thread_compactions.memory_extracted_at                   timestamptz         null                    chat.ts:1087  Set by the memory extractor once it has proposed memories from this compaction, so the background job stays idempotent.
+chat_thread_compactions.memory_extraction_attempted_at        timestamptz         null                    chat.ts:1090  Failed attempts stay eligible, but rotate behind untouched work so a permanently bad compaction cannot monopolize its tenant's queue slice.
+chat_thread_compactions.memory_extraction_organization_id     safeOrganizationId  null                    chat.ts:1095  Stamped from the owning thread by a database trigger on insert.
+chat_thread_compactions.memory_extraction_consent_at          timestamptz         null                    chat.ts:1101  Copies organization_settings.memory_extraction_enabled_at only when extraction consent is active at insert time.
+chat_thread_compactions.memory_extraction_data_workspace_ids  safeWorkspaceId     array,default,not null  chat.ts:1105  Snapshot of the thread's validated matter-data scope when this compaction was created.
+chat_thread_compactions.created_at                            timestamptz         default,not null        chat.ts:1111
 ```
 
-## ai_memories · `aiMemories` · chat.ts:1169 · rls
+## ai_memories · `aiMemories` · chat.ts:1242 · rls
 
 Persistent AI memory: typed facts and preferences the assistant recalls across sessions, scoped to the firm (organization), the lawyer (user), or a matter (wor…
 
 ```text
-ai_memories.id                         pUuid               pk,not null             chat.ts:1172
-ai_memories.organization_id            safeOrganizationId  fk,not null             chat.ts:1173
-ai_memories.scope                      text                not null                chat.ts:1176
-ai_memories.user_id                    text                fk,null                 chat.ts:1177
-ai_memories.workspace_id               safeWorkspaceId     null                    chat.ts:1181
-ai_memories.kind                       text                not null                chat.ts:1182
-ai_memories.content                    text                not null                chat.ts:1183
-ai_memories.dedup_key                  varchar             not null                chat.ts:1187  SHA-256 over canonical scope, owner, kind, sanitized content, and provenance.
-ai_memories.language                   varchar             null                    chat.ts:1188
-ai_memories.source_data_workspace_ids  safeWorkspaceId     array,default,not null  chat.ts:1192  Workspaces whose content this memory was derived from.
-ai_memories.status                     text                default,not null        chat.ts:1196
-ai_memories.pinned                     boolean             default,not null        chat.ts:1200
-ai_memories.source                     text                not null                chat.ts:1201
-ai_memories.source_message_id          safeUuid            fk,null                 chat.ts:1202
-ai_memories.confidence                 doublePrecision     null                    chat.ts:1206
-ai_memories.created_by                 text                fk,null                 chat.ts:1209  Initiating user for explicit writes and extracted suggestions.
-ai_memories.superseded_by_id           safeUuid            fk,null                 chat.ts:1213
-ai_memories.created_at                 timestamptz         default,not null        chat.ts:1217
-ai_memories.updated_at                 timestamptz         default,not null        chat.ts:1218
-ai_memories.last_used_at               timestamptz         default,not null        chat.ts:1223  Drives the curator lifecycle (active -> stale -> archived).
-ai_memories.archived_at                timestamptz         null                    chat.ts:1224
+ai_memories.id                         pUuid               pk,not null             chat.ts:1245
+ai_memories.organization_id            safeOrganizationId  fk,not null             chat.ts:1246
+ai_memories.scope                      text                not null                chat.ts:1249
+ai_memories.user_id                    text                fk,null                 chat.ts:1250
+ai_memories.workspace_id               safeWorkspaceId     null                    chat.ts:1254
+ai_memories.kind                       text                not null                chat.ts:1255
+ai_memories.content                    text                not null                chat.ts:1256
+ai_memories.dedup_key                  varchar             not null                chat.ts:1260  SHA-256 over canonical scope, owner, kind, sanitized content, and provenance.
+ai_memories.language                   varchar             null                    chat.ts:1261
+ai_memories.source_data_workspace_ids  safeWorkspaceId     array,default,not null  chat.ts:1265  Workspaces whose content this memory was derived from.
+ai_memories.status                     text                default,not null        chat.ts:1269
+ai_memories.pinned                     boolean             default,not null        chat.ts:1273
+ai_memories.source                     text                not null                chat.ts:1274
+ai_memories.source_message_id          safeUuid            fk,null                 chat.ts:1275
+ai_memories.confidence                 doublePrecision     null                    chat.ts:1279
+ai_memories.created_by                 text                fk,null                 chat.ts:1282  Initiating user for explicit writes and extracted suggestions.
+ai_memories.superseded_by_id           safeUuid            fk,null                 chat.ts:1286
+ai_memories.created_at                 timestamptz         default,not null        chat.ts:1290
+ai_memories.updated_at                 timestamptz         default,not null        chat.ts:1291
+ai_memories.last_used_at               timestamptz         default,not null        chat.ts:1296  Drives the curator lifecycle (active -> stale -> archived).
+ai_memories.archived_at                timestamptz         null                    chat.ts:1297
 ```
