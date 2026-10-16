@@ -301,11 +301,20 @@ describe("shared documentation MCP HTTP server", () => {
       });
     });
     expect(statusLine).toContain(" 413 ");
-    const answeredAt = performance.now();
     // The server does not keep reading the unfinished upload indefinitely: it
-    // drops the connection after its linger window, well within this bound.
-    await socketClosed;
-    expect(performance.now() - answeredAt).toBeLessThan(10_000);
+    // drops the connection after its linger window, well within this bound. A
+    // server that kept the upload open fails here instead of hanging the test.
+    const closedInTime = await Promise.race([
+      socketClosed.then(() => true),
+      new Promise<boolean>((resolve) => {
+        setTimeout(() => {
+          resolve(false);
+        }, 4000).unref();
+      }),
+    ]);
+    clearInterval(keepUploading);
+    socket.destroy();
+    expect(closedInTime).toBe(true);
   });
 
   test("answers every repeated unbounded upload with a 413 status line first", async () => {
