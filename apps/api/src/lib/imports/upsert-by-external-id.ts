@@ -46,8 +46,8 @@ export const externalRefConflict = (table: ExternalRefTable) => ({
 export const excluded = (column: AnyPgColumn): SQL =>
   sql`excluded.${sql.identifier(column.name)}`;
 
-export const UPSERT_OUTCOMES = ["created", "updated"] as const;
-export type UpsertOutcome = (typeof UPSERT_OUTCOMES)[number];
+const UPSERT_OUTCOMES = ["created", "updated"] as const;
+type UpsertOutcome = (typeof UPSERT_OUTCOMES)[number];
 
 /**
  * Whether the upsert inserted or updated the returned row. An inserted
