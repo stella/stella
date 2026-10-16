@@ -466,6 +466,9 @@ if (!databaseUrl || !runPostgresTests) {
         const seeded = await seedAdminClientMatter(matterFirstDb, "assigned");
         const matterLocked = Promise.withResolvers<undefined>();
         const deletionStarted = Promise.withResolvers<number>();
+        // Deletion retries a deadlock victim, so a lost first attempt would
+        // still delete the matter; one attempt proves there was no cycle.
+        let attempts = 0;
         try {
           // Adding a member locks the matter row, then the added user's
           // organization member row FOR KEY SHARE. Here the added user is the
@@ -500,6 +503,7 @@ if (!databaseUrl || !runPostgresTests) {
                 database: {
                   transaction: async (run) =>
                     await deletionDb.transaction(async (tx) => {
+                      attempts += 1;
                       const rows = await tx.execute<{ pid: number }>(
                         sql`SELECT pg_backend_pid() AS pid`,
                       );
@@ -520,6 +524,7 @@ if (!databaseUrl || !runPostgresTests) {
             ]);
             expect(members).toBe(1);
             expect(deletion.unwrap()).toEqual({ status: "deleted" });
+            expect(attempts).toBe(1);
           } finally {
             matterLocked.resolve(undefined);
             deletionStarted.resolve(-1);
