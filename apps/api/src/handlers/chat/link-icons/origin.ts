@@ -43,8 +43,17 @@ const isRetryableIconStatus = (status: number) =>
   status === 429 ||
   (status >= 500 && status <= 599);
 
+type HttpsIconUrl = `https://${string}`;
+
+const isHttpsIconUrl = (url: string): url is HttpsIconUrl =>
+  url.startsWith("https://");
+
+type FetchIconBytes = (
+  options: Parameters<typeof safeOutboundFetchBytes>[0] & { url: HttpsIconUrl },
+) => ReturnType<typeof safeOutboundFetchBytes>;
+
 type OriginOptions = {
-  fetchBytes?: typeof safeOutboundFetchBytes;
+  fetchBytes?: FetchIconBytes;
   now?: () => number;
 };
 
@@ -68,7 +77,7 @@ export const createLinkIconOrigin = ({
     active += 1;
     const deadline = now() + ORIGIN_DEADLINE_MS;
     const signal = AbortSignal.timeout(ORIGIN_DEADLINE_MS);
-    let url = new URL(`https://${hostname}/favicon.ico`);
+    let url: HttpsIconUrl = `https://${hostname}/favicon.ico`;
     let remainingBytes = LINK_ICON_MAX_BYTES;
 
     try {
@@ -124,8 +133,10 @@ export const createLinkIconOrigin = ({
               reason: "redirect_location",
             });
           }
-          const parsed = parseSafeOutboundUrl(redirected.value.toString());
+          const redirectedUrl = redirected.value.href;
+          const parsed = parseSafeOutboundUrl(redirectedUrl);
           if (
+            !isHttpsIconUrl(redirectedUrl) ||
             Result.isError(parsed) ||
             !isCanonicalIconHostname(parsed.value.hostname) ||
             parsed.value.port !== "" ||
@@ -138,7 +149,7 @@ export const createLinkIconOrigin = ({
               reason: "redirect_target",
             });
           }
-          url = parsed.value;
+          url = redirectedUrl;
           continue;
         }
         if (isRetryableIconStatus(status)) {

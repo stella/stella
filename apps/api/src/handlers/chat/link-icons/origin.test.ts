@@ -63,19 +63,28 @@ test("invalid ASCII IDN labels cannot consume origin capacity", async () => {
   expect(calls).toBe(1);
 });
 
-test("refuses a redirect to a non-HTTPS destination before another fetch", async () => {
-  let calls = 0;
-  const origin = createLinkIconOrigin({
-    fetchBytes: async () => {
-      calls += 1;
-      return redirectResponse("http://example.com/favicon.ico");
-    },
+for (const status of [301, 302, 303, 307, 308]) {
+  test(`HTTP redirect ${status} cannot send the icon fetch to an unencrypted target`, async () => {
+    const requests: string[] = [];
+    const origin = createLinkIconOrigin({
+      fetchBytes: async ({ url }) => {
+        requests.push(url);
+        return Result.ok({
+          status,
+          ok: false,
+          body: new ArrayBuffer(0),
+          headers: new Headers({ location: "http://example.com/favicon.ico" }),
+        });
+      },
+    });
+    expect(
+      await origin("example.com", grantThirdPartyOutboundPermit()),
+    ).toEqual({
+      type: "no-icon",
+    });
+    expect(requests).toEqual(["https://example.com/favicon.ico"]);
   });
-  expect(await origin("example.com", grantThirdPartyOutboundPermit())).toEqual({
-    type: "no-icon",
-  });
-  expect(calls).toBe(1);
-});
+}
 
 test("bounds redirect hops and shares one remaining deadline", async () => {
   const timeouts: number[] = [];
