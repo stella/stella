@@ -105,8 +105,11 @@ test.each(
 )(
   "%s account presence without a pending approval still connects this computer",
   async (presence) => {
+    const started: Awaited<
+      ReturnType<typeof desktopBridge.linkDesktopAccount>
+    > = Result.ok({ status: "started" });
     const link = spyOn(desktopBridge, "linkDesktopAccount").mockResolvedValue(
-      Result.ok({ status: "started" } as const),
+      started,
     );
     const view = mountCard(PRESENCE_FIXTURES[presence]);
     const connect = view.getByRole("button", {
