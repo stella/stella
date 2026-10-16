@@ -1555,6 +1555,18 @@
       "rejected": "Odrzucono"
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
+    "tableChart": {
+      "bar": "Słupkowy",
+      "kind": "Typ wykresu",
+      "line": "Liniowy",
+      "loading": "Wybieranie wykresu…",
+      "pie": "Kołowy",
+      "scatter": "Punktowy",
+      "showChart": "Pokaż jako wykres",
+      "summary": "Liczba wyświetlonych wartości: {n, number}.",
+      "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracuję z kontekstem",
     "threadFiles": {
       "title": "Pliki w tym czacie"
