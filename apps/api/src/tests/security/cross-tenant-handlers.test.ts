@@ -644,6 +644,11 @@ const outboundHash = outboundPreviewHash(outboundPreview);
 let outboundReadB: SafeId<"outboundAction">;
 let outboundConfirmB: SafeId<"outboundAction">;
 let outboundDiscardB: SafeId<"outboundAction">;
+// A second member of organization B targets these; each positive case then
+// proves the denied attempt left the owner's action pending.
+let outboundPeerReadB: SafeId<"outboundAction">;
+let outboundPeerConfirmB: SafeId<"outboundAction">;
+let outboundPeerDiscardB: SafeId<"outboundAction">;
 const confirmOutboundAction = createConfirmOutboundActionHandler({
   "email.send": async () => Result.ok({ providerMessageId: "message-1" }),
 });
@@ -691,6 +696,51 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(discardOutboundAction, sameUserWorkspaceB, {
         params: { actionId: outboundDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
+  {
+    name: "outbound action read by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(readOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", outboundPeerReadB),
+  },
+  {
+    name: "outbound action confirm by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(confirmOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(discardOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerDiscardB },
       }),
     expectDenied: (result) =>
       expect(recordField(result, "discarded")).toBe(false),
@@ -2726,6 +2776,9 @@ testState.beforeAll(async () => {
   outboundReadB = await prepareAction();
   outboundConfirmB = await prepareAction();
   outboundDiscardB = await prepareAction();
+  outboundPeerReadB = await prepareAction();
+  outboundPeerConfirmB = await prepareAction();
+  outboundPeerDiscardB = await prepareAction();
   const chatText = (text: string) =>
     toPersistedChatMessageContentV3({
       data: [{ type: "text" as const, content: text }],
