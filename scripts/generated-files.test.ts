@@ -1031,10 +1031,18 @@ test("web messages have one derived owner and are generated wherever the route t
       continue;
     }
     expect(script, name).not.toContain("bun run generate:route-tree");
+    // The fallback is either this producer step or the root generate, which
+    // includes generate:messages (checked below).
     if (script.includes('[ -n "$TURBO_HASH" ]')) {
-      expect(script, name).toContain(
-        '([ -n "$TURBO_HASH" ] || bun run generate:web-sources)',
-      );
+      expect(
+        script.includes(
+          '([ -n "$TURBO_HASH" ] || bun run generate:web-sources)',
+        ) ||
+          /\[ -n "\$TURBO_HASH" \] \|\| bun run (?:--cwd \.\.\/\.\. )?generate\)/u.test(
+            script,
+          ),
+        name,
+      ).toBe(true);
     }
   }
   const root = v.parse(
