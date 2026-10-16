@@ -13,11 +13,12 @@
  * for its duration: `createIngestionDb` (the write boundary every worker
  * goes through) and the operator scripts' write door both run their
  * transactions through `runUnderCorpusSchemaLane`. The migrate entrypoint
- * takes the lane EXCLUSIVE for the whole upgrade
+ * takes the lane EXCLUSIVE for the schema migrations
  * (`CORPUS_SCHEMA_LANE_LOCK_SQL`), which waits for the batches in flight;
  * once it is granted no corpus transaction is open, so DDL wins its table
- * lock at once with a short wait. Batches resume when the upgrade releases
- * the lane.
+ * lock at once with a short wait. Batches resume when the schema migrations
+ * end: the online phase that follows (concurrent index builds, validations,
+ * batched repairs) runs beside them, outside the lane.
  *
  * A batch never *waits* for the lane inside a transaction. A transaction
  * blocked on a lock still holds its snapshot, and a concurrent index build

@@ -247,6 +247,36 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
   );
 });
 
+test("a decision id set is a quoted term-set filter on the decision id", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: {
+        jurisdiction: "CZE",
+        decisionIds: [
+          "019dd643-82d9-7000-abc3-fe06dac868ee",
+          "e979ebe3-2f3c-471c-89f7-e769457e3a09",
+        ],
+      },
+    }),
+  ).toBe(
+    '("kamera")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND document_id: IN ["019dd643-82d9-7000-abc3-fe06dac868ee" "e979ebe3-2f3c-471c-89f7-e769457e3a09"]',
+  );
+});
+
+test("an empty decision id set admits nothing, so no query is sent", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: { decisionIds: [] },
+    }),
+  ).toBeNull();
+});
+
 test("a type filter names every stored spelling of its kind, so an abbreviation is not missed", () => {
   const order = corpusDecisionTypeClause("order");
   expect(corpusDecisionTypeClause("usnesení")).toBe(order);

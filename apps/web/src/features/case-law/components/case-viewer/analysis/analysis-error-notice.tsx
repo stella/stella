@@ -7,10 +7,14 @@ import { SparklesIcon } from "@stll/ui/icons";
 import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import {
   analysisErrorMessage,
+  analysisRetryAt,
   type AnalysisErrorMessage,
 } from "@/features/case-law/components/case-viewer/analysis/analysis-error.logic";
 import { analysisRetryOf } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
 import type { AnalysisError } from "@/features/case-law/queries/decision-analysis";
+import { useTimePassed } from "@/hooks/use-time-passed";
+import { useFormatter } from "@/i18n/formatting-context";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
   const t = useTranslations();
@@ -30,7 +34,9 @@ const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
 /**
  * Why the analysis column holds no analysis, and the way to ask again when
  * asking again can help. A failed run names whose key it used, so a reader
- * on their organization's own key knows where the fault sits.
+ * on their organization's own key knows where the fault sits; one whose
+ * provider named a time to retry after says when, and offers the retry only
+ * from then on.
  */
 export const AnalysisErrorNotice = ({
   error,
@@ -40,7 +46,10 @@ export const AnalysisErrorNotice = ({
   onRetry: () => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const text = useAnalysisErrorText(analysisErrorMessage(error));
+  const retryAt = analysisRetryAt(error);
+  const retryTimePassed = useTimePassed(retryAt);
   return (
     <div
       className="bg-background/75 supports-[backdrop-filter]:bg-background/55 mx-2 mt-8 flex flex-col items-center gap-2 rounded-lg border px-3 py-4 text-center shadow-sm backdrop-blur-xl"
@@ -51,7 +60,14 @@ export const AnalysisErrorNotice = ({
       ) : (
         <p className="text-muted-foreground text-xs leading-snug">{text}</p>
       )}
-      {analysisRetryOf(error) !== "none" && (
+      {retryAt !== undefined && !retryTimePassed && (
+        <p className="text-muted-foreground text-xs leading-snug">
+          {t("caseLaw.analysis.errors.retryAfter", {
+            time: format.dateTime(retryAt, MEDIUM_DATE_SHORT_TIME_FORMAT),
+          })}
+        </p>
+      )}
+      {analysisRetryOf(error, retryTimePassed) !== "none" && (
         <Button onClick={onRetry} size="sm" variant="muted">
           <SparklesIcon className="size-3" />
           {t("common.retry")}

@@ -51,6 +51,7 @@ export const toParsedBundledSkillPackage = ({
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
     entrypointHash: hashSkillPackage({ resources, source }),
+    invocation: metadata.invocation,
     license: metadata.license ?? null,
     metadata: metadata.metadata ?? {},
     name: metadata.name,

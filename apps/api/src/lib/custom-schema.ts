@@ -6,6 +6,7 @@ import {
   CURRENCY_CODE_LENGTH,
   CURRENCY_CODE_PATTERN,
 } from "@stll/api-contract/currency-code";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -64,7 +65,7 @@ export const tUserId = t.String({
 
 export const tDefaultVarchar = t.String({
   minLength: 1,
-  maxLength: 256,
+  maxLength: DEFAULT_VARCHAR_MAX_LENGTH,
 });
 
 /** A JSON object with caller-defined keys and values. `t.Record` does not
