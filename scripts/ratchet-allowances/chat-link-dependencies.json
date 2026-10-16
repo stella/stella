@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 7,
+  "reason": "The shared chat link owner adds pinned linkify-it and tldts for Unicode detection and PSL validation, optional TipTap core/pm peers plus matching development declarations for the composer adapter, and HAST types for the markdown adapter. Existing consumers reuse these implementations."
+}

@@ -213,11 +213,15 @@ jobs:
       # itself so the queue lands first; the merge-queue steward re-runs it.
       # A head defers at most once: a re-run (the steward's resume or a manual
       # one) never yields and clears a deferral that is still pending.
+      # Deferring is on only while CI_YIELD_TO_MERGE_QUEUE is `on`; clearing a
+      # pending deferral on a re-run works either way.
       - name: Yield to the merge queue
         if: >-
           github.event_name == 'pull_request'
           && !github.event.pull_request.head.repo.fork
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
         with:
           retries: 0
           script: |
@@ -242,6 +246,7 @@ jobs:
               }
               return;
             }
+            if (process.env.CI_YIELD_TO_MERGE_QUEUE !== "on") return;
             const waiting = async () => {
               for (const status of ["queued", "waiting", "pending", "requested"]) {
                 const { data } = await github.rest.actions.listWorkflowRunsForRepo({
@@ -4159,6 +4164,14 @@ jobs:
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
 
+      - name: Test reusable workflow permission contracts
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_121
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_121 != 'true') }}
+        run: bun test scripts/workflow-call-permissions.test.ts
+
       - name: Test main network recording selection
         env:
           CI_CHECK_KIND: STATIC
@@ -5371,7 +5384,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     permissions:
       contents: read
       packages: read
@@ -5466,7 +5479,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/2
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
