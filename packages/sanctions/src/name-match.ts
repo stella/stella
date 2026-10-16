@@ -689,6 +689,139 @@ const spellingCharacterCounts = (
   return decoded;
 };
 
+// A linear one-edit check tightens the character bound without running a
+// quadratic distance for every spelling in a dense vocabulary.
+const withinOneEdit = (
+  query: readonly string[],
+  candidate: readonly string[],
+) => {
+  if (Math.abs(query.length - candidate.length) > 1) {
+    return false;
+  }
+  let left = 0;
+  let right = 0;
+  let edits = 0;
+  while (left < query.length && right < candidate.length) {
+    if (query[left] === candidate[right]) {
+      left += 1;
+      right += 1;
+      continue;
+    }
+    if (edits > 0) {
+      return false;
+    }
+    edits += 1;
+    if (query.length < candidate.length) {
+      right += 1;
+      continue;
+    }
+    if (query.length > candidate.length) {
+      left += 1;
+      continue;
+    }
+    if (
+      query[left] === candidate[right + 1] &&
+      query[left + 1] === candidate[right]
+    ) {
+      left += 2;
+      right += 2;
+      continue;
+    }
+    left += 1;
+    right += 1;
+  }
+  return edits + (query.length - left) + (candidate.length - right) <= 1;
+};
+
+type FuzzyCandidate = { id: number; score: number };
+type SelectFuzzyStringsOptions = {
+  vocabulary: Vocabulary;
+  text: string;
+  queryCharacters: readonly string[];
+  candidates: readonly number[];
+  lowerBounds: Uint32Array;
+  work: ScreeningWorkBudget;
+};
+
+const selectFuzzyStrings = ({
+  vocabulary,
+  text,
+  queryCharacters,
+  candidates,
+  lowerBounds,
+  work,
+}: SelectFuzzyStringsOptions): FuzzyCandidate[] | undefined => {
+  const length = queryCharacters.length;
+  // Keep only the best actual similarities. Character bounds avoid an
+  // expensive distance when even the candidate's best score cannot enter
+  // the retained set. Both selection and distance work share the hard bound.
+  const selected: FuzzyCandidate[] = [];
+  const compare = (left: FuzzyCandidate, right: FuzzyCandidate) =>
+    right.score - left.score ||
+    vocabulary.postings.size(left.id) +
+      vocabulary.joinPostings.size(left.id) -
+      vocabulary.postings.size(right.id) -
+      vocabulary.joinPostings.size(right.id) ||
+    left.id - right.id;
+  for (const id of candidates) {
+    if (!spendScreeningWork(work)) {
+      return undefined;
+    }
+    const candidateLength = vocabulary.spellings.lengths.getUnchecked(
+      vocabulary.spellingIds.getUnchecked(id),
+    );
+    const longerLength = Math.max(length, candidateLength);
+    let lowerBound = lowerBounds[id] ?? 0;
+    let oneEdit = false;
+    if (lowerBound < 2) {
+      if (!spendScreeningWork(work, length + candidateLength)) {
+        return undefined;
+      }
+      oneEdit = withinOneEdit(
+        queryCharacters,
+        Array.from(vocabulary.strings.get(id)),
+      );
+      lowerBound = oneEdit ? 1 : 2;
+    }
+    const optimistic = { id, score: 1 - lowerBound / longerLength };
+    const worst = selected.at(-1);
+    if (
+      selected.length === MAX_FUZZY_STRINGS &&
+      worst !== undefined &&
+      compare(optimistic, worst) >= 0
+    ) {
+      continue;
+    }
+    if (!oneEdit && !spendScreeningWork(work, length * candidateLength)) {
+      return undefined;
+    }
+    const edits = oneEdit
+      ? 1
+      : distance(text, vocabulary.strings.get(id), METRIC);
+    if (edits > editBudget(Math.min(length, candidateLength))) {
+      continue;
+    }
+    const candidate = { id, score: 1 - edits / longerLength };
+    if (!spendScreeningWork(work, selected.length * 2 + 1)) {
+      return undefined;
+    }
+    const position = selected.findIndex(
+      (other) => compare(candidate, other) < 0,
+    );
+    if (position === -1) {
+      if (selected.length < MAX_FUZZY_STRINGS) {
+        selected.push(candidate);
+      }
+      continue;
+    }
+    selected.splice(position, 0, candidate);
+    if (selected.length > MAX_FUZZY_STRINGS) {
+      selected.pop();
+    }
+  }
+  return selected;
+};
+
 type SimilarStringsOptions = {
   vocabulary: Vocabulary;
   text: string;
@@ -719,7 +852,8 @@ const similarStrings = ({
     }
     return cached.matches;
   }
-  const length = Array.from(text).length;
+  const queryCharacters = Array.from(text);
+  const length = queryCharacters.length;
   const budget = editBudget(length);
   if (budget === 0) {
     return similar;
@@ -771,65 +905,35 @@ const similarStrings = ({
     ) {
       continue;
     }
-    if (
-      characterDistanceLowerBound({
-        query: counts,
-        candidate: spellingCharacterCounts(vocabulary.spellings, spelling),
-        lengthDifference: candidateLength - length,
-      }) > pairBudget
-    ) {
+    const lowerBound = characterDistanceLowerBound({
+      query: counts,
+      candidate: spellingCharacterCounts(vocabulary.spellings, spelling),
+      lengthDifference: candidateLength - length,
+    });
+    if (lowerBound > pairBudget) {
       continue;
     }
+    sharedCounts[id] = lowerBound;
     candidates.push(id);
   }
-  if (
-    !spendScreeningWork(
-      work,
-      candidates.length * Math.ceil(Math.log2(candidates.length + 1)),
-    )
-  ) {
+  const selected = selectFuzzyStrings({
+    vocabulary,
+    text,
+    queryCharacters,
+    candidates,
+    lowerBounds: sharedCounts,
+    work,
+  });
+  if (selected === undefined) {
     return similar;
   }
-  candidates.sort(
-    (left, right) =>
-      (sharedCounts[right] ?? 0) /
-        Math.max(
-          grams.size,
-          vocabulary.spellings.gramCounts.getUnchecked(
-            vocabulary.spellingIds.getUnchecked(right),
-          ),
-        ) -
-        (sharedCounts[left] ?? 0) /
-          Math.max(
-            grams.size,
-            vocabulary.spellings.gramCounts.getUnchecked(
-              vocabulary.spellingIds.getUnchecked(left),
-            ),
-          ) || left - right,
-  );
-  // This lookup's own truncation, independent of what earlier tokens already
-  // did to the shared work selection: the cache must replay it exactly.
+  // Cache this lookup's own truncation, independently of earlier tokens.
   const truncated = candidates.length > MAX_FUZZY_STRINGS;
   if (truncated) {
     work.selection = "partial";
   }
-  for (
-    let index = 0;
-    index < Math.min(candidates.length, MAX_FUZZY_STRINGS);
-    index += 1
-  ) {
-    const id = candidates.at(index) ?? panic("Missing fuzzy candidate");
-    const candidateLength = vocabulary.spellings.lengths.getUnchecked(
-      vocabulary.spellingIds.getUnchecked(id),
-    );
-    const pairBudget = editBudget(Math.min(length, candidateLength));
-    if (!spendScreeningWork(work, length * candidateLength)) {
-      return similar;
-    }
-    const edits = distance(text, vocabulary.strings.get(id), METRIC);
-    if (edits <= pairBudget) {
-      similar.set(id, 1 - edits / Math.max(length, candidateLength));
-    }
+  for (const { id, score } of selected) {
+    similar.set(id, score);
   }
   if (!screeningWorkExhausted(work)) {
     vocabulary.similarityCache.set(text, {

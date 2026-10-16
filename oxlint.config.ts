@@ -385,6 +385,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
+    "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
+  ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
@@ -1634,6 +1637,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -3185,6 +3189,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/legal-reader/*chat*.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
+        "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
+        "packages/chat/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.tsx",
+        // These are settings/navigation chrome, outside message content.
+        "apps/web/src/components/chat/chat-model-options-menu.tsx",
+        "apps/web/src/components/chat/chat-matter-picker.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
       },
     },
     {

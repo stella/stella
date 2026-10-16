@@ -1176,7 +1176,17 @@ test("Escape closes a footer overlay whose trigger still holds focus", async ({
     await trigger.click();
     await expect(popup).toBeVisible();
     // Popups take focus a beat after they open, so Escape often arrives while
-    // the trigger still holds it. The overlay owns Escape either way.
+    // the trigger still holds it. The overlay owns Escape either way. Wait for
+    // the popup to take focus before handing it back, or the late move races
+    // the trigger focus below.
+    await expect
+      .poll(
+        async () =>
+          await popup.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+      )
+      .toBe(true);
     await trigger.focus();
     await expect(trigger).toBeFocused();
     await expect(popup).toBeVisible();
