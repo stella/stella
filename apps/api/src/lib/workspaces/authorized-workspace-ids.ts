@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -111,3 +111,24 @@ export const activeAuthorizedWorkspaceQuery = (
  */
 export const authorizedWorkspaceIdSubquery = (): SQL =>
   sql`SELECT aw.authorized_workspace_id FROM ${stellaAuthorizedWorkspaces} aw`;
+
+type SqlValue = SQLWrapper | string;
+
+type MemberScope = {
+  organizationId: SqlValue;
+  userId: SqlValue;
+};
+
+/**
+ * Whether one organization member reaches a matter, asked of the database
+ * rule (`stella_workspace_access`) instead of computed in app code. Unlike
+ * the reads above it names the member explicitly, so it also answers for a
+ * credential's user or a member being offboarded. Select it as a column next
+ * to the rows the caller already reads. Like the authorization view, the
+ * function resolves through the connection's search path.
+ */
+export const memberReachesMatterSql = (
+  { organizationId, userId }: MemberScope,
+  workspaceId: SqlValue,
+): SQL<boolean> =>
+  sql<boolean>`stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;

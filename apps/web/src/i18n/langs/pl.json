@@ -173,6 +173,7 @@
       "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
+      "inScoring": "Uwzględnione w ocenie",
       "includeInScoring": "Uwzględnij w ocenie",
       "interpretationNote": "Uwaga do interpretacji",
       "interpretationNotePlaceholder": "Jeśli znaczenie tego dowodu jest sporne, opisz jak. Jeśli nie jest, zostaw pole puste.",
@@ -1294,6 +1295,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
     },
+    "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
@@ -1325,6 +1327,7 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "messageUnavailable": "Nie można wyświetlić tej wiadomości.",
     "mockModel": {
       "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
       "label": "Symulowane AI"
@@ -1490,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Dodawanie komentarza",
+      "add_matter_member": "Dodaj członka sprawy",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
       "ares_lookup_company": "Wyszukiwanie danych firmy",
       "ares_search_companies": "Wyszukiwanie danych firm",
@@ -1546,7 +1550,6 @@
       "list_stories": "Wyświetlanie części dokumentu",
       "list_templates": "Wyświetlanie szablonów",
       "load-skill": "Odczytywanie wskazówek",
-      "manage_organization": "Zarządzaj organizacją",
       "read-contact": "Odczyt kontaktu",
       "read-content-across-matters": "Odczyt treści w różnych sprawach",
       "read-skill-resource": "Odczytywanie wskazówek",
@@ -1556,6 +1559,7 @@
       "read_section": "Odczytywanie sekcji",
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
+      "remove_matter_member": "Usuń członka sprawy",
       "reply_comment": "Odpowiadanie na komentarz",
       "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
@@ -1589,6 +1593,7 @@
       "suggest_template_fields": "Proponowanie pól szablonu",
       "unknown": "Używanie narzędzia",
       "update-entity-fields": "Aktualizacja metadanych",
+      "update_organization_settings": "Zaktualizuj ustawienia zespołu",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
@@ -2074,6 +2079,7 @@
     "versionLabel": "Wersja {version}",
     "viewSource": "Zobacz źródło",
     "website": "Witryna",
+    "whenToUse": "Kiedy używać",
     "workflow": "Przepływ pracy",
     "workflows": "Przepływy pracy",
     "zoomIn": "Powiększ",
@@ -2553,6 +2559,10 @@
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "validationInvalid": "Pole zawiera wartość, której nie można zapisać.",
+      "validationRequired": "Wymagane pole jest puste.",
+      "validationTooLong": "Za długie: użyj najwyżej {limit, number} znaków.",
+      "validationTooShort": "Za krótkie: użyj co najmniej {limit, number} znaków.",
       "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
       "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
@@ -3648,6 +3658,10 @@
       "importTitle": "Importuj umiejętność",
       "importedSkills": "{count, plural, one {Zaimportowano # umiejętność} few {Zaimportowano # umiejętności} many {Zaimportowano # umiejętności} other {Zaimportowano # umiejętności}}",
       "invalidPath": "Ścieżka może zawierać tylko małe litery, cyfry, kropki, łączniki i podkreślenia",
+      "invocationAuto": "Automatycznie",
+      "invocationAutoHelp": "AI może sama użyć tej umiejętności, gdy pasuje do prośby.",
+      "invocationManual": "Tylko na żądanie",
+      "invocationManualHelp": "Używana tylko wtedy, gdy wywołasz ją przez / lub dodasz do wiadomości.",
       "license": "Licencja: {license}",
       "newFile": "Nowy plik",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4509,6 +4523,25 @@
     },
     "tokenHelp": "Jak uzyskać token",
     "viewOnGithub": "Zobacz na GitHubie"
+  },
+  "readerAnswers": {
+    "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozwiń odpowiedź",
+    "explain": "Wyjaśnij",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Zadaj dodatkowe pytanie",
+    "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
+    "loading": "Generowanie odpowiedzi…",
+    "minimise": "Zwiń odpowiedź",
+    "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
+    "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
+    "regenerate": "Wygeneruj odpowiedź ponownie",
+    "selectionError": "Zaznacz tekst w obrębie jednego akapitu (do 2000 znaków).",
+    "send": "Wyślij dodatkowe pytanie",
+    "share": "Udostępnij zespołowi",
+    "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
+    "title": "Odpowiedź dotycząca zaznaczonego tekstu"
   },
   "routeError": {
     "backToMatters": "Wróć do spraw",
@@ -5556,7 +5589,6 @@
     "viewVersion": "Podgląd",
     "whenNotToUse": "Kiedy nie używać",
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
-    "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
   },
   "timesheets": {

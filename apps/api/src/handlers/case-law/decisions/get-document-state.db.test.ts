@@ -73,6 +73,7 @@ if (!databaseUrl || !runPostgresTests) {
       const subject =
         (await withRedistributableSubject(
           caseLawPublicReadDb,
+          "pages",
           {
             kind: "id",
             id,

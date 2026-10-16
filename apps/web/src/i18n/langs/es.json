@@ -173,6 +173,7 @@
       "heldDescription": "Estas extracciones son <strong>realmente inciertas en cuanto a su significado</strong>: el contenido es provisional o no está confirmado, no es simplemente manuscrito. Se excluyen de la puntuación hasta que un revisor las confirme, edite o vuelva a escribir. Una fuente legible nunca se pone en espera solo por su formato.",
       "heldForReview": "Pendiente de revisión",
       "holdOutOfScoring": "Excluir de la puntuación",
+      "inScoring": "En la puntuación",
       "includeInScoring": "Incluir en la puntuación",
       "interpretationNote": "Nota de interpretación",
       "interpretationNotePlaceholder": "Si el significado de esta prueba es cuestionado, explique cómo. Déjelo en blanco si no lo es.",
@@ -1294,6 +1295,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
     },
+    "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
     "improvePromptDraftChanged": "El borrador cambió, por lo que no se aplicó la mejora.",
     "improvePromptPlainTextOnly": "La mejora de prompts solo está disponible para texto sin formato.",
@@ -1325,6 +1327,7 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "messageUnavailable": "Este mensaje no se puede mostrar.",
     "mockModel": {
       "description": "Respuestas predefinidas del modelo simulado local",
       "label": "IA simulada"
@@ -1490,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Añadiendo comentario",
+      "add_matter_member": "Añadir un miembro al expediente",
       "apply-active-docx-edits": "Preparando cambios del documento",
       "ares_lookup_company": "Buscando registros de empresa",
       "ares_search_companies": "Buscando registros de empresas",
@@ -1546,7 +1550,6 @@
       "list_stories": "Listando partes del documento",
       "list_templates": "Listando plantillas",
       "load-skill": "Leyendo instrucciones",
-      "manage_organization": "Gestionar organización",
       "read-contact": "Leyendo contacto",
       "read-content-across-matters": "Leyendo contenido entre asuntos",
       "read-skill-resource": "Leyendo instrucciones",
@@ -1556,6 +1559,7 @@
       "read_section": "Leyendo una sección",
       "read_story": "Leyendo una parte del documento",
       "remember": "Guardando en la memoria",
+      "remove_matter_member": "Quitar un miembro del expediente",
       "reply_comment": "Respondiendo al comentario",
       "request_secret": "Solicitando una credencial privada",
       "resolve_comment": "Resolviendo comentario",
@@ -1589,6 +1593,7 @@
       "suggest_template_fields": "Sugiriendo campos de la plantilla",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
+      "update_organization_settings": "Actualizar la configuración del equipo",
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
@@ -2074,6 +2079,7 @@
     "versionLabel": "Versión {version}",
     "viewSource": "Ver fuente",
     "website": "Sitio web",
+    "whenToUse": "Cuándo usar",
     "workflow": "Flujo de trabajo",
     "workflows": "Flujos de trabajo",
     "zoomIn": "Acercar",
@@ -2553,6 +2559,10 @@
       "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso.",
+      "validationInvalid": "Un campo tiene un valor que no se puede guardar.",
+      "validationRequired": "Un campo obligatorio está vacío.",
+      "validationTooLong": "Demasiado largo: usa como máximo {limit, number} caracteres.",
+      "validationTooShort": "Demasiado corto: usa al menos {limit, number} caracteres.",
       "verificationActiveLimitReached": "Su organización ha alcanzado el límite de verificaciones simultáneas. Espere a que termine una verificación y vuelva a intentarlo.",
       "verificationDailyLimitReached": "Su organización ha alcanzado el límite diario de verificaciones. Vuelva a intentarlo después de medianoche (Europe/Prague).",
       "versionConflict": "Otra persona lo modificó mientras editabas. Recarga para obtener la versión actual."
@@ -3648,6 +3658,10 @@
       "importTitle": "Importar habilidad",
       "importedSkills": "{count, plural, one {Se importó # habilidad} other {Se importaron # habilidades}}",
       "invalidPath": "La ruta solo puede usar letras minúsculas, dígitos, puntos, guiones o guiones bajos",
+      "invocationAuto": "Automáticamente",
+      "invocationAutoHelp": "La IA puede usar esta habilidad por su cuenta cuando encaje con la solicitud.",
+      "invocationManual": "Solo cuando se invoque",
+      "invocationManualHelp": "Solo se usa cuando la invocas con / o la añades a tu mensaje.",
       "license": "Licencia: {license}",
       "newFile": "Nuevo archivo",
       "newFileFilenamePlaceholder": "notas.md",
@@ -4509,6 +4523,25 @@
     },
     "tokenHelp": "Cómo obtener un token",
     "viewOnGithub": "Ver en GitHub"
+  },
+  "readerAnswers": {
+    "budgetError": "Se ha agotado el presupuesto para respuestas.",
+    "citation": "¶{paragraph}",
+    "expand": "Expandir respuesta",
+    "explain": "Explicar",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Hacer una pregunta de seguimiento",
+    "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
+    "loading": "Generando respuesta…",
+    "minimise": "Contraer respuesta",
+    "modelError": "El modelo no pudo completar esta respuesta.",
+    "networkError": "La conexión se ha interrumpido. Inténtalo de nuevo.",
+    "regenerate": "Regenerar respuesta",
+    "selectionError": "Selecciona texto dentro de un solo párrafo (hasta 2000 caracteres).",
+    "send": "Enviar pregunta de seguimiento",
+    "share": "Compartir con el equipo",
+    "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",
+    "title": "Respuesta sobre el texto seleccionado"
   },
   "routeError": {
     "backToMatters": "Volver a los asuntos",
@@ -5556,7 +5589,6 @@
     "viewVersion": "Ver",
     "whenNotToUse": "Cuándo no usar",
     "whenNotToUsePlaceholder": "¿Cuándo debe evitarse esta plantilla?",
-    "whenToUse": "Cuándo usar",
     "whenToUsePlaceholder": "¿Cuándo debe usarse esta plantilla? (guía la selección de plantillas por la IA)"
   },
   "timesheets": {
