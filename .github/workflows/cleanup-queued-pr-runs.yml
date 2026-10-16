@@ -67,9 +67,9 @@ jobs:
                 if (run.event !== "pull_request") return null;
                 let byCommit;
                 try {
-                  ({ data: byCommit } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                    ...repo, commit_sha: run.head_sha,
-                  }));
+                  byCommit = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                    ...repo, commit_sha: run.head_sha, per_page: 100,
+                  });
                 } catch {
                   core.warning(`Cleanup skipped for ${run.id}: pull requests of ${run.head_sha} unavailable`);
                   return null;

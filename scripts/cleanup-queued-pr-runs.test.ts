@@ -87,6 +87,15 @@ const cleanup = async ({
   const failures: string[] = [];
   let reads = 0;
   const listWorkflowRunsForRepo = () => {};
+  // Every page of pull requests found by the run's commit, as paginate returns them.
+  const listPullRequestsAssociatedWithCommit = async () => {
+    if (commitPulls === "error") {
+      throw Object.assign(new Error("Unavailable"), { status: 500 });
+    }
+    return commitPulls.map((pull) => ({
+      labels: pull.labels.map((name) => ({ name })),
+    }));
+  };
   await script.runInNewContext({
     context: { repo: { owner: "test", repo: "test" }, payload: {} },
     core: {
@@ -98,7 +107,12 @@ const cleanup = async ({
       },
     },
     github: {
-      paginate: async () => (followingRun ? [run, followingRun] : [run]),
+      paginate: async (method: unknown) => {
+        if (method === listPullRequestsAssociatedWithCommit) {
+          return listPullRequestsAssociatedWithCommit();
+        }
+        return followingRun ? [run, followingRun] : [run];
+      },
       rest: {
         actions: {
           listWorkflowRunsForRepo,
@@ -117,18 +131,7 @@ const cleanup = async ({
             }
           },
         },
-        repos: {
-          listPullRequestsAssociatedWithCommit: async () => {
-            if (commitPulls === "error") {
-              throw Object.assign(new Error("Unavailable"), { status: 500 });
-            }
-            return {
-              data: commitPulls.map((pull) => ({
-                labels: pull.labels.map((name) => ({ name })),
-              })),
-            };
-          },
-        },
+        repos: { listPullRequestsAssociatedWithCommit },
         pulls: {
           get: async ({ pull_number }: { pull_number: number }) => {
             readPulls.push(pull_number);
@@ -275,6 +278,20 @@ test("an old run without an association is matched to its pull requests by commi
     expect(result.cancelled, JSON.stringify(commitPulls)).toEqual([]);
     expect(result.forced, JSON.stringify(commitPulls)).toEqual([]);
   }
+});
+
+test("a protected pull request beyond the first page of commit results still protects", async () => {
+  const run = {
+    ...queued("pull_request"),
+    pull_requests: [],
+    created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+  };
+  const commitPulls = [
+    ...Array.from({ length: 100 }, () => ({ labels: [] })),
+    { labels: ["ci-protect"] },
+  ];
+  const result = await cleanup({ run, commitPulls });
+  expect(result.cancelled).toEqual([]);
 });
 
 test("an old target run without an association is left alone", async () => {
