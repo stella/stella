@@ -5,7 +5,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 
-import { buildChatAnonDecorations } from "./chat-anon-decorations-extension";
+import {
+  buildChatAnonDecorations,
+  ChatAnonDecorations,
+  setChatAnonDecorationPairs,
+} from "./chat-anon-decorations-extension";
 
 const schema = new Schema({
   nodes: {
@@ -69,5 +73,45 @@ describe("buildChatAnonDecorations", () => {
     ]);
 
     expect(buildChatAnonDecorations(doc, [])).toEqual([]);
+  });
+});
+
+describe("setChatAnonDecorationPairs", () => {
+  const pairs = [
+    { label: "person", original: "Jan Novák", placeholder: "[PERSON_1]" },
+  ] as const satisfies readonly ChatAnonPair[];
+
+  test("stores the pairs and recomputes only its own decorations on a live editor", () => {
+    const storage = { stllAnonDecorations: { pairs: [] } };
+    const updated: (string | undefined)[] = [];
+    const editor = {
+      commands: {
+        updateDecorations: (extensionName?: string) => {
+          updated.push(extensionName);
+          return true;
+        },
+      },
+      isDestroyed: false,
+      storage,
+    };
+
+    setChatAnonDecorationPairs(editor, pairs);
+
+    expect(storage.stllAnonDecorations.pairs).toBe(pairs);
+    expect(updated).toEqual([ChatAnonDecorations.name]);
+  });
+
+  test("leaves a destroyed editor's storage and commands untouched", () => {
+    const editor = {
+      get commands(): never {
+        throw new TypeError("view is gone");
+      },
+      isDestroyed: true,
+      get storage(): never {
+        throw new TypeError("view is gone");
+      },
+    };
+
+    expect(() => setChatAnonDecorationPairs(editor, pairs)).not.toThrow();
   });
 });

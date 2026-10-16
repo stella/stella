@@ -1,4 +1,4 @@
-import type { Editor } from "@tiptap/core";
+import type { SingleCommands, Storage } from "@tiptap/core";
 import { Decoration, Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
@@ -103,8 +103,15 @@ export const ChatAnonDecorations = Extension.create<
   },
 });
 
+// The fields this write touches; a destroyed editor's accessors can throw.
+type ChatAnonDecorationTarget = {
+  readonly isDestroyed: boolean;
+  readonly storage: Pick<Storage, typeof CHAT_ANON_DECORATIONS_NAME>;
+  readonly commands: Pick<SingleCommands, "updateDecorations">;
+};
+
 export const setChatAnonDecorationPairs = (
-  editor: Editor,
+  editor: ChatAnonDecorationTarget,
   pairs: readonly ChatAnonPair[],
 ): void => {
   if (editor.isDestroyed) {
