@@ -628,27 +628,25 @@ describe("warm screening", () => {
       legacyScreen(legacy, query, options).unwrap(),
     );
     // Work units are the matcher's own deterministic cost, so the budget
-    // holds on a loaded runner where wall-clock ratios do not. Cached lookups
-    // charge their original work, so warm and cold queries spend the same.
-    const minimalWork = () => {
-      let low = 1;
-      let high = MAX_SCREENING_WORK;
-      while (low < high) {
-        const middle = Math.floor((low + high) / 2);
-        if (screen(realistic, query, { ...options, maxWork: middle }).isOk()) {
-          high = middle;
-        } else {
-          low = middle + 1;
-        }
-      }
-      return low;
-    };
-    const cold = minimalWork();
-    expect(minimalWork()).toBe(cold);
-    console.info(JSON.stringify({ minimalWork: cold }));
-    // Measured at 1,603,468 units; the allowance admits small ranking changes,
-    // and any larger growth needs a deliberate change to this budget.
-    expect(cold).toBeLessThanOrEqual(1_650_000);
+    // holds on a loaded runner where wall-clock ratios do not. Measured at
+    // 1,603,468 units: the query fits the budget and fails just below the
+    // measurement, so work counting stays live. Cached lookups charge their
+    // original work, so the warm repeat of each probe gives the same answer.
+    // Two probes replace a search over every budget, which ran the full
+    // screen dozens of times and outlived the test timeout on loaded runners.
+    const budget = 1_650_000;
+    const belowMeasured = 1_550_000;
+    expect(budget).toBeLessThan(MAX_SCREENING_WORK);
+    for (const warm of [false, true]) {
+      expect(
+        screen(realistic, query, { ...options, maxWork: budget }).isOk(),
+        `budget, warm=${warm}`,
+      ).toBe(true);
+      expect(
+        screen(realistic, query, { ...options, maxWork: belowMeasured }).isOk(),
+        `below measured work, warm=${warm}`,
+      ).toBe(false);
+    }
   });
 
   test("warm screening work stays bounded for repeated common query tokens", () => {
