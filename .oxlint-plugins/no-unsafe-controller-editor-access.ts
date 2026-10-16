@@ -1,3 +1,17 @@
+/**
+ * Invariant: statically identified controller editor text/command accesses use
+ * getLiveEditor at the point of use.
+ *
+ * Rejected: getText/commands access or destructuring through useChatEditor's
+ * editor, local aliases, and imported ChatEditorController parameter/prop types.
+ * Accepted: accesses on getLiveEditor(editor) results and unrelated editors.
+ *
+ * Boundary: local import, binding and type-shape detection only. Not tracked:
+ * ChatEditorController["editor"]-typed parameters, editors stored in refs or
+ * returned by other helpers, and getLiveEditor handles retained across await.
+ * Static detection does not guarantee runtime liveness; reacquire the live
+ * editor after an asynchronous boundary.
+ */
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {

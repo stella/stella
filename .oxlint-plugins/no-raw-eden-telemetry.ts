@@ -1,5 +1,18 @@
-// Resolve the Eden client's imports and immutable aliases; arbitrary errors
-// with the same local names must remain valid telemetry inputs.
+/**
+ * Invariant: identified raw Eden errors are normalized before captureError or
+ * captureException so the captured error can retain its message and status.
+ *
+ * Rejected: response.error, destructured error bindings and immutable aliases
+ * from requests through the registered api/eden-client imports, including
+ * parameterized client calls and awaited responses.
+ * Accepted: toAPIError(error), unwrapEden(response), and unrelated errors.
+ *
+ * Boundary: static import provenance and local immutable aliases, not general
+ * interprocedural taint analysis. Errors passed through parameters, mutable
+ * bindings, containers or other helper returns, and unregistered clients are
+ * not tracked. Capture calls are identified by method/function name; this
+ * detection is not a runtime guarantee that every captured error is normalized.
+ */
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import type { ImportedFromOptions } from "./utils.ts";
