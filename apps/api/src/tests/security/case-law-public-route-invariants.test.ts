@@ -77,6 +77,8 @@ const DECISION_PROVISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/list-for-decision.ts";
 const CITING_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/provisions/citing-decisions.ts";
+const CITATION_COUNTS_FILE =
+  "apps/api/src/handlers/case-law/provisions/citation-counts.ts";
 const LAUNCH_READINESS_FILE =
   "packages/api-contract/src/case-law-launch-readiness.ts";
 const RESEARCH_SUGGEST_PROMPT_FILE =
@@ -224,6 +226,10 @@ const PUBLIC_DECISION_READ_GATES = {
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [CITATION_COUNTS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/lib/case-law/provision-filter.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
   },
@@ -677,6 +683,7 @@ describe("public case-law route boundary", () => {
         SEARCH_DECISIONS_FILE,
         STATUS_DECISIONS_FILE,
         CITING_DECISIONS_FILE,
+        CITATION_COUNTS_FILE,
       ].map(readSource),
     );
     for (const source of scopedSources) {
@@ -696,6 +703,7 @@ describe("public case-law route boundary", () => {
         SEARCH_DECISIONS_SCHEMA_FILE,
         STATUS_DECISIONS_FILE,
         CITING_DECISIONS_FILE,
+        CITATION_COUNTS_FILE,
         ROUTES_FILE,
       ].map(readSource),
     );

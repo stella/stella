@@ -67,8 +67,8 @@ type ProvisionItem = Extract<
 const citationFields = {
   jurisdiction: boundedString(12),
   workIdentifier: boundedString(1024),
-  workNumber: t.Number(),
-  workYear: t.Number(),
+  workNumber: nullableNumber,
+  workYear: nullableNumber,
   workCollection: boundedString(1024),
   workEli: nullableBoundedString(2048),
   workSource: t.Union([

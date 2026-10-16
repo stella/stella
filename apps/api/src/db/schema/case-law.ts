@@ -22,6 +22,7 @@ import {
   DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
@@ -308,6 +309,10 @@ export const STATUTE_CITATION_COUNT_STATUS = {
 } as const;
 
 export const STATUTE_CITATION_COUNT_STATE_KEY = "global";
+
+const EU_PRIMARY_WORK_CELEX_SQL_VALUES = Object.values(EU_PRIMARY_WORKS).map(
+  ({ celex }) => sql.raw(`'${celex}'`),
+);
 
 const PROVISION_UNIT_SQL_VALUES = PROVISION_UNITS.map((unit) =>
   sql.raw(`'${unit}'`),
@@ -1993,8 +1998,8 @@ export const caseLawProvisionCitations = p.pgTable(
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     jurisdiction: p.varchar("jurisdiction", { length: 3 }).notNull(),
     workIdentifier: p.text("work_identifier").notNull(),
-    workNumber: p.integer("work_number").notNull(),
-    workYear: p.smallint("work_year").notNull(),
+    workNumber: p.integer("work_number"),
+    workYear: p.smallint("work_year"),
     workCollection: p.text("work_collection").notNull(),
     workEli: p.text("work_eli"),
     unit: p.text("unit", { enum: PROVISION_UNITS }).notNull(),
@@ -2121,6 +2126,19 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
       )
       .where(isNotNull(t.workEli)),
+    p.check(
+      "provision_citations_work_number_shape",
+      sql`CASE WHEN ${t.jurisdiction} = 'EU' AND ${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+        THEN ${t.workNumber} IS NULL AND ${t.workYear} IS NULL
+        ELSE ${t.workNumber} IS NOT NULL AND ${t.workYear} IS NOT NULL END`,
+    ),
+    p.check(
+      "provision_citations_eu_work_identity",
+      sql`${t.jurisdiction} <> 'EU' OR (
+        ${t.workCollection} = 'EUR-Lex' AND ${t.workEli} IS NOT NULL
+        AND (${t.workIdentifier} IN (${sql.join(EU_PRIMARY_WORK_CELEX_SQL_VALUES, sql.raw(","))})
+          OR ${t.workIdentifier} ~ '^3[0-9]{4}[LR][0-9]{4}$'))`,
+    ),
     p.check(
       "provision_citations_unit_values",
       sql`${t.unit} IN (${sql.join(PROVISION_UNIT_SQL_VALUES, sql.raw(","))})`,

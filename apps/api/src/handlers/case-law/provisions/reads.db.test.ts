@@ -965,3 +965,64 @@ test("citation-count order labels a short result complete and other sorts unboun
     snapshot: null,
   });
 });
+
+test("EU cited-by lists and counts share decision admission and publication gates", async () => {
+  const eli = "http://data.europa.eu/eli/reg/2016/679/oj";
+  const pendingId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    ...decisionRow({
+      id: pendingId,
+      caseNumber: "pending EU citation",
+      citationAuthority: 0,
+      decisionDate: "2025-01-01",
+      sourceId: openSourceId,
+    }),
+    country: "SVK",
+    language: "sk",
+  });
+  const ids = [highAuthorityId, lowAuthorityId, closedDecisionId, pendingId];
+  await db.insert(caseLawProvisionCitations).values(
+    ids.flatMap((decisionId) =>
+      [100, 120].map((spanStart) => ({
+        ...provisionRow({
+          decisionId,
+          anchor: "art_6",
+          decisionDate: "2025-01-01",
+          spanStart,
+          workIdentifier: "32016R0679",
+          workEli: eli,
+        }),
+        jurisdiction: "EU",
+        unit: "article" as const,
+        section: 6,
+        workCollection: "EUR-Lex",
+        workNumber: 679,
+        workYear: 2016,
+      })),
+    ),
+  );
+  const page = await listCitingDecisionsHandler(
+    { jurisdiction: "EU", work: "32016R0679", limit: 10 },
+    { caseLawDb, courtRegistry: new Map() },
+  );
+  if (!("items" in page)) {
+    throw new Error("Expected EU citing decisions page");
+  }
+  expect(new Set(page.items.map(({ decisionId }) => decisionId))).toEqual(
+    new Set([highAuthorityId, lowAuthorityId]),
+  );
+  expect(
+    page.items.every(
+      ({ country, mentionCount }) => country === "CZE" && mentionCount === 2,
+    ),
+  ).toBe(true);
+  expect(
+    await readStatuteCitationCountsHandler(
+      { jurisdiction: "EU", eli },
+      caseLawDb,
+    ),
+  ).toEqual({
+    status: "ready",
+    provisions: [{ anchor: "art_6", decisionCount: 2 }],
+  });
+});

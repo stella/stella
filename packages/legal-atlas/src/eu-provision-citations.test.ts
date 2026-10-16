@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { formatProvisionKey } from "@stll/api-contract/provision-key";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   EU_ACT_ALIASES,
+  EU_PRIMARY_WORKS,
+  euProvisionAnchor,
+  parseEuWorkIdentifier,
+  euProvisionSourceUrl,
   locateEuProvisionCitations,
 } from "./eu-provision-citations";
+import { provisionRefOf, parseProvisionKey } from "./provision-key";
 
 const fixtures = [
   "Article 6(1)(a) of Regulation (EU) 2016/679",
@@ -97,5 +103,96 @@ describe("EU provision citations", () => {
     expect(
       locateEuProvisionCitations("Article 6 GDPR Regulation (EU) 2016/679"),
     ).toHaveLength(1);
+  });
+});
+
+describe("EU primary-law work identity", () => {
+  const primaryFixtures = [
+    ["Article 6 TEU", "teu"],
+    ["Article 267 TFEU", "tfeu"],
+    ["čl. 267 SFEU", "tfeu"],
+    ["čl. 267 ZFEÚ", "tfeu"],
+    ["art. 267 TFUE", "tfeu"],
+    ["267. cikk EUMSZ", "tfeu"],
+    ["Artikel 267 AEUV", "tfeu"],
+    ["Article 267 TFUE", "tfeu"],
+    ["Article 47 Charter of Fundamental Rights", "charter"],
+  ] as const;
+  test.each(primaryFixtures)("reads primary law %s", (printed, kind) => {
+    expect(locateEuProvisionCitations(printed).at(0)?.act).toEqual(
+      EU_PRIMARY_WORKS[kind],
+    );
+  });
+
+  test("a stated treaty edition changes version evidence while the work key stays fixed", () => {
+    for (const edition of ["2008", "2010", "2012", "2016"]) {
+      const printed = `Article 267 TFEU (${edition})`;
+      const citation = locateEuProvisionCitations(printed).at(0);
+      expect(citation?.act.celex).toBe("12016E/TXT");
+      expect(citation?.appliedVersion).toEqual({
+        type: "stated_version",
+        amendmentWorkIdentifier: `1${edition}E/TXT`,
+        evidence: { start: 0, end: printed.length, kind: "stated_version" },
+      });
+    }
+    expect(
+      locateEuProvisionCitations("Article 267 TFEU").at(0)?.appliedVersion,
+    ).toEqual({ type: "not_stated" });
+  });
+
+  test("EU provision references round-trip their CELEX identity independently of hosted text", () => {
+    assertProperty(
+      "eu-provision-celex-key-roundtrip",
+      fc.property(
+        fc.constantFrom(
+          ...primaryFixtures,
+          ...fixtures.map((printed) => [printed, "gdpr"] as const),
+        ),
+        ([printed]) => {
+          const citation = locateEuProvisionCitations(printed).at(0);
+          expect(citation).toBeDefined();
+          if (citation === undefined) {
+            return;
+          }
+          const result = provisionRefOf({
+            jurisdiction: "EU",
+            workIdentifier: citation.act.celex,
+            reference: citation.reference,
+          });
+          expect(result.status).toBe("resolved");
+          if (result.status !== "resolved") {
+            return;
+          }
+          expect(result.provision.workEli).toBe(citation.act.eli);
+          expect(result.provision.anchor).toBe(
+            euProvisionAnchor(citation.reference),
+          );
+          expect(
+            parseProvisionKey(formatProvisionKey(result.provision)),
+          ).toMatchObject({
+            jurisdiction: "EU",
+            workIdentifier: citation.act.celex,
+            anchor: result.provision.anchor,
+          });
+          expect(
+            euProvisionSourceUrl(citation.act.celex, citation.reference),
+          ).toContain("eur-lex.europa.eu");
+        },
+      ),
+    );
+  });
+
+  test("invalid work identities and zero articles are refused", () => {
+    for (const value of [
+      "32016R0000",
+      "30000R0679",
+      "12012E/TXT",
+      "GDPR",
+      "https://evil.test",
+    ]) {
+      expect(parseEuWorkIdentifier(value)).toBeNull();
+      expect(euProvisionSourceUrl(value)).toBeNull();
+    }
+    expect(locateEuProvisionCitations("Article 0 TFEU")).toEqual([]);
   });
 });

@@ -245,3 +245,35 @@ describe("a pages_public country on the shared read", () => {
     });
   });
 });
+
+test("EU provision jurisdiction does not depend on EU decision admission", () => {
+  const capabilities = {
+    ...PUBLIC_COUNTRY_CAPABILITIES,
+    EU: "withdrawn" as const,
+  };
+  for (const input of ["EU", "eu", "European Union"]) {
+    expect(
+      readPublicLawCountry(input, {
+        admitted: ["CZE"],
+        surface: "search",
+        jurisdictionType: "provision",
+        capabilities,
+      }),
+    ).toEqual({ kind: "read", country: "EU" });
+    expect(
+      readPublicLawCountry(input, {
+        admitted: ["CZE"],
+        surface: "search",
+        capabilities,
+      }).kind,
+    ).toBe("unavailable");
+  }
+  expect(
+    readPublicLawCountry("SVK", {
+      admitted: ["CZE"],
+      surface: "search",
+      jurisdictionType: "provision",
+      capabilities: { ...capabilities, SVK: "withdrawn" },
+    }).kind,
+  ).toBe("unavailable");
+});

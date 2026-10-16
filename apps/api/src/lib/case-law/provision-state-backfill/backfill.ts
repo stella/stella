@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import {
-  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
 } from "@stll/legal-atlas/provision-extraction-admission";
 import { Temporal } from "@stll/time";
@@ -53,9 +53,9 @@ type Admission = { revision: number; scopes: readonly ScopeKey[] };
 
 const CURRENT_ADMISSION: Admission = {
   revision: PROVISION_EXTRACTION_ADMISSION_REVISION,
-  scopes: Object.values(PROVISION_EXTRACTION_ADMISSION)
-    .map(({ jurisdiction, language }) => ({ country: jurisdiction, language }))
-    .toSorted(compareScopeKeys),
+  scopes: PROVISION_EXTRACTION_ADMISSION_SCOPES.map(
+    ({ jurisdiction, language }) => ({ country: jurisdiction, language }),
+  ).toSorted(compareScopeKeys),
 };
 
 const readString = (row: unknown, key: string): string => {

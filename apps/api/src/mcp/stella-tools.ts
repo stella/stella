@@ -35,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
@@ -778,7 +779,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         ),
       ),
     ),
@@ -2178,6 +2179,42 @@ const resolveSearchProvision = (
   text: string,
   country: string,
 ): SearchProvisionRead => {
+  const euCitations = locateEuProvisionCitations(text);
+  if (euCitations.length > 1) {
+    return provisionRefusal(
+      "The provision names several provisions or a range",
+      'Pass one EU provision per search, for example "Article 6(1)(a) GDPR".',
+    );
+  }
+  const euCitation = euCitations.at(0);
+  if (euCitation !== undefined) {
+    const before = text.slice(0, euCitation.start).trim();
+    const after = text.slice(euCitation.end).trim();
+    if (before.length > 0 || (after.length > 0 && after !== ".")) {
+      return provisionRefusal(
+        "The provision names several provisions or contains unsupported text",
+        'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
+      );
+    }
+    const reference = euCitation.reference;
+    return {
+      type: "resolved",
+      provision: {
+        jurisdiction: "EU",
+        work: euCitation.act.celex,
+        unit: reference.unit,
+        section: reference.section,
+        ...(reference.sectionSuffix === null
+          ? {}
+          : { sectionSuffix: reference.sectionSuffix }),
+        ...(reference.subsection === null
+          ? {}
+          : { subsection: reference.subsection }),
+        ...(reference.letter === null ? {} : { letter: reference.letter }),
+        ...(reference.point === null ? {} : { point: reference.point }),
+      },
+    };
+  }
   const profile = provisionCitationProfileFor(country);
   if (profile === null) {
     return provisionRefusal(

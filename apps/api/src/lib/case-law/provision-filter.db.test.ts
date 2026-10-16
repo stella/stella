@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
@@ -257,6 +257,35 @@ test("the provision scope is the whole citing set while it fits, else its exact 
   expect((await read(subsection, 2)).type).toBe("decisions");
   expect(
     await read({ work: "262/2006 Sb.", unit: "section", section: 317 }),
+  ).toEqual({ type: "decisions", decisionIds: [] });
+  await db
+    .update(caseLawDecisions)
+    .set({ country: "SVK" })
+    .where(eq(caseLawDecisions.id, third.id));
+  await db.insert(caseLawProvisionCitations).values(
+    [first.id, third.id].map((decisionId) => ({
+      ...link(decisionId, "1", 80),
+      jurisdiction: "EU",
+      workIdentifier: "32016R0679",
+      workNumber: 679,
+      workYear: 2016,
+      workCollection: "EUR-Lex",
+      workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      unit: "article" as const,
+      section: 6,
+      anchor: "art_6-par_1",
+    })),
+  );
+  const euScope = await read({
+    jurisdiction: "EU",
+    work: "32016R0679",
+    unit: "article",
+    section: 6,
+  });
+  expect(euScope).toEqual({ type: "decisions", decisionIds: [first.id] });
+  // The same work token in a national filter cannot reach EU links.
+  expect(
+    await read({ work: "32016R0679", unit: "article", section: 6 }),
   ).toEqual({ type: "decisions", decisionIds: [] });
   await client.close();
 }, 60_000);

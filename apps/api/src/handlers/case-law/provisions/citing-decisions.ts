@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -291,6 +291,27 @@ const readCitingDecisionRows = async ({
   );
 };
 
+/** Target jurisdiction and citing-country admission are one scope decision. */
+const citingJurisdictionScope = (country: string) => {
+  if (country === "EU") {
+    return {
+      jurisdiction: "EU",
+      decisionCountryCondition: inArray(
+        caseLawDecisions.country,
+        PUBLIC_CASE_LAW_COUNTRIES,
+      ),
+    };
+  }
+  const jurisdiction = publicCaseLawCountry(country);
+  if (jurisdiction === null) {
+    return null;
+  }
+  return {
+    jurisdiction,
+    decisionCountryCondition: eq(caseLawDecisions.country, jurisdiction),
+  };
+};
+
 type CitingDecisionsReadOptions = {
   caseLawDb: CaseLawPublicReadDb;
   courtRegistry: CourtRegistry;
@@ -304,6 +325,7 @@ export const listCitingDecisionsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
     parameter: "jurisdiction",
+    jurisdictionType: "provision",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -311,10 +333,11 @@ export const listCitingDecisionsHandler = async (
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
-  const jurisdiction = publicCaseLawCountry(countryRead.country);
-  if (jurisdiction === null) {
+  const scope = citingJurisdictionScope(countryRead.country);
+  if (scope === null) {
     return status(404, { message: "Not Found" });
   }
+  const { jurisdiction, decisionCountryCondition } = scope;
   const work = workCondition(query);
 
   if (work === null) {
@@ -357,7 +380,7 @@ export const listCitingDecisionsHandler = async (
   }
   const conditions: SQL[] = [
     eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
-    eq(caseLawDecisions.country, jurisdiction),
+    decisionCountryCondition,
     work,
     redistributableCaseLawSource,
     publishedCaseLawDecision,

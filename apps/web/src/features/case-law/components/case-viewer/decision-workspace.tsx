@@ -467,7 +467,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
-  const provisionAnchors = useDecisionProvisionAnchors({
+  const {
+    anchors: provisionAnchors,
+    externalAnchors: externalProvisionAnchors,
+  } = useDecisionProvisionAnchors({
     court: decision.court,
     caseNumber: decision.caseNumber,
     surface: "full-reader",
@@ -971,6 +974,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     }
                     landingSessionId={landingSessionId}
                     provisionAnchors={provisionAnchors}
+                    externalProvisionAnchors={externalProvisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
                   />

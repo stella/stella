@@ -135,6 +135,8 @@ type PublicLawCountryOptions = {
   /** The canonical codes this surface holds law for, named in the ask so a
    *  caller that guessed wrong can see what there is to ask for. */
   admitted: readonly string[];
+  /** EU provision targets can be cited by every admitted decision country. */
+  jurisdictionType?: "decision" | "provision";
   /** Which public surface is asking: `pages` serves decision and statute pages
    *  and sitemaps, `search` is search, listing and the agent surfaces. */
   surface: PublicCountrySurface;
@@ -153,7 +155,13 @@ type PublicLawCountryOptions = {
  */
 export const readPublicLawCountry = (
   input: unknown,
-  { admitted, capabilities, parameter, surface }: PublicLawCountryOptions,
+  {
+    admitted,
+    capabilities,
+    jurisdictionType = "decision",
+    parameter,
+    surface,
+  }: PublicLawCountryOptions,
 ): PublicLawCountryRead => {
   const normalized = normalizeCountry(input, {
     spelling: "alpha-3",
@@ -161,6 +169,9 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
+    if (jurisdictionType === "provision" && normalized.value.alpha3 === "EU") {
+      return { kind: "read", country: normalized.value.alpha3 };
+    }
     const answer = publicLawCountryUnavailable(
       normalized.value.alpha3,
       surface,

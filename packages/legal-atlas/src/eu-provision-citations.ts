@@ -1,3 +1,4 @@
+import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
 const EU_ACT_KINDS = {
@@ -24,20 +25,85 @@ const ACT_NUMBER_ORDERS = {
 export type EuActIdentity = {
   celex: string;
   eli: string;
-  kind: EuActKind;
-  number: number;
-  year: number;
+} & (
+  | { kind: EuActKind; number: number; year: number }
+  | { kind: "teu" | "tfeu" | "charter"; number: null; year: null }
+);
+
+/** Series identifiers are stable work keys; a stated edition is separate evidence. */
+export const EU_PRIMARY_WORKS = {
+  teu: {
+    kind: "teu",
+    celex: "12016M/TXT",
+    eli: "http://data.europa.eu/eli/treaty/teu_2016/oj",
+    number: null,
+    year: null,
+  },
+  tfeu: {
+    kind: "tfeu",
+    celex: "12016E/TXT",
+    eli: "http://data.europa.eu/eli/treaty/tfeu_2016/oj",
+    number: null,
+    year: null,
+  },
+  charter: {
+    kind: "charter",
+    celex: "12016P/TXT",
+    eli: "http://data.europa.eu/eli/treaty/char_2016/oj",
+    number: null,
+    year: null,
+  },
+} as const satisfies Record<string, EuActIdentity>;
+
+export const parseEuWorkIdentifier = (raw: string): EuActIdentity | null => {
+  const primary = Object.values(EU_PRIMARY_WORKS).find(
+    ({ celex }) => celex === raw,
+  );
+  if (primary !== undefined) {
+    return primary;
+  }
+  const match = /^3(?<year>\d{4})(?<kind>[LR])(?<number>\d{4})$/u.exec(raw);
+  const year = match?.groups?.["year"];
+  const number = match?.groups?.["number"];
+  if (
+    year === undefined ||
+    number === undefined ||
+    Number(year) < 1950 ||
+    Number(number) === 0
+  ) {
+    return null;
+  }
+  return actIdentity(
+    match?.groups?.["kind"] === "L" ? "directive" : "regulation",
+    Number(year),
+    Number(number),
+  );
+};
+
+export const euProvisionSourceUrl = (
+  workIdentifier: string,
+  reference?: ProvisionReference,
+): string | null => {
+  if (parseEuWorkIdentifier(workIdentifier) === null) {
+    return null;
+  }
+  const anchor =
+    reference === undefined
+      ? ""
+      : `#art_${String(reference.section)}${reference.sectionSuffix ?? ""}`;
+  return `https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:${encodeURIComponent(workIdentifier)}${anchor}`;
 };
 
 export type LocatedEuProvisionCitation = {
   act: EuActIdentity;
+  appliedVersion: AppliedProvisionVersion;
   end: number;
   jurisdiction: "EU";
   reference: ProvisionReference;
   start: number;
 };
 
-type EuActAlias = EuActIdentity & {
+type EuActAlias = Extract<EuActIdentity, { kind: EuActKind }> & {
   patterns: readonly string[];
 };
 
@@ -45,7 +111,7 @@ const actIdentity = (
   kind: EuActKind,
   year: number,
   number: number,
-): EuActIdentity => {
+): Extract<EuActIdentity, { kind: EuActKind }> => {
   const { celexLetter, eliKind } = EU_ACT_KINDS[kind];
   return {
     celex: `3${String(year).padStart(4, "0")}${celexLetter}${String(number).padStart(4, "0")}`,
@@ -103,6 +169,42 @@ const ALIAS_PATTERN = new RegExp(
   "giu",
 );
 
+const PRIMARY_ALIASES = {
+  teu: String.raw`(?:TEU|SEU|ZEÚ|EUV|EUSZ|TUE|Treaty on European Union|Smlouvy o Evropské unii|Zmluvy o Európskej únii|Traktatu o Unii Europejskiej|Vertrag(?:s)? über die Europäische Union|traité sur l’Union européenne)`,
+  tfeu: String.raw`(?:TFEU|SFEU|ZFEÚ|AEUV|EUMSZ|TFUE|Treaty on the Functioning of the European Union|Smlouvy o fungování Evropské unie|Zmluvy o fungovaní Európskej únie|Traktatu o funkcjonowaniu Unii Europejskiej|Vertrag(?:s)? über die Arbeitsweise der Europäischen Union|traité sur le fonctionnement de l’Union européenne)`,
+  charter: String.raw`(?:Charter of Fundamental Rights(?: of the European Union)?|Listiny základních práv Evropské unie|Charty základných práv Európskej únie|Karty praw podstawowych(?: Unii Europejskiej)?|Charta der Grundrechte(?: der Europäischen Union)?|Charte des droits fondamentaux(?: de l’Union européenne)?|Európai Unió Alapjogi Chartája|GRCh)`,
+} as const satisfies Record<keyof typeof EU_PRIMARY_WORKS, string>;
+const HUNGARIAN_REFERENCE = String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?`;
+const PRIMARY_PATTERNS = Object.values(EU_PRIMARY_WORKS).flatMap(({ kind }) => {
+  const tail = String.raw`\s*(?:of\s+(?:the\s+)?|de\s+|du\s+|der\s+|des\s+)?${PRIMARY_ALIASES[kind]}(?![\p{L}\p{N}])(?:\s*\((?<edition>2008|2010|2012|2016)\))?`;
+  return [
+    [
+      kind,
+      new RegExp(String.raw`${ARTICLE}${PARAGRAPH}${POINT}${tail}`, "giu"),
+    ] as const,
+    [
+      kind,
+      new RegExp(String.raw`${HUNGARIAN_REFERENCE}${tail}`, "giu"),
+    ] as const,
+  ];
+});
+const REFERENCE_PATTERNS = [
+  new RegExp(String.raw`^${ARTICLE}${PARAGRAPH}${POINT}\s*$`, "iu"),
+  new RegExp(String.raw`^${HUNGARIAN_REFERENCE}\s*$`, "iu"),
+];
+
+export const parseEuProvisionReference = (
+  raw: string,
+): ProvisionReference | null => {
+  for (const pattern of REFERENCE_PATTERNS) {
+    const match = pattern.exec(raw);
+    if (match !== null) {
+      return referenceFrom(match.groups ?? {});
+    }
+  }
+  return null;
+};
+
 const normalizeYear = (raw: string): number => {
   const year = Number(raw);
   if (raw.length === 4) {
@@ -140,7 +242,7 @@ const referenceFrom = (groups: Record<string, string | undefined>) => {
   }
   const matched = /^(?<number>\d+)(?<suffix>[a-zA-Z]?)$/u.exec(rawSection);
   const number = matched?.groups?.["number"];
-  if (number === undefined) {
+  if (number === undefined || Number(number) < 1) {
     return null;
   }
   return {
@@ -163,7 +265,7 @@ const aliasMatchers = Object.values(EU_ACT_ALIASES).map((alias) => ({
   pattern: new RegExp(`^(?:${alias.patterns.join("|")})$`, "iu"),
 }));
 
-/** Locate EU secondary-law provision references without requiring hosted act text. */
+/** Locate EU provision references without requiring hosted act text. */
 export const locateEuProvisionCitations = (
   text: string,
 ): LocatedEuProvisionCitation[] => {
@@ -179,6 +281,7 @@ export const locateEuProvisionCitations = (
       }
       citations.push({
         act,
+        appliedVersion: { type: "not_stated" },
         end: match.index + match[0].length,
         jurisdiction: "EU",
         reference,
@@ -195,6 +298,7 @@ export const locateEuProvisionCitations = (
     }
     citations.push({
       act,
+      appliedVersion: { type: "not_stated" },
       end: match.index + match[0].length,
       jurisdiction: "EU",
       reference,
@@ -214,6 +318,7 @@ export const locateEuProvisionCitations = (
       continue;
     }
     citations.push({
+      appliedVersion: { type: "not_stated" },
       act: {
         celex: alias.celex,
         eli: alias.eli,
@@ -227,5 +332,91 @@ export const locateEuProvisionCitations = (
       start: match.index,
     });
   }
+  for (const [kind, pattern] of PRIMARY_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      const reference = referenceFrom(match.groups ?? {});
+      if (reference === null) {
+        continue;
+      }
+      const edition = match.groups?.["edition"];
+      const letter = { teu: "M", tfeu: "E", charter: "P" } as const;
+      citations.push({
+        act: EU_PRIMARY_WORKS[kind],
+        appliedVersion:
+          edition === undefined
+            ? { type: "not_stated" }
+            : {
+                type: "stated_version",
+                amendmentWorkIdentifier: `1${edition}${letter[kind]}/TXT`,
+                evidence: {
+                  start: match.index,
+                  end: match.index + match[0].length,
+                  kind: "stated_version",
+                },
+              },
+        reference,
+        jurisdiction: "EU",
+        start: match.index,
+        end: match.index + match[0].length,
+      });
+    }
+  }
   return citations.toSorted((left, right) => left.start - right.start);
+};
+
+/** Stable citation identity; publisher links deliberately stop at the article. */
+export const euProvisionAnchor = (reference: ProvisionReference): string => {
+  const parts = [
+    `art_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
+  ];
+  if (reference.subsection !== null) {
+    parts.push(`par_${reference.subsection}`);
+  }
+  if (reference.letter !== null) {
+    parts.push(`pt_${reference.letter}`);
+  }
+  if (reference.point !== null) {
+    parts.push(`num_${reference.point}`);
+  }
+  return parts.join("-");
+};
+
+export const parseEuProvisionAnchor = (
+  raw: string,
+): ProvisionReference | null => {
+  const match =
+    /^art_(?<article>[1-9]\d*[a-z]?)(?:-par_(?<wordParagraph>[1-9]\d*))?(?:-pt_(?<point>[a-z]))?(?:-num_(?<numericPoint>[1-9]\d*))?$/u.exec(
+      raw,
+    );
+  if (match?.groups === undefined) {
+    return null;
+  }
+  const reference = referenceFrom(match.groups);
+  return reference === null
+    ? null
+    : { ...reference, point: match.groups["numericPoint"] ?? null };
+};
+
+export const normalizeEuProvisionReference = (
+  reference: ProvisionReference,
+): ProvisionReference | null => {
+  if (
+    reference.unit !== "article" ||
+    !Number.isSafeInteger(reference.section) ||
+    reference.section < 1
+  ) {
+    return null;
+  }
+  const canonical = (value: string | null) =>
+    value === null ? null : value.toLowerCase().replace(/^0+(?=\d)/u, "");
+  const normalized = {
+    ...reference,
+    sectionSuffix: canonical(reference.sectionSuffix),
+    subsection: canonical(reference.subsection),
+    letter: canonical(reference.letter),
+    point: canonical(reference.point),
+  };
+  return parseEuProvisionAnchor(euProvisionAnchor(normalized)) === null
+    ? null
+    : normalized;
 };
