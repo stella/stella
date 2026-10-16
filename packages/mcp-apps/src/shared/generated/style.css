@@ -862,6 +862,9 @@
   .inline-flex {
     display: inline-flex;
   }
+  .inline-grid {
+    display: inline-grid;
+  }
   .list-item {
     display: list-item;
   }
@@ -1395,6 +1398,9 @@
   .origin-\(--transform-origin\) {
     transform-origin: var(--transform-origin);
   }
+  .origin-center {
+    transform-origin: center;
+  }
   .origin-left {
     transform-origin: 0;
   }
@@ -1496,6 +1502,9 @@
   }
   .animate-spin {
     animation: var(--animate-spin);
+  }
+  .animate-status-spin {
+    animation: status-spin 1100ms linear infinite;
   }
   .cursor-col-resize {
     cursor: col-resize;
@@ -2953,6 +2962,9 @@
   .opacity-50 {
     opacity: 50%;
   }
+  .opacity-55 {
+    opacity: 55%;
+  }
   .opacity-60 {
     opacity: 60%;
   }
@@ -3299,6 +3311,14 @@
     );
     transition-duration: var(--tw-duration, var(--default-transition-duration));
   }
+  .transition-\[color\] {
+    transition-property: color;
+    transition-timing-function: var(
+      --tw-ease,
+      var(--default-transition-timing-function)
+    );
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
   .transition-\[height\] {
     transition-property: height;
     transition-timing-function: var(
@@ -3357,6 +3377,14 @@
   }
   .transition-\[scale\,opacity\] {
     transition-property: scale, opacity;
+    transition-timing-function: var(
+      --tw-ease,
+      var(--default-transition-timing-function)
+    );
+    transition-duration: var(--tw-duration, var(--default-transition-duration));
+  }
+  .transition-\[stroke-dasharray\,opacity\] {
+    transition-property: stroke-dasharray, opacity;
     transition-timing-function: var(
       --tw-ease,
       var(--default-transition-timing-function)
@@ -3441,6 +3469,10 @@
   .duration-250 {
     --tw-duration: 250ms;
     transition-duration: 250ms;
+  }
+  .duration-300 {
+    --tw-duration: 300ms;
+    transition-duration: 300ms;
   }
   .duration-1000 {
     --tw-duration: 1000ms;
@@ -3558,6 +3590,9 @@
   .\[-ms-overflow-style\:none\] {
     -ms-overflow-style: none;
   }
+  .\[animation-play-state\:paused\] {
+    animation-play-state: paused;
+  }
   .\[background\:linear-gradient\(120deg\,transparent_40\%\,var\(--skeleton-highlight\)\,transparent_60\%\)_var\(--color-muted\)_0_0\/200\%_100\%_fixed\] {
     background: linear-gradient(
         120deg,
@@ -3567,6 +3602,18 @@
       )
       var(--color-muted) 0 0/200% 100% fixed;
   }
+  .\[stroke-dasharray\:1_2\] {
+    stroke-dasharray: 1 2;
+  }
+  .\[stroke-dasharray\:3\.75_8\.75\] {
+    stroke-dasharray: 3.75 8.75;
+  }
+  .\[stroke-dashoffset\:1\.05\] {
+    stroke-dashoffset: 1.05;
+  }
+  .\[transform-box\:view-box\] {
+    transform-box: view-box;
+  }
   .\[transition\:background-color_5000000s_ease-in-out_0s\] {
     transition: background-color 5000000s ease-in-out 0s;
   }
@@ -3574,6 +3621,11 @@
     transition:
       opacity 150ms ease-out,
       scale 320ms var(--ease-spring);
+  }
+  .\[transition\:stroke-dashoffset_150ms_cubic-bezier\(0\.22\,1\,0\.36\,1\)\,opacity_0ms_linear_150ms\] {
+    transition:
+      stroke-dashoffset 150ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0ms linear 150ms;
   }
   .\[transition\:transform_\.5s_var\(--ease-smooth\)\,opacity_\.5s\,height_\.15s\] {
     transition:
@@ -3800,6 +3852,85 @@
   ) {
     border-inline-start-style: var(--tw-border-style);
     border-inline-start-width: 1px;
+  }
+  .group-data-\[status\=done\]\/status\:opacity-50:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    opacity: 50%;
+  }
+  .group-data-\[status\=done\]\/status\:opacity-100:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    opacity: 100%;
+  }
+  .group-data-\[status\=done\]\/status\:opacity-\[0\.06\]:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    opacity: 0.06;
+  }
+  .group-data-\[status\=done\]\/status\:\[stroke-dasharray\:100_0\]:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    stroke-dasharray: 100 0;
+  }
+  .group-data-\[status\=done\]\/status\:\[stroke-dashoffset\:0\]:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    stroke-dashoffset: 0;
+  }
+  .group-data-\[status\=done\]\/status\:\[transition\:stroke-dashoffset_300ms_cubic-bezier\(0\.22\,1\,0\.36\,1\)_140ms\,opacity_0ms_linear_140ms\]:is(
+    :where(.group\/status)[data-status="done"] *
+  ) {
+    transition:
+      stroke-dashoffset 300ms cubic-bezier(0.22, 1, 0.36, 1) 140ms,
+      opacity 0ms linear 140ms;
+  }
+  .group-data-\[status\=failed\]\/status\:opacity-60:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    opacity: 60%;
+  }
+  .group-data-\[status\=failed\]\/status\:opacity-100:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    opacity: 100%;
+  }
+  .group-data-\[status\=failed\]\/status\:opacity-\[0\.08\]:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    opacity: 0.08;
+  }
+  .group-data-\[status\=failed\]\/status\:\[stroke-dasharray\:100_0\]:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    stroke-dasharray: 100 0;
+  }
+  .group-data-\[status\=failed\]\/status\:\[stroke-dashoffset\:0\]:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    stroke-dashoffset: 0;
+  }
+  .group-data-\[status\=failed\]\/status\:\[transition\:stroke-dashoffset_300ms_cubic-bezier\(0\.22\,1\,0\.36\,1\)_140ms\,opacity_0ms_linear_140ms\]:is(
+    :where(.group\/status)[data-status="failed"] *
+  ) {
+    transition:
+      stroke-dashoffset 300ms cubic-bezier(0.22, 1, 0.36, 1) 140ms,
+      opacity 0ms linear 140ms;
+  }
+  .group-data-\[status\=running\]\/status\:opacity-20:is(
+    :where(.group\/status)[data-status="running"] *
+  ) {
+    opacity: 20%;
+  }
+  .group-data-\[status\=running\]\/status\:opacity-100:is(
+    :where(.group\/status)[data-status="running"] *
+  ) {
+    opacity: 100%;
+  }
+  .group-data-\[status\=running\]\/status\:\[stroke-dasharray\:30_70\]:is(
+    :where(.group\/status)[data-status="running"] *
+  ) {
+    stroke-dasharray: 30 70;
   }
   .group-data-\[variant\=floating\]\:rounded-lg:is(
     :where(.group)[data-variant="floating"] *
@@ -5530,15 +5661,56 @@
       }
     }
   }
+  @media (prefers-reduced-motion: no-preference) {
+    .motion-safe\:animate-swap-in {
+      animation: swap-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .motion-safe\:animate-swap-out {
+      animation: swap-out 200ms ease-in both;
+    }
+    .motion-safe\:animate-text-fade {
+      animation: text-fade 200ms ease-out both;
+    }
+    .motion-safe\:group-data-\[status\=running\]\/status\:\[animation-play-state\:running\]:is(
+      :where(.group\/status)[data-status="running"] *
+    ) {
+      animation-play-state: running;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
+    .motion-reduce\:hidden {
+      display: none;
+    }
     .motion-reduce\:animate-none {
       animation: none;
     }
     .motion-reduce\:opacity-70 {
       opacity: 70%;
     }
+    .motion-reduce\:transition-\[opacity\] {
+      transition-property: opacity;
+      transition-timing-function: var(
+        --tw-ease,
+        var(--default-transition-timing-function)
+      );
+      transition-duration: var(
+        --tw-duration,
+        var(--default-transition-duration)
+      );
+    }
     .motion-reduce\:transition-none {
       transition-property: none;
+    }
+    .motion-reduce\:\[stroke-dashoffset\:0\] {
+      stroke-dashoffset: 0;
+    }
+    .motion-reduce\:\[transition\:opacity_200ms_ease\] {
+      transition: opacity 200ms ease;
+    }
+    .motion-reduce\:group-data-\[status\=running\]\/status\:animate-status-breathe:is(
+      :where(.group\/status)[data-status="running"] *
+    ) {
+      animation: status-breathe 1400ms ease-in-out infinite;
     }
   }
   @media (width < 480px) {
@@ -9161,6 +9333,43 @@ body {
 @keyframes pulse {
   50% {
     opacity: 0.5;
+  }
+}
+@keyframes swap-in {
+  from {
+    filter: blur(2px);
+    opacity: 0;
+    transform: translateY(0.45em);
+  }
+  to {
+    filter: blur(0);
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes swap-out {
+  to {
+    filter: blur(2px);
+    opacity: 0;
+    transform: translateY(-0.45em);
+  }
+}
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes status-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes text-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 @keyframes loader {

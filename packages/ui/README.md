@@ -213,7 +213,8 @@ column and keep their trailing column, so they never scroll sideways.
   <ListGroupHeader>
     <ListGroupHeading>
       <ListGroupTitle id="apps">
-        Apps with access<ListGroupCount count="3" />
+        Apps with access
+        <ListGroupCount count="3" />
       </ListGroupTitle>
       <ListGroupDescription>Apps you authorized.</ListGroupDescription>
     </ListGroupHeading>
