@@ -42,7 +42,6 @@ import type {
 import type {
   PersistedToolCallPart,
   PersistedToolResultPart,
-  persistedChatMessageContentProof,
   persistedChatMessageContentV3Proof,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
@@ -269,26 +268,9 @@ export type ChatCompactionSummary = {
   readFiles: string[];
 };
 
-/** Versioned envelope for the chatMessages JSONB column.
- *  Bump the version and add a new variant when the parts
- *  shape changes; migrate in-place by reading the version
- *  and transforming old shapes on read. */
-type LegacyChatMessageContent = {
-  version: 1;
-  data: unknown[];
-};
-
 export type ChatMessageContentCandidate = {
   data: ChatMessage["parts"];
   metadata?: ChatMessageMetadata | undefined;
-  version: 2;
-};
-
-export type ChatMessageContent = {
-  data: ChatMessage["parts"];
-  metadata?: ChatMessageMetadata | undefined;
-  readonly [persistedChatMessageContentProof]: true;
-  version: 2;
 };
 
 type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;
@@ -303,7 +285,5 @@ export type PersistedChatMessageContentV3 = {
   version: 3;
 };
 
-export type PersistedChatMessageContent =
-  | LegacyChatMessageContent
-  | ChatMessageContent
-  | PersistedChatMessageContentV3;
+/** Stored rows are upgraded to v3 before runtime readers start. */
+export type PersistedChatMessageContent = PersistedChatMessageContentV3;

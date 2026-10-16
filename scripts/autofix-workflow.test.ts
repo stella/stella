@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync, readdirSync } from "node:fs";
 
+import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
   CI_GENERATION_COMMANDS,
   GENERATORS,
+  generatorsForFiles,
   orderGenerators,
 } from "./generated-files";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
@@ -30,6 +33,46 @@ const RESOLUTION_SOURCE_URLS = RESOLUTION_SCRIPTS.map(
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+// This test runs before the dependency install, so it narrows the workflow by
+// hand instead of with a schema library.
+const autofixTriggerPaths = (): string[] => {
+  const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
+  const on = isRecord(workflow) ? workflow["on"] : undefined;
+  const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
+  const paths: unknown = isRecord(pullRequest)
+    ? pullRequest["paths"]
+    : undefined;
+  if (
+    !Array.isArray(paths) ||
+    !paths.every((path): path is string => typeof path === "string")
+  ) {
+    throw new TypeError("autofix must declare pull_request paths");
+  }
+  return paths;
+};
+
+// Workflow files are never format or lint targets, so only a workflow that a
+// generator or the Tauri alignment reads (or this workflow) can need autofix.
+test("the PR trigger drops exactly the workflow files autofix never reads", () => {
+  const workflows = readdirSync(
+    new URL("../.github/workflows", import.meta.url),
+  )
+    .map((name) => `.github/workflows/${name}`)
+    .filter(
+      (file) =>
+        file === ".github/workflows/autofix.yml" ||
+        generatorsForFiles([file]).length > 0 ||
+        requiresTauriAlignment([file]),
+    )
+    .toSorted();
+  expect(workflows).toContain(".github/workflows/ci.yml");
+  expect(autofixTriggerPaths()).toEqual([
+    "**",
+    "!.github/workflows/**",
+    ...workflows,
+  ]);
+});
 
 const namedCiStep = (workflow: unknown, name: string) => {
   if (!isRecord(workflow)) {
@@ -190,9 +233,12 @@ describe("Dependabot Bun autofix boundary", () => {
     const checkCall = `bun --no-install --no-env-file scripts/dependabot-changeset.ts \\
             --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH" --check`;
 
-    // No workflow-level path filter can drop a package.json-only bump; the
-    // Dependabot job scopes itself by head ref.
-    expect(workflow).not.toContain("paths:");
+    // The path filter keeps every non-workflow file, so a package.json-only
+    // bump still runs; the Dependabot job scopes itself by head ref.
+    expect(autofixTriggerPaths().slice(0, 2)).toEqual([
+      "**",
+      "!.github/workflows/**",
+    ]);
     expect(workflow).toContain(
       `DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
