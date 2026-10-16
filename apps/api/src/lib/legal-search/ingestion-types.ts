@@ -1,3 +1,4 @@
+// parser-output-unchanged: The optional reconciliation publisherCount field carries census observations; decision parser inputs and output are unchanged.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
 // parser-output-unchanged: Adds an optional observation-quality discriminator; publisher fields and document parsing are unchanged.

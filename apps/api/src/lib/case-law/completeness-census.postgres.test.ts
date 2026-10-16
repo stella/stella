@@ -10,6 +10,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -283,16 +284,18 @@ describe.skipIf(!enabled)(
       const id = createSafeId<"caseLawSource">();
       const sources = [{ id, adapterKey: "cz-us" }];
       const initial = (
-        await currentCensusSourceScopes(
+        await currentCensusSourceScopes({
           sources,
-          new Date("2026-12-31T23:59:59Z"),
-        )
+          now: new Date("2026-12-31T23:59:59Z"),
+          loadAdapter: loadAdapterByKey,
+        })
       ).at(0);
       const current = (
-        await currentCensusSourceScopes(
+        await currentCensusSourceScopes({
           sources,
-          new Date("2027-01-01T00:00:00Z"),
-        )
+          now: new Date("2027-01-01T00:00:00Z"),
+          loadAdapter: loadAdapterByKey,
+        })
       ).at(0);
       if (
         initial?.scope === null ||
@@ -439,6 +442,13 @@ describe.skipIf(!enabled)(
         panic("Postgres census test requires DATABASE_URL");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient({ max: 1 });
+        expect(
+          await db.execute<{ enabled: boolean; forced: boolean }>(sql`
+            SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced
+            FROM pg_catalog.pg_class
+            WHERE oid = 'public.case_law_completeness_census'::regclass
+          `),
+        ).toEqual([{ enabled: true, forced: true }]);
         const visible = createSafeId<"caseLawSource">();
         const withheld = createSafeId<"caseLawSource">();
         await db.insert(caseLawSources).values([

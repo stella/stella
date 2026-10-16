@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing, listed items and page counts are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.

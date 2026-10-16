@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing totalHits count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { Result, panic } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.

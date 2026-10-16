@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing reported listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { Result, TaggedError, panic } from "better-result";

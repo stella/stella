@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing numFound count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.

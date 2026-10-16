@@ -46,7 +46,7 @@ test("a missing measurement or empty universe never authorizes launch", () => {
   expect(countryCensusVerdict([])).toBe("unmeasured");
 });
 
-test("a source with any short or unmeasured slice never reads complete", () => {
+test("census-short-or-unmeasured-never-complete", () => {
   assertProperty(
     "census-short-or-unmeasured-never-complete",
     fc.property(
@@ -107,7 +107,7 @@ test("a source with any short or unmeasured slice never reads complete", () => {
   );
 });
 
-test("the text threshold agrees with exact integer arithmetic over safe counts", () => {
+test("census-text-threshold-exact-safe-integers", () => {
   assertProperty(
     "census-text-threshold-exact-safe-integers",
     fc.property(

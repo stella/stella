@@ -24,6 +24,11 @@ CREATE TABLE "case_law_completeness_census" (
 );--> statement-breakpoint
 CREATE INDEX "case_law_completeness_census_source_year_idx" ON "case_law_completeness_census" ("source_id", "year");--> statement-breakpoint
 ALTER TABLE "case_law_completeness_census" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "case_law_completeness_census" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "census_owner_access" ON "case_law_completeness_census"
+  FOR ALL TO PUBLIC
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass));--> statement-breakpoint
 CREATE POLICY "case_law_global_access" ON "case_law_completeness_census" AS PERMISSIVE FOR SELECT TO "stella" USING (true);--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_completeness_census" AS PERMISSIVE FOR ALL TO "stella_ingestion" USING (true) WITH CHECK (true);
 --> statement-breakpoint

@@ -1721,6 +1721,12 @@ export const caseLawCompletenessCensus = p.pgTable(
           AND ${redistributableCaseLawSourceFor(sql`census_source.descriptor`)}
       )`,
     }),
+    p.pgPolicy("census_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+    }),
     ...globalCaseLawPolicies(),
   ],
 );

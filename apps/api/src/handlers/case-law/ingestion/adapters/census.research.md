@@ -11,37 +11,37 @@ The registry adds twelve Austrian sources to the seventeen-source task list.
 Each registered key has its own research note below; shared RIS mechanics do
 not merge their separate application denominators.
 
-| Registered adapter | Recommended observation | Natural axis |
-| --- | --- | --- |
-| [at-asylgh](at-asylgh.research.md) | `publisher-count` | decision month |
-| [at-bks](at-bks.research.md) | `publisher-count` | decision month |
-| [at-bvwg](at-bvwg.research.md) | `publisher-count` | decision month |
-| [at-courts](at-courts.research.md) | `publisher-count` | decision month |
-| [at-findok](at-findok.research.md) | `listing-enumerated` | decision year × UFS/BFG collection |
-| [at-lvwg](at-lvwg.research.md) | `publisher-count` | decision month |
-| [at-ubas](at-ubas.research.md) | `publisher-count` | decision month |
-| [at-umse](at-umse.research.md) | `publisher-count` | decision month |
-| [at-uvs](at-uvs.research.md) | `publisher-count` | decision month |
-| [at-verg](at-verg.research.md) | `publisher-count` | decision month |
-| [at-vfgh](at-vfgh.research.md) | `publisher-count` | decision month |
-| [at-vwgh](at-vwgh.research.md) | `publisher-count` | decision month |
-| [cz-ns](cz-ns.research.md) | `publisher-count` | publication day |
-| [cz-nss](cz-nss.research.md) | `publisher-count` | decision day |
-| [cz-regional](cz-regional.research.md) | `listing-enumerated` | publication day |
-| [cz-us](cz-us.research.md) | `publisher-count` | decision year |
-| [eu-ecj](eu-ecj.research.md) | `listing-enumerated` | year, enumerated through month windows × language |
-| [hu-bhgy](hu-bhgy.research.md) | `publisher-count` | decision year × kollégium |
-| [pl-courts](pl-courts.research.md) | `publisher-count` | decision day |
-| [pl-kio](pl-kio.research.md) | `publisher-count` | issue day |
-| [pl-kis](pl-kis.research.md) | `publisher-count` | issue month plus undated |
-| [pl-ncourt](pl-ncourt.research.md) | `publisher-count` | judgment day |
-| [pl-nsa](pl-nsa.research.md) | `none-exposed` | pinned dataset shard (with decision year on records) |
-| [pl-sn](pl-sn.research.md) | `listing-enumerated` | decision day |
-| [pl-tk](pl-tk.research.md) | `listing-enumerated` | decision year × proceeding stage |
-| [pl-uodo](pl-uodo.research.md) | `listing-enumerated` | announcement year plus undated |
-| [pl-uokik](pl-uokik.research.md) | `publisher-count` | decision year plus undated |
-| [sk-courts](sk-courts.research.md) | `publisher-count` | decision day |
-| [sk-us](sk-us.research.md) | `publisher-count` | decision month |
+| Registered adapter                     | Recommended observation | Natural axis                                         |
+| -------------------------------------- | ----------------------- | ---------------------------------------------------- |
+| [at-asylgh](at-asylgh.research.md)     | `publisher-count`       | decision month                                       |
+| [at-bks](at-bks.research.md)           | `publisher-count`       | decision month                                       |
+| [at-bvwg](at-bvwg.research.md)         | `publisher-count`       | decision month                                       |
+| [at-courts](at-courts.research.md)     | `publisher-count`       | decision month                                       |
+| [at-findok](at-findok.research.md)     | `listing-enumerated`    | decision year × UFS/BFG collection                   |
+| [at-lvwg](at-lvwg.research.md)         | `publisher-count`       | decision month                                       |
+| [at-ubas](at-ubas.research.md)         | `publisher-count`       | decision month                                       |
+| [at-umse](at-umse.research.md)         | `publisher-count`       | decision month                                       |
+| [at-uvs](at-uvs.research.md)           | `publisher-count`       | decision month                                       |
+| [at-verg](at-verg.research.md)         | `publisher-count`       | decision month                                       |
+| [at-vfgh](at-vfgh.research.md)         | `publisher-count`       | decision month                                       |
+| [at-vwgh](at-vwgh.research.md)         | `publisher-count`       | decision month                                       |
+| [cz-ns](cz-ns.research.md)             | `publisher-count`       | publication day                                      |
+| [cz-nss](cz-nss.research.md)           | `publisher-count`       | decision day                                         |
+| [cz-regional](cz-regional.research.md) | `listing-enumerated`    | publication day                                      |
+| [cz-us](cz-us.research.md)             | `publisher-count`       | decision year                                        |
+| [eu-ecj](eu-ecj.research.md)           | `listing-enumerated`    | year, enumerated through month windows × language    |
+| [hu-bhgy](hu-bhgy.research.md)         | `publisher-count`       | decision year × kollégium                            |
+| [pl-courts](pl-courts.research.md)     | `publisher-count`       | decision day                                         |
+| [pl-kio](pl-kio.research.md)           | `publisher-count`       | issue day                                            |
+| [pl-kis](pl-kis.research.md)           | `publisher-count`       | issue month plus undated                             |
+| [pl-ncourt](pl-ncourt.research.md)     | `publisher-count`       | judgment day                                         |
+| [pl-nsa](pl-nsa.research.md)           | `none-exposed`          | pinned dataset shard (with decision year on records) |
+| [pl-sn](pl-sn.research.md)             | `listing-enumerated`    | decision day                                         |
+| [pl-tk](pl-tk.research.md)             | `listing-enumerated`    | decision year × proceeding stage                     |
+| [pl-uodo](pl-uodo.research.md)         | `listing-enumerated`    | announcement year plus undated                       |
+| [pl-uokik](pl-uokik.research.md)       | `publisher-count`       | decision year plus undated                           |
+| [sk-courts](sk-courts.research.md)     | `publisher-count`       | decision day                                         |
+| [sk-us](sk-us.research.md)             | `publisher-count`       | decision month                                       |
 
 ## Evidence and typed absence
 
@@ -73,14 +73,14 @@ resolution. This is agreement on the interface and integration choice, not
 
 The resolution queue contained these scope questions:
 
-| Question | Resolution and evidence |
-| --- | --- |
-| UODO HTML count versus JSON enumeration | Both passes found a scalar result total in the official HTML search pager. The adapter reads a mixed-scope JSON listing; equivalence of filters is unverified. Use its completed enumeration. |
-| RIS ordinary courts total | Both identified `Hits.#text`; Justiz foreign-court rows are excluded by the adapter. Preserve that exclusion in its benchmark. |
-| NSA mirror footer count | Both identified a pinned secondary mirror, not live CBOSA holdings. Its footer verifies the snapshot only; official completeness stays unmeasured. |
-| Page totals versus row totals | TK and regional daily paging do not establish exact row counts by multiplication. Enumerate the listing; retain regional monthly `pocet` separately when already read. |
-| UOKIK count verification | Pass A retrieved and inspected official Domino JSON with `@toplevelentries`; pass B identified the same reader from code. No conflicting field or scope was found. |
-| KIO undated tail | Implementation scope audit found the day reconciliation omits the separately crawled undated tail. Keep `partial-publisher` scope and an unmeasured launch verdict until that tail is also censused. |
+| Question                                | Resolution and evidence                                                                                                                                                                              |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UODO HTML count versus JSON enumeration | Both passes found a scalar result total in the official HTML search pager. The adapter reads a mixed-scope JSON listing; equivalence of filters is unverified. Use its completed enumeration.        |
+| RIS ordinary courts total               | Both identified `Hits.#text`; Justiz foreign-court rows are excluded by the adapter. Preserve that exclusion in its benchmark.                                                                       |
+| NSA mirror footer count                 | Both identified a pinned secondary mirror, not live CBOSA holdings. Its footer verifies the snapshot only; official completeness stays unmeasured.                                                   |
+| Page totals versus row totals           | TK and regional daily paging do not establish exact row counts by multiplication. Enumerate the listing; retain regional monthly `pocet` separately when already read.                               |
+| UOKIK count verification                | Pass A retrieved and inspected official Domino JSON with `@toplevelentries`; pass B identified the same reader from code. No conflicting field or scope was found.                                   |
+| KIO undated tail                        | Implementation scope audit found the day reconciliation omits the separately crawled undated tail. Keep `partial-publisher` scope and an unmeasured launch verdict until that tail is also censused. |
 
 Pass B independently encountered blocked or inaccessible SN, NSA, ncourt,
 RIS/API, IPO, UZP, and Cellar requests; JavaScript index pages did not prove

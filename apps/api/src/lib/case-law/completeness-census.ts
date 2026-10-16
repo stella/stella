@@ -8,7 +8,6 @@ import {
   caseLawCompletenessCensus as census,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
@@ -20,6 +19,7 @@ import {
 import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
 import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import type {
   ListingIdentity,
@@ -69,14 +69,23 @@ export type CurrentCensusSourceScope = {
   scope: CensusScope | null;
 };
 
+type CurrentCensusSourceScopesOptions = {
+  sources: readonly CensusSource[];
+  now: Date;
+  loadAdapter: (
+    key: string,
+  ) => Promise<{ reconciliation: SourceSliceWalk } | undefined>;
+};
+
 /** Resolve the current publisher universe before opening the read transaction; no publisher calls. */
-export const currentCensusSourceScopes = async (
-  sources: readonly CensusSource[],
-  now: Date,
-): Promise<CurrentCensusSourceScope[]> =>
+export const currentCensusSourceScopes = async ({
+  sources,
+  now,
+  loadAdapter,
+}: CurrentCensusSourceScopesOptions): Promise<CurrentCensusSourceScope[]> =>
   await Promise.all(
     sources.map(async ({ id, adapterKey }) => {
-      const adapter = await loadAdapterByKey(adapterKey);
+      const adapter = await loadAdapter(adapterKey);
       return {
         id,
         scope:
@@ -263,46 +272,56 @@ export const readCompletenessCensusQuery = async (
           ),
     ),
   );
-  const totals = await tx
-    .select({
-      sourceId: census.sourceId,
-      measured: count(),
-      unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeStatus} = 'partial-publisher')::int`,
-      noneExposed: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed')::int`,
-      partial: sql<number>`count(*) FILTER (WHERE ${census.scopeStatus} = 'partial-publisher')::int`,
-      stated: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'publisher-count')::int`,
-      short: sql<number>`count(*) FILTER (WHERE ${short})::int`,
-      publisher: sql<
-        number | null
-      >`sum(${census.publisherCount})::bigint`.mapWith(
-        (value: string | null) => (value === null ? null : Number(value)),
-      ),
-      stored: sql<number>`sum(${census.storedCount})::bigint`.mapWith(Number),
-      withText: sql<number>`sum(${census.textCount})::bigint`.mapWith(Number),
-      observedAt: sql<string>`min(${census.observedAt})::text`,
-      evidenceRef: sql<string>`min(${census.evidenceRef})`,
-    })
-    .from(census)
-    .where(where)
-    .groupBy(census.sourceId)
-    .limit(CASE_LAW_SOURCE_ROWS_BOUND);
-  const years = await tx
-    .select({
-      sourceId: census.sourceId,
-      year: census.year,
-      slices: count(),
-      publisher:
-        sql<number>`coalesce(sum(${census.publisherCount}), 0)::bigint`.mapWith(
-          Number,
-        ),
-      stored: sql<number>`sum(${census.storedCount})::bigint`.mapWith(Number),
-      withText: sql<number>`sum(${census.textCount})::bigint`.mapWith(Number),
-    })
-    .from(census)
-    .where(where)
-    .groupBy(census.sourceId, census.year)
-    .orderBy(census.sourceId, census.year)
-    .limit(CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_YEAR_SUMMARIES_LIMIT);
+  const totalsRead = await readBounded(
+    tx
+      .select({
+        sourceId: census.sourceId,
+        measured: count(),
+        unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeStatus} = 'partial-publisher')::int`,
+        noneExposed: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed')::int`,
+        partial: sql<number>`count(*) FILTER (WHERE ${census.scopeStatus} = 'partial-publisher')::int`,
+        stated: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'publisher-count')::int`,
+        short: sql<number>`count(*) FILTER (WHERE ${short})::int`,
+        publisher: sql<
+          number | null
+        >`sum(${census.publisherCount})::bigint`.mapWith(Number),
+        stored: sql<number>`sum(${census.storedCount})::bigint`.mapWith(Number),
+        withText: sql<number>`sum(${census.textCount})::bigint`.mapWith(Number),
+        observedAt: sql<string>`min(${census.observedAt})::text`,
+        evidenceRef: sql<string>`min(${census.evidenceRef})`,
+      })
+      .from(census)
+      .where(where)
+      .groupBy(census.sourceId),
+    CASE_LAW_SOURCE_ROWS_BOUND,
+  );
+  if (totalsRead.type === "overflow") {
+    return panic("Census source aggregates exceed the registered source bound");
+  }
+  const totals = totalsRead.rows;
+  const yearsRead = await readBounded(
+    tx
+      .select({
+        sourceId: census.sourceId,
+        year: census.year,
+        slices: count(),
+        publisher:
+          sql<number>`coalesce(sum(${census.publisherCount}), 0)::bigint`.mapWith(
+            Number,
+          ),
+        stored: sql<number>`sum(${census.storedCount})::bigint`.mapWith(Number),
+        withText: sql<number>`sum(${census.textCount})::bigint`.mapWith(Number),
+      })
+      .from(census)
+      .where(where)
+      .groupBy(census.sourceId, census.year)
+      .orderBy(census.sourceId, census.year),
+    CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_YEAR_SUMMARIES_LIMIT,
+  );
+  if (yearsRead.type === "overflow") {
+    return panic("Census year aggregates exceed the response summary bound");
+  }
+  const years = yearsRead.rows;
   const ranked = tx
     .select({
       sourceId: census.sourceId,
@@ -321,11 +340,17 @@ export const readCompletenessCensusQuery = async (
     .from(census)
     .where(and(where, sql`(${short} OR ${census.outcome} = 'none-exposed')`))
     .as("ranked_census");
-  const worst = await tx
-    .select()
-    .from(ranked)
-    .where(sql`${ranked.rank} <= ${CENSUS_WORST_SLICES_LIMIT}`)
-    .limit(CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_WORST_SLICES_LIMIT);
+  const worstRead = await readBounded(
+    tx
+      .select()
+      .from(ranked)
+      .where(sql`${ranked.rank} <= ${CENSUS_WORST_SLICES_LIMIT}`),
+    CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_WORST_SLICES_LIMIT,
+  );
+  if (worstRead.type === "overflow") {
+    return panic("Census worst slices exceed the response summary bound");
+  }
+  const worst = worstRead.rows;
   return new Map(
     totals.map((row) => {
       const scope = scopes.get(String(row.sourceId));

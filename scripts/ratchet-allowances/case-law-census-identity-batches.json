@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/case-law/completeness-census.ts",
+  "delta": 1,
+  "reason": "One census observation counts its listing identities in batches of 500 within the source-lease transaction. Each batch is one grouped identity join, not one query per decision; sequential batches bound JSON payload size and database memory while keeping counts and observation atomic."
+}

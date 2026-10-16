@@ -32,6 +32,7 @@ import {
   readCaseLawCourtActivityQuery,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -648,7 +649,11 @@ export const readCaseLawCoverageHandler = async (
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
     readCensus: async (sources) => {
-      const scopes = await currentCensusSourceScopes(sources, now);
+      const scopes = await currentCensusSourceScopes({
+        sources,
+        now,
+        loadAdapter: loadAdapterByKey,
+      });
       return await caseLawDb(
         async (tx) => await readCompletenessCensusQuery(tx, scopes),
       );

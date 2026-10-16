@@ -1,3 +1,4 @@
+// parser-output-unchanged: These census outcomes and scope statuses configure census persistence and responses; decision parser output is unchanged.
 export const CENSUS_MEASURED_OUTCOMES = [
   "publisher-count",
   "listing-enumerated",
