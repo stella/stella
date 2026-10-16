@@ -7,6 +7,7 @@ import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.l
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawDecisionLocator } from "./case-law-open";
 
@@ -57,6 +58,8 @@ const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
 const { AskUserCard } = await import("./ask-user-card");
+const { MessageResponseImpl } =
+  await import("@/components/ai-elements/message-response");
 const { useExternalSourceStore } = await import("./external-source-store");
 const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
@@ -87,7 +90,7 @@ afterAll(async () => {
   } else {
     process.env["VITE_PUBLIC_LAW_ENABLED"] = originalPublicLawFlag;
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderChat = async (
@@ -361,7 +364,6 @@ for (const { kind, path } of citations) {
           <>
             <section aria-label="Sources">
               <SourceChips
-                activeOrganizationId="organization"
                 messageId="message"
                 parts={[
                   {
@@ -429,7 +431,6 @@ test("held decision tray and answer share a compact annotation without moving th
     <>
       <section aria-label="Sources">
         <SourceChips
-          activeOrganizationId="organization"
           messageId="message"
           parts={[
             {
@@ -522,7 +523,7 @@ test("default markdown and clarification analysis share publisher aliases and in
   });
 });
 
-test("an external primary still previews its publisher in the inspector on plain activation", async () => {
+test("an external primary opens immediately in a new tab without inspector interception", async () => {
   const label = "Unheld citation";
   const publisher = "https://publisher.example.test/unheld";
   const view = await renderChat(
@@ -533,12 +534,16 @@ test("an external primary still previews its publisher in the inspector on plain
   const primary = view.getByRole("link", { name: label });
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });
   primary.dispatchEvent(click);
-  expect(click.defaultPrevented).toBe(true);
-  expect(
-    useInspectorTabsStore
-      .getState()
-      .tabs.some((tab) => tab.type === "external" && tab.url === publisher),
-  ).toBe(true);
+  expect(click.defaultPrevented).toBe(false);
+  expect(primary.getAttribute("href")).toBe(publisher);
+  expect(primary.getAttribute("target")).toBe("_blank");
+  expect(primary.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(primary.firstElementChild?.querySelector("svg")).not.toBeNull();
+  expect(primary.querySelector("bdi")?.textContent).toBe(label);
+  primary.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  primary.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+  expect(view.container.querySelector("img")).toBeNull();
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
 });
 
 for (const anchorId of [null, "p-12"]) {
@@ -665,6 +670,37 @@ for (const interactive of [false, true]) {
   });
 }
 
+test("a long external source title stays inside its truncated tray chip", async () => {
+  const title = "Publisher".repeat(12);
+  const href = "https://publisher.example.test/long-title";
+  const view = await renderChat(
+    <SourceChips
+      messageId="long-external"
+      parts={[
+        {
+          type: "tool-call",
+          name: "execute_typescript",
+          id: "long-external-source",
+          state: "complete",
+          arguments: "{}",
+          output: { url: href, title },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => {
+    const chip = view.getByRole("link", { name: title });
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(chip.parentElement?.className).toContain("rounded-md");
+    expect(chip.parentElement?.className).toContain("border");
+    const label = chip.querySelector(".truncate");
+    expect(label?.className).toContain("max-w-[20ch]");
+    expect(label?.textContent).toBe(title);
+  });
+});
+
 test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";
@@ -673,7 +709,6 @@ test("a relative held primary keeps its publisher source in the tray and passive
   const view = await renderChat(
     <>
       <SourceChips
-        activeOrganizationId="organization"
         messageId="relative"
         parts={[
           {
@@ -794,6 +829,64 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
   });
 }
+
+test("reply markdown and clarification analysis share bare-domain chips without remote icons", async () => {
+  const input = {
+    analysis:
+      "Read stll.app and [Repository](https://github.com/stella/stella).",
+    questions: [{ question: "Continue?", reason: "Confirm the reading." }],
+  };
+  const view = await renderChat(
+    <>
+      <MessageResponseImpl>{input.analysis}</MessageResponseImpl>
+      <AskUserCard
+        isAwaitingUser
+        onSubmit={() => undefined}
+        part={{
+          type: "tool-call",
+          name: "ask-user",
+          id: "external-links",
+          state: "input-complete",
+          arguments: JSON.stringify(input),
+          input,
+        }}
+      />
+    </>,
+  );
+  await waitFor(() => {
+    for (const name of ["stll.app", "Repository"]) {
+      const links = view.getAllByRole("link", { name });
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute("target")).toBe("_blank");
+        expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(link.firstElementChild?.querySelector("svg")).not.toBeNull();
+        expect(link.children.item(1)?.tagName).toBe("BDI");
+        fireEvent.mouseEnter(link);
+        fireEvent.focus(link);
+      }
+    }
+  });
+  expect(view.container.querySelector("img")).toBeNull();
+});
+
+test("relative Markdown destinations retain their original href through citation classification", async () => {
+  const label = "Relative source";
+  const href = "/github.com/stella";
+  const view = await renderChat(
+    <StreamdownMentionLink href={href} interactive>
+      {label}
+    </StreamdownMentionLink>,
+  );
+  const link = view.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe(href);
+  expect(
+    new URL(link.getAttribute("href") ?? "", window.location.href).origin,
+  ).toBe(window.location.origin);
+  expect(link.querySelector("svg")).toBeNull();
+  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(link.getAttribute("target")).toBe("_blank");
+});
 
 test("maximizing a different decision docks the displaced main reader before navigation", async () => {
   const side = createCaseDecisionViewTab({

@@ -119,10 +119,7 @@
     "cleanup-queued-pr-runs.yml/cleanup": "main",
     "safe-chain-cache.yml/warm": "main",
     "ci.yml/ci-plan": "pr-fast",
-    "ci.yml/ci-generated-sources": "pr-fast",
     "ci.yml/docker-checks": "queue",
-    "ci.yml/parser-version-guard": "pr-fast",
-    "ci.yml/ci-checks-docs": "pr-fast",
     "ci.yml/ci-checks-generated": "pr-fast",
     "ci.yml/ci-checks-policy": "pr-fast",
     "ci.yml/ci-checks-rest": "pr-fast",
@@ -155,11 +152,13 @@
     "ci.yml/scan-engine-wasm-drift": "pr-fast",
     "ci.yml/desktop-rust-lint": "pr-fast",
     "ci.yml/dependency-malware": "pr-fast",
-    "ci.yml/dated-waiver-expiry": "pr-fast",
+    "ci.yml/ci-quick-checks": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
+    "flake-gate.yml/report": "pr-opt-in",
     "security-txt-guard.yml/check": "pr-fast",
     "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
+    "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
@@ -176,10 +175,6 @@
     "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
-    "audit-image.yml": {
-      "role": "analysis",
-      "cancelInProgress": true
-    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false

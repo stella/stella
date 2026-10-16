@@ -819,7 +819,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/api/src/db/online-index-observer.ts",
     class: "operator-configured-infrastructure",
-    reason: "Reads online index state through Bun SQL connections.",
+    reason:
+      "Reads online index state and runs operator online repairs through Bun SQL connections.",
     transports: ["module:bun"],
   },
   {
@@ -979,6 +980,18 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Downloads entity archives and OCR exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/avt/use-load-sample-case.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads the bundled sample statement from the web app's origin.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams reader answers from the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {
@@ -1205,6 +1218,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Standalone CLI uploads document bytes to server-issued storage URLs with its upload deadline.",
     transports: ["global:fetch"],
+  },
+  {
+    path: "packages/test-kit/src/network.ts",
+    class: "package-owned-client",
+    reason:
+      "Test network guard wraps fetch and the socket factories to refuse non-loopback hosts; it opens no connection of its own.",
+    transports: ["global:fetch", "module:node:net", "module:node:tls"],
   },
   {
     path: "packages/fetch/src/index.ts",

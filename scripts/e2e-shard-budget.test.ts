@@ -110,7 +110,7 @@ const budgetViolations = (candidate: typeof job) => {
                 "github.event.pull_request.head.repo.fork": false,
                 "github.token": "test-token",
                 "matrix.shard": shard,
-                "steps.e2e-stack.outputs.status": "ready",
+                "steps.e2e-stack.outcome": "success",
               },
               // Include failure-only uploads as well as tests for a conservative cap.
               status: {

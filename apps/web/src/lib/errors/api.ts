@@ -1,8 +1,9 @@
-import { isTaggedError, TaggedError } from "better-result";
+import { isTaggedError, panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
@@ -10,7 +11,9 @@ import {
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "@stll/api-contract";
+import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -202,6 +205,48 @@ const isUsageRejectionReason = (
 ): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
   Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
 
+/** The message for the first field a rejected request named. */
+const validationIssueMessage = (issue: ApiValidationIssue): string => {
+  const t = getTranslator();
+  switch (issue.constraint) {
+    case "maxLength":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : t("errors.apiCodes.validationTooLong", { limit: issue.limit });
+    case "minLength":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : t("errors.apiCodes.validationTooShort", { limit: issue.limit });
+    case "required":
+      return t("errors.apiCodes.validationRequired");
+    case "invalid":
+      return t("errors.apiCodes.validationInvalid");
+    default:
+      issue.constraint satisfies never;
+      return panic(
+        `Unhandled validation constraint: ${String(issue.constraint)}`,
+      );
+  }
+};
+
+/**
+ * The message for a rejected request's issue on one body field, or
+ * `undefined` when the error is not a validation answer naming that field.
+ * Forms show it under the matching input instead of only in a toast.
+ */
+export const apiFieldIssueMessage = (
+  error: unknown,
+  field: string,
+): string | undefined => {
+  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+    return undefined;
+  }
+  const issue = parseApiValidationIssues(error.details).find(
+    (candidate) => candidate.field === field,
+  );
+  return issue === undefined ? undefined : validationIssueMessage(issue);
+};
+
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
@@ -250,6 +295,13 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   }
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
+  }
+  const issue =
+    code === API_VALIDATION_ERROR_CODE
+      ? parseApiValidationIssues(details).at(0)
+      : undefined;
+  if (issue !== undefined) {
+    return validationIssueMessage(issue);
   }
   if (code && isKnownErrorCode(code)) {
     return translateError(CODE_ERROR_KEYS[code]);

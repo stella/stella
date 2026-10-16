@@ -203,6 +203,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-test-support-import.fixture.ts", [
+    "no-test-support-import/no-test-support-import",
+  ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
   ]),
@@ -381,6 +384,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
+  ]),
+  fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
+    "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
@@ -1441,6 +1447,7 @@ const config = defineConfig({
     ...SHADCN_LINT_JS_PLUGINS,
     stellaLowercasePluginSpecifier,
     "./.oxlint-plugins/no-raw-cache-control.ts",
+    "./.oxlint-plugins/confine-sql-close.ts",
     "./.oxlint-plugins/raw-hash-from-source-fingerprint.ts",
     "./.oxlint-plugins/no-raw-sha256.ts",
     "./.oxlint-plugins/no-hand-rolled-concurrency.ts",
@@ -1481,6 +1488,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
+    "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
@@ -1615,6 +1623,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
@@ -1628,6 +1637,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-dialog-trigger-menu-item.ts",
     "./.oxlint-plugins/no-decorated-search-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
@@ -1639,6 +1649,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -1676,6 +1687,16 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/api/**/*.{ts,tsx,js,mjs}",
+        "packages/**/*.{ts,tsx,js,mjs}",
+        ".oxlint-plugins/__fixtures__/confine-sql-close.fixture.ts",
+      ],
+      rules: {
+        "confine-sql-close/confine-sql-close": "error",
+      },
+    },
     {
       files: [
         "packages/scripts/src/dev-*.ts",
@@ -1719,6 +1740,19 @@ const config = defineConfig({
         "gdp-ts/no-type-assertion": "error",
         "gdp-ts/no-any": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.type-test.ts",
+        "**/*.spec.ts",
+        "**/__fixtures__/**",
+        "**/__tests__/**",
+        "apps/api/src/tests/**",
+      ],
+      rules: { "no-test-support-import/no-test-support-import": "error" },
     },
     {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
@@ -2267,6 +2301,7 @@ const config = defineConfig({
       // code on structured logging. The type rules still apply to both.
       files: [
         "apps/api/src/tests/load/**/*.ts",
+        "apps/api/src/tests/exact-mirror-guard.ts",
         "apps/api/src/scripts/**/*.ts",
       ],
       rules: { "no-console": "off" },
@@ -2496,6 +2531,21 @@ const config = defineConfig({
       excludeFiles: ["packages/text-normalize/**/*.{ts,tsx}"],
       rules: {
         "no-direct-unicode-normalize/no-direct-unicode-normalize": "error",
+      },
+    },
+    {
+      // Zip entry writes belong to writeZipEntry in @stll/docx-utils, which
+      // UTF-8 encodes text in one pass; JSZip's own string encoding splits
+      // surrogate pairs at its 16 KiB piece boundaries.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-string-zip-entry.fixture.ts",
+      ],
+      excludeFiles: ["packages/docx-utils/src/zip-entry.ts"],
+      rules: {
+        "no-string-zip-entry/no-string-zip-entry": "error",
       },
     },
     {
@@ -3139,6 +3189,25 @@ const config = defineConfig({
       ],
       rules: {
         "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/legal-reader/*chat*.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
+        "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
+        "packages/chat/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.tsx",
+        // These are settings/navigation chrome, outside message content.
+        "apps/web/src/components/chat/chat-model-options-menu.tsx",
+        "apps/web/src/components/chat/chat-matter-picker.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-chat-link/no-ad-hoc-chat-link": "error",
       },
     },
     {
@@ -4158,6 +4227,9 @@ const config = defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
+              // The test network guard refuses to install while the process
+              // routes fetch through a remote proxy from the environment.
+              "packages/test-kit/src/network.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
@@ -5138,6 +5210,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      rules: {
+        "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },
     },
     {

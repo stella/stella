@@ -54,12 +54,12 @@ type Workflow = v.InferOutput<typeof workflowSchema>;
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      (id.startsWith("ci-checks-") && id !== "ci-checks-docs") ||
+      id.startsWith("ci-checks-") ||
       id.startsWith("code-quality-") ||
       id === "typecheck-baseline",
   );
 const manifest = `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`;
-const artifact = `generated-sources-\${{ needs.ci-generated-sources.outputs.input_hash }}`;
+const artifact = `generated-sources-\${{ needs.ci-plan.outputs.generated_sources_input_hash }}`;
 const restoreCommand =
   'bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"';
 const oldPreparation = new Set([
@@ -69,15 +69,43 @@ const oldPreparation = new Set([
   "Generate types",
 ]);
 
+// Each producer step also repeats the reused-depth gate, so a run that reuses
+// an earlier depth result never reaches an expensive planner step.
+const producerGate =
+  "steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'";
+const producerSteps = [
+  "Fetch submodules for generated sources",
+  "Install generated source dependencies",
+  "Prepare local check environment",
+  "Produce generated sources",
+  "Upload generated sources",
+];
+
+// ci-plan produces the generated sources after its install-free plan, so a
+// failed generation fails the plan, which the result gate treats as fatal.
 const assertHandoff = (source: Workflow) => {
-  const producer = source.jobs["ci-generated-sources"];
+  const producer = source.jobs["ci-plan"];
   expect(producer, "generated producer").toBeDefined();
-  expect(producer?.outputs?.["input_hash"]).toBe(
+  expect(producer?.outputs?.["generated_sources_input_hash"]).toBe(
     `\${{ steps.generate.outputs.input_hash }}`,
   );
-  const upload = producer?.steps.find(
-    ({ name }) => name === "Upload generated sources",
+  const steps = producer?.steps ?? [];
+  const planned = steps.findIndex(({ id }) => id === "generated-plan");
+  const indices = producerSteps.map((name) =>
+    steps.findIndex((step) => step.name === name),
   );
+  expect(planned, "producer gate").toBeGreaterThan(-1);
+  expect(
+    indices.every(
+      (index, position) => index > (indices[position - 1] ?? planned),
+    ),
+    "producer steps run in order after their gate",
+  ).toBe(true);
+  for (const index of indices) {
+    expect(steps.at(index)?.if, steps.at(index)?.name).toBe(producerGate);
+  }
+  expect(steps.at(indices[3] ?? -1)?.id).toBe("generate");
+  const upload = steps.find(({ name }) => name === "Upload generated sources");
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/u);
   expect(
     upload?.with?.["include-hidden-files"],
@@ -91,27 +119,18 @@ const assertHandoff = (source: Workflow) => {
     "include-hidden-files": true,
   });
   const gate = source.jobs["ci-result"];
-  expect(gate?.needs).toContain("ci-generated-sources");
+  expect(gate?.needs).toContain("ci-plan");
   const outcome = gate?.steps.find(
     ({ name }) => name === "Evaluate CI outcome",
   );
-  const scopes = v.parse(
-    v.record(v.string(), v.nullable(v.string())),
-    JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? ""),
-  );
-  expect(Object.hasOwn(scopes, "ci-generated-sources")).toBe(true);
-  expect(scopes["ci-generated-sources"]).toBe("package_checks_required");
-  const fast = v.parse(
-    v.array(v.string()),
-    JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? ""),
-  );
-  expect(fast).toContain("ci-generated-sources");
+  expect(outcome?.env?.["PLAN_RESULT"]).toBe(`\${{ needs.ci-plan.result }}`);
+  expect(outcome?.run).toContain('if [[ "$PLAN_RESULT" != "success" ]]; then');
   for (const id of consumerIds(source)) {
     const job = source.jobs[id];
     if (!job) {
       panic(`Missing generated source consumer: ${id}`);
     }
-    expect(job.needs, id).toEqual(["ci-plan", "ci-generated-sources"]);
+    expect(job.needs, id).toBe("ci-plan");
     expect(job.env?.["CI_GENERATED_SOURCES_MANIFEST"], id).toBe(manifest);
     const downloads = job.steps.filter(
       ({ name }) => name === "Download generated sources",
@@ -294,7 +313,7 @@ test("every generated-source consumer restores the same-run artifact before chec
 test("generated-source uploads include ignored compiler configs", () => {
   for (const value of [undefined, false]) {
     const mutated = structuredClone(workflow);
-    const upload = mutated.jobs["ci-generated-sources"]?.steps.find(
+    const upload = mutated.jobs["ci-plan"]?.steps.find(
       ({ name }) => name === "Upload generated sources",
     );
     if (!upload?.with) {
@@ -312,18 +331,19 @@ test("generated-source uploads include ignored compiler configs", () => {
 });
 
 test("the documentation job consumes Markdown without generated-source hydration", () => {
-  const job = workflow.jobs["ci-checks-docs"];
+  const job = workflow.jobs["ci-quick-checks"];
   expect(job?.needs).toBe("ci-plan");
-  expect(job?.["if"]).toContain(
+  const markdown = job?.steps.filter(({ run }) =>
+    run?.includes("--run-markdown-checks"),
+  );
+  expect(markdown).toHaveLength(1);
+  expect(markdown?.at(0)?.if).toContain(
     "needs.ci-plan.outputs.docs_checks_required == 'true'",
   );
   expect(
-    job?.steps.filter(({ run }) => run?.includes("--run-markdown-checks")),
-  ).toHaveLength(1);
-  expect(
     job?.steps.some(({ name }) => name === "Restore generated sources"),
   ).toBe(false);
-  expect(consumerIds(workflow)).not.toContain("ci-checks-docs");
+  expect(consumerIds(workflow)).not.toContain("ci-quick-checks");
   const mutated = structuredClone(workflow);
   mutated.jobs["ci-checks-new"] = {
     needs: "ci-plan",
@@ -371,7 +391,7 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
       }
       switch (mutation) {
         case "dependency":
-          job.needs = ["ci-plan"];
+          job.needs = ["ci-plan", "ci-quick-checks"];
           break;
         case "manifest":
           delete job.env["CI_GENERATED_SOURCES_MANIFEST"];
@@ -413,34 +433,55 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
 });
 
 test("generated-source production remains required in every result gate", () => {
-  for (const field of ["needs", "JOB_SCOPES", "FAST_REQUIRED"] as const) {
+  for (const mutation of [
+    "needs",
+    "plan result",
+    "ungated step",
+    "order",
+    "output",
+  ] as const) {
     const mutated = structuredClone(workflow);
     const gate = mutated.jobs["ci-result"];
+    const plan = mutated.jobs["ci-plan"];
     const outcome = gate?.steps.find(
       ({ name }) => name === "Evaluate CI outcome",
     );
-    if (!gate || !outcome?.env || !Array.isArray(gate.needs)) {
+    const produce = plan?.steps.find(
+      ({ name }) => name === "Produce generated sources",
+    );
+    if (
+      !gate ||
+      !plan?.outputs ||
+      !produce ||
+      !outcome?.run ||
+      !Array.isArray(gate.needs)
+    ) {
       panic("Missing producer gate mutation fixture");
     }
-    if (field === "needs") {
-      gate.needs = gate.needs.filter((id) => id !== "ci-generated-sources");
-    } else if (field === "JOB_SCOPES") {
-      const scopes = v.parse(
-        v.record(v.string(), v.nullable(v.string())),
-        JSON.parse(outcome.env[field] ?? ""),
-      );
-      delete scopes["ci-generated-sources"];
-      outcome.env[field] = JSON.stringify(scopes);
-    } else {
-      const fast = v.parse(
-        v.array(v.string()),
-        JSON.parse(outcome.env[field] ?? ""),
-      );
-      outcome.env[field] = JSON.stringify(
-        fast.filter((id) => id !== "ci-generated-sources"),
-      );
+    switch (mutation) {
+      case "needs":
+        gate.needs = gate.needs.filter((id) => id !== "ci-plan");
+        break;
+      case "plan result":
+        outcome.run = outcome.run.replace(
+          'if [[ "$PLAN_RESULT" != "success" ]]; then',
+          'if [[ "$PLAN_RESULT" == "failure" ]]; then',
+        );
+        break;
+      case "ungated step":
+        delete produce.if;
+        break;
+      case "order":
+        plan.steps = [
+          produce,
+          ...plan.steps.filter((step) => step !== produce),
+        ];
+        break;
+      case "output":
+        delete plan.outputs["generated_sources_input_hash"];
+        break;
     }
-    expect(() => assertHandoff(mutated), field).toThrow("expect(received)");
+    expect(() => assertHandoff(mutated), mutation).toThrow(/Expected/u);
   }
 });
 

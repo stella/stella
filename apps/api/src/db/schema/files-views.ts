@@ -146,6 +146,13 @@ export const AGENT_SKILL_ORIGINS = [
 ] as const;
 export type AgentSkillOrigin = (typeof AGENT_SKILL_ORIGINS)[number];
 
+// Whether the model may pick a skill by itself (`auto`) or the skill runs
+// only when the user invokes it (`manual`): a skill reference in the message,
+// the slash menu, or the thread's active skill. The one place that applies it
+// is `apps/api/src/lib/agent-skills/invocation.ts`.
+export const AGENT_SKILL_INVOCATIONS = ["auto", "manual"] as const;
+export type AgentSkillInvocation = (typeof AGENT_SKILL_INVOCATIONS)[number];
+
 // Slash-command shape for `agentSkills.command`. Mirrors the legacy
 // `prompt_shortcuts.command` constraint so migrated rows remain valid.
 export const AGENT_SKILL_COMMAND_PATTERN = /^[a-z0-9][a-z0-9_-]{0,48}$/u;

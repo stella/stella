@@ -116,6 +116,48 @@ test("generation owners have unique identifiers", () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+test("glossary and catalogue generation inputs cover their runtime import closures", () => {
+  const repoRoot = nodePath.resolve(import.meta.dir, "..");
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  for (const { id, entry } of [
+    { id: "i18n-glossary", entry: "packages/scripts/src/glossary-gen.ts" },
+    {
+      id: "catalogue",
+      entry: "packages/catalogue/scripts/generate-manifest.ts",
+    },
+  ]) {
+    const inputs = generator(id).inputs;
+    const pending = [entry];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop() ?? panic("Missing import closure entry");
+      if (visited.has(file)) {
+        continue;
+      }
+      visited.add(file);
+      expect(
+        inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+        `${id}: ${file}`,
+      ).toBe(true);
+      for (const { path: specifier } of transpiler.scanImports(
+        readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+          /^#![^\n]*/u,
+          "",
+        ),
+      )) {
+        if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
+          continue;
+        }
+        const resolved = Bun.resolveSync(
+          specifier,
+          nodePath.join(repoRoot, nodePath.dirname(file)),
+        );
+        pending.push(repoRelativePath(repoRoot, resolved));
+      }
+    }
+  }
+});
+
 test("pinned facts generation inputs cover the derived parser graph", () => {
   const inputs = generator("catalogue-pinned-facts").inputs;
   const parserInputs = pinnedParserInputs();
@@ -158,7 +200,10 @@ test("MCP app parser schema imports are registered generation inputs", () => {
     }
     visited.add(file);
     for (const { path: specifier } of transpiler.scanImports(
-      readFileSync(nodePath.join(repoRoot, file), "utf-8"),
+      readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+        /^#![^\n]*/u,
+        "",
+      ),
     )) {
       if (!specifier.startsWith(".")) {
         continue;
@@ -914,7 +959,26 @@ test("route tree has one derived owner and a cache producer for every consumer",
   }
 });
 
-test("the fresh-export proof runs nightly and alone on dispatch", () => {
+test("long optional runs accept dispatch only", () => {
+  for (const file of [
+    "bundle-size-nightly.yml",
+    "nightly-property-test.yml",
+    "nightly-typecheck.yml",
+  ]) {
+    const workflow = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+          "utf-8",
+        ),
+      ),
+    );
+    expect(Object.keys(workflow.on), file).toEqual(["workflow_dispatch"]);
+  }
+});
+
+test("the fresh-export proof runs alone on dispatch", () => {
   const workflow = v.parse(
     v.object({ jobs: v.record(v.string(), v.looseObject({ if: v.string() })) }),
     Bun.YAML.parse(
@@ -925,7 +989,7 @@ test("the fresh-export proof runs nightly and alone on dispatch", () => {
     ),
   );
   expect(workflow.jobs["fresh-web-sources"]?.if).toBe(
-    `\${{ github.event_name == 'schedule' || inputs.fresh-web }}`,
+    `\${{ inputs.fresh-web }}`,
   );
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === "fresh-web-sources") {

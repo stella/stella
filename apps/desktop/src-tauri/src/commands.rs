@@ -9,10 +9,51 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 pub type AppState = Arc<Mutex<SessionManager>>;
 
 fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
+  let default_web_origin = crate::config::default_connect_target().1;
   format!(
     "{}/settings/account/desktop",
-    linked_self_host_origin.unwrap_or(crate::config::PRODUCTION_WEB_ORIGIN)
+    linked_self_host_origin.unwrap_or(&default_web_origin)
   )
+}
+
+/// The API and web origin a new browser connection goes to: the selected
+/// self-hosted server, else the build's own server. A remembered self-hosted
+/// link without a selected server has no API to connect to yet.
+fn browser_connect_target_from(
+  selected: Option<&crate::types::TrustedSelfHostConnection>,
+  remembered_self_host: bool,
+) -> Result<(String, String), String> {
+  match selected {
+    Some(connection) => Ok((
+      connection.api_base_url.clone(),
+      connection.web_origin.clone(),
+    )),
+    None if remembered_self_host => {
+      Err("Reconnect the self-hosted desktop server to select its API".into())
+    }
+    None => Ok(crate::config::default_connect_target()),
+  }
+}
+
+pub(crate) fn browser_connect_target(
+  manager: &SessionManager,
+) -> Result<(String, String), String> {
+  browser_connect_target_from(
+    manager.selected_self_host_connection(),
+    manager.linked_self_host_origin().is_some(),
+  )
+}
+
+/// The server the account card names for a new connection. It is always the
+/// server `open_stella_account` would open, or the remembered self-hosted one
+/// that has to be reconnected first.
+pub(crate) fn browser_connect_server(manager: &SessionManager) -> String {
+  match browser_connect_target(manager) {
+    Ok((_, web_origin)) => web_origin,
+    Err(_) => manager
+      .linked_self_host_origin()
+      .map_or_else(|| crate::config::default_connect_target().1, str::to_owned),
+  }
 }
 
 #[tauri::command]
@@ -28,30 +69,13 @@ pub async fn open_stella_account(
   account: State<'_, crate::account::AccountState>,
 ) -> Result<(), String> {
   let linked = crate::account::current(&account).await?;
-  let (selected_self_host, remembered_self_host) = {
-    let manager = state.lock().await;
-    (
-      manager.selected_self_host_connection().cloned(),
-      manager.linked_self_host_origin().is_some(),
-    )
-  };
   if linked.is_none() {
-    if selected_self_host.is_none() && remembered_self_host {
-      return Err("Reconnect the self-hosted desktop server to select its API".into());
-    }
-    let (api_base_url, origin) = selected_self_host.as_ref().map_or(
-      (
-        crate::config::PRODUCTION_API_BASE_URL,
-        crate::config::PRODUCTION_WEB_ORIGIN,
-      ),
-      |connection| {
-        (
-          connection.api_base_url.as_str(),
-          connection.web_origin.as_str(),
-        )
-      },
-    );
-    return crate::account::open_browser_connection(&app, api_base_url, origin).await;
+    let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
+    return crate::account::open_browser_connection(&app, &api_base_url, &origin)
+      .await
+      .inspect_err(|error| {
+        tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
+      });
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app
@@ -263,6 +287,29 @@ pub async fn set_autostart(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn browser_connect_target_follows_the_selected_server() {
+    let selected = crate::types::TrustedSelfHostConnection {
+      api_base_url: "https://api.stella.example".into(),
+      trusted_at: "2026-10-15T00:00:00Z".into(),
+      web_origin: "https://stella.example".into(),
+    };
+    for remembered in [true, false] {
+      assert_eq!(
+        browser_connect_target_from(Some(&selected), remembered).unwrap(),
+        (
+          "https://api.stella.example".to_owned(),
+          "https://stella.example".to_owned()
+        )
+      );
+    }
+    assert_eq!(
+      browser_connect_target_from(None, false).unwrap(),
+      crate::config::default_connect_target()
+    );
+    assert!(browser_connect_target_from(None, true).is_err());
+  }
 
   #[test]
   fn account_settings_url_uses_the_linked_self_host_origin() {

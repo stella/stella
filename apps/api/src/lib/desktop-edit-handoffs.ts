@@ -9,7 +9,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -24,6 +23,7 @@ import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-w
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { recordPdfSigningHandoffFailure } from "@/api/lib/files/pdf-signing/sessions";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 export type ConsumedDesktopEditHandoff = {
   apiBaseUrl: string;
@@ -179,15 +179,20 @@ export const markDesktopEditHandoffOpened = async ({
 export const readDesktopEditHandoffAccess = async ({
   createdBy,
   workspaceId,
+  db = rootDb,
 }: {
   createdBy: string;
   workspaceId: SafeId<"workspace">;
+  db?: Pick<typeof rootDb, "select">;
 }) => {
-  const rows = await rootDb
+  const rows = await db
     .select({
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
-      workspaceMemberId: workspaceMembers.id,
+      reachesMatter: memberReachesMatterSql(
+        { organizationId: workspaces.organizationId, userId: createdBy },
+        workspaces.id,
+      ),
     })
     .from(workspaces)
     .leftJoin(
@@ -195,13 +200,6 @@ export const readDesktopEditHandoffAccess = async ({
       and(
         eq(member.userId, createdBy),
         eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, createdBy),
-        eq(workspaceMembers.workspaceId, workspaceId),
       ),
     )
     .where(eq(workspaces.id, workspaceId))
@@ -215,7 +213,7 @@ export const readDesktopEditHandoffAccess = async ({
   return {
     canWriteWorkspaceEntities: canWriteWorkspaceEntities({
       organizationRole: access.organizationRole,
-      workspaceMemberId: access.workspaceMemberId,
+      reachesMatter: access.reachesMatter,
     }),
     organizationId: access.organizationId,
   };

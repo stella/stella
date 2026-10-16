@@ -60,4 +60,13 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn. Spr 1234/2014-5")).toBe(true);
     expect(residual("sp. zn. 5 Sp 123/2014")).toBe(true);
   });
+
+  test("a procurement arbitration file is benign, a court docket is not", () => {
+    expect(residual("sygn. akt UZP/ZO/0-1234/05")).toBe(false);
+    expect(residual("sygn. akt UZP/ZO/O-567/07")).toBe(false);
+    expect(residual("sygn. akt UZP/ZO/O- 2279/05")).toBe(false);
+    expect(residual("sygn. akt UZP/ZO/0-\n2039/06")).toBe(false);
+    expect(residual("sygn. akt UZP/ZO/0-1234/05/A")).toBe(true);
+    expect(residual("sygn. akt V CSK 123/05")).toBe(true);
+  });
 });
