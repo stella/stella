@@ -14,6 +14,7 @@ import { analysisRetryOf } from "@/features/case-law/components/case-viewer/anal
 import type { AnalysisError } from "@/features/case-law/queries/decision-analysis";
 import { useTimePassed } from "@/hooks/use-time-passed";
 import { useFormatter } from "@/i18n/formatting-context";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 const useAnalysisErrorText = (message: AnalysisErrorMessage): string => {
   const t = useTranslations();
@@ -62,10 +63,7 @@ export const AnalysisErrorNotice = ({
       {retryAt !== undefined && !retryTimePassed && (
         <p className="text-muted-foreground text-xs leading-snug">
           {t("caseLaw.analysis.errors.retryAfter", {
-            time: format.dateTime(retryAt, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }),
+            time: format.dateTime(retryAt, MEDIUM_DATE_SHORT_TIME_FORMAT),
           })}
         </p>
       )}

@@ -15,7 +15,6 @@ import type { AnalysisInputFingerprint } from "@stll/legal-ast/analysis";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { PROVIDER_RETRY_WAIT_CAP_MS } from "@/api/lib/errors/provider-retry-delay";
 import type { RedactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 /**
@@ -76,9 +75,9 @@ export type AnalysisFailureRecord = {
   provider: string | null;
   recordedAt: Date;
   /**
-   * The time the provider asked not to be called again before, when it named
-   * a delay longer than a call waits out (`PROVIDER_RETRY_WAIT_CAP_MS`).
-   * Until then neither a poll nor an explicit retry runs again.
+   * The time the provider asked not to be called again before, when the
+   * failing answer named a delay. Until then neither a poll nor an explicit
+   * retry runs again.
    */
   retryAfter?: Date | undefined;
   providerDiagnostic?: RedactedProviderDiagnostic | undefined;
@@ -105,8 +104,9 @@ export const analysisFailureRecord = ({
   keySource: reader.source,
   provider: reader.source === "organization" ? reader.provider : null,
   recordedAt: now,
-  // A delay within the cap was already waited out once by the call itself.
-  ...(retryAfterMs === undefined || retryAfterMs <= PROVIDER_RETRY_WAIT_CAP_MS
+  // The delay is the final answer's, so it is still ahead whatever its size:
+  // a short one the call already waited out ended in an answer, not here.
+  ...(retryAfterMs === undefined || retryAfterMs <= 0
     ? {}
     : { retryAfter: new Date(now.getTime() + retryAfterMs) }),
   ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),

@@ -97,7 +97,7 @@ describe("a failed run's record", () => {
     ).toBe(false);
   });
 
-  test("files the provider's retry time only for a delay the call did not wait out", () => {
+  test("files the retry time of the failing answer, short or long", () => {
     const withDelay = (retryAfterMs: number | undefined) =>
       analysisFailureRecord({
         code: "provider_refused",
@@ -108,7 +108,9 @@ describe("a failed run's record", () => {
       }).retryAfter;
 
     expect(withDelay(undefined)).toBeUndefined();
-    expect(withDelay(PROVIDER_RETRY_WAIT_CAP_MS)).toBeUndefined();
+    expect(withDelay(0)).toBeUndefined();
+    // A refusal of the call's own retry after its one wait: still current.
+    expect(withDelay(5000)).toEqual(new Date(NOW.getTime() + 5000));
     expect(withDelay(PROVIDER_RETRY_WAIT_CAP_MS + 1)).toEqual(
       new Date(NOW.getTime() + PROVIDER_RETRY_WAIT_CAP_MS + 1),
     );
