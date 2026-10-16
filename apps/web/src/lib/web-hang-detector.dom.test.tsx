@@ -74,15 +74,11 @@ const setup = ({
   const existingKeys = new Set(markerKeys());
   const hangs: Parameters<Analytics["capturePageHangSuspected"]>[0][] = [];
   const frames: Parameters<Analytics["captureLongAnimationFrame"]>[0][] = [];
-  const requests: string[] = [];
   const detector = createWebHangDetector({
     window: browser,
     build: "current",
     now,
     random,
-    report: (phase) => {
-      requests.push(phase);
-    },
   });
   disposers.push(detector.dispose);
   const markerKey = markerKeys().find((name) => !existingKeys.has(name));
@@ -100,11 +96,11 @@ const setup = ({
       routeTemplates: new Set(["/chat/$threadId"]),
     });
   attach();
-  return { detector, hangs, frames, requests, attach, markerKey };
+  return { detector, hangs, frames, attach, markerKey };
 };
 test("a stale boot reports once and resets layout before restoration, with a visible recovery toast", async () => {
   seed("boot");
-  const { detector, hangs, requests, attach } = setup();
+  const { detector, hangs, attach } = setup();
   expect(detector.safeMode).toBe(true);
   expect(local.getItem("stella:inspector-state")).toBeNull();
   expect(hangs).toEqual([
@@ -115,9 +111,8 @@ test("a stale boot reports once and resets layout before restoration, with a vis
       restoredState: [{ key: "stella:inspector-state", bytes: 27 }],
     },
   ]);
-  expect(requests).toEqual(["boot"]);
   attach();
-  expect(requests).toHaveLength(1);
+  expect(hangs).toHaveLength(1);
   const view = render(
     <IntlProvider locale="en" messages={messages}>
       <ToastProvider>
@@ -132,25 +127,25 @@ test("a stale boot reports once and resets layout before restoration, with a vis
 });
 test("a stale session reports without resetting layout", () => {
   seed("session");
-  const { detector, hangs, requests } = setup();
+  const { detector, hangs } = setup();
   expect(detector.safeMode).toBe(false);
   expect(local.getItem("stella:inspector-state")).toBe(
     "privileged document content",
   );
   expect(hangs.at(0)?.phase).toBe("session");
-  expect(requests).toEqual(["session"]);
+  expect(hangs).toHaveLength(1);
 });
 test("a new tab consumes a stale terminated-tab boot while live tabs remain isolated", () => {
   seed("boot");
   session.clear();
   const recovery = setup();
   expect(recovery.detector.safeMode).toBe(true);
-  expect(recovery.requests).toEqual(["boot"]);
+  expect(recovery.hangs.at(0)?.phase).toBe("boot");
   expect(local.getItem(key)).toBeNull();
   session.clear();
   const liveNeighbour = setup();
   expect(liveNeighbour.detector.safeMode).toBe(false);
-  expect(liveNeighbour.requests).toEqual([]);
+  expect(liveNeighbour.hangs).toEqual([]);
 });
 test("duplicated session ids cannot share document markers or erase a neighbor's hang evidence", () => {
   const firstFrame = document.createElement("iframe");
@@ -187,10 +182,9 @@ test("duplicated session ids cannot share document markers or erase a neighbor's
     first.detector.dispose();
     clock += HANG_STALE_MS + 1;
     const recovery = setup({ now: () => clock });
-    expect(recovery.requests).toEqual(["boot"]);
+    expect(recovery.hangs).toHaveLength(1);
     expect(recovery.hangs.at(0)?.phase).toBe("boot");
     const next = setup({ now: () => clock });
-    expect(next.requests).toEqual([]);
     expect(next.hangs).toEqual([]);
   } finally {
     firstFrame.remove();
@@ -227,7 +221,6 @@ test("a clean pagehide followed by reload emits nothing", () => {
   first.detector.dispose();
   const next = setup();
   expect(next.hangs).toEqual([]);
-  expect(next.requests).toEqual([]);
 });
 test("boot markers contain a template immediately and complete only after router ready and idle", () => {
   const descriptor = Object.getOwnPropertyDescriptor(
@@ -381,10 +374,9 @@ test("private-mode storage exceptions leave boot running without reports", () =>
     },
   });
   try {
-    const { detector, hangs, requests } = setup();
+    const { detector, hangs } = setup();
     expect(detector.safeMode).toBe(false);
     expect(hangs).toEqual([]);
-    expect(requests).toEqual([]);
   } finally {
     if (descriptor) {
       Object.defineProperty(window, "localStorage", descriptor);

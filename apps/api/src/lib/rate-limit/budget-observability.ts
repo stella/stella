@@ -3,7 +3,6 @@ import { emitRateLimitRejectedMetric } from "@/api/lib/observability/request-met
 
 export const BUDGET_NAMES = [
   "api.address",
-  "api.client_telemetry.address",
   "api.agent_auth.address",
   "api.agent_auth_confirm.address",
   "api.folio_collab.address",

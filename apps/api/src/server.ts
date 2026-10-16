@@ -37,7 +37,6 @@ import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
-import { clientTelemetryRoute } from "@/api/handlers/client-telemetry/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
@@ -630,7 +629,6 @@ const api = new Elysia()
     new Elysia()
       .use(pdfSigningSessionsRoute)
       .use(desktopPresenceRoute)
-      .use(clientTelemetryRoute)
       .use(desktopFeatureAccessRoute)
       .use(desktopTimeEntriesRoute),
   );

@@ -11,7 +11,6 @@ import {
   persistedUiStateFingerprint,
   resetPersistedUiState,
 } from "@/lib/persisted-ui-state";
-import { reportWebPageHang } from "@/lib/web-hang-report";
 import { resolveWebRouteTemplate } from "@/lib/web-route-template";
 
 export const HANG_HEARTBEAT_MS = 3000;
@@ -100,7 +99,6 @@ export type HangDetectorOptions = {
   build: string;
   now?: () => number;
   random?: () => number;
-  report?: (phase: "boot" | "session") => void;
 };
 
 type ObserveFramesOptions = {
@@ -164,7 +162,6 @@ export const createWebHangDetector = ({
   build,
   now = () => Temporal.Now.instant().epochMilliseconds,
   random = Math.random,
-  report,
 }: HangDetectorOptions) => {
   const local = browserStorage("local");
   // sessionStorage is copied by duplicate/opener tabs: identity belongs to
@@ -239,9 +236,6 @@ export const createWebHangDetector = ({
     stopped = false;
     onVisibility();
   };
-  if (suspected) {
-    report?.(prior.phase);
-  }
   const timer = browser.setInterval(pulse, HANG_HEARTBEAT_MS);
   browser.document.addEventListener("visibilitychange", onVisibility);
   browser.addEventListener("pagehide", onHide);
@@ -328,11 +322,6 @@ export const startWebHangDetector = () => {
   detector ??= createWebHangDetector({
     window,
     build: __APP_VERSION__,
-    report: (phase) => {
-      reportWebPageHang(phase).catch((error: unknown) => {
-        reportError(error);
-      });
-    },
   });
 };
 export const getWebHangDetector = () => detector;
