@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { deferred } from "@stll/test-kit";
-
 import {
   checkLockfileReleaseAges,
   createRegistryLookup,
@@ -394,8 +392,9 @@ describe("registry lookup", () => {
     const requested: string[] = [];
     let inFlight = 0;
     let peak = 0;
-    const twoStarted = deferred();
-    const release = deferred();
+    // Install-free: this test runs before the dependency install.
+    const twoStarted = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
     const lookup = createRegistryLookup({
       concurrency: 2,
       fetch: async (url) => {
@@ -403,7 +402,7 @@ describe("registry lookup", () => {
         inFlight += 1;
         peak = Math.max(peak, inFlight);
         if (inFlight === 2) {
-          twoStarted.resolve();
+          twoStarted.resolve(undefined);
         }
         await release.promise;
         inFlight -= 1;
@@ -422,7 +421,7 @@ describe("registry lookup", () => {
     );
     await twoStarted.promise;
     expect(peak).toBe(2);
-    release.resolve();
+    release.resolve(undefined);
     await lookups;
 
     expect(requested.toSorted()).toEqual([
