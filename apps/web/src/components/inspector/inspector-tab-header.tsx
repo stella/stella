@@ -46,6 +46,8 @@ type RenameState = {
    * required press/click trigger semantics.
    */
   action?: ReactNode;
+  /** Longest name the rename accepts. */
+  maxLength?: number | undefined;
 };
 
 type InspectorTabHeaderProps = {
@@ -115,6 +117,7 @@ export const InspectorTabHeader = ({
           <InlineEdit
             className="text-xs font-medium"
             action={rename.action}
+            maxLength={rename.maxLength}
             onCancel={rename.onCancel}
             onChange={rename.onChange}
             onCommit={rename.onCommit}
