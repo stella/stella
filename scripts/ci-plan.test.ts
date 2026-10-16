@@ -616,7 +616,9 @@ test("dependency jobs follow dependency inputs and skip unrelated changes", () =
   )) {
     const expected = cases.find(({ files }) => files[0] === item.files[0]);
     if (!expected) {
-      throw new TypeError(`Missing dependency selector case: ${item.files[0]}`);
+      throw new TypeError(
+        `Missing dependency selector case: ${String(item.files[0])}`,
+      );
     }
     expect(plan, item.files[0]).toEqual([expected.expected]);
   }

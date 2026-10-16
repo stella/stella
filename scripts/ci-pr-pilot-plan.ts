@@ -41,6 +41,8 @@ export const PILOT_DEFERRED = [
   "desktop-windows-dry-run",
   "desktop-rust-tests",
   "dependency-malware",
+  "dependency-audit",
+  "dependency-review",
   "api-test-durations",
 ] as const;
 
