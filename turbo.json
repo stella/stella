@@ -82,7 +82,7 @@
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/package.json",
-        "$TURBO_ROOT$/packages/{ai-catalog,boe,business-registries,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
+        "$TURBO_ROOT$/packages/{ai-catalog,boe,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
         "$TURBO_ROOT$/packages/typescript-config/base.json",
         "!$TURBO_ROOT$/apps/**/node_modules/**",
         "!$TURBO_ROOT$/apps/**/.cache/**",
