@@ -193,7 +193,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
     ],
     inputs: CAPABILITY_RUNTIME_INPUTS,
-    write: ["bun", "--cwd=apps/api", "run", "generate:capability-runtime"],
+    write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,

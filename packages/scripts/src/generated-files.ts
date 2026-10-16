@@ -36,7 +36,8 @@ export const CI_GENERATED_OUTPUTS = {
 export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
 export const CI_GENERATION_COMMANDS = [
-  ["bun", "--cwd=apps/api", "run", "generate:capability-runtime"],
+  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+  ["bun", "scripts/prepare-mcp-apps.ts"],
   ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
