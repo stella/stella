@@ -25,7 +25,7 @@ const rateLimited = (retryAfterMs: number | undefined) =>
   });
 
 // A call that fails with each queued failure in turn, then answers.
-const scripted = (failures: unknown[]) => {
+const scripted = (failures: Error[]) => {
   const calls: number[] = [];
   const run = async () => {
     calls.push(performance.now());

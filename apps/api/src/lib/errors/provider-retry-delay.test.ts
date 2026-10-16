@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
@@ -26,22 +27,33 @@ const EXPECTED_DELAY_MS: Record<string, number | undefined> = {
   openrouter: undefined,
 };
 
-type WireResponse = {
-  status: number;
-  headers?: Record<string, string>;
-  body?: { encoding: string; text: string };
-};
+const WIRE_FIXTURE = v.object({
+  exchanges: v.array(
+    v.object({
+      response: v.object({
+        status: v.number(),
+        headers: v.optional(v.record(v.string(), v.string())),
+        body: v.optional(v.object({ encoding: v.string(), text: v.string() })),
+      }),
+    }),
+  ),
+});
+
+type WireResponse = v.InferOutput<
+  typeof WIRE_FIXTURE
+>["exchanges"][number]["response"];
 
 const rateLimitResponses = (provider: string): WireResponse[] =>
   readdirSync(path.join(FIXTURES, provider))
     .filter((name) => name.startsWith("rate-limit"))
     .map((name) => {
-      const fixture: unknown = JSON.parse(
-        readFileSync(path.join(FIXTURES, provider, name), "utf-8"),
+      const fixture = v.parse(
+        WIRE_FIXTURE,
+        JSON.parse(readFileSync(path.join(FIXTURES, provider, name), "utf-8")),
       );
-      const exchanges = (fixture as { exchanges: { response: WireResponse }[] })
-        .exchanges;
-      return exchanges.at(-1)?.response ?? panic(`${name}: no exchange`);
+      return (
+        fixture.exchanges.at(-1)?.response ?? panic(`${name}: no exchange`)
+      );
     });
 
 // The two shapes an SDK hands over: the response headers on the error, and
