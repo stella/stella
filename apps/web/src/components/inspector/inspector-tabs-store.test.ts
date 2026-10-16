@@ -1438,9 +1438,11 @@ describe("Inspector tab broadcast", () => {
     const addListener = spyOn(
       globalThis,
       "addEventListener",
-    ).mockImplementation((type, listener, options) => {
-      pagehide.addEventListener(type, listener, options);
-    });
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
     const scope = { organizationId: "org-1", userId: "user-1" };
     const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
