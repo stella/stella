@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawCitations,
+  caseLawCitationDoctrineReviews,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -18,11 +19,16 @@ import {
   listLeadingCitationsHandler,
   listTopCitingDecisionsHandler,
   summarizeDecisionCitationsHandler,
+  summarizeDecisionDoctrineHandler,
   treatmentOf,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
-import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import {
+  CITATION_REVIEW_ORIGIN,
+  POLARITIES,
+  POLARITY,
+} from "@/api/handlers/case-law/polarity/consts";
 import { citationSummaryResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -367,8 +373,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
-  panic("expected a redistributable subject");
+  (await withRedistributableSubject(
+    caseLawDb,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a redistributable subject");
 
 const readCitationPage = async (
   direction: CitationDirection,
@@ -751,6 +761,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: closedRelatedId,
@@ -761,6 +772,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: subjectId,
@@ -789,6 +801,7 @@ test("a listing-only related decision is absent from every citation read even wi
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: listingOnlyRelatedId },
       async () => true,
     ),
@@ -1163,10 +1176,30 @@ test("conflicting edge inserts preserve exact projections for both endpoints", a
   await assertRecount();
 });
 
+test("expand release reports doctrine capability unavailable instead of unread", async () => {
+  const page = await readCitationPage("incoming", undefined);
+  if (!("items" in page)) {
+    throw new Error("Expected a citation page");
+  }
+  expect(page.doctrineAvailability).toBe("unavailable");
+  expect(
+    page.items.every(
+      ({ doctrine, evidenceQuote }) =>
+        doctrine === null && evidenceQuote === null,
+    ),
+  ).toBe(true);
+  const summary = await withSubject(
+    subjectId,
+    async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
+  );
+  expect(summary).toEqual({ status: "unavailable" });
+});
+
 test("citation digests omit withheld unresolved references", async () => {
   const digest = await readGatedDecisionCitationDigest({
     caseLawDb,
     decisionId: withheldSubjectId,
+    surface: "search",
   });
   expect(digest?.cites).toMatchObject([
     {
@@ -1184,6 +1217,7 @@ test("citation reads carry withheld text dispositions", async () => {
     decisionId: withheldSubjectId,
     direction: "cites",
     limit: 10,
+    surface: "search",
   });
   expect(read).toMatchObject({
     type: "page",
@@ -1197,4 +1231,75 @@ test("citation reads carry withheld text dispositions", async () => {
       ],
     },
   });
+});
+
+test("a reviewed doctrine quote cannot bypass the source text disposition", async () => {
+  await db
+    .update(caseLawCitations)
+    .set({
+      citationKey: "doctrine-licence-fixture",
+      doctrinalTreatment: "limits",
+    })
+    .where(eq(caseLawCitations.id, citationId(999)));
+  const reviewId = createSafeId<"caseLawCitationDoctrineReview">();
+  await db.insert(caseLawCitationDoctrineReviews).values({
+    id: reviewId,
+    citingDecisionId: withheldSubjectId,
+    citationKey: "doctrine-licence-fixture",
+    doctrinalTreatment: "limits",
+    evidenceQuote: "The earlier precedent has a narrower scope.",
+    reviewRef: "test:source-text-disposition",
+    origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+  });
+  await db.execute(
+    sql`GRANT SELECT (citation_key, doctrinal_treatment) ON case_law_citations TO stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`GRANT SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews TO stella_public_law_reader`,
+  );
+  const read = await readGatedDecisionCitations({
+    caseLawDb,
+    cursor: undefined,
+    decisionId: withheldSubjectId,
+    direction: "cites",
+    limit: 10,
+    surface: "search",
+  });
+  const summary = await withSubject(
+    withheldSubjectId,
+    async (subject) => await summarizeDecisionDoctrineHandler({ subject }),
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citation_key, doctrinal_treatment) ON case_law_citations FROM stella_public_law_reader`,
+  );
+  await db.execute(
+    sql`REVOKE SELECT (citing_decision_id, citation_key, doctrinal_treatment, evidence_quote) ON case_law_citation_doctrine_reviews FROM stella_public_law_reader`,
+  );
+  await db
+    .delete(caseLawCitationDoctrineReviews)
+    .where(eq(caseLawCitationDoctrineReviews.id, reviewId));
+  await db
+    .update(caseLawCitations)
+    .set({ citationKey: null, doctrinalTreatment: null })
+    .where(eq(caseLawCitations.id, citationId(999)));
+  if (read?.type !== "page") {
+    throw new Error("Expected a citation page");
+  }
+  expect(summary).toEqual({
+    status: "available",
+    counts: {
+      incoming: { distinguishes: 0, limits: 0, not_stated: 0, unread: 0 },
+      outgoing: { distinguishes: 0, limits: 1, not_stated: 0, unread: 0 },
+    },
+    capped: { incoming: false, outgoing: false },
+    candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+  });
+  expect(read.page.doctrineAvailability).toBe("available");
+  expect(read.page.items.at(0)).toMatchObject({
+    doctrine: "limits",
+    passage: null,
+    citationText: null,
+    textWithheldReason: "source_licence",
+  });
+  expect(read.page.items.at(0)).not.toHaveProperty("evidenceQuote");
 });

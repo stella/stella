@@ -203,6 +203,22 @@ const rejectionOf = async (run: () => Promise<unknown>): Promise<unknown> =>
     (error: unknown) => error,
   );
 
+/** A key only these tests take; schema SQL that awaits it parks under the lane. */
+const SCHEMA_GATE_KEY = 74_221_903;
+const AWAIT_SCHEMA_GATE = `SELECT pg_advisory_xact_lock(${String(SCHEMA_GATE_KEY)});`;
+const HOLD_SCHEMA_GATE = `SELECT pg_advisory_lock(${String(SCHEMA_GATE_KEY)})`;
+const RELEASE_SCHEMA_GATE = `SELECT pg_advisory_unlock_all()`;
+
+const backendPid = async (connection: SQL) => {
+  const [row] = await connection.unsafe<{ pid: number }[]>(
+    "SELECT pg_backend_pid() AS pid",
+  );
+  if (row === undefined) {
+    throw new Error("Expected backend pid");
+  }
+  return row.pid;
+};
+
 const appliedResult = (result: Awaited<ReturnType<typeof runMigrations>>) => {
   if (result.status !== "applied") {
     throw new Error(`Expected migrations to apply, got ${result.status}`);
@@ -551,63 +567,88 @@ if (!runPostgresTests || databaseUrl === undefined) {
     });
 
     test("a second session waits on the lane and applies no duplicate SQL", async () => {
-      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
-        await withScratch(async ({ scratchUrl, observer, openClient }) => {
-          const first = await openClient().reserve();
-          const second = await openClient().reserve();
-          const [pidRow] = await second.unsafe<{ pid: number }[]>(
-            "SELECT pg_backend_pid() AS pid",
-          );
-          if (pidRow === undefined) {
-            throw new Error("Expected backend pid");
-          }
-          const entered = Promise.withResolvers<undefined>();
-          const release = Promise.withResolvers<undefined>();
-          const firstRun = runMigrations({
-            connection: first,
-            migrationsFolder: folder,
-            ebs: DISABLED_EBS,
-            databaseUrl: scratchUrl,
-            runOnline: async () => {
-              entered.resolve(undefined);
-              await release.promise;
-              return ONLINE_COMPLETE;
-            },
-          });
-          try {
-            await entered.promise;
-            const secondRun = runMigrations({
-              connection: second,
+      await withBundle(
+        [
+          {
+            name: A,
+            sql: `${CREATE_PROBE}--> statement-breakpoint\n${AWAIT_SCHEMA_GATE}`,
+          },
+        ],
+        async (folder) => {
+          await withScratch(async ({ scratchUrl, observer, openClient }) => {
+            const gate = await openClient().reserve();
+            const first = await openClient().reserve();
+            const second = await openClient().reserve();
+            const firstPid = await backendPid(first);
+            const secondPid = await backendPid(second);
+            await gate.unsafe(HOLD_SCHEMA_GATE);
+            const firstRun = runMigrations({
+              connection: first,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
               runOnline: async () => ONLINE_COMPLETE,
             });
-            await waitUntilBlocked(observer, pidRow.pid);
-            release.resolve(undefined);
-            expect(appliedResult(await firstRun).insertedNames).toEqual([A]);
-            expect(appliedResult(await secondRun).insertedNames).toEqual([]);
-            expect(await probeEvents(observer)).toEqual(["A"]);
+            try {
+              // The first run holds the lane while its schema SQL waits.
+              await waitUntilBlocked(observer, firstPid);
+              const secondRun = runMigrations({
+                connection: second,
+                migrationsFolder: folder,
+                ebs: DISABLED_EBS,
+                databaseUrl: scratchUrl,
+                runOnline: async () => ONLINE_COMPLETE,
+              });
+              await waitUntilBlocked(observer, secondPid);
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              expect(appliedResult(await firstRun).insertedNames).toEqual([A]);
+              expect(appliedResult(await secondRun).insertedNames).toEqual([]);
+              expect(await probeEvents(observer)).toEqual(["A"]);
+              expect(
+                (await ledgerRows(observer)).map(({ name }) => name),
+              ).toEqual([A]);
+            } finally {
+              await gate.unsafe(RELEASE_SCHEMA_GATE);
+              // swallow-ok: finally drains the first migration runner after its applied result has been asserted
+              await firstRun.catch(() => undefined);
+              gate.release();
+              first.release();
+              second.release();
+            }
+          });
+        },
+      );
+    });
+
+    /**
+     * An index build on a corpus-sized table runs for many minutes. The
+     * schema SQL needs the lane; the online phase must not keep corpus
+     * writers out while it builds.
+     */
+    test("the online phase runs with the lane open to corpus writers", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, run }) => {
+          const result = await run(folder, async () => {
+            expect(await laneHolders(observer)).toBe(0);
             expect(
-              (await ledgerRows(observer)).map(({ name }) => name),
-            ).toEqual([A]);
-          } finally {
-            release.resolve(undefined);
-            // swallow-ok: finally drains the first migration runner after its applied result has been asserted
-            await firstRun.catch(() => undefined);
-            first.release();
-            second.release();
-          }
+              await observer.begin(async (tx) =>
+                isCorpusSchemaLaneGranted(
+                  await tx.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
+                ),
+              ),
+            ).toBe(true);
+          });
+          expect(appliedResult(result).insertedNames).toEqual([A]);
+          expect(await laneHolders(observer)).toBe(0);
         });
       });
     });
 
     /**
-     * A held index build must not keep corpus writers out: they wait for the
-     * lane only within a bounded budget and then fail. The deferred run
-     * releases the lane, reports no completion, and a later run resumes.
+     * A held index build reports no completion, keeps the lane open while it
+     * waits, and a later run resumes it.
      */
-    test("a deferred online phase releases the lane while it waits and settles on a later run", async () => {
+    test("a deferred online phase leaves the lane open while it waits and settles on a later run", async () => {
       await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
         await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const laneOpenToWriters = async () =>
@@ -629,7 +670,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               ebs: DISABLED_EBS,
               databaseUrl: scratchUrl,
               runOnline: async () => {
-                expect(await laneOpenToWriters()).toBe(false);
+                expect(await laneOpenToWriters()).toBe(true);
                 return deferred;
               },
             });
@@ -654,7 +695,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               databaseUrl: scratchUrl,
               runOnline: async (_pool, options) => {
                 holds.add(options.indexGate.hold);
-                expect(await laneOpenToWriters()).toBe(false);
+                expect(await laneOpenToWriters()).toBe(true);
                 const outcome = outcomes.shift();
                 if (outcome === undefined) {
                   throw new Error("Online phase ran after it completed");
