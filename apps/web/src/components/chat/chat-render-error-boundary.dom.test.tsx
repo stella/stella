@@ -150,3 +150,34 @@ test("a thread without failing messages reports nothing", () => {
   );
   expect(errors).toHaveLength(0);
 });
+
+test("a failed message renders again once its content changes under the same id", () => {
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  try {
+    const view = render(threadView([unrenderableMessage()], noopAnalytics));
+    expect(view.container.textContent).toContain(
+      messages.chat.messageUnavailable,
+    );
+
+    // The same message streams on: same id, new content that renders.
+    view.rerender(
+      threadView(
+        [
+          textMessage(
+            "unrenderable-message",
+            "assistant",
+            "The renewed answer",
+          ),
+        ],
+        noopAnalytics,
+      ),
+    );
+    expect(view.container.textContent).toContain("The renewed answer");
+    expect(view.container.textContent).not.toContain(
+      messages.chat.messageUnavailable,
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+});

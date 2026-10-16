@@ -332,6 +332,7 @@ export const ChatThreadMessages = ({
     <ChatRenderErrorBoundary
       fallback={<MessageRenderFallback message={message} />}
       key={message.id}
+      resetOn={message.parts}
       surface="chat-message"
     >
       <Message

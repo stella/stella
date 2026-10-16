@@ -17,16 +17,20 @@ type ChatRenderErrorBoundaryProps = {
   surface: ChatRenderSurface;
   children: ReactElement;
   fallback: ReactElement;
+  /** The content it wraps; a new value retries a failed render. */
+  resetOn?: unknown;
 };
 
 type ChatRenderErrorBoundaryState = {
   hasError: boolean;
+  resetOn: unknown;
 };
 
 // Contains one failing piece of a chat thread (a rich part or a whole
 // message) so the rest of the thread and the composer keep rendering.
-// Callers key it by the identity of what it wraps, which resets it when
-// that content changes.
+// Callers key it by what it wraps and pass the content as `resetOn`, so a
+// message that keeps its id while it streams retries once its content
+// changes instead of staying on the fallback.
 export class ChatRenderErrorBoundary extends Component<
   ChatRenderErrorBoundaryProps,
   ChatRenderErrorBoundaryState
@@ -36,10 +40,19 @@ export class ChatRenderErrorBoundary extends Component<
 
   constructor(props: ChatRenderErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, resetOn: props.resetOn };
   }
 
-  static getDerivedStateFromError(): ChatRenderErrorBoundaryState {
+  static getDerivedStateFromProps(
+    props: ChatRenderErrorBoundaryProps,
+    state: ChatRenderErrorBoundaryState,
+  ): ChatRenderErrorBoundaryState | null {
+    return Object.is(props.resetOn, state.resetOn)
+      ? null
+      : { hasError: false, resetOn: props.resetOn };
+  }
+
+  static getDerivedStateFromError(): Partial<ChatRenderErrorBoundaryState> {
     return { hasError: true };
   }
 
