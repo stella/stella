@@ -35,9 +35,7 @@ export const dynamicToolNamespaceOf = (
   return undefined;
 };
 
-export const isDynamicToolNamespace = (
-  value: string,
-): value is DynamicToolNamespace =>
+const isDynamicToolNamespace = (value: string): value is DynamicToolNamespace =>
   Object.hasOwn(DYNAMIC_TOOL_NAMESPACES, value);
 
 export const isExternalMcpToolName = (toolName: string): boolean =>

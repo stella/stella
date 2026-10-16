@@ -651,8 +651,8 @@ describe("online index gate", () => {
   });
 
   /**
-   * A held build ends its migrator run so the schema lane is released, and
-   * the next run creates a new gate. The hold must outlive the gate, or it
+   * A held build ends its migrator run, and the next run creates a new
+   * gate. The hold must outlive the gate, or it
    * would restart with every run and never alert.
    */
   test("a hold shared across gates alerts once, measured from the first gate", async () => {

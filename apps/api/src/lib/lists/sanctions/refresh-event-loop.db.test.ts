@@ -11,6 +11,7 @@ import {
   type ParsedList,
   type SanctionsEntry,
 } from "@stll/sanctions";
+import { largeOfacSdnXml } from "@stll/sanctions/test-fixtures/large-ofac-list";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -26,7 +27,6 @@ import {
   fetchSanctionsEdition,
   type FetchedMarker,
 } from "@/api/lib/lists/sanctions/source-fetch";
-import { largeOfacSdnXml } from "@/api/lib/lists/sanctions/test-fixtures/large-ofac-list";
 import type { safeOutboundFetchStream } from "@/api/lib/safe-outbound-fetch";
 import {
   expectEventLoopResponsive,

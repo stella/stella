@@ -1055,9 +1055,10 @@ export const DecisionText = ({
                   onClick={() => onAnnotationActivate(annotation.id)}
                   type="button"
                 >
-                  {annotation.kind === "comment"
-                    ? messages["folio.comment"]
-                    : messages["legalReader.annotations.highlight"]}
+                  {annotation.activationLabel ??
+                    (annotation.kind === "comment"
+                      ? messages["folio.comment"]
+                      : messages["legalReader.annotations.highlight"])}
                 </button>
               ))}
             </div>
