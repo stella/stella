@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/flows/workspace-event-authorizer.ts",
+  "delta": 1,
+  "reason": "The flow event infrastructure owner binds the existing recipient-delivery operation to its owner connection. SSE delivery has no request-scoped transaction; the confined operation checks organization, current matter access, deployment availability, and recipient enrolment before delivery. It returns neither a handle nor feature data, while the reusable event module retains required database injection."
+}

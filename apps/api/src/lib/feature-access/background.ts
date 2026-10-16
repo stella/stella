@@ -3,15 +3,9 @@ import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
-
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import {
-  featureEnrolments,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { featureEnrolments, workspaces } from "@/api/db/schema";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
@@ -21,6 +15,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type BackgroundFeatureAccessOptions = {
   tx: Pick<Transaction, "select">;
@@ -282,21 +277,12 @@ export const backgroundFeatureActorExists = ({
     JOIN ${workspaces}
       ON ${workspaces.id} = ${workspaceId}
       AND ${workspaces.organizationId} = ${member.organizationId}
-    LEFT JOIN ${workspaceMembers}
-      ON ${workspaceMembers.workspaceId} = ${workspaces.id}
-      AND ${workspaceMembers.userId} = ${member.userId}
     WHERE ${member.organizationId} = ${organizationId}
       AND ${user.emailVerified} = true
       AND ${user.deletedAt} IS NULL
       AND ${userId === undefined ? sql`true` : sql`${member.userId} = ${userId}`}
-      AND (
-        ${workspaceMembers.userId} IS NOT NULL
-        OR (
-          ${workspaces.clientId} IS NOT NULL
-          AND ${member.role} IN (${sql.join(
-            CLIENT_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
-            sql`, `,
-          )})
-        )
-      )
+      AND ${memberReachesMatterSql(
+        { organizationId: member.organizationId, userId: member.userId },
+        workspaces.id,
+      )}
   )`;

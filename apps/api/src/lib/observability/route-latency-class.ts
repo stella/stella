@@ -553,6 +553,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/entities/:workspaceId/property-facets": "crud",
   "POST /v1/entities/:workspaceId/query": "crud",
   "POST /v1/entities/:workspaceId/query-window": "crud",
+  "POST /v1/entities/:workspaceId/transfer-eligibility": "crud",
   "POST /v1/entities/:workspaceId/upload": "crud",
   "POST /v1/entities/:workspaceId/upload-generated-document": "crud",
   "POST /v1/entities/:workspaceId/upload-version": "crud",

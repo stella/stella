@@ -209,7 +209,7 @@ import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
-import { deliverFlowRunWorkspaceEvent } from "@/api/lib/flows/flow-run-events";
+import { authorizeFlowWorkspaceEvent } from "@/api/lib/flows/workspace-event-authorizer";
 import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
@@ -2815,12 +2815,7 @@ export const realtimeAuthorizers = {
   ) => await resolveUserRealtimeAuthorization(lookup, rootDb),
   workspace: async (lookup: WorkspaceRealtimeAudienceLookup) =>
     await resolveWorkspaceRealtimeAudience(lookup, rootDb),
-  workspaceEvent: async (
-    lookup: Omit<
-      Parameters<typeof deliverFlowRunWorkspaceEvent>[0],
-      "database"
-    >,
-  ) => await deliverFlowRunWorkspaceEvent({ ...lookup, database: rootDb }),
+  workspaceEvent: authorizeFlowWorkspaceEvent,
 };
 
 /**
