@@ -587,6 +587,39 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
+  const dependencyInputs = [
+    "bun.lock",
+    "package.json",
+    "apps/web/package.json",
+    "bunfig.toml",
+    "patches/example.patch",
+    "Cargo.lock",
+    "apps/desktop/Cargo.toml",
+    "pyproject.toml",
+    "uv.lock",
+    "requirements.txt",
+    ".github/workflows/ci.yml",
+    ".github/actions/example/action.yml",
+  ];
+  const cases = [
+    ...dependencyInputs.map((file) => ({ files: [file], expected: "true" })),
+    { files: ["apps/web/src/example.ts"], expected: "false" },
+  ];
+  for (const { item, plan } of planSelector(
+    cases.map(({ files }) => ({
+      files,
+      outputs: ["dependency_changes_required"],
+    })),
+  )) {
+    const expected = cases.find(({ files }) => files[0] === item.files[0]);
+    if (!expected) {
+      throw new TypeError(`Missing dependency selector case: ${item.files[0]}`);
+    }
+    expect(plan, item.files[0]).toEqual([expected.expected]);
+  }
+});
+
 test("the lockfile release-age guard follows every tracked lockfile", () => {
   for (const file of [
     "bun.lock",
@@ -747,6 +780,10 @@ const resultJob = v.parse(
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  // These moved jobs retain the exact least-privilege grants from their
+  // standalone workflows, so neither can cancel a merge-group run.
+  "dependency-audit",
+  "dependency-review",
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",

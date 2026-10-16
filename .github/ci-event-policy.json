@@ -56,7 +56,6 @@
     "build-api-image.yml/build": "main",
     "codeql.yml/analyze": "release-pr",
     "pr-lint.yml/pr-lint": "pr-fast",
-    "dependency-review.yml/dependency-review": "pr-fast",
     "agent-sandbox-canary.yml/real-model-mcp-canary": "main",
     "release-desktop.yml/resolve": "main",
     "release-desktop.yml/build": "main",
@@ -156,7 +155,6 @@
     "ci.yml/ci-result": "pr-fast",
     "flake-gate.yml/report": "pr-opt-in",
     "security-txt-guard.yml/check": "pr-fast",
-    "dependency-audit.yml/audit": "pr-fast",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
@@ -172,7 +170,9 @@
     "manual-checks.yml/install-cache-windows": "main",
     "manual-checks.yml/install-cache-linux": "main",
     "type-cost-measurement.yml/prepare": "main",
-    "type-cost-measurement.yml/measure": "main"
+    "type-cost-measurement.yml/measure": "main",
+    "ci.yml/dependency-review": "pr-fast",
+    "ci.yml/dependency-audit": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {

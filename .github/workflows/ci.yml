@@ -182,6 +182,7 @@ jobs:
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required == 'true' && steps.legal-atlas-scope.outputs.api_source_required != 'false' }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
+      dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
@@ -885,6 +886,7 @@ jobs:
               echo "legal_atlas_image_required=true"
               echo "legal_atlas_image_pr_required=true"
               echo "dependency_malware_required=true"
+              echo "dependency_changes_required=true"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
@@ -935,6 +937,7 @@ jobs:
               echo "legal_atlas_image_required=false"
               echo "legal_atlas_image_pr_required=false"
               echo "dependency_malware_required=false"
+              echo "dependency_changes_required=false"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
@@ -1008,6 +1011,15 @@ jobs:
             ci_browser_scope_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
+          dependency_changes_required=false
+          for file in "${changed_files[@]}"; do
+            case "$file" in
+              bun.lock|*/bun.lock|package.json|*/package.json|bunfig.toml|*/bunfig.toml|patches/*|.github/workflows/*|*/action.yml|*/action.yaml|Cargo.toml|*/Cargo.toml|Cargo.lock|*/Cargo.lock|pyproject.toml|*/pyproject.toml|uv.lock|*/uv.lock|requirements*.txt|*/requirements*.txt|requirements*.in|*/requirements*.in)
+                dependency_changes_required=true
+                break
+                ;;
+            esac
+          done
           agent_sandbox_docker_required=false
           api_image_deps_required=false
           api_image_smoke_required=false
@@ -1282,6 +1294,7 @@ jobs:
             echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "legal_atlas_image_pr_required=$legal_atlas_image_pr_required"
             echo "dependency_malware_required=$dependency_malware_required"
+            echo "dependency_changes_required=$dependency_changes_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
@@ -8025,6 +8038,269 @@ jobs:
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
       - *merge_group_cancel
 
+  dependency-audit:
+    name: bun audit (high/critical)
+    needs: ci-plan
+    if: ${{ needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: false
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
+        env:
+          NPM_TOKEN: ""
+
+      - name: Audit changed dependency resolutions
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"
+
+      - name: Check lockfile deduplication
+        run: bun --no-env-file dedupe --check
+
+      - name: Check trusted lifecycle dependencies
+        run: bun --no-env-file scripts/check-trusted-dependencies.ts
+
+  dependency-review:
+    needs: ci-plan
+    if: ${{ needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      # Keep the required check present even for drafts and source-only changes.
+      # No checkout or PR code executes while deciding whether review is needed.
+      - name: Derive dependency changes
+        id: changes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 0
+          script: |
+            const { owner, repo } = context.repo;
+            const event = context.payload;
+            const base = event.pull_request?.base.sha || event.merge_group?.base_sha;
+            const head = event.pull_request?.head.sha || event.merge_group?.head_sha;
+            if (!base || !head) throw new Error("Missing dependency comparison refs");
+            const { data } = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: `${base}...${head}`, per_page: 1,
+            });
+            const files = data.files;
+            if (!files) throw new Error("Missing dependency comparison files");
+            // The compare API caps files at 300. Never interpret a capped list
+            // as evidence that dependencies did not change.
+            const manifest = /(?:^|\/)(?:package\.json|bun\.lock|Cargo\.(?:toml|lock)|pyproject\.toml|uv\.lock|requirements[^/]*\.(?:txt|in))$/u;
+            const paths = file => [file.filename, file.previous_filename].filter(Boolean);
+            const required = files.length >= 300 || files.some(file => paths(file).some(path => manifest.test(path)));
+            core.setOutput("required", String(required));
+            if (required) return;
+            const actionInput = /(?:^\.github\/workflows\/[^/]+\.ya?ml$|(?:^|\/)action\.ya?ml$)/u;
+            const changed = files.filter(file => paths(file).some(path => actionInput.test(path)));
+            core.setOutput("workflows", String(changed.length > 0));
+            if (changed.length === 0) {
+              await core.summary.addRaw("No dependency manifests, lockfiles or workflow actions changed. Review is a no-op.").write();
+              return;
+            }
+            const content = async (path, ref) => {
+              const { data: blob } = await github.rest.repos.getContent({ owner, repo, path, ref });
+              if (Array.isArray(blob) || blob.type !== "file" || blob.encoding !== "base64") {
+                throw new Error("Cannot read dependency review input");
+              }
+              return Buffer.from(blob.content, "base64").toString("utf8");
+            };
+            const beforeRef = data.merge_base_commit.sha;
+            const snapshots = [];
+            for (const file of changed) {
+              const beforePath = file.previous_filename || file.filename;
+              const before = file.status === "added" || !actionInput.test(beforePath)
+                ? "" : await content(beforePath, beforeRef);
+              const after = file.status === "removed" || !actionInput.test(file.filename)
+                ? "" : await content(file.filename, head);
+              snapshots.push({ before, after });
+            }
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "dependency-review-"));
+            const input = path.join(directory, "workflows.json");
+            const manifestPath = path.join(directory, "package.json");
+            fs.writeFileSync(input, JSON.stringify(snapshots));
+            fs.writeFileSync(manifestPath, await content("package.json", beforeRef));
+            core.setOutput("input", input);
+            core.setOutput("manifest", manifestPath);
+
+      - name: Setup workflow YAML parser
+        if: steps.changes.outputs.workflows == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: ${{ steps.changes.outputs.manifest }}
+          # Parses YAML only; nothing is installed, so nothing is cached.
+          no-cache: true
+
+      - name: Compare workflow action dependencies
+        id: actions
+        if: steps.changes.outputs.workflows == 'true'
+        env:
+          WORKFLOW_INPUT: ${{ steps.changes.outputs.input }}
+        run: |
+          bun --no-env-file - <<'JS'
+          const references = source => {
+            if (source === "") return [];
+            const definition = Bun.YAML.parse(source);
+            const uses = [];
+            for (const job of Object.values(definition.jobs ?? {})) {
+              if (job.uses !== undefined) uses.push(job.uses);
+              for (const step of job.steps ?? []) {
+                if (step.uses !== undefined) uses.push(step.uses);
+              }
+            }
+            for (const step of definition.runs?.steps ?? []) {
+              if (step.uses !== undefined) uses.push(step.uses);
+            }
+            if (uses.some(value => typeof value !== "string")) {
+              throw new Error("Invalid workflow action reference");
+            }
+            return [...new Set(uses)].sort();
+          };
+          const snapshots = await Bun.file(process.env.WORKFLOW_INPUT).json();
+          const required = snapshots.some(({ before, after }) =>
+            JSON.stringify(references(before)) !== JSON.stringify(references(after)));
+          const { appendFileSync } = await import("node:fs");
+          appendFileSync(process.env.GITHUB_OUTPUT, `required=${required}\n`);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, required
+            ? "Workflow action dependencies changed; running review.\n"
+            : "Workflow action dependencies unchanged; review is a no-op.\n");
+          JS
+
+      - name: Checkout
+        if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Dependency Review
+        if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # The action derives both refs from a pull_request payload on its own;
+          # a merge group carries them under its own event key.
+          base-ref: ${{ github.event.merge_group.base_sha || '' }}
+          head-ref: ${{ github.event.merge_group.head_sha || '' }}
+          fail-on-severity: high
+          allow-licenses: >-
+            MIT,
+            Apache-2.0,
+            BSD-2-Clause,
+            BSD-3-Clause,
+            ISC,
+            0BSD,
+            BlueOak-1.0.0,
+            Unlicense,
+            CC0-1.0,
+            CC-BY-4.0,
+            MIT-0,
+            BSL-1.0,
+            MPL-2.0,
+            Python-2.0,
+            Zlib,
+            Unicode-3.0,
+            OFL-1.1
+          # GitHub's dependency snapshot currently reports some Bun
+          # workspace/catalog entries and Bun-locked npm packages as license
+          # "Null" in PR summaries even though package manifests declare
+          # allowed licenses. It also fails to parse some Cargo crates' dual
+          # SPDX license expressions (e.g. brotli-decompressor "BSD-3-Clause OR
+          # MIT", filetime "MIT OR Apache-2.0", mac-notification-sys
+          # "MIT OR Apache-2.0"), reporting them as an
+          # unrecognized LicenseRef even though both halves are allowed above.
+          # webpki-root-certs is genuinely CDLA-Permissive-2.0: the permissive
+          # data license Mozilla uses for its CA certificate bundle.
+          # @silurus/ooxml ships an Apache-2.0 LICENSE in its published package,
+          # but its package manifest omits the SPDX license field.
+          # Swatinem/rust-cache is a standalone CI action executed on GitHub's
+          # runner; stella does not link, bundle, modify, or distribute it in
+          # product artifacts. Workflow uses must remain pinned to immutable
+          # commit SHAs and receive normal dependency-update review.
+          # Keep these exceptions package-scoped; do not add namespace/group
+          # exceptions.
+          allow-dependencies-licenses: >-
+            pkg:githubactions/Swatinem/rust-cache,
+            pkg:npm/@ai-sdk/provider,
+            pkg:npm/@ai-sdk/provider-utils,
+            pkg:npm/@aws-sdk/client-sts,
+            pkg:npm/@fontsource-variable/source-serif-4,
+            pkg:npm/@hocuspocus/provider,
+            pkg:npm/@hocuspocus/server,
+            pkg:npm/@stll/ai-catalog,
+            pkg:npm/@stll/anonymize-chat,
+            pkg:npm/@stll/anonymize-wasm,
+            pkg:npm/@stll/conditions,
+            pkg:npm/@stll/country-codes,
+            pkg:npm/@stll/docx-core,
+            pkg:npm/@stll/errors,
+            pkg:npm/@stll/ssr-kit,
+            pkg:npm/@stll/ssr-testkit,
+            pkg:npm/@stll/start-runtime,
+            pkg:npm/@stll/time,
+            pkg:npm/@t3-oss/env-core,
+            pkg:npm/@ai-sdk/azure,
+            pkg:npm/@ai-sdk/openai,
+            pkg:npm/@aws-sdk/client-s3,
+            pkg:npm/@aws-sdk/client-sesv2,
+            pkg:npm/@aws-sdk/s3-request-presigner,
+            pkg:npm/@pydantic/genai-prices,
+            pkg:npm/@silurus/ooxml,
+            pkg:npm/@tanstack/react-router,
+            pkg:npm/@tanstack/react-start,
+            pkg:npm/@tiptap/core,
+            pkg:npm/@tiptap/extension-bold,
+            pkg:npm/@tiptap/extension-document,
+            pkg:npm/@tiptap/extension-hard-break,
+            pkg:npm/@tiptap/extension-heading,
+            pkg:npm/@tiptap/extension-history,
+            pkg:npm/@tiptap/extension-italic,
+            pkg:npm/@tiptap/extension-mention,
+            pkg:npm/@tiptap/extension-paragraph,
+            pkg:npm/@tiptap/extension-placeholder,
+            pkg:npm/@tiptap/extension-text,
+            pkg:npm/@tiptap/extensions,
+            pkg:npm/@tiptap/pm,
+            pkg:npm/@tiptap/react,
+            pkg:npm/@tiptap/suggestion,
+            pkg:npm/ai,
+            pkg:npm/better-result,
+            pkg:npm/client-zip,
+            pkg:npm/crossws,
+            pkg:npm/jszip,
+            pkg:npm/marked,
+            pkg:npm/posthog-js,
+            pkg:npm/posthog-node,
+            pkg:npm/postal-mime,
+            pkg:npm/valibot,
+            pkg:npm/y-prosemirror,
+            pkg:npm/yjs,
+            pkg:cargo/brotli-decompressor,
+            pkg:cargo/dbus,
+            pkg:cargo/filetime,
+            pkg:cargo/mac-notification-sys,
+            pkg:cargo/webpki-root-certs
+          # A merge group has no pull request to comment on.
+          comment-summary-in-pr: ${{ github.event_name == 'merge_group' && 'never' || 'always' }}
+
   dependency-malware:
     needs: ci-plan
     if: >-
@@ -8177,6 +8453,8 @@ jobs:
       [
         ci-plan,
         ci-quick-checks,
+        dependency-audit,
+        dependency-review,
         dependency-malware,
         docker-checks,
         ci-checks-generated,
@@ -8290,6 +8568,8 @@ jobs:
             "ci-tests": "package_checks_required",
             "code-quality-api": "package_checks_required",
             "code-quality-web-rest": "package_checks_required",
+            "dependency-audit": "dependency_changes_required",
+            "dependency-review": "dependency_changes_required",
             "dependency-malware": "dependency_malware_required",
             "desktop-rust-tests": "desktop_rust_checks_required",
             "desktop-rust-lint": "desktop_rust_checks_required",
@@ -8322,7 +8602,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["ci-quick-checks", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+            ["ci-quick-checks", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-audit", "dependency-review", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1

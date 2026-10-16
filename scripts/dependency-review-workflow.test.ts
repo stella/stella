@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+const githubExpression = (body: string) => `\${{ ${body} }}`;
 const workflow = v.parse(
   v.looseObject({
     name: v.string(),
@@ -15,22 +16,27 @@ const workflow = v.parse(
       v.string(),
       v.looseObject({
         if: v.optional(v.string()),
-        steps: v.array(
-          v.looseObject({
-            id: v.optional(v.string()),
-            name: v.optional(v.string()),
-            uses: v.optional(v.string()),
-            if: v.optional(v.string()),
-            run: v.optional(v.string()),
-            with: v.optional(v.record(v.string(), v.unknown())),
-          }),
+        needs: v.optional(v.union([v.string(), v.array(v.string())])),
+        permissions: v.optional(v.record(v.string(), v.string())),
+        steps: v.optional(
+          v.array(
+            v.looseObject({
+              id: v.optional(v.string()),
+              name: v.optional(v.string()),
+              uses: v.optional(v.string()),
+              if: v.optional(v.string()),
+              run: v.optional(v.string()),
+              with: v.optional(v.record(v.string(), v.unknown())),
+            }),
+          ),
+          [],
         ),
       }),
     ),
   }),
   Bun.YAML.parse(
     readFileSync(
-      new URL("../.github/workflows/dependency-review.yml", import.meta.url),
+      new URL("../.github/workflows/ci.yml", import.meta.url),
       "utf-8",
     ),
   ),
@@ -220,16 +226,20 @@ const selector = ({
 
 describe("required dependency review workflow boundary", () => {
   test("keeps one required job present for PR and merge-group events without paths or draft filtering", () => {
-    expect(workflow.name).toBe("Dependency Review");
-    expect(workflow.on).toEqual({
-      pull_request: {
-        types: ["opened", "synchronize", "reopened", "ready_for_review"],
-      },
-      merge_group: { types: ["checks_requested"] },
-    });
-    expect(Object.keys(workflow.jobs)).toEqual(["dependency-review"]);
-    expect(job.if).toBeUndefined();
+    expect(workflow.name).toBe("CI Checks");
+    expect(workflow.on["pull_request"]).toBeDefined();
+    expect(workflow.on["merge_group"]).toEqual({ types: ["checks_requested"] });
+    expect(job.if).toBe(
+      githubExpression(
+        "needs.ci-plan.outputs.dependency_changes_required == 'true'",
+      ),
+    );
+    expect(job["needs"]).toBe("ci-plan");
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
+    expect(job.permissions).toEqual({
+      contents: "read",
+      "pull-requests": "write",
+    });
     expect(selectorStep.if).toBeUndefined();
   });
 
