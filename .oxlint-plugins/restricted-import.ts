@@ -94,6 +94,11 @@ const packageWithSubpaths =
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
   new Set(glyphs.flatMap((glyph) => [glyph, `${glyph}Icon`, `Lucide${glyph}`]));
 
+// Test support (`asTestRaw` and the other unchecked casts) must not be
+// reachable from production modules.
+const isTestSupportModule = (moduleId: string): boolean =>
+  moduleId.startsWith("apps/api/src/tests/");
+
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
 // owner component is restricted there too.
@@ -145,6 +150,25 @@ const RESTRICTED_IMPORT_RULES = {
       },
       // The module, and its drift test, which compares entries against lucide.
       owners: [ICON_MODULE, "packages/ui/src/icons.test.ts"],
+    },
+  ],
+  // Production API modules import nothing under apps/api/src/tests/; the
+  // scope (production versus test files) is set by the rule's override in
+  // oxlint.config.ts.
+  "no-test-support-import": [
+    {
+      messageId: "noTestSupportImport",
+      message:
+        "Production modules must not import from apps/api/src/tests/. " +
+        "Move test-only code under that directory and import it only from " +
+        "tests.",
+      modules: [isTestSupportModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
     },
   ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and

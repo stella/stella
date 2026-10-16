@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Przeniesiono na inne urządzenie",
     "sessionNeedsAttention": "Wymaga uwagi",
     "sessionOpeningInOffice": "Otwieranie w Office",
-    "sessionSavingDraft": "Zapisywanie wersji roboczej"
+    "sessionSavingDraft": "Zapisywanie wersji roboczej",
+    "reconnectAccount": "Połącz ponownie ze stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — Zmiany pozostają lokalne i zostaną automatycznie ponowione",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Automatycznie uruchamiaj stella desktop przy logowaniu.",
     "stellaDesktop": "stella desktop",
     "support": "Wsparcie",
-    "title": "Ustawienia"
+    "title": "Ustawienia",
+    "serverLabel": "Serwer",
+    "connectToHost": "Połącz z {host}",
+    "connectToHostDescription": "Otwiera {host} w przeglądarce, aby zatwierdzić ten komputer.",
+    "reconnectNeeded": "Wymagane ponowne połączenie",
+    "reconnect": "Połącz ponownie",
+    "reconnectHostDescription": "Połączenie z {host} trzeba odnowić. Zatwierdź ten komputer ponownie w przeglądarce."
   },
   "clipboard": {
     "registryUnavailable": "Brak włączonych rejestrów dla jurysdykcji, w których prowadzisz praktykę.",

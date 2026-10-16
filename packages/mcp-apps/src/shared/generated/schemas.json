@@ -322,6 +322,10 @@
               "additionalProperties": true
             }
           },
+          "provisionStatus": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+          },
           "nextCursor": {
             "type": ["string", "null"]
           },

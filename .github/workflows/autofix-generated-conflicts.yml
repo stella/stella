@@ -88,9 +88,13 @@ jobs:
             const updated = pull => Date.parse(pull.updatedAt) || 0;
             const pulls = eligible
               .sort((a, b) => Number(planned.has(a.headRefOid)) - Number(planned.has(b.headRefOid))
-                || updated(b) - updated(a))
-              .slice(0, 8);
+                || updated(b) - updated(a));
+            // Only an accepted dispatch takes one of the 8 slots: a branch
+            // that refuses the dispatch never starts a run, so it would stay
+            // unplanned and sort first again on every push.
+            let started = 0;
             for (const pull of pulls) {
+              if (started === 8) break;
               try {
                 // `ref` is the pull request's branch: the run, its caches and
                 // its artifacts belong to that branch alone.
@@ -100,8 +104,12 @@ jobs:
                   ref: pull.headRefName,
                   inputs: { head: pull.headRefOid, main: branch.commit.sha },
                 });
+                started += 1;
               } catch (error) {
-                // A branch that predates the resolve workflow cannot run it.
-                core.notice(`#${pull.number}: not dispatched (${error.status ?? error.message})`);
+                // 422: a branch that predates the resolve workflow cannot run
+                // it. Any other failure (auth, rate limit, server) affects every
+                // branch alike, so the run fails instead of walking the list.
+                if (error.status !== 422) throw error;
+                core.notice(`#${pull.number}: not dispatched (422)`);
               }
             }
