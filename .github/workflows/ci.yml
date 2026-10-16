@@ -109,6 +109,8 @@ jobs:
       generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      test_scope: ${{ steps.api-tests.outputs.test_scope }}
+      comparison_base: ${{ steps.changed-files.outputs.comparison_base }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
@@ -821,10 +823,12 @@ jobs:
         run: |
           changed_files=()
           scope_unknown=false
+          comparison_base=""
           if [[ "$EVENT_NAME" != "workflow_dispatch" && "${HEAVY_ONLY:-false}" != true ]]; then
             base_ref="${BASE_SHA:-origin/$BASE_REF}"
             changed_paths=$(mktemp)
-            if git diff --name-only -z --no-renames "$base_ref"...HEAD > "$changed_paths"; then
+            if comparison_base=$(git merge-base "$base_ref" HEAD) &&
+              git diff --name-only -z --no-renames "$comparison_base" HEAD > "$changed_paths"; then
               while IFS= read -r -d '' file; do
                 changed_files+=("$file")
               done < "$changed_paths"
@@ -839,6 +843,7 @@ jobs:
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
           echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
+          echo "comparison_base=$comparison_base" >> "$GITHUB_OUTPUT"
 
           # An unreadable diff must widen every scope rather than skip checks.
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" || "${HEAVY_ONLY:-false}" == true ]]; then
@@ -1374,13 +1379,14 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          COMPARISON_BASE: ${{ steps.changed-files.outputs.comparison_base }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             {
               echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}'
               echo 'api_test_shards=3'
+              echo 'test_scope='
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           fi
@@ -1572,11 +1578,13 @@ jobs:
           SELECTED_MATRIX: ${{ steps.api-test-selection.outputs.ci_tests_matrix }}
           SELECTED_FILES: ${{ steps.api-test-selection.outputs.api_test_files }}
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
+          SELECTED_SCOPE: ${{ steps.api-test-selection.outputs.test_scope }}
         run: |
           if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
             {
               echo "ci_tests_matrix=$SELECTED_MATRIX"
               echo "api_test_shards=$SELECTED_SHARDS"
+              echo "test_scope=$SELECTED_SCOPE"
             } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
@@ -1587,10 +1595,12 @@ jobs:
             {
               echo 'ci_tests_matrix={"shard":["rest-web"]}'
               echo 'api_test_shards=0'
+              echo 'test_scope='
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           else
             bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
+            echo 'test_scope=' >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
@@ -4598,15 +4608,17 @@ jobs:
         # Heavy runs and manual dispatches test the full source tree; other
         # runs widen affected packages through scripts/test-scope.ts.
         env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          COMPARISON_BASE: ${{ needs.ci-plan.outputs.comparison_base }}
           EVENT_NAME: ${{ github.event_name }}
           HEAVY_ONLY: ${{ inputs.heavy_only }}
         run: |
-          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" ]]; then
+          # Without the planner's comparison base, test the full tree rather
+          # than let Turbo guess a base.
+          if [[ "$HEAVY_ONLY" == true || "$EVENT_NAME" == "workflow_dispatch" || -z "$COMPARISON_BASE" ]]; then
             echo "flag=" >> "$GITHUB_OUTPUT"
           else
             echo "flag=--affected" >> "$GITHUB_OUTPUT"
-            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+            echo "TURBO_SCM_BASE=$COMPARISON_BASE" >> "$GITHUB_ENV"
           fi
 
       - name: Test .claude/mcp
@@ -4630,7 +4642,7 @@ jobs:
           && needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
@@ -4650,8 +4662,7 @@ jobs:
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
-            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
-            read -r -a args <<<"$scope"
+            read -r -a args <<<"$TEST_SCOPE"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
@@ -4684,13 +4695,12 @@ jobs:
           && matrix.shard == 'rest-web'
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          BASE_REF: ${{ github.base_ref || 'main' }}
+          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: web
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
-            scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")
-            read -r -a args <<<"$scope"
+            read -r -a args <<<"$TEST_SCOPE"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")

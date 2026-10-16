@@ -6205,12 +6205,25 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
   expect(planner?.run).toContain("api_test_shards=3");
+  expect(planner?.env?.["COMPARISON_BASE"]).toBe(
+    `\${{ steps.changed-files.outputs.comparison_base }}`,
+  );
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
   expect(runner?.env?.["API_TEST_FILES"]).toBe(
     `\${{ needs.ci-plan.outputs.api_test_files }}`,
   );
+  expect(runner?.env?.["TEST_SCOPE"]).toBe(
+    `\${{ needs.ci-plan.outputs.test_scope }}`,
+  );
+  expect(runner?.run).not.toContain("scripts/test-scope.ts");
+  expect(runner?.run).toContain('read -r -a args <<<"$TEST_SCOPE"');
+  expect(
+    v.parse(v.object({ needs: v.array(v.string()) }), ciJobs["ci-result"])
+      .needs,
+  ).toContain("ci-tests");
+  expect(jobIf(ciJobs["ci-result"])).toBe("always()");
 });
 
 test("a crashed API planner widens the real workflow outputs", () => {
