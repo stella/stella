@@ -16,7 +16,7 @@ export const HISTORY_TRIMMED_NOTICE = {
 } as const satisfies ChatContextNotice;
 
 /** The metadata key an answer carries its context notice under. */
-export const CONTEXT_NOTICE_METADATA_KEY = "contextNotice";
+const CONTEXT_NOTICE_METADATA_KEY = "contextNotice";
 
 /** An answer's context notice: recorded once known, carried by the answer. */
 export type ContextNoticeStamp = {

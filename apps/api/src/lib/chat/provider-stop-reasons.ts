@@ -186,7 +186,7 @@ export const UNRECOGNIZED_STOP_REASON = "unknown";
  * `UNRECOGNIZED_STOP_REASON` for a finish whose reason no table lists. A
  * value no table lists never enters the run.
  */
-export const RECORDED_STOP_REASON_KEY = "stopReason";
+const RECORDED_STOP_REASON_KEY = "stopReason";
 
 /** The stop reason a decided terminal event recorded, if it recorded one. */
 export const recordedStopReasonOf = (chunk: {
