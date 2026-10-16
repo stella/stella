@@ -1031,7 +1031,11 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>
-    ownedSteps(steps)
+    ownedSteps(
+      steps.map((step) =>
+        normalizeRootSelection(step, partitionIds.at(index) ?? ""),
+      ),
+    )
       .filter(
         ({ run }) =>
           typeof run === "string" &&

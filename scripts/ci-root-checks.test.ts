@@ -25,40 +25,77 @@ const manifestSchema = v.object({
   optionalDependencies: v.optional(dependencyFields, {}),
   peerDependencies: v.optional(dependencyFields, {}),
 });
-const dependencies = new Map(
-  [...graph.packages].map(([name, { directory }]) => [
-    name,
-    Object.values(
-      v.parse(
-        manifestSchema,
-        JSON.parse(
-          readFileSync(path.join(root, directory, "package.json"), "utf-8"),
-        ),
+const lockEntrySchema = v.looseObject({
+  dependencies: v.optional(dependencyFields, {}),
+  optionalDependencies: v.optional(dependencyFields, {}),
+  peerDependencies: v.optional(dependencyFields, {}),
+});
+const lockSchema = v.object({
+  packages: v.record(v.string(), v.array(v.unknown())),
+});
+// Published packages can depend on a workspace package, which the install
+// links to the local copy (an app -> npm package -> workspace package path).
+const externalDependencies = new Map(
+  Object.entries(
+    v.parse(
+      lockSchema,
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    ).packages,
+  ).map(([key, entry]) => {
+    const fields = entry.find((item) => v.is(lockEntrySchema, item));
+    if (fields === undefined) {
+      return [key, []];
+    }
+    const { dependencies, optionalDependencies, peerDependencies } = v.parse(
+      lockEntrySchema,
+      fields,
+    );
+    return [
+      key,
+      [dependencies, optionalDependencies, peerDependencies].flatMap((field) =>
+        Object.keys(field),
       ),
-    ).flatMap(Object.keys),
-  ]),
+    ];
+  }),
 );
-type ReachesOptions = {
-  consumer: string;
-  dependency: string;
-  visited?: Set<string>;
-};
-const reaches = ({
-  consumer,
-  dependency,
-  visited = new Set(),
-}: ReachesOptions): boolean => {
-  if (consumer === dependency) {
-    return true;
+const dependencies = new Map([
+  ...externalDependencies,
+  ...[...graph.packages].map(
+    ([name, { directory }]) =>
+      [
+        name,
+        Object.values(
+          v.parse(
+            manifestSchema,
+            JSON.parse(
+              readFileSync(path.join(root, directory, "package.json"), "utf-8"),
+            ),
+          ),
+        ).flatMap((field) => Object.keys(field)),
+      ] as const,
+  ),
+]);
+const closures = new Map<string, ReadonlySet<string>>();
+const closureOf = (consumer: string) => {
+  const cached = closures.get(consumer);
+  if (cached !== undefined) {
+    return cached;
   }
-  if (visited.has(consumer)) {
-    return false;
+  const visited = new Set<string>();
+  const queue = [consumer];
+  for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+    if (visited.has(next)) {
+      continue;
+    }
+    visited.add(next);
+    queue.push(...(dependencies.get(next) ?? []));
   }
-  visited.add(consumer);
-  return (dependencies.get(consumer) ?? []).some((next) =>
-    reaches({ consumer: next, dependency, visited }),
-  );
+  closures.set(consumer, visited);
+  return visited;
 };
+type ReachesOptions = { consumer: string; dependency: string };
+const reaches = ({ consumer, dependency }: ReachesOptions) =>
+  closureOf(consumer).has(dependency);
 
 // Forward oracle: source owners produced by derived generators, then the
 // actual manifest dependency closures of each check's consuming package.
