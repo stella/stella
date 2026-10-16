@@ -173,6 +173,7 @@
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
+      "inScoring": "Zahrnuté do hodnotenia",
       "includeInScoring": "Zahrnúť do hodnotenia",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",
@@ -1294,6 +1295,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
     },
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
@@ -1325,6 +1327,7 @@
       "loadError": "Nepodarilo sa načítať položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "messageUnavailable": "Túto správu nemožno zobraziť.",
     "mockModel": {
       "description": "Vopred pripravené odpovede lokálneho simulovaného modelu",
       "label": "Simulovaná AI"
@@ -1490,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Pridávanie komentára",
+      "add_matter_member": "Pridať člena spisu",
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",
       "ares_lookup_company": "Hľadám záznamy o firme",
       "ares_search_companies": "Hľadám záznamy o firmách",
@@ -1546,7 +1550,6 @@
       "list_stories": "Výpis častí dokumentu",
       "list_templates": "Výpis vzorov",
       "load-skill": "Čítam pokyny",
-      "manage_organization": "Spravovať organizáciu",
       "read-contact": "Čítanie kontaktu",
       "read-content-across-matters": "Čítanie obsahu naprieč spismi",
       "read-skill-resource": "Čítam pokyny",
@@ -1556,6 +1559,7 @@
       "read_section": "Čítanie oddielu",
       "read_story": "Čítanie časti dokumentu",
       "remember": "Ukladanie do pamäte",
+      "remove_matter_member": "Odobrať člena spisu",
       "reply_comment": "Odpovedanie na komentár",
       "request_secret": "Žiadosť o súkromný prístupový údaj",
       "resolve_comment": "Riešenie komentára",
@@ -1589,6 +1593,7 @@
       "suggest_template_fields": "Navrhujem polia vzoru",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát",
+      "update_organization_settings": "Upraviť nastavenia tímu",
       "update_reader_annotation": "Upraviť zvýraznenie alebo komentár",
       "use-browser": "Používanie vášho prehliadača",
       "use_connector_secret": "Použitie prístupového údaja konektora",
@@ -2074,6 +2079,7 @@
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
     "website": "Web",
+    "whenToUse": "Kedy použiť",
     "workflow": "Pracovný postup",
     "workflows": "Pracovné postupy",
     "zoomIn": "Priblížiť",
@@ -2553,6 +2559,10 @@
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
+      "validationInvalid": "Pole obsahuje hodnotu, ktorú nemožno uložiť.",
+      "validationRequired": "Povinné pole je prázdne.",
+      "validationTooLong": "Príliš dlhé: použite najviac {limit, number} znakov.",
+      "validationTooShort": "Príliš krátke: použite aspoň {limit, number} znakov.",
       "verificationActiveLimitReached": "Vaša organizácia dosiahla limit súčasne prebiehajúcich overení. Počkajte na dokončenie niektorého overenia a skúste to znova.",
       "verificationDailyLimitReached": "Vaša organizácia dosiahla denný limit overení. Skúste to znova po polnoci (Europe/Prague).",
       "versionConflict": "Niekto iný to počas vašej úpravy zmenil. Načítajte znova aktuálnu verziu."
@@ -2923,6 +2933,7 @@
     "checkingDocxEditDescription": "stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte súbor na vloženie číslovaného odkazu na dôkaz.",
+    "collaborationSnapshotRecovered": "Uloženú kópiu na spoluprácu sa nepodarilo znova otvoriť. Miestnosť bola obnovená z posledného uloženého dokumentu; neuložené zmeny sa mohli stratiť.",
     "comment": "Komentár",
     "comments": {
       "addPlaceholder": "Pridať komentár...",
@@ -3647,6 +3658,10 @@
       "importTitle": "Importovať zručnosť",
       "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností}}",
       "invalidPath": "Cesta smie obsahovať iba malé písmená, číslice, bodky, spojovníky alebo podčiarkovníky",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
+      "invocationManual": "Iba na vyžiadanie",
+      "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
       "license": "Licencia: {license}",
       "newFile": "Nový súbor",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4337,6 +4352,8 @@
         "yearMonthSequential": "Rok-Mesiac / Poradový (2026-02/001)",
         "yearSequential": "Rok / Poradový (2026/001)"
       },
+      "showInTitle": "Zobraziť číslo vedľa názvu spisu",
+      "showInTitleDescription": "Keď je vypnuté, názov je presne ten, ktorý ste zadali.",
       "title": "Číslovanie spisov",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (poradové číslo), '{'YYYY'}' (rok), '{'YY'}' (2-ciferný rok), '{'MM'}' (mesiac)"
     },
@@ -4506,6 +4523,25 @@
     },
     "tokenHelp": "Ako získať token",
     "viewOnGithub": "Zobraziť na GitHube"
+  },
+  "readerAnswers": {
+    "budgetError": "Rozpočet na odpovede je vyčerpaný.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozbaliť odpoveď",
+    "explain": "Vysvetliť",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Položiť doplňujúcu otázku",
+    "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.}}",
+    "loading": "Generovanie odpovede…",
+    "minimise": "Zbaliť odpoveď",
+    "modelError": "Model nedokázal túto odpoveď dokončiť.",
+    "networkError": "Spojenie bolo prerušené. Skúste to znova.",
+    "regenerate": "Vygenerovať odpoveď znova",
+    "selectionError": "Vyberte text v rámci jedného odseku (najviac 2 000 znakov).",
+    "send": "Odoslať doplňujúcu otázku",
+    "share": "Zdieľať s tímom",
+    "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
+    "title": "Odpoveď k vybranému textu"
   },
   "routeError": {
     "backToMatters": "Späť na spisy",
@@ -4970,17 +5006,22 @@
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
     "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
+    "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
@@ -4996,7 +5037,6 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {
@@ -5549,7 +5589,6 @@
     "viewVersion": "Zobraziť",
     "whenNotToUse": "Kedy nepoužívať",
     "whenNotToUsePlaceholder": "Kedy sa tomuto vzoru vyhnúť?",
-    "whenToUse": "Kedy použiť",
     "whenToUsePlaceholder": "Kedy sa má tento vzor použiť? (pomáha AI s výberom vzoru)"
   },
   "timesheets": {
@@ -5670,7 +5709,7 @@
       "title": "Kopírovať do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Názov spisu",
       "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
@@ -6122,15 +6161,12 @@
       "upcomingTasks": "Nadchádzajúca agenda",
       "uploaded": "nahral(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobný"
-    },
     "parties": {
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
       "noClient": "Žiadny klient nepriradený",
+      "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
       "partyRoles": {
         "co_counsel": "Spolupracujúci advokát",

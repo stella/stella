@@ -6,54 +6,59 @@ import { linkIconsApi } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 
 const LINK_ICON_REQUEST_TIMEOUT_MS = 5000;
+const LINK_ICON_CACHE_MS = 60 * 60 * 1000;
+
+type LinkIcon =
+  | { type: "icon"; blob: Blob }
+  | { type: "no-icon" }
+  | { type: "temporary" };
 
 export const linkIconOptions = (hostname: string) =>
   queryOptions({
     queryKey: ["chat-link-icon", hostname],
     retry: false,
-    staleTime: 60 * 60 * 1000,
+    staleTime: (query) =>
+      query.state.data?.type === "temporary" ? 0 : LINK_ICON_CACHE_MS,
     gcTime: 60 * 1000,
-    queryFn: async ({ signal }) => {
-      const result = await Result.tryPromise(async () => {
-        const response = await linkIconsApi({ hostname }).get({
+    queryFn: async ({ signal }): Promise<LinkIcon> => {
+      const result = await Result.tryPromise(() =>
+        linkIconsApi({ hostname }).get({
           fetch: {
             signal: AbortSignal.any([
               signal,
               AbortSignal.timeout(LINK_ICON_REQUEST_TIMEOUT_MS),
             ]),
           },
-        });
-        if (response.error) {
-          throw new ClientOperationError({
-            action: "readLinkIcon",
-            message: "Link icon request failed",
-          });
-        }
-        const bytes = response.data;
-        if (!(bytes instanceof Blob)) {
-          return null;
-        }
-        if (
-          bytes.size > 64 * 1024 ||
-          (bytes.type !== "image/png" && bytes.type !== "image/x-icon")
-        ) {
-          throw new ClientOperationError({
-            action: "readLinkIcon",
-            message: "Unexpected link icon response",
-          });
-        }
-        return bytes;
-      });
-      if (Result.isError(result)) {
+        }),
+      );
+      if (Result.isError(result) || result.value.error) {
         getAnalytics().captureError(
           new ClientOperationError({
             action: "readLinkIcon",
             message: "Link icon unavailable",
-            cause: result.error,
+            cause: Result.isError(result) ? result.error : result.value.error,
           }),
         );
-        return null;
+        return { type: "temporary" };
       }
-      return result.value;
+      const bytes = result.value.data;
+      if (!(bytes instanceof Blob)) {
+        return bytes?.type === "no-icon"
+          ? { type: "no-icon" }
+          : { type: "temporary" };
+      }
+      if (
+        bytes.size > 64 * 1024 ||
+        (bytes.type !== "image/png" && bytes.type !== "image/x-icon")
+      ) {
+        getAnalytics().captureError(
+          new ClientOperationError({
+            action: "readLinkIcon",
+            message: "Unexpected link icon response",
+          }),
+        );
+        return { type: "temporary" };
+      }
+      return { type: "icon", blob: bytes };
     },
   });

@@ -113,6 +113,7 @@ const readableDecisionWith =
       decisionId: row().id,
       phase: "blocks",
       audience: "model",
+      surface: "search",
     });
     if (base?.status !== "read") {
       return panic("Fixture decision is not readable");
@@ -148,6 +149,7 @@ const licensedDecision: typeof readDecisionReaderSource = async () => {
     decisionId: row().id,
     phase: "blocks",
     audience: "model",
+    surface: "search",
   });
   if (readable?.status !== "read") {
     return panic("Fixture decision is not readable");
@@ -358,17 +360,87 @@ describe("decision legal resolution", () => {
     });
   });
 
-  test("asks for the sheet when a bare docket finds one decision in a file that can hold more", async () => {
+  test("finds the one decision a bare docket matches, even in a file that can hold more", async () => {
     const result = await resolveDecision({
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008",
-      dependencies: { lookup: lookupRows([row()]), read: missingDecision },
+      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
     });
-    expect(result).toEqual({
-      status: "incomplete_identifier",
-      missing: ["sheet"],
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { kind: "decision", caseNumber: "3 Afs 41/2008 - 98" },
     });
+  });
+
+  test("finds the one decision whose file matches when its sheet is not recorded", async () => {
+    const unsheeted = { ...row("3 Afs 41/2008"), ecli: null };
+    const result = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "3 Afs 41/2008 - 98",
+      dependencies: { lookup: lookupRows([unsheeted]), read: readableDecision },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { kind: "decision", decisionId: unsheeted.id },
+    });
+  });
+
+  test("leaves the same docket at two courts ambiguous, listing both", async () => {
+    const brno = {
+      ...row("22 Ad 11/2023"),
+      court: "Krajský soud v Brně",
+      courtAbbreviation: "KSBR",
+      ecli: null,
+    };
+    const ostrava = {
+      ...row("22 Ad 11/2023"),
+      court: "Krajský soud v Ostravě",
+      courtAbbreviation: "KSOS",
+      ecli: null,
+    };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier: "22 Ad 11/2023",
+        dependencies: { lookup: lookupRows([brno, ostrava]) },
+      }),
+    ).toMatchObject({
+      status: "ambiguous",
+      candidates: [
+        { decisionId: brno.id, label: expect.stringContaining("Brně") },
+        { decisionId: ostrava.id, label: expect.stringContaining("Ostravě") },
+      ],
+    });
+  });
+
+  test("never resolves a printed part to the one decision of its file", async () => {
+    // A part selector leaves the whole file open, so a lone candidate may be
+    // a sibling under another part.
+    const bare = { ...row("3 Afs 41/2008"), ecli: null };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier: "3 Afs 41/2008 - II.",
+        dependencies: { lookup: lookupRows([bare]), read: readableDecision },
+      }),
+    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+  });
+
+  test("never picks one of several unrecorded sheets for a printed sheet", async () => {
+    const first = { ...row("3 Afs 41/2008"), ecli: null };
+    const second = { ...row("3 Afs 41/2008"), ecli: null };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier: "3 Afs 41/2008 - 98",
+        dependencies: { lookup: lookupRows([first, second]) },
+      }),
+    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
   });
 
   test("marks a missing read as unavailable, not licensed", async () => {
@@ -390,6 +462,7 @@ describe("decision legal resolution", () => {
         decisionId: row().id,
         phase: "blocks",
         audience: "model",
+        surface: "search",
       });
       if (readable?.status !== "read") {
         return panic("Fixture decision is not readable");

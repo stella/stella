@@ -68,11 +68,13 @@ type ChatLinkProps = Omit<
   "href" | "target" | "rel" | "className"
 > & {
   href: string;
+  appearance?: "inline" | "tray";
   iconSource?: ChatLinkIconSource | undefined;
   newTabLabel?: string;
 };
 
 export const ChatLink = ({
+  appearance = "inline",
   children,
   href,
   iconSource,
@@ -80,6 +82,12 @@ export const ChatLink = ({
   title,
   ...anchorProps
 }: ChatLinkProps) => {
+  const className =
+    appearance === "tray"
+      ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      : CHAT_LINK_CLASS_NAME;
+  const labelClassName =
+    appearance === "tray" ? "max-w-[20ch] truncate" : undefined;
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
@@ -93,12 +101,12 @@ export const ChatLink = ({
       <a
         {...anchorProps}
         title={newTabLabel ?? title}
-        className={CHAT_LINK_CLASS_NAME}
+        className={className}
         href={href}
         target={CHAT_LINK_ATTRIBUTES.target}
         rel={CHAT_LINK_ATTRIBUTES.rel}
       >
-        <bdi>{children ?? href}</bdi>
+        <bdi className={labelClassName}>{children ?? href}</bdi>
       </a>
     );
   }
@@ -118,15 +126,22 @@ export const ChatLink = ({
     <a
       {...anchorProps}
       title={newTabLabel ?? title}
-      className={CHAT_LINK_CLASS_NAME}
+      className={className}
       href={target.href}
       target={CHAT_LINK_ATTRIBUTES.target}
       rel={CHAT_LINK_ATTRIBUTES.rel}
     >
-      <span aria-hidden="true" className="me-1 inline-block align-[-0.125em]">
+      <span
+        aria-hidden="true"
+        className={
+          appearance === "tray"
+            ? "inline-block shrink-0"
+            : "me-1 inline-block align-[-0.125em]"
+        }
+      >
         {icon}
       </span>
-      <bdi>{label}</bdi>
+      <bdi className={labelClassName}>{label}</bdi>
     </a>
   );
 };

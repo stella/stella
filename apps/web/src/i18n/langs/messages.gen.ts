@@ -176,6 +176,7 @@ type Messages = {
       "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.";
       "heldForReview": "Held for review";
       "holdOutOfScoring": "Hold out of scoring";
+      "inScoring": "In scoring";
       "includeInScoring": "Include in scoring";
       "interpretationNote": "Interpretation note";
       "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.";
@@ -1297,6 +1298,7 @@ type Messages = {
       "overflow": "+{count, number}";
       "unnamed": "{count, plural, one {and # more} other {and # more}}";
     };
+    "historyTrimmed": "Earlier messages could not be summarized, so this answer only took the most recent part of the conversation into account.";
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1328,6 +1330,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";
@@ -1493,6 +1496,7 @@ type Messages = {
     };
     "tool": {
       "add_comment": "Adding comment";
+      "add_matter_member": "Add matter member";
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
@@ -1549,7 +1553,6 @@ type Messages = {
       "list_stories": "Listing document parts";
       "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
-      "manage_organization": "Manage organization";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
@@ -1559,6 +1562,7 @@ type Messages = {
       "read_section": "Reading a section";
       "read_story": "Reading a document part";
       "remember": "Remembering";
+      "remove_matter_member": "Remove matter member";
       "reply_comment": "Replying to comment";
       "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
@@ -1592,6 +1596,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_organization_settings": "Update team settings";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
       "use_connector_secret": "Using connector credential";
@@ -2077,6 +2082,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -2556,6 +2562,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
@@ -2926,6 +2936,7 @@ type Messages = {
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.";
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.";
     "comment": "Comment";
     "comments": {
       "addPlaceholder": "Add a comment...";
@@ -3650,6 +3661,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -4340,6 +4355,8 @@ type Messages = {
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
       };
+      "showInTitle": "Show the number next to the matter name";
+      "showInTitleDescription": "When this is off, the title is exactly the name you entered.";
       "title": "Matter numbering";
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)";
     };
@@ -4509,6 +4526,25 @@ type Messages = {
     };
     "tokenHelp": "How to get a token";
     "viewOnGithub": "View on GitHub";
+  };
+  "readerAnswers": {
+    "budgetError": "The answer budget is exhausted.";
+    "citation": "¶{paragraph}";
+    "expand": "Expand answer";
+    "explain": "Explain";
+    "externalCitation": "{decision} · ¶{paragraph}";
+    "followUp": "Ask a follow-up";
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}";
+    "loading": "Generating answer…";
+    "minimise": "Minimise answer";
+    "modelError": "The model could not finish this answer.";
+    "networkError": "The connection was interrupted. Try again.";
+    "regenerate": "Regenerate answer";
+    "selectionError": "Select text within a single paragraph (up to 2,000 characters).";
+    "send": "Send follow-up";
+    "share": "Share with team";
+    "timeoutError": "The answer timed out. Try again.";
+    "title": "Answer about selected text";
   };
   "routeError": {
     "backToMatters": "Return to matters";
@@ -4973,17 +5009,22 @@ type Messages = {
     "provisionAskSummarize": "Summarize how courts apply this provision";
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
     "provisionDetailsFor": "Details of {provision}";
+    "provisionEffectiveFrom": "in force since {date}";
     "provisionHistoryEarliest": "Earliest wording on record.";
     "provisionHistoryEmpty": "No wording of this provision is on record.";
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.";
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
+    "showCitedPartOnly": "Show cited part only";
+    "showFullProvision": "Show full provision";
     "showInText": "Show in the text";
     "statedWindow": "Dates stated by the publisher: {range}";
     "status": {
@@ -4999,7 +5040,6 @@ type Messages = {
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
     "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
-    "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
@@ -5552,7 +5592,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {
@@ -5673,7 +5712,7 @@ type Messages = {
       "title": "Copy to Matter";
     };
     "create": {
-      "ownerTypeToggle": "Matter type";
+      "matterName": "Matter name";
       "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
     };
     "createNewWorkspace": "Create new matter";
@@ -6125,15 +6164,12 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
-    "ownerType": {
-      "client": "Client";
-      "personal": "Personal";
-    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
       "client": "Client";
       "noClient": "No client assigned";
+      "noClientOptional": "No client (optional)";
       "noParties": "No parties added to this matter.";
       "partyRoles": {
         "co_counsel": "Co-counsel";

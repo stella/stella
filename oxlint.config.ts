@@ -3176,6 +3176,8 @@ const config = defineConfig({
     {
       files: [
         "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/ai-elements/message-response.tsx",
+        "apps/web/src/features/chat/components/proxy-chat-link.tsx",
         "apps/web/src/components/legal-reader/*chat*.tsx",
         "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
         "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
@@ -4209,6 +4211,9 @@ const config = defineConfig({
               "apps/api/src/server.ts",
               // The one reader of NODE_ENV and the local development opt-in.
               "packages/runtime-mode/src/index.ts",
+              // The test network guard refuses to install while the process
+              // routes fetch through a remote proxy from the environment.
+              "packages/test-kit/src/network.ts",
               // The web server entrypoint reads its listen address from Bun's
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.

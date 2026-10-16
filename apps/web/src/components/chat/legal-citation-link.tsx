@@ -232,6 +232,7 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <span>{props.children}</span>
     ) : (
       <ProxyChatLink
+        appearance={props.appearance}
         href={props.externalHref ?? citation.url}
         newTabLabel={t("common.openInNewTab")}
       >

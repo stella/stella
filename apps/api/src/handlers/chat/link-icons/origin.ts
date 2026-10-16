@@ -79,7 +79,7 @@ export const createLinkIconOrigin = ({
         const response = await fetchBytes({
           url,
           permit,
-          timeoutMs,
+          timeout: { type: "headers", ms: timeoutMs },
           signal,
           redirect: "manual",
           maxBytes: remainingBytes,

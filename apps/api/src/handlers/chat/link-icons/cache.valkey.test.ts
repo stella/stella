@@ -54,7 +54,7 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
       const leases = results.filter((result) => result.type === "lease");
       expect(leases).toHaveLength(1);
       expect(
-        results.filter((result) => result.type === "no-icon"),
+        results.filter((result) => result.type === "temporary"),
       ).toHaveLength(7);
       const lease = leases.at(0);
       if (lease?.type !== "lease") {
@@ -138,7 +138,7 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
           ...subject,
           hostname: "over-limit.example",
         }),
-      ).toEqual({ type: "no-icon" });
+      ).toEqual({ type: "temporary" });
       // Expire only the lease, retaining hourly distinct-host admission membership.
       await fixture.raw.send("HSET", [
         fixture.entries,

@@ -39,3 +39,11 @@ test("verified bytes retain their MIME and never expose the origin URL", async (
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.has("location")).toBe(false);
 });
+
+test("temporary icon refusals are never cached by the browser", async () => {
+  const response = await new Elysia()
+    .get("/", ({ set }) => linkIconBody("temporary", set))
+    .handle(new Request("http://localhost/"));
+  expect(await response.json()).toEqual({ type: "temporary" });
+  expect(response.headers.get("cache-control")).toContain("no-store");
+});

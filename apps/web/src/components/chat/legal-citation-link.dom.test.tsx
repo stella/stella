@@ -409,6 +409,12 @@ for (const { kind, path } of citations) {
             }
           }
         });
+        const trayPrimary = sources.querySelector("a");
+        expect(trayPrimary?.classList.contains("border")).toBe(true);
+        expect(trayPrimary?.classList.contains("bg-muted/50")).toBe(true);
+        const trayLabel = trayPrimary?.querySelector(".truncate");
+        expect(trayLabel?.classList.contains("max-w-[20ch]")).toBe(true);
+        expect(trayLabel?.classList.contains("truncate")).toBe(true);
         expect(view.container.querySelector("a a, a button")).toBeNull();
         expect(view.container.querySelector("img")).toBeNull();
         expect(requests).toEqual([]);

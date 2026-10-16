@@ -94,9 +94,6 @@ const validPng = (bytes: Buffer): DecodedImage | null => {
       ({ width, height, channels } = header);
       sawHeader = true;
     } else if (type === "IDAT") {
-      if (sawEnd) {
-        return null;
-      }
       sawData = true;
       imageDataLength += length;
       if (imageDataLength > MAX_IMAGE_BYTES) {

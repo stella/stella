@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { sha256Hex as digest } from "@stll/sha256/bun";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -19,6 +19,7 @@ type ConnectionAttempt = { client: RedisLike; ready: Promise<unknown> };
 type ReadResult =
   | { type: "hit"; icon: LinkIcon }
   | { type: "no-icon" }
+  | { type: "temporary" }
   | { type: "lease"; token: string };
 type CacheOptions = {
   createRedis?: () => RedisLike;
@@ -89,9 +90,9 @@ local uc = tonumber(get(user) or '0')
 local ic = tonumber(get(ip) or '0')
 local unew = not get(um)
 local inew = not get(im)
-if (unew and uc >= 60) or (inew and ic >= 120) then return finish('N') end
+if (unew and uc >= 60) or (inew and ic >= 120) then return finish('T') end
 -- Five small records need at most 4096 bytes, including their overhead.
-if used + 4096 > tonumber(ARGV[5]) or redis.call('HLEN', KEYS[1]) + 5 > tonumber(ARGV[6]) then return finish('N') end
+if used + 4096 > tonumber(ARGV[5]) or redis.call('HLEN', KEYS[1]) + 5 > tonumber(ARGV[6]) then return finish('T') end
 if unew then put(user, tostring(uc + 1), 3600); put(um, '1', 3600) end
 if inew then put(ip, tostring(ic + 1), 3600); put(im, '1', 3600) end
 put(host, 'L' .. ARGV[4], ${LEASE_TTL})
@@ -185,9 +186,9 @@ export const createLinkIconCache = ({
     }): Promise<ReadResult> => {
       const token = Bun.randomUUIDv7();
       const value = await command(READ, [
-        digest(hostname),
-        digest(userId),
-        digest(ip),
+        sha256Hex(hostname),
+        sha256Hex(userId),
+        sha256Hex(ip),
         token,
         String(BYTE_BUDGET),
         String(MAX_ENTRIES),
@@ -196,7 +197,7 @@ export const createLinkIconCache = ({
         return { type: "lease", token };
       }
       if (typeof value !== "string") {
-        return { type: "no-icon" };
+        return { type: "temporary" };
       }
       switch (value.charAt(0)) {
         case "P":
@@ -215,8 +216,10 @@ export const createLinkIconCache = ({
               mime: "image/x-icon",
             },
           };
-        default:
+        case "N":
           return { type: "no-icon" };
+        default:
+          return { type: "temporary" };
       }
     },
     store: async ({
@@ -237,7 +240,7 @@ export const createLinkIconCache = ({
           : `${icon.mime === "image/png" ? "P" : "I"}${Buffer.from(icon.bytes).toString("base64")}`;
       return (
         (await command(FILL, [
-          digest(hostname),
+          sha256Hex(hostname),
           token,
           value,
           String(icon === null ? NEGATIVE_TTL : POSITIVE_TTL),

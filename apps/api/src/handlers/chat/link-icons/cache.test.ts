@@ -17,8 +17,8 @@ test("cache failures never authorize outbound work and a later request reconnect
     createRedis: () => {
       connections++;
       return {
-        connect: async () => Promise.resolve(),
-        send: async () => Promise.reject(new Error("offline")),
+        connect: async () => undefined,
+        send: () => Promise.reject(new Error("offline")),
         close: () => undefined,
       };
     },
@@ -27,8 +27,8 @@ test("cache failures never authorize outbound work and a later request reconnect
     },
   });
   expect(connections).toBe(0);
-  expect(await cache.readOrLease(subject)).toEqual({ type: "no-icon" });
-  expect(await cache.readOrLease(subject)).toEqual({ type: "no-icon" });
+  expect(await cache.readOrLease(subject)).toEqual({ type: "temporary" });
+  expect(await cache.readOrLease(subject)).toEqual({ type: "temporary" });
   expect(connections).toBe(2);
   expect(failures).toBe(2);
 });
@@ -38,14 +38,14 @@ test("positive cache envelopes round trip bytes and oversized fills are rejected
   let sends = 0;
   const cache = createLinkIconCache({
     createRedis: () => ({
-      connect: async () => Promise.resolve(),
+      connect: async () => undefined,
       send: async (_command, args) => {
         sends++;
         if (args.at(0)?.includes("local cost")) {
           payload = args.at(6);
-          return Promise.resolve("S");
+          return "S";
         }
-        return Promise.resolve(payload);
+        return payload;
       },
       close: () => undefined,
     }),
@@ -84,7 +84,7 @@ test("cold requests share their connection and send only after it is ready", asy
         sends++;
         const token = args.at(7);
         expect(typeof token).toBe("string");
-        return Promise.resolve(`A${token}`);
+        return `A${token}`;
       },
       close: () => undefined,
     }),
@@ -99,4 +99,20 @@ test("cold requests share their connection and send only after it is ready", asy
   expect(results.every((result) => result.type === "lease")).toBe(true);
   expect(sends).toBe(2);
   cache.close();
+});
+
+test("only stored negative entries establish a missing icon", async () => {
+  for (const envelope of ["N", "T", "Lsomeone-else", null]) {
+    const cache = createLinkIconCache({
+      createRedis: () => ({
+        connect: async () => undefined,
+        send: async () => envelope,
+        close: () => undefined,
+      }),
+    });
+    expect(await cache.readOrLease(subject)).toEqual({
+      type: envelope === "N" ? "no-icon" : "temporary",
+    });
+    cache.close();
+  }
 });

@@ -81,12 +81,13 @@ test("bounds redirect hops and shares one remaining deadline", async () => {
   const timeouts: number[] = [];
   let elapsed = 0;
   const fetchBytes: FetchBytes = async ({
-    timeoutMs,
+    timeout,
     redirect,
     signal,
     headers,
   }) => {
-    timeouts.push(timeoutMs);
+    expect(timeout?.type).toBe("headers");
+    timeouts.push(timeout?.ms ?? 0);
     expect(redirect).toBe("manual");
     expect(signal).toBeDefined();
     expect(new Headers(headers).has("cookie")).toBe(false);

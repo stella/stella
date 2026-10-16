@@ -137,6 +137,34 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("header timeout permits a byte body to finish after headers arrive", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("partial");
+        setTimeout(() => response.end("complete"), 150);
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          signal: AbortSignal.timeout(1000),
+          timeoutMs: 50,
+          timeoutPolicy: "headers",
+          url: new URL(`http://example.test:${port}/slow-body`),
+        });
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        expect(new TextDecoder().decode(result.value.body)).toBe(
+          "partialcomplete",
+        );
+      },
+    );
+  });
+
   test("aborts a byte response that stops sending its body", async () => {
     await withHttpServer(
       (_request, response) => {

@@ -276,6 +276,18 @@ test.each(["stall", "signal"])(
   },
 );
 
+test("a rate-limited E2E stack is a typed infrastructure failure", () => {
+  const message =
+    "kind=infra class=e2e-stack-rate-limited Docker Hub rate-limited E2E infrastructure pulls; browser tests did not run";
+  expect(classify("Start E2E stack", [{ message }])).toBe("infra");
+  expect(
+    classify("Run Playwright shard", [
+      { message },
+      { message: "error: expect(received).toBe(expected)" },
+    ]),
+  ).not.toBe("infra");
+});
+
 test.each(["stall", "signal"])(
   "mixed install %s and compiler failures preserve both diagnostics as code",
   (failureClass) => {

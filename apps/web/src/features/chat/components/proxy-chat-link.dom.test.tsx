@@ -14,6 +14,7 @@ const { act, cleanup, fireEvent, render, waitFor } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { ProxyChatLink } = await import("./proxy-chat-link");
+const { linkIconOptions } = await import("../link-icons");
 const { apiUrl } = await import("@/lib/api-url");
 
 class VisibleIntersectionObserver implements IntersectionObserver {
@@ -235,3 +236,36 @@ test("loads visible host icons once through the authenticated API and cleans loc
     }
   }
 });
+
+for (const { disposition, requestsExpected } of [
+  { disposition: "temporary", requestsExpected: 2 },
+  { disposition: "no-icon", requestsExpected: 1 },
+  { disposition: "icon", requestsExpected: 1 },
+]) {
+  test(`only temporary icon outcomes become stale immediately: ${disposition}`, async () => {
+    const originalFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = Object.assign(
+      async () => {
+        requests += 1;
+        return disposition === "icon"
+          ? new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+              headers: { "content-type": "image/png" },
+            })
+          : Response.json({ type: disposition });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const client = new QueryClient();
+    try {
+      const options = linkIconOptions("retry.example");
+      const first = await client.fetchQuery(options);
+      expect(first.type).toBe(disposition);
+      await client.fetchQuery(options);
+      expect(requests).toBe(requestsExpected);
+    } finally {
+      client.clear();
+      globalThis.fetch = originalFetch;
+    }
+  });
+}

@@ -137,6 +137,7 @@ export const fetchWithResolvedAddress = async ({
   redirect = "error",
   signal,
   timeoutMs,
+  timeoutPolicy = "total",
   url,
 }: {
   addresses: readonly SafeOutboundAddress[];
@@ -148,6 +149,7 @@ export const fetchWithResolvedAddress = async ({
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
+  timeoutPolicy?: "headers" | "total";
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   assertThirdPartyOutboundPermit(permit);
@@ -192,6 +194,9 @@ export const fetchWithResolvedAddress = async ({
             servername: url.hostname,
           },
           (response) => {
+            if (timeoutPolicy === "headers") {
+              guards?.clearHeaderTimeout();
+            }
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
 
@@ -692,6 +697,7 @@ export const safeOutboundFetchBytes = async ({
   redirect,
   signal,
   timeoutMs,
+  timeout,
   url,
 }: {
   body?: SafeOutboundFetchBody | undefined;
@@ -701,17 +707,23 @@ export const safeOutboundFetchBytes = async ({
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
-  timeoutMs: number;
   url: string | URL;
-}): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+} & (
+  | { timeoutMs: number; timeout?: never }
+  | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
+)): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   assertThirdPartyOutboundPermit(permit);
+  const durationMs = timeout?.ms ?? timeoutMs;
   const startedAt = Temporal.Now.instant().epochMilliseconds;
-  const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
+  const target = await validateOutboundFetchTarget(url, {
+    signal,
+    timeoutMs: durationMs,
+  });
   if (Result.isError(target)) {
     return Result.err(target.error);
   }
   const remainingTimeoutMs =
-    timeoutMs - (Temporal.Now.instant().epochMilliseconds - startedAt);
+    durationMs - (Temporal.Now.instant().epochMilliseconds - startedAt);
   if (remainingTimeoutMs <= 0) {
     return Result.err(
       new SafeOutboundFetchError({ message: "Request timed out" }),
@@ -728,6 +740,7 @@ export const safeOutboundFetchBytes = async ({
     redirect,
     signal,
     timeoutMs: remainingTimeoutMs,
+    timeoutPolicy: timeout?.type ?? "total",
     url: target.value.url,
   });
 };

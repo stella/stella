@@ -15,10 +15,11 @@ export const ProxyChatLink = (
 ) => {
   const hostname = normalizeChatLink(props.href)?.hostname ?? "";
   const [visible, setVisible] = useState(false);
-  const { data: blob, isError } = useQuery({
+  const { data: icon, isError } = useQuery({
     ...linkIconOptions(hostname),
     enabled: visible && hostname !== "" && !hasBundledChatLinkIcon(hostname),
   });
+  const blob = icon?.type === "icon" ? icon.blob : undefined;
   const [localIcon, setLocalIcon] = useState<{
     blob: Blob;
     source: ChatLinkIconSource;
