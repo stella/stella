@@ -611,6 +611,27 @@ const noMatterAccessContextEscape = {
         callback.body,
         patternNames(callback.params.at(0), new Set()),
       );
+      // Locals bound to a function that captures the context.
+      const closureNames = new Set();
+      const collectClosures = (node) => {
+        if (
+          node.type === "VariableDeclarator" &&
+          node.id.type === "Identifier" &&
+          node.init &&
+          (node.init.type === "ArrowFunctionExpression" ||
+            node.init.type === "FunctionExpression") &&
+          references(node.init.body, names)
+        ) {
+          closureNames.add(node.id.name);
+        }
+        if (node.type === "FunctionDeclaration" && node.id && references(node.body, names)) {
+          closureNames.add(node.id.name);
+        }
+        for (const child of children(node)) {
+          collectClosures(child);
+        }
+      };
+      collectClosures(callback.body);
       const local = declaredWithin(callback.body);
       const isOuter = (target) => {
         const root = rootIdentifier(target);
@@ -632,6 +653,7 @@ const noMatterAccessContextEscape = {
         ) {
           context.report({ node, message });
         }
+        let stored = false;
         if (
           node.type === "CallExpression" &&
           node.callee.type === "MemberExpression" &&
@@ -642,11 +664,50 @@ const noMatterAccessContextEscape = {
           const method = node.callee.computed ? undefined : node.callee.property.name;
           if (["push", "unshift", "set", "add", "splice"].includes(method)) {
             context.report({ node, message });
+            stored = true;
           }
+        }
+        // A function that captures the context may only be handed to a call
+        // the callback awaits (or returns): otherwise it can run after the
+        // transaction ended (a timer, an un-awaited forEach, a microtask).
+        if (
+          !stored &&
+          (node.type === "CallExpression" || node.type === "NewExpression") &&
+          node.arguments.some((argument) => isCapturingFunction(argument)) &&
+          !isAwaitedWithin(node)
+        ) {
+          context.report({ node, message });
         }
         for (const child of children(node)) {
           visit(child, nested || isFunction(child));
         }
+      };
+      const isCapturingFunction = (argument) =>
+        ((argument.type === "ArrowFunctionExpression" ||
+          argument.type === "FunctionExpression") &&
+          references(argument.body, names)) ||
+        (argument.type === "Identifier" && closureNames.has(argument.name));
+      // Up from `node` to the callback body: an await, or the callback's own
+      // return, before any nested function boundary.
+      const isAwaitedWithin = (node) => {
+        let settled = false;
+        let current = node.parent;
+        while (current && current !== callback) {
+          if (isFunction(current)) {
+            // An await inside a nested function only settles that function,
+            // which is itself checked where it is handed on.
+            return false;
+          }
+          if (
+            current.type === "AwaitExpression" ||
+            current.type === "ReturnStatement"
+          ) {
+            settled = true;
+          }
+          current = current.parent;
+        }
+        // An expression-bodied callback returns its value to the awaiting caller.
+        return settled || callback.body.type !== "BlockStatement";
       };
       visit(callback.body, false);
     };

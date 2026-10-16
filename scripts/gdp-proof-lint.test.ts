@@ -282,6 +282,10 @@ describe("GDP proof anti-forgery rules", () => {
       `async (context) => { const later = () => checkedWrite(context); return Result.ok(later); }`,
       `async (context) => { const alias = context; const again = alias; return Result.ok({ again }); }`,
       `async (context) => Result.ok(context.proof)`,
+      `async (context) => { setTimeout(() => checkedWrite(context), 0); return Result.ok(1); }`,
+      `async ({ tx, proof }) => { const later = async () => await write({ tx, proof }); queueMicrotask(later); return Result.ok(1); }`,
+      `async ({ tx, proof }) => { items.forEach(async (item) => await write({ tx, proof, item })); return Result.ok(1); }`,
+      `async ({ tx, proof }) => { await Promise.all(items.map(async (item) => { setTimeout(() => write({ tx, proof, item }), 0); })); return Result.ok(1); }`,
     ]) {
       expect(
         await messages(
@@ -301,6 +305,9 @@ describe("GDP proof anti-forgery rules", () => {
       `async ({ tx, proof }) => Result.ok(await write({ tx, proof }))`,
       `async (context) => Result.ok({ matterId: context.matter.value })`,
       `async ({ tx, proof }) => { const helper = async () => await write({ tx, proof }); await helper(); return Result.ok(1); }`,
+      `async (context) => { checkedWrite(context); return Result.ok({ type: "written" }); }`,
+      `async ({ tx, proof }) => { await withRetry(async () => await write({ tx, proof })); return Result.ok(1); }`,
+      `async ({ tx, proof }) => { return await Promise.all(items.map(async (item) => await write({ tx, proof, item }))).then(() => Result.ok(1)); }`,
       `async ({ tx, proof }) => { const rows = await Promise.all(items.map(async (item) => await write({ tx, proof, item }))); let last = proof; last = proof; return Result.ok(rows.length); }`,
     ]) {
       expect(
