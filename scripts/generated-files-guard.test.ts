@@ -6,7 +6,16 @@ import path from "node:path";
 
 import { generateBunToolchain } from "./generate-bun-toolchain";
 import { GENERATORS, type Generator } from "./generated-files";
-import { runGeneratorChecks } from "./generated-files-guard";
+import {
+  DELEGATED_CHECKS_ENV,
+  delegatedGeneratorIds,
+  runGeneratorChecks,
+} from "./generated-files-guard";
+import { evaluate, type Context } from "./github-expression";
+import { workflowJobSteps } from "./workflow-steps";
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const generator = (id: string) =>
   GENERATORS.find((entry) => entry.id === id) ??
@@ -166,4 +175,139 @@ test("matches sequential generator findings including stale and missing committe
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+});
+
+const WORKFLOW: unknown = Bun.YAML.parse(
+  await Bun.file(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+  ).text(),
+);
+const GUARD_JOB = "ci-checks-rest";
+
+const workflowJobs = () => {
+  if (!isRecord(WORKFLOW) || !isRecord(WORKFLOW["jobs"])) {
+    return panic("ci.yml has no jobs");
+  }
+  return WORKFLOW["jobs"];
+};
+
+const jobCondition = (job: string) => {
+  const definition = workflowJobs()[job];
+  if (!isRecord(definition) || typeof definition["if"] !== "string") {
+    return panic(`${job} has no if: condition`);
+  }
+  return definition["if"];
+};
+
+const namedJobStep = (job: string, name: string) =>
+  workflowJobSteps(WORKFLOW, job).find((step) => step["name"] === name);
+
+// Every value each condition can branch on, so the binding is exhaustive.
+const contexts = (sources: readonly string[]): Context[] => {
+  const paths = [
+    ...new Set(
+      sources.flatMap((source) =>
+        [...source.matchAll(/\b(?:github|inputs|needs)\.[\w.-]+/gu)].map(
+          ([contextPath]) => contextPath,
+        ),
+      ),
+    ),
+  ].toSorted();
+  const domain = (contextPath: string): readonly (string | boolean)[] => {
+    if (contextPath === "github.event_name") {
+      return ["pull_request", "merge_group", "workflow_dispatch", "push"];
+    }
+    if (contextPath.startsWith("inputs.")) {
+      return [false, true];
+    }
+    return ["true", "false", ""];
+  };
+  let expanded: Context[] = [{ values: {} }];
+  for (const contextPath of paths) {
+    expanded = expanded.flatMap((context) =>
+      domain(contextPath).map((value) => ({
+        values: { ...context.values, [contextPath]: value },
+      })),
+    );
+  }
+  return expanded;
+};
+
+test("rejects delegated checks that no other CI step runs", () => {
+  expect(delegatedGeneratorIds(undefined)).toEqual(new Set());
+  expect(delegatedGeneratorIds('["scan-engine-wasm"]')).toEqual(
+    new Set(["scan-engine-wasm"]),
+  );
+  for (const value of [
+    "",
+    "scan-engine-wasm",
+    '{"id":"scan-engine-wasm"}',
+    "[1]",
+  ]) {
+    expect(() => delegatedGeneratorIds(value), value).toThrow(
+      "must be a JSON array of generator ids",
+    );
+  }
+  // Checked only by Guard B, or unknown: nothing else would run it.
+  for (const value of ['["missing-generator"]', '["scan-engine-fixtures"]']) {
+    expect(() => delegatedGeneratorIds(value), value).toThrow(
+      "has no check delegated to another CI step",
+    );
+  }
+});
+
+test("Guard B delegates the WebAssembly check exactly in runs whose drift job builds it", () => {
+  const step = namedJobStep(GUARD_JOB, "Generated files manifest guard");
+  const env = step?.["env"];
+  const delegation = isRecord(env) ? env[DELEGATED_CHECKS_ENV] : undefined;
+  if (typeof delegation !== "string") {
+    return panic(`Guard B step has no ${DELEGATED_CHECKS_ENV}`);
+  }
+  const ownerOf = (id: string) => {
+    const { checkedBy } = generator(id);
+    const owners = Object.entries(workflowJobs()).flatMap(
+      ([job, definition]) =>
+        job !== GUARD_JOB &&
+        isRecord(definition) &&
+        "steps" in definition &&
+        checkedBy !== undefined &&
+        namedJobStep(job, checkedBy) !== undefined
+          ? [job]
+          : [],
+    );
+    const [owner] = owners;
+    if (owner === undefined || owners.length > 1) {
+      return panic(`${id} needs exactly one owning job: ${owners.join(", ")}`);
+    }
+    // The owning step runs whenever its job does, and ci-result gates it.
+    expect(namedJobStep(owner, checkedBy ?? "")?.["if"], id).toBeUndefined();
+    const ciResult = workflowJobs()["ci-result"];
+    const gated = isRecord(ciResult) ? ciResult["needs"] : undefined;
+    expect(Array.isArray(gated) && gated.includes(owner), owner).toBe(true);
+    return owner;
+  };
+  const wasmOwner = ownerOf("scan-engine-wasm");
+  const guardCondition = jobCondition(GUARD_JOB);
+  const sources = [guardCondition, delegation, jobCondition(wasmOwner)];
+  const outcomes = new Set<string>();
+  for (const context of contexts(sources)) {
+    if (evaluate(guardCondition, context) !== true) {
+      continue;
+    }
+    const value = evaluate(delegation, context);
+    if (typeof value !== "string") {
+      return panic(`${DELEGATED_CHECKS_ENV} is not a string`);
+    }
+    const delegated = delegatedGeneratorIds(value);
+    for (const id of delegated) {
+      // Sound: a skipped family is built by its owner in this same run.
+      expect(evaluate(jobCondition(ownerOf(id)), context), id).toBe(true);
+    }
+    // Complete: no run builds the WebAssembly in both jobs.
+    expect(delegated.has("scan-engine-wasm")).toBe(
+      evaluate(jobCondition(wasmOwner), context) === true,
+    );
+    outcomes.add(value);
+  }
+  expect([...outcomes].toSorted()).toEqual(['["scan-engine-wasm"]', "[]"]);
 });
