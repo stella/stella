@@ -403,6 +403,45 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
 }
 
+type StatuteListFilterChipsOptions = {
+  search: StatutesIndexSearch;
+  onRemove: (key: "year" | "validity" | "type") => void;
+};
+
+const useStatuteListFilterChips = ({
+  search,
+  onRemove,
+}: StatuteListFilterChipsOptions) => {
+  const t = useTranslations();
+  const chips: PublicLawFilterChip[] = [];
+  if (search.year !== undefined) {
+    chips.push({
+      id: "filter:year",
+      kind: t("workspaces.views.calendar.year"),
+      onRemove: () => onRemove("year"),
+      value: search.year,
+    });
+  }
+  if (search.validity !== undefined) {
+    chips.push({
+      id: "filter:validity",
+      kind: t(FILTER_KIND_LABEL_KEYS.validity),
+      onRemove: () => onRemove("validity"),
+      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
+    });
+  }
+  if (search.type !== undefined) {
+    chips.push({
+      id: "filter:type",
+      kind: t(FILTER_KIND_LABEL_KEYS.type),
+      onRemove: () => onRemove("type"),
+      value: search.type,
+    });
+  }
+
+  return chips;
+};
+
 function PublicStatuteList({
   routeState,
 }: {
@@ -412,12 +451,13 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, type, validity }) => ({
+    select: ({ page, pageSize, q, type, validity, year }) => ({
       page,
       pageSize,
       q,
       type,
       validity,
+      year,
     }),
   });
   const navigate = Route.useNavigate();
@@ -570,23 +610,14 @@ function PublicStatuteList({
     );
   };
 
-  const chips: PublicLawFilterChip[] = [];
-  if (search.validity !== undefined) {
-    chips.push({
-      id: "filter:validity",
-      kind: t(FILTER_KIND_LABEL_KEYS.validity),
-      onRemove: () => selectFacet("validity", undefined),
-      value: t(STATUTE_VALIDITY_LABEL_KEYS[search.validity]),
-    });
-  }
-  if (search.type !== undefined) {
-    chips.push({
-      id: "filter:type",
-      kind: t(FILTER_KIND_LABEL_KEYS.type),
-      onRemove: () => selectFacet("type", undefined),
-      value: search.type,
-    });
-  }
+  const chips = useStatuteListFilterChips({
+    search,
+    onRemove: (key) =>
+      detached(
+        searchNavigation((previous) => ({ ...previous, [key]: undefined })),
+        "statutes.filter-navigate",
+      ),
+  });
 
   // Enter on an act reference opens the act when exactly one work answers
   // to it. Several (the same number in two collections) stay listed, so the
@@ -684,6 +715,7 @@ function PublicStatuteList({
                 ...previous,
                 type: undefined,
                 validity: undefined,
+                year: undefined,
               })),
               "statutes.clear-filters",
             );
