@@ -53,24 +53,24 @@ export const matterProofMistakes = <U, M, T, O, Other>(
   return { forgedRead, forgedWrite, changedOrganization };
 };
 
-// A continuation that settles without awaiting anything.
-const settled = <T>(value: T): Promise<T> => Promise.resolve(value);
+// A continuation result, settled as an awaited value.
+const done = async <T>(value: T) => await Promise.resolve(Result.ok(value));
 
 export const matterProofCannotEscape = async (
   options: Parameters<typeof withMatterAccess<"read", unknown, never>>[0],
 ) => {
   // @ts-expect-error The transaction's ghost name cannot escape its continuation.
-  await withMatterAccess(options, ({ proof }) => settled(Result.ok(proof)));
+  await withMatterAccess(options, async ({ proof }) => await done(proof));
   // @ts-expect-error A named transaction cannot escape for use in another scope.
-  await withMatterAccess(options, ({ tx }) => settled(Result.ok(tx)));
+  await withMatterAccess(options, async ({ tx }) => await done(tx));
 };
 
 export const matterProofInference = async (
   options: Parameters<typeof withMatterAccess<"write", unknown, never>>[0],
 ) => {
-  const outcome = await withMatterAccess(options, (context) => {
+  const outcome = await withMatterAccess(options, async (context) => {
     checkedWrite(context);
-    return settled(Result.ok({ type: "written" } as const));
+    return await done({ type: "written" } as const);
   });
   if (Result.isError(outcome)) {
     return outcome.error.status;

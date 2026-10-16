@@ -862,7 +862,7 @@ export default {
         return {
           ...upstream,
           ImportDeclaration(node) {
-            upstream.ImportDeclaration(node);
+            upstream.ImportDeclaration?.(node);
             if (
               node.source.value !== "@gdp-ts/core" ||
               node.importKind === "type"
@@ -889,7 +889,7 @@ export default {
             trackBinding(node.left, node.right, node);
           },
           CallExpression(node) {
-            upstream.CallExpression(node);
+            upstream.CallExpression?.(node);
             if (
               node.callee.type === "Identifier" &&
               constructors.has(node.callee.name)
