@@ -50,101 +50,101 @@ legislation_documents.source_raw_s3_key               varchar          null     
 legislation_documents.source_raw_content_type         varchar          null              legislation.ts:240
 legislation_documents.citation_authority              doublePrecision  default,not null  legislation.ts:243  Reuse the corpus ranking signal (cross-reference authority); 0 until a legislation-specific signal is computed.
 legislation_documents.citation_count                  integer          default,not null  legislation.ts:247
-legislation_documents.citation_authority_computed_at  timestamptz      null              legislation.ts:248
-legislation_documents.text_s3_key                     varchar          null              legislation.ts:249
-legislation_documents.normalized_s3_key               varchar          null              legislation.ts:250
-legislation_documents.ast_s3_key                      varchar          null              legislation.ts:251
-legislation_documents.content_hash                    varchar          null              legislation.ts:252
-legislation_documents.indexed_hash                    varchar          null              legislation.ts:254  The case-law twins' legislation counterparts; see that table.
-legislation_documents.indexed_generation              varchar          null              legislation.ts:255
-legislation_documents.indexed_at                      timestamptz      null              legislation.ts:256
-legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:258  Monotonic fence advanced by each desired-state transaction.
-legislation_documents.payload_revision                bigint           default,not null  legislation.ts:267  Advanced by the database whenever the payload or the version identity changes (migration `20260926150000_legislation_payload_revision`); a write that supplies…
-legislation_documents.created_at                      timestamptz      default,not null  legislation.ts:271
-legislation_documents.updated_at                      timestamptz      default,not null  legislation.ts:272
+legislation_documents.citation_authority_computed_at  timestamptz      null              legislation.ts:249  Retained until the next schema release; remove with its case-law counterpart.
+legislation_documents.text_s3_key                     varchar          null              legislation.ts:250
+legislation_documents.normalized_s3_key               varchar          null              legislation.ts:251
+legislation_documents.ast_s3_key                      varchar          null              legislation.ts:252
+legislation_documents.content_hash                    varchar          null              legislation.ts:253
+legislation_documents.indexed_hash                    varchar          null              legislation.ts:255  The case-law twins' legislation counterparts; see that table.
+legislation_documents.indexed_generation              varchar          null              legislation.ts:256
+legislation_documents.indexed_at                      timestamptz      null              legislation.ts:257
+legislation_documents.projection_epoch                bigint           default,not null  legislation.ts:259  Monotonic fence advanced by each desired-state transaction.
+legislation_documents.payload_revision                bigint           default,not null  legislation.ts:268  Advanced by the database whenever the payload or the version identity changes (migration `20260926150000_legislation_payload_revision`); a write that supplies…
+legislation_documents.created_at                      timestamptz      default,not null  legislation.ts:272
+legislation_documents.updated_at                      timestamptz      default,not null  legislation.ts:273
 ```
 
-## legislation_work_names · `legislationWorkNames` · legislation.ts:488 · rls
+## legislation_work_names · `legislationWorkNames` · legislation.ts:489 · rls
 
 The names each stored legislation version's title states, for recognising a query that names an act.
 
 ```text
-legislation_work_names.id              pUuid        pk,not null       legislation.ts:491
-legislation_work_names.document_id     safeUuid     fk,not null       legislation.ts:493  The version whose stored title states the name.
-legislation_work_names.country         varchar      not null          legislation.ts:496
-legislation_work_names.official_title  text         null              legislation.ts:498  The title exactly as the publisher states it.
-legislation_work_names.derived_name    text         null              legislation.ts:500  A name derived from stored titles; see `derivation`.
-legislation_work_names.derivation      varchar      null              legislation.ts:501
-legislation_work_names.cited_key       varchar      null              legislation.ts:509  For `derived_from_citation`: the match key of the citation the name was written beside, resolved against `derived_title_citation` rows.
-legislation_work_names.match_key       varchar      null              legislation.ts:517  The name as a query is compared with it: case-folded word tokens joined by one space (`legislationNameMatchKey`).
-legislation_work_names.created_at      timestamptz  default,not null  legislation.ts:520
+legislation_work_names.id              pUuid        pk,not null       legislation.ts:492
+legislation_work_names.document_id     safeUuid     fk,not null       legislation.ts:494  The version whose stored title states the name.
+legislation_work_names.country         varchar      not null          legislation.ts:497
+legislation_work_names.official_title  text         null              legislation.ts:499  The title exactly as the publisher states it.
+legislation_work_names.derived_name    text         null              legislation.ts:501  A name derived from stored titles; see `derivation`.
+legislation_work_names.derivation      varchar      null              legislation.ts:502
+legislation_work_names.cited_key       varchar      null              legislation.ts:510  For `derived_from_citation`: the match key of the citation the name was written beside, resolved against `derived_title_citation` rows.
+legislation_work_names.match_key       varchar      null              legislation.ts:518  The name as a query is compared with it: case-folded word tokens joined by one space (`legislationNameMatchKey`).
+legislation_work_names.created_at      timestamptz  default,not null  legislation.ts:521
 ```
 
-## statute_sitemap_shards · `statuteSitemapShards` · legislation.ts:559 · rls
+## statute_sitemap_shards · `statuteSitemapShards` · legislation.ts:560 · rls
 
 Public statute sitemap index, replaced as one snapshot by the scheduler.
 
 ```text
-statute_sitemap_shards.country  varchar  not null  legislation.ts:562
-statute_sitemap_shards.bucket   varchar  not null  legislation.ts:563
-statute_sitemap_shards.total    integer  not null  legislation.ts:564
-statute_sitemap_shards.lastmod  varchar  not null  legislation.ts:565
+statute_sitemap_shards.country  varchar  not null  legislation.ts:563
+statute_sitemap_shards.bucket   varchar  not null  legislation.ts:564
+statute_sitemap_shards.total    integer  not null  legislation.ts:565
+statute_sitemap_shards.lastmod  varchar  not null  legislation.ts:566
 ```
 
-## legislation_facet_counts · `legislationFacetCounts` · legislation.ts:588 · rls
+## legislation_facet_counts · `legislationFacetCounts` · legislation.ts:589 · rls
 
 Works per kind of act, per jurisdiction and source, replaced as one snapshot by the scheduler.
 
 ```text
-legislation_facet_counts.country        varchar   not null     legislation.ts:591
-legislation_facet_counts.source_id      safeUuid  fk,not null  legislation.ts:592
-legislation_facet_counts.document_type  varchar   not null     legislation.ts:595
-legislation_facet_counts.works          integer   not null     legislation.ts:596
+legislation_facet_counts.country        varchar   not null     legislation.ts:592
+legislation_facet_counts.source_id      safeUuid  fk,not null  legislation.ts:593
+legislation_facet_counts.document_type  varchar   not null     legislation.ts:596
+legislation_facet_counts.works          integer   not null     legislation.ts:597
 ```
 
-## legislation_facet_refreshes · `legislationFacetRefreshes` · legislation.ts:629 · rls
+## legislation_facet_refreshes · `legislationFacetRefreshes` · legislation.ts:630 · rls
 
 When the statute facet snapshot last completed: one row, no source data.
 
 ```text
-legislation_facet_refreshes.singleton     boolean      pk,default,not null  legislation.ts:632
-legislation_facet_refreshes.refreshed_at  timestamptz  not null             legislation.ts:633
+legislation_facet_refreshes.singleton     boolean      pk,default,not null  legislation.ts:633
+legislation_facet_refreshes.refreshed_at  timestamptz  not null             legislation.ts:634
 ```
 
-## legislation_work_changes · `legislationWorkChanges` · legislation.ts:653 · rls
+## legislation_work_changes · `legislationWorkChanges` · legislation.ts:654 · rls
 
 Works whose versions changed, one row per affected `(country, eli)`.
 
 ```text
-legislation_work_changes.id          bigint       pk,generated,not null  legislation.ts:656
-legislation_work_changes.country     varchar      not null               legislation.ts:660
-legislation_work_changes.eli         varchar      not null               legislation.ts:661
-legislation_work_changes.changed_at  timestamptz  default,not null       legislation.ts:662
+legislation_work_changes.id          bigint       pk,generated,not null  legislation.ts:657
+legislation_work_changes.country     varchar      not null               legislation.ts:661
+legislation_work_changes.eli         varchar      not null               legislation.ts:662
+legislation_work_changes.changed_at  timestamptz  default,not null       legislation.ts:663
 ```
 
-## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:677 · rls
+## legislation_search_documents · `legislationSearchDocuments` · legislation.ts:678 · rls
 
 ```text
-legislation_search_documents.document_id      safeUuid     pk,fk,not null    legislation.ts:680
-legislation_search_documents.title            text         default,not null  legislation.ts:683
-legislation_search_documents.searchable_text  text         default,not null  legislation.ts:684
-legislation_search_documents.language         varchar      null              legislation.ts:685
-legislation_search_documents.regconfig        varchar      default,not null  legislation.ts:686
-legislation_search_documents.tsv              tsvector     null              legislation.ts:687
-legislation_search_documents.updated_at       timestamptz  default,not null  legislation.ts:688
-legislation_search_documents.retry_after      timestamptz  null              legislation.ts:689
+legislation_search_documents.document_id      safeUuid     pk,fk,not null    legislation.ts:681
+legislation_search_documents.title            text         default,not null  legislation.ts:684
+legislation_search_documents.searchable_text  text         default,not null  legislation.ts:685
+legislation_search_documents.language         varchar      null              legislation.ts:686
+legislation_search_documents.regconfig        varchar      default,not null  legislation.ts:687
+legislation_search_documents.tsv              tsvector     null              legislation.ts:688
+legislation_search_documents.updated_at       timestamptz  default,not null  legislation.ts:689
+legislation_search_documents.retry_after      timestamptz  null              legislation.ts:690
 ```
 
-## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:702 · rls
+## legislation_index_jobs · `legislationIndexJobs` · legislation.ts:703 · rls
 
 ```text
-legislation_index_jobs.id             pUuid        pk,not null       legislation.ts:705
-legislation_index_jobs.document_id    safeUuid     fk,null           legislation.ts:706
-legislation_index_jobs.generation     varchar      not null          legislation.ts:710
-legislation_index_jobs.operation      varchar      not null          legislation.ts:711
-legislation_index_jobs.status         varchar      not null          legislation.ts:715
-legislation_index_jobs.content_hash   varchar      null              legislation.ts:716
-legislation_index_jobs.error_message  varchar      null              legislation.ts:717
-legislation_index_jobs.detail         varchar      null              legislation.ts:719  Why a succeeded operation was performed; see the case-law twin.
-legislation_index_jobs.created_at     timestamptz  default,not null  legislation.ts:720
+legislation_index_jobs.id             pUuid        pk,not null       legislation.ts:706
+legislation_index_jobs.document_id    safeUuid     fk,null           legislation.ts:707
+legislation_index_jobs.generation     varchar      not null          legislation.ts:711
+legislation_index_jobs.operation      varchar      not null          legislation.ts:712
+legislation_index_jobs.status         varchar      not null          legislation.ts:716
+legislation_index_jobs.content_hash   varchar      null              legislation.ts:717
+legislation_index_jobs.error_message  varchar      null              legislation.ts:718
+legislation_index_jobs.detail         varchar      null              legislation.ts:720  Why a succeeded operation was performed; see the case-law twin.
+legislation_index_jobs.created_at     timestamptz  default,not null  legislation.ts:721
 ```
