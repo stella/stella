@@ -1893,14 +1893,16 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     // The consolidation's heading blocks in document order. Each `anchorId`
     // is what read_statute_provisions and read_provision_history take as
     // `anchor`, in the publisher's own scheme.
-    outline: v.array(
-      v.strictObject({
-        anchorId: passthroughId(),
-        level: v.number(),
-        text: contentText(),
-      }),
+    outline: v.optional(
+      v.array(
+        v.strictObject({
+          anchorId: passthroughId(),
+          level: v.number(),
+          text: contentText(),
+        }),
+      ),
     ),
-    outlineTruncated: v.boolean(),
+    outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
     // The publisher's own document URL, which may embed the publisher's own
     // UUID — never a Stella tenant id, so it is forwarded unchanged.
@@ -1915,7 +1917,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
     ...statuteExpressionLabel,
-    versions: v.array(STATUTE_VERSION_PROJECTION),
+    versions: v.optional(v.array(STATUTE_VERSION_PROJECTION)),
   }),
 });
 
