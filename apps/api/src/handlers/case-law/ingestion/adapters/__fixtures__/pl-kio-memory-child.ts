@@ -62,7 +62,7 @@ const boundaryRepeats = Math.floor(
 );
 const markupBoundaryHtml = `${'<span a="x">text</span>'.repeat(boundaryRepeats)}<span a="x">x</span><span></span>`;
 const boundaryBudget = inspectPlKioHtmlBudget(markupBoundaryHtml);
-const overflowBudget = inspectPlKioHtmlBudget(`${markupBoundaryHtml}<`);
+const overflowBudget = inspectPlKioHtmlBudget(`${markupBoundaryHtml}<span>`);
 const markupTokens = countMarkupTokens(documentHtml);
 if (
   documentBytes !== targetBytes ||
