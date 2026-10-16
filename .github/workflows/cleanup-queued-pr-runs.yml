@@ -276,8 +276,10 @@ jobs:
             }
             core.info(`Resumed ${resumed} deferred pull request run(s).`);
 
+      # Deferring is on only while CI_YIELD_TO_MERGE_QUEUE is `on`; the resume
+      # step above keeps releasing heads that were already deferred.
       - name: Defer queued pull request work while the merge queue waits
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && vars.CI_YIELD_TO_MERGE_QUEUE == 'on' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |

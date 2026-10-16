@@ -227,27 +227,31 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <ChatDecisionCitation {...decisionProps} decisionId={decisionId} />
     );
   }
-  if (citation.type === "external") {
-    return citation.url === null ? (
-      <span>{props.children}</span>
-    ) : (
-      <ProxyChatLink
-        appearance={props.appearance}
-        href={props.externalHref ?? citation.url}
-        newTabLabel={t("common.openInNewTab")}
-      >
-        {props.children}
-      </ProxyChatLink>
-    );
+  switch (citation.type) {
+    case "external":
+      return (
+        <ProxyChatLink
+          appearance={props.appearance}
+          href={
+            citation.url === null ? "" : (props.externalHref ?? citation.url)
+          }
+          newTabLabel={t("common.openInNewTab")}
+        >
+          {props.children}
+        </ProxyChatLink>
+      );
+    case "statute":
+      return props.interactive ? (
+        <InteractiveLegalCitation
+          {...props}
+          citation={citation}
+          appOrigins={appOrigins}
+        />
+      ) : (
+        <LegalCitationView {...props} citation={citation} />
+      );
+    default:
+      citation satisfies never;
+      return panic("Unhandled legal citation type");
   }
-  if (props.interactive) {
-    return (
-      <InteractiveLegalCitation
-        {...props}
-        citation={citation}
-        appOrigins={appOrigins}
-      />
-    );
-  }
-  return <LegalCitationView {...props} citation={citation} />;
 };

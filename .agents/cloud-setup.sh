@@ -78,7 +78,9 @@ network_run() (
   trap 'exit 143' TERM
   # Output goes to a file, never a pipe: package scripts may leave processes that keep
   # inherited descriptors open, and a pipe reader would wait for them past the command.
-  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" > "$network_log" 2>&1 || status=$?
+  # Input is never the terminal: timeout runs the command outside the foreground process
+  # group, where apt restoring terminal settings on a terminal stdin stops it for good.
+  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" < /dev/null > "$network_log" 2>&1 || status=$?
   release_log_holders "$network_log"
   cat -- "$network_log" || fail 'Cannot capture network command output'
   [[ "$status" != 0 ]] || return 0
@@ -459,7 +461,9 @@ service_process_matches() {
   owner="$(stat -c '%u' "/proc/$pid" 2>/dev/null)" || return 2
   [[ "$owner" =~ ^[0-9]+$ ]] || return 2
   [[ "$owner" == "$SERVICE_UID" ]] || return 1
-  actual="$(readlink -f "/proc/$pid/exe" 2>/dev/null)" || return 2
+  # Read the executable link as its verified owner: container root may lack the ptrace
+  # capability that reading another user's /proc/<pid>/exe requires.
+  actual="$(service_run readlink -f "/proc/$pid/exe" 2>/dev/null)" || return 2
   expected="$(readlink -f "$executable")" || return 2
   [[ -n "$actual" && -n "$expected" && "$actual" != *' (deleted)' ]] || return 2
   [[ "$actual" == "$expected" ]]
@@ -679,12 +683,15 @@ write_environment() {
 }
 
 
+
+
 if [[ "$MODE" == install ]]; then
   step runtimes install_runtimes
   step services install_services
   step tools install_tools
   step shell install_shell_environment
   step dependencies dependency_install
+
   exit 0
 fi
 step runtime-check runtime_ready

@@ -711,6 +711,37 @@ for (const interactive of [false, true]) {
   });
 }
 
+test("a long external source title stays inside its truncated tray chip", async () => {
+  const title = "Publisher".repeat(12);
+  const href = "https://publisher.example.test/long-title";
+  const view = await renderChat(
+    <SourceChips
+      messageId="long-external"
+      parts={[
+        {
+          type: "tool-call",
+          name: "execute_typescript",
+          id: "long-external-source",
+          state: "complete",
+          arguments: "{}",
+          output: { url: href, title },
+        },
+      ]}
+    />,
+  );
+  await waitFor(() => {
+    const chip = view.getByRole("link", { name: title });
+    expect(chip.getAttribute("href")).toBe(href);
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(chip.className).toContain("rounded-md");
+    expect(chip.className).toContain("border");
+    const label = chip.querySelector(".truncate");
+    expect(label?.className).toContain("max-w-[20ch]");
+    expect(label?.textContent).toBe(title);
+  });
+});
+
 test("a relative held primary keeps its publisher source in the tray and passive answer", async () => {
   const href = `${statutePath}#par-420`;
   const publisher = "https://publisher.example.test/relative-provision";
@@ -955,4 +986,22 @@ test("maximizing a different decision docks the displaced main reader before nav
   expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
     payload: { decisionId: fullDecision.id },
   });
+});
+
+test("an external tray label without a safe URL retains its compact presentation", async () => {
+  const title = "Unavailable publisher title".repeat(8);
+  const view = await renderChat(
+    <LegalCitationLink
+      appearance="tray"
+      interactive={false}
+      source={{ title, url: "data:text/plain,unavailable" }}
+    >
+      {title}
+    </LegalCitationLink>,
+  );
+  const label = view.getByText(title);
+  expect(label.className).toContain("max-w-[20ch]");
+  expect(label.className).toContain("truncate");
+  expect(label.parentElement?.className).toContain("border");
+  expect(view.queryByRole("link")).toBeNull();
 });

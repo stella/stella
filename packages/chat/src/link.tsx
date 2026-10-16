@@ -95,7 +95,13 @@ export const ChatLink = ({
       href.startsWith("#") || /^(?:\/(?![\\/])|\.{1,2}\/)/u.test(href);
     const safeMail = parsed?.protocol === "mailto:";
     if ((!safeLocal && !safeMail) || /[\p{Cc}\p{Cf}]/u.test(href)) {
-      return <span>{children ?? href}</span>;
+      return appearance === "tray" ? (
+        <span className={className}>
+          <bdi className={labelClassName}>{children ?? href}</bdi>
+        </span>
+      ) : (
+        <span>{children ?? href}</span>
+      );
     }
     return (
       <a
