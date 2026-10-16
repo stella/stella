@@ -221,7 +221,12 @@ const affectedWorkspaces = (
     }
   }
   for (const file of manifests) {
-    affected.add(file.slice(0, -"/package.json".length));
+    const directory = file.slice(0, -"/package.json".length);
+    // Only workspaces become synthetic source paths; another manifest (a
+    // fixture or standalone tool) keeps its own path in the scope list.
+    if (Object.hasOwn(after.workspaces, directory)) {
+      affected.add(directory);
+    }
   }
   // A source change in each affected workspace reaches consumers through the
   // existing selectors; include them explicitly for selectors whose package
@@ -311,7 +316,15 @@ export const dependencyScope = ({
   if (manifestsDev === undefined) {
     return unknownScope(changed, "a workspace manifest is unreadable");
   }
-  const ordinary = changed.filter((file) => !dependencyFiles.includes(file));
+  const ordinary = changed.filter(
+    (file) =>
+      !dependencyFiles.includes(file) ||
+      (file.endsWith("/package.json") &&
+        !Object.hasOwn(
+          after.workspaces,
+          file.slice(0, -"/package.json".length),
+        )),
+  );
   // Dev tooling changes only what lint and type checks read; the plan keeps
   // package checks on and selects tests for the PR's other files alone.
   const rootDevOnly = changedDevDependencies(beforeRoot, afterRoot).every(

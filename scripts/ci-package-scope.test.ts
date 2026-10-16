@@ -193,6 +193,32 @@ test("dependency metadata selects tooling, runtime consumers, shared base, and u
         .type,
     ).toBe("shared-base");
 
+    // A manifest outside the workspaces keeps its own path for its selectors.
+    const fixtureBase = head;
+    mkdirSync(path.join(root, "scripts/fixtures/tool"), { recursive: true });
+    writeFileSync(
+      path.join(root, "scripts/fixtures/tool/package.json"),
+      JSON.stringify({ name: "fixture-tool" }),
+    );
+    const fixtureAdded = commit("add a standalone fixture manifest");
+    writeFileSync(
+      path.join(root, "scripts/fixtures/tool/package.json"),
+      JSON.stringify({
+        name: "fixture-tool",
+        dependencies: { runtime: "1.0.0" },
+      }),
+    );
+    const fixtureChanged = commit("change the standalone fixture manifest");
+    expect(
+      dependencyScope({
+        base: fixtureAdded,
+        head: fixtureChanged,
+        changed: ["scripts/fixtures/tool/package.json"],
+      }).files,
+    ).toContain("scripts/fixtures/tool/package.json");
+    expect(fixtureBase).not.toBe(fixtureAdded);
+    head = fixtureChanged;
+
     // Any other top-level lockfile change reaches every workspace.
     const patchBase = head;
     lock.patchedDependencies = { "runtime@1.0.0": "patches/runtime.patch" };
