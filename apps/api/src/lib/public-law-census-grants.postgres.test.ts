@@ -13,7 +13,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
-  test("permits absent and staged census columns while refusing undeclared reads and writes", async () => {
+  test("keeps expansion readers available while census readers require all columns and both reject excess privileges", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("Postgres census grant test requires DATABASE_URL");
@@ -32,7 +32,12 @@ describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
         columns.map((column) => sql.identifier(column)),
         sql`, `,
       );
-      const grants = {
+      const expansionGrants = {
+        case_law_sources: { id: "required" },
+        [relation]:
+          CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+      } as const;
+      const currentGrants = {
         case_law_sources: { id: "required" },
         [relation]:
           PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
@@ -53,21 +58,33 @@ describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
           );
           const permissions = async () => {
             await tx.execute(sql`SET LOCAL ROLE ${role}`);
-            const row =
+            const expansion =
               (
                 await tx.execute<PublicLawDatabaseRolePermissions>(
-                  publicLawDatabaseRolePermissionsSql(grants),
+                  publicLawDatabaseRolePermissionsSql(expansionGrants),
                 )
               ).at(0) ?? panic("Reader grant attestation returned no result");
+            const current =
+              (
+                await tx.execute<PublicLawDatabaseRolePermissions>(
+                  publicLawDatabaseRolePermissionsSql(currentGrants),
+                )
+              ).at(0) ??
+              panic("Current reader grant attestation returned no result");
             await tx.execute(sql`RESET ROLE`);
-            return row;
+            return { expansion, current };
           };
           const accepted = {
             canReadPublicLaw: true,
             canReadOtherData: false,
             canWritePublicLaw: false,
           };
-          expect(await permissions()).toMatchObject(accepted);
+          const bothAccepted = { expansion: accepted, current: accepted };
+          const censusNotReady = {
+            expansion: accepted,
+            current: { ...accepted, canReadPublicLaw: false },
+          };
+          expect(await permissions()).toMatchObject(censusNotReady);
 
           // Keep the required lower bound non-vacuous even before the optional
           // census relation exists.
@@ -75,7 +92,8 @@ describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
             sql`REVOKE SELECT (id) ON public.case_law_sources FROM ${role}`,
           );
           expect(await permissions()).toMatchObject({
-            canReadPublicLaw: false,
+            expansion: { canReadPublicLaw: false },
+            current: { canReadPublicLaw: false },
           });
           await tx.execute(
             sql`GRANT SELECT (id) ON public.case_law_sources TO ${role}`,
@@ -87,43 +105,51 @@ describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
               sql`, `,
             )}, private_fixture text)`,
           );
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(censusNotReady);
           await tx.execute(
             sql`GRANT SELECT (${sql.identifier(firstColumn)}) ON ${table} TO ${role}`,
           );
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(censusNotReady);
           await tx.execute(
             sql`GRANT SELECT (${columnList}) ON ${table} TO ${role}`,
           );
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(bothAccepted);
 
           await tx.execute(
             sql`GRANT SELECT (private_fixture) ON ${table} TO ${role}`,
           );
-          expect(await permissions()).toMatchObject({ canReadOtherData: true });
+          expect(await permissions()).toMatchObject({
+            expansion: { canReadOtherData: true },
+            current: { canReadOtherData: true },
+          });
           await tx.execute(
             sql`REVOKE SELECT (private_fixture) ON ${table} FROM ${role}`,
           );
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(bothAccepted);
 
           await tx.execute(sql`GRANT SELECT ON ${table} TO ${role}`);
-          expect(await permissions()).toMatchObject({ canReadOtherData: true });
+          expect(await permissions()).toMatchObject({
+            expansion: { canReadOtherData: true },
+            current: { canReadOtherData: true },
+          });
           await tx.execute(sql`REVOKE SELECT ON ${table} FROM ${role}`);
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(bothAccepted);
 
           await tx.execute(
             sql`GRANT UPDATE (${sql.identifier(firstColumn)}) ON ${table} TO ${role}`,
           );
           expect(await permissions()).toMatchObject({
-            canWritePublicLaw: true,
+            expansion: { canWritePublicLaw: true },
+            current: { canWritePublicLaw: true },
           });
           await tx.execute(
             sql`REVOKE UPDATE (${sql.identifier(firstColumn)}) ON ${table} FROM ${role}`,
           );
-          expect(await permissions()).toMatchObject(accepted);
+          expect(await permissions()).toMatchObject(bothAccepted);
           await tx.execute(sql`GRANT INSERT ON ${table} TO ${role}`);
           expect(await permissions()).toMatchObject({
-            canWritePublicLaw: true,
+            expansion: { canWritePublicLaw: true },
+            current: { canWritePublicLaw: true },
           });
           tx.rollback();
         });

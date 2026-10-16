@@ -349,19 +349,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     added_last_week: "required",
     counted_at: "required",
   },
-  case_law_completeness_census: {
-    source_id: "required",
-    slice: "required",
-    year: "required",
-    outcome: "required",
-    scope_status: "required",
-    publisher_count: "required",
-    stored_count: "required",
-    text_count: "required",
-    observed_at: "required",
-    expected_slices: "required",
-    evidence_ref: "required",
-  },
+  case_law_completeness_census: Object.fromEntries(
+    Object.keys(
+      CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+    ).map((column) => [column, "required"] as const),
+  ),
   legislation_facet_refreshes: {
     singleton: "required",
     refreshed_at: "required",

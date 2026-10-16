@@ -34,8 +34,8 @@ CREATE POLICY "public_law_reader_access" ON "case_law_completeness_census"
       AND (census_source."descriptor" IS NULL
         OR (census_source."descriptor" ->> 'allowsRedistribution') = 'true')
   ));--> statement-breakpoint
--- Deployment cutover: drain the previous API release before applying these
--- grants, then start this release. Previous releases reject undeclared grants.
+-- Deploy the reader-grant expansion in #5968 before applying this migration.
+-- Its running readers permit these columns while this release requires them.
 GRANT SELECT ("source_id", "slice", "year", "outcome", "scope_status", "publisher_count",
   "stored_count", "text_count", "observed_at", "expected_slices", "evidence_ref")
   ON TABLE "case_law_completeness_census" TO "stella_public_law_reader";
