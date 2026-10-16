@@ -37,7 +37,7 @@ const importsFromIconModule = (
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.isTypeOnly === true
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       return false;
     }
