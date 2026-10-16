@@ -207,11 +207,10 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
  * ships with the removal of this map.
  */
 const CASE_LAW_DECISION_BASE_COLUMN_GRANTS = Object.fromEntries(
-  Object.keys(CASE_LAW_DECISION_VIEW_COLUMN_GRANTS).map((column) => [
-    column,
-    "permitted",
-  ]),
-) as Readonly<Record<string, PublicLawColumnGrant>>;
+  Object.keys(CASE_LAW_DECISION_VIEW_COLUMN_GRANTS).map(
+    (column) => [column, "permitted"] as const,
+  ),
+);
 
 export const CASE_LAW_DECISION_VIEWS = [
   PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,

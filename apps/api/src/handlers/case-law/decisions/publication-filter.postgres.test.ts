@@ -27,7 +27,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import {
+  CASE_LAW_SURFACE_COUNTRIES,
+  withRedistributableSubject,
+} from "@/api/lib/case-law/public-subject";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
@@ -328,6 +331,7 @@ if (!databaseUrl || !runPostgresTests) {
               tx: readerTx,
               cursor: undefined,
               decisionId,
+              countries: CASE_LAW_SURFACE_COUNTRIES.pages,
             }),
         );
         if (!("items" in citations)) {
@@ -379,6 +383,7 @@ if (!databaseUrl || !runPostgresTests) {
         const reader = await readDecisionReaderSource({
           caseLawDb,
           decisionId: redactedId,
+          surface: "pages",
           phase: "blocks",
           audience: "model",
         });
