@@ -11,6 +11,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import type { MatterVisibility } from "@stll/api-contract";
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -21,6 +22,7 @@ import type { WorkspaceUpdateActor } from "@/api/handlers/workspaces/update";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   leadsAssignedOnlyMatter,
@@ -72,6 +74,17 @@ const createMatter = async ({
 }): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [workspaceId],
+          userIds: members,
+        },
+      ],
+      mode: "update",
+    });
     await tx.insert(workspaces).values({
       id: workspaceId,
       organizationId: ids.orgA,
@@ -373,12 +386,14 @@ describe("keeping a steward when a lead leaves", () => {
     const recordAuditEvent: AuditRecorder = (_tx, event) => {
       events.push(...(Array.isArray(event) ? event : [event]));
     };
-    await restoreMatterStewards(asTestRaw<Transaction>(testDb), {
-      workspaceIds: [workspaceId],
-      organizationId: ids.orgA,
-      departingUserId,
-      actorUserId: departingUserId,
-      recordAuditEvent,
+    await testDb.transaction(async (tx) => {
+      await restoreMatterStewards(asTestRaw<Transaction>(tx), {
+        workspaceIds: [workspaceId],
+        organizationId: ids.orgA,
+        departingUserId,
+        actorUserId: departingUserId,
+        recordAuditEvent,
+      });
     });
     return events;
   };
@@ -411,10 +426,14 @@ describe("keeping a steward when a lead leaves", () => {
       visibility: "assigned_only",
       members: [ids.userA1],
     });
-    const result = await Result.tryPromise(
-      async () => await restore(workspaceId, ids.userA1),
-    );
-    expect(result.isErr()).toBe(true);
+    const result = await Result.tryPromise({
+      try: async () => await restore(workspaceId, ids.userA1),
+      catch: (error) => error,
+    });
+    expect(result).toMatchObject({
+      status: "error",
+      error: { status: 409, code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE },
+    });
     expect(await readLead(workspaceId)).toBe(ids.userA1);
     expect(await readVisibility(workspaceId)).toBe("assigned_only");
   });

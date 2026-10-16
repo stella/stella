@@ -28,6 +28,7 @@ import {
   runChatThreadCompaction,
 } from "@/api/lib/chat/thread-compaction";
 import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -432,13 +433,6 @@ const holdThreadOwnerAccess = async (
   { organizationId, threadId, userId }: QueuedCompactionThread,
 ): Promise<OwnerAccessLostReason | null> => {
   const owner = { organizationId, userId };
-  const organization = await holdMemberAccessOnTx(tx, {
-    ...owner,
-    workspaceIds: [],
-  });
-  if (organization.type === "not-member") {
-    return OWNER_ACCESS_LOST_REASON.ORGANIZATION;
-  }
   const scope = (
     await tx
       .select({
@@ -449,23 +443,55 @@ const holdThreadOwnerAccess = async (
       .where(eq(chatThreads.id, threadId))
       .limit(1)
   ).at(0);
-  if (scope === undefined) {
-    return OWNER_ACCESS_LOST_REASON.THREAD;
-  }
-  const matters = [
-    ...new Set([
-      ...(scope.workspaceId === null ? [] : [scope.workspaceId]),
-      ...scope.dataWorkspaceIds,
-    ]),
-  ];
-  if (matters.length === 0) {
-    return null;
-  }
+  // Discover the complete scope before acquiring the canonical prefix. The
+  // hold checks membership and matter reach again after acquiring its locks.
+  const matters =
+    scope === undefined
+      ? []
+      : [
+          ...new Set([
+            ...(scope.workspaceId === null ? [] : [scope.workspaceId]),
+            ...scope.dataWorkspaceIds,
+          ]),
+        ];
   const held = await holdMemberAccessOnTx(tx, {
     ...owner,
     workspaceIds: matters,
   });
-  return held.type === "held" && held.workspaceIds.length === matters.length
+  if (held.type === "not-member") {
+    return OWNER_ACCESS_LOST_REASON.ORGANIZATION;
+  }
+  if (scope === undefined || held.workspaceIds.length !== matters.length) {
+    return OWNER_ACCESS_LOST_REASON.THREAD;
+  }
+  const current = (
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "chatThread",
+      id: { ...owner, id: threadId },
+      mode: "update",
+      select: (lockTx) =>
+        lockTx
+          .select({
+            id: chatThreads.id,
+            organizationId: chatThreads.organizationId,
+            userId: chatThreads.userId,
+            dataWorkspaceIds: chatThreads.dataWorkspaceIds,
+            workspaceId: chatThreads.workspaceId,
+          })
+          .from(chatThreads),
+    })
+  ).rows.at(0);
+  if (current === undefined) {
+    return OWNER_ACCESS_LOST_REASON.THREAD;
+  }
+  const currentMatters = [
+    ...(current.workspaceId === null ? [] : [current.workspaceId]),
+    ...current.dataWorkspaceIds,
+  ];
+  return currentMatters.every((matterId) =>
+    held.workspaceIds.includes(matterId),
+  )
     ? null
     : OWNER_ACCESS_LOST_REASON.THREAD;
 };

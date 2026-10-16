@@ -290,11 +290,9 @@ export const verifyAndDeleteUser = async (
           },
         },
         beforeConsume: async (tx) => {
-          await lockAccountRow(tx, currentUserId);
-          // Ownership check with SELECT FOR UPDATE locks on owner rows.
-          await assertUserIsNotSoleOrgOwner(tx, currentUserId);
-          // Organization membership -> every affected matter, without waiting.
           await tryLockAccountMemberCleanup(tx, currentUserId);
+          await lockAccountRow(tx, currentUserId);
+          await assertUserIsNotSoleOrgOwner(tx, currentUserId);
         },
         afterConsume: async (tx) => {
           const { organizationIds, workspaceIds } =

@@ -328,15 +328,9 @@ describe("duplicateWorkspace", () => {
                 return {
                   where: () => ({
                     orderBy: (column: unknown) => {
-                      // Copied memberships lock in the order removal uses.
-                      expect(column).toBe(member.userId);
+                      expect(column).toBe(member.id);
                       return {
-                        limit: () => ({
-                          for: async (strength: string) => {
-                            expect(strength).toBe("key share");
-                            return [{ userId: "user_lead123" }];
-                          },
-                        }),
+                        limit: async () => [{ userId: "user_lead123" }],
                       };
                     },
                   }),
@@ -387,7 +381,7 @@ describe("duplicateWorkspace", () => {
           if (statement.sql.includes("stella_create_workspace")) {
             createdWorkspaces.push(statement.params);
           }
-          return undefined;
+          return [];
         },
       });
 
@@ -541,7 +535,7 @@ describe("duplicateWorkspace", () => {
         expect(table).toBe(matterCounters);
         return { set: () => ({ where: async () => undefined }) };
       },
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(
@@ -744,7 +738,7 @@ describe("duplicateWorkspace", () => {
           where: async () => undefined,
         }),
       }),
-      execute: async () => undefined,
+      execute: async () => [],
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx);
@@ -982,7 +976,7 @@ describe("duplicateWorkspace", () => {
         },
       }),
       update: () => ({ set: () => ({ where: async () => undefined }) }),
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(
@@ -1106,7 +1100,7 @@ describe("duplicateWorkspace", () => {
         },
       }),
       update: () => ({ set: () => ({ where: async () => undefined }) }),
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
@@ -1175,7 +1169,7 @@ describe("duplicateWorkspace", () => {
       insert: () => {
         throw new Error("Duplicate wrote before validating the source size");
       },
-      execute: async () => undefined,
+      execute: async () => [],
     });
 
     const result = await duplicateWorkspace.handler(

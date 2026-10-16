@@ -108,6 +108,26 @@ const seed = async (database: PGlite): Promise<void> => {
   `);
 };
 
+const lockStewardship = async (
+  database: PGlite,
+  workspaceIds: readonly string[],
+  userIds: readonly string[],
+) => {
+  await database.query(
+    "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+    [
+      JSON.stringify([
+        {
+          organization_id: ORG,
+          workspace_ids: workspaceIds,
+          user_ids: userIds,
+          membership_user_ids: userIds,
+        },
+      ]),
+    ],
+  );
+};
+
 const normalVerdict = {
   kind: "normal",
   signals: [],
@@ -225,14 +245,168 @@ const rejectedMutations = [
 ];
 
 describe("assigned-only matter stewardship across mutation entry points", () => {
+  test("stewardship triggers validate the prefix without acquiring row or advisory locks", () => {
+    const functions = [
+      ...migrationSql.matchAll(
+        /CREATE(?: OR REPLACE)? FUNCTION\s+([^\s(]+)[\s\S]*?AS \$\$([\s\S]*?)\$\$/gu,
+      ),
+    ];
+    const guards = functions.filter(([, name]) =>
+      name?.replaceAll('"', "").replace("public.", "").startsWith("enforce_"),
+    );
+    expect(guards).toHaveLength(4);
+    for (const guard of guards) {
+      expect(guard.at(2)).not.toMatch(
+        /FOR\s+(?:NO\s+KEY\s+UPDATE|KEY\s+SHARE|UPDATE|SHARE)|pg_advisory_(?:xact_)?lock\s*\(/iu,
+      );
+    }
+    const owner = functions.find(
+      ([, name]) => name === "public.stella_lock_matter_stewardship",
+    );
+    expect(owner?.at(2)).toMatch(/FOR NO KEY UPDATE/u);
+    expect(owner?.at(2)).toMatch(/FOR SHARE/u);
+    expect(owner?.at(2)).toMatch(/pg_advisory_xact_lock/u);
+  });
+
+  test("restricted sessions cannot forge stewardship completion after an empty canonical call", async () => {
+    await using database = await migrated();
+    const before = await matterSnapshot(database);
+    await database.exec("GRANT SELECT, UPDATE ON workspaces TO stella");
+    await database.exec("BEGIN; SET LOCAL ROLE stella");
+    await database.query("SELECT set_config('app.organization_id', $1, true)", [
+      ORG,
+    ]);
+    await database.query(
+      "SELECT public.stella_lock_matter_stewardship('[]'::jsonb, 'update')",
+    );
+    await database.query(
+      "SELECT set_config('stella.stewardship_locks', $1, true)",
+      [
+        JSON.stringify({
+          mode: "update",
+          workspaces: [MATTER.clientlessOfMember],
+          members: ["m3"],
+        }),
+      ],
+    );
+    const forged = await Result.tryPromise({
+      try: async () =>
+        await database.query(
+          "UPDATE workspaces SET lead_user_id = NULL WHERE id = $1",
+          [MATTER.clientlessOfMember],
+        ),
+      catch: (error) => error,
+    });
+    expect(forged).toMatchObject({ status: "error", error: { code: "55P03" } });
+    await database.exec("ROLLBACK");
+    expect(await matterSnapshot(database)).toEqual(before);
+  });
+
+  test("restricted sessions cannot write the protected stewardship proof table", async () => {
+    await using database = await migrated();
+    await database.exec("BEGIN; SET LOCAL ROLE stella");
+    const forged = await Result.tryPromise({
+      try: async () =>
+        await database.exec(
+          "INSERT INTO public.matter_stewardship_locks(transaction_id, proof) VALUES (txid_current(), '{}'::jsonb)",
+        ),
+      catch: (error) => error,
+    });
+    expect(forged).toMatchObject({ status: "error", error: { code: "42501" } });
+    await database.exec("ROLLBACK");
+  });
+
+  test.each([
+    {
+      name: "another organization",
+      organizationId: OTHER_ORG,
+      workspaceIds: [MATTER.otherOrgClientMatter],
+      membershipUserIds: [],
+    },
+    {
+      name: "another organization's matter under the local organization",
+      organizationId: ORG,
+      workspaceIds: [MATTER.otherOrgClientMatter],
+      membershipUserIds: [],
+    },
+    {
+      name: "membership-wide discovery",
+      organizationId: ORG,
+      workspaceIds: [],
+      membershipUserIds: [MEMBER],
+    },
+  ])(
+    "restricted sessions cannot request $name",
+    async ({ organizationId, workspaceIds, membershipUserIds }) => {
+      await using database = await migrated();
+      const before = await matterSnapshot(database);
+      await database.exec("BEGIN; SET LOCAL ROLE stella");
+      await database.query(
+        "SELECT set_config('app.organization_id', $1, true)",
+        [ORG],
+      );
+      const refused = await Result.tryPromise({
+        try: async () =>
+          await database.query(
+            "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+            [
+              JSON.stringify([
+                {
+                  organization_id: organizationId,
+                  workspace_ids: workspaceIds,
+                  user_ids: [],
+                  membership_user_ids: membershipUserIds,
+                },
+              ]),
+            ],
+          ),
+        catch: (error) => error,
+      });
+      expect(refused).toMatchObject({
+        status: "error",
+        error: { code: "42501" },
+      });
+      await database.exec("ROLLBACK");
+      expect(await matterSnapshot(database)).toEqual(before);
+    },
+  );
+
+  test("restricted sessions cannot invoke the migration repair", async () => {
+    await using database = await migrated();
+    const before = await matterSnapshot(database);
+    await database.exec("BEGIN; SET LOCAL ROLE stella");
+    await database.query("SELECT set_config('app.organization_id', $1, true)", [
+      ORG,
+    ]);
+    const refused = await Result.tryPromise({
+      try: async () =>
+        await database.query(
+          "SELECT public.stella_repair_legacy_visibility_batch($1::uuid[])",
+          [[MATTER.clientlessOfMember]],
+        ),
+      catch: (error) => error,
+    });
+    expect(refused).toMatchObject({
+      status: "error",
+      error: { code: "42501" },
+    });
+    await database.exec("ROLLBACK");
+    expect(await matterSnapshot(database)).toEqual(before);
+  });
+
   for (const role of Object.keys(roles)) {
     test(`assigned same-organization ${role} stewardship matches the internal role policy`, async () => {
       await using database = await migrated();
+      await database.exec("BEGIN");
+      await lockStewardship(database, [MATTER.clientlessOfMember], [EXTERNAL]);
       await database.query(
         "UPDATE member SET role = $1 WHERE user_id = $2 AND organization_id = $3",
         [role, EXTERNAL, ORG],
       );
+      await database.exec("COMMIT");
       const before = await matterSnapshot(database);
+      await database.exec("BEGIN");
+      await lockStewardship(database, [MATTER.clientlessOfMember], [EXTERNAL]);
       const outcome = await Result.tryPromise(
         async () =>
           await database.query(
@@ -240,6 +414,7 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
             [EXTERNAL, MATTER.clientlessOfMember],
           ),
       );
+      await database.exec(outcome.isOk() ? "COMMIT" : "ROLLBACK");
       const maySteward = INTERNAL_MEMBER_ROLES.some(
         (internalRole) => internalRole === role,
       );
@@ -291,9 +466,18 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
   for (const { name, statement } of rejectedMutations) {
     test(`refuses mutation when ${name}`, async () => {
       await using database = await migrated();
+      await database.exec("BEGIN");
+      await lockStewardship(
+        database,
+        Object.values(MATTER).filter(
+          (id) => id !== MATTER.otherOrgClientMatter,
+        ),
+        [OWNER, ADMIN, MEMBER, OTHER_MEMBER, EXTERNAL, INTERN],
+      );
       await database.exec(`
         INSERT INTO member VALUES ('foreign_member', '${OTHER_ORG}', 'foreign_user', 'member');
         INSERT INTO workspace_members VALUES ('foreign_assignment', '${MATTER.clientlessOfMember}', 'foreign_user');
+        COMMIT;
       `);
       await assertUsableSteward(database);
       const before = await matterSnapshot(database);
@@ -311,7 +495,13 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
 
   test("an assigned internal successor permits offboarding after the handoff", async () => {
     await using database = await migrated();
-    await database.exec(`BEGIN;
+    await database.exec("BEGIN");
+    await lockStewardship(
+      database,
+      Object.values(MATTER).filter((id) => id !== MATTER.otherOrgClientMatter),
+      [OWNER, MEMBER],
+    );
+    await database.exec(`
       UPDATE workspaces SET lead_user_id = '${OWNER}' WHERE id = '${MATTER.clientlessOfMember}';
       DELETE FROM workspace_members WHERE user_id = '${MEMBER}';
       DELETE FROM member WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}';
@@ -333,6 +523,24 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
     );
     expect(departing.rows).toEqual([]);
   });
+  test("an unsupported private INSERT is refused before deferred validation", async () => {
+    await using database = await migrated();
+    const before = await matterSnapshot(database);
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await database.query(
+          "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ('00000000-0000-4000-8000-0000000000a9',$1,$2,'assigned_only')",
+          [ORG, MEMBER],
+        ),
+      catch: (error) => error,
+    });
+    expect(outcome).toMatchObject({
+      status: "error",
+      error: { code: "55P03" },
+    });
+    expect(await matterSnapshot(database)).toEqual(before);
+  });
+
   test.each([
     { label: "null", lead: null, assigned: false },
     { label: "external", lead: EXTERNAL, assigned: true },
@@ -342,6 +550,7 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
     await using database = await migrated();
     const id = "00000000-0000-4000-8000-0000000000a8";
     await database.exec("BEGIN");
+    await lockStewardship(database, [id], lead === null ? [] : [lead]);
     await database.query(
       "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,'assigned_only')",
       [id, ORG, lead],

@@ -6,6 +6,7 @@ import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { TransactionOf, WorkspaceScope } from "@/api/db/scoped";
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { toSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { LIMITS } from "@/api/lib/limits";
 import type { SearchQuery } from "@/api/lib/search/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -100,11 +101,24 @@ const seedPlaceholderQueryPerf = async (
       VALUES ('queryperfmember00000000000000001', ${organizationId}, ${userId}, 'member', now()),
         ('queryperfmember00000000000000002', ${organizationId}, ${backgroundStewardId}, 'member', now())`);
     await tx.execute(sql`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
-      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf', ${MATTER_VISIBILITY.assignedOnly}, ${userId}),
-        (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background', ${MATTER_VISIBILITY.assignedOnly}, ${backgroundStewardId})`);
+      VALUES (${workspaceId}, ${organizationId}, 'Query perf matter', 'query-perf', ${MATTER_VISIBILITY.adminsAndAssigned}, ${userId}),
+        (${backgroundWorkspaceId}, ${organizationId}, 'Query perf background matter', 'query-perf-background', ${MATTER_VISIBILITY.adminsAndAssigned}, ${backgroundStewardId})`);
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId,
+          workspaceIds: [workspaceId, backgroundWorkspaceId],
+          userIds: [userId, backgroundStewardId],
+        },
+      ],
+      mode: "update",
+    });
     await tx.execute(sql`INSERT INTO workspace_members (id, workspace_id, user_id)
       VALUES ('01990000-0003-7000-8000-000000000001', ${workspaceId}, ${userId}),
         ('01990000-0003-7000-8000-000000000002', ${backgroundWorkspaceId}, ${backgroundStewardId})`);
+    await tx.execute(sql`UPDATE workspaces SET visibility = ${MATTER_VISIBILITY.assignedOnly}
+      WHERE id IN (${workspaceId}, ${backgroundWorkspaceId})`);
     for (let first = 1; first <= documentCount; first += SEED_CHUNK_ROWS) {
       const last = Math.min(first + SEED_CHUNK_ROWS - 1, documentCount);
       // db-await-in-loop: bounded chunks keep each seed statement well inside the connection's statement timeout.

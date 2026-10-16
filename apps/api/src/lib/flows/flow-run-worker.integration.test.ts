@@ -1633,6 +1633,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       );
       const removed = await Result.gen(() =>
         removeWorkspaceMemberHandler({
+          organizationId,
           safeDb,
           workspaceId,
           userId: reviewer,

@@ -2,7 +2,6 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
-import { INTERNAL_MEMBER_ROLES } from "@stll/permissions";
 
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -24,44 +23,6 @@ class MatterVisibilityRepairBlocked extends TaggedError(
   message: string;
   cause: unknown;
 }> {}
-
-// Repair legacy matters without widening clientless access. The selected matter locks serialize
-// membership role changes with the steward read and both writes.
-const REPAIR_STEWARDS_SQL = `
-  UPDATE public.workspaces AS w
-  SET lead_user_id = steward.user_id
-  FROM (
-    SELECT DISTINCT ON (wm.workspace_id) wm.workspace_id, wm.user_id
-    FROM public.workspace_members AS wm
-    JOIN public.workspaces AS matter ON matter.id = wm.workspace_id
-    JOIN public.member AS m
-      ON m.user_id = wm.user_id
-      AND m.organization_id = matter.organization_id
-    WHERE matter.id = ANY(string_to_array($1, ',')::uuid[])
-      AND matter.client_id IS NULL
-      AND m.role = ANY(string_to_array($2, ','))
-      AND NOT EXISTS (
-        SELECT 1
-        FROM public.workspace_members AS lead_assignment
-        JOIN public.member AS lead_member
-          ON lead_member.user_id = lead_assignment.user_id
-          AND lead_member.organization_id = matter.organization_id
-        WHERE lead_assignment.workspace_id = matter.id
-          AND lead_assignment.user_id = matter.lead_user_id
-          AND lead_member.role = ANY(string_to_array($2, ','))
-      )
-    ORDER BY wm.workspace_id, wm.created_at, wm.id
-  ) AS steward
-  WHERE w.id = steward.workspace_id
-`;
-
-const REPAIR_VISIBILITY_SQL = `
-  UPDATE public.workspaces AS w
-  SET visibility = CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
-  WHERE w.id = ANY(string_to_array($1, ',')::uuid[])
-    AND w.visibility IS DISTINCT FROM
-      CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
-`;
 
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
@@ -111,11 +72,10 @@ const backfill = async (
           if (next === undefined) {
             return { cursor, done: true, value: null };
           }
-          await tx.execute(REPAIR_STEWARDS_SQL, [
-            ids.join(","),
-            INTERNAL_MEMBER_ROLES.join(","),
-          ]);
-          await tx.execute(REPAIR_VISIBILITY_SQL, [ids.join(",")]);
+          await tx.execute(
+            "SELECT public.stella_repair_legacy_visibility_batch(string_to_array($1, ',')::uuid[])",
+            [ids.join(",")],
+          );
           return { cursor: next, done: false, value: null };
         }),
     });

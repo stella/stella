@@ -16,6 +16,7 @@ import {
 } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -35,6 +36,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -90,6 +92,18 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
   test("a global-chat pin preserves self-removal cleanup and audit scope", async () => {
     try {
       await testDb.transaction(async (outerTx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(outerTx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+              membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            },
+          ],
+          mode: "update",
+        });
         await outerTx
           .update(workspaces)
           .set({ leadUserId: ids.userA1 })
@@ -160,6 +174,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
 
         const result = await Result.gen(() =>
           removeWorkspaceMemberHandler({
+            organizationId: ids.orgA,
             safeDb: context.safeDb,
             workspaceId,
             userId: ids.userA1,
@@ -273,6 +288,18 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
       const outcome = await Result.tryPromise(
         async () =>
           await testDb.transaction(async (outerTx) => {
+            await lockMatterStewardship({
+              tx: asTestRaw<Transaction>(outerTx),
+              requests: [
+                {
+                  organizationId: ids.orgA,
+                  workspaceIds: [ids.wsA1, ids.wsA2],
+                  userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+                  membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+                },
+              ],
+              mode: "update",
+            });
             const actorUserId = {
               lead: ids.userA1,
               admin: ids.userAdmin,
@@ -318,6 +345,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             });
             const result = await Result.gen(() =>
               removeWorkspaceMemberHandler({
+                organizationId: ids.orgA,
                 safeDb,
                 workspaceId: ids.wsA2,
                 userId: ids.userA1,
@@ -442,6 +470,18 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
   test("the synchronous cap excludes closed ownership history", async () => {
     try {
       await testDb.transaction(async (outerTx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(outerTx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+              membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            },
+          ],
+          mode: "update",
+        });
         const closedEntityIds = Array.from(
           {
             length: LIMITS.workspaceMemberRemovalWorkObligationsMax + 1,
@@ -501,6 +541,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
 
         const result = await Result.gen(() =>
           removeWorkspaceMemberHandler({
+            organizationId: ids.orgA,
             safeDb,
             workspaceId: ids.wsA2,
             userId: ids.userA1,

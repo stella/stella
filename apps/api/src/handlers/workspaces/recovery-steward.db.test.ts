@@ -9,6 +9,7 @@ import { workspaceMembers, workspaces } from "@/api/db/schema";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { recoverOrphanedMatterSteward } from "@/api/lib/workspaces/visibility";
@@ -224,11 +225,46 @@ test.each(["actor", "steward", "external-steward"] as const)(
 test.each(["unknown", "other-organization", "healthy"] as const)(
   "recovery refuses a %s matter without changing its steward",
   async (target) => {
-    const workspaceId = {
-      unknown: createSafeId<"workspace">(),
-      "other-organization": ids.wsB1,
-      healthy: ids.wsA1,
-    }[target];
+    let workspaceId =
+      target === "other-organization" ? ids.wsB1 : createSafeId<"workspace">();
+    if (target === "healthy") {
+      workspaceId = await testDb.transaction(async (rawTx) => {
+        const tx = asTestRaw<Transaction>(rawTx);
+        const id = await createOrphan(tx);
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [id],
+              userIds: [ids.userA1],
+            },
+          ],
+          mode: "update",
+        });
+        await tx
+          .insert(workspaceMembers)
+          .values({ workspaceId: id, userId: ids.userA1 });
+        await tx
+          .update(workspaces)
+          .set({ leadUserId: ids.userA1 })
+          .where(eq(workspaces.id, id));
+        return id;
+      });
+      createdIds.push(workspaceId);
+    }
+    if (target === "healthy") {
+      const access = await testDb
+        .select({
+          canRead: memberReachesMatterSql(
+            { organizationId: ids.orgA, userId: ids.userAdmin },
+            workspaceId,
+          ),
+        })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId));
+      expect(access).toEqual([{ canRead: false }]);
+    }
     const before = await testDb
       .select()
       .from(workspaces)
@@ -247,7 +283,21 @@ test.each(["unknown", "other-organization", "healthy"] as const)(
         });
       }),
     );
-    refuseStatus(error, target === "healthy" ? 409 : 404);
+    refuseStatus(error, 404);
+    if (!HandlerError.is(error)) {
+      throw new TypeError("Expected a recovery refusal");
+    }
+    expect({
+      status: error.status,
+      message: error.message,
+      code: error.code,
+      affectedMatters: error.affectedMatters,
+    }).toEqual({
+      status: 404,
+      message: "Matter not found",
+      code: undefined,
+      affectedMatters: undefined,
+    });
     expect(events).toEqual([]);
     expect(
       await testDb

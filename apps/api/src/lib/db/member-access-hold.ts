@@ -1,15 +1,10 @@
 import { and, eq, inArray, ne } from "drizzle-orm";
 
-import { INTERNAL_MEMBER_ROLES } from "@stll/permissions";
-
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  lockMatterAccessAssignments,
-  lockMatterAccessWorkspaceRows,
-  lockMemberAccessRow,
-} from "@/api/lib/db/aggregate-lock";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type HoldMemberAccessOptions = {
@@ -29,10 +24,8 @@ export type MemberAccessHold =
 /**
  * Hold a member's current access for the rest of `tx`.
  *
- * Locks the organization member and requested matter assignments `FOR SHARE`.
- * Unassigned matters hold their matter row for internal
- * roles. The final reach decision uses a later statement and only identities
- * covered by those locks, so it sees changes committed before acquisition.
+ * Uses the stewardship lifecycle/member/matter prefix in shared mode, then
+ * decides reach with a fresh statement while revocation remains fenced.
  *
  * Reads the rows directly rather than through the RLS access view, so the
  * answer is the same on a membership-scoped handle and on a handle pinned to
@@ -42,39 +35,23 @@ export const holdMemberAccessOnTx = async (
   tx: Transaction,
   { organizationId, userId, workspaceIds }: HoldMemberAccessOptions,
 ): Promise<MemberAccessHold> => {
-  const scope = { tx, organizationId, userId, mode: "share" } as const;
-  const organizationMember = await lockMemberAccessRow(scope);
-  if (organizationMember === undefined) {
+  const requested = [...new Set(workspaceIds)];
+  await lockMatterStewardship({
+    tx,
+    requests: [{ organizationId, workspaceIds: requested, userIds: [userId] }],
+    mode: "share",
+  });
+  const organizationMember = await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    )
+    .limit(1);
+  if (organizationMember.length === 0) {
     return { type: "not-member" };
   }
-  const requested = [...new Set(workspaceIds)];
   if (requested.length === 0) {
-    return { type: "held", workspaceIds: [] };
-  }
-  const assigned = await lockMatterAccessAssignments({
-    ...scope,
-    workspaceIds: requested,
-    where: ne(workspaces.status, "deleting"),
-  });
-  const covered = new Set(assigned.map((row) => row.workspaceId));
-  // This role condition only preserves the lock scope: assigned matters hold
-  // assignment rows, and unassigned matters hold matter rows for
-  // these roles. The later database query alone decides reach.
-  const reachesUnassignedMatters = INTERNAL_MEMBER_ROLES.some(
-    (role) => role === organizationMember.role,
-  );
-  if (reachesUnassignedMatters) {
-    const matterRows = await lockMatterAccessWorkspaceRows({
-      ...scope,
-      workspaceIds: requested.filter((id) => !covered.has(id)),
-      where: ne(workspaces.status, "deleting"),
-    });
-    for (const { id } of matterRows) {
-      covered.add(id);
-    }
-  }
-  const candidates = requested.filter((id) => covered.has(id));
-  if (candidates.length === 0) {
     return { type: "held", workspaceIds: [] };
   }
   const reachable = await tx
@@ -82,7 +59,7 @@ export const holdMemberAccessOnTx = async (
     .from(workspaces)
     .where(
       and(
-        inArray(workspaces.id, candidates),
+        inArray(workspaces.id, requested),
         eq(workspaces.organizationId, organizationId),
         ne(workspaces.status, "deleting"),
         memberReachesMatterSql({ organizationId, userId }, workspaces.id),

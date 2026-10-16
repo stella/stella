@@ -25,6 +25,7 @@ import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
@@ -161,6 +162,17 @@ beforeAll(async () => {
   tokenDb = testTokenDb();
 
   await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [personalMatter.workspaceId],
+          userIds: [ids.userA2],
+        },
+      ],
+      mode: "update",
+    });
     await tx.insert(workspaces).values({
       id: personalMatter.workspaceId,
       organizationId: ids.orgA,

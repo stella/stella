@@ -53,10 +53,7 @@ import {
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
-import {
-  tryLockMemberCleanupWorkspace,
-  removeOrganizationMemberInTransaction,
-} from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -484,6 +481,7 @@ if (!databaseUrl || !runPostgresTests) {
               if (!contactWrite && kind !== "membership") {
                 return await Result.gen(() =>
                   removeWorkspaceMemberHandler({
+                    organizationId,
                     safeDb,
                     workspaceId,
                     userId: leaverUserId,
@@ -1279,6 +1277,7 @@ if (!databaseUrl || !runPostgresTests) {
           const remove = async () =>
             Result.gen(() =>
               removeWorkspaceMemberHandler({
+                organizationId,
                 safeDb,
                 workspaceId,
                 userId,
@@ -1484,26 +1483,12 @@ if (!databaseUrl || !runPostgresTests) {
             try: async () =>
               await removalDb.transaction(async (tx) => {
                 if (lockedRow === "workspace") {
-                  await tx
-                    .select({ id: member.id })
-                    .from(member)
-                    .where(eq(member.id, memberId))
-                    .for("update");
-                  await tryLockMemberCleanupWorkspace(
-                    asTestRaw<Transaction>(tx),
-                    workspaceId,
-                  );
-                } else {
-                  await removeOrganizationMemberInTransaction(
-                    asTestRaw<Transaction>(tx),
-                    {
-                      organizationId,
-                      memberId,
-                      userId,
-                      actorUserId,
-                    },
-                  );
+                  await tx.execute(sql`SET LOCAL lock_timeout = '25ms'`);
                 }
+                await removeOrganizationMemberInTransaction(
+                  asTestRaw<Transaction>(tx),
+                  { organizationId, memberId, userId, actorUserId },
+                );
               }),
             catch: (error) => error,
           });

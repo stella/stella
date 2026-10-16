@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import {
   entities,
   fields,
@@ -17,6 +18,8 @@ import {
 } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -36,6 +39,22 @@ const setupRlsScopedDb = async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [
+            ownerPersonalWorkspaceId,
+            otherPersonalWorkspaceId,
+            scopedAuthorizationLifetimeWorkspaceId,
+            safeAuthorizationLifetimeWorkspaceId,
+          ],
+          userIds: [ids.userAdmin, ids.userA1, ids.userA2],
+        },
+      ],
+      mode: "update",
+    });
     await tx.insert(workspaces).values([
       {
         id: ownerPersonalWorkspaceId,
@@ -273,6 +292,17 @@ describe("createMembershipScopedDb", () => {
     });
 
     const result = await scoped(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [scopedAuthorizationLifetimeWorkspaceId],
+            userIds: [ids.userA1, ids.userA2],
+          },
+        ],
+        mode: "update",
+      });
       await tx
         .delete(workspaceMembers)
         .where(
@@ -330,6 +360,17 @@ describe("createMembershipScopedDb", () => {
     // that authorization for later transactions.
     serverValidatedWorkspaceIds.push(safeAuthorizationLifetimeWorkspaceId);
     const result = await safeDb(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [safeAuthorizationLifetimeWorkspaceId],
+            userIds: [ids.userA1, ids.userA2],
+          },
+        ],
+        mode: "update",
+      });
       await tx
         .delete(workspaceMembers)
         .where(

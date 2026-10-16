@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   desktopEditHandoffs,
   workspaceMembers,
@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import {
   consumeDesktopEditHandoff,
   readDesktopEditHandoffAccess,
@@ -46,6 +47,17 @@ beforeAll(async () => {
   ids = fixture.ids;
   db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
   await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [personalMatterId],
+          userIds: [ids.userA2],
+        },
+      ],
+      mode: "update",
+    });
     await tx.insert(workspaces).values({
       id: personalMatterId,
       organizationId: ids.orgA,

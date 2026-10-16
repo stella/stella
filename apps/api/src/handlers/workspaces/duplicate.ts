@@ -32,6 +32,7 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -63,6 +64,7 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -622,6 +624,25 @@ export const createDuplicateWorkspace = (
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
       const txResult = await resultTx(safeDb, async (tx) => {
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              organizationId,
+              workspaceIds: [targetWorkspaceId],
+              userIds: [
+                user.id,
+                ...snapshot.members.map((row) =>
+                  brandPersistedUserId(row.userId),
+                ),
+                ...[snapshot.workspace.leadUserId].filter(
+                  (leadUserId) => leadUserId !== null,
+                ),
+              ],
+            },
+          ],
+          mode: "update",
+        });
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -660,10 +681,8 @@ export const createDuplicateWorkspace = (
                       ),
                     ),
                   )
-                  // Same order as organization removal's membership locks.
-                  .orderBy(member.userId)
+                  .orderBy(member.id)
                   .limit(snapshot.members.length)
-                  .for("key share")
               : Promise.resolve([]),
           ]);
 

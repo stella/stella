@@ -134,20 +134,18 @@ export const ACCOUNT_DELETION_ERROR_CODE = {
 } as const;
 
 /**
- * 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction.
- * Fetch all organizations where the user is an owner, locking the member
- * rows to prevent concurrent modifications.
+ * Refuse erasure of the sole organization owner under the complete membership prefix.
  */
 export const assertUserIsNotSoleOrgOwner = async (
   tx: Transaction,
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<void> => {
+  await tryLockAccountMemberCleanup(tx, currentUserId);
   const ownedOrgs = await tx
     .select({ orgId: member.organizationId, orgName: organization.name })
     .from(member)
     .innerJoin(organization, eq(organization.id, member.organizationId))
-    .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")))
-    .for("update");
+    .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")));
 
   const ownedOrgIds = ownedOrgs.map((org) => org.orgId);
   const orgIdsWithOtherOwners = new Set(
@@ -163,7 +161,6 @@ export const assertUserIsNotSoleOrgOwner = async (
                 ne(member.userId, currentUserId),
               ),
             )
-            .for("update")
         ).map((row) => row.orgId)
       : [],
   );
@@ -315,6 +312,7 @@ export const clearWorkspaceLeadRole = async (
   tx: Transaction,
   currentUserId: SafeId<"user">,
 ): Promise<void> => {
+  await tryLockAccountMemberCleanup(tx, currentUserId);
   const ledMatters = await tx
     .select({
       id: workspaces.id,
@@ -436,8 +434,7 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   const obligationOwnerByEntityId = new Map<string, string>();
 
   const reassignmentItems = [...arrayOrEmpty(reassignments)];
-  // Organization membership -> affected matters (try) -> matter membership ->
-  // obligation/entity. Re-entrant when the caller already holds the prefix.
+  // Re-entrant when the account entry already holds the complete stewardship prefix.
   await tryLockAccountMemberCleanup(tx, currentUserId);
 
   const currentTaskAssignments = await selectActiveTaskAssignments(

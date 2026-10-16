@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
 
@@ -11,8 +11,10 @@ import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import {
@@ -24,6 +26,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -69,7 +72,16 @@ const seedMember = async (db: GatedTestDb) => {
     name: "Held matter",
     reference: suffix,
   });
-  await db.insert(workspaceMembers).values({ workspaceId, userId });
+  await db.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        { organizationId, workspaceIds: [workspaceId], userIds: [userId] },
+      ],
+      mode: "update",
+    });
+    await tx.insert(workspaceMembers).values({ workspaceId, userId });
+  });
   const cleanUp = async () => {
     await db.delete(organization).where(eq(organization.id, organizationId));
     await db.delete(user).where(eq(user.id, userId));
@@ -90,19 +102,33 @@ const seedAdminClientMatter = async (
     type: "person",
     displayName: "Matter lock client",
   });
-  await db
-    .update(member)
-    .set({ role: "admin" })
-    .where(eq(member.id, seeded.memberId));
-  await db
-    .update(workspaces)
-    .set({ clientId })
-    .where(eq(workspaces.id, seeded.workspaceId));
-  if (assignment === "unassigned") {
-    await db
-      .delete(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
-  }
+  await db.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId: seeded.organizationId,
+          workspaceIds: [seeded.workspaceId],
+          userIds: [seeded.userId],
+          membershipUserIds: [seeded.userId],
+        },
+      ],
+      mode: "update",
+    });
+    await tx
+      .update(member)
+      .set({ role: "admin" })
+      .where(eq(member.id, seeded.memberId));
+    await tx
+      .update(workspaces)
+      .set({ clientId })
+      .where(eq(workspaces.id, seeded.workspaceId));
+    if (assignment === "unassigned") {
+      await tx
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+    }
+  });
   return seeded;
 };
 
@@ -128,12 +154,39 @@ type Seeded = Awaited<ReturnType<typeof seedMember>>;
 
 const REMOVALS = {
   organization: async (db: GatedTestDb, seeded: Seeded) => {
-    await db.delete(member).where(eq(member.id, seeded.memberId));
+    await db.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId: seeded.organizationId,
+            workspaceIds: [seeded.workspaceId],
+            userIds: [seeded.userId],
+            membershipUserIds: [seeded.userId],
+          },
+        ],
+        mode: "update",
+      });
+      await tx.delete(member).where(eq(member.id, seeded.memberId));
+    });
   },
   matter: async (db: GatedTestDb, seeded: Seeded) => {
-    await db
-      .delete(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+    await db.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId: seeded.organizationId,
+            workspaceIds: [seeded.workspaceId],
+            userIds: [seeded.userId],
+          },
+        ],
+        mode: "update",
+      });
+      await tx
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, seeded.workspaceId));
+    });
   },
 } as const;
 
@@ -151,6 +204,64 @@ const ACCESS_READERS = {
   },
 } as const;
 
+const PRIVATE_ACCESS_MUTATIONS = {
+  offboarding: {
+    scope: "membership",
+    retainsReach: false,
+    run: async (tx: Transaction, seeded: Seeded) => {
+      await removeOrganizationMemberInTransaction(tx, {
+        organizationId: seeded.organizationId,
+        memberId: seeded.memberId,
+        userId: seeded.userId,
+        actorUserId: seeded.ownerId,
+      });
+    },
+  },
+  assignment: {
+    scope: "matter",
+    retainsReach: false,
+    run: async (tx: Transaction, seeded: Seeded) => {
+      await tx
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, seeded.workspaceId),
+            eq(workspaceMembers.userId, seeded.userId),
+          ),
+        );
+    },
+  },
+  role: {
+    scope: "membership",
+    // External users still reach the private matters they are assigned to.
+    retainsReach: true,
+    run: async (tx: Transaction, seeded: Seeded) => {
+      await tx
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, seeded.memberId));
+    },
+  },
+  "role and assignment": {
+    scope: "membership",
+    retainsReach: false,
+    run: async (tx: Transaction, seeded: Seeded) => {
+      await tx
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, seeded.memberId));
+      await tx
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, seeded.workspaceId),
+            eq(workspaceMembers.userId, seeded.userId),
+          ),
+        );
+    },
+  },
+} as const;
+
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("member access hold (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
@@ -159,6 +270,178 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("member access hold (postgres)", () => {
+    describe.each(Object.entries(ACCESS_READERS))(
+      "private matter %s access",
+      (_reader, readAccess) => {
+        describe.each(Object.entries(PRIVATE_ACCESS_MUTATIONS))(
+          "racing %s",
+          (_mutation, mutation) => {
+            test.each(["reader", "revoker"] as const)(
+              "%s acquires the protocol first without a deadlock",
+              async (first) => {
+                await withGatedTestClients(
+                  databaseUrl,
+                  async ({ openClient }) => {
+                    const { db } = openClient({ max: 1 });
+                    const seeded = await seedMember(db);
+                    try {
+                      await db.transaction(async (tx) => {
+                        await lockMatterStewardship({
+                          tx,
+                          requests: [
+                            {
+                              organizationId: seeded.organizationId,
+                              workspaceIds: [seeded.workspaceId],
+                              userIds: [seeded.userId, seeded.ownerId],
+                            },
+                          ],
+                          mode: "update",
+                        });
+                        await tx.insert(workspaceMembers).values({
+                          workspaceId: seeded.workspaceId,
+                          userId: seeded.ownerId,
+                        });
+                        await tx
+                          .update(workspaces)
+                          .set({
+                            leadUserId: seeded.ownerId,
+                            visibility: MATTER_VISIBILITY.assignedOnly,
+                          })
+                          .where(eq(workspaces.id, seeded.workspaceId));
+                      });
+                      let observedAccess: boolean | undefined;
+                      await withInterleaving({
+                        databaseUrl,
+                        schedules:
+                          first === "reader"
+                            ? [
+                                [
+                                  "a.read",
+                                  "b.protocol",
+                                  "a.commit",
+                                  "b.mutate",
+                                  "b.commit",
+                                ],
+                              ]
+                            : [
+                                [
+                                  "b.protocol",
+                                  "a.read",
+                                  "b.mutate",
+                                  "b.commit",
+                                  "a.commit",
+                                ],
+                              ],
+                        a: {
+                          steps: [
+                            {
+                              name: "read",
+                              run: async (tx) => {
+                                observedAccess = await readAccess(tx, seeded);
+                              },
+                            },
+                          ],
+                        },
+                        b: {
+                          steps: [
+                            {
+                              name: "protocol",
+                              run: async (tx) => {
+                                await lockMatterStewardship({
+                                  tx,
+                                  requests: [
+                                    {
+                                      organizationId: seeded.organizationId,
+                                      workspaceIds: [seeded.workspaceId],
+                                      userIds: [seeded.userId, seeded.ownerId],
+                                      membershipUserIds:
+                                        mutation.scope === "membership"
+                                          ? [seeded.userId]
+                                          : [],
+                                    },
+                                  ],
+                                  mode: "update",
+                                });
+                              },
+                            },
+                            {
+                              name: "mutate",
+                              run: async (tx) => {
+                                await mutation.run(tx, seeded);
+                              },
+                            },
+                          ],
+                        },
+                        reset: async () => {},
+                        readState: async () => ({
+                          observedAccess,
+                          finalAccess: await db.transaction(
+                            async (tx) => await readAccess(tx, seeded),
+                          ),
+                          steward: await db
+                            .select({
+                              leadUserId: workspaces.leadUserId,
+                              visibility: workspaces.visibility,
+                              role: member.role,
+                            })
+                            .from(workspaces)
+                            .innerJoin(
+                              workspaceMembers,
+                              and(
+                                eq(workspaceMembers.workspaceId, workspaces.id),
+                                eq(
+                                  workspaceMembers.userId,
+                                  workspaces.leadUserId,
+                                ),
+                              ),
+                            )
+                            .innerJoin(
+                              member,
+                              and(
+                                eq(
+                                  member.organizationId,
+                                  workspaces.organizationId,
+                                ),
+                                eq(member.userId, workspaces.leadUserId),
+                              ),
+                            )
+                            .where(eq(workspaces.id, seeded.workspaceId)),
+                        }),
+                        invariant: ({ outcomes, blocked, state }) => {
+                          expect(outcomes.a.status).not.toBe("deadlock");
+                          expect(outcomes.b.status).not.toBe("deadlock");
+                          expect(outcomes).toEqual({
+                            a: { status: "committed" },
+                            b: { status: "committed" },
+                          });
+                          expect(blocked).toContain(
+                            first === "reader" ? "b.protocol" : "a.read",
+                          );
+                          expect(state.observedAccess).toBe(
+                            first === "reader" || mutation.retainsReach,
+                          );
+                          expect(state.finalAccess).toBe(mutation.retainsReach);
+                          expect(state.steward).toEqual([
+                            {
+                              leadUserId: seeded.ownerId,
+                              visibility: MATTER_VISIBILITY.assignedOnly,
+                              role: "owner",
+                            },
+                          ]);
+                        },
+                      });
+                    } finally {
+                      await seeded.cleanUp();
+                    }
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
     test.each(Object.entries(REMOVALS))(
       "a %s membership removal waits for the transaction holding it",
       async (_removal, remove) => {
@@ -235,7 +518,7 @@ if (!databaseUrl || !runPostgresTests) {
     );
 
     test.each(Object.entries(ACCESS_READERS))(
-      "%s observes an assignment removal committed during its member lock wait",
+      "%s observes an assignment removal committed during its lifecycle lock wait",
       async (_reader, readAccess) => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { db: writerDb } = openClient({ max: 1 });
@@ -245,7 +528,19 @@ if (!databaseUrl || !runPostgresTests) {
           const locked = Promise.withResolvers<number>();
           const release = Promise.withResolvers<undefined>();
           const writing = writerDb.transaction(async (tx) => {
-            // An UPDATE holds the member while assignment removal shares its commit.
+            await lockMatterStewardship({
+              tx,
+              requests: [
+                {
+                  organizationId: seeded.organizationId,
+                  workspaceIds: [seeded.workspaceId],
+                  userIds: [seeded.userId],
+                  membershipUserIds: [seeded.userId],
+                },
+              ],
+              mode: "update",
+            });
+            // The revocation prefix precedes the member update and assignment loss.
             await tx
               .update(member)
               .set({ role: "member" })

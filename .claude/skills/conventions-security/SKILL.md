@@ -78,6 +78,19 @@ operation until an authorized person explicitly hands the matter to another
 assigned internal member. Refusal responses list only affected matters the
 caller already reaches; hidden matter names, identifiers and counts stay hidden.
 
+Acquire stewardship locks through `lockMatterStewardship` in
+`lib/db/aggregate-lock.ts`: lifecycle IDs, all candidate membership rows by
+member ID, then matter rows by ID. Pass all organizations and matters in one
+request before acquiring any part of that prefix. Revalidate after acquisition;
+retry the whole transaction if discovery grows. Never extend a prefix below an
+already locked matter or upgrade a shared reach hold into a writer.
+Database triggers validate the completed prefix and steward state without
+acquiring further locks. Completion proofs are root-owned; mutable session
+settings cannot authorize a mutation. Reach holds, creation, recovery, repair, membership
+changes and deletion use this same protocol. Recovery cannot assign its acting
+administrator; hidden healthy, missing and foreign-organization matters produce
+the same not-found response.
+
 ### Server-bound audit events
 
 Actors, workspace/organization ownership, request metadata, and before/after

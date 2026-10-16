@@ -21,6 +21,7 @@
     "./verification-run-caps": "./src/verification-run-caps.ts",
     "./action-admission": "./src/action-admission.ts",
     "./matter-visibility": "./src/matter-visibility.ts",
+    "./error": "./src/error.ts",
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
     "./chat-secret": "./src/chat-secret.ts",

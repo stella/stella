@@ -19,6 +19,7 @@ import type {
 } from "drizzle-orm/pg-core/query-builders/select.types";
 import * as v from "valibot";
 
+import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract/error";
 import { compareCodeUnit } from "@stll/collation";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -39,6 +40,7 @@ import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-ti
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -2142,6 +2144,110 @@ export const withDecisionCitationStatsLocks = async ({
   `);
 };
 
+export type MatterStewardshipLockRequest = {
+  organizationId: SafeId<"organization">;
+  workspaceIds: readonly SafeId<"workspace">[];
+  userIds?: readonly string[];
+  /** Includes every matter currently led by or assigned to these members. */
+  membershipUserIds?: readonly string[];
+};
+
+type MatterStewardshipLockOptions = {
+  tx: ExecuteTransaction;
+  requests: readonly MatterStewardshipLockRequest[];
+  mode: "share" | "update";
+};
+
+/**
+ * The single stewardship prefix: lifecycle IDs, candidate member IDs, matter
+ * IDs, each sorted globally across organizations. SQL also owns the online
+ * repair prefix. A scope discovered to have grown aborts for a fresh retry.
+ */
+export const lockMatterStewardship = async ({
+  tx,
+  requests,
+  mode,
+}: MatterStewardshipLockOptions) => {
+  const request = JSON.stringify(
+    requests.map((scope) => ({
+      organization_id: scope.organizationId,
+      workspace_ids: scope.workspaceIds,
+      user_ids: scope.userIds,
+      membership_user_ids: scope.membershipUserIds,
+    })),
+  );
+  const result = await Result.tryPromise(
+    async () =>
+      await tx.execute(sql`
+    SELECT workspace_id AS id FROM public.stella_lock_matter_stewardship(${request}::text::jsonb, ${mode})
+  `),
+  );
+  if (result.isErr()) {
+    if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+      abortTransaction(
+        new HandlerError({
+          status: 409,
+          code: MEMBER_REMOVAL_BUSY_CODE,
+          retryable: true,
+          message: "Other work is in progress. Please try again shortly.",
+        }),
+      );
+    }
+    abortTransaction(result.error.cause);
+  }
+  const rows = executedRows(result.value);
+  return {
+    workspaceIds: rows.map((row) =>
+      brandPersistedWorkspaceId(v.parse(v.object({ id: v.string() }), row).id),
+    ),
+  };
+};
+
+type TimerOwnerIdentitiesLockOptions = {
+  tx: ExecuteTransaction;
+  owners: readonly {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  }[];
+};
+
+/** The timer-owner tier follows a completed stewardship prefix. */
+export const lockTimerOwnerIdentities = async ({
+  tx,
+  owners,
+}: TimerOwnerIdentitiesLockOptions): Promise<void> => {
+  await lockMatterStewardship({
+    tx,
+    requests: [...Map.groupBy(owners, (owner) => owner.organizationId)].map(
+      ([organizationId, members]) => ({
+        organizationId,
+        workspaceIds: [],
+        userIds: members.map((owner) => owner.userId),
+      }),
+    ),
+    mode: "share",
+  });
+  const keys = [
+    ...new Set(
+      owners.map((owner) => `timer:${owner.organizationId}:${owner.userId}`),
+    ),
+  ];
+  if (keys.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(owner_locks.lock_key)
+    FROM (
+      SELECT DISTINCT hashtext(owner_key) AS lock_key
+      FROM unnest(ARRAY[${sql.join(
+        keys.map((key) => sql`${key}`),
+        sql`, `,
+      )}]::text[]) AS owner_key
+      ORDER BY lock_key
+    ) owner_locks ORDER BY owner_locks.lock_key
+  `);
+};
+
 type MemberAccessRowLockOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
@@ -2169,36 +2275,6 @@ export const lockMemberAccessRow = async ({
       .limit(1)
       .for(mode)
   ).at(0);
-
-type MemberAccessRowsLockOptions = {
-  tx: Transaction;
-  organizationId: SafeId<"organization">;
-  userIds: readonly SafeId<"user">[];
-};
-
-/** Freeze actor and named steward roles in deterministic order for recovery. */
-export const lockMemberAccessRows = async ({
-  tx,
-  organizationId,
-  userIds,
-}: MemberAccessRowsLockOptions) => {
-  const ids = [...new Set(userIds)].toSorted();
-  if (ids.length === 0) {
-    return [];
-  }
-  return await tx
-    .select({ userId: member.userId, role: member.role })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        inArray(member.userId, ids),
-      ),
-    )
-    .orderBy(member.userId)
-    .limit(ids.length)
-    .for("share");
-};
 
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];

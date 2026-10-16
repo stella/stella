@@ -34,6 +34,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -759,10 +760,23 @@ describe("global timer lifecycle", () => {
       legacyTimeEntryId: null,
       state: "running",
     });
-    const removed = await db
-      .delete(workspaceMembers)
-      .where(eq(workspaceMembers.id, membershipId))
-      .returning({ id: workspaceMembers.id });
+    const removed = await db.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [originalMatterId],
+            userIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
+      return await tx
+        .delete(workspaceMembers)
+        .where(eq(workspaceMembers.id, membershipId))
+        .returning({ id: workspaceMembers.id });
+    });
     expect(removed).toEqual([{ id: membershipId }]);
     const beforeEntries = await db
       .select({ id: timeEntries.id })

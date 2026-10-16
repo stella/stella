@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
-import { defaultMatterVisibilityFor } from "@stll/api-contract";
+import {
+  defaultMatterVisibilityFor,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import { assertProperty } from "@stll/property-testing";
 
@@ -13,6 +16,7 @@ import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { canUseFolioCollabWorkspace } from "@/api/lib/folio-collab-rooms";
@@ -142,7 +146,7 @@ const seedWorld = async (tx: Transaction, world: World) => {
   ]);
   await tx.insert(workspaces).values(
     world.matters.map((matter, index) => ({
-      visibility: defaultMatterVisibilityFor({ hasClient: matter.client }),
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: seeded.matterIds[index] ?? panic("matter id"),
       organizationId: seeded.organizationId,
       clientId: matter.client ? clientId : null,
@@ -175,9 +179,34 @@ const seedWorld = async (tx: Transaction, world: World) => {
             : [],
         ),
   );
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId: seeded.organizationId,
+        workspaceIds: seeded.matterIds,
+        userIds: [...members.map(({ userId }) => userId), seeded.stewardUserId],
+      },
+    ],
+    mode: "update",
+  });
   const allAssignments = [...stewardAssignments, ...assignments];
   if (allAssignments.length > 0) {
     await tx.insert(workspaceMembers).values(allAssignments);
+  }
+  if (stewardAssignments.length > 0) {
+    await tx
+      .update(workspaces)
+      .set({
+        visibility: defaultMatterVisibilityFor({ hasClient: false }),
+        leadUserId: seeded.stewardUserId,
+      })
+      .where(
+        inArray(
+          workspaces.id,
+          stewardAssignments.map(({ workspaceId }) => workspaceId),
+        ),
+      );
   }
   return seeded;
 };

@@ -36,8 +36,10 @@ import {
   ownedTimers,
   readOwnedTimer,
   timerNotFound,
+  timerScopeChanged,
   timerSeconds,
 } from "@/api/lib/billing/time-timers";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type {
@@ -523,6 +525,98 @@ const finishTimerConfirmation = async ({
   });
 };
 
+const holdTimerCompletionScope = async ({
+  tx,
+  owner,
+  id,
+}: Pick<FinalizeTimerOptions, "tx" | "owner" | "id">) => {
+  const preliminary = await readOwnedTimer({ tx, owner, id, lock: "advisory" });
+  const preliminaryLegacy = preliminary?.legacyTimeEntryId
+    ? (
+        await tx
+          .select({ workspaceId: timeEntries.workspaceId })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.id, preliminary.legacyTimeEntryId),
+              eq(timeEntries.organizationId, owner.organizationId),
+              eq(timeEntries.userId, owner.userId),
+            ),
+          )
+          .limit(1)
+      ).at(0)
+    : undefined;
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        ...owner,
+        workspaceIds: [
+          ...new Set(
+            [preliminary?.workspaceId, preliminaryLegacy?.workspaceId].filter(
+              (value) => value !== null && value !== undefined,
+            ),
+          ),
+        ],
+        userIds: [owner.userId],
+      },
+    ],
+    mode: "share",
+  });
+  return { preliminary, preliminaryLegacy };
+};
+
+type CheckTimerOriginalEntryOptions = {
+  timer: typeof timeTimers.$inferSelect;
+  legacy: typeof timeEntries.$inferSelect | undefined;
+  expectedWorkspaceId: typeof timeEntries.$inferSelect.workspaceId | undefined;
+  completion: TimerCompletion;
+};
+const checkTimerOriginalEntry = ({
+  timer,
+  legacy,
+  expectedWorkspaceId,
+  completion,
+}: CheckTimerOriginalEntryOptions) => {
+  if (legacy && legacy.workspaceId !== expectedWorkspaceId) {
+    return Result.err(timerScopeChanged());
+  }
+  if (timer.legacyTimeEntryId && !legacy) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        code: "timer_original_entry_inaccessible",
+        message: "Original timer entry is not accessible",
+        hint: {
+          admin:
+            "Restore the timer owner's access to the original matter, then retry time-timers.admin.stop.",
+          owner:
+            "Restore access to the original matter before confirming this migrated timer.",
+        }[completion.type],
+      }),
+    );
+  }
+  if (
+    legacy &&
+    (legacy.status !== BILLING_STATUS.DRAFT ||
+      legacy.source !== TIME_ENTRY_SOURCE.TIMER)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "timer_original_entry_changed",
+        message: "The original timer entry has changed",
+        hint: {
+          admin:
+            "Ask the timer owner to discard it and review the original time entry.",
+          owner: "Discard the timer and review the original time entry.",
+        }[completion.type],
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
 const finalizeTimerInSavepoint = async ({
   tx,
   owner,
@@ -532,6 +626,11 @@ const finalizeTimerInSavepoint = async ({
   completion,
 }: FinalizeTimerOptions) => {
   const policy = await lockTimePolicy(tx, owner.organizationId);
+  const { preliminary, preliminaryLegacy } = await holdTimerCompletionScope({
+    tx,
+    owner,
+    id,
+  });
   await lockTimerOwner(tx, owner);
   const replay = await readConfirmation({ tx, owner, id });
   if (replay) {
@@ -545,6 +644,13 @@ const finalizeTimerInSavepoint = async ({
   });
   if (!timer) {
     return Result.err(timerNotFound(completion.type));
+  }
+  if (
+    !preliminary ||
+    timer.workspaceId !== preliminary.workspaceId ||
+    timer.legacyTimeEntryId !== preliminary.legacyTimeEntryId
+  ) {
+    return Result.err(timerScopeChanged());
   }
   const workspaceId = timer.workspaceId;
   const internalRequested =
@@ -610,38 +716,14 @@ const finalizeTimerInSavepoint = async ({
           .for("update")
       ).at(0)
     : undefined;
-  if (timer.legacyTimeEntryId && !legacy) {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        code: "timer_original_entry_inaccessible",
-        message: "Original timer entry is not accessible",
-        hint: {
-          admin:
-            "Restore the timer owner's access to the original matter, then retry time-timers.admin.stop.",
-          owner:
-            "Restore access to the original matter before confirming this migrated timer.",
-        }[completion.type],
-      }),
-    );
-  }
-  if (
-    legacy &&
-    (legacy.status !== BILLING_STATUS.DRAFT ||
-      legacy.source !== TIME_ENTRY_SOURCE.TIMER)
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        code: "timer_original_entry_changed",
-        message: "The original timer entry has changed",
-        hint: {
-          admin:
-            "Ask the timer owner to discard it and review the original time entry.",
-          owner: "Discard the timer and review the original time entry.",
-        }[completion.type],
-      }),
-    );
+  const originalEntry = checkTimerOriginalEntry({
+    timer,
+    legacy,
+    expectedWorkspaceId: preliminaryLegacy?.workspaceId,
+    completion,
+  });
+  if (originalEntry.isErr()) {
+    return originalEntry;
   }
   if (completion.type === "admin" && timer.state !== "running") {
     return Result.err(

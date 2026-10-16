@@ -206,6 +206,7 @@ describe("a matter's event stream when a member is removed", () => {
     });
     const removal = await Result.gen(() =>
       removeWorkspaceMemberHandler({
+        organizationId: identity.organizationId,
         safeDb: createMembershipSafeDb(rlsDb, {
           ...identity,
           serverValidatedWorkspaceIds: [workspaceId],

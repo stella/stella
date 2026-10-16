@@ -21,6 +21,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -186,6 +187,17 @@ describe("audit log compliance filter", () => {
     );
     const personalMatterId = toSafeId<"workspace">(Bun.randomUUIDv7());
     await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [personalMatterId],
+            userIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
       await tx.insert(workspaces).values({
         id: personalMatterId,
         organizationId: ids.orgA,

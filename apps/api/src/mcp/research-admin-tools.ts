@@ -955,6 +955,7 @@ const handleRemoveMember = async ({
   }
   const removed = await Result.gen(() =>
     removeWorkspaceMemberHandler({
+      organizationId: context.organizationId,
       safeDb: context.safeDb,
       workspaceId,
       userId: brandPersistedUserId(userId),

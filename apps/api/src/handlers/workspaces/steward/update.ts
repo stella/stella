@@ -5,6 +5,7 @@ import { recoverMatterSteward } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -80,6 +81,11 @@ export const createRecoverMatterSteward = ({
 
 // Recovery deliberately has organization management authority without granting
 // read access. The owner validates organization, actor and steward under locks.
-export default createRecoverMatterSteward({
+const endpoint = createRecoverMatterSteward({
   recoverInTransaction: recoverMatterSteward,
 });
+declareAggregateMutation(endpoint.handler, {
+  type: "aggregate",
+  aggregates: ["workspace"],
+});
+export default endpoint;

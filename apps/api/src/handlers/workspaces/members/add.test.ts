@@ -7,7 +7,10 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import addWorkspaceMember from "./add";
 
@@ -55,16 +58,15 @@ const selectRowsInOrder = (rowsByCall: unknown[][], isMember = true) => {
   let callIndex = 0;
 
   return () => ({
-    from: (table: unknown) => ({
-      where: () => ({
-        for: async () => {
-          if (table === member) {
-            return isMember ? [{ id: "member_existing" }] : [];
-          }
-          return rowsByCall.at(callIndex++) ?? [];
-        },
-      }),
-    }),
+    from: (table: unknown) => {
+      let rows = rowsByCall.at(callIndex) ?? [];
+      if (table === member) {
+        rows = isMember ? [{ id: "member_existing" }] : [];
+      } else {
+        callIndex += 1;
+      }
+      return createSelectQueryMock(rows).from();
+    },
   });
 };
 

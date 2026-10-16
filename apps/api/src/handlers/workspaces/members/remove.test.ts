@@ -111,6 +111,7 @@ describe("removeWorkspaceMember", () => {
 
     const result = await Result.gen(() =>
       removeWorkspaceMemberHandler({
+        organizationId: toSafeId<"organization">("org_timer_test"),
         safeDb,
         workspaceId,
         userId,

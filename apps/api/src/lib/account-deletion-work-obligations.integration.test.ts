@@ -33,6 +33,7 @@ import {
   reassignActiveTaskAssignmentsAndDropMemberships,
 } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -72,6 +73,24 @@ test("organization offboarding hands a private matter to its remaining internal 
   const outcome = await Result.tryPromise(
     async () =>
       await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+              membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            },
+            {
+              organizationId: ids.orgB,
+              workspaceIds: [ids.wsB1],
+              membershipUserIds: [ids.userA1],
+              userIds: [ids.userB1],
+            },
+          ],
+          mode: "update",
+        });
         await tx.insert(workspaceMembers).values({
           id: createSafeId<"workspaceMember">(),
           workspaceId: ids.wsA1,
@@ -272,6 +291,24 @@ describe("account deletion governed ownership", () => {
     const outcome = await Result.tryPromise(
       async () =>
         await testDb.transaction(async (tx) => {
+          await lockMatterStewardship({
+            tx: asTestRaw<Transaction>(tx),
+            requests: [
+              {
+                organizationId: ids.orgA,
+                workspaceIds: [ids.wsA1, ids.wsA2],
+                userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+                membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+              },
+              {
+                organizationId: ids.orgB,
+                workspaceIds: [ids.wsB1],
+                membershipUserIds: [ids.userA1],
+                userIds: [ids.userB1],
+              },
+            ],
+            mode: "update",
+          });
           await tx.insert(workspaceMembers).values({
             id: createSafeId<"workspaceMember">(),
             workspaceId: ids.wsA1,
@@ -368,6 +405,24 @@ describe("account deletion governed ownership", () => {
   test("hands off reassigned work, unassigns other mutable work, and retains closed history", async () => {
     try {
       await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1, ids.wsA2],
+              userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+              membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            },
+            {
+              organizationId: ids.orgB,
+              workspaceIds: [ids.wsB1],
+              membershipUserIds: [ids.userA1],
+              userIds: [ids.userB1],
+            },
+          ],
+          mode: "update",
+        });
         const handedEntityId = createSafeId<"entity">();
         const unassignedEntityId = createSafeId<"entity">();
         const closedEntityId = createSafeId<"entity">();
@@ -569,6 +624,24 @@ describe("account deletion governed ownership", () => {
 test("account erasure unassigns open tasks, keeps finished work's assignee and attorney history", async () => {
   try {
     await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [ids.wsA1, ids.wsA2],
+            userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+          },
+          {
+            organizationId: ids.orgB,
+            workspaceIds: [ids.wsB1],
+            membershipUserIds: [ids.userA1],
+            userIds: [ids.userB1],
+          },
+        ],
+        mode: "update",
+      });
       const taskIds = [createSafeId<"entity">(), createSafeId<"entity">()];
       await tx.insert(entities).values(
         taskIds.map((id, index) => ({
@@ -664,6 +737,24 @@ type FixtureTransaction = Parameters<
 const rollingBack = async (body: (tx: FixtureTransaction) => Promise<void>) => {
   try {
     await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [ids.wsA1, ids.wsA2],
+            userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+            membershipUserIds: [ids.userA1, ids.userA2, ids.userAdmin],
+          },
+          {
+            organizationId: ids.orgB,
+            workspaceIds: [ids.wsB1],
+            membershipUserIds: [ids.userA1],
+            userIds: [ids.userB1],
+          },
+        ],
+        mode: "update",
+      });
       await body(tx);
       tx.rollback();
     });

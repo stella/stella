@@ -26,6 +26,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -54,6 +55,7 @@ const config = {
 
 export type RemoveWorkspaceMemberProps = {
   safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
@@ -106,6 +108,43 @@ const readMemberWorkToUnassign = ({
     )
     .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
     .for("update");
+
+const readMemberWorkForRemoval = async ({
+  tx,
+  workspaceId,
+  userId,
+}: ReadMemberWorkToUnassignOptions) => {
+  const activeTimers = await tx
+    .select({ id: timeEntries.id })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.userId, userId),
+        isNotNull(timeEntries.timerStartedAt),
+        isNull(timeEntries.timerStoppedAt),
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  if (activeTimers.at(0)) {
+    throw new HandlerError({
+      status: 409,
+      message: "Stop the member's active timer before removing them",
+    });
+  }
+
+  const ownedWork = await readMemberWorkToUnassign({ tx, workspaceId, userId });
+
+  if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
+    throw new HandlerError({
+      status: 409,
+      message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
+    });
+  }
+  return ownedWork;
+};
 
 type RemovedMemberAuditEventsOptions = {
   workspaceId: SafeId<"workspace">;
@@ -223,6 +262,7 @@ const removedMemberWorkEvents = ({
 // transports.
 export const removeWorkspaceMemberHandler = async function* ({
   safeDb,
+  organizationId,
   workspaceId,
   userId,
   actorUserId,
@@ -236,6 +276,17 @@ export const removeWorkspaceMemberHandler = async function* ({
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          {
+            organizationId,
+            workspaceIds: [workspaceId],
+            userIds: [userId, actorUserId, ...(reassignTo ? [reassignTo] : [])],
+          },
+        ],
+        mode: "update",
+      });
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.
@@ -306,39 +357,11 @@ export const removeWorkspaceMemberHandler = async function* ({
         );
       }
 
-      const activeTimers = await tx
-        .select({ id: timeEntries.id })
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.workspaceId, workspaceId),
-            eq(timeEntries.userId, userId),
-            isNotNull(timeEntries.timerStartedAt),
-            isNull(timeEntries.timerStoppedAt),
-          ),
-        )
-        .limit(1)
-        .for("update");
-
-      if (activeTimers.at(0)) {
-        throw new HandlerError({
-          status: 409,
-          message: "Stop the member's active timer before removing them",
-        });
-      }
-
-      const ownedWork = await readMemberWorkToUnassign({
+      const ownedWork = await readMemberWorkForRemoval({
         tx,
         workspaceId,
         userId,
       });
-
-      if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
-        throw new HandlerError({
-          status: 409,
-          message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
-        });
-      }
 
       let leadWasCleared = false;
       if (workspace.leadUserId === userId) {
@@ -497,6 +520,7 @@ export const createRemoveWorkspaceMember = (
     config,
     async function* ({
       safeDb,
+      session,
       workspaceId,
       params: { userId },
       body,
@@ -506,6 +530,7 @@ export const createRemoveWorkspaceMember = (
     }) {
       return yield* removeWorkspaceMemberHandler({
         safeDb,
+        organizationId: session.activeOrganizationId,
         workspaceId,
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,

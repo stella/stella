@@ -77,3 +77,24 @@ SELECT a.workspace_id AS authorized_workspace_id, a.workspace_status
 FROM current_member m
 CROSS JOIN LATERAL public.stella_authorized_workspace_ids(m.organization_id, m.user_id) a;
 --> statement-breakpoint
+
+--> statement-breakpoint
+-- The retained seven-argument creation API delegates to the same lock owner.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; delegates to the tenant-bound creation procedure without adding authority
+CREATE OR REPLACE FUNCTION public.stella_create_workspace(
+  p_workspace_id uuid, p_client_id uuid, p_name text, p_reference text,
+  p_billing_reference text, p_color text, p_lead_user_id text
+) RETURNS void LANGUAGE sql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT public.stella_create_workspace(
+    p_workspace_id, p_client_id, p_name, p_reference, p_billing_reference, p_color,
+    CASE WHEN p_client_id IS NULL THEN COALESCE(p_lead_user_id, NULLIF(current_setting('app.user_id', true), '')) ELSE p_lead_user_id END,
+    CASE WHEN p_client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
+  );
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) TO stella;
+--> statement-breakpoint

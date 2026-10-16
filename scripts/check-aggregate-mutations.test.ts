@@ -239,6 +239,91 @@ describe("aggregate mutation route coverage", () => {
     expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
   });
 
+  test("canonical stewardship acquisition is verified and shadowed acquisitions fail", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; ${String(sources.get(routes))}`,
+    );
+    const source = (shadow: string) =>
+      `import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeHandler } from "@/api/lib/api-handlers"; import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock"; const existing = createSafeHandler({}, async (${shadow}) => { await lockMatterStewardship({tx, requests: [], mode: "update"}); }); declareAggregateMutation(existing.handler, {type: "aggregate", aggregates: ["workspace"]}); export default existing;`;
+    sources.set("apps/api/src/handlers/example/create.ts", source(""));
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      source("lockMatterStewardship"),
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
+  test("an injected recovery owner requires its exact import, ownership path and awaited root transaction", () => {
+    const sources = fixture('post("/existing", existing.handler)');
+    const recovery = "apps/api/src/handlers/workspaces/steward/update.ts";
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/workspaces/steward/update"; ${String(sources.get(routes))}`,
+    );
+    const endpoint = (dependency: string, extra = "") =>
+      `import { Result } from "better-result"; import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration"; import { createSafeRootHandler } from "@/api/lib/api-handlers"; import { recoverMatterSteward } from "@/api/db/root"; ${extra} export const createEndpoint = ({ recoverInTransaction }) => createSafeRootHandler({}, async function* () { yield* Result.await(Result.tryPromise({ try: async () => await recoverInTransaction({}) })); }); const endpoint = createEndpoint({recoverInTransaction: ${dependency}}); declareAggregateMutation(endpoint.handler, {type: "aggregate", aggregates: ["workspace"]}); export default endpoint;`;
+    const owner = (acquisition: string, wrapper = "withAggregateTransaction") =>
+      `import { withAggregateTransaction, lockMatterStewardship } from "@/api/lib/db/aggregate-lock"; const rootDb = makeDatabase(); export const recoverMatterSteward = async (options) => await ${wrapper}(rootDb, async (tx) => { ${acquisition} });`;
+    sources.set(recovery, endpoint("recoverMatterSteward"));
+    sources.set(
+      "apps/api/src/db/root.ts",
+      owner('await lockMatterStewardship({tx, requests: [], mode: "update"});'),
+    );
+    expect(enumerate(sources).at(0)?.declared).toBe(true);
+    for (const counterfeit of [
+      endpoint("fake", "const fake = async () => {};"),
+      endpoint(
+        "recoverMatterSteward",
+        "recoverMatterSteward = async () => {};",
+      ),
+      endpoint("recoverMatterSteward, ...override"),
+      endpoint("recoverMatterSteward", "Result = counterfeit;"),
+      endpoint("recoverMatterSteward").replace(
+        "async function* ()",
+        "async function* (Result)",
+      ),
+      endpoint("recoverMatterSteward").replace(
+        "yield* Result.await(Result.tryPromise({ try: async () => await recoverInTransaction({}) }));",
+        "Result.tryPromise({ try: async () => await recoverInTransaction({}) });",
+      ),
+      endpoint("recoverMatterSteward").replace(
+        "try: async () => await recoverInTransaction({})",
+        "try: async () => await recoverInTransaction({}), ...override",
+      ),
+    ]) {
+      sources.set(recovery, counterfeit);
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    }
+    sources.set(recovery, endpoint("recoverMatterSteward"));
+    for (const body of [
+      owner(""),
+      owner('lockMatterStewardship({tx, requests: [], mode: "update"});'),
+      owner(
+        'await lockMatterStewardship({tx, requests: [], mode: "update"});',
+        "fakeTransaction",
+      ),
+    ]) {
+      sources.set("apps/api/src/db/root.ts", body);
+      expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+    }
+    sources.set(
+      "apps/api/src/db/root.ts",
+      owner('await lockMatterStewardship({tx, requests: [], mode: "update"});'),
+    );
+    sources.set(
+      "apps/api/src/handlers/example/create.ts",
+      endpoint("recoverMatterSteward"),
+    );
+    sources.set(
+      routes,
+      `import existing from "@/api/handlers/example/create"; export const route = new Elysia().post("/existing", existing.handler);`,
+    );
+    expect(() => enumerate(sources)).toThrow("must await withAggregateLock");
+  });
+
   test("a default export declaration does not classify a different named handler", () => {
     const sources = fixture('post("/named", foo.handler)');
     sources.set(

@@ -44,7 +44,7 @@ import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import { withMemberRoleStewardship, rootDb, rlsDb } from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -1280,11 +1280,35 @@ export const createAuth = (
     });
     return {
       ...adapter,
-      // The hook's preflight cannot hold a lock across this plugin write.
-      // Translate the database's final refusal at the adapter boundary.
+      // The plugin hook is outside its adapter write transaction. Acquire the
+      // stewardship prefix and perform role writes on the same connection.
       update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
         const update = await Result.tryPromise({
-          try: async () => await adapter.update<T>(args),
+          try: async () => {
+            if (args.model !== "member" || !("role" in args.update)) {
+              return await adapter.update<T>(args);
+            }
+            const selector = args.where.at(0);
+            if (
+              args.where.length !== 1 ||
+              selector?.field !== "id" ||
+              (selector.operator !== undefined && selector.operator !== "eq") ||
+              typeof selector.value !== "string"
+            ) {
+              return panic(
+                "Membership role update requires one member ID selector",
+              );
+            }
+            const memberId = selector.value;
+            return await withMemberRoleStewardship({
+              memberId,
+              write: async (tx) =>
+                await drizzleAdapter(
+                  tx,
+                  AUTH_DATABASE_ADAPTER_OPTIONS,
+                )(options).update<T>(args),
+            });
+          },
           catch: mapMembershipInvariantError,
         });
         if (Result.isError(update)) {

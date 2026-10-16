@@ -24,8 +24,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessWorkspaceRows,
-  lockMemberAccessRows,
-  withAggregateRowQuery,
+  lockMatterStewardship,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -125,22 +124,16 @@ export const hasUsableSteward = async (
   if (leadUserId === null) {
     return false;
   }
-  // The matter row is the invariant's lock: holding it before reading the
-  // lead's role and assignment means a concurrent role change (whose member
-  // trigger locks this row) or lead removal either committed already
-  // and is read here, or waits for this transaction and then sees its result.
-  await withAggregateRowQuery({
+  await lockMatterStewardship({
     tx,
-    aggregate: "workspace",
-    id: { id: workspaceId, organizationId },
+    requests: [
+      {
+        organizationId,
+        workspaceIds: [workspaceId],
+        userIds: [leadUserId, ...assigningUserIds],
+      },
+    ],
     mode: "update",
-    select: (lockTx) =>
-      lockTx
-        .select({
-          id: workspaces.id,
-          organizationId: workspaces.organizationId,
-        })
-        .from(workspaces),
   });
   const internal = await tx
     .select({ id: member.id })
@@ -209,6 +202,17 @@ export const restoreMatterStewards = async (
     return;
   }
   const requested = [...new Set(workspaceIds)];
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId,
+        workspaceIds: requested,
+        userIds: [departingUserId, actorUserId],
+      },
+    ],
+    mode: "update",
+  });
   const locked = await lockMatterAccessWorkspaceRows({
     tx,
     organizationId,
@@ -350,11 +354,26 @@ export const recoverOrphanedMatterSteward = async (
       new HandlerError({ status: 404, message: "Matter not found" }),
     );
   }
-  const memberships = await lockMemberAccessRows({
+  await lockMatterStewardship({
     tx,
-    organizationId,
-    userIds: [actorUserId, stewardUserId],
+    requests: [
+      {
+        organizationId,
+        workspaceIds: [workspaceId],
+        userIds: [actorUserId, stewardUserId],
+      },
+    ],
+    mode: "update",
   });
+  const memberships = await tx
+    .select({ userId: member.userId, role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, [actorUserId, stewardUserId]),
+      ),
+    );
   const actor = memberships.find((row) => row.userId === actorUserId);
   if (
     !actor ||
@@ -407,8 +426,8 @@ export const recoverOrphanedMatterSteward = async (
   ) {
     abortTransaction(
       new HandlerError({
-        status: 409,
-        message: "Matter does not require steward recovery",
+        status: 404,
+        message: "Matter not found",
       }),
     );
   }

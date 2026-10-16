@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Desktop edit session event reads and liveness renewals run in the session's
  * own scope: role `stella`, pinned to the session's workspace, exactly as
@@ -5,8 +6,6 @@
  * rows are reachable; the membership joins and token predicates still decide
  * the answer inside that bound.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -22,6 +21,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import {
   authorizeDesktopEditSessionWithDb,
   hashDesktopEditSessionToken,
@@ -185,6 +185,17 @@ beforeAll(async () => {
     },
   ]);
   await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [personalMatter.workspaceId],
+          userIds: [ids.userA2],
+        },
+      ],
+      mode: "update",
+    });
     await tx.insert(workspaces).values({
       id: personalMatter.workspaceId,
       organizationId: ids.orgA,
@@ -270,15 +281,29 @@ beforeAll(async () => {
   };
 
   // The requester leaves after asking; the creator loses the matter.
-  await testDb.delete(member).where(eq(member.id, formerMembershipId));
-  await testDb
-    .delete(workspaceMembers)
-    .where(
-      and(
-        eq(workspaceMembers.workspaceId, ids.wsA1),
-        eq(workspaceMembers.userId, revokedCreator),
-      ),
-    );
+  await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [ids.wsA1],
+          userIds: [formerRequester, revokedCreator],
+          membershipUserIds: [formerRequester],
+        },
+      ],
+      mode: "update",
+    });
+    await tx.delete(member).where(eq(member.id, formerMembershipId));
+    await tx
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, ids.wsA1),
+          eq(workspaceMembers.userId, revokedCreator),
+        ),
+      );
+  });
 });
 
 afterAll(async () => {
@@ -290,9 +315,22 @@ afterAll(async () => {
   await testDb
     .delete(workspaces)
     .where(eq(workspaces.id, personalMatter.workspaceId));
-  for (const userId of createdUsers) {
-    await testDb.delete(user).where(eq(user.id, userId));
-  }
+  await testDb.transaction(async (tx) => {
+    await lockMatterStewardship({
+      tx: asTestRaw<Transaction>(tx),
+      requests: [
+        {
+          organizationId: ids.orgA,
+          workspaceIds: [],
+          membershipUserIds: createdUsers,
+        },
+      ],
+      mode: "update",
+    });
+    for (const userId of createdUsers) {
+      await tx.delete(user).where(eq(user.id, userId));
+    }
+  });
   await releaseTestDb();
 });
 
@@ -375,10 +413,23 @@ describe("desktop edit session authorization", () => {
 
   test("refuses an owner without a matter membership once the client matter is assigned-only", async () => {
     const session = sessions.ownerOnClientMatter;
-    await testDb
-      .update(workspaces)
-      .set({ visibility: "assigned_only", leadUserId: ids.userA1 })
-      .where(eq(workspaces.id, ids.wsA1));
+    await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId: ids.orgA,
+            workspaceIds: [ids.wsA1],
+            userIds: [ids.userA1],
+          },
+        ],
+        mode: "update",
+      });
+      await tx
+        .update(workspaces)
+        .set({ visibility: "assigned_only", leadUserId: ids.userA1 })
+        .where(eq(workspaces.id, ids.wsA1));
+    });
     try {
       const result = await authorizeDesktopEditSessionWithDb(
         { sessionId: session.id, sessionToken: session.token },
@@ -387,10 +438,23 @@ describe("desktop edit session authorization", () => {
 
       expect(result.status).toBe("permission-revoked");
     } finally {
-      await testDb
-        .update(workspaces)
-        .set({ visibility: "admins_and_assigned", leadUserId: null })
-        .where(eq(workspaces.id, ids.wsA1));
+      await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [ids.wsA1],
+              userIds: [ids.userA1],
+            },
+          ],
+          mode: "update",
+        });
+        await tx
+          .update(workspaces)
+          .set({ visibility: "admins_and_assigned", leadUserId: null })
+          .where(eq(workspaces.id, ids.wsA1));
+      });
     }
   });
 

@@ -7,7 +7,10 @@ import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import {
+  lockMatterStewardship,
+  withAggregateRowQuery,
+} from "@/api/lib/db/aggregate-lock";
 import { hasUsableSteward } from "@/api/lib/workspaces/visibility";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -91,10 +94,23 @@ if (!databaseUrl || !runPostgresTests) {
               mutation === "new assignment handover" ? ownerId : leadUserId,
             visibility: MATTER_VISIBILITY.adminsAndAssigned,
           });
-          await db.insert(workspaceMembers).values({
-            workspaceId,
-            userId:
-              mutation === "new assignment handover" ? ownerId : leadUserId,
+          await db.transaction(async (tx) => {
+            await lockMatterStewardship({
+              tx,
+              requests: [
+                {
+                  organizationId,
+                  workspaceIds: [workspaceId],
+                  userIds: [leadUserId, ownerId],
+                },
+              ],
+              mode: "update",
+            });
+            await tx.insert(workspaceMembers).values({
+              workspaceId,
+              userId:
+                mutation === "new assignment handover" ? ownerId : leadUserId,
+            });
           });
 
           try {
@@ -107,6 +123,17 @@ if (!databaseUrl || !runPostgresTests) {
                   {
                     name: "checkSteward",
                     run: async (tx) => {
+                      await lockMatterStewardship({
+                        tx,
+                        requests: [
+                          {
+                            organizationId,
+                            workspaceIds: [workspaceId],
+                            userIds: [leadUserId, ownerId],
+                          },
+                        ],
+                        mode: "update",
+                      });
                       if (mutation === "new assignment handover") {
                         await tx
                           .insert(workspaceMembers)
@@ -163,6 +190,22 @@ if (!databaseUrl || !runPostgresTests) {
                   {
                     name: "removeSteward",
                     run: async (tx) => {
+                      await lockMatterStewardship({
+                        tx,
+                        requests: [
+                          {
+                            organizationId,
+                            workspaceIds: [workspaceId],
+                            userIds: [leadUserId, ownerId],
+                            membershipUserIds:
+                              mutation === "assignment deletion" ||
+                              mutation === "lead clearing"
+                                ? []
+                                : [leadUserId],
+                          },
+                        ],
+                        mode: "update",
+                      });
                       switch (mutation) {
                         case "new assignment handover":
                         case "role change":
@@ -202,44 +245,58 @@ if (!databaseUrl || !runPostgresTests) {
                 ],
               },
               reset: async () => {
-                await db
-                  .update(workspaces)
-                  .set({
-                    visibility: MATTER_VISIBILITY.adminsAndAssigned,
-                    leadUserId:
-                      mutation === "new assignment handover"
-                        ? ownerId
-                        : leadUserId,
-                  })
-                  .where(eq(workspaces.id, workspaceId));
-                await db
-                  .insert(member)
-                  .values({
-                    id: leadMemberId,
-                    organizationId,
-                    userId: leadUserId,
-                    role: "member",
-                    createdAt: new Date(),
-                  })
-                  .onConflictDoUpdate({
-                    target: member.id,
-                    set: { role: "member" },
+                await db.transaction(async (tx) => {
+                  await lockMatterStewardship({
+                    tx,
+                    requests: [
+                      {
+                        organizationId,
+                        workspaceIds: [workspaceId],
+                        userIds: [leadUserId, ownerId],
+                        membershipUserIds: [leadUserId],
+                      },
+                    ],
+                    mode: "update",
                   });
-                if (mutation === "new assignment handover") {
-                  await db
-                    .delete(workspaceMembers)
-                    .where(
-                      and(
-                        eq(workspaceMembers.workspaceId, workspaceId),
-                        eq(workspaceMembers.userId, leadUserId),
-                      ),
-                    );
-                } else {
-                  await db
-                    .insert(workspaceMembers)
-                    .values({ workspaceId, userId: leadUserId })
-                    .onConflictDoNothing();
-                }
+                  await tx
+                    .update(workspaces)
+                    .set({
+                      visibility: MATTER_VISIBILITY.adminsAndAssigned,
+                      leadUserId:
+                        mutation === "new assignment handover"
+                          ? ownerId
+                          : leadUserId,
+                    })
+                    .where(eq(workspaces.id, workspaceId));
+                  await tx
+                    .insert(member)
+                    .values({
+                      id: leadMemberId,
+                      organizationId,
+                      userId: leadUserId,
+                      role: "member",
+                      createdAt: new Date(),
+                    })
+                    .onConflictDoUpdate({
+                      target: member.id,
+                      set: { role: "member" },
+                    });
+                  if (mutation === "new assignment handover") {
+                    await tx
+                      .delete(workspaceMembers)
+                      .where(
+                        and(
+                          eq(workspaceMembers.workspaceId, workspaceId),
+                          eq(workspaceMembers.userId, leadUserId),
+                        ),
+                      );
+                  } else {
+                    await tx
+                      .insert(workspaceMembers)
+                      .values({ workspaceId, userId: leadUserId })
+                      .onConflictDoNothing();
+                  }
+                });
               },
               readState: async () =>
                 await db.transaction(async (tx) => {
@@ -262,6 +319,8 @@ if (!databaseUrl || !runPostgresTests) {
                   };
                 }),
               invariant: ({ outcomes, state }) => {
+                expect(outcomes.a.status).not.toBe("deadlock");
+                expect(outcomes.b.status).not.toBe("deadlock");
                 const committed = [outcomes.a, outcomes.b].filter(
                   ({ status }) => status === "committed",
                 );

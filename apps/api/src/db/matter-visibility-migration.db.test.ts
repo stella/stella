@@ -109,6 +109,26 @@ const seed = async (database: PGlite): Promise<void> => {
   `);
 };
 
+const lockStewardship = async (
+  database: PGlite,
+  workspaceIds: readonly string[],
+  userIds: readonly string[],
+) => {
+  await database.query(
+    "SELECT public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+    [
+      JSON.stringify([
+        {
+          organization_id: ORG,
+          workspace_ids: workspaceIds,
+          user_ids: userIds,
+          membership_user_ids: userIds,
+        },
+      ]),
+    ],
+  );
+};
+
 const normalVerdict = {
   kind: "normal",
   signals: [],
@@ -374,8 +394,13 @@ describe("matter visibility migration", () => {
     await using database = await migrated();
     const clientlessOrganizationMatter = "00000000-0000-4000-8000-000000000005";
     const privateClientMatter = "00000000-0000-4000-8000-000000000006";
+    await database.exec("BEGIN");
+    await lockStewardship(
+      database,
+      [clientlessOrganizationMatter, privateClientMatter],
+      [OTHER_MEMBER],
+    );
     await database.exec(`
-      BEGIN;
       INSERT INTO workspaces (id, organization_id, client_id, visibility,lead_user_id) VALUES
         ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'admins_and_assigned',NULL),
         ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'assigned_only','${OTHER_MEMBER}');
@@ -459,8 +484,29 @@ describe("matter visibility migration", () => {
     await database.query("SELECT set_config('app.user_id', $1, false)", [
       MEMBER,
     ]);
+    const unsupported = await Result.tryPromise({
+      try: async () =>
+        await database.exec(
+          `INSERT INTO workspaces (id, organization_id, client_id) VALUES ('00000000-0000-4000-8000-0000000000a6', '${ORG}', NULL)`,
+        ),
+      catch: (error) => error,
+    });
+    expect(unsupported).toMatchObject({
+      status: "error",
+      error: { code: "55P03" },
+    });
+    await database.exec("BEGIN");
+    await lockStewardship(
+      database,
+      [
+        "00000000-0000-4000-8000-0000000000a1",
+        "00000000-0000-4000-8000-0000000000a2",
+        "00000000-0000-4000-8000-0000000000a3",
+        "00000000-0000-4000-8000-0000000000a4",
+      ],
+      [MEMBER],
+    );
     await database.exec(`
-      BEGIN;
       INSERT INTO workspaces (id, organization_id, client_id) VALUES
         ('00000000-0000-4000-8000-0000000000a1', '${ORG}', NULL),
         ('00000000-0000-4000-8000-0000000000a2', '${ORG}', '${CLIENT}');
@@ -471,6 +517,16 @@ describe("matter visibility migration", () => {
       INSERT INTO workspace_members (id,workspace_id,user_id) VALUES
       ('legacy_created1','00000000-0000-4000-8000-0000000000a1','${MEMBER}'),
       ('legacy_created4','00000000-0000-4000-8000-0000000000a4','${MEMBER}');
+      COMMIT;
+    `);
+    // Explicit narrowing is a new writer operation, distinct from legacy INSERT.
+    await database.exec("BEGIN");
+    await lockStewardship(
+      database,
+      ["00000000-0000-4000-8000-0000000000a4"],
+      [MEMBER],
+    );
+    await database.exec(`
       UPDATE workspaces SET visibility = 'assigned_only' WHERE id = '00000000-0000-4000-8000-0000000000a4';
       COMMIT;
     `);
@@ -528,6 +584,8 @@ describe("matter visibility migration", () => {
     await using database = await migrated();
 
     // MEMBER leads the assigned-only clientlessOfMember matter.
+    await database.exec("BEGIN");
+    await lockStewardship(database, [MATTER.clientlessOfMember], [MEMBER]);
     expect(
       String(
         await rejectionOf(
@@ -537,6 +595,9 @@ describe("matter visibility migration", () => {
         ),
       ),
     ).toMatch(/member_role_keeps_matter_leads|leads a matter/u);
+    await database.exec("ROLLBACK");
+    await database.exec("BEGIN");
+    await lockStewardship(database, [MATTER.clientlessOfMember], [MEMBER]);
     // Another internal role keeps the lead usable.
     await database.exec(
       `UPDATE member SET role = 'intern' WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
@@ -548,6 +609,7 @@ describe("matter visibility migration", () => {
     await database.exec(
       `UPDATE member SET role = 'external' WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
     );
+    await database.exec("COMMIT");
     const { rows } = await database.query<{ role: string }>(
       `SELECT role FROM member WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
     );

@@ -67,10 +67,190 @@ EXECUTE FUNCTION public.workspaces_legacy_visibility();
 ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
 --> statement-breakpoint
 
--- Membership loss locks all affected matters before checking the current
--- state in a separate statement. This serializes with narrowing and handoff,
--- including writers that predate application-level steward repair.
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the persisted member's organization and assignments, locks affected matter rows, refuses stewardship loss, and writes nothing
+-- Root-owned transaction proofs make the lock protocol enforceable without
+-- trusting mutable application settings. Completed older proofs are pruned in
+-- bounded batches; active transactions are never touched.
+CREATE TABLE public.matter_stewardship_locks (
+  transaction_id bigint PRIMARY KEY,
+  proof jsonb NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE public.matter_stewardship_locks ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY matter_stewardship_lock_owner_access ON public.matter_stewardship_locks
+FOR ALL TO public
+USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.matter_stewardship_locks'::regclass))
+WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.matter_stewardship_locks'::regclass));
+--> statement-breakpoint
+REVOKE ALL ON TABLE public.matter_stewardship_locks FROM PUBLIC, stella;
+--> statement-breakpoint
+
+-- Every stewardship writer and reach hold uses this prefix, including native
+-- online-repair connections. Discovery is repeated after candidate membership
+-- locks: a newly committed relationship requires a fresh transaction, never a
+-- late lifecycle/member acquisition below a matter lock.
+-- stella-migration-safety: reviewed security-definer - fixed search path; tenant-qualified discovery acquires the canonical prefix and writes only root-owned transaction proofs; scoped sessions cannot discover membership-wide matter IDs or cross tenants
+CREATE FUNCTION public.stella_lock_matter_stewardship(p_requests jsonb, p_mode text)
+RETURNS TABLE (workspace_id uuid)
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  targets uuid[];
+  candidates text[];
+  fresh_targets uuid[];
+  fresh_candidates text[];
+  locked_candidates text[];
+  held jsonb;
+  row_id text;
+BEGIN
+  IF p_mode NOT IN ('share', 'update') OR jsonb_typeof(p_requests) <> 'array' THEN
+    RAISE EXCEPTION 'invalid stewardship lock request' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  -- Root repair/account operations may span organizations. A restricted
+  -- application session may lock only its transaction's authenticated tenant.
+  IF current_setting('role', true) = 'stella' AND (
+    NULLIF(current_setting('app.organization_id', true), '') IS NULL OR EXISTS (
+      SELECT 1 FROM jsonb_to_recordset(p_requests) AS r(organization_id text)
+      WHERE r.organization_id IS DISTINCT FROM NULLIF(current_setting('app.organization_id', true), '')
+    )
+  ) THEN
+    RAISE EXCEPTION 'stewardship lock requires the transaction organization' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF current_setting('role', true) = 'stella' AND EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[])
+    JOIN public.workspaces w ON w.id = ANY(r.workspace_ids)
+    WHERE w.organization_id IS DISTINCT FROM r.organization_id
+  ) THEN
+    RAISE EXCEPTION 'stewardship lock requires the transaction organization' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF current_setting('role', true) = 'stella' AND EXISTS (
+    SELECT 1 FROM jsonb_to_recordset(p_requests) AS r(membership_user_ids text[])
+    WHERE cardinality(r.membership_user_ids) > 0
+  ) THEN
+    RAISE EXCEPTION 'membership-wide stewardship discovery requires the database owner' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  SELECT proof INTO held FROM public.matter_stewardship_locks
+    WHERE transaction_id = txid_current();
+  SELECT COALESCE(array_agg(DISTINCT w.id ORDER BY w.id), '{}'::uuid[]) INTO targets
+  FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], membership_user_ids text[])
+  CROSS JOIN LATERAL (
+    SELECT requested.id FROM unnest(r.workspace_ids) AS requested(id)
+    WHERE NOT EXISTS (SELECT 1 FROM public.workspaces existing
+      WHERE existing.id = requested.id AND existing.organization_id <> r.organization_id)
+    UNION
+    SELECT matter.id FROM public.workspaces matter
+    WHERE matter.organization_id = r.organization_id AND (
+      matter.lead_user_id = ANY(r.membership_user_ids) OR EXISTS (
+        SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = matter.id
+          AND a.user_id = ANY(r.membership_user_ids)
+      )
+    )
+  ) w;
+  SELECT COALESCE(array_agg(DISTINCT m.id ORDER BY m.id), '{}'::text[]) INTO candidates
+  FROM public.member m
+  JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
+    ON r.organization_id = m.organization_id
+  WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
+    OR EXISTS (
+      SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
+        AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
+          SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
+        ))
+    );
+  IF held IS NOT NULL THEN
+    IF (p_mode = 'update' AND held->>'mode' <> 'update')
+      OR NOT (held->'workspaces' @> to_jsonb(targets))
+      OR NOT (held->'members' @> to_jsonb(candidates)) THEN
+      RAISE EXCEPTION 'stewardship lock scope changed; retry the transaction' USING ERRCODE = 'lock_not_available';
+    END IF;
+    RETURN QUERY SELECT unnest(targets);
+    RETURN;
+  END IF;
+  DELETE FROM public.matter_stewardship_locks WHERE transaction_id IN (
+    SELECT transaction_id FROM public.matter_stewardship_locks
+    WHERE transaction_id < txid_snapshot_xmin(txid_current_snapshot())
+    ORDER BY transaction_id LIMIT 64 FOR UPDATE SKIP LOCKED
+  );
+  FOREACH row_id IN ARRAY targets::text[] LOOP
+    PERFORM pg_advisory_xact_lock(hashtext(row_id));
+  END LOOP;
+  IF p_mode = 'update' THEN
+    SELECT COALESCE(array_agg(locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
+    FROM (SELECT m.id FROM public.member m WHERE m.id = ANY(candidates) ORDER BY m.id FOR NO KEY UPDATE) locked;
+  ELSE
+    SELECT COALESCE(array_agg(locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
+    FROM (SELECT m.id FROM public.member m WHERE m.id = ANY(candidates) ORDER BY m.id FOR SHARE) locked;
+  END IF;
+  SELECT COALESCE(array_agg(DISTINCT w.id ORDER BY w.id), '{}'::uuid[]) INTO fresh_targets
+  FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], membership_user_ids text[])
+  CROSS JOIN LATERAL (
+    SELECT requested.id FROM unnest(r.workspace_ids) AS requested(id)
+    WHERE NOT EXISTS (SELECT 1 FROM public.workspaces existing
+      WHERE existing.id = requested.id AND existing.organization_id <> r.organization_id)
+    UNION
+    SELECT matter.id FROM public.workspaces matter
+    WHERE matter.organization_id = r.organization_id AND (
+      matter.lead_user_id = ANY(r.membership_user_ids) OR EXISTS (
+        SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = matter.id
+          AND a.user_id = ANY(r.membership_user_ids)
+      )
+    )
+  ) w;
+  SELECT COALESCE(array_agg(DISTINCT m.id ORDER BY m.id), '{}'::text[]) INTO fresh_candidates
+  FROM public.member m
+  JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
+    ON r.organization_id = m.organization_id
+  WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
+    OR EXISTS (
+      SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
+        AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
+          SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
+        ))
+    );
+  IF fresh_targets <> targets OR fresh_candidates <> candidates OR locked_candidates <> candidates THEN
+    RAISE EXCEPTION 'stewardship relationships changed; retry the transaction' USING ERRCODE = 'lock_not_available';
+  END IF;
+  IF p_mode = 'update' THEN
+    PERFORM w.id FROM public.workspaces w
+      JOIN jsonb_to_recordset(p_requests) AS r(organization_id text) ON r.organization_id = w.organization_id
+      WHERE w.id = ANY(targets) ORDER BY w.id FOR UPDATE OF w;
+  ELSE
+    PERFORM w.id FROM public.workspaces w
+      JOIN jsonb_to_recordset(p_requests) AS r(organization_id text) ON r.organization_id = w.organization_id
+      WHERE w.id = ANY(targets) ORDER BY w.id FOR SHARE OF w;
+  END IF;
+  INSERT INTO public.matter_stewardship_locks(transaction_id, proof)
+  VALUES (txid_current(), jsonb_build_object(
+    'mode', p_mode, 'workspaces', targets, 'members', candidates
+  ));
+  RETURN QUERY SELECT unnest(targets);
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) TO stella;
+--> statement-breakpoint
+
+-- No row or advisory locks are acquired by validation triggers. Unsupported
+-- writers fail closed instead of waiting in an inverted order.
+CREATE FUNCTION public.stella_has_stewardship_lock(p_kind text, p_id text)
+RETURNS boolean LANGUAGE sql
+SET search_path = pg_catalog, public
+AS $$
+  SELECT COALESCE((SELECT proof->>'mode' = 'update'
+    AND proof->p_kind @> jsonb_build_array(p_id)
+    FROM public.matter_stewardship_locks WHERE transaction_id = txid_current()), false);
+$$;
+--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.stella_has_stewardship_lock(text, text) FROM PUBLIC;
+--> statement-breakpoint
+
+-- Membership loss validates after the caller has acquired the complete prefix.
+-- Unsupported writers are refused before they can wait in an inverted order.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the persisted member's organization and assignments, verifies the completed lock prefix, refuses stewardship loss, and writes nothing
 CREATE FUNCTION "enforce_member_role_keeps_matter_leads"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -92,15 +272,9 @@ BEGIN
     END IF;
   END IF;
 
-  PERFORM w.id
-  FROM public.workspaces AS w
-  WHERE w.organization_id = OLD.organization_id
-    AND (w.lead_user_id = OLD.user_id OR EXISTS (
-      SELECT 1 FROM public.workspace_members AS wm
-      WHERE wm.workspace_id = w.id AND wm.user_id = OLD.user_id
-    ))
-  ORDER BY w.id
-  FOR UPDATE OF w;
+  IF NOT public.stella_has_stewardship_lock('members', OLD.id) THEN
+    RAISE EXCEPTION 'membership change requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+  END IF;
 
   IF EXISTS (
     SELECT 1 FROM public.workspaces AS w
@@ -134,8 +308,8 @@ FOR EACH ROW
 EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();
 --> statement-breakpoint
 
--- UPDATE already holds the decisive matter row. The membership and assignment
--- loss triggers take that same row FOR UPDATE before deciding whether to refuse.
+-- Callers hold candidate memberships before matter rows. These triggers only
+-- validate that completed prefix and the resulting steward state.
 -- A usable steward is internal, belongs to this organization, and is assigned.
 -- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; read-only trigger checks the updated matter's persisted membership and assignment under its existing row lock
 CREATE FUNCTION public.enforce_workspace_keeps_matter_lead()
@@ -145,13 +319,14 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-  IF NEW.visibility = 'assigned_only' THEN
-    -- Lock the candidate membership even when this assignment or matter is
-    -- uncommitted. A membership change either precedes this fresh validation
-    -- or waits and then sees this committed relationship.
-    PERFORM m.id FROM public.member AS m
-    WHERE m.organization_id = NEW.organization_id AND m.user_id = NEW.lead_user_id
-    ORDER BY m.id FOR SHARE OF m;
+  IF NEW.visibility = 'assigned_only' AND NOT public.stella_has_stewardship_lock('workspaces', NEW.id::text) THEN
+    RAISE EXCEPTION 'matter change requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+  END IF;
+  IF NEW.visibility = 'assigned_only' AND EXISTS (
+    SELECT 1 FROM public.member m WHERE m.organization_id = NEW.organization_id
+      AND m.user_id = NEW.lead_user_id AND NOT public.stella_has_stewardship_lock('members', m.id)
+  ) THEN
+    RAISE EXCEPTION 'steward membership requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
   END IF;
   IF NEW.visibility = 'assigned_only' AND NOT EXISTS (
     SELECT 1 FROM public.member AS m
@@ -178,7 +353,7 @@ EXECUTE FUNCTION public.enforce_workspace_keeps_matter_lead();
 --> statement-breakpoint
 
 -- INSERT validation waits until assignments in the creation transaction exist.
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads the inserted matter and locks only its persisted candidate membership before checking stewardship
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads the inserted matter, verifies the completed lock prefix and checks stewardship without acquiring locks
 CREATE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -192,9 +367,13 @@ BEGIN
   IF NOT FOUND OR matter.visibility <> 'assigned_only' THEN
     RETURN NULL;
   END IF;
-  PERFORM m.id FROM public.member AS m
-  WHERE m.organization_id = matter.organization_id AND m.user_id = matter.lead_user_id
-  ORDER BY m.id FOR SHARE OF m;
+  IF NOT public.stella_has_stewardship_lock('workspaces', matter.id::text) THEN
+    RAISE EXCEPTION 'matter creation requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.member m WHERE m.organization_id = matter.organization_id
+    AND m.user_id = matter.lead_user_id AND NOT public.stella_has_stewardship_lock('members', m.id)) THEN
+    RAISE EXCEPTION 'steward membership requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+  END IF;
   IF NOT EXISTS (
     SELECT 1 FROM public.member AS m
     JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
@@ -218,7 +397,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead();
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; locks the old assignment's matter, reads only its persisted steward rows, refuses losing a usable steward, and writes nothing
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; verifies the completed lock prefix, reads only the old assignment's persisted steward rows, refuses losing a usable steward, and writes nothing
 CREATE FUNCTION public.enforce_assignment_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -233,10 +412,10 @@ BEGIN
   END IF;
 
   -- An absent parent means the whole matter or organization is being deleted.
-  PERFORM w.id FROM public.workspaces AS w
-  JOIN public.organization AS o ON o.id = w.organization_id
-  WHERE w.id = OLD.workspace_id
-  FOR UPDATE OF w;
+  IF EXISTS (SELECT 1 FROM public.workspaces w JOIN public.organization o ON o.id = w.organization_id WHERE w.id = OLD.workspace_id)
+    AND NOT public.stella_has_stewardship_lock('workspaces', OLD.workspace_id::text) THEN
+    RAISE EXCEPTION 'assignment removal requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+  END IF;
 
   IF EXISTS (
     SELECT 1 FROM public.workspaces AS w
@@ -332,6 +511,11 @@ BEGIN
       USING ERRCODE = 'foreign_key_violation';
   END IF;
 
+  PERFORM public.stella_lock_matter_stewardship(jsonb_build_array(jsonb_build_object(
+    'organization_id', v_organization_id, 'workspace_ids', ARRAY[p_workspace_id],
+    'user_ids', array_remove(ARRAY[v_user_id, p_lead_user_id], NULL)
+  )), 'update');
+
   INSERT INTO public.workspaces (
     id,
     organization_id,
@@ -380,22 +564,100 @@ RETURNS TABLE (id uuid)
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+  requests jsonb;
 BEGIN
   IF p_size < 1 OR p_size > 100 THEN
     RAISE EXCEPTION 'visibility backfill batch must contain between 1 and 100 matters'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
-  IF p_cursor IS NULL THEN
-    RETURN QUERY SELECT w.id FROM public.workspaces w
-      ORDER BY w.id LIMIT p_size FOR UPDATE;
-  ELSE
-    RETURN QUERY SELECT w.id FROM public.workspaces w
-      WHERE w.id > p_cursor
-      ORDER BY w.id LIMIT p_size FOR UPDATE;
-  END IF;
+  SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO requests FROM (
+    SELECT organization_id, array_agg(batch.id ORDER BY batch.id) AS workspace_ids
+    FROM (SELECT w.id, w.organization_id FROM public.workspaces w
+      WHERE p_cursor IS NULL OR w.id > p_cursor ORDER BY w.id LIMIT p_size) batch
+    GROUP BY organization_id
+  ) r;
+  PERFORM public.stella_lock_matter_stewardship(requests, 'update');
+  RETURN QUERY SELECT w.id FROM public.workspaces w
+    WHERE p_cursor IS NULL OR w.id > p_cursor ORDER BY w.id LIMIT p_size;
 END;
 $$;
 --> statement-breakpoint
 
 -- Only the database migration owner runs the repair; application sessions do not.
 REVOKE ALL ON FUNCTION public.stella_lock_legacy_visibility_batch(uuid, integer) FROM PUBLIC;
+--> statement-breakpoint
+
+-- The migration owner repairs legacy stewardship and visibility in the same
+-- bounded prefix. Application sessions cannot invoke this rollout operation.
+CREATE FUNCTION public.stella_repair_legacy_visibility_batch(p_ids uuid[])
+RETURNS void
+LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  requests jsonb;
+BEGIN
+  IF cardinality(p_ids) > 100 THEN
+    RAISE EXCEPTION 'visibility repair batch cannot exceed 100 matters'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO requests FROM (
+    SELECT w.organization_id, array_agg(w.id ORDER BY w.id) AS workspace_ids
+    FROM public.workspaces w WHERE w.id = ANY(p_ids)
+    GROUP BY w.organization_id
+  ) r;
+  PERFORM public.stella_lock_matter_stewardship(requests, 'update');
+
+  UPDATE public.workspaces AS w
+  SET lead_user_id = steward.user_id
+  FROM (
+    SELECT DISTINCT ON (wm.workspace_id) wm.workspace_id, wm.user_id
+    FROM public.workspace_members AS wm
+    JOIN public.workspaces AS matter ON matter.id = wm.workspace_id
+    JOIN public.member AS m
+      ON m.user_id = wm.user_id AND m.organization_id = matter.organization_id
+    WHERE matter.id = ANY(p_ids) AND matter.client_id IS NULL
+      AND m.role IN ('owner', 'admin', 'member', 'intern')
+      AND NOT EXISTS (
+        SELECT 1 FROM public.workspace_members AS lead_assignment
+        JOIN public.member AS lead_member
+          ON lead_member.user_id = lead_assignment.user_id
+          AND lead_member.organization_id = matter.organization_id
+        WHERE lead_assignment.workspace_id = matter.id
+          AND lead_assignment.user_id = matter.lead_user_id
+          AND lead_member.role IN ('owner', 'admin', 'member', 'intern')
+      )
+    ORDER BY wm.workspace_id, wm.created_at, wm.id
+  ) AS steward
+  WHERE w.id = steward.workspace_id;
+
+  UPDATE public.workspaces AS w
+  SET visibility = CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
+  WHERE w.id = ANY(p_ids) AND w.visibility IS DISTINCT FROM
+    CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_repair_legacy_visibility_batch(uuid[]) FROM PUBLIC;
+--> statement-breakpoint
+
+-- The retained seven-argument creation API delegates to the same lock owner.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; delegates to the tenant-bound creation procedure without adding authority
+CREATE OR REPLACE FUNCTION public.stella_create_workspace(
+  p_workspace_id uuid, p_client_id uuid, p_name text, p_reference text,
+  p_billing_reference text, p_color text, p_lead_user_id text
+) RETURNS void LANGUAGE sql SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT public.stella_create_workspace(
+    p_workspace_id, p_client_id, p_name, p_reference, p_billing_reference, p_color,
+    CASE WHEN p_client_id IS NULL THEN COALESCE(p_lead_user_id, NULLIF(current_setting('app.user_id', true), '')) ELSE p_lead_user_id END,
+    CASE WHEN p_client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
+  );
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) TO stella;
+--> statement-breakpoint

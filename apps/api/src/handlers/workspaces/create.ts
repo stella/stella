@@ -29,6 +29,7 @@ import {
   tSafeId,
   withDescription,
 } from "@/api/lib/custom-schema";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -132,6 +133,13 @@ export const createWorkspaceHandler = async function* ({
           : [];
 
       const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
+      await lockMatterStewardship({
+        tx,
+        requests: [
+          { organizationId, workspaceIds: [body.id], userIds: grantedUserIds },
+        ],
+        mode: "update",
+      });
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
       const [countResult, duplicatedNames, settings, client, orgMembers] =
@@ -176,10 +184,8 @@ export const createWorkspaceHandler = async function* ({
                 inArray(member.userId, grantedUserIds),
               ),
             )
-            // Same order as organization removal's membership locks.
-            .orderBy(member.userId)
-            .limit(grantedUserIds.length)
-            .for("update"),
+            .orderBy(member.id)
+            .limit(grantedUserIds.length),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;

@@ -26,6 +26,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -355,6 +356,20 @@ export const updateWorkspaceHandler = async function* ({
   body,
 }: UpdateWorkspaceHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId,
+          workspaceIds: [workspaceId],
+          userIds: [
+            actor.userId,
+            ...(body.leadUserId ? [body.leadUserId] : []),
+          ],
+        },
+      ],
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,

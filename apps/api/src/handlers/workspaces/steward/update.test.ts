@@ -79,19 +79,15 @@ for (const role of ["owner", "admin"] as const) {
   });
 }
 
-for (const status of [404, 409] as const) {
-  test(`recovery preserves a ${status} refusal without metadata`, async () => {
-    const recovery = createRecoverMatterSteward({
-      recoverInTransaction: async () => {
-        throw new HandlerError({ status, message: "Recovery refused" });
-      },
-    });
-    const response = await recovery.handler(
-      context(sessionMemberRole("owner")),
-    );
-    expect(response).toMatchObject({
-      code: status,
-      response: { message: "Recovery refused" },
-    });
+test("recovery preserves an indistinguishable not-found refusal without metadata", async () => {
+  const recovery = createRecoverMatterSteward({
+    recoverInTransaction: async () => {
+      throw new HandlerError({ status: 404, message: "Matter not found" });
+    },
   });
-}
+  const response = await recovery.handler(context(sessionMemberRole("owner")));
+  expect(response).toMatchObject({
+    code: 404,
+    response: { message: "Matter not found" },
+  });
+});

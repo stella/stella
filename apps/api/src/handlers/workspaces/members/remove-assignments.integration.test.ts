@@ -129,6 +129,7 @@ test.each([
         });
         const removal = await Result.gen(() =>
           removeWorkspaceMemberHandler({
+            organizationId: ids.orgA,
             safeDb,
             workspaceId: ids.wsA2,
             userId: ids.userA1,
@@ -330,6 +331,7 @@ test("membership-removal.task-preservation", async () => {
               );
               const removed = await Result.gen(() =>
                 removeWorkspaceMemberHandler({
+                  organizationId: ids.orgA,
                   safeDb,
                   workspaceId: ids.wsA2,
                   userId: ids.userA1,
@@ -440,6 +442,7 @@ test("matter removal returns only that matter's pending approvals to the pool", 
         );
         const removed = await Result.gen(() =>
           removeWorkspaceMemberHandler({
+            organizationId: ids.orgA,
             safeDb,
             workspaceId: ids.wsA2,
             userId: ids.userA1,
@@ -536,6 +539,7 @@ test("member cleanup drains more than one bounded assignment batch", async () =>
         );
         const removed = await Result.gen(() =>
           removeWorkspaceMemberHandler({
+            organizationId: ids.orgA,
             safeDb,
             workspaceId: ids.wsA2,
             userId: ids.userA1,

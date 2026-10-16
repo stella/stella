@@ -1,13 +1,18 @@
 import { SQL } from "bun";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
+import { member } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateTransaction,
+  lockMatterStewardship,
+} from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
@@ -28,6 +33,7 @@ import type {
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { recoverOrphanedMatterSteward } from "@/api/lib/workspaces/visibility";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -188,11 +194,74 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
 
+type MemberRoleStewardshipOptions<T> = {
+  memberId: string;
+  write: (tx: Transaction) => Promise<T>;
+};
+
+/** Auth's role hook and adapter write must share the stewardship transaction. */
+export const withMemberRoleStewardship = async <T>({
+  memberId,
+  write,
+}: MemberRoleStewardshipOptions<T>): Promise<T | null> =>
+  await withAggregateTransaction(rootDb, async (tx) => {
+    const target = (
+      await tx
+        .select({
+          userId: member.userId,
+          organizationId: member.organizationId,
+        })
+        .from(member)
+        .where(eq(member.id, memberId))
+    ).at(0);
+    if (!target) {
+      return null;
+    }
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId: brandPersistedOrganizationId(target.organizationId),
+          workspaceIds: [],
+          membershipUserIds: [target.userId],
+        },
+      ],
+      mode: "update",
+    });
+    const lockedTarget = (
+      await tx
+        .select({
+          userId: member.userId,
+          organizationId: member.organizationId,
+        })
+        .from(member)
+        .where(eq(member.id, memberId))
+    ).at(0);
+    if (
+      !lockedTarget ||
+      lockedTarget.userId !== target.userId ||
+      lockedTarget.organizationId !== target.organizationId
+    ) {
+      return null;
+    }
+    return await write(tx);
+  });
+
 /** Recovery is an explicit organization-management mutation, never an owner read. */
 export const recoverMatterSteward = async (
   options: Parameters<typeof recoverOrphanedMatterSteward>[1],
 ) =>
-  await withAggregateTransaction(
-    rootDb,
-    async (tx) => await recoverOrphanedMatterSteward(tx, options),
-  );
+  await withAggregateTransaction(rootDb, async (tx) => {
+    await lockMatterStewardship({
+      tx,
+      requests: [
+        {
+          organizationId: options.organizationId,
+          workspaceIds: [options.workspaceId],
+          userIds: [options.actorUserId, options.stewardUserId],
+        },
+      ],
+      mode: "update",
+    });
+    await recoverOrphanedMatterSteward(tx, options);
+  });

@@ -3,11 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  lockMemberAccessRow,
-  lockMatterAccessWorkspaceRows,
-  lockWorkspaceLifecycle,
-} from "@/api/lib/db/aggregate-lock";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 export const hasCurrentTimerMatterAccess = async ({
@@ -21,30 +17,13 @@ export const hasCurrentTimerMatterAccess = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
-  await lockWorkspaceLifecycle(tx, workspaceId);
-  // Freeze membership before the matter: role changes already hold the member
-  // row, and their guards can then take the matter without an inverted wait.
-  const member = await lockMemberAccessRow({
+  await lockMatterStewardship({
     tx,
-    organizationId,
-    userId,
+    requests: [
+      { organizationId, workspaceIds: [workspaceId], userIds: [userId] },
+    ],
     mode: "share",
   });
-  if (member === undefined) {
-    return false;
-  }
-  // Assignment-loss guards lock the matter FOR UPDATE, so this one lock
-  // also serializes revocation without locking an assignment after its matter.
-  const matters = await lockMatterAccessWorkspaceRows({
-    tx,
-    organizationId,
-    workspaceIds: [workspaceId],
-    mode: "share",
-    where: eq(workspaces.status, "active"),
-  });
-  if (matters.length === 0) {
-    return false;
-  }
   const reachableRows = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
