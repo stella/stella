@@ -142,14 +142,14 @@ type AnalyticsUserIdentity = {
   activeOrganizationId: string;
 };
 
-export type PageHangSuspectedProperties = {
+type PageHangSuspectedProperties = {
   routeTemplate: string;
   phase: "boot" | "session";
   build: string;
   restoredState: readonly { key: string; bytes: number }[];
 };
 
-export type LongAnimationFrameProperties = {
+type LongAnimationFrameProperties = {
   duration: number;
   scripts: readonly {
     invoker: string;
