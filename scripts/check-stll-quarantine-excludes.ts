@@ -43,7 +43,8 @@ export const quarantineBunfigFiles = (
 export const REPO_ROOT = path.resolve(import.meta.dir, "..");
 export const LOCKFILE = "bun.lock";
 export const BUNFIG = "bunfig.toml";
-const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
+// The command line that owns --prune; the diagnostic names it.
+export const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes-cli.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
 export const RELEASE_AGE_EXCEPTION_SOURCES = ["docker-compose.yml"] as const;

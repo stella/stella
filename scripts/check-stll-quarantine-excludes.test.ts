@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   checkQuarantineExcludes,
@@ -6,6 +8,7 @@ import {
   pruneQuarantineBunfigs,
   quarantineBunfigFiles,
   quarantineOwningFiles,
+  SCRIPT_PATH,
 } from "./check-stll-quarantine-excludes";
 import { expiryScopeBase } from "./expiry-check-scope";
 
@@ -405,8 +408,15 @@ minimumReleaseAgeExcludes = [
         'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
       );
       expect(result.errors.at(0)).toContain(
-        "bun scripts/check-stll-quarantine-excludes.ts --prune",
+        "bun scripts/check-stll-quarantine-excludes-cli.ts --prune",
       );
+      // The named command must be the entry point that handles --prune.
+      const cli = readFileSync(
+        path.join(import.meta.dir, "..", SCRIPT_PATH),
+        "utf-8",
+      );
+      expect(cli).toContain("if (import.meta.main)");
+      expect(cli).toContain('process.argv.includes("--prune")');
     },
   );
 
