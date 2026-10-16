@@ -314,6 +314,7 @@ test(
     const read = async (id: SafeId<"caseLawDecision">) => {
       const result = await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id },
         async (subject) =>
           await readDecisionHandler({
@@ -367,6 +368,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: closedId },
         async (subject) => subject.id,
       ),
@@ -374,6 +376,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: openId },
         async (subject) => subject.id,
       ),
@@ -527,6 +530,7 @@ test(
     // The decision read answers with the judgment itself, and says why.
     const read = await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: absorbedId },
       async (subject) =>
         await readDecisionHandler({

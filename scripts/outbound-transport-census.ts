@@ -819,7 +819,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/api/src/db/online-index-observer.ts",
     class: "operator-configured-infrastructure",
-    reason: "Reads online index state through Bun SQL connections.",
+    reason:
+      "Reads online index state and runs operator online repairs through Bun SQL connections.",
     transports: ["module:bun"],
   },
   {
@@ -979,6 +980,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Downloads entity archives and OCR exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams reader answers from the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {

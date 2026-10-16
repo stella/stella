@@ -104,6 +104,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   case_law_provision_extractions: {
     decision_id: PROVISION_LINK_STATUS_GRANT,
     desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    pending_since: PROVISION_LINK_STATUS_GRANT,
     work_status: PROVISION_LINK_STATUS_GRANT,
     generation: PROVISION_LINK_STATUS_GRANT,
     outcome: PROVISION_LINK_STATUS_GRANT,

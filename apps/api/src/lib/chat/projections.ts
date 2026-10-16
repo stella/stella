@@ -2214,12 +2214,10 @@ const sanctionsListOutcomeProjection = v.strictObject({
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
   reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
-  // The one note the budget keeps: which edition these fields name depends
-  // on the list's status (the screened one when it answered).
-  editionId: v.pipe(
-    v.nullable(passthroughId()),
-    v.description("If unavailable: latest on file, NOT screened"),
-  ),
+  // Which edition these fields name depends on the list's status: the
+  // screened one when it answered, the latest on file (not screened) when
+  // unavailable. The tool description says so; the output schema has no room.
+  editionId: v.nullable(passthroughId()),
   publishedAt: v.nullable(v.string()),
   verifiedAt: v.nullable(v.string()),
   // A newer edition held back for review; the list still screens the
@@ -2624,20 +2622,20 @@ export const RUN_PLAYBOOK_PROJECTION = v.strictObject({
 });
 
 /**
- * manage_organization: add_member returns `{ memberId }`, remove_member
+ * add_matter_member returns `{ memberId }`, remove_matter_member
  * `{ removed: true, id }` (both membership-row handles, not tenant refs);
- * update_org_settings echoes only the scalar settings it changed.
+ * update_organization_settings echoes only the scalar settings it changed.
  */
-export const MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION = v.strictObject({
+export const ADD_MATTER_MEMBER_PROJECTION = v.strictObject({
   memberId: passthroughId(),
 });
 
-export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
+export const REMOVE_MATTER_MEMBER_PROJECTION = v.strictObject({
   removed: v.literal(true),
   id: passthroughId(),
 });
 
-export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
@@ -2651,12 +2649,6 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   timeNarrativeRequired: v.optional(v.boolean()),
   timeZone: v.optional(v.nullable(v.string())),
 });
-
-export const MANAGE_ORGANIZATION_PROJECTION = v.union([
-  projectionBranch(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION),
-  projectionBranch(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION),
-  projectionBranch(MANAGE_ORGANIZATION_SETTINGS_PROJECTION),
-]);
 
 /**
  * set_practice_jurisdictions returns `{ practiceJurisdictions }`: country

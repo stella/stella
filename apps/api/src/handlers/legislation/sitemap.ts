@@ -3,7 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import {
@@ -45,7 +45,9 @@ export const statuteSitemapIndexQuery = (tx: LegislationReadTransaction) =>
     })
     .from(statuteSitemapShards)
     .where(
-      inArray(statuteSitemapShards.country, [...PUBLIC_LEGISLATION_COUNTRIES]),
+      inArray(statuteSitemapShards.country, [
+        ...PUBLIC_LEGISLATION_PAGE_COUNTRIES,
+      ]),
     )
     .orderBy(
       asc(statuteSitemapShards.country),
@@ -135,7 +137,7 @@ export const listStatuteSitemapStatutesHandler = async (
   query: SitemapShardStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
-  const unavailable = publicLawCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country, "pages");
   if (unavailable !== null) {
     return unavailable;
   }

@@ -5,6 +5,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import { PROVISION_LINK_CAPABILITIES } from "@stll/api-contract/provision-link-capability";
+
 import {
   caseLawDecisions,
   caseLawSearchDocuments,
@@ -24,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
 import {
   publishedUnredactedCaseLawDecisionFor,
   publishedUnredactedCaseLawDecisionSqlFor,
@@ -549,6 +553,20 @@ test(
         }),
     );
     expect(arrivals.size).toBe(3);
+
+    const pendingCounts = await readAsReader(readProvisionPendingCounts);
+    expect(pendingCounts.map(({ country }) => country)).toEqual(
+      CASE_LAW_JURISDICTIONS,
+    );
+    for (const { country, state } of pendingCounts) {
+      const capability = PROVISION_LINK_CAPABILITIES[country];
+      if (capability.type === "notSupportedYet") {
+        expect(state).toEqual(capability);
+        continue;
+      }
+      expect(state.type).toBe("unavailable");
+      expect(state).not.toHaveProperty("pendingCount");
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );

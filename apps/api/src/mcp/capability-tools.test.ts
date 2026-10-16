@@ -1095,7 +1095,6 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              access: "write",
               result: new ElysiaCustomStatusResponse(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
@@ -1135,7 +1134,6 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        access: "write",
         result: new ElysiaCustomStatusResponse(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
@@ -2686,7 +2684,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new Response("file bytes"),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("feature_disabled");
   });
@@ -2703,7 +2700,6 @@ describe("capability executor file-response gate (fix-6)", () => {
       const mapped = mapHandlerResult({
         id: "x.y",
         result: value,
-        access: "read",
       });
       expect(mappedError(mapped).code, label).toBe("feature_disabled");
     }
@@ -2713,7 +2709,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: { ok: true },
-      access: "read",
     });
     expect(mapped).toEqual({
       egress: "structured",
@@ -2722,26 +2717,25 @@ describe("capability executor file-response gate (fix-6)", () => {
     });
   });
 
-  test("(layer b) a WRITE success payload carries the request receipt under meta", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "write" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true, meta: { requestId: "req_invoke" } },
-      textFields: [],
-    });
-  });
-
-  test("(layer b) a READ success payload carries NO receipt (deterministic for caching)", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "read" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true },
-      textFields: [],
-    });
+  test("successful capability projections exclude request receipts", () => {
+    for (const payload of [
+      { ok: true },
+      { items: [{ id: "entity_1" }], nextCursor: "next_page" },
+      { meta: { revision: 3 }, value: "rendered text" },
+      ["one", "two"],
+      "rendered text",
+      null,
+    ]) {
+      const mapped = runWithRequestId("req_invoke", () =>
+        mapHandlerResult({ id: "x.y", result: payload }),
+      );
+      expect(mapped).toEqual({
+        egress: "structured",
+        payload,
+        textFields: [],
+      });
+      expect(JSON.stringify(mapped)).not.toContain('"requestId"');
+    }
   });
 
   test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
@@ -2756,7 +2750,6 @@ describe("capability executor file-response gate (fix-6)", () => {
         const result = runWithRequestId("req_refusal", () =>
           mapHandlerResult({
             id: "documents.verifications.start",
-            access: "write",
             result: new ElysiaCustomStatusResponse(429, refusal),
           }),
         );
@@ -2774,7 +2767,6 @@ describe("capability executor file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          access: "write",
           result: new ElysiaCustomStatusResponse(refusal.status, {
             code,
             message: refusal.message,
@@ -2798,7 +2790,6 @@ describe("capability executor file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
@@ -3400,7 +3391,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
-      access: "write",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("conflict");
@@ -3413,7 +3403,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("validation_error");
@@ -3424,7 +3413,6 @@ describe("status-to-envelope mapping", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -3435,7 +3423,6 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("internal_error");

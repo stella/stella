@@ -200,6 +200,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Chat content repair receipts: forced owner-only RLS; the owner-run
+  // backfill and deploy repair write them, request roles never see them.
+  "chat_content_v3_backfill_receipts",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   // Professional-use acceptances are written once at account or
