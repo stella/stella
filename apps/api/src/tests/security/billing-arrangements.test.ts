@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import {
   billingArrangements,
   workspaceMembers,
@@ -30,18 +32,21 @@ beforeAll(async () => {
   scopedQuery = fixture.scopedQuery;
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: matterA,
       organizationId: ids.orgA,
       name: "Arrangement scope A",
       reference: matterA,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherMatterA,
       organizationId: ids.orgA,
       name: "Arrangement scope A other",
       reference: otherMatterA,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: matterB,
       organizationId: ids.orgB,
       name: "Arrangement scope B",

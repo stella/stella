@@ -32,6 +32,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -221,7 +222,9 @@ export const VisibilitySection = ({
 }: VisibilitySectionProps) => {
   const t = useTranslations();
   const updateWorkspace = useUpdateWorkspace();
-  const canChange = useCanStewardMatter(leadUserId);
+  const canUpdate = usePermissions({ workspace: ["update"] });
+  const canSteward = useCanStewardMatter(leadUserId);
+  const canChange = canUpdate && canSteward;
   const [pendingWiden, setPendingWiden] = useState<MatterVisibility | null>(
     null,
   );

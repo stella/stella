@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { CHAT_MESSAGE_EDIT_TYPE } from "@stll/api-contract/chat-message-revisions";
 import { sha256Hex } from "@stll/sha256/bun";
@@ -20,8 +24,8 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
+  chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
-  toChatMessageContent,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
@@ -105,6 +109,7 @@ const seedFixture = async (db: GatedTestDb) => {
     },
   ]);
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Revision fixture matter",
@@ -231,9 +236,9 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("chat message revisions on the migrated schema (postgres)", () => {
-    test.each([1, 2] as const)(
+    test.each([3] as const)(
       "accept preserves normalized v%i metadata in the snapshot and edited message",
-      async (version) => {
+      async () => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const db = openClient().db;
           const fixture = await seedFixture(db);
@@ -267,31 +272,10 @@ if (!databaseUrl || !runPostgres) {
                 },
               ],
             } satisfies ChatMessageMetadata;
-            const content =
-              version === 1
-                ? {
-                    version: 1 as const,
-                    data: [
-                      {
-                        type: "text",
-                        text: "Original answer: café\n\nNext paragraph.",
-                      },
-                      {
-                        type: "data-stella-anon-restorations",
-                        data: metadata.anonRestorations,
-                      },
-                      { type: "data-stella-mentions", data: metadata.mentions },
-                      {
-                        type: "data-stella-source-document",
-                        data: metadata.sourceDocuments.at(0),
-                      },
-                    ],
-                  }
-                : toChatMessageContent({
-                    version,
-                    data: normalizePersistedChatMessageContent(original).parts,
-                    metadata,
-                  });
+            const content = toPersistedChatMessageContentV3({
+              data: normalizePersistedChatMessageContent(original).parts,
+              metadata,
+            });
             await db
               .update(chatMessages)
               .set({ content })
@@ -609,9 +593,9 @@ if (!databaseUrl || !runPostgres) {
           expect(historyAfter.value.map(({ id }) => id)).toEqual([
             fixture.messageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).parts,
-          );
+          expect(
+            historyAfter.value.map(chatMessageFromPersisted).at(0)?.parts,
+          ).toEqual(normalizePersistedChatMessageContent(edited).parts);
         } finally {
           await fixture.cleanUp();
         }
@@ -713,9 +697,9 @@ if (!databaseUrl || !runPostgres) {
             fixture.messageId,
             keptMessageId,
           ]);
-          expect(historyAfter.value.at(0)?.content.data).toEqual(
-            normalizePersistedChatMessageContent(edited).parts,
-          );
+          expect(
+            historyAfter.value.map(chatMessageFromPersisted).at(0)?.parts,
+          ).toEqual(normalizePersistedChatMessageContent(edited).parts);
           const note = await fixture.scoped(db)(
             async (tx) =>
               await readChatRevisionContextChanges({
@@ -1005,8 +989,7 @@ if (!databaseUrl || !runPostgres) {
           await db
             .update(chatMessages)
             .set({
-              content: toChatMessageContent({
-                version: 2,
+              content: toPersistedChatMessageContentV3({
                 data: [
                   { type: "text", content: "Draft answer" },
                   {
@@ -1015,6 +998,7 @@ if (!databaseUrl || !runPostgres) {
                     name: "mcp__external__search",
                     state: "input-streaming",
                     arguments: '{"query":"partial',
+                    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
                   },
                 ],
               }),

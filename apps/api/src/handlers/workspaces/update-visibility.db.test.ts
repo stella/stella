@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -45,12 +46,16 @@ beforeAll(async () => {
   ids = fixture.ids;
 });
 
-afterAll(async () => {
+afterEach(async () => {
   if (createdWorkspaceIds.length > 0) {
     await testDb
       .delete(workspaces)
       .where(inArray(workspaces.id, createdWorkspaceIds));
   }
+  createdWorkspaceIds.length = 0;
+});
+
+afterAll(async () => {
   await releaseRlsFixture();
 });
 

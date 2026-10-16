@@ -102,7 +102,6 @@
     "clauses.versionRestored",
     "consent.error",
     "contacts.emailTypes.other",
-    "contacts.emailTypes.personal",
     "contacts.phoneTypes.other",
     "contacts.search",
     "docxReview.applyTracked",
@@ -262,7 +261,6 @@
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
-    "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
     "workspaces.playbooks.run",
     "workspaces.properties.addOption",
@@ -917,9 +915,6 @@
     "workspaces.parties.partyRoles.mediator": [
       "de",
       "pl"
-    ],
-    "workspaces.parties.personalLabel": [
-      "es"
     ],
     "workspaces.properties.chipSingle": [
       "pl"

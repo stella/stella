@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user, verification } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -142,6 +144,7 @@ const fixture = async (db: GatedTestDb) => {
   ]);
   await db.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Erasure matter",
@@ -149,6 +152,7 @@ const fixture = async (db: GatedTestDb) => {
       leadUserId: leaverId,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherWorkspaceId,
       organizationId,
       name: "Unrelated matter",
@@ -560,6 +564,12 @@ describeLocks("matter creation against organization removal (postgres)", () => {
                 async (fn) =>
                   await creationDb.transaction(async (tx) => {
                     creationPid.resolve(await backendPid(tx));
+                    // A request transaction carries its organization and
+                    // member; matter creation in the database reads them.
+                    await tx.execute(
+                      sql`SELECT set_config('app.organization_id', ${data.organizationId}, true),
+                        set_config('app.user_id', ${data.ownerId}, true)`,
+                    );
                     const value = await fn(asTestRaw<Transaction>(tx));
                     if (hold) {
                       await releaseCreation.promise;
@@ -699,6 +709,7 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: data.organizationId,
     name: "Movable matter",

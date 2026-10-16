@@ -4,7 +4,11 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import type { Verdict } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { createMatterVisibilityRepair } from "./matter-visibility-repair";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 /**
  * Matter visibility replaces "no client means private".
@@ -12,7 +16,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
  * The shared test database runs every migration before any matter exists, so
  * it never holds a clientless matter from before the column. This suite seeds
  * the tables the migration reads in their pre-migration shape, runs the
- * migration file itself, and checks the backfill, the transitional insert
+ * migration and its online repair, and checks the backfill, the transitional insert
  * trigger, and the rewritten access view.
  */
 
@@ -47,6 +51,7 @@ const CLIENT = "00000000-0000-4000-8000-0000000000c1";
 
 // Only the columns the migration and its view read.
 const SCHEMA = `
+CREATE ROLE stella;
 CREATE TABLE member (
   id text PRIMARY KEY,
   organization_id varchar(128) NOT NULL,
@@ -70,6 +75,19 @@ CREATE TABLE workspace_members (
 
 const seed = async (database: PGlite): Promise<void> => {
   await database.exec(SCHEMA);
+  for (const path of [
+    "20261001123000_database_backfill_state/migration.sql",
+    "20261015090000_matter_access_rule_function/migration.sql",
+  ]) {
+    await database.exec(
+      readFileSync(
+        nodePath.resolve(import.meta.dir, "../../drizzle", path),
+        "utf-8",
+      )
+        .replaceAll("--> statement-breakpoint", "")
+        .replaceAll("SET LOCAL", "SET"),
+    );
+  }
   await database.exec(`
     INSERT INTO member VALUES
       ('m1', '${ORG}', '${OWNER}', 'owner'),
@@ -91,10 +109,34 @@ const seed = async (database: PGlite): Promise<void> => {
   `);
 };
 
+const normalVerdict = {
+  kind: "normal",
+  signals: [],
+} as const satisfies Verdict;
+
+const repair = createMatterVisibilityRepair({
+  readVerdict: async () => normalVerdict,
+  sleep: async () => {},
+});
+
+const connectionOver = (database: PGlite): OnlineMigrationConnection => ({
+  execute: async (statement, parameters = []) => {
+    await database.query(statement, [...parameters]);
+  },
+  query: async (statement, parameters = []) =>
+    (await database.query(statement, [...parameters])).rows,
+  release: () => {},
+});
+
+const applyVisibility = async (database: PGlite) => {
+  await database.exec(migrationSql);
+  await repair.repair(connectionOver(database));
+};
+
 const migrated = async (): Promise<PGlite> => {
   const database = new PGlite();
   await seed(database);
-  await database.exec(migrationSql);
+  await applyVisibility(database);
   return database;
 };
 
@@ -123,6 +165,76 @@ const authorizedFor = async (
 };
 
 describe("matter visibility migration", () => {
+  test("an interrupted backfill blocks deployment, preserves legacy access, and resumes to an idempotent cutover", async () => {
+    await using database = new PGlite();
+    await seed(database);
+    await database.exec(`
+      INSERT INTO workspaces (id, organization_id, lead_user_id)
+      SELECT ('00000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+        '${ORG}', '${MEMBER}' FROM generate_series(100, 209) i;
+      INSERT INTO workspace_members (id, workspace_id, user_id)
+      SELECT 'resume-' || i::text,
+        ('00000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
+        '${MEMBER}' FROM generate_series(100, 209) i;
+    `);
+    await database.exec(migrationSql);
+    const connection = connectionOver(database);
+    let now = Date.now();
+    let reads = 0;
+    const interrupted = createMatterVisibilityRepair({
+      clock: () => now,
+      sleep: async () => {},
+      readVerdict: async () => {
+        reads += 1;
+        return reads === 1 ? normalVerdict : { kind: "stop", signals: [] };
+      },
+    });
+    expect(await interrupted.readCompletion(connection)).toMatchObject({
+      type: "incomplete",
+    });
+    expect(String(await rejectionOf(interrupted.repair(connection)))).toContain(
+      "Matter visibility backfill must finish before deployment",
+    );
+    const checkpoint = await database.query<{ cursor: string | null }>(
+      "SELECT cursor FROM database_backfill_states WHERE name = 'matter-visibility'",
+    );
+    expect(checkpoint.rows.at(0)?.cursor).toEqual(expect.any(String));
+    expect(await interrupted.readCompletion(connection)).toMatchObject({
+      type: "incomplete",
+    });
+    // Stored visibility already changed in the committed first batch; the
+    // pre-cutover SQL rule still grants no unassigned clientless matter.
+    const legacyAccess = await database.query<{ workspace_id: string }>(
+      "SELECT workspace_id FROM public.stella_authorized_workspace_ids($1, $2) ORDER BY 1",
+      [ORG, OWNER],
+    );
+    expect(legacyAccess.rows.map(({ workspace_id }) => workspace_id)).toEqual([
+      MATTER.clientMatter,
+    ]);
+    now += 86_400_000;
+    const resumed = createMatterVisibilityRepair({
+      clock: () => now,
+      sleep: async () => {},
+      readVerdict: async () => normalVerdict,
+    });
+    await resumed.repair(connection);
+    expect(await resumed.readCompletion(connection)).toEqual({
+      type: "complete",
+    });
+    expect(
+      Object.values(await visibilityById(database)).filter(
+        (value) => value === "assigned_only",
+      ),
+    ).toHaveLength(112);
+    await database.query(
+      "UPDATE workspaces SET visibility = 'all_members' WHERE id = $1",
+      [MATTER.clientlessOfMember],
+    );
+    const beforeReplay = await visibilityById(database);
+    await resumed.repair(connection);
+    expect(await visibilityById(database)).toEqual(beforeReplay);
+  });
+
   test("backfill keeps every clientless matter assigned-only and every client matter admins-and-assigned; nothing becomes all-members", async () => {
     await using database = await migrated();
 
@@ -166,7 +278,7 @@ describe("matter visibility migration", () => {
         ('wx1', '${externalLead}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
         ('wx2', '${externalLead}', '${MEMBER}', '2026-01-02T00:00:00Z');
     `);
-    await database.exec(migrationSql);
+    await applyVisibility(database);
 
     const leads = Object.fromEntries(
       (
@@ -240,7 +352,7 @@ describe("matter visibility migration", () => {
         ),
       ),
     );
-    await database.exec(migrationSql);
+    await applyVisibility(database);
 
     for (const userId of [
       OWNER,

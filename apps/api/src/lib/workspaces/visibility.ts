@@ -192,7 +192,7 @@ const restoredSteward = v.object({
  * transaction and then refuses, or committed first and is read here.
  */
 export const restoreMatterStewards = async (
-  tx: Pick<Transaction, "execute">,
+  tx: Transaction,
   {
     workspaceIds,
     departingUserId,

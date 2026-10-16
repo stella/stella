@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
@@ -157,6 +158,7 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
         createdAt: oldDate,
       });
       await testDb.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Calendar fixture",

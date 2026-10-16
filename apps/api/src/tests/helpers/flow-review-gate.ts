@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -80,6 +82,7 @@ export const flowReviewGateFixture = async (
       createdAt: new Date(),
     });
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Review matter",

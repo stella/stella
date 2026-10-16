@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, chatThreads, workspaces } from "@/api/db/schema";
@@ -58,6 +60,7 @@ beforeAll(async () => {
   // reach it through their role alone.
   matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: matterId,
     organizationId: ids.orgA,
     name: "Matter T",

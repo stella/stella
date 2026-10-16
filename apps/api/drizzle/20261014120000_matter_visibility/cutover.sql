@@ -1,0 +1,77 @@
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked, read-only; returns the matters one organization member reaches under the existing view rule
+CREATE OR REPLACE FUNCTION public.stella_authorized_workspace_ids(
+  p_organization_id text,
+  p_user_id text
+)
+RETURNS TABLE (workspace_id uuid, workspace_status text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT w.id, w.status::text
+  FROM public.member m
+  JOIN public.workspace_members wm
+    ON wm.user_id = m.user_id
+  JOIN public.workspaces w
+    ON w.id = wm.workspace_id
+   AND w.organization_id = m.organization_id
+  WHERE m.organization_id = p_organization_id
+    AND m.user_id = p_user_id
+  UNION
+  SELECT w.id, w.status::text
+  FROM public.member m
+  JOIN public.workspaces w
+    ON w.organization_id = m.organization_id
+
+  WHERE m.organization_id = p_organization_id
+    AND m.user_id = p_user_id
+    AND (
+      (m.role IN ('owner', 'admin') AND w.visibility IN ('admins_and_assigned', 'all_members'))
+      OR (m.role IN ('owner', 'admin', 'member', 'intern') AND w.visibility = 'all_members')
+    )
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.stella_authorized_workspace_ids(text, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_authorized_workspace_ids(text, text) TO stella;--> statement-breakpoint
+
+
+CREATE OR REPLACE VIEW public.stella_authorized_workspaces
+WITH (security_barrier = true, security_invoker = false)
+AS
+WITH current_member AS (
+  SELECT m.organization_id, m.user_id, m.role
+  FROM public.member m
+  WHERE pg_catalog.current_setting(
+      'app.workspace_access_mode',
+      true
+    ) = 'membership'
+    AND m.organization_id = NULLIF(
+      pg_catalog.current_setting('app.organization_id', true),
+      ''
+    )
+    AND m.user_id = NULLIF(
+      pg_catalog.current_setting('app.user_id', true),
+      ''
+    )
+)
+SELECT
+  explicit_workspace.workspace_id AS authorized_workspace_id,
+  w.status AS workspace_status
+FROM pg_catalog.unnest(
+  COALESCE(
+    NULLIF(
+      pg_catalog.current_setting('app.workspace_ids', true),
+      ''
+    )::uuid[],
+    ARRAY[]::uuid[]
+  )
+) AS explicit_workspace(workspace_id)
+LEFT JOIN public.workspaces w
+  ON w.id = explicit_workspace.workspace_id
+WHERE explicit_workspace.workspace_id IS NOT NULL
+UNION ALL
+SELECT a.workspace_id AS authorized_workspace_id, a.workspace_status
+FROM current_member m
+CROSS JOIN LATERAL public.stella_authorized_workspace_ids(m.organization_id, m.user_id) a;
+--> statement-breakpoint

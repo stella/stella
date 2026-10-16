@@ -7,6 +7,8 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { stella } from "@/api/db/rls";
 import {
   billingCodes,
@@ -48,6 +50,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -1442,6 +1445,7 @@ describe("workspaces table — wrong scope", () => {
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
       tryCatch(async () =>
         tx.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: toSafeId<"workspace">(Bun.randomUUIDv7()),
           organizationId: ids.orgB,
           clientId: ids.contactB,
@@ -1673,7 +1677,7 @@ describe("chat mutations — wrong user", () => {
       (tx) =>
         tx
           .update(chatMessages)
-          .set({ content: { version: 1 as const, data: [] } })
+          .set({ content: toPersistedChatMessageContentV3({ data: [] }) })
           .where(eq(chatMessages.id, ids.chatMessageWorkspaceA1UserA2))
           .returning({ id: chatMessages.id }),
       ids.userA1,

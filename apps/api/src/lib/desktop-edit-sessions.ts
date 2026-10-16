@@ -7,11 +7,7 @@ import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  desktopEditSessions,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
@@ -22,6 +18,7 @@ import {
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 type AuthorizedDesktopEditSession = {
   entityId: SafeId<"entity">;
@@ -157,9 +154,14 @@ export const authorizeDesktopEditSessionWithDb = async (
       sessionStatus: desktopEditSessions.status,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
       tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
-      workspaceMemberId: workspaceMembers.id,
+      reachesMatter: memberReachesMatterSql(
+        {
+          organizationId: workspaces.organizationId,
+          userId: desktopEditSessions.createdBy,
+        },
+        desktopEditSessions.workspaceId,
+      ),
       workspaceId: desktopEditSessions.workspaceId,
-      workspaceVisibility: workspaces.visibility,
     })
     .from(desktopEditSessions)
     .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
@@ -168,13 +170,6 @@ export const authorizeDesktopEditSessionWithDb = async (
       and(
         eq(member.userId, desktopEditSessions.createdBy),
         eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, desktopEditSessions.createdBy),
-        eq(workspaceMembers.workspaceId, desktopEditSessions.workspaceId),
       ),
     )
     .where(eq(desktopEditSessions.id, sessionId))
@@ -202,8 +197,7 @@ export const authorizeDesktopEditSessionWithDb = async (
   if (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
-      workspaceMemberId: session.workspaceMemberId,
-      workspaceVisibility: session.workspaceVisibility,
+      reachesMatter: session.reachesMatter,
     })
   ) {
     return {
@@ -236,7 +230,7 @@ export const authorizeDesktopEditSessionWithDb = async (
  * in the session's own scoped transaction (see
  * {@link authorizeDesktopEditSession}). That scope pins the session's
  * workspace, so row visibility alone would not notice a revoked membership:
- * the joined membership rows decide it here. The requester's name is joined
+ * the database access rule decides it here. The requester's name is joined
  * through their membership of the same organization, so a requester who has
  * since left reads as no name.
  */
@@ -247,8 +241,13 @@ export const readDesktopEditSessionEventState = async (
   const sessions = await tx
     .select({
       organizationRole: member.role,
-      workspaceMemberId: workspaceMembers.id,
-      workspaceVisibility: workspaces.visibility,
+      reachesMatter: memberReachesMatterSql(
+        {
+          organizationId: workspaces.organizationId,
+          userId: desktopEditSessions.createdBy,
+        },
+        desktopEditSessions.workspaceId,
+      ),
     })
     .from(desktopEditSessions)
     .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
@@ -257,13 +256,6 @@ export const readDesktopEditSessionEventState = async (
       and(
         eq(member.userId, desktopEditSessions.createdBy),
         eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, desktopEditSessions.createdBy),
-        eq(workspaceMembers.workspaceId, desktopEditSessions.workspaceId),
       ),
     )
     .where(
@@ -279,8 +271,7 @@ export const readDesktopEditSessionEventState = async (
     !session ||
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
-      workspaceMemberId: session.workspaceMemberId,
-      workspaceVisibility: session.workspaceVisibility,
+      reachesMatter: session.reachesMatter,
     })
   ) {
     return null;

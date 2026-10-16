@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, test, setDefaultTimeout } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
-import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  MEMBER_REMOVAL_BUSY_CODE,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
@@ -359,6 +362,7 @@ if (!databaseUrl || !runPostgresTests) {
               },
             ]);
             await checkDb.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: workspaceId,
               organizationId,
               name: "Assignment matter",
@@ -777,6 +781,7 @@ if (!databaseUrl || !runPostgresTests) {
       const retainedInviteId = Bun.randomUUIDv7();
       try {
         await db.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Removal matter",
@@ -1193,6 +1198,7 @@ if (!databaseUrl || !runPostgresTests) {
             })),
           );
           await db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Exchange matter",
@@ -1426,6 +1432,7 @@ if (!databaseUrl || !runPostgresTests) {
             },
           ]);
           await holdingDb.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Busy matter",

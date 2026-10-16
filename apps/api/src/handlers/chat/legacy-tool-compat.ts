@@ -1,7 +1,11 @@
+import { panic } from "better-result";
+
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
@@ -10,6 +14,8 @@ import type {
   createFolioAgentDocTools,
   createSuggestChangesTools,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
+import type { ChatPart } from "@/api/handlers/chat/types";
+import { isRecord } from "@/api/lib/type-guards";
 
 type FolioClientToolName =
   | keyof ReturnType<typeof createFolioAgentDocTools>
@@ -37,117 +43,30 @@ const LEGACY_CLIENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   BROWSER_CONTROL_TOOL_NAME,
 ]);
 
-export const legacyChatToolExecutor = (name: string): "client" | "server" =>
+const legacyChatToolExecutor = (name: string): "client" | "server" =>
   LEGACY_CLIENT_TOOL_NAMES.has(name) ? "client" : "server";
 
-type CreateDocumentInput = {
-  name: string;
-  source: string;
-};
-type CreateDocumentOutput =
-  | {
-      success: true;
-      fileName: string;
-      entityId: string;
-      fieldId: string;
-      workspaceId: string;
-      entityRef: string;
-      matterRef: string;
-      href: string;
-      mention: string;
-    }
-  | {
-      success: false;
-      message: string;
-    };
-
-const CREATE_DOCUMENT_TOOL_PART_TYPE = "tool-create-document";
-// Old outputs predate route IDs. Empty IDs pass historical-message validation
-// while keeping the web "open created document" affordance hidden.
-const LEGACY_MISSING_ROUTE_ID = "";
-
-export const normalizeLegacyRawToolInputs = (
-  parts: readonly unknown[],
-): unknown[] => parts.map((part) => normalizeLegacyRawCreateDocumentPart(part));
-
-const normalizeCreateDocumentInput = (
-  input: unknown,
-): CreateDocumentInput | null => {
-  const name = getStringProperty(input, "name");
-  const source =
-    getStringProperty(input, "source") ?? getStringProperty(input, "markdown");
-  if (!name || !source) {
-    return null;
-  }
-
-  return { name, source };
-};
-
-const normalizeCreateDocumentOutput = (
-  output: unknown,
-): CreateDocumentOutput | null => {
-  if (!isRecord(output)) {
-    return null;
-  }
-
-  if (output["success"] === false) {
-    const message = getStringProperty(output, "message");
-    return message ? { success: false, message } : null;
-  }
-
-  if (output["success"] !== true) {
-    return null;
-  }
-
-  const fileName = getStringProperty(output, "fileName");
-  const entityRef = getStringProperty(output, "entityRef");
-  const matterRef = getStringProperty(output, "matterRef");
-  const href = getStringProperty(output, "href");
-  const mention = getStringProperty(output, "mention");
-  if (!fileName || !entityRef || !matterRef || !href || !mention) {
-    return null;
-  }
-
-  return {
-    success: true,
-    fileName,
-    entityId: getStringProperty(output, "entityId") ?? LEGACY_MISSING_ROUTE_ID,
-    fieldId: getStringProperty(output, "fieldId") ?? LEGACY_MISSING_ROUTE_ID,
-    workspaceId:
-      getStringProperty(output, "workspaceId") ?? LEGACY_MISSING_ROUTE_ID,
-    entityRef,
-    matterRef,
-    href,
-    mention,
-  };
-};
-
-const normalizeLegacyRawCreateDocumentPart = (part: unknown): unknown => {
-  if (!isRecord(part) || part["type"] !== CREATE_DOCUMENT_TOOL_PART_TYPE) {
+export const normalizeStoredChatToolExecutor = (part: ChatPart): ChatPart => {
+  if (part.type !== "tool-call" || chatToolExecutor(part) !== null) {
     return part;
   }
-
-  const input = normalizeCreateDocumentInput(part["input"]);
-  const output = normalizeCreateDocumentOutput(part["output"]);
-  if (!input && !output) {
-    return part;
+  const metadata = part.metadata;
+  // Every writer proves its content before storing it, so a stored call with
+  // non-object metadata or an unrecognised executor is corrupted state.
+  if (metadata !== undefined && !isRecord(metadata)) {
+    return panic("Stored tool call has invalid metadata");
   }
-
+  const provider = isRecord(metadata) ? metadata : {};
+  if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
+    return panic("Stored tool call has invalid executor ownership");
+  }
+  // Stored calls predate recorded ownership and deferred server execution.
+  // A request registry must never change ownership of a historical call.
   return {
     ...part,
-    ...(input && { input }),
-    ...(output && { output }),
+    metadata: {
+      ...provider,
+      [CHAT_TOOL_EXECUTOR_METADATA_KEY]: legacyChatToolExecutor(part.name),
+    },
   };
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const getStringProperty = (value: unknown, key: string): string | null => {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const property = value[key];
-  return typeof property === "string" ? property : null;
 };

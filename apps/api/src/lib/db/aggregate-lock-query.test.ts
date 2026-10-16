@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
@@ -68,6 +69,7 @@ beforeAll(async () => {
   });
   await db.insert(workspaces).values(
     [workspaceId, otherWorkspaceId].map((id) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId,
       name: "Selected projection",

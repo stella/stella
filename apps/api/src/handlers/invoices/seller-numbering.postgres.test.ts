@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   INVOICE_STATUS,
@@ -86,6 +88,7 @@ if (!databaseUrl || !runPostgres) {
         featureId: "time-billing",
       });
       await db.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: wsId,
         organizationId: orgId,
         name: "Numbering",

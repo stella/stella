@@ -1,11 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member } from "@/api/db/auth-schema";
-import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
 import {
   type fields,
@@ -85,6 +84,7 @@ import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
+import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -704,9 +704,8 @@ export const createDuplicateWorkspace = (
         }
         const reference = referenceResult.value;
 
-        await tx.insert(workspaces).values({
+        await createWorkspaceInTransaction(tx, {
           id: targetWorkspaceId,
-          organizationId,
           clientId: snapshot.workspace.clientId,
           billingReference: snapshot.workspace.billingReference,
           color: snapshot.workspace.color,
@@ -718,24 +717,18 @@ export const createDuplicateWorkspace = (
           visibility: snapshot.workspace.visibility,
         });
 
-        await tx.execute(
-          sql`SELECT set_config(
-            ${SETTING_WORKSPACE_IDS},
-            array_append(
-              current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
-              ${targetWorkspaceId}
-            )::text,
-            true
-          )`,
-        );
-
         if (snapshot.members.length > 0) {
-          await tx.insert(workspaceMembers).values(
-            snapshot.members.map((workspaceMember) => ({
-              workspaceId: targetWorkspaceId,
-              userId: workspaceMember.userId,
-            })),
-          );
+          await tx
+            .insert(workspaceMembers)
+            .values(
+              snapshot.members.map((workspaceMember) => ({
+                workspaceId: targetWorkspaceId,
+                userId: workspaceMember.userId,
+              })),
+            )
+            .onConflictDoNothing({
+              target: [workspaceMembers.workspaceId, workspaceMembers.userId],
+            });
         }
 
         const propertyIdMap = new Map<string, SafeId<"property">>();

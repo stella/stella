@@ -3,6 +3,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
@@ -90,6 +92,7 @@ const queueRows = async () =>
 
 const seedWorkspace = async (id: SafeId<"workspace">) => {
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     createdAt: SEED_AT,
     id,
     lastActivityAt: SEED_AT,

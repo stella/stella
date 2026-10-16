@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -203,12 +204,14 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       await db.insert(workspaces).values([
         {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Matter",
           reference: "MAIL-1",
         },
         {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: otherWorkspaceId,
           organizationId,
           name: "Other matter",

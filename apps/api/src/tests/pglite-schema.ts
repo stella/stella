@@ -7,6 +7,7 @@ import nodePath from "node:path";
 
 import { ASCII_FOLD_TABLE } from "@stll/text-normalize";
 
+import { readMatterVisibilityCutoverSql } from "@/api/db/matter-visibility-sql";
 import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 import { FLOW_TRANSITION_SPECS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
@@ -20,6 +21,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
 const MATTER_VISIBILITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261014120000_matter_visibility",
+  "migration.sql",
+);
+const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261015090000_matter_access_rule_function",
   "migration.sql",
 );
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
@@ -274,24 +280,25 @@ export const installPgliteWorkspaceAccessObjects = async (
 ): Promise<void> => {
   const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
+    MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH,
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {
     await installPgliteMigration({ db, migrationPath });
   }
-  // The push already created `workspaces.visibility`; only the access view's
-  // three-level rewrite is replayed, over the view installed above.
-  const accessViewStatements = readMigrationStatements(
+  // The schema push supplies the column; replay only functions/triggers and
+  // the online phase's access cutover over main's authorization objects.
+  const visibilityStatements = readMigrationStatements(
     MATTER_VISIBILITY_MIGRATION_PATH,
   ).filter((statement) =>
-    executableSql(statement).startsWith(
-      `CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}`,
+    /^(?:CREATE (?:OR REPLACE )?FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+      executableSql(statement),
     ),
   );
-  if (accessViewStatements.length !== 1) {
-    panic("Matter visibility migration must replace the access view once");
+  for (const statement of visibilityStatements) {
+    await db.execute(sql.raw(statement));
   }
-  for (const statement of accessViewStatements) {
+  for (const statement of readMatterVisibilityCutoverSql()) {
     await db.execute(sql.raw(statement));
   }
   // The replay above rewrites every `workspace_*` policy to the plain matter
@@ -516,6 +523,28 @@ export const installPgliteReaderAnswerRls = async (
     }
     await db.execute(sql.raw(statement));
   }
+};
+
+/** Apply the committed setting omitted by schema push. */
+export const installPgliteCitationDoctrineRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261014174500_case_law_citation_doctrine",
+      "migration.sql",
+    ),
+  );
+  const statement = statements.find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "case_law_citation_doctrine_reviews" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Citation doctrine FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
 };
 
 /** Apply the committed setting omitted by schema push. */

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
@@ -66,6 +67,7 @@ const withPublicRowFixture = async ({
     ]);
     if (workspace === "present") {
       await db.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Aggregate lock fixture",
@@ -334,6 +336,7 @@ if (!databaseUrl || !enabled) {
                 }),
               ).toEqual({ status: "locked" });
               await tx.insert(workspaces).values({
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
                 id: workspaceId,
                 organizationId,
                 name: "Aggregate lock fixture",

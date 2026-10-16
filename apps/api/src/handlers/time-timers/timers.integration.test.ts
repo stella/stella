@@ -13,7 +13,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  TIME_ENTRY_ACTIVITY_GROUP,
+} from "@stll/api-contract";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -635,6 +638,7 @@ describe("global timer lifecycle", () => {
   test("a migrated draft completed in another matter starts its billing fields over", async () => {
     const originalMatterId = createSafeId<"workspace">();
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: originalMatterId,
       organizationId: ids.orgA,
       name: "Original timer matter",
@@ -723,6 +727,7 @@ describe("global timer lifecycle", () => {
   test("a timer survives matter membership removal and confirms after reassignment", async () => {
     const originalMatterId = createSafeId<"workspace">();
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: originalMatterId,
       organizationId: ids.orgA,
       name: "Timer matter",

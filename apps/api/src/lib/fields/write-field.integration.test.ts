@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -73,6 +75,7 @@ beforeAll(async () => {
   db = fixture.testDb;
   ids = fixture.ids;
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: ids.orgA,
     name: "Field write test",

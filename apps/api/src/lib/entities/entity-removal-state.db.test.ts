@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -58,8 +60,20 @@ const seed = async () => {
     email: `${userId}@example.test`,
   });
   await db.insert(workspaces).values([
-    { id: workspaceId, organizationId, name: "Source", reference: "SOURCE" },
-    { id: otherWorkspaceId, organizationId, name: "Other", reference: "OTHER" },
+    {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
+      id: workspaceId,
+      organizationId,
+      name: "Source",
+      reference: "SOURCE",
+    },
+    {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
+      id: otherWorkspaceId,
+      organizationId,
+      name: "Other",
+      reference: "OTHER",
+    },
   ]);
   await db.insert(properties).values({
     id: propertyId,

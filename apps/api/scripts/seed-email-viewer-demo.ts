@@ -1,12 +1,12 @@
+import { panic } from "better-result";
 /**
  * Add the representative email fixtures to the existing local email QA matter.
  * Rerunning is idempotent. Set STELLA_SEED_EMAIL_WORKSPACE_ID to target a
  * different matter that already has a file property.
  */
-
-import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
@@ -130,6 +130,8 @@ const resolveTarget = async () => {
       const insertedWorkspaces = await tx
         .insert(workspaces)
         .values({
+          visibility: defaultMatterVisibilityFor({ hasClient: false }),
+          leadUserId: activeSession.userId,
           id: workspace.id,
           organizationId: workspace.organizationId,
           name: workspace.name,

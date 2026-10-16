@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, or, sql } from "drizzle-orm";
 
-import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  MEMBER_REMOVAL_BUSY_CODE,
+} from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
@@ -99,6 +102,7 @@ const withLockFixture = async (
         },
       ]);
       await holder.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId,
         name: "Aggregate lock fixture",

@@ -1551,10 +1551,16 @@ export const createAuth = (
         );
         if (
           !INTERNAL_MEMBER_ROLES.some((role) => role === newRole) &&
-          (await leadsAssignedOnlyMatter(rootDb, {
+          (await createMembershipScopedDb(rlsDb, {
             organizationId: brandPersistedOrganizationId(org.id),
             userId: brandPersistedUserId(updatedMember.userId),
-          }))
+            serverValidatedWorkspaceIds: [],
+          })((tx) =>
+            leadsAssignedOnlyMatter(tx, {
+              organizationId: brandPersistedOrganizationId(org.id),
+              userId: brandPersistedUserId(updatedMember.userId),
+            }),
+          ))
         ) {
           throw new APIError("BAD_REQUEST", {
             code: "member_leads_assigned_only_matter",

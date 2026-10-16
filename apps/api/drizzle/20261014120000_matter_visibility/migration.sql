@@ -16,81 +16,16 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- reach a matter without an assignment.
 --
 -- Adding the column with a constant default is a metadata-only change; the
--- CHECK is validated in the same statement against a table bounded by
--- matters per organization.
+-- CHECK is validated by the online phase after its bounded backfill.
 ALTER TABLE "workspaces"
   ADD COLUMN "visibility" text DEFAULT 'admins_and_assigned' NOT NULL,
   ADD CONSTRAINT "workspaces_visibility_check"
-    CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only'));
+    CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only')) NOT VALID;
 --> statement-breakpoint
 
--- Steward invariant: an assigned-only matter is managed by its lead (owners
--- and admins do not reach it), so it always has a usable lead, one who is an
--- internal member (owner, admin, member, intern) of the matter's organization
--- and assigned to it. The application keeps this in
--- apps/api/src/lib/workspaces/visibility.ts; this backfill applies the same
--- rule once.
---
--- First repair: a clientless matter whose lead is missing or no longer usable
--- (left the organization, became external, or unassigned) takes its earliest
--- assigned internal member, by assignment time then id, as lead. A matter
--- with no such member keeps its lead as it is. Bounded to clientless matters.
-UPDATE "workspaces" AS w
-SET "lead_user_id" = steward.user_id
-FROM (
-  SELECT DISTINCT ON (wm.workspace_id) wm.workspace_id, wm.user_id
-  FROM "workspace_members" AS wm
-  JOIN "workspaces" AS matter ON matter.id = wm.workspace_id
-  JOIN "member" AS m
-    ON m.user_id = wm.user_id
-   AND m.organization_id = matter.organization_id
-  WHERE matter.client_id IS NULL
-    AND m.role IN ('owner', 'admin', 'member', 'intern')
-    AND NOT EXISTS (
-      SELECT 1
-      FROM "workspace_members" AS lead_assignment
-      JOIN "member" AS lead_member
-        ON lead_member.user_id = lead_assignment.user_id
-       AND lead_member.organization_id = matter.organization_id
-      WHERE lead_assignment.workspace_id = matter.id
-        AND lead_assignment.user_id = matter.lead_user_id
-        AND lead_member.role IN ('owner', 'admin', 'member', 'intern')
-    )
-  ORDER BY wm.workspace_id, wm.created_at, wm.id
-) AS steward
-WHERE w.id = steward.workspace_id;
---> statement-breakpoint
-
--- Then visibility: a matter without a client stays assigned_only and every
--- other matter admins_and_assigned, so nothing becomes visible to anyone who
--- could not already see it, except a clientless matter that still has no
--- usable lead: nobody could manage it as assigned_only, so it stays
--- admins_and_assigned and owners and admins can recover it. all_members is
--- never set here; only an explicit, audited change opens a matter that wide.
--- Bounded to the clientless matters.
-UPDATE "workspaces" AS w
-SET "visibility" = 'assigned_only'
-WHERE w.client_id IS NULL
-  AND EXISTS (
-    SELECT 1
-    FROM "workspace_members" AS wm
-    JOIN "member" AS m
-      ON m.user_id = wm.user_id
-     AND m.organization_id = w.organization_id
-    WHERE wm.workspace_id = w.id
-      AND wm.user_id = w.lead_user_id
-      AND m.role IN ('owner', 'admin', 'member', 'intern')
-  );
---> statement-breakpoint
-
--- No database default: the application always states a visibility. A writer
--- that predates this column (an API instance still rolling out) omits it, and
--- the trigger below gives that row the visibility the old rule implied, so a
--- clientless matter created mid-rollout stays assigned_only rather than
--- defaulting to admins_and_assigned. CONTRACT STEP: drop the trigger and the
--- function in a later release, once no such writer can remain.
-ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
---> statement-breakpoint
+-- Existing rows retain the old access rule until the bounded online repair
+-- finishes. Its cursor and atomic function/view cutover are owned by
+-- src/db/matter-visibility-repair.ts. NOT VALID avoids a deploy-time scan.
 
 CREATE FUNCTION public.workspaces_legacy_visibility() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -121,66 +56,14 @@ WHEN (NEW.visibility IS NULL)
 EXECUTE FUNCTION public.workspaces_legacy_visibility();
 --> statement-breakpoint
 
--- Without an assignment, owners and admins reach admins_and_assigned and
--- all_members matters, and every internal member reaches all_members
--- matters; assigned_only matters are reached only through workspace_members.
--- Same columns and order as the view it replaces, so every policy that reads
--- it keeps working.
-CREATE OR REPLACE VIEW public.stella_authorized_workspaces
-WITH (security_barrier = true, security_invoker = false)
-AS
-WITH current_member AS (
-  SELECT m.organization_id, m.user_id, m.role
-  FROM public.member m
-  WHERE pg_catalog.current_setting(
-      'app.workspace_access_mode',
-      true
-    ) = 'membership'
-    AND m.organization_id = NULLIF(
-      pg_catalog.current_setting('app.organization_id', true),
-      ''
-    )
-    AND m.user_id = NULLIF(
-      pg_catalog.current_setting('app.user_id', true),
-      ''
-    )
-)
-SELECT
-  explicit_workspace.workspace_id AS authorized_workspace_id,
-  w.status AS workspace_status
-FROM pg_catalog.unnest(
-  COALESCE(
-    NULLIF(
-      pg_catalog.current_setting('app.workspace_ids', true),
-      ''
-    )::uuid[],
-    ARRAY[]::uuid[]
-  )
-) AS explicit_workspace(workspace_id)
-LEFT JOIN public.workspaces w
-  ON w.id = explicit_workspace.workspace_id
-WHERE explicit_workspace.workspace_id IS NOT NULL
-UNION ALL
-SELECT w.id AS authorized_workspace_id, w.status AS workspace_status
-FROM current_member m
-JOIN public.workspace_members wm
-  ON wm.user_id = m.user_id
-JOIN public.workspaces w
-  ON w.id = wm.workspace_id
- AND w.organization_id = m.organization_id
-UNION ALL
-SELECT w.id AS authorized_workspace_id, w.status AS workspace_status
-FROM current_member m
-JOIN public.workspaces w
-  ON w.organization_id = m.organization_id
-WHERE (
-    m.role IN ('owner', 'admin')
-    AND w.visibility IN ('admins_and_assigned', 'all_members')
-  )
-  OR (
-    m.role IN ('owner', 'admin', 'member', 'intern')
-    AND w.visibility = 'all_members'
-  );
+-- No database default: the application always states a visibility. A writer
+-- that predates this column (an API instance still rolling out) omits it, and
+-- the trigger below gives that row the visibility the old rule implied, so a
+-- clientless matter created mid-rollout stays assigned_only rather than
+-- defaulting to admins_and_assigned. CONTRACT STEP: drop the trigger and the
+-- function in a later release, once no such writer can remain.
+-- squawk-ignore ban-drop-default -- The preceding insert trigger supplies the legacy visibility for rolling old writers; new writers state it explicitly.
+ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
 --> statement-breakpoint
 
 -- The steward invariant under concurrency. A role change runs in the
@@ -199,18 +82,25 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  -- Lock every assignment before checking visibility. A filtered EXISTS can
+  -- skip an open matter that another transaction is concurrently narrowing.
+  PERFORM w.id
+  FROM public.workspaces AS w
+  JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
+  WHERE wm.user_id = NEW.user_id
+    AND w.organization_id = NEW.organization_id
+  ORDER BY w.id
+  FOR SHARE OF w;
+
+  -- This separate statement sees changes committed while the lock waited.
   IF EXISTS (
     SELECT 1
-    FROM (
-      SELECT w.visibility, w.lead_user_id
-      FROM public.workspaces AS w
-      JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
-      WHERE wm.user_id = NEW.user_id
-        AND w.organization_id = NEW.organization_id
-      FOR SHARE OF w
-    ) AS assigned_matter
-    WHERE assigned_matter.visibility = 'assigned_only'
-      AND assigned_matter.lead_user_id = NEW.user_id
+    FROM public.workspaces AS w
+    JOIN public.workspace_members AS wm ON wm.workspace_id = w.id
+    WHERE wm.user_id = NEW.user_id
+      AND w.organization_id = NEW.organization_id
+      AND w.visibility = 'assigned_only'
+      AND w.lead_user_id = NEW.user_id
   ) THEN
     RAISE EXCEPTION 'member leads a matter visible to assigned members only'
       USING ERRCODE = 'check_violation',
@@ -227,3 +117,133 @@ BEFORE UPDATE OF "role" ON "member"
 FOR EACH ROW
 WHEN (NEW.role NOT IN ('owner', 'admin', 'member', 'intern'))
 EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();
+--> statement-breakpoint
+
+-- Creating a matter: inserts the matter in the transaction's organization and,
+-- when the creating member would not reach it otherwise, that member's
+-- assignment, so the new matter is reachable through the rule above without
+-- naming it in app.workspace_ids. It adds no other member.
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked; organization and user come from the transaction settings, never from arguments; inserts one matter and at most the caller's own assignment
+CREATE FUNCTION public.stella_create_workspace(
+  p_workspace_id uuid,
+  p_client_id uuid,
+  p_name text,
+  p_reference text,
+  p_billing_reference text,
+  p_color text,
+  p_lead_user_id text,
+  p_visibility text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_organization_id text := NULLIF(
+    pg_catalog.current_setting('app.organization_id', true),
+    ''
+  );
+  v_user_id text := NULLIF(pg_catalog.current_setting('app.user_id', true), '');
+BEGIN
+  IF v_organization_id IS NULL OR v_user_id IS NULL THEN
+    RAISE EXCEPTION 'creating a matter requires an organization member'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.member m
+    WHERE m.organization_id = v_organization_id
+      AND m.user_id = v_user_id
+  ) THEN
+    RAISE EXCEPTION 'creating a matter requires an organization member'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  -- The function runs as the owner, so it checks what the row policies would:
+  -- the client and the lead belong to the same organization.
+  IF p_client_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM public.contacts c
+    WHERE c.id = p_client_id
+      AND c.organization_id = v_organization_id
+  ) THEN
+    RAISE EXCEPTION 'the client belongs to another organization'
+      USING ERRCODE = 'foreign_key_violation';
+  END IF;
+  IF p_lead_user_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM public.member m
+    WHERE m.organization_id = v_organization_id
+      AND m.user_id = p_lead_user_id
+  ) THEN
+    RAISE EXCEPTION 'the matter lead is not an organization member'
+      USING ERRCODE = 'foreign_key_violation';
+  END IF;
+
+  INSERT INTO public.workspaces (
+    id,
+    organization_id,
+    client_id,
+    name,
+    reference,
+    billing_reference,
+    color,
+    lead_user_id,
+    visibility
+  )
+  VALUES (
+    p_workspace_id,
+    v_organization_id,
+    p_client_id,
+    p_name,
+    p_reference,
+    p_billing_reference,
+    p_color,
+    p_lead_user_id,
+    p_visibility
+  );
+
+  IF NOT public.stella_workspace_access(
+    v_organization_id,
+    v_user_id,
+    p_workspace_id
+  ) THEN
+    -- The application mints ids for its own inserts; the column has no
+    -- database default, so the function supplies one.
+    INSERT INTO public.workspace_members (id, workspace_id, user_id)
+    VALUES (pg_catalog.gen_random_uuid(), p_workspace_id, v_user_id);
+  END IF;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text, text) TO stella;
+
+--> statement-breakpoint
+
+-- The online repair selects and holds only its bounded legacy batch; its
+-- subsequent steward queries run after lock acquisition with a fresh snapshot.
+CREATE FUNCTION public.stella_lock_legacy_visibility_batch(p_cursor uuid, p_size integer)
+RETURNS TABLE (id uuid)
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF p_size < 1 OR p_size > 100 THEN
+    RAISE EXCEPTION 'visibility backfill batch must contain between 1 and 100 matters'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF p_cursor IS NULL THEN
+    RETURN QUERY SELECT w.id FROM public.workspaces w
+      WHERE w.client_id IS NULL ORDER BY w.id LIMIT p_size FOR UPDATE;
+  ELSE
+    RETURN QUERY SELECT w.id FROM public.workspaces w
+      WHERE w.client_id IS NULL AND w.id > p_cursor
+      ORDER BY w.id LIMIT p_size FOR UPDATE;
+  END IF;
+END;
+$$;
+--> statement-breakpoint
+
+-- Only the database migration owner runs the repair; application sessions do not.
+REVOKE ALL ON FUNCTION public.stella_lock_legacy_visibility_batch(uuid, integer) FROM PUBLIC;

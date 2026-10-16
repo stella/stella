@@ -1,44 +1,32 @@
 [
   {
-    "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "from": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
-    "to": "324510407a3f1e599055bcdf64c5fb3c275d2f9bbc36e6e468d0d37fa68ef46f",
-    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now asks the matter visibility rule instead of the client."
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "0f0556ddff0a0353c8e9733fcd221854b54c55dc49a0fc05e42757c4b6ac48f3",
+    "to": "aa327ba04f6eb3561ddec1c1db69cb6032f1c69aa20c5801307ceb00d048e195",
+    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "from": "4d0ff3a1232e8708641540aea532d71a6edc4bfd90eee22ab25e7987991cbcb5",
-    "to": "7e5b7a62e12268f465b88320ece3fd0152fa1dad231113823571961ca4e2800d",
-    "reason": "Same FOR SHARE on the unassigned matters the member's role may reach; their visibility decides it instead of the client."
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "ce0491ea9028a00b6ea1b0cb2ef3680ec461521b191cae44fcef9ea43c6f3c27",
+    "to": "7a7ae785a84d64f46929bd0b11a293db6c7638ec189b44b8da10a8895758af5c",
+    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {
-    "file": "apps/api/src/handlers/workspaces/update.ts",
-    "from": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
-    "to": "6180d6835d6c7a5c454ef296ae4f9ecf127d4b32eef799852746351cd2b587f6",
-    "reason": "Same FOR UPDATE on the matter row being changed; the locked read also selects its visibility."
-  },
-  {
-    "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
-    "from": "bb2c0d1fdd89296750310debff2ec785e192cf0ebbf42f75389776c69b43410a",
-    "to": "51c3621984343f4d7b66e676683a10c654633cfe7ccf9e3610de1576eaf25ac4",
-    "reason": "Same FOR UPDATE OF the signing session; the locked read also selects the matter's visibility for the write check."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "from": "64b6b45709f00dc3273f623d0137839de1f9c554deec5440a0ecd28ccad822b9",
-    "to": "d6460635c126ccf7a0397860b7740e7b7fa7ebfe90368b147103354148adbb90",
-    "reason": "Same deletion transaction boundary; its body now reads the matter's visibility for the access check."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "from": "837ee1e4a66f80b891712a0f16ea36fbe738bbe24d8b7276962d66bf45b862cb",
-    "to": "0bd9ba054686e0e66aa4cf82b6f842559e3ff0ab7a2b7bd50b82c68d47b09055",
-    "reason": "Same FOR UPDATE on the matter being deleted; the locked read also selects its visibility."
+    "file": "apps/api/scripts/seed-email-viewer-demo.ts",
+    "from": "f3a6b9f8efa089291a3fbb01903f9d4b61f1964203578969cbe5dbf12508b525",
+    "to": "57ad693539cecb5b698a3d6c19ea95f6ef342a28b314af629e82b8f615ade5e2",
+    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
     "from": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
     "to": "2f5507d8eb48a66ea1d3a7eeadb72c071990dc4a8137972e021ee5bfc1147d7d",
-    "reason": "Same FOR UPDATE on the client contact; the check moved into a helper so the update handler keeps one responsibility per step."
+    "reason": "Existing client contact lock moved to a helper; its lock boundary is unchanged."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "from": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
+    "to": "6180d6835d6c7a5c454ef296ae4f9ecf127d4b32eef799852746351cd2b587f6",
+    "reason": "Existing matter update lock now selects visibility for its access rules; its lock boundary is unchanged."
   }
 ]

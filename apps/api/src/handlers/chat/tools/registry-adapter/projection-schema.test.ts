@@ -135,7 +135,10 @@ describe("projectForChat", () => {
     name: "Acme",
     reference: "REF-1",
     status: "active",
-  };
+    visibility: "admins_and_assigned",
+  } satisfies v.InferInput<
+    typeof LIST_MATTERS_LIST_PROJECTION
+  >["matters"][number];
 
   test("an undeclared field is stripped and reported by path, never by value", () => {
     const refRegistry = createChatRefRegistry();
@@ -819,6 +822,7 @@ describe("projectForChat", () => {
           name: "Acme",
           reference: "REF-1",
           status: "active",
+          visibility: "admins_and_assigned",
           lastActivityAt: "2026-01-01T00:00:00.000Z",
           createdAt: "2026-01-01T00:00:00.000Z",
         },
@@ -840,6 +844,7 @@ describe("projectForChat", () => {
           name: "Acme",
           reference: "REF-1",
           status: "active",
+          visibility: "admins_and_assigned",
           lastActivityAt: "2026-01-01T00:00:00.000Z",
           createdAt: "2026-01-01T00:00:00.000Z",
         },
@@ -900,7 +905,7 @@ describe("projectForChat", () => {
       READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
     ];
     for (const country of PUBLIC_COUNTRIES) {
-      const payload = publicCountryUnavailable(country);
+      const payload = publicCountryUnavailable(country, "search");
       if (payload === null) {
         continue;
       }
@@ -966,7 +971,7 @@ describe("renderProjectionShape", () => {
     const shape = renderProjectionShape(LIST_MATTERS_PROJECTION);
 
     expect(shape).toContain(
-      "matters: { id, name, reference, status, lastActivityAt, createdAt }[]",
+      "matters: { id, name, reference, status, visibility, lastActivityAt, createdAt }[]",
     );
     expect(shape).toContain(" | ");
     expect(shape).toContain("contacts");

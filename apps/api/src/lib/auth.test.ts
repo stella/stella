@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -183,6 +184,7 @@ testState.beforeAll(async () => {
   });
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: clientWorkspaceId,
       organizationId: orgFull,
       clientId: clientContactId,

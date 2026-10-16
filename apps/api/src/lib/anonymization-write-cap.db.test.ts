@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -87,6 +89,7 @@ const seedScope = async (tx: Transaction): Promise<Scope> => {
     createdAt: new Date(),
   });
   await tx.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Anonymization cap matter",

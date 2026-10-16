@@ -11,6 +11,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -152,6 +153,7 @@ beforeAll(async () => {
 
   workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Shared matter",
@@ -965,6 +967,7 @@ describe("admin ending a member's timer", () => {
     const hiddenMatterId = createSafeId<"workspace">();
     try {
       await testDb.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: hiddenMatterId,
         organizationId,
         name: "Private matter",
@@ -1011,6 +1014,7 @@ describe("admin ending a member's timer", () => {
         organizationName: "Client",
       });
       await testDb.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: clientMatterId,
         organizationId,
         clientId,

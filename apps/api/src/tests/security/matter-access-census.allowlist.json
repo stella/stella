@@ -21,30 +21,11 @@
       "workspaceArrayCheck": 1
     }
   },
-  "apps/api/src/handlers/entities/desktop-edit-handoffs.ts::names-matter-role-rule": {
-    "reason": "Reads the write decision the handoff resolver computed; switches with that resolver.",
-    "sites": {
-      "redeemDesktopEditHandoffHandler": 1
-    }
-  },
-  "apps/api/src/handlers/entities/join-folio-collab-room.ts::derives-matter-access": {
-    "reason": "Rechecks the joining member's matter membership inside a transaction that pins the matter, where the view would admit the pinned id; moves to the owner module once it offers a membership-only check.",
-    "sites": {
-      "canStillEditWorkspace.memberships": 3,
-      "canStillEditWorkspace.memberships.workspaceMemberId": 1
-    }
-  },
   "apps/api/src/lib/auth.ts::derives-matter-access": {
     "reason": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
     "sites": {
       "memberWorkspaceAccess.membershipExists": 3,
       "memberWorkspaceAccess.membershipExists.id": 1
-    }
-  },
-  "apps/api/src/lib/auth.ts::names-matter-role-rule": {
-    "reason": "Request authorization lists organization members with the client-matter admin roles; switches to the database access function.",
-    "sites": {
-      "memberWorkspaceAccess": 1
     }
   },
   "apps/api/src/lib/auth.ts::owner-connection-workspace-set": {
@@ -85,20 +66,6 @@
       "resolveValidateAuth.orgSettings#rootDb": 1
     }
   },
-  "apps/api/src/lib/db/member-access-hold.ts::derives-matter-access": {
-    "reason": "Share-locks the membership rows an operation depends on and reports which requested matters stay reachable, so a concurrent removal serializes with the operation; reads the rows directly so pinned matters do not count. Moves to the owner module once it offers a membership-only check.",
-    "sites": {
-      "holdMemberAccessOnTx.assigned": 4,
-      "holdMemberAccessOnTx.assigned.of": 1,
-      "holdMemberAccessOnTx.assigned.workspaceId": 1
-    }
-  },
-  "apps/api/src/lib/db/member-access-hold.ts::names-matter-role-rule": {
-    "reason": "Access holds decide whether a member reaches client matters through their role; switches to the database access function.",
-    "sites": {
-      "holdMemberAccessOnTx.reachesClientMatters": 1
-    }
-  },
   "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
     "reason": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
     "sites": {
@@ -108,84 +75,6 @@
       "getPendingTasksAndMembers.try.otherMembers": 1,
       "getPendingTasksAndMembers.try.otherMembers#rootDb": 1,
       "getPendingTasksAndMembers.try.userAssignments#rootDb": 1
-    }
-  },
-  "apps/api/src/lib/desktop-edit-handoffs.ts::derives-matter-access": {
-    "reason": "Re-evaluates a desktop handoff credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "readDesktopEditHandoffAccess.rows": 3,
-      "readDesktopEditHandoffAccess.rows.workspaceMemberId": 1
-    }
-  },
-  "apps/api/src/lib/desktop-edit-handoffs.ts::names-matter-role-rule": {
-    "reason": "Desktop handoffs compute write access through the shared app-side write check; switches to the database access function.",
-    "sites": {
-      "readDesktopEditHandoffAccess.canWriteWorkspaceEntities": 2
-    }
-  },
-  "apps/api/src/lib/desktop-edit-sessions.ts::derives-matter-access": {
-    "reason": "Re-evaluates a desktop edit session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "authorizeDesktopEditSessionWithDb.rows": 3,
-      "authorizeDesktopEditSessionWithDb.rows.workspaceMemberId": 1,
-      "readDesktopEditSessionEventState.sessions": 3,
-      "readDesktopEditSessionEventState.sessions.workspaceMemberId": 1
-    }
-  },
-  "apps/api/src/lib/desktop-edit-sessions.ts::names-matter-role-rule": {
-    "reason": "Desktop edit sessions authorize writes through the shared app-side write check; switches to the database access function.",
-    "sites": {
-      "authorizeDesktopEditSessionWithDb": 1,
-      "readDesktopEditSessionEventState": 1
-    }
-  },
-  "apps/api/src/lib/entities/workspace-entity-write-access.ts::names-matter-role-rule": {
-    "reason": "Defines the app-side write check (matter membership, or an admin role on a client matter); the copy of the rule that moves into the database access function.",
-    "sites": {
-      "canWriteWorkspaceEntities": 1,
-      "canWriteWorkspaceEntities.hasWorkspaceAccess": 1
-    }
-  },
-  "apps/api/src/lib/files/pdf-signing/sessions.ts::derives-matter-access": {
-    "reason": "Re-evaluates a signing session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "authorizePdfSigningSession.rows": 3,
-      "authorizePdfSigningSession.rows.workspaceMemberId": 1,
-      "lockedCreatorAccess.membership": 3,
-      "lockedCreatorAccess.membership.id": 1
-    }
-  },
-  "apps/api/src/lib/files/pdf-signing/sessions.ts::names-matter-role-rule": {
-    "reason": "PDF signing sessions authorize through the shared app-side write check; switches to the database access function.",
-    "sites": {
-      "authorizePdfSigningSession": 1,
-      "redeemPdfSigningHandoff": 1
-    }
-  },
-  "apps/api/src/lib/folio-collab-rooms.ts::derives-matter-access": {
-    "reason": "Re-evaluates a collaboration room token against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "authorizeFolioCollabRoom.rows": 3,
-      "authorizeFolioCollabRoom.rows.workspaceMemberId": 1
-    }
-  },
-  "apps/api/src/lib/folio-collab-rooms.ts::names-matter-role-rule": {
-    "reason": "Collaboration room joins re-check the client-matter admin reach in app code; switches to the database access function.",
-    "sites": {
-      "canUseFolioCollabWorkspace": 1
-    }
-  },
-  "apps/api/src/lib/lists/verification/access-context.ts::derives-matter-access": {
-    "reason": "Background list verification rechecks the requesting member before pinning its one matter; moves to the owner module once it offers a per-member check.",
-    "sites": {
-      "resolveListVerificationAccess.identity": 3,
-      "resolveListVerificationAccess.identity.workspaceMemberId": 1
-    }
-  },
-  "apps/api/src/lib/lists/verification/access-context.ts::names-matter-role-rule": {
-    "reason": "List verification derives write access through the shared app-side write check; switches to the database access function.",
-    "sites": {
-      "canExecuteListVerificationInWorkspace": 1
     }
   },
   "apps/api/src/lib/search/index-entity.ts::owner-connection-workspace-set": {
@@ -219,31 +108,6 @@
       "rebuildSupplementalSearchIndex#rootDb": 1,
       "syncWorkspaceSearchActivity#rootDb": 1,
       "writeWorkspaceProjections": 2
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": {
-    "reason": "Rechecks the timer owner's matter access under a matter lock when a timer starts, changes or finalizes; moves to the owner module once it offers a membership-only check.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/time-entry-timer-access.ts::names-matter-role-rule": {
-    "reason": "Timer access embeds the admin role list in SQL; switches to the database access function.",
-    "sites": {
-      "hasCurrentTimerMatterAccess.rows": 1
-    }
-  },
-  "apps/api/src/lib/workspace-deletion.ts::derives-matter-access": {
-    "reason": "Authorizes matter deletion for the acting member inside a transaction that pins the matter; moves to the owner module once it offers a membership-only check.",
-    "sites": {
-      "actorCanAccessWorkspace.workspaceMemberRows": 3,
-      "actorCanAccessWorkspace.workspaceMemberRows.id": 1
-    }
-  },
-  "apps/api/src/lib/workspace-deletion.ts::names-matter-role-rule": {
-    "reason": "Matter deletion checks the actor role reach on client matters; switches to the database access function.",
-    "sites": {
-      "actorCanAccessWorkspace": 1
     }
   }
 }

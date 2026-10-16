@@ -3,6 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
@@ -161,6 +163,7 @@ const seedTestWorkspace = async (
     createdAt: new Date(),
   });
   await tx.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Entity cap lock matter",

@@ -2,6 +2,7 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -90,6 +91,7 @@ if (!databaseUrl || !runPostgres) {
           createdAt: new Date(),
         });
         await db.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Fact detail matter",

@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 import { containsRawUuid } from "@/api/lib/chat/projection-schema";
+import type { LIST_MATTERS_LIST_PROJECTION } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -22,8 +24,13 @@ const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
 const DOCUMENT_UUID = "7a0c1e2f-3b4d-4c5e-8f6a-7b8c9d0e1f01";
 
+type MatterRow = Omit<
+  v.InferInput<typeof LIST_MATTERS_LIST_PROJECTION>["matters"][number],
+  "createdAt" | "lastActivityAt"
+> & { createdAt: Date; lastActivityAt: Date };
+
 /** A scopedDb whose select chain resolves to the seeded matter rows. */
-const selectScopedDb = (rows: readonly unknown[]): ScopedDb =>
+const selectScopedDb = (rows: readonly MatterRow[]): ScopedDb =>
   asTestRaw<ScopedDb>(async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -42,9 +49,10 @@ const ONE_MATTER_ROW = {
   name: "Acme",
   reference: "REF-1",
   status: "active",
+  visibility: "admins_and_assigned",
   lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
-};
+} satisfies MatterRow;
 
 const buildContext = ({
   accessibleWorkspaceIds = [toSafeId<"workspace">(WS_UUID)],
@@ -87,10 +95,11 @@ describe("runRegistryReadTool", () => {
         name: "Acme",
         reference: "REF-1",
         status: "active",
+        visibility: "admins_and_assigned",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
       },
-    ];
+    ] satisfies MatterRow[];
 
     const result = await runRegistryReadTool({
       args: {},
@@ -155,10 +164,11 @@ describe("runRegistryReadTool", () => {
         name: "Acme",
         reference: "REF-1",
         status: "active",
+        visibility: "admins_and_assigned",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
       },
-    ];
+    ] satisfies MatterRow[];
     // Mints mat_1 the way a chat turn does: by listing matters first.
     await runRegistryReadTool({
       args: {},
@@ -255,10 +265,11 @@ describe("runRegistryReadTool", () => {
         name: "Acme",
         reference: OTHER_WS_UUID,
         status: "active",
+        visibility: "admins_and_assigned",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
       },
-    ];
+    ] satisfies MatterRow[];
 
     const result = await runRegistryReadTool({
       args: {},

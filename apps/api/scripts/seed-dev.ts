@@ -24,6 +24,7 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import type {
   ExpenseCategory,
   InvoiceStatus,
@@ -5234,6 +5235,9 @@ export async function seed(organizationId?: string, userId?: string) {
         await tx
           .insert(workspaces)
           .values({
+            visibility: defaultMatterVisibilityFor({
+              hasClient: ws.clientId !== null,
+            }),
             id: ws.id,
             organizationId: ORG_ID,
             name: ws.name,
@@ -5264,6 +5268,7 @@ export async function seed(organizationId?: string, userId?: string) {
         await tx
           .insert(workspaces)
           .values({
+            visibility: defaultMatterVisibilityFor({ hasClient: true }),
             id: wsId,
             organizationId: ORG_ID,
             name: mw.name,

@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
@@ -58,6 +59,7 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -389,6 +391,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
 
   await db.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: ids.wsA1,
       organizationId: ids.orgA,
       clientId: ids.contactA,
@@ -397,6 +400,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       status: "active" as const,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: ids.wsA2,
       organizationId: ids.orgA,
       clientId: ids.contactA2,
@@ -405,6 +409,7 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       status: "active" as const,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: ids.wsB1,
       organizationId: ids.orgB,
       clientId: ids.contactB,
@@ -1234,10 +1239,8 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     chatThreadId: ids.chatThreadGlobalA1,
   });
 
-  const chatContent = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const chatContent = (content: string) =>
+    toPersistedChatMessageContentV3({ data: [{ type: "text", content }] });
 
   await db.insert(chatMessages).values([
     {

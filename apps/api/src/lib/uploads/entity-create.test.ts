@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -280,6 +281,7 @@ const seedWorkspace = async (
     email: `${userId}@example.com`,
   });
   await tx.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: seededWorkspaceId,
     organizationId,
     name: "Upload conflict matter",

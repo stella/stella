@@ -241,9 +241,8 @@ const validRow = (overrides: Row = {}): Row => ({
   userId: "user_1",
   userName: "Authorized user",
   workspaceId,
-  workspaceMemberId: null,
+  reachesMatter: true,
   workspaceStatus: "active",
-  workspaceVisibility: "admins_and_assigned",
   ...overrides,
 });
 
@@ -272,62 +271,9 @@ describe("authorizeFolioCollabRoom", () => {
     expect(await authorize(validRow({ organizationRole: null }))).toEqual({
       status: "workspace-access-revoked",
     });
-    expect(
-      await authorize(
-        validRow({ organizationRole: "member", workspaceMemberId: null }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-  });
-
-  test("an all-members matter admits unassigned internal members, never externals", async () => {
-    expect(
-      await authorize(
-        validRow({
-          organizationRole: "member",
-          workspaceMemberId: null,
-          workspaceVisibility: "all_members",
-        }),
-      ),
-    ).toMatchObject({ status: "authorized" });
-    expect(
-      await authorize(
-        validRow({
-          organizationRole: "external",
-          workspaceMemberId: null,
-          workspaceVisibility: "all_members",
-        }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-    // Narrowed to admins and assigned members: the same member is out.
-    expect(
-      await authorize(
-        validRow({
-          organizationRole: "member",
-          workspaceMemberId: null,
-          workspaceVisibility: "admins_and_assigned",
-        }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-  });
-
-  test("requires assigned-only matter membership even for organization admins", async () => {
-    expect(
-      await authorize(
-        validRow({
-          workspaceVisibility: "assigned_only",
-          workspaceMemberId: null,
-        }),
-      ),
-    ).toEqual({ status: "workspace-access-revoked" });
-
-    expect(
-      await authorize(
-        validRow({
-          workspaceVisibility: "assigned_only",
-          workspaceMemberId: "wm_1",
-        }),
-      ),
-    ).toMatchObject({ status: "authorized" });
+    expect(await authorize(validRow({ reachesMatter: false }))).toEqual({
+      status: "workspace-access-revoked",
+    });
   });
 
   test("rejects credentials minted for an abandoned seed generation", async () => {
@@ -337,9 +283,7 @@ describe("authorizeFolioCollabRoom", () => {
   });
 
   test("downgrades edit permission on the next authorization", async () => {
-    const result = await authorize(
-      validRow({ organizationRole: "intern", workspaceMemberId: "wm_1" }),
-    );
+    const result = await authorize(validRow({ organizationRole: "intern" }));
 
     expect(result.status).toBe("authorized");
     if (result.status === "authorized") {
@@ -357,9 +301,8 @@ describe("authorizeFolioCollabRoom", () => {
         organizationRole: "owner",
         tokenCanEdit: false,
         tokenGeneration: 3,
-        workspaceMemberId: null,
+        reachesMatter: true,
         workspaceStatus: "active",
-        workspaceVisibility: "admins_and_assigned",
       }),
     ).toEqual({ status: "authorized", canEdit: false });
   });

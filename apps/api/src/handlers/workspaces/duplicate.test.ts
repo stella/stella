@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -232,7 +234,7 @@ const createContext = ({
 describe("duplicateWorkspace", () => {
   for (const featureStatus of ["hidden", "colleague", "enabled"] as const) {
     test(`${featureStatus} copies a matter with permitted views and its lead`, async () => {
-      const insertedWorkspaces: unknown[] = [];
+      const createdWorkspaces: unknown[][] = [];
       const insertedViews: unknown[] = [];
       const insertedWorkspaceMembers: unknown[] = [];
       const insertedAuditLogs: unknown[] = [];
@@ -363,14 +365,9 @@ describe("duplicateWorkspace", () => {
               insertedViews.push(value);
               return undefined;
             }
-            if (table === workspaces) {
-              insertedWorkspaces.push(value);
-              return undefined;
-            }
-
             if (table === workspaceMembers) {
               insertedWorkspaceMembers.push(value);
-              return undefined;
+              return { onConflictDoNothing: async () => undefined };
             }
 
             if (table === auditLogs) {
@@ -385,7 +382,13 @@ describe("duplicateWorkspace", () => {
           expect(table).toBe(matterCounters);
           return { set: () => ({ where: async () => undefined }) };
         },
-        execute: async () => undefined,
+        execute: async (query: SQL) => {
+          const statement = new PgDialect().sqlToQuery(query);
+          if (statement.sql.includes("stella_create_workspace")) {
+            createdWorkspaces.push(statement.params);
+          }
+          return undefined;
+        },
       });
 
       const result = await duplicateWorkspace.handler(
@@ -393,15 +396,19 @@ describe("duplicateWorkspace", () => {
       );
 
       expect(result).toEqual({ workspaceId: expect.any(String) });
-      expect(insertedWorkspaces).toEqual([
-        expect.objectContaining({
-          billingReference: "BILL-123",
-          clientId: "contact_client123",
-          color: "blue",
-          leadUserId: "user_lead123",
-          name: "Smith v Jones",
-          visibility: "assigned_only",
-        }),
+      // The database creates the matter: id, client, name, reference,
+      // billing reference, color, lead and visibility.
+      expect(createdWorkspaces).toEqual([
+        [
+          expect.any(String),
+          "contact_client123",
+          "Smith v Jones",
+          expect.any(String),
+          "BILL-123",
+          "blue",
+          "user_lead123",
+          "assigned_only",
+        ],
       ]);
       expect(insertedWorkspaceMembers).toEqual([
         [

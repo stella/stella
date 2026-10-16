@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   apikey,
@@ -36,6 +38,7 @@ import {
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { matterAccessFunctionStatements } from "@/api/tests/helpers/matter-access-functions";
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
@@ -136,6 +139,9 @@ if (!databaseUrl || !enabled) {
               );
             }
           }
+          for (const statement of matterAccessFunctionStatements(schema, [])) {
+            await db.execute(sql.raw(statement));
+          }
           const transaction = async <T>(
             work: (tx: Transaction) => Promise<T>,
           ) =>
@@ -175,12 +181,14 @@ if (!databaseUrl || !enabled) {
           await transaction(async (tx) => {
             await tx.insert(workspaces).values([
               {
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
                 id: workspaceId,
                 organizationId,
                 name: "Matter A",
                 reference: "A",
               },
               {
+                visibility: MATTER_VISIBILITY.adminsAndAssigned,
                 id: otherWorkspaceId,
                 organizationId: otherOrganizationId,
                 name: "Matter B",
