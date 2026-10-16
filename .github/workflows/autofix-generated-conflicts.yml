@@ -105,7 +105,10 @@ jobs:
                 });
                 started += 1;
               } catch (error) {
-                // A branch that predates the resolve workflow cannot run it.
-                core.notice(`#${pull.number}: not dispatched (${error.status ?? error.message})`);
+                // 422: a branch that predates the resolve workflow cannot run
+                // it. Any other failure (auth, rate limit, server) affects every
+                // branch alike, so the run fails instead of walking the list.
+                if (error.status !== 422) throw error;
+                core.notice(`#${pull.number}: not dispatched (422)`);
               }
             }
