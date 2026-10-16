@@ -229,6 +229,41 @@ describe("publisher legislation identity", () => {
     expect(await rowsOf(sourceId)).toEqual(before);
   });
 
+  test("an old writer cannot move a publisher expression into a legacy source", async () => {
+    const sourceId = await source();
+    const legacySourceId = await source(LEGISLATION_IDENTITY_MODES.legacy);
+    const saved = await store(
+      document({ sourceId, expressionId: "cannot-move" }),
+    );
+    const [before] = await db
+      .select()
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, saved.id));
+    if (before === undefined) {
+      return panic("publisher source move fixture was not stored");
+    }
+    const move = db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('stella.legislation_writer_contract', 'expression-v1', true)`,
+      );
+      await tx
+        .update(legislationDocuments)
+        .set({
+          sourceId: legacySourceId,
+          sourceHash: "old-writer-source-move",
+          fulltext: "A different wording",
+        })
+        .where(eq(legislationDocuments.id, saved.id));
+    });
+    expect(await sqlState(move)).toBe("23514");
+    const [after] = await db
+      .select()
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, saved.id));
+    expect(after).toEqual(before);
+    expect(await rowsOf(legacySourceId)).toEqual([]);
+  });
+
   test("publisher uniqueness and source-derived mode are enforced outside the application writer", async () => {
     const sourceId = await source();
     await store(document({ sourceId, expressionId: "unique" }));
