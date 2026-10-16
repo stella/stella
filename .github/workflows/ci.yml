@@ -8109,9 +8109,6 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-          submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
           submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
 
