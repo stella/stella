@@ -66,38 +66,37 @@ export const locateQuoteInBlocks = (
   if (!pieces.some((piece) => piece.length >= MIN_EVIDENCE_LENGTH)) {
     return null;
   }
-  let blockIndex = 0;
-  let from = 0;
-  let first: Block | null = null;
-  for (const piece of pieces) {
-    let found = false;
-    for (let index = blockIndex; index < blocks.length; index += 1) {
-      const block = blocks[index];
-      if (block === undefined || !hasBlockInlines(block)) {
-        continue;
-      }
-      const sameBlock = index === blockIndex;
-      const span = locateQuote(
-        plainTextOf(block.inlines),
-        piece,
-        sameBlock ? from : 0,
-      );
-      // `locateQuote` only prefers an occurrence after `from` and falls back
-      // to an earlier one; a piece before its predecessor is out of order.
-      if (span === null || (sameBlock && span.start < from)) {
-        continue;
-      }
-      first ??= block;
-      blockIndex = index;
-      from = span.end;
-      found = true;
-      break;
+  // The text blocks joined by line breaks, which matching reads as spacing,
+  // so a quotation may run on from one paragraph into the next.
+  const segments: { block: Block; start: number }[] = [];
+  let text = "";
+  for (const block of blocks) {
+    if (!hasBlockInlines(block)) {
+      continue;
     }
-    if (!found) {
+    if (segments.length > 0) {
+      text += "\n";
+    }
+    segments.push({ block, start: text.length });
+    text += plainTextOf(block.inlines);
+  }
+  let from = 0;
+  let firstStart: number | null = null;
+  for (const piece of pieces) {
+    const span = locateQuote(text, piece, from);
+    // `locateQuote` only prefers an occurrence after `from` and falls back
+    // to an earlier one; a piece before its predecessor is out of order.
+    if (span === null || span.start < from) {
       return null;
     }
+    firstStart ??= span.start;
+    from = span.end;
   }
-  return first === null
+  const first =
+    firstStart === null
+      ? undefined
+      : segments.findLast(({ start }) => start <= firstStart)?.block;
+  return first === undefined
     ? null
     : { anchorId: first.anchorId, paragraph: courtParagraphNumber(first) };
 };

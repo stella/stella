@@ -74,6 +74,14 @@ describe("a quotation located in the decision", () => {
     }
   });
 
+  test("a quotation running on into the next paragraph is located at its first", () => {
+    const quote = `„${BOD_15.slice(-60)} ${BOD_16.slice(0, 60)}“`;
+    expect(locateQuoteInBlocks(quote, DECISION_BLOCKS)).toEqual({
+      anchorId: "p-27",
+      paragraph: 15,
+    });
+  });
+
   test("one changed word is a misquote, not a match", () => {
     const [quote] = RECORDED_QUOTES[0];
     const misquote = quote.replace("jej odmítne", "jej zamítne");
