@@ -30,7 +30,8 @@ const previewHash = outboundPreviewHash(preview);
 type StoredAction = {
   kind: "email.send";
   status: string;
-  expiresAt: Date;
+  // The database clock's verdict, as the handler selects it.
+  expired: boolean;
   previewEncrypted: Buffer;
   previewIv: Buffer;
   previewHash: string;
@@ -46,7 +47,7 @@ const storedAction = async (
   return {
     kind: "email.send",
     status: "pending",
-    expiresAt: new Date(Date.now() + 60_000),
+    expired: false,
     previewEncrypted: encrypted.ciphertext,
     previewIv: encrypted.iv,
     previewHash,
@@ -173,7 +174,7 @@ test("an action that is not pending is never sent again", async () => {
 
 test("an expired preview is not sent", async () => {
   const fixture = setup({
-    action: await storedAction({ expiresAt: new Date(Date.now() - 1) }),
+    action: await storedAction({ expired: true }),
     executor: sends,
   });
   expect(await fixture.handler.handler(fixture.context)).toMatchObject({
@@ -187,7 +188,7 @@ test("an action that expires between the read and the claim is not sent", async 
   // Unexpired when read; the claim's database-clock expiry check then matches
   // no row.
   const fixture = setup({
-    action: await storedAction({ expiresAt: new Date(Date.now() + 1) }),
+    action: await storedAction(),
     executor: sends,
     claimSucceeds: false,
   });

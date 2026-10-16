@@ -74,7 +74,8 @@ export const createConfirmOutboundActionHandler = (
               .select({
                 kind: outboundActions.kind,
                 status: outboundActions.status,
-                expiresAt: outboundActions.expiresAt,
+                // The database clock decides expiry here and at the claim.
+                expired: sql<boolean>`${outboundActions.expiresAt} <= clock_timestamp()`,
                 previewEncrypted: outboundActions.previewEncrypted,
                 previewIv: outboundActions.previewIv,
                 previewHash: outboundActions.previewHash,
@@ -100,7 +101,7 @@ export const createConfirmOutboundActionHandler = (
           if (action.status !== "pending") {
             return conflict(`This action is already ${action.status}`);
           }
-          if (action.expiresAt.getTime() <= now.getTime()) {
+          if (action.expired) {
             return conflict("This preview expired; prepare it again");
           }
           if (action.previewHash !== previewHash) {

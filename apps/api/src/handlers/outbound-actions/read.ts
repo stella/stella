@@ -1,8 +1,6 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
-
-import { Temporal } from "@stll/time";
 
 import { outboundActions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -37,6 +35,8 @@ const readOutboundAction = createSafeRootHandler(
               kind: outboundActions.kind,
               status: outboundActions.status,
               expiresAt: outboundActions.expiresAt,
+              // Same clock as the confirm claim, so read never disagrees.
+              expired: sql<boolean>`${outboundActions.expiresAt} <= clock_timestamp()`,
               previewEncrypted: outboundActions.previewEncrypted,
               previewIv: outboundActions.previewIv,
               previewHash: outboundActions.previewHash,
@@ -69,9 +69,7 @@ const readOutboundAction = createSafeRootHandler(
         previewIv: action.previewIv,
       }),
     );
-    const expired =
-      action.status === "pending" &&
-      action.expiresAt.getTime() <= Temporal.Now.instant().epochMilliseconds;
+    const expired = action.status === "pending" && action.expired;
     return Result.ok({
       id: action.id,
       kind: action.kind,
