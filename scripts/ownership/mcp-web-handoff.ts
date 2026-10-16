@@ -7,6 +7,7 @@ export default {
   owner: [
     "apps/api/src/lib/auth.ts",
     "apps/api/src/lib/auth/mcp-web-handoff.ts",
+    "apps/api/src/lib/auth/mcp-web-handoff-service.ts",
     "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts",
     "apps/api/src/lib/auth/mcp-web-handoff-session.ts",
   ],

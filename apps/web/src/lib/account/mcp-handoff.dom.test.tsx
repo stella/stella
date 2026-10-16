@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
@@ -12,7 +14,9 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   window.takeStellaHandoff = undefined;
 });
-afterAll(async () => await GlobalRegistrator.unregister());
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
 test.each([
   ["protected", "/matters/example?tab=notes#section=2"],
