@@ -2,6 +2,16 @@ import type { AppliedProvisionVersion } from "@stll/api-contract/provision-appli
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 import { Temporal } from "@stll/time";
 
+export const EU_PROVISION_CITATION_LANGUAGES = [
+  "cs",
+  "sk",
+  "pl",
+  "hu",
+  "en",
+  "de",
+  "fr",
+] as const;
+
 const EU_ACT_KINDS = {
   directive: { celexLetter: "L", eliKind: "dir" },
   regulation: { celexLetter: "R", eliKind: "reg" },
@@ -145,23 +155,34 @@ const ACT_KIND = {
   directive: String.raw`(?:Directive|směrnic(?:e|i)|smernic(?:a|e|i)|dyrektyw(?:a|y)|irányelv|Richtlinie|directive)`,
   regulation: String.raw`(?:Regulation|nařízen(?:í|i)|nariaden(?:ie|ia)|rozporządzeni(?:e|a)|rendelet|Verordnung|règlement)`,
 } as const satisfies Record<EuActKind, string>;
-const EU_MARKER = String.raw`(?:\((?:EU|EÚ|UE|EG|EC|ES|CE|WE|EK|EEC|EHS|EWG|EGK)\)\s*)?`;
+const EU_MARKER_SOURCE = String.raw`(?:EU|EÚ|UE|EG|EC|ES|CE|WE|EK|EEC|EHS|EWG|EGK)(?![\p{L}\p{N}])`;
+const EU_MARKER = String.raw`(?:\(${EU_MARKER_SOURCE}\)\s*)?`;
 
 const compileActPattern = (kind: EuActKind): RegExp =>
   new RegExp(
-    String.raw`${ARTICLE}${PARAGRAPH}${POINT}\s*(?:of\s+|de\s+|du\s+|der\s+|des\s+|nařízení\s+|nariadenia\s+|rozporządzenia\s+)?${ACT_KIND[kind]}\s*${EU_MARKER}(?<hasNumberFirst>(?:No\.?|Nr\.?|č\.?|c\.)\s*)?${YEAR_NUMBER}(?:\s*\/(?:EU|EÚ|UE|EC|EG|EHS|EWG))?`,
+    String.raw`${ARTICLE}${PARAGRAPH}${POINT}\s*(?:of\s+(?:the\s+)?|de\s+(?:la\s+)?|du\s+|der\s+|des\s+|nařízení\s+|nariadenia\s+|rozporządzenia\s+)?${ACT_KIND[kind]}\s*${EU_MARKER}(?<hasNumberFirst>(?:No\.?|Nr\.?|č\.?|c\.)\s*)?${YEAR_NUMBER}(?:\s*\/${EU_MARKER_SOURCE})?`,
     "giu",
   );
 
-const ACT_PATTERNS = {
-  directive: compileActPattern("directive"),
-  regulation: compileActPattern("regulation"),
-} as const satisfies Record<EuActKind, RegExp>;
+const HUNGARIAN_REFERENCE = String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?`;
 
-const HUNGARIAN_REGULATION_PATTERN = new RegExp(
-  String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?\s*${YEAR_NUMBER}\s*\/(?:EU|EÚ|EK|EGK)\s*${ACT_KIND.regulation}`,
-  "giu",
-);
+const compileActPatterns = (kind: EuActKind) => [
+  compileActPattern(kind),
+  new RegExp(
+    String.raw`${HUNGARIAN_REFERENCE}\s*${YEAR_NUMBER}\s*\/${EU_MARKER_SOURCE}\s*${ACT_KIND[kind]}`,
+    "giu",
+  ),
+];
+
+const ACT_PATTERNS = {
+  directive: { kind: "directive", patterns: compileActPatterns("directive") },
+  regulation: {
+    kind: "regulation",
+    patterns: compileActPatterns("regulation"),
+  },
+} as const satisfies {
+  [Kind in EuActKind]: { kind: Kind; patterns: readonly RegExp[] };
+};
 
 const ALIAS_PATTERN = new RegExp(
   String.raw`${ARTICLE}${PARAGRAPH}${POINT}\s*(?:of\s+|de\s+|der\s+|des\s+)?(?<alias>${Object.values(
@@ -177,7 +198,6 @@ const PRIMARY_ALIASES = {
   tfeu: String.raw`(?:TFEU|SFEU|ZFEÚ|AEUV|EUMSZ|TFUE|Treaty on the Functioning of the European Union|Smlouvy o fungování Evropské unie|Zmluvy o fungovaní Európskej únie|Traktatu o funkcjonowaniu Unii Europejskiej|Vertrag(?:s)? über die Arbeitsweise der Europäischen Union|traité sur le fonctionnement de l’Union européenne)`,
   charter: String.raw`(?:Charter of Fundamental Rights(?: of the European Union)?|Listiny základních práv Evropské unie|Charty základných práv Európskej únie|Karty praw podstawowych(?: Unii Europejskiej)?|Charta der Grundrechte(?: der Europäischen Union)?|Charte des droits fondamentaux(?: de l’Union européenne)?|Európai Unió Alapjogi Chartája|GRCh)`,
 } as const satisfies Record<keyof typeof EU_PRIMARY_WORKS, string>;
-const HUNGARIAN_REFERENCE = String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?`;
 const PRIMARY_PATTERNS = Object.values(EU_PRIMARY_WORKS).flatMap(({ kind }) => {
   const tail = String.raw`\s*(?:of\s+(?:the\s+)?|de\s+|du\s+|der\s+|des\s+)?${PRIMARY_ALIASES[kind]}(?![\p{L}\p{N}])(?:\s*\((?<edition>2008|2010|2012|2016)\))?`;
   return [
@@ -255,6 +275,10 @@ const numberedActIdentity = ({
       continue;
     }
     const era = year >= 2015 ? "from2015" : "before2015";
+    // Short years belong to legacy numbering; modern identifiers print four digits.
+    if (era === "from2015" && rawYear.length !== 4) {
+      continue;
+    }
     const expectedOrder = explicitlyNumberFirst
       ? "number-year"
       : ACT_NUMBER_ORDERS[kind][era];
@@ -357,50 +381,29 @@ export const locateEuProvisionCitations = (
     return [];
   }
   const citations: LocatedEuProvisionCitation[] = [];
-  for (const kind of ["directive", "regulation"] as const) {
-    const pattern = ACT_PATTERNS[kind];
-    pattern.lastIndex = 0;
-    for (const match of text.matchAll(pattern)) {
-      const act = numberedActIdentity({
-        kind,
-        groups: match.groups ?? {},
-        maxYear,
-      });
-      const reference = referenceFrom(match.groups ?? {});
-      if (act === null || reference === null) {
-        continue;
+  for (const { kind, patterns } of Object.values(ACT_PATTERNS)) {
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(pattern)) {
+        const act = numberedActIdentity({
+          kind,
+          groups: match.groups ?? {},
+          maxYear,
+        });
+        const reference = referenceFrom(match.groups ?? {});
+        if (act === null || reference === null) {
+          continue;
+        }
+        citations.push({
+          act,
+          source: "number",
+          appliedVersion: { type: "not_stated" },
+          end: match.index + match[0].length,
+          jurisdiction: "EU",
+          reference,
+          start: match.index,
+        });
       }
-      citations.push({
-        act,
-        source: "number",
-        appliedVersion: { type: "not_stated" },
-        end: match.index + match[0].length,
-        jurisdiction: "EU",
-        reference,
-        start: match.index,
-      });
     }
-  }
-  HUNGARIAN_REGULATION_PATTERN.lastIndex = 0;
-  for (const match of text.matchAll(HUNGARIAN_REGULATION_PATTERN)) {
-    const act = numberedActIdentity({
-      kind: "regulation",
-      groups: match.groups ?? {},
-      maxYear,
-    });
-    const reference = referenceFrom(match.groups ?? {});
-    if (act === null || reference === null) {
-      continue;
-    }
-    citations.push({
-      act,
-      source: "number",
-      appliedVersion: { type: "not_stated" },
-      end: match.index + match[0].length,
-      jurisdiction: "EU",
-      reference,
-      start: match.index,
-    });
   }
   ALIAS_PATTERN.lastIndex = 0;
   for (const match of text.matchAll(ALIAS_PATTERN)) {
