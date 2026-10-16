@@ -51,6 +51,7 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/link-icons/:hostname", getLinkIcon.handler, {
     params: getLinkIcon.config.params,
     permissions: getLinkIcon.config.permissions,
+    accountAccess: getLinkIcon.config.accountAccess,
   })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,

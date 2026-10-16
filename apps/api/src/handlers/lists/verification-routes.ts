@@ -43,6 +43,7 @@ export const createListVerificationRoutes = (
     .post("/sample-case", createSampleCase.handler, {
       body: createSampleCase.config.body,
       permissions: createSampleCase.config.permissions,
+      accountAccess: createSampleCase.config.accountAccess,
     })
     .post("/verifications", createVerification.handler, {
       body: createVerification.config.body,
