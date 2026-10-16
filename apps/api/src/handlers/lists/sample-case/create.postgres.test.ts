@@ -291,11 +291,11 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
       });
       expect(result.isError).toBe(true);
       const response = result.content.at(0);
-      expect(response?.type).toBe("text");
-      if (response?.type !== "text") {
-        return panic("Expected a text admission refusal");
-      }
-      expect(JSON.parse(response.text)).toMatchObject({
+      const text =
+        response?.type === "text"
+          ? response.text
+          : panic("Expected a text admission refusal");
+      expect(JSON.parse(text)).toMatchObject({
         error: {
           code: "missing_scope",
           message: expect.stringContaining("stella:matters_write"),
