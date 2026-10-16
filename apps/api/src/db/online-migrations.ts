@@ -203,6 +203,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legal_lists_sample_workspace_uidx" ON public."legal_lists" USING btree ("workspace_id") WHERE "sample_case" IS NOT NULL',
+    definitionBody:
+      "ON public.legal_lists USING btree (workspace_id) WHERE (sample_case IS NOT NULL)",
+    isUnique: true,
+    name: "legal_lists_sample_workspace_uidx",
+    tableName: "legal_lists",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_provision_scope_cursor_idx" ON public."case_law_decisions" USING btree ("country", "language", "id")',
     definitionBody:
       "ON public.case_law_decisions USING btree (country, language, id)",

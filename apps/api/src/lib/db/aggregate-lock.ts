@@ -80,6 +80,7 @@ export const AGGREGATE_LOCKS = {
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
+  sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
   chatMessage: { rank: 810, kind: "row" },
   signingSession: { rank: 900, kind: "row" },
@@ -161,6 +162,7 @@ export const AGGREGATE_CHAINS = {
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
   personalCatalog: ["personalCatalog"],
+  sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
@@ -202,6 +204,7 @@ const modeCovers = (
 };
 
 type AggregateIdentities = {
+  sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
@@ -1188,6 +1191,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
           options.id.idempotencyKey,
         ],
+      };
+    case "sampleCase":
+      return {
+        first: sql`hashtext('lists.sample-case')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
       };
     case "professionalUseAcceptance":
       return {
