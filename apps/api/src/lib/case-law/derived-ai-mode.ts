@@ -14,5 +14,3 @@
  * `env-base` imports it.
  */
 export const CASE_LAW_DERIVED_AI_MODES = ["off", "on"] as const;
-
-export type CaseLawDerivedAiMode = (typeof CASE_LAW_DERIVED_AI_MODES)[number];

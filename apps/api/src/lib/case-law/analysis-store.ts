@@ -138,8 +138,7 @@ const readsSharedCorpus = (): boolean =>
  * update one there. A development process keeps its analyses in memory
  * instead, which is what makes the local reader work.
  */
-export const storesAnalyses = (): boolean =>
-  !readsSharedCorpus() || isLocalDevOpen();
+const storesAnalyses = (): boolean => !readsSharedCorpus() || isLocalDevOpen();
 
 /**
  * Whether this deployment may ask a model for a decision's derived layers:
