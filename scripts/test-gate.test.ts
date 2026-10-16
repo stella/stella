@@ -2185,7 +2185,7 @@ jobs:
           credited: false,
           events: undefined,
         },
-      ];
+      ] as const;
       for (const { earlier, later, credited, events } of cases) {
         const analysis = analyzeGatingWorkflow(
           {
