@@ -99,7 +99,7 @@ export const DATA_EXPORT_FAILURE_MESSAGE = {
 } as const;
 
 /** Where one attempt writes its parts and the export manifest. */
-export type DataExportAttemptStorage = {
+type DataExportAttemptStorage = {
   sink: ExportSink;
   writeManifest: (bytes: Uint8Array) => Promise<void>;
 };

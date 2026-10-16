@@ -19,7 +19,7 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -815,7 +815,7 @@ const measureRecords = async (
     organizationBytes += rows.at(0)?.bytes ?? 0;
   }
   // What `loadMatter` reads, grouped by matter.
-  const matterTables: readonly (readonly [PgTable, AnyColumn])[] = [
+  const matterTables: readonly (readonly [PgTable, PgColumn])[] = [
     [entities, entities.workspaceId],
     [entityVersions, entityVersions.workspaceId],
     [fields, fields.workspaceId],

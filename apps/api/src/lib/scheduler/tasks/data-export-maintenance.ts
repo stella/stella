@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
-import type { AnyColumn } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -265,6 +265,44 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   );
 };
 
+type ReadQueuedPageOptions = {
+  db: SchedulerDb;
+  settled: SQL | undefined;
+  cursor: QueuedCursor | null;
+  pageSize: number;
+};
+
+// One page of settled queued exports after `cursor`.
+const readQueuedPage = async ({
+  db,
+  settled,
+  cursor,
+  pageSize,
+}: ReadQueuedPageOptions) =>
+  await readCursorPage(
+    db
+      .select({
+        id: organizationDataExports.id,
+        organizationId: organizationDataExports.organizationId,
+        requestedBy: organizationDataExports.requestedBy,
+        attempt: organizationDataExports.attempt,
+        createdAt: organizationDataExports.createdAt,
+      })
+      .from(organizationDataExports)
+      .where(
+        and(
+          settled,
+          isNotNull(organizationDataExports.requestedBy),
+          afterQueued(cursor),
+        ),
+      )
+      .orderBy(
+        asc(organizationDataExports.createdAt),
+        asc(organizationDataExports.id),
+      ),
+    { limit: pageSize, cursorForItem: (row) => row.id },
+  );
+
 const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
   const settledBefore = new Date(now.getTime() - QUEUED_HANDOFF_SETTLE_MS);
   const settled = and(
@@ -309,29 +347,12 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
   let cursor: QueuedCursor | null = null;
   for (let page = 0; page < MAX_HANDOFF_PAGES; page += 1) {
     // Keyset pages are sequential by design: each starts after the previous page's last row
-    const queuedPage = await readCursorPage(
-      db
-        .select({
-          id: organizationDataExports.id,
-          organizationId: organizationDataExports.organizationId,
-          requestedBy: organizationDataExports.requestedBy,
-          attempt: organizationDataExports.attempt,
-          createdAt: organizationDataExports.createdAt,
-        })
-        .from(organizationDataExports)
-        .where(
-          and(
-            settled,
-            isNotNull(organizationDataExports.requestedBy),
-            afterQueued(cursor),
-          ),
-        )
-        .orderBy(
-          asc(organizationDataExports.createdAt),
-          asc(organizationDataExports.id),
-        ),
-      { limit: deps.handoffPageSize, cursorForItem: (row) => row.id },
-    );
+    const queuedPage = await readQueuedPage({
+      db,
+      settled,
+      cursor,
+      pageSize: deps.handoffPageSize,
+    });
     const handoffs = await Promise.all(
       queuedPage.items.flatMap((row) => {
         const requestedBy = row.requestedBy;
