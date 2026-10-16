@@ -861,11 +861,9 @@ describe("projectForChat", () => {
         fc.array(fc.boolean(), { maxLength: 36, minLength: 36 }),
       )
       .map(([id, upper]) =>
-        [...id]
-          .map((char, index) =>
-            upper[index] === true ? char.toUpperCase() : char,
-          )
-          .join(""),
+        id.replaceAll(/[a-f]/gu, (char, offset: number) =>
+          upper[offset] === true ? char.toUpperCase() : char,
+        ),
       );
     // Dash-free segments (hex digits and diacritics included) with UUIDs
     // spliced between them. A UUID match needs dashes at fixed offsets, which
