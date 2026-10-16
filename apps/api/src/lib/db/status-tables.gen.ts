@@ -13,6 +13,7 @@ export const STATUS_COLUMNS = {
   bufferObjectCleanupIntents: ["status"],
   caseLawCitationResolutionCensusRuns: ["status"],
   caseLawCitations: ["resolutionStatus"],
+  caseLawCompletenessCensus: ["scopeStatus"],
   caseLawCorpusUploadIntents: ["status"],
   caseLawDecisionCitationStatsState: ["status"],
   caseLawDecisionIdentifierBackfills: ["phase"],

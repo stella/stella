@@ -34,17 +34,15 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
       const scope = { first: "2026", last: "2026", expectedSlices: 1 };
       const scopedDb: ScopedDb = async (callback) =>
         await db.transaction(callback);
-      await db
-        .insert(caseLawSources)
-        .values(
-          [sourceId, otherSourceId].map((id) => ({
-            id,
-            adapterKey: `census-identity-${id}`,
-            name: "Retained publisher identity fixture",
-            ingestionLeaseToken: leaseToken,
-            ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
-          })),
-        );
+      await db.insert(caseLawSources).values(
+        [sourceId, otherSourceId].map((id) => ({
+          id,
+          adapterKey: `census-identity-${id}`,
+          name: "Retained publisher identity fixture",
+          ingestionLeaseToken: leaseToken,
+          ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+        })),
+      );
       try {
         await db.insert(caseLawDecisions).values([
           {
@@ -68,15 +66,13 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
             fulltext: "Other source text",
           },
         ]);
-        await db
-          .insert(caseLawDecisionSourceIdentities)
-          .values(
-            ["publisher-first", "publisher-second"].map((sourceDocumentId) => ({
-              sourceId,
-              sourceDocumentId,
-              decisionId: canonicalId,
-            })),
-          );
+        await db.insert(caseLawDecisionSourceIdentities).values(
+          ["publisher-first", "publisher-second"].map((sourceDocumentId) => ({
+            sourceId,
+            sourceDocumentId,
+            decisionId: canonicalId,
+          })),
+        );
         const record = async (offset: number) => {
           await recordCompletenessCensus(scopedDb, {
             sourceId,
@@ -108,24 +104,20 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           stored: 2,
           withText: 2,
         });
-        await db
-          .insert(caseLawDecisions)
-          .values({
-            id: retiredId,
-            sourceId,
-            sourceDocumentId: "retired",
-            caseNumber: "retired",
-            country: "CZE",
-            court: "Fixture",
-            language: "cs",
-            fulltext: "Retired duplicate",
-          });
-        await db
-          .insert(caseLawDecisionAliases)
-          .values({
-            retiredDecisionId: retiredId,
-            canonicalDecisionId: canonicalId,
-          });
+        await db.insert(caseLawDecisions).values({
+          id: retiredId,
+          sourceId,
+          sourceDocumentId: "retired",
+          caseNumber: "retired",
+          country: "CZE",
+          court: "Fixture",
+          language: "cs",
+          fulltext: "Retired duplicate",
+        });
+        await db.insert(caseLawDecisionAliases).values({
+          retiredDecisionId: retiredId,
+          canonicalDecisionId: canonicalId,
+        });
         await db
           .delete(caseLawDecisions)
           .where(eq(caseLawDecisions.id, retiredId));
@@ -173,13 +165,11 @@ describe.skipIf(!enabled)("retained publisher identities (postgres)", () => {
           withText: 0,
         });
         await db.delete(caseLawDecisionSourceIdentities).where(secondIdentity);
-        await db
-          .insert(caseLawDecisionSourceIdentities)
-          .values({
-            sourceId: otherSourceId,
-            sourceDocumentId: "publisher-second",
-            decisionId: foreignId,
-          });
+        await db.insert(caseLawDecisionSourceIdentities).values({
+          sourceId: otherSourceId,
+          sourceDocumentId: "publisher-second",
+          decisionId: foreignId,
+        });
         expect(await record(5)).toMatchObject({
           verdict: "incomplete",
           stored: 1,
