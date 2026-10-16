@@ -7,10 +7,7 @@ import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
-import {
-  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-  withGatedTestClients,
-} from "../tests/gated-test-database";
+import { withGatedTestClients } from "../tests/gated-test-database";
 import {
   createOnlineIndexGate,
   type OnlineIndexGateOptions,
@@ -20,6 +17,7 @@ import type {
   OnlineMigrationParam,
 } from "./online-migration-connection";
 import { ensureOnlineIndexValid } from "./online-migrations";
+import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -33,7 +31,7 @@ const connectionAdapter = (
   },
   release: () => connection.release(),
   terminate: async () => {
-    await connection.close({ timeout: 0 });
+    await terminateReserved(connection);
   },
 });
 
@@ -186,7 +184,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         blocker.release();
       }
     },
-    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+    { closeMode: "force" },
   );
 };
 
@@ -335,7 +333,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           },
         });
       // The cancelled run returns instead of sleeping, so a migrator can
-      // release its schema lane before the retry.
+      // re-read its ledger before the retry.
       expect(await run()).toEqual({
         type: "deferred",
         index: fixture.name,
@@ -410,7 +408,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.gate,
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       });
       const outcome = await Result.tryPromise(
@@ -1036,7 +1034,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         ...fixture.connection,
         terminate: async () => {
           terminated = true;
-          await fixture.builder.close({ timeout: 0 });
+          await terminateReserved(fixture.builder);
         },
       };
       const gate = createOnlineIndexGate({

@@ -21,6 +21,7 @@ on:
           - test-files
           - verify-affected
           - install-cache-benchmark
+          - store-cache-save-benchmark
       target:
         description: Package name or space-separated test paths
         type: string
@@ -38,7 +39,7 @@ env:
 
 jobs:
   check:
-    if: inputs.check != 'install-cache-benchmark'
+    if: inputs.check != 'install-cache-benchmark' && inputs.check != 'store-cache-save-benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -121,6 +122,24 @@ jobs:
           esac 2>&1 | tee "$CHECK_LOG_FILE"
           echo "${PIPESTATUS[0]}" > "$CHECK_EXIT_FILE"
 
+      - name: Record typecheck parity report
+        if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
+        run: |
+          {
+            cat CLOUD_REPORT.md
+            printf '\n## CI parity output\n\n```text\n'
+            cat "$RUNNER_TEMP/manual-check.log"
+            printf '\n```\n'
+          } > "$RUNNER_TEMP/CLOUD_REPORT.md"
+
+      - name: Upload typecheck parity report
+        if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: typecheck-parity-report
+          path: ${{ runner.temp }}/CLOUD_REPORT.md
+          if-no-files-found: error
+
       - name: Write result
         if: always() && steps.validate.outcome != 'skipped'
         env:
@@ -174,7 +193,8 @@ jobs:
         id: install
         uses: $/.github/actions/ci-install
         with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
+          cache-write: ${{ matrix.global-store == '1' && 'save' || 'restore' }}
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
       - name: Report measured phases
         if: always()
         env:
@@ -204,7 +224,7 @@ jobs:
           retention-days: 7
 
   install-cache-linux:
-    if: inputs.check == 'install-cache-benchmark'
+    if: inputs.check == 'install-cache-benchmark' || inputs.check == 'store-cache-save-benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -223,6 +243,13 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
+      - name: Register isolated cache save measurement
+        if: inputs.check == 'store-cache-save-benchmark'
+        continue-on-error: true
+        uses: $/.github/actions/ci-store-save
+        with:
+          key: install-store-measurement-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
       - name: Report measured phases
         if: always()
         env:

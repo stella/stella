@@ -173,6 +173,7 @@
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
       "heldForReview": "Kontrolli ootel",
       "holdOutOfScoring": "Jäta hindamisest välja",
+      "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
       "interpretationNote": "Tõlgendusmärkus",
       "interpretationNotePlaceholder": "Kui selle tõendi tähendus on vaidlustatud, kirjeldage, kuidas. Kui ei ole, jätke väli tühjaks.",
@@ -363,6 +364,8 @@
       "chooseList": "Vali loend",
       "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
+      "loadSample": "Laadi näidisjuhtum",
+      "loadSampleFailed": "Näidisjuhtumi laadimine ebaõnnestus",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
@@ -746,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "retryAfter": "Uuesti saate proovida alates {time}.",
         "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}",
         "unavailable": "Selle lahendi AI-analüüs pole saadaval."
       },
@@ -1292,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
     },
+    "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
@@ -1323,6 +1328,7 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "messageUnavailable": "Seda sõnumit ei saa kuvada.",
     "mockModel": {
       "description": "Valmisvastused kohalikult simuleeritud mudelilt",
       "label": "Simuleeritud AI"
@@ -1488,6 +1494,7 @@
     },
     "tool": {
       "add_comment": "Kommentaari lisamine",
+      "add_matter_member": "Lisa toimiku liige",
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",
       "ares_lookup_company": "Ettevõtte andmete otsimine",
       "ares_search_companies": "Ettevõtete andmete otsimine",
@@ -1544,7 +1551,6 @@
       "list_stories": "Dokumendi osade loetlemine",
       "list_templates": "Mallide loetlemine",
       "load-skill": "Juhiste lugemine",
-      "manage_organization": "Halda organisatsiooni",
       "read-contact": "Kontakti lugemine",
       "read-content-across-matters": "Sisu lugemine kõigist toimikutest",
       "read-skill-resource": "Juhiste lugemine",
@@ -1554,6 +1560,7 @@
       "read_section": "Jaotise lugemine",
       "read_story": "Dokumendi osa lugemine",
       "remember": "Mällu salvestamine",
+      "remove_matter_member": "Eemalda toimiku liige",
       "reply_comment": "Kommentaarile vastamine",
       "request_secret": "Privaatse mandaadi küsimine",
       "resolve_comment": "Kommentaari lahendamine",
@@ -1587,6 +1594,7 @@
       "suggest_template_fields": "Pakun malli välju",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",
+      "update_organization_settings": "Uuenda meeskonna seadeid",
       "update_reader_annotation": "Muuda esiletõstu või kommentaari",
       "use-browser": "Teie brauseri kasutamine",
       "use_connector_secret": "Konnektori mandaadi kasutamine",
@@ -2072,6 +2080,7 @@
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
     "website": "Veebisait",
+    "whenToUse": "Millal kasutada",
     "workflow": "Töövoog",
     "workflows": "Töövood",
     "zoomIn": "Suumi sisse",
@@ -2925,6 +2934,7 @@
     "checkingDocxEditDescription": "stella kontrollib veel, kas seda DOCX-i saab turvaliselt muuta. Proovige uuesti, kui dokument on laadimise lõpetanud.",
     "checkingDocxEditTitle": "Dokumendi kontrollimine",
     "chooseEvidence": "Valige fail, et lisada nummerdatud tõendiviide.",
+    "collaborationSnapshotRecovered": "Salvestatud koostöökoopiat ei saanud uuesti avada. Ruum taastati viimati salvestatud dokumendist; salvestamata muudatused võisid kaduma minna.",
     "comment": "Kommenteeri",
     "comments": {
       "addPlaceholder": "Lisa kommentaar…",
@@ -3649,6 +3659,10 @@
       "importTitle": "Impordi oskus",
       "importedSkills": "{count, plural, one {Imporditi # oskus} other {Imporditi # oskust}}",
       "invalidPath": "Tee tohib sisaldada ainult väiketähti, numbreid, punkte, sidekriipse või allkriipse",
+      "invocationAuto": "Automaatselt",
+      "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
+      "invocationManual": "Ainult käivitamisel",
+      "invocationManualHelp": "Kasutatakse ainult siis, kui käivitate selle märgiga / või lisate selle oma sõnumisse.",
       "license": "Litsents: {license}",
       "newFile": "Uus fail",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4339,6 +4353,8 @@
         "yearMonthSequential": "Aasta-kuu / Järjestikune (2026-02/001)",
         "yearSequential": "Aasta / Järjestikune (2026/001)"
       },
+      "showInTitle": "Kuva number toimiku nime kõrval",
+      "showInTitleDescription": "Kui see on väljas, on pealkiri täpselt sisestatud nimi.",
       "title": "Toimikute nummerdamine",
       "tokenHelp": "Saadaolevad märgendid: '{'SEQ'}' (järjekorranumber), '{'YYYY'}' (aasta), '{'YY'}' (2-kohaline aasta), '{'MM'}' (kuu)"
     },
@@ -4509,6 +4525,25 @@
     "tokenHelp": "Kuidas hankida pääsutõend",
     "viewOnGithub": "Vaata GitHubis"
   },
+  "readerAnswers": {
+    "budgetError": "Vastuste eelarve on ammendatud.",
+    "citation": "¶{paragraph}",
+    "expand": "Laienda vastust",
+    "explain": "Selgita",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Esita täpsustav küsimus",
+    "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
+    "loading": "Vastuse loomine…",
+    "minimise": "Ahenda vastust",
+    "modelError": "Mudel ei suutnud seda vastust lõpetada.",
+    "networkError": "Ühendus katkes. Proovi uuesti.",
+    "regenerate": "Loo vastus uuesti",
+    "selectionError": "Vali tekst ühe lõigu piires (kuni 2000 märki).",
+    "send": "Saada täpsustav küsimus",
+    "share": "Jaga meeskonnaga",
+    "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",
+    "title": "Vastus valitud teksti kohta"
+  },
   "routeError": {
     "backToMatters": "Naase toimikute juurde",
     "copyReference": "Kopeeri vea viide",
@@ -4521,6 +4556,8 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
@@ -4970,17 +5007,22 @@
     "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
     "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
     "provisionDetailsFor": "{provision} üksikasjad",
+    "provisionEffectiveFrom": "kehtib alates {date}",
     "provisionHistoryEarliest": "Varaseim teadaolev redaktsioon.",
     "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
     "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
     "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
     "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
+    "showCitedPartOnly": "Näita ainult viidatud osa",
+    "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
@@ -4996,7 +5038,6 @@
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
     "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Sõnastus kehtib alates {date}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {
@@ -5549,7 +5590,6 @@
     "viewVersion": "Vaata",
     "whenNotToUse": "Millal mitte kasutada",
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
-    "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
   },
   "timesheets": {
@@ -5670,7 +5710,7 @@
       "title": "Kopeeri toimikusse"
     },
     "create": {
-      "ownerTypeToggle": "Toimiku tüüp",
+      "matterName": "Toimiku nimi",
       "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
     },
     "createNewWorkspace": "Loo uus toimik",
@@ -6122,15 +6162,12 @@
       "upcomingTasks": "Tulevane agenda",
       "uploaded": "laadis üles"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Isiklik"
-    },
     "parties": {
       "addParty": "Lisa osapool",
       "changeClient": "Muuda klienti",
       "client": "Klient",
       "noClient": "Klienti pole määratud",
+      "noClientOptional": "Klient puudub (valikuline)",
       "noParties": "Sellele toimikule pole osapooli lisatud.",
       "partyRoles": {
         "co_counsel": "Kaasadvokaat",

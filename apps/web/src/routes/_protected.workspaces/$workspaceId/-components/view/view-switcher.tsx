@@ -77,6 +77,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { EMPTY_AVT_LAYOUT, switcherViews } from "@/lib/workspaces/view-layout";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import { unavailableViewLayouts } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-options.logic";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 
@@ -193,13 +194,13 @@ export const ViewSwitcher = ({
       .map((view) => view.layout.type)
       .filter((layoutType) => isSingleViewLayout(layoutType)),
   );
+  const disallowedTemplateLayouts = unavailableViewLayouts({
+    heldSingleLayouts,
+    avtEnabled,
+  });
   const createLayoutOptions = LAYOUT_OPTIONS.filter(
-    (layoutType) => !heldSingleLayouts.has(layoutType),
+    (layoutType) => !disallowedTemplateLayouts.has(layoutType),
   );
-  const disallowedTemplateLayouts = new Set<ViewLayoutType>([
-    ...heldSingleLayouts,
-    ...(avtEnabled ? [] : ["avt" as const]),
-  ]);
   // Views hidden from the switcher keep their place after the shown ones:
   // the server takes a reorder only when it names every view.
   const hiddenViewIds = allViews
@@ -593,8 +594,11 @@ const useViewActionsMenu = ({
             <MenuSubPopup>
               <ViewLayoutMenuContent
                 options={LAYOUT_OPTIONS.flatMap((layoutType) => {
+                  // An AVT view checks documents against a list; no other
+                  // layout's records carry over into one.
                   if (
                     layoutType === layout.type ||
+                    layoutType === "avt" ||
                     isSingleViewLayout(layoutType)
                   ) {
                     return [];

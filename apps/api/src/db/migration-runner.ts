@@ -28,6 +28,7 @@ import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import { terminateReserved } from "./sql-close";
 
 type LedgerRow = {
   id: number;
@@ -552,10 +553,16 @@ export const runMigrations = async ({
         `),
       remedy: "Migration completion requires every bundled migration hash.",
     });
+    // The schema SQL is done. The online phase takes no ACCESS EXCLUSIVE lock
+    // (concurrent index builds, validations, batched repairs), and an index
+    // build on a corpus-sized table runs for many minutes: holding the lane
+    // through it would stop every corpus writer for that long.
+    await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+    laneHeld = false;
     const onlineConnection: OnlineMigrationConnection = {
       terminate: async () => {
         session.state = "terminated";
-        await connection.close({ timeout: 0 });
+        await terminateReserved(connection);
       },
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);
@@ -602,11 +609,12 @@ type RunMigrationsUntilSettledOptions = RunMigrationsOptions & {
 };
 
 /**
- * Runs the migrator until its online phase completes. A deferred index build
- * ends the run, which releases the corpus schema lane, so corpus writers keep
- * running while the build waits for health. The next run takes the lane
- * again, re-reads the ledger (a newer bundle may have moved it meanwhile), and
- * resumes the online phase at the deferred index. The hold spans the runs, so
+ * Runs the migrator until its online phase completes. Every run releases the
+ * corpus schema lane before its online phase, so corpus writers keep running
+ * while an index builds or waits for health. A deferred index build ends the
+ * run; the next run takes the lane again, re-reads the ledger (a newer bundle
+ * may have moved it meanwhile), and resumes the online phase at the deferred
+ * index. The hold spans the runs, so
  * a long one alerts once.
  */
 export const runMigrationsUntilSettled = async ({

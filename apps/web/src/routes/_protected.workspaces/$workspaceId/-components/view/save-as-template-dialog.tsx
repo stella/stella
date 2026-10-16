@@ -20,6 +20,8 @@ import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
 import { apiFieldIssueMessage } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ViewLayout } from "@/lib/types";
@@ -34,6 +36,7 @@ type SaveAsTemplateDialogProps = {
 };
 
 type SaveTemplateHandlers = {
+  onSettled: () => void;
   onSuccess: () => void;
   onError: (error: unknown) => void;
 };
@@ -75,6 +78,7 @@ export const SaveAsTemplateDialogView = ({
   const [name, setName] = useState(defaultName);
   // The server's verdict on the name, shown under the field until it changes.
   const [nameIssue, setNameIssue] = useState<string | undefined>();
+  const submitOnce = useSingleFlight();
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -87,11 +91,13 @@ export const SaveAsTemplateDialogView = ({
   const trimmed = name.trim();
   const canSubmit = trimmed.length > 0 && !pending;
 
-  const handleSubmit = () => {
+  const saveTemplate = (settled: () => void) => {
     if (!canSubmit) {
+      settled();
       return;
     }
     save(trimmed, {
+      onSettled: settled,
       onSuccess: () => {
         stellaToast.add({
           title: t("workspaces.views.templates.created"),
@@ -104,6 +110,9 @@ export const SaveAsTemplateDialogView = ({
         notifyUserError(error, t("errors.failedToSaveTemplate"));
       },
     });
+  };
+  const handleSubmit = () => {
+    detached(submitOnce.runSettled(saveTemplate), "save-as-template.submit");
   };
 
   return (

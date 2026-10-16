@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -52,7 +53,7 @@ const withIntl = (node: React.ReactNode) => (
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("an inline rename stops at the shared name limit", () => {
@@ -87,6 +88,7 @@ test("saving a view template shows the server's length verdict under the name", 
         save={(name, handlers) => {
           createTemplateCalls.push(name);
           handlers.onError(TOO_LONG);
+          handlers.onSettled();
         }}
       />,
     ),

@@ -166,8 +166,18 @@ export const repositoryRules = async () => {
   return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
 };
 
+type SpawnTests = (
+  command: string[],
+  options: {
+    cwd: string;
+    env: Record<string, string | undefined>;
+    stdout: "inherit";
+    stderr: "inherit";
+  },
+) => { success: boolean };
+
 export const checkRuleCoverage = async (
-  spawnTests = Bun.spawnSync,
+  spawnTests: SpawnTests = Bun.spawnSync,
 ): Promise<number> => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rule-coverage-"));
   const coveragePath = path.join(directory, "coverage.jsonl");

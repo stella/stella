@@ -8,6 +8,7 @@ import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const sessionArea = () =>
   browserStorage("session") ?? panic("Test requires session browser storage");
@@ -36,7 +37,7 @@ afterEach(async () => {
   sessionArea().clear();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type FileSource = { load: () => Promise<string> };

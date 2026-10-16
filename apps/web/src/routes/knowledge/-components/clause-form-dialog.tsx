@@ -26,6 +26,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -123,6 +124,9 @@ const ClauseFormDialogBody = ({
   }));
   const [initialForm] = useState(form);
   const [saving, setSaving] = useState(false);
+  // The create goes through the API directly, not a create hook, so the
+  // census cannot find it: guard it here the same way.
+  const once = useSingleFlight();
   const [reviewStatus, setReviewStatus] =
     useState<ClauseEditorReviewStatus>("resolved");
 
@@ -338,7 +342,7 @@ const ClauseFormDialogBody = ({
         <Button
           disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
           onClick={() => {
-            detached(handleSave(), "clause-form-dialog.save");
+            detached(once.run(handleSave), "clause-form-dialog.save");
           }}
         >
           {t("common.save")}

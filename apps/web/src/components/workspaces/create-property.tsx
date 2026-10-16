@@ -57,6 +57,7 @@ import {
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -400,6 +401,7 @@ const PropertyComposerBody = ({
   const format = useFormatter();
   const suggestPrompt = useSuggestPrompt();
   const startWorkflow = useStartWorkflow(workspaceId);
+  const submitOnce = useSingleFlight();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
   const editingProperty =
@@ -610,11 +612,12 @@ const PropertyComposerBody = ({
     handleBlur: () => undefined,
   };
 
-  const handleSubmit = () => {
-    if (showAiSections && capabilities.ai.type !== "available") {
-      return;
-    }
-    if (!canSubmit) {
+  const submitProperty = (settled: () => void) => {
+    if (
+      (showAiSections && capabilities.ai.type !== "available") ||
+      !canSubmit
+    ) {
+      settled();
       return;
     }
 
@@ -637,6 +640,7 @@ const PropertyComposerBody = ({
           tool: nextTool,
         },
         {
+          onSettled: settled,
           onSuccess: () => {
             // AI properties need a re-extraction after any edit since
             // the prompt, type, options, or dependencies may have
@@ -669,6 +673,7 @@ const PropertyComposerBody = ({
           : {}),
       },
       {
+        onSettled: settled,
         onSuccess: (data) => {
           const result: CreatePropertyResult = {
             property: {
@@ -710,6 +715,10 @@ const PropertyComposerBody = ({
         },
       },
     );
+  };
+
+  const handleSubmit = () => {
+    detached(submitOnce.runSettled(submitProperty), "create-property.submit");
   };
 
   const handleAutoPrompt = (instruction: string) => {
