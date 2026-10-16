@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { status } from "elysia";
 import * as v from "valibot";
 
+import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -88,6 +89,7 @@ const sourceOf = (
         appUrl: "https://example.test/law/cze/cases/test/cited",
       },
     ],
+    provisionStatus: { type: "pending" },
     provisionAnchors: [
       {
         pieceId: "block-0",
@@ -455,6 +457,7 @@ describe("decision reader tool contracts", () => {
         ...source,
         citationAnchors: phase === "citations" ? citationAnchors : [],
         provisionAnchors: [],
+        provisionStatus: null,
         referenceNextCursor: null,
       }),
     });
@@ -624,3 +627,40 @@ describe("decision reader tool contracts", () => {
     }
   });
 });
+
+test.each(PROVISION_LINK_STATUS_TYPES)(
+  "returns %s status for empty provision anchors",
+  async (type) => {
+    const source = sourceOf(astOf(1));
+    const context = contextWith({
+      readDecisionReaderSource: async ({ phase }) => ({
+        ...source,
+        citationAnchors: [],
+        provisionAnchors: [],
+        provisionStatus: phase === "provisions" ? { type } : null,
+      }),
+    });
+    let cursor: string | undefined;
+    for (let index = 0; index < 3; index += 1) {
+      const result = await blocks({
+        args: { decision_id: id, ...(cursor === undefined ? {} : { cursor }) },
+        context,
+      });
+      if (
+        result.status !== "success" ||
+        result.data.content.status !== "available"
+      ) {
+        throw new Error("Expected an available reader page");
+      }
+      const content = result.data.content;
+      if (content.phase === "provisions") {
+        expect(content.provisionAnchors).toEqual([]);
+        expect(content.provisionStatus).toEqual({ type });
+        expect(content.nextCursor).toBeNull();
+        return;
+      }
+      cursor = content.nextCursor ?? undefined;
+    }
+    throw new Error("Expected a provision page");
+  },
+);
