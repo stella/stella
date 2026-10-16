@@ -446,6 +446,9 @@ export default eslintCompatPlugin({
             );
           },
           CallExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             const callee = unwrapExpression(node.callee);
             if (
               callee?.type !== "MemberExpression" ||
@@ -533,6 +536,9 @@ export default eslintCompatPlugin({
             reportSql(node, source);
           },
           TaggedTemplateExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
             if (
               !isAstNode(node.parent) ||
               node.parent.type !== "CallExpression"

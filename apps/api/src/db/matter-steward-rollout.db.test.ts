@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { getColumns } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -9,8 +10,15 @@ import { MATTER_VISIBILITY } from "@stll/api-contract/matter-visibility";
 import type { Verdict } from "@stll/db-load-gate/health";
 import { INTERNAL_MEMBER_ROLES, roles } from "@stll/permissions";
 
+import { auditLogs } from "@/api/db/schema";
+import {
+  createBackgroundAuditRecorder,
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log";
 import {
   brandPersistedOrganizationId,
+  brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
@@ -80,6 +88,14 @@ CREATE TABLE workspace_members (
 
 const seed = async (database: PGlite): Promise<void> => {
   await database.exec(SCHEMA);
+  await database.exec(
+    `CREATE TABLE audit_logs (${Object.values(getColumns(auditLogs))
+      .map(
+        (column) =>
+          `"${column.name}" ${column.getSQLType()}${column.name === "created_at" ? " DEFAULT now()" : ""}`,
+      )
+      .join(", ")})`,
+  );
   for (const path of [
     "20261001123000_database_backfill_state/migration.sql",
     "20261015090000_matter_access_rule_function/migration.sql",
@@ -812,6 +828,100 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
           ? []
           : [{ id: departing === EXTERNAL ? "m6" : "m3" }],
       );
+    },
+  );
+
+  test.each(["user", "service"] as const)(
+    "legacy lead cleanup records one transactional scoped audit with %s attribution",
+    async (actor) => {
+      await using database = new PGlite();
+      await seed(database);
+      await database.exec(`
+        DELETE FROM workspace_members WHERE workspace_id = '${MATTER.clientlessOfMember}'
+          AND user_id IN ('${MEMBER}', '${OWNER}');
+        UPDATE workspaces SET lead_user_id = '${EXTERNAL}' WHERE id = '${MATTER.clientlessOfMember}';
+      `);
+      await applyVisibility(database);
+      const before = await matterSnapshot(database);
+      const audits = async () =>
+        (
+          await database.query(
+            "SELECT to_jsonb(a) - 'id' - 'group_id' - 'created_at' AS event FROM audit_logs a ORDER BY created_at, id",
+          )
+        ).rows;
+      const remove = async () => {
+        await database.exec("BEGIN");
+        await database.query("SELECT set_config('app.user_id', $1, true)", [
+          actor === "user" ? ADMIN : "",
+        ]);
+        await database.exec(
+          legacyRemovalSql({
+            kind: "matter",
+            matter: MATTER.clientlessOfMember,
+            departing: EXTERNAL,
+          }),
+        );
+      };
+      await remove();
+      expect(await audits()).toHaveLength(1);
+      await database.exec("ROLLBACK");
+      expect(await matterSnapshot(database)).toEqual(before);
+      expect(await audits()).toEqual([]);
+
+      const identity =
+        actor === "user" ? ADMIN : "system:matter-steward-compatibility";
+      const recorder = createBackgroundAuditRecorder({
+        organizationId: brandPersistedOrganizationId(ORG),
+        workspaceId: brandPersistedWorkspaceId(MATTER.clientlessOfMember),
+        userId: identity,
+        execution:
+          actor === "user"
+            ? {
+                performer: { type: "user", id: brandPersistedUserId(ADMIN) },
+                trigger: { type: "direct" },
+              }
+            : {
+                performer: {
+                  type: "service",
+                  id: identity,
+                  name: "Matter stewardship compatibility",
+                },
+                trigger: {
+                  type: "system",
+                  source: "matter-steward-compatibility",
+                },
+              },
+      });
+      await drizzle({ client: database }).transaction(async (tx) => {
+        await recorder(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+          resourceId: MATTER.clientlessOfMember,
+          changes: { leadUserId: { old: EXTERNAL, new: null } },
+          metadata: { cause: "matter_steward_cleared" },
+        });
+      });
+      const expected = await audits();
+      await database.exec("DELETE FROM audit_logs");
+
+      await remove();
+      await database.exec("COMMIT");
+      expect(await audits()).toEqual(expected);
+      expect(
+        (
+          await database.query(
+            "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+            [MATTER.clientlessOfMember],
+          )
+        ).rows,
+      ).toEqual([
+        { lead_user_id: null, visibility: MATTER_VISIBILITY.assignedOnly },
+      ]);
+      await database.query(
+        "UPDATE workspaces SET lead_user_id = NULL WHERE id = $1",
+        [MATTER.clientlessOfMember],
+      );
+      expect(await audits()).toEqual(expected);
     },
   );
 

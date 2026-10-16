@@ -307,13 +307,15 @@ EXECUTE FUNCTION "enforce_member_role_keeps_matter_leads"();
 -- Callers hold candidate memberships before matter rows. These triggers only
 -- validate that completed prefix and the resulting steward state.
 -- A usable steward is internal, belongs to this organization, and is assigned.
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; read-only trigger checks the updated matter's persisted membership and assignment under its existing row lock
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; validates the updated matter under its existing row lock and appends a matter-scoped audit for legacy unusable-lead cleanup
 CREATE FUNCTION public.enforce_workspace_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+  audit_actor text;
 BEGIN
   -- Old offboarding clears a departing lead before removing memberships.
   -- Clearing an already unusable legacy lead preserves its existing orphaned
@@ -327,6 +329,30 @@ BEGIN
         AND m.role IN ('owner', 'admin', 'member', 'intern')
         AND wm.workspace_id = OLD.id
     ) THEN
+    IF OLD.lead_user_id IS NOT NULL
+      AND NOT public.stella_has_stewardship_lock('workspaces', OLD.id::text) THEN
+      -- New callers use their bound audit recorder. Older callers cannot run
+      -- that recorder here, so append the same workspace event transactionally.
+      audit_actor := NULLIF(current_setting('app.user_id', true), '');
+      INSERT INTO public.audit_logs (
+        id, organization_id, workspace_id, user_id, action, resource_type,
+        resource_id, metadata, changes, performer_type, performer_id,
+        performer_name, trigger_type, trigger_source, group_id, approval_status,
+        activity_category
+      ) VALUES (
+        pg_catalog.gen_random_uuid(), OLD.organization_id, OLD.id,
+        COALESCE(audit_actor, 'system:matter-steward-compatibility'),
+        'update', 'workspace', OLD.id::text,
+        jsonb_build_object('cause', 'matter_steward_cleared'),
+        jsonb_build_object('leadUserId', jsonb_build_object('old', OLD.lead_user_id, 'new', NULL)),
+        CASE WHEN audit_actor IS NULL THEN 'service' ELSE 'user' END,
+        COALESCE(audit_actor, 'system:matter-steward-compatibility'),
+        CASE WHEN audit_actor IS NULL THEN 'Matter stewardship compatibility' ELSE NULL END,
+        CASE WHEN audit_actor IS NULL THEN 'system' ELSE 'direct' END,
+        CASE WHEN audit_actor IS NULL THEN 'matter-steward-compatibility' ELSE NULL END,
+        pg_catalog.gen_random_uuid(), 'not_required', 'matter'
+      );
+    END IF;
     RETURN NEW;
   END IF;
   IF NEW.visibility = 'assigned_only' AND NOT public.stella_has_stewardship_lock('workspaces', NEW.id::text) THEN
