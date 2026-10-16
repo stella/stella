@@ -322,5 +322,89 @@ if (!databaseUrl || !runPostgresTests) {
         ]);
       });
     });
+
+    test("overlapping decision extensions cannot change the active timeout scope", async () => {
+      await withSession(async (db) => {
+        await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('statement_timeout', '0', true), set_config('lock_timeout', '0', true)`,
+          );
+          const settingsBefore = executedRows(
+            await tx.execute(
+              sql`SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout`,
+            ),
+          );
+          const dialect = new PgDialect();
+          const timeoutSettings = Promise.withResolvers<undefined>();
+          const releaseFirst = Promise.withResolvers<undefined>();
+          const statements: string[] = [];
+          let paused = false;
+          let firstObservedSettings: unknown[] | undefined;
+          const observedTx = {
+            execute: async (query: SQL) => {
+              const statement = dialect.sqlToQuery(query).sql;
+              statements.push(statement);
+              const result = await tx.execute(query);
+              if (statement.includes("set_config") && !paused) {
+                paused = true;
+                timeoutSettings.resolve(undefined);
+                await releaseFirst.promise;
+              }
+              return result;
+            },
+          };
+          const decisionId = createSafeId<"caseLawDecision">();
+          const first = runDecisionWriteExtension(observedTx, decisionId, {
+            deadlineMs: 5000,
+            extension: async ({ tx: extensionTx }) => {
+              firstObservedSettings = executedRows(
+                await extensionTx.execute(
+                  sql`SELECT current_setting('statement_timeout')::interval > interval '0' AND current_setting('statement_timeout')::interval <= interval '5 seconds' AS statement_timeout_bounded, current_setting('lock_timeout')::interval > interval '0' AND current_setting('lock_timeout')::interval <= interval '5 seconds' AS lock_timeout_bounded`,
+                ),
+              );
+              return { type: "applied" };
+            },
+          });
+
+          try {
+            await Promise.race([timeoutSettings.promise, first]);
+            const statementCountAtPause = statements.length;
+            expect(paused).toBe(true);
+            expect(statements.at(-1)?.includes("set_config")).toBe(true);
+            expect(
+              await rejectionOf(
+                runDecisionWriteExtension(observedTx, decisionId, {
+                  extension: async () => ({ type: "applied" }),
+                }),
+              ),
+            ).toMatchObject({
+              message:
+                "Await the executor savepoint before reusing its transaction",
+            });
+            expect(statements).toHaveLength(statementCountAtPause);
+          } finally {
+            releaseFirst.resolve(undefined);
+            await first;
+          }
+
+          expect(
+            statements.some((statement) => statement.includes("set_config")),
+          ).toBe(true);
+          expect(firstObservedSettings).toEqual([
+            {
+              statement_timeout_bounded: true,
+              lock_timeout_bounded: true,
+            },
+          ]);
+          expect(await first).toEqual({ type: "applied" });
+          const observedSettings = executedRows(
+            await tx.execute(
+              sql`SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout`,
+            ),
+          );
+          expect(observedSettings).toEqual(settingsBefore);
+        });
+      });
+    });
   });
 }

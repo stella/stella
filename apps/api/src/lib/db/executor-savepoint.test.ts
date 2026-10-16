@@ -11,7 +11,14 @@ const journal = () => {
   const dialect = new PgDialect();
   const tx = {
     execute: async (statement: SQL) => {
-      events.push(dialect.sqlToQuery(statement).sql);
+      const query = dialect.sqlToQuery(statement).sql;
+      if (query.includes("current_setting")) {
+        return [{ statement_timeout: "0", lock_timeout: "0" }];
+      }
+      if (query.includes("set_config")) {
+        return [];
+      }
+      events.push(query);
       return [];
     },
   };
@@ -91,6 +98,62 @@ describe("execute-only savepoints", () => {
       return { type: "commit", value: undefined };
     });
     expect(events).toHaveLength(2);
+  });
+
+  test("admission remains exclusive until timeout restoration finishes", async () => {
+    const { tx: next, events } = journal();
+    const restoring = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const dialect = new PgDialect();
+    let calls = 0;
+    let pauseRestoration = true;
+    const tx = {
+      execute: async (statement: SQL) => {
+        calls += 1;
+        const result = await next.execute(statement);
+        if (
+          pauseRestoration &&
+          dialect.sqlToQuery(statement).sql.includes("set_config")
+        ) {
+          pauseRestoration = false;
+          restoring.resolve(undefined);
+          await release.promise;
+        }
+        return result;
+      },
+    };
+    const first = withExecutorSavepoint(tx, async () => ({
+      type: "commit",
+      value: "first",
+    }));
+    try {
+      await Promise.race([restoring.promise, first]);
+      expect(events.at(-1)).toStartWith("RELEASE SAVEPOINT ");
+      const callsBeforeRefusal = calls;
+      expect(
+        await rejectionOf(
+          withExecutorSavepoint(tx, async () => ({
+            type: "commit",
+            value: "second",
+          })),
+        ),
+      ).toMatchObject({
+        message: "Await the executor savepoint before reusing its transaction",
+      });
+      expect(calls).toBe(callsBeforeRefusal);
+    } finally {
+      release.resolve(undefined);
+      await first;
+    }
+    expect((await first).unwrap()).toBe("first");
+    expect(
+      (
+        await withExecutorSavepoint(tx, async () => ({
+          type: "commit",
+          value: "following",
+        }))
+      ).unwrap(),
+    ).toBe("following");
   });
 
   test("setup failure does not retain the executor admission", async () => {
