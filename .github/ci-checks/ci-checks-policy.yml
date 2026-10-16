@@ -1,0 +1,245 @@
+# Checks for the `ci-checks-policy` job in .github/workflows/ci.yml. Its "Run
+# policy checks" step runs them with `bun scripts/ci-check-pool.ts`: each
+# entry keeps the fields of the workflow step it replaced (condition, env,
+# command, timeout), the pool evaluates the condition against the job's
+# context, runs the selected checks concurrently (one fewer than the runner
+# CPUs) and prints their logs in this order. Workflow guards read these
+# entries as steps of the job (scripts/workflow-steps.ts).
+checks:
+  - name: Format
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.affected.outcome == 'success' }}
+    # Call turbo directly: the `format:check` script already
+    # contains `-- --check`, so appending `--affected` via
+    # `bun run` would land it after turbo's `--` and forward it
+    # to oxfmt instead of filtering packages.
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      STELLA_VERIFY: check
+      AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+    run: |
+      bun run format:guard
+      args=()
+      [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+      bun --bun turbo run format "${args[@]}" -- --check
+
+  - name: Test unsignalled skip detection
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_001
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_001 != 'true') }}
+    run: bun test scripts/unsignalled-skip.test.ts
+
+  - name: Ratchet guard
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
+    # A rise fails; decreases require no committed baseline update. Both
+    # trees use the current registry, including per-file ceilings.
+    # The self-test proves counter and gate behavior before the comparison.
+    run: |
+      bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
+      bun scripts/ratchet.ts --self-test
+      bun scripts/ratchet.ts --check
+
+  - name: Ratchet scanner invariants
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_002
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_002 != 'true') }}
+    run: bun test scripts/ratchet-scan.test.ts
+
+  - name: Test subject reachability census
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    run: |
+      bun scripts/test-subject-reachability.ts --self-test
+      bun scripts/test-subject-reachability.ts --base "$RATCHET_BASE_REF"
+
+  - name: Deployment feature guard
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    # Every declared deployment flag has a reader and every flag read is
+    # declared; no flag is read off the raw process environment; across the
+    # real route tree a capability tagged with a flag is mounted behind a
+    # gate on that flag, and every route file is classified. Existing gaps
+    # sit in apps/api/deployment-feature-baseline.json, which may only
+    # shrink against the measured base. The --self-test run first proves
+    # each detector fires on mutated copies of the real tree.
+    run: |
+      bun apps/api/scripts/deployment-feature-guard.ts --self-test
+      bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
+
+  - name: Processed-field backlog guard
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Processed-field backlog guard')) }}
+    # The case-law processed-field backlog (debts and unrecorded claims)
+    # may only shrink against the measured base.
+    run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
+
+  - name: GitHub API command ownership
+    id: static_check_003
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_003 != 'true') }}
+    run: |
+      bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
+      bun scripts/check-gh-retry.ts
+
+  - name: Sparse checkout script dependencies
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_004
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
+    run: bun test scripts/sparse-checkout-dependencies.test.ts
+
+  - name: SHA-256 migration ledger
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
+
+  - name: Custom lint rule coverage
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+    run: |
+      bun test scripts/check-oxlint-rule-coverage.test.ts
+      bun scripts/check-oxlint-rule-coverage.ts
+
+  - name: Custom lint test timeout policy
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_005
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_005 != 'true') }}
+    run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
+
+  - name: Dated waiver lifecycle guards
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_006
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_006 != 'true') }}
+    run: |
+      bun test scripts/dated-waivers.test.ts scripts/dated-waiver-probes.test.ts scripts/dated-waiver-publish.test.ts scripts/dated-waiver-healing.test.ts scripts/dated-waiver-healing-workflow.test.ts
+
+  - name: Documentation source policy rule
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Reads wall clock to validate dated waivers or quarantine expiry."
+    if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+    # Every direct dependency must have an exact llms.txt source or a
+    # time-bounded, explained quarantine.
+    run: bun run check:docs-sources
+
+  - name: Instruction references
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_007
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_007 != 'true') }}
+    # AGENTS.md and .claude/skills/*/SKILL.md name repository
+    # paths, package scripts, module exports and oxlint rule ids that
+    # nothing compiles, so a rename leaves the instruction quietly wrong and
+    # every agent reading it is misled. This guard resolves each named
+    # reference against the tree. Intentional examples live in
+    # scripts/instruction-references-allowlist.json, and an entry that
+    # suppresses nothing fails as stale. The --self-test run first proves
+    # each matcher still fires, so a broken guard cannot pass silently.
+    run: |
+      bun scripts/check-instruction-references.ts --self-test
+      bun run check:instruction-references
+
+  - name: Knip production dependency checks
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_008
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_008 != 'true') }}
+    # Static gate paired with the image boot smokes (api-image-smoke,
+    # api-image-deps): knip --strict verifies production code imports
+    # only `dependencies` (never a devDependency) and flags transitively
+    # resolved (phantom) packages a `turbo prune` would drop. Scoped to
+    # the apps that ship a pruned runtime; each declares its real
+    # production entry (a `!` entry, a start script, or the SSR server
+    # entry). New runtimes are enrolled here deliberately, alongside a
+    # boot/compile smoke.
+    run: |
+      for workspace in apps/api apps/legal-atlas-runner apps/web; do
+        DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
+      done
+
+  - name: Knip workspace dependency checks
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_009
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_009 != 'true') }}
+    # Include test and tooling imports in every workspace. The production
+    # gate above also checks deployment boundaries for the server apps.
+    run: bun run dependencies:check
+
+  - name: Knip dead-export check (packages/cli)
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_010
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_010 != 'true') }}
+    # The CLI is small enough to enforce the `exports`/`types` issue
+    # types today (the apps above are not; see the note in the step
+    # before). An exported helper that no runtime or test path calls
+    # usually means a code path that was meant to be wired up is not.
+    # Test files are entries in
+    # knip.json so test-only exports count as used; anything else that
+    # is exported but unreferenced fails here.
+    run: |
+      DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
+
+  - name: Knip dead-export budget (all workspaces)
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_011
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_011 != 'true') }}
+    # What the packages/cli step enforces at zero, every other workspace
+    # carries as a decrease-only budget: one knip run for the whole repo,
+    # counted per workspace against scripts/knip-exports-baseline.json. A
+    # rise fails here and names the offending symbols; a fall only prompts
+    # `bun scripts/knip-exports-ratchet.ts --write` so the improvement can
+    # never regress. The parser tests run first, so a broken summary cannot
+    # pass silently.
+    run: |
+      bun test scripts/knip-exports-ratchet.test.ts
+      bun run check:knip-exports
+
+  - name: Dependabot group guard (installed packages)
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+    id: static_check_012
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+    # Related framework and plugin updates must stay in one PR even when
+    # upstream moves packages between scopes. The stale-ignore checks read
+    # installed manifests (Expo's bundled module list among them), so the
+    # guard runs here, after the install, which every change to
+    # .github/dependabot.yml or a manifest requires.
+    run: bun test scripts/dependabot-grouping.test.ts
