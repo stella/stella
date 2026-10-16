@@ -184,3 +184,16 @@ test("loaded routes never open rounds for idle prefetch", () => {
   expect(controller.release(2000)).toEqual([]);
   expect(controller.rounds).toEqual([["a"]]);
 });
+
+test("a request aborted while held adds no round and blocks none", () => {
+  const controller = createNetworkRoundController<string>();
+  controller.arrive({ token: "aborted", key: "GET /aborted", now: 0 });
+  // The page abandons the request before the barrier releases it.
+  controller.complete("aborted", 10);
+  controller.arrive({ token: "kept", key: "GET /kept", now: 20 });
+  const released = controller.release(20 + NETWORK_ROUND_SETTLE_MS);
+  expect(released).toEqual(["kept"]);
+  controller.complete("kept", 400);
+  expect(controller.pending).toBe(false);
+  expect(controller.rounds).toEqual([["GET /kept"]]);
+});

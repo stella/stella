@@ -19,6 +19,13 @@ export const createNetworkRoundController = <Token>() => {
       held.set(token, key);
     },
     complete: (token: Token, now: number) => {
+      // A request aborted while still held never reaches the network: drop it
+      // so it neither counts as a round nor waits for a completion that has
+      // already happened.
+      if (held.delete(token)) {
+        lastActivityAt = now;
+        return;
+      }
       if (!inFlight.delete(token)) {
         return;
       }
