@@ -2413,7 +2413,7 @@
   },
   {
     "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "bc5f8fa1897a00f1017110d8c6cb360d1c50751f96cde2bd6a42319762c0a62a",
+    "fingerprint": "ba2c8c81fb5f3b119bd4571a013cab18647f8785e8f936611fcf2ff2921805cf",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },

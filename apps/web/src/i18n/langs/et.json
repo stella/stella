@@ -1295,6 +1295,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
     },
+    "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",

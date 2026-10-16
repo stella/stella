@@ -60,11 +60,13 @@ import {
   getManagedOpenRouterCredentialProvider,
   type ManagedOpenRouterCredential,
 } from "@/api/lib/chat/openrouter-credential";
+import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
 import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
@@ -74,6 +76,7 @@ import {
   streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type {
+  PublicRunFinishedChunk,
   PublicStreamChunk,
   StreamChatChunksOptions,
   TanStackTextFinishReason,
@@ -82,10 +85,13 @@ import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
+  ModelOutputModeratedError,
   ModelRunError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import type { ModelRunFinish } from "@/api/lib/errors/provider-call-error";
 import {
   createProviderCallError,
   providerRequestIdFrom,
@@ -337,8 +343,64 @@ const isAbortRejection = ({
 // lifecycle regression); `finished` carries the provider's reason, which the
 // event leaves optional, so `null` there means the provider reported none.
 type TextRunFinish =
-  | { kind: "finished"; reason: TanStackTextFinishReason }
+  | {
+      kind: "finished";
+      reason: TanStackTextFinishReason;
+      /** The provider's own stop reason, where its table lists it. */
+      providerStopReason?: string | undefined;
+    }
   | { kind: "unfinished" };
+
+const finishedRunOf = (chunk: PublicRunFinishedChunk): TextRunFinish => {
+  const providerStopReason = recordedStopReasonOf(chunk);
+  return {
+    kind: "finished",
+    reason: finishReasonOf(chunk),
+    ...(providerStopReason === undefined ? {} : { providerStopReason }),
+  };
+};
+
+/** How a refused run ended, as its failure records it. */
+const modelRunFinishOf = (finish: TextRunFinish): ModelRunFinish => {
+  if (finish.kind === "unfinished") {
+    return { finish: "unfinished" };
+  }
+  return {
+    finish: finish.reason ?? "none",
+    ...(finish.providerStopReason === undefined
+      ? {}
+      : { providerStopReason: finish.providerStopReason }),
+  };
+};
+
+/**
+ * The typed failure of a run its finish policy refused: an answer cut at its
+ * output ceiling, one the provider filtered, or a run that ended without an
+ * answer. Each carries the finish it ended with, so a sink records why.
+ */
+const refusedFinishError = (
+  model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">,
+  finish: TextRunFinish,
+): ModelRunError => {
+  const options = { model, finish: modelRunFinishOf(finish) };
+  if (finish.kind === "unfinished") {
+    return new ModelRunUnfinishedError(options);
+  }
+  switch (finish.reason) {
+    case "length":
+      return new ModelOutputIncompleteError(options);
+    case "content_filter":
+      return new ModelOutputModeratedError(options);
+    case "tool_calls":
+    case null:
+      return new ModelRunUnfinishedError(options);
+    case "stop":
+      return panic("A refused finish cannot be a clean stop");
+    default:
+      finish.reason satisfies never;
+      return panic(`Unhandled finish reason: ${String(finish.reason)}`);
+  }
+};
 
 const finishAccepted = (
   finishPolicy: TanStackTextFinishPolicy,
@@ -397,8 +459,8 @@ const generateTanStackTextWithin = async (
       serviceTier: options.serviceTier,
       system: guardedSystemPrompt(options),
       temperature: options.temperature,
-      onFinishReason: (reason) => {
-        run.finish = { kind: "finished", reason };
+      onFinish: (finish) => {
+        run.finish = finish;
       },
     })) {
       output += delta;
@@ -422,16 +484,7 @@ const generateTanStackTextWithin = async (
   }
 
   if (!finishAccepted(options.finishPolicy, run.finish)) {
-    // A run that spent its output budget is an incomplete answer and is named
-    // as one; the other refused finishes (moderated, tool-bearing, unfinished)
-    // keep the generic refusal.
-    if (run.finish.kind === "finished" && run.finish.reason === "length") {
-      throw new ModelOutputIncompleteError({ model });
-    }
-    throw new HandlerError({
-      status: 502,
-      message: "AI generation did not complete",
-    });
+    throw refusedFinishError(model, run.finish);
   }
 
   return output;
@@ -576,7 +629,7 @@ export const collectTanStackTextRun = async (
         run.finish =
           runFinishedOutcomeOf(chunk) === "cancelled"
             ? { kind: "unfinished" }
-            : { kind: "finished", reason: finishReasonOf(chunk) };
+            : finishedRunOf(chunk);
         continue;
       }
       if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
@@ -606,7 +659,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier,
   system,
   temperature,
-  onFinishReason,
+  onFinish,
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
@@ -617,7 +670,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
-  onFinishReason?: ((reason: TanStackTextFinishReason) => void) | undefined;
+  onFinish?: ((finish: TextRunFinish) => void) | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
     abortSignal: abortController?.signal,
@@ -640,7 +693,7 @@ const streamTanStackTextDeltas = async function* ({
       }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
-        onFinishReason?.(finishReasonOf(chunk));
+        onFinish?.(finishedRunOf(chunk));
         return undefined;
       }
       if (
@@ -806,6 +859,7 @@ const PROVIDER_OWNED_ERROR_KIND = {
   // Named by this service from the run's own outcome, not by the provider.
   output_incomplete: false,
   output_invalid: false,
+  output_moderated: false,
   deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
@@ -2054,7 +2108,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              maxOutputTokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.google]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...googleServiceTierOptions(serviceTier),
@@ -2065,7 +2122,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              max_tokens:
+              [OUTPUT_CEILING_OPTION.anthropic]:
                 maxOutputTokens +
                 anthropicThinkingReservation(model.modelOptions.thinking),
             }),
@@ -2083,7 +2140,7 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { max_completion_tokens: maxOutputTokens }),
+          : { [OUTPUT_CEILING_OPTION.bedrock]: maxOutputTokens }),
         ...temperatureOverride,
       };
     case "mistral":
@@ -2091,7 +2148,7 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { max_tokens: maxOutputTokens }),
+          : { [OUTPUT_CEILING_OPTION.mistral]: maxOutputTokens }),
         ...temperatureOverride,
       };
     case "openai":
@@ -2100,7 +2157,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              max_output_tokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.openai]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...openAICacheOptions(caching),
@@ -2112,7 +2172,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              maxCompletionTokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.openrouter]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),

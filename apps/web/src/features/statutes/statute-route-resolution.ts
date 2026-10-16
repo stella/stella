@@ -9,7 +9,7 @@ import {
 import type { StatuteSlugKey } from "@/features/statutes/queries/statutes";
 import { isStatuteWindowGap } from "@/features/statutes/statute-expression";
 import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
-import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
+import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 
 /** The corpus reads an address resolves through: by document id, and by slug. */
 export type StatuteRouteReads<Statute> = {
@@ -56,7 +56,7 @@ export const resolveStatuteRoute = async <Statute>(
   reads: StatuteRouteReads<Statute>,
 ): Promise<StatuteRouteResolution<Statute>> => {
   const countrySegment = toStatuteCountrySegment(country);
-  if (!isPublicStatuteCountry(countrySegment)) {
+  if (!isPublicStatutePageCountry(countrySegment)) {
     return { type: "unserved" };
   }
 
