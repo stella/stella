@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * A stored decision's text read through the wrong character set.
  *
@@ -14,8 +15,10 @@
  * itself, transformed back by an operator.
  */
 
-import { panic } from "better-result";
-
+import {
+  EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
+  type ExtractionWarnings,
+} from "@stll/api-contract/case-law-extraction-warnings";
 import {
   checkTextEncoding,
   type EncodingCheckLimit,
@@ -107,8 +110,16 @@ const sampleSpans = (finding: EncodingFinding): string[] => {
 };
 
 export type TextEncodingReport =
-  | { type: "misdecoded"; fields: TextMisdecodedFields }
-  | { type: "incomplete"; fields: { encodingLimit: EncodingCheckLimit } };
+  | {
+      type: "misdecoded";
+      fields: TextMisdecodedFields;
+      warnings: ExtractionWarnings;
+    }
+  | {
+      type: "incomplete";
+      fields: { encodingLimit: EncodingCheckLimit };
+      warnings: ExtractionWarnings;
+    };
 
 /**
  * What this text's encoding check reports: the fields of a `TEXT_MISDECODED`
@@ -124,9 +135,26 @@ export const textEncodingReport = (
     case "clean":
       return undefined;
     case "incomplete":
-      return { type: "incomplete", fields: { encodingLimit: check.limit } };
+      return {
+        type: "incomplete",
+        fields: { encodingLimit: check.limit },
+        warnings: [{ rule: "encoding-incomplete", count: 1, firstOffsets: [] }],
+      };
     case "suspect":
-      return { type: "misdecoded", fields: misdecodedFields(check.findings) };
+      return {
+        type: "misdecoded",
+        fields: misdecodedFields(check.findings),
+        warnings: check.findings.map((finding) => ({
+          rule: finding.kind,
+          count:
+            finding.kind === "misdecoded"
+              ? finding.fixedOccurrences
+              : finding.occurrences,
+          firstOffsets: finding.samples
+            .slice(0, EXTRACTION_WARNING_FIRST_OFFSETS_MAX)
+            .map(({ start }) => start),
+        })),
+      };
     default: {
       check satisfies never;
       return panic(`Unhandled encoding check: ${String(check)}`);

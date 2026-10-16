@@ -1,9 +1,13 @@
-import type { TSchema } from "@sinclair/typebox";
+import { Type, type TSchema } from "@sinclair/typebox";
 import { panic } from "better-result";
 import { t } from "elysia";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import {
+  EXTRACTION_WARNING_RULES,
+  EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
+} from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   TEXT_ABSENCE_REASONS,
@@ -182,6 +186,21 @@ export const readDecisionSuccessResponseSchema = t.Object({
   // Whole official decision text is intentional. These and `sections[].text`
   // are the only fields exempted by the public-response ledger; a windowed
   // reader is separate.
+  extractionWarnings: t.Array(
+    t.Object({
+      rule: t.UnionEnum([...EXTRACTION_WARNING_RULES]),
+      count: Type.Integer({
+        minimum: 1,
+        description:
+          "Occurrences reported by the detector; encoding checks retain their existing work bounds.",
+      }),
+      firstOffsets: t.Array(Type.Integer({ minimum: 0 }), {
+        maxItems: EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
+        description: `Up to ${String(EXTRACTION_WARNING_FIRST_OFFSETS_MAX)} detected locations as zero-based UTF-16 code-unit offsets in stored fulltext; encoding locations identify sample word spans. Served AST text and excerpts may differ. Empty for document-wide signals.`,
+      }),
+    }),
+    { maxItems: EXTRACTION_WARNING_RULES.length },
+  ),
   documentAst: t.Unknown(),
   fulltext: t.Nullable(t.String()),
   projectionDigest: nullableBoundedString(

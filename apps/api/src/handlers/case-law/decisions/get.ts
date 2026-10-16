@@ -324,6 +324,7 @@ export const decisionRecordQuery = (
       languageGroupKey: true,
       decisionDate: true,
       decisionType: true,
+      extractionWarnings: true,
       documentAst: true,
       sections: true,
       sourceUrl: true,
@@ -533,6 +534,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       documentAst,
+      extractionWarnings: decision.extractionWarnings,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,
       documentAstSource: decision.redactedAt === null ? astRead.source : null,

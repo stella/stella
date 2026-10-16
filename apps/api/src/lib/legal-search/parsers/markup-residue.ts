@@ -1,4 +1,11 @@
+// parser-output-unchanged: adds stored-quality warning metadata; existing detector rules, order and parser text/AST remain unchanged
 import { decodeHTMLStrict } from "entities";
+
+import {
+  MARKUP_RESIDUE_RULE_IDS,
+  EXTRACTION_WARNING_FIRST_OFFSETS_MAX,
+  type ExtractionWarnings,
+} from "@stll/api-contract/case-law-extraction-warnings";
 
 /**
  * Source markup that survived into a decision's text.
@@ -24,16 +31,6 @@ import { decodeHTMLStrict } from "entities";
  */
 
 /** What the text carried that a court did not write. */
-const MARKUP_RESIDUE_RULE_IDS = [
-  "rtf-control",
-  "html-tag",
-  "xml-marker",
-  "pdf-object",
-  "entity",
-  "digit-run",
-  "hex-run",
-] as const;
-
 export type MarkupResidueRuleId = (typeof MARKUP_RESIDUE_RULE_IDS)[number];
 
 type MarkupResidueRule = {
@@ -78,8 +75,8 @@ export const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
  * Ordered: the first rule that matches names the finding, so a run of 48
  * digits reports as a number rather than as hex.
  */
-const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
-  {
+const MARKUP_RESIDUE_RULE_BY_ID = {
+  "rtf-control": {
     id: "rtf-control",
     reason: "RTF control words",
     // Two control words in a row, or an ignorable destination. One alone is
@@ -89,7 +86,7 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     sqlPattern:
       "(\\{\\\\\\*|\\\\[a-zA-Z]{1,32}-?[0-9]{0,10}[[:space:]{}]{0,4}\\\\[a-zA-Z]{1,32})",
   },
-  {
+  "html-tag": {
     id: "html-tag",
     reason: "HTML tags",
     // A tag closed right after its name, or opened with an attribute.
@@ -98,19 +95,19 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     sqlPattern:
       "(</?[a-zA-Z][a-zA-Z0-9-]{0,30}([[:space:]]+[a-zA-Z-]+[[:space:]]*=|[[:space:]]*/?>))",
   },
-  {
+  "xml-marker": {
     id: "xml-marker",
     reason: "XML prologue or CDATA",
     pattern: /<\?xml[\s?]|<!\[CDATA\[|<!DOCTYPE\s/giu,
     sqlPattern: "(<\\?xml[[:space:]?]|<!\\[CDATA\\[|<!DOCTYPE[[:space:]])",
   },
-  {
+  "pdf-object": {
     id: "pdf-object",
     reason: "PDF object syntax",
     pattern: /<<\s*\/[a-zA-Z]|\bendobj\b|\bendstream\b/gu,
     sqlPattern: "(<<[[:space:]]*/[a-zA-Z]|\\mendobj\\M|\\mendstream\\M)",
   },
-  {
+  entity: {
     id: "entity",
     reason: "undecoded character entities",
     pattern: /&(?:[a-zA-Z]{2,12}|#\d{1,7});/gu,
@@ -120,13 +117,13 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
     accept: (match) => decodeHTMLStrict(match) !== match,
     sqlPattern: "&([a-zA-Z]{2,12}|#[0-9]{1,7});",
   },
-  {
+  "digit-run": {
     id: "digit-run",
     reason: "a digit run longer than any number a court writes",
     pattern: new RegExp(String.raw`\d{${DIGIT_RUN_MIN},}`, "gu"),
     sqlPattern: `[0-9]{${DIGIT_RUN_MIN},}`,
   },
-  {
+  "hex-run": {
     id: "hex-run",
     reason: "an embedded binary payload",
     pattern: new RegExp(String.raw`[0-9a-fA-F]{${HEX_RUN_MIN},}`, "gu"),
@@ -134,7 +131,11 @@ const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
       match.length >= HEX_RUN_DIGITS_ONLY_MIN || /[a-f]/iu.test(match),
     sqlPattern: `[0-9a-fA-F]{${HEX_RUN_MIN},}`,
   },
-];
+} as const satisfies {
+  [Id in MarkupResidueRuleId]: MarkupResidueRule & { id: Id };
+};
+const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] =
+  MARKUP_RESIDUE_RULE_IDS.map((id) => MARKUP_RESIDUE_RULE_BY_ID[id]);
 
 /**
  * What the documented sweep must contain: every rule, with the Postgres
@@ -177,4 +178,27 @@ export const markupResidueIn = (text: string): MarkupResidue | undefined => {
     }
   }
   return undefined;
+};
+
+/** All matched rules, with bounded locations and an exact occurrence count. */
+export const markupResidueWarnings = (text: string): ExtractionWarnings => {
+  const warnings: ExtractionWarnings = [];
+  for (const rule of MARKUP_RESIDUE_RULES) {
+    let count = 0;
+    const firstOffsets: number[] = [];
+    rule.pattern.lastIndex = 0;
+    for (const match of text.matchAll(rule.pattern)) {
+      if (rule.accept && !rule.accept(match[0])) {
+        continue;
+      }
+      count += 1;
+      if (firstOffsets.length < EXTRACTION_WARNING_FIRST_OFFSETS_MAX) {
+        firstOffsets.push(match.index);
+      }
+    }
+    if (count > 0) {
+      warnings.push({ rule: rule.id, count, firstOffsets });
+    }
+  }
+  return warnings;
 };

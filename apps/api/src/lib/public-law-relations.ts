@@ -248,6 +248,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     language_group_key: "required",
     decision_date: "required",
     decision_type: "required",
+    extraction_warnings: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",

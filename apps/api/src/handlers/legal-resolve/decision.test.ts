@@ -86,6 +86,7 @@ const decisionAst = (texts = ["Text"]) =>
 const readableDecision: typeof readDecisionReaderSource = async () => ({
   status: "read",
   decision: {
+    extractionWarnings: [],
     id: row().id,
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,

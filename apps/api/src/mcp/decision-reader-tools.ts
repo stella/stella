@@ -64,6 +64,7 @@ const withheldReason = {
     "The source licence does not permit AI use of the full text. Open the decision in stella.",
 } as const;
 const metadataOf = ({ decision }: ReaderSource) => ({
+  extractionWarnings: decision.extractionWarnings,
   decisionId: decision.id,
   caseNumber: decision.caseNumber.slice(0, 256),
   caseNumberType: decision.caseNumberType,

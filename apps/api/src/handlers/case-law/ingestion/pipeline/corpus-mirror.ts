@@ -136,6 +136,7 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   sourceUrl: "text",
   documentUrl: "text",
   parserVersion: "smallint",
+  extractionWarnings: "jsonb",
   fulltext: "text",
   sections: "jsonb",
   documentAst: "jsonb",

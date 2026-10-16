@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -24,6 +25,7 @@ const citationId = toSafeId<"caseLawCitation">(UUID);
 const decisionWithText = (text: string) => {
   const textField = { type: TEXT_FIELD_TYPE.PRESENT, text } as const;
   return {
+    extractionWarnings: [],
     documentPending: false,
     hasDocument: true,
     documentReadFailed: false,
@@ -204,4 +206,27 @@ test("decision readers keep every section whole so citation section indices reso
   expect([
     ...Value.Errors(readDecisionSuccessResponseSchema, response),
   ]).toEqual([]);
+});
+
+test("decision API projection preserves typed extraction warnings", () => {
+  const extractionWarnings = [
+    { rule: "html-tag", count: 7, firstOffsets: [0, 8, 16] },
+  ] satisfies ExtractionWarnings;
+  const decision = projectDecisionReader({
+    ...decisionWithText("Court text"),
+    extractionWarnings,
+  });
+  expect(decision.extractionWarnings).toEqual(extractionWarnings);
+  expect(Value.Check(readDecisionSuccessResponseSchema, decision)).toBe(true);
+  for (const warning of [
+    { rule: "html-tag", count: "7", firstOffsets: [0] },
+    { rule: "html-tag", count: 7, firstOffsets: ["0"] },
+  ]) {
+    expect(
+      Value.Check(readDecisionSuccessResponseSchema, {
+        ...decision,
+        extractionWarnings: [warning],
+      }),
+    ).toBe(false);
+  }
 });
