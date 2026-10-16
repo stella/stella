@@ -22,6 +22,21 @@ const MUTATION_HELPER = "resourceMutation";
 const READER_HELPER = "resourceQueryOptions";
 const MUTATION_PRIMITIVES = new Set(["useMutation", "mutationOptions"]);
 const READER_PRIMITIVES = new Set(["queryOptions", "infiniteQueryOptions"]);
+const READER_EXECUTORS = new Set([
+  ...READER_PRIMITIVES,
+  "useQuery",
+  "useSuspenseQuery",
+  "useInfiniteQuery",
+  "useSuspenseInfiniteQuery",
+  "fetchQuery",
+  "prefetchQuery",
+  "ensureQueryData",
+  "fetchInfiniteQuery",
+  "prefetchInfiniteQuery",
+  "query",
+  "infiniteQuery",
+  "ensureInfiniteQueryData",
+]);
 const READER_SPREAD_OVERRIDES = new Set([
   "enabled",
   "select",
@@ -1382,6 +1397,159 @@ const functionReturnsTaggedReader = ({
   );
 };
 
+type ForwardedReaderOptionsArgs = {
+  module: ModuleIndex;
+  expression: ts.Expression;
+  reference: ts.Node;
+  parameter: ts.ParameterDeclaration;
+  seen: Set<Binding>;
+};
+
+const forwardsReaderOptions = ({
+  module,
+  expression,
+  reference,
+  parameter,
+  seen,
+}: ForwardedReaderOptionsArgs): boolean => {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) {
+    if (
+      ts.isIdentifier(parameter.name) &&
+      value.text === parameter.name.text &&
+      localBinding(module, value.text, reference)?.scope === parameter.parent
+    ) {
+      return true;
+    }
+    const resolved = unchangedOptionsBinding({
+      module,
+      identifier: value,
+      reference,
+    });
+    if (!resolved || seen.has(resolved.binding)) {
+      return false;
+    }
+    return forwardsReaderOptions({
+      module,
+      expression: resolved.expression,
+      reference: resolved.reference,
+      parameter,
+      seen: new Set(seen).add(resolved.binding),
+    });
+  }
+  if (ts.isConditionalExpression(value)) {
+    return [value.whenTrue, value.whenFalse].every((branch) =>
+      forwardsReaderOptions({
+        module,
+        expression: branch,
+        reference,
+        parameter,
+        seen: new Set(seen),
+      }),
+    );
+  }
+  if (!ts.isObjectLiteralExpression(value)) {
+    return false;
+  }
+  return (
+    validateTaggedSpreadOverrides({
+      module,
+      expression: value,
+      reference,
+      allowedOverrides: READER_SPREAD_OVERRIDES,
+      isTaggedSpread: (spread, spreadReference) =>
+        forwardsReaderOptions({
+          module,
+          expression: spread,
+          reference: spreadReference,
+          parameter,
+          seen: new Set(seen),
+        }),
+    }) === "tagged"
+  );
+};
+
+type WrapperForwardsReaderOptionsArgs = {
+  module: ModuleIndex;
+  functionLike: ts.FunctionLikeDeclaration;
+  modules: ReadonlyMap<string, ModuleIndex>;
+  seen: Set<string>;
+};
+
+const wrapperForwardsReaderOptions = ({
+  module,
+  functionLike,
+  modules,
+  seen,
+}: WrapperForwardsReaderOptionsArgs): boolean => {
+  const parameter = functionLike.parameters.at(0);
+  if (!parameter || !ts.isIdentifier(parameter.name) || !functionLike.body) {
+    return false;
+  }
+  const readerForwards: boolean[] = [];
+  const visit = (node: ts.Node) => {
+    if (readerForwards.includes(false)) {
+      return;
+    }
+    if (ts.isFunctionLike(node) && node !== functionLike) {
+      return;
+    }
+    if (!ts.isCallExpression(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const name = callName(node);
+    if (name && READER_EXECUTORS.has(name)) {
+      const options = node.arguments.at(0);
+      readerForwards.push(
+        options !== undefined &&
+          forwardsReaderOptions({
+            module,
+            expression: options,
+            reference: node,
+            parameter,
+            seen: new Set(),
+          }),
+      );
+      return;
+    }
+    const target = factoryFunction({
+      module,
+      expression: node.expression,
+      reference: node,
+      modules,
+      seen: new Set(),
+    });
+    if (target) {
+      const argument = node.arguments.at(0);
+      const key = `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`;
+      if (argument && !seen.has(key)) {
+        const nestedForwards = wrapperForwardsReaderOptions({
+          module: target.module,
+          functionLike: target.functionLike,
+          modules,
+          seen: new Set(seen).add(key),
+        });
+        if (nestedForwards) {
+          readerForwards.push(
+            forwardsReaderOptions({
+              module,
+              expression: argument,
+              reference: node,
+              parameter,
+              seen: new Set(),
+            }),
+          );
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(functionLike.body);
+  return readerForwards.length > 0 && readerForwards.every(Boolean);
+};
+
 const isTaggedReaderValue = ({
   module,
   expression,
@@ -1511,18 +1679,50 @@ const createReaderStates = ({
       return { entry, module, call, tagged: false };
     }
     const options = call.arguments.at(0);
-    const tagged =
-      entry.kind === "wrapper" || !READER_PRIMITIVES.has(callName(call) ?? "")
-        ? options !== undefined &&
-          isTaggedReaderValue({
-            module,
-            expression: options,
-            reference: call,
-            names,
-            modules: indexed,
-            seen: new Set(),
-          })
-        : wrappedReaderCall(module, call, names);
+    const target = factoryFunction({
+      module,
+      expression: call.expression,
+      reference: call,
+      modules: indexed,
+      seen: new Set(),
+    });
+    let tagged: boolean;
+    if (target) {
+      tagged =
+        options !== undefined &&
+        wrapperForwardsReaderOptions({
+          module: target.module,
+          functionLike: target.functionLike,
+          modules: indexed,
+          seen: new Set([
+            `${target.module.file}:${target.functionLike.pos}:${target.functionLike.end}`,
+          ]),
+        }) &&
+        isTaggedReaderValue({
+          module,
+          expression: options,
+          reference: call,
+          names,
+          modules: indexed,
+          seen: new Set(),
+        });
+    } else if (
+      entry.kind === "wrapper" ||
+      !READER_PRIMITIVES.has(callName(call) ?? "")
+    ) {
+      tagged =
+        options !== undefined &&
+        isTaggedReaderValue({
+          module,
+          expression: options,
+          reference: call,
+          names,
+          modules: indexed,
+          seen: new Set(),
+        });
+    } else {
+      tagged = wrappedReaderCall(module, call, names);
+    }
     return { entry, module, call, tagged };
   });
 
