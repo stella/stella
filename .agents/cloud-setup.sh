@@ -78,7 +78,9 @@ network_run() (
   trap 'exit 143' TERM
   # Output goes to a file, never a pipe: package scripts may leave processes that keep
   # inherited descriptors open, and a pipe reader would wait for them past the command.
-  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" > "$network_log" 2>&1 || status=$?
+  # Input is never the terminal: timeout runs the command outside the foreground process
+  # group, where apt restoring terminal settings on a terminal stdin stops it for good.
+  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" < /dev/null > "$network_log" 2>&1 || status=$?
   release_log_holders "$network_log"
   cat -- "$network_log" || fail 'Cannot capture network command output'
   [[ "$status" != 0 ]] || return 0
