@@ -7,7 +7,7 @@ import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { defineFeatureRegistry } from "@/api/lib/feature-access/prerequisites";
 
 type FeatureDefinition = {
-  enrolment: "invitation" | "self-serve";
+  enrolment: "invitation" | "self-serve" | "general-availability";
   deploymentFeature?: DeploymentFeatureFlag;
   prerequisites?: readonly string[];
   ownership?: {
@@ -54,7 +54,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
-    enrolment: "invitation",
+    enrolment: "general-availability",
     deploymentFeature: "FEATURE_GENERATED_VIEWS",
     ownership: {
       handlerDirectories: [],

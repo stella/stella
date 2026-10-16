@@ -48,6 +48,7 @@
     "eval:playbook-authoring": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/playbook-authoring.ts",
     "eval:extraction": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/extraction.ts",
     "eval:reader-explain": "bun evals/reader-explain-local.ts",
+    "eval:generated-views": "NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env.example evals/generated-views-local.ts",
     "eval:agent-orientation": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && NODE_ENV=development STELLA_LOCAL_DEV=1 bun --env-file=.env evals/agent-orientation.ts",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:backfill-chat-content-v3": "bun run --env-file=.env src/scripts/backfill-chat-content-v3.ts",

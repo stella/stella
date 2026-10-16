@@ -1332,6 +1332,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
             (name) => [name, "web research is off for this chat"] as const,
           )),
+      ...Object.keys(projected)
+        .filter((name) => !(name in tools))
+        .map(
+          (name) =>
+            [name, "unavailable for this caller or deployment"] as const,
+        ),
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
