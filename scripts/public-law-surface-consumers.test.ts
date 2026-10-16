@@ -288,18 +288,18 @@ describe("public law surface consumers", () => {
     } as const;
     for (const [path, domain] of Object.entries(owners)) {
       const source = await readSource(path);
-      expect(
-        [
-          ...source.matchAll(
-            /publicCountriesFor\(\s*"(caseLaw|legislation)",\s*"(pages|search)",?\s*\)/gu,
-          ),
-        ]
-          .map((match) => [match[1], match[2]])
-          .toSorted(),
-      ).toEqual([
-        [domain, "pages"],
-        [domain, "search"],
-      ]);
+      const reads = [
+        ...source.matchAll(
+          /publicCountriesFor\(\s*"(caseLaw|legislation)",\s*"(pages|search)",?\s*\)/gu,
+        ),
+      ].map((match) => [match[1], match[2]]);
+      expect(reads).toHaveLength(2);
+      expect(reads).toEqual(
+        expect.arrayContaining([
+          [domain, "pages"],
+          [domain, "search"],
+        ]),
+      );
     }
   });
 
