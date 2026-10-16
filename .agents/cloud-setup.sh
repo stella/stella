@@ -683,7 +683,14 @@ write_environment() {
 }
 
 
-
+prepare_sources() {
+  local leader status=0
+  timeout --kill-after=10 300 runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" PATH="$PATH" "$BUN_DIR/bun" run 'generate:cloud' </dev/null &
+  leader=$!
+  wait "$leader" || status=$?
+  kill -KILL -- "-$leader" 2>/dev/null || true
+  return "$status"
+}
 
 if [[ "$MODE" == install ]]; then
   step runtimes install_runtimes
@@ -691,7 +698,7 @@ if [[ "$MODE" == install ]]; then
   step tools install_tools
   step shell install_shell_environment
   step dependencies dependency_install
-
+  step prepare prepare_sources
   exit 0
 fi
 step runtime-check runtime_ready
