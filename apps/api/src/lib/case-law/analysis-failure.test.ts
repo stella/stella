@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { PROVIDER_RETRY_WAIT_CAP_MS } from "@/api/lib/errors/provider-retry-delay";
 
 import {
   ANALYSIS_FAILURE_HOLD_MS,
   analysisFailureKeyTag,
   analysisFailureRecord,
+  failureClaimGuard,
+  failureMatchesGuard,
   failureStillHolds,
   type AnalysisReaderKey,
+  type AnalysisRequestKind,
 } from "./analysis-failure";
 
 const NOW = new Date("2026-09-01T12:00:00.000Z");
@@ -52,6 +56,7 @@ describe("a failed run's record", () => {
         fingerprint: CURRENT,
         now: NOW,
         reader: ORG_KEY,
+        request: "poll",
       }),
     ).toBe(true);
   });
@@ -63,6 +68,7 @@ describe("a failed run's record", () => {
         fingerprint: CURRENT,
         now: NOW,
         reader: ORG_KEY,
+        request: "poll",
       }),
     ).toBe(false);
   });
@@ -74,6 +80,7 @@ describe("a failed run's record", () => {
         fingerprint: PREVIOUS,
         now: NOW,
         reader: ORG_KEY,
+        request: "poll",
       }),
     ).toBe(false);
   });
@@ -85,6 +92,87 @@ describe("a failed run's record", () => {
         fingerprint: CURRENT,
         now: NOW,
         reader: { ...ORG_KEY, provider: "anthropic" },
+        request: "poll",
+      }),
+    ).toBe(false);
+  });
+
+  test("files the provider's retry time only for a delay the call did not wait out", () => {
+    const withDelay = (retryAfterMs: number | undefined) =>
+      analysisFailureRecord({
+        code: "provider_refused",
+        fingerprint: CURRENT,
+        now: NOW,
+        reader: ORG_KEY,
+        retryAfterMs,
+      }).retryAfter;
+
+    expect(withDelay(undefined)).toBeUndefined();
+    expect(withDelay(PROVIDER_RETRY_WAIT_CAP_MS)).toBeUndefined();
+    expect(withDelay(PROVIDER_RETRY_WAIT_CAP_MS + 1)).toEqual(
+      new Date(NOW.getTime() + PROVIDER_RETRY_WAIT_CAP_MS + 1),
+    );
+  });
+
+  describe("a failure with a provider retry time", () => {
+    const LONG_DELAY_MS = 11.5 * 60 * 60 * 1000;
+    const failure = analysisFailureRecord({
+      code: "provider_refused",
+      fingerprint: CURRENT,
+      now: NOW,
+      reader: ORG_KEY,
+      retryAfterMs: LONG_DELAY_MS,
+    });
+    const holdsAt = (at: Date, request: AnalysisRequestKind) =>
+      failureStillHolds({
+        failure,
+        fingerprint: CURRENT,
+        now: at,
+        reader: ORG_KEY,
+        request,
+      });
+    const pastHold = new Date(NOW.getTime() + ANALYSIS_FAILURE_HOLD_MS + 1);
+    const atRetryTime = new Date(NOW.getTime() + LONG_DELAY_MS);
+
+    test("holds polls and explicit retries alike until that time, past the plain hold", () => {
+      for (const request of ["poll", "retry"] as const) {
+        expect(holdsAt(NOW, request)).toBe(true);
+        expect(holdsAt(pastHold, request)).toBe(true);
+        expect(holdsAt(new Date(atRetryTime.getTime() - 1), request)).toBe(
+          true,
+        );
+        expect(holdsAt(atRetryTime, request)).toBe(false);
+      }
+    });
+
+    test("answers the claim guard by the same rule", () => {
+      for (const request of ["poll", "retry"] as const) {
+        for (const at of [NOW, pastHold, atRetryTime]) {
+          expect(
+            failureMatchesGuard({
+              failure,
+              fingerprint: CURRENT,
+              guard: failureClaimGuard({
+                decisionId: DECISION,
+                now: at,
+                reader: ORG_KEY,
+                request,
+              }),
+            }),
+          ).toBe(holdsAt(at, request));
+        }
+      }
+    });
+  });
+
+  test("a failure without a retry time never holds an explicit retry", () => {
+    expect(
+      failureStillHolds({
+        failure: recordedAt(NOW),
+        fingerprint: CURRENT,
+        now: NOW,
+        reader: ORG_KEY,
+        request: "retry",
       }),
     ).toBe(false);
   });
