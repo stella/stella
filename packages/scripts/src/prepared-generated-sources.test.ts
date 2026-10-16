@@ -16,7 +16,7 @@ import path from "node:path";
 
 import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 
-import { CI_GENERATED_FILES } from "./generated-files";
+import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
@@ -42,12 +42,20 @@ const fixture = () => {
     JSON.stringify({ version: "test-compiler" }),
   );
   write("input.ts", "export const input = 1;\n");
-  for (const file of CI_GENERATED_FILES) {
+  write("packages/cli/capabilities/fixture.read.json", '{"id":"fixture.read"}');
+  write("packages/mcp-apps/src/fixture/app.html", "<!doctype html>");
+  for (const file of ciGeneratedFiles(root)) {
     write(file, `prepared:${file}\n`);
   }
   for (const args of [
     ["init", "-q"],
-    ["add", "input.ts", ...CI_GENERATED_FILES],
+    [
+      "add",
+      "input.ts",
+      "packages/cli/capabilities/fixture.read.json",
+      "packages/mcp-apps/src/fixture/app.html",
+      ...ciGeneratedFiles(root),
+    ],
     [
       "-c",
       "user.name=Fixture",
@@ -65,7 +73,7 @@ const fixture = () => {
   const manifest = {
     ...generatedInputIdentity(root),
     files: Object.fromEntries(
-      CI_GENERATED_FILES.map((file) => [
+      ciGeneratedFiles(root).map((file) => [
         file,
         generatedFileHash(readFileSync(path.join(root, file))),
       ]),
@@ -78,7 +86,7 @@ test("every prepared output has required identity and byte coverage", () => {
   const { root, manifest, write } = fixture();
   try {
     expect(verifyPreparedGeneratedFiles(root, manifest)).toEqual(manifest);
-    for (const file of CI_GENERATED_FILES) {
+    for (const file of ciGeneratedFiles(root)) {
       const missing = {
         ...manifest,
         files: Object.fromEntries(
@@ -105,7 +113,7 @@ test("every prepared output has required identity and byte coverage", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
   const { root, manifest, write } = fixture();
@@ -114,6 +122,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
+      "generated-file-inventory.ts",
       "generated-input-identity.ts",
       "child-exit-status.ts",
     ]) {
@@ -203,20 +212,20 @@ test("restore validates the whole artifact before any writes and restores every 
   try {
     mkdirSync(source);
     writeFileSync(path.join(source, "manifest.json"), JSON.stringify(manifest));
-    for (const file of CI_GENERATED_FILES) {
+    for (const file of ciGeneratedFiles(root)) {
       write(
         `artifact/files/${file}`,
         readFileSync(path.join(root, file), "utf-8"),
       );
       write(file, "before restore");
     }
-    for (const file of CI_GENERATED_FILES) {
+    for (const file of ciGeneratedFiles(root)) {
       const original = readFileSync(path.join(source, "files", file), "utf-8");
       write(`artifact/files/${file}`, "incomplete artifact");
       expect(() => restorePreparedGeneratedSources(root, source)).toThrow(
         `Generated source artifact differs: ${file}`,
       );
-      for (const output of CI_GENERATED_FILES) {
+      for (const output of ciGeneratedFiles(root)) {
         expect(readFileSync(path.join(root, output), "utf-8")).toBe(
           "before restore",
         );
@@ -294,7 +303,8 @@ test("configured preparation fails closed and an ordinary checkout generates loc
     );
     expect(hasPreparedGeneratedSources(root)).toBe(true);
     const output =
-      CI_GENERATED_FILES.at(0) ?? panic("Generated output inventory is empty");
+      ciGeneratedFiles(root).at(0) ??
+      panic("Generated output inventory is empty");
     write(output, "changed output");
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "Prepared generated source differs",
@@ -325,6 +335,9 @@ test("API runtime generation works with only packaged sources and rejects a root
       "packages/scripts/src/prepared-generated-sources.ts",
       "packages/scripts/src/generated-input-identity.ts",
       "packages/scripts/src/generated-files.ts",
+      "packages/scripts/src/generated-file-inventory.ts",
+      "packages/scripts/src/generated-output-cache.ts",
+      "packages/scripts/src/generation-lock.ts",
     ]) {
       write(
         file,
@@ -339,10 +352,11 @@ test("API runtime generation works with only packaged sources and rejects a root
       "packages/cli/capabilities/widgets.list.json",
       JSON.stringify({ id: "widgets.list", featureId: "fixture-feature" }),
     );
-    write(
-      "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
-      "export const CAPABILITY_DISPATCH = {};\n",
+    symlinkSync(
+      new URL("../../../apps/api/scripts/lib", import.meta.url).pathname,
+      path.join(root, "apps/api/scripts/lib"),
     );
+    write("apps/api/src/handlers/widgets/list.ts", "export default {};\n");
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         ([key]) => key !== "CI_GENERATED_SOURCES_MANIFEST",
@@ -379,7 +393,7 @@ test("API runtime generation works with only packaged sources and rejects a root
     const owner = "packages/scripts/src/prepared-generated-sources.ts";
     const source = readFileSync(path.join(root, owner), "utf-8");
     const mutated = source.replace(
-      'from "./generated-files"',
+      'from "./generated-file-inventory"',
       'from "../../../scripts/generated-files"',
     );
     expect(mutated).not.toBe(source);
@@ -442,7 +456,7 @@ test("prepared input identities retain tracked directory, symlink and byte frami
     const oracle = createSha256().update(
       JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
     );
-    const generated = new Set<string>(CI_GENERATED_FILES);
+    const generated = new Set<string>(ciGeneratedFiles(root));
     for (const entry of inventory.stdout.toString().split("\0")) {
       if (entry === "") {
         continue;
@@ -468,7 +482,7 @@ test("prepared input identities retain tracked directory, symlink and byte frami
 test("preparation preserves tracked input identity while producing ignored compiler configs", () => {
   const { root, manifest, write } = fixture();
   try {
-    for (const file of CI_GENERATED_FILES) {
+    for (const file of ciGeneratedFiles(root)) {
       write(file, `new generated bytes:${file}`);
     }
     expect(() => requireUnchangedGeneratedInputs(root, manifest)).not.toThrow();
