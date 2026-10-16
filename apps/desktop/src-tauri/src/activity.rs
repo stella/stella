@@ -2295,7 +2295,7 @@ fn emit_changed(app: &AppHandle) {
   refresh_tray(app);
 }
 
-fn refresh_tray(app: &AppHandle) {
+pub(crate) fn refresh_tray(app: &AppHandle) {
   let Some(state) = app.try_state::<crate::commands::AppState>() else {
     return;
   };

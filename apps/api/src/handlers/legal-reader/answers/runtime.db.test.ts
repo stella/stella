@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
+  READER_ANSWER_DEADLINE_MS,
   READER_ANSWER_ERROR_CODES,
   READER_ANSWER_MAX_MESSAGES,
 } from "@stll/api-contract/reader-answers";
@@ -24,10 +25,7 @@ import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
 import { listReaderAnswersHandler } from "@/api/handlers/legal-reader/answers/list";
-import {
-  READER_ANSWER_DEADLINE_MS,
-  prepareReaderAnswer,
-} from "@/api/handlers/legal-reader/answers/operation";
+import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/operation";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";

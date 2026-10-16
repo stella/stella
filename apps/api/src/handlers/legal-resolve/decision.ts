@@ -139,6 +139,42 @@ const candidate = (row: DecisionIdentityRow) => ({
   }),
 });
 
+const resolvedDecision = async (
+  row: DecisionIdentityRow,
+  read: typeof readDecisionReaderSource,
+): Promise<LegalResolveResponse> => {
+  const content = await read({
+    decisionId: row.id,
+    phase: "blocks",
+    audience: "model",
+    surface: "search",
+  });
+  const readerUrl = buildCaseLawDecisionUrl({
+    caseNumber: row.caseNumber,
+    country: row.country,
+    court: row.court,
+    decisionId: row.id,
+    language: row.language,
+    languageAlternates: row.languageAlternates,
+    slug: row.slug,
+  });
+  return {
+    status: "resolved",
+    document: {
+      kind: "decision",
+      decisionId: row.id,
+      identifier: row.ecli ?? row.caseNumber,
+      country: row.country,
+      caseNumber: row.caseNumber,
+      court: row.court,
+      decisionDate: row.decisionDate,
+      ecli: row.ecli,
+      readerUrl,
+      text: decisionText(content),
+    },
+  };
+};
+
 type ResolveDecisionOptions = {
   admission: LawReadAdmission;
   country: string;
@@ -184,9 +220,19 @@ export const resolveDecision = async ({
   switch (resolution.status) {
     case "none":
       return { status: "not_found", reason: "no_exact_identity" };
-    case "ambiguous":
+    case "ambiguous": {
+      // A printed sheet no stored decision is known to carry. One decision
+      // in the file is the one the reader asked for; several are left open.
       if (resolution.reason === "selector_unmatched") {
-        return { status: "not_found", reason: "no_exact_identity" };
+        // Only a printed sheet narrows the open candidates to decisions with
+        // no recorded sheet; a part selector leaves the whole file open, so a
+        // lone candidate may be a sibling under another part.
+        const [only, ...rest] = resolution.candidates;
+        const printedSheet =
+          intent.kind === "docket" && intent.selector.kind === "sheet";
+        return printedSheet && only !== undefined && rest.length === 0
+          ? await resolvedDecision(only, read)
+          : { status: "not_found", reason: "no_exact_identity" };
       }
       return {
         status: "ambiguous",
@@ -194,45 +240,23 @@ export const resolveDecision = async ({
           .slice(0, LIMITS.caseLawLookupCandidatesMax)
           .map(candidate),
       };
-    case "unique": {
-      const row = resolution.decision;
-      const content = await read({
-        decisionId: row.id,
-        phase: "blocks",
-        audience: "model",
-      });
-      const readerUrl = buildCaseLawDecisionUrl({
-        caseNumber: row.caseNumber,
-        country: row.country,
-        court: row.court,
-        decisionId: row.id,
-        language: row.language,
-        languageAlternates: row.languageAlternates,
-        slug: row.slug,
-      });
-      return {
-        status: "resolved",
-        document: {
-          kind: "decision",
-          decisionId: row.id,
-          identifier: row.ecli ?? row.caseNumber,
-          country: row.country,
-          caseNumber: row.caseNumber,
-          court: row.court,
-          decisionDate: row.decisionDate,
-          ecli: row.ecli,
-          readerUrl,
-          text: decisionText(content),
-        },
-      };
     }
-    case "incomplete_identifier":
-      // A docket file that may hold several decisions needs its sheet number;
-      // exact identity never picks one of the candidates for the caller.
+    case "unique":
+      return await resolvedDecision(resolution.decision, read);
+    case "incomplete_identifier": {
+      // A bare docket of a file that can hold several decisions. When the
+      // lookup finds exactly one, that is the decision: asking for a sheet
+      // the reader does not have only hides it. Several stay unresolved, and
+      // exact identity never picks one of them for the caller.
+      const [only, ...rest] = resolution.candidates;
+      if (only !== undefined && rest.length === 0) {
+        return await resolvedDecision(only, read);
+      }
       return {
         status: "incomplete_identifier",
         missing: [...resolution.missing],
       };
+    }
     default:
       resolution satisfies never;
       return panic("Unhandled decision identity resolution");

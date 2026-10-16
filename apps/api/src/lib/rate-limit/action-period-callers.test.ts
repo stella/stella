@@ -169,6 +169,7 @@ describe("period identity coverage", () => {
       "handlers/case-law/research/columns-suggest-prompt.ts",
       "handlers/chat/improve-prompt.ts",
       "handlers/chat/messages/revisions/span-edit.ts",
+      "handlers/chat/table-chart.ts",
       "handlers/clauses/rewrite.ts",
       "handlers/clauses/versions/summarize.ts",
       "handlers/contacts/extract-procuracao.ts",

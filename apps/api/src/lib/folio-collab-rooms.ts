@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
-import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
+import { roles } from "@stll/permissions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -19,7 +19,6 @@ import {
   folioCollabContributions,
   folioCollabRooms,
   folioCollabRoomTokens,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -71,6 +70,7 @@ import {
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
@@ -336,24 +336,16 @@ type FolioCollabRoomDecisionInput = {
   organizationRole: string | null;
   tokenCanEdit: boolean;
   tokenGeneration: number;
-  workspaceClientId: string | null;
-  workspaceMemberId: string | null;
+  /** The database access rule's answer for the token's user. */
+  reachesMatter: boolean;
   workspaceStatus: (typeof workspaces.$inferSelect)["status"];
 };
 
 export const canUseFolioCollabWorkspace = ({
   organizationRole,
-  workspaceClientId,
-  workspaceMemberId,
-}: Pick<
-  FolioCollabRoomDecisionInput,
-  "organizationRole" | "workspaceClientId" | "workspaceMemberId"
->) =>
-  organizationRole !== null &&
-  isMemberRole(organizationRole) &&
-  (workspaceMemberId !== null ||
-    (workspaceClientId !== null &&
-      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === organizationRole)));
+  reachesMatter,
+}: Pick<FolioCollabRoomDecisionInput, "organizationRole" | "reachesMatter">) =>
+  reachesMatter && organizationRole !== null && isMemberRole(organizationRole);
 
 export const decideFolioCollabRoomAuthorization = ({
   actualGeneration,
@@ -362,8 +354,7 @@ export const decideFolioCollabRoomAuthorization = ({
   organizationRole,
   tokenCanEdit,
   tokenGeneration,
-  workspaceClientId,
-  workspaceMemberId,
+  reachesMatter,
   workspaceStatus,
 }: FolioCollabRoomDecisionInput):
   | { status: "authorized"; canEdit: boolean }
@@ -385,8 +376,7 @@ export const decideFolioCollabRoomAuthorization = ({
   const role = organizationRole;
   const canUseWorkspace = canUseFolioCollabWorkspace({
     organizationRole: role,
-    workspaceClientId,
-    workspaceMemberId,
+    reachesMatter,
   });
   if (role === null || !isMemberRole(role) || !canUseWorkspace) {
     return { status: "workspace-access-revoked" };
@@ -428,8 +418,13 @@ export const authorizeFolioCollabRoom = async ({
       userId: folioCollabRoomTokens.userId,
       userName: user.name,
       workspaceId: folioCollabRooms.workspaceId,
-      workspaceClientId: workspaces.clientId,
-      workspaceMemberId: workspaceMembers.id,
+      reachesMatter: memberReachesMatterSql(
+        {
+          organizationId: workspaces.organizationId,
+          userId: folioCollabRoomTokens.userId,
+        },
+        folioCollabRooms.workspaceId,
+      ),
       workspaceStatus: workspaces.status,
     })
     .from(folioCollabRoomTokens)
@@ -447,13 +442,6 @@ export const authorizeFolioCollabRoom = async ({
       and(
         eq(member.userId, folioCollabRoomTokens.userId),
         eq(member.organizationId, workspaces.organizationId),
-      ),
-    )
-    .leftJoin(
-      workspaceMembers,
-      and(
-        eq(workspaceMembers.userId, folioCollabRoomTokens.userId),
-        eq(workspaceMembers.workspaceId, folioCollabRooms.workspaceId),
       ),
     )
     .where(
@@ -476,8 +464,7 @@ export const authorizeFolioCollabRoom = async ({
     organizationRole: row.organizationRole,
     tokenCanEdit: row.permissions.canEdit,
     tokenGeneration: row.tokenGeneration,
-    workspaceClientId: row.workspaceClientId,
-    workspaceMemberId: row.workspaceMemberId,
+    reachesMatter: row.reachesMatter,
     workspaceStatus: row.workspaceStatus,
   });
   if (decision.status !== "authorized") {
