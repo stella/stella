@@ -762,7 +762,9 @@ const processOnlineRepairAt = async ({
       kind: "repair",
       name: repair.name,
     } as const;
-    const { outcome, settled } = await timed({
+    // The postconditions run inside the timed work, so a repair they reject
+    // is reported as failed, never as pending.
+    const settled = await timed({
       timing: mode.timing,
       work: async () => {
         const attempt = await Result.tryPromise({
@@ -776,23 +778,21 @@ const processOnlineRepairAt = async ({
         ) {
           throw attempt.error;
         }
-        return {
-          outcome: attempt,
-          settled: await repair.readCompletion(connection),
-        };
+        const after = await repair.readCompletion(connection);
+        if (Result.isError(attempt) && after.type !== "pending") {
+          return panic(
+            `Online repair ${repair.name}: hold has no durable pending checkpoint`,
+          );
+        }
+        assertRepairDeployable(repair, after);
+        return after;
       },
-      describe: ({ settled: { type } }) => ({
+      describe: ({ type }) => ({
         ...step,
         outcome: type === "complete" ? "complete" : "pending",
       }),
       failure: { ...step, outcome: "failed" },
     });
-    if (Result.isError(outcome) && settled.type !== "pending") {
-      return panic(
-        `Online repair ${repair.name}: hold has no durable pending checkpoint`,
-      );
-    }
-    assertRepairDeployable(repair, settled);
     if (settled.type === "pending") {
       log({
         event: "online_repair_pending",

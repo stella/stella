@@ -2,6 +2,7 @@ import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
@@ -11,6 +12,10 @@ import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair"
 import type { MigrationTimingRecord } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
+import type {
+  OnlineRepair,
+  OnlineRepairCompletion,
+} from "./online-migration-connection";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -944,6 +949,45 @@ describe("online migrations", () => {
       ),
     ).toBe(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  test("a repair its completion check rejects is reported as failed, never as pending", async () => {
+    const harness = createHarness();
+    const records: MigrationTimingRecord[] = [];
+    const completions: OnlineRepairCompletion[] = [
+      { type: "incomplete", reason: "not started" },
+      { type: "incomplete", reason: "rows left behind" },
+    ];
+    const repair = {
+      name: "probe-repair",
+      readCompletion: async () =>
+        completions.shift() ?? {
+          type: "incomplete",
+          reason: "unexpected read",
+        },
+      repair: async () => undefined,
+    } satisfies OnlineRepair;
+
+    const failure = await rejectionOf(
+      runOnlineMigrations(harness.pool, {
+        repairs: [repair],
+        timing: {
+          clock: () => 0,
+          emit: (record) => {
+            records.push(record);
+          },
+        },
+      }),
+    );
+
+    expect(String(failure)).toContain("probe-repair");
+    expect(records.at(-1)).toEqual({
+      event: "migrate.online_step_duration",
+      kind: "repair",
+      name: "probe-repair",
+      durationMs: 0,
+      outcome: "failed",
+    });
   });
 
   test("a migrate-phase batch statement timeout stays pending and deployment proceeds", async () => {
