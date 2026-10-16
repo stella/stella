@@ -447,6 +447,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       RUSTUP_TOOLCHAIN: 1.99.0
+      OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
 
     steps:
       - name: Checkout pull request head
@@ -504,14 +505,10 @@ jobs:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""
 
-      - name: Locate Tailwind design-system cache
-        id: tailwind-cache
-        run: echo "path=$(bun scripts/warm-tailwind-design-systems.ts --cache-dir)" >> "$GITHUB_OUTPUT"
-
       - name: Restore Tailwind design-system cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ steps.tailwind-cache.outputs.path }}
+          path: ${{ runner.temp }}/oxlint-tailwindcss
           key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
 
       - name: Warm Tailwind design systems

@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import config from "../oxlint.config.ts";
 
@@ -13,12 +14,16 @@ import config from "../oxlint.config.ts";
 // reads the warmed cache.
 const WARM_TIMEOUT_MS = 300_000;
 
-// oxlint-tailwindcss 1.x keeps its content-hashed design-system cache in
-// `<os tmpdir>/oxlint-tailwindcss-<uid>` (`cacheDirName` in its dist) and reads
-// no override. CI caches this directory between jobs; the warm run fails if
-// the plugin stops writing here, so a plugin upgrade cannot silently turn the
-// cache step into a no-op.
-export const tailwindCacheDirectory = (): string => {
+// oxlint-tailwindcss resolves its content-hashed cache directory from
+// OXLINT_TAILWINDCSS_CACHE_DIR, falling back to `<os tmpdir>/oxlint-tailwindcss-<uid>`
+// (`resolveCacheDir` in its dist). CI sets the variable so actions/cache can
+// keep the directory between jobs; the warm run fails when the plugin did not
+// write there, so a plugin change cannot silently turn the cache into a no-op.
+const tailwindCacheDirectory = (): string => {
+  const override = process.env["OXLINT_TAILWINDCSS_CACHE_DIR"]?.trim();
+  if (override) {
+    return override;
+  }
   const { uid, username } = userInfo();
   const id = uid >= 0 ? String(uid) : username;
   return path.join(
@@ -27,11 +32,13 @@ export const tailwindCacheDirectory = (): string => {
   );
 };
 
-const cachedDesignSystems = (): string[] => {
+const cachedDesignSystems = (): number => {
   const directory = tailwindCacheDirectory();
   return existsSync(directory)
-    ? readdirSync(directory).filter((file) => file.endsWith(".json"))
-    : [];
+    ? readdirSync(directory).filter((file) =>
+        /^[0-9a-f]{32}\.json$/u.test(file),
+      ).length
+    : 0;
 };
 
 type TailwindEntryPoint = {
@@ -39,31 +46,29 @@ type TailwindEntryPoint = {
   use: string;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const entryPointSchema = v.object({ files: v.string(), use: v.string() });
+const configSchema = v.object({
+  settings: v.object({
+    tailwindcss: v.object({ entryPoint: v.array(v.unknown()) }),
+  }),
+});
 
 export const extractTailwindEntryPoints = (
   oxlintConfig: unknown,
 ): TailwindEntryPoint[] => {
-  if (!isRecord(oxlintConfig) || !isRecord(oxlintConfig.settings)) {
-    panic("oxlint config has no settings object");
-  }
-  const tailwindcss = oxlintConfig.settings.tailwindcss;
-  if (!isRecord(tailwindcss) || !Array.isArray(tailwindcss.entryPoint)) {
+  const parsed = v.safeParse(configSchema, oxlintConfig);
+  if (!parsed.success) {
     panic("oxlint config has no tailwindcss entryPoint list");
   }
 
   const distinct = new Map<string, TailwindEntryPoint>();
-  for (const value of tailwindcss.entryPoint) {
-    if (
-      !isRecord(value) ||
-      typeof value.files !== "string" ||
-      typeof value.use !== "string"
-    ) {
+  for (const value of parsed.output.settings.tailwindcss.entryPoint) {
+    const row = v.safeParse(entryPointSchema, value);
+    if (!row.success) {
       panic("tailwindcss entryPoint rows require files and use");
     }
-    if (!distinct.has(value.use)) {
-      distinct.set(value.use, { files: value.files, use: value.use });
+    if (!distinct.has(row.output.use)) {
+      distinct.set(row.output.use, row.output);
     }
   }
   return [...distinct.values()];
@@ -128,18 +133,14 @@ export const warmTailwindDesignSystems = (): void => {
   } finally {
     rmSync(configPath, { force: true });
   }
-  const cached = cachedDesignSystems().length;
+  const cached = cachedDesignSystems();
   if (cached < entryPoints.length) {
     panic(
-      `Expected ${entryPoints.length} cached design systems in ${tailwindCacheDirectory()}, found ${cached}; the oxlint-tailwindcss cache location changed`,
+      `Expected ${entryPoints.length} design systems cached in ${tailwindCacheDirectory()} found ${cached}; the oxlint-tailwindcss cache location changed`,
     );
   }
 };
 
 if (import.meta.main) {
-  if (process.argv.includes("--cache-dir")) {
-    console.log(tailwindCacheDirectory());
-  } else {
-    warmTailwindDesignSystems();
-  }
+  warmTailwindDesignSystems();
 }

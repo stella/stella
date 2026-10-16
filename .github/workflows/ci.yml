@@ -5196,6 +5196,7 @@ jobs:
       actions: write
     env:
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
+      OXLINT_TAILWINDCSS_CACHE_DIR: ${{ runner.temp }}/oxlint-tailwindcss
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -5230,19 +5231,6 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Locate Tailwind design-system cache
-        id: tailwind-cache
-        run: echo "path=$(bun scripts/warm-tailwind-design-systems.ts --cache-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore Tailwind design-system cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.tailwind-cache.outputs.path }}
-          key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
-
-      - name: Warm Tailwind design systems
-        run: bun run lint:tailwind:warm
-
       - name: Download generated sources
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -5257,6 +5245,15 @@ jobs:
           cp .env.example .env
           cd ../web
           cp .env.example .env
+
+      - name: Restore Tailwind design-system cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/oxlint-tailwindcss
+          key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
+
+      - name: Warm Tailwind design systems
+        run: bun run lint:tailwind:warm
 
       - name: Code quality (web)
         env:
