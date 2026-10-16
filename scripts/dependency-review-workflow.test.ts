@@ -231,7 +231,7 @@ describe("required dependency review workflow boundary", () => {
     expect(workflow.on["merge_group"]).toEqual({ types: ["checks_requested"] });
     expect(job.if).toBe(
       githubExpression(
-        "needs.ci-plan.outputs.dependency_changes_required == 'true'",
+        "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
       ),
     );
     expect(job.needs).toBe("ci-plan");
@@ -747,4 +747,23 @@ describe("real Bun action comparison output", () => {
     expect(result.output).toBe("existing=preserved\n");
     expect(result.summary).toBe("Existing summary\n");
   });
+});
+
+test("dependency jobs run only for events that carry comparison refs", () => {
+  const ciJobs = v.parse(
+    v.object({
+      jobs: v.record(v.string(), v.looseObject({ if: v.optional(v.string()) })),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dir, "../.github/workflows/ci.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  for (const jobName of ["dependency-review", "dependency-audit"]) {
+    const condition = ciJobs.jobs[jobName]?.if ?? "";
+    expect(condition, jobName).toContain("github.event_name == 'pull_request'");
+    expect(condition, jobName).toContain("github.event_name == 'merge_group'");
+  }
 });

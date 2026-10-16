@@ -8041,7 +8041,7 @@ jobs:
   dependency-audit:
     name: bun audit (high/critical)
     needs: ci-plan
-    if: ${{ needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -8076,7 +8076,7 @@ jobs:
 
   dependency-review:
     needs: ci-plan
-    if: ${{ needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
