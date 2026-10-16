@@ -215,13 +215,18 @@ describe("shared documentation MCP HTTP server", () => {
   test("answers an unbounded upload with 413 before it finishes", async () => {
     const { baseUrl } = await startHttpServer();
     const { port } = new URL(baseUrl);
-    const socket = connect(Number(port), "127.0.0.1", () => {
-      socket.write(
-        `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
-      );
-      // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
-      socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
-    });
+    // Half-open: the client does not close its side when the server's FIN
+    // arrives, so only the server's linger bound can end the connection.
+    const socket = connect(
+      { port: Number(port), host: "127.0.0.1", allowHalfOpen: true },
+      () => {
+        socket.write(
+          `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${100 * 1024 * 1024}\r\n\r\n`,
+        );
+        // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
+        socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
+      },
+    );
     // Upload bytes keep arriving after the answer, as from a client that does
     // not read until it has sent everything.
     const keepUploading = setInterval(() => {
@@ -252,8 +257,11 @@ describe("shared documentation MCP HTTP server", () => {
       });
     });
     expect(statusLine).toContain(" 413 ");
-    // The server does not keep reading the unfinished upload indefinitely.
+    const answeredAt = performance.now();
+    // The server does not keep reading the unfinished upload indefinitely: it
+    // drops the connection after its linger window, well within this bound.
     await socketClosed;
+    expect(performance.now() - answeredAt).toBeLessThan(10_000);
   });
 
   test("applies the body limit to requests of an established session", async () => {
