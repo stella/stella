@@ -29,6 +29,7 @@ describe("EU provision citations", () => {
     test(`reads ${sentence}`, () => {
       const citation = locateEuProvisionCitations(sentence).at(0);
       expect(citation?.act.celex).toBe("32016R0679");
+      expect(citation?.source).toBe("number");
       expect(citation?.act.eli).toBe(
         "http://data.europa.eu/eli/reg/2016/679/oj",
       );
@@ -54,6 +55,9 @@ describe("EU provision citations", () => {
       expect(
         locateEuProvisionCitations(`čl. 6 odst. 1 ${alias}`).at(0)?.act.celex,
       ).toBe("32016R0679");
+      expect(
+        locateEuProvisionCitations(`čl. 6 odst. 1 ${alias}`).at(0)?.source,
+      ).toBe("alias");
     }
   });
 

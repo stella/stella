@@ -97,6 +97,7 @@ export const euProvisionSourceUrl = (
 export type LocatedEuProvisionCitation = {
   act: EuActIdentity;
   appliedVersion: AppliedProvisionVersion;
+  source: "number" | "alias";
   end: number;
   jurisdiction: "EU";
   reference: ProvisionReference;
@@ -281,6 +282,7 @@ export const locateEuProvisionCitations = (
       }
       citations.push({
         act,
+        source: "number",
         appliedVersion: { type: "not_stated" },
         end: match.index + match[0].length,
         jurisdiction: "EU",
@@ -298,6 +300,7 @@ export const locateEuProvisionCitations = (
     }
     citations.push({
       act,
+      source: "number",
       appliedVersion: { type: "not_stated" },
       end: match.index + match[0].length,
       jurisdiction: "EU",
@@ -318,6 +321,7 @@ export const locateEuProvisionCitations = (
       continue;
     }
     citations.push({
+      source: "alias",
       appliedVersion: { type: "not_stated" },
       act: {
         celex: alias.celex,
@@ -342,6 +346,7 @@ export const locateEuProvisionCitations = (
       const letter = { teu: "M", tfeu: "E", charter: "P" } as const;
       citations.push({
         act: EU_PRIMARY_WORKS[kind],
+        source: "alias",
         appliedVersion:
           edition === undefined
             ? { type: "not_stated" }

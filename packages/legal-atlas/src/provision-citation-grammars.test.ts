@@ -144,11 +144,16 @@ describe("provision citation grammars", () => {
     for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
       if (grammar.status === "supported") {
         expect(
-          grammar.jurisdiction === "EU" ||
+          grammar.target === "publisher" ||
             isPublicLegislationCountry(grammar.jurisdiction),
         ).toBe(true);
       }
     }
+  });
+
+  test("EU references open at the publisher while national fallback stays hosted", () => {
+    expect(PROVISION_CITATION_GRAMMARS.EU.target).toBe("publisher");
+    expect(PROVISION_CITATION_GRAMMARS.CZE.target).toBe("hosted");
   });
 
   test("gazette citations are read with every grammar, whoever cites them", () => {

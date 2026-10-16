@@ -96,7 +96,9 @@ const useCitingProvisionCitationGrammar = (
     return null;
   }
   const grammar = PROVISION_CITATION_GRAMMARS[declared];
-  return grammar.status === "supported" ? grammar : null;
+  return grammar.status === "supported" && grammar.target === "hosted"
+    ? grammar
+    : null;
 };
 
 type WorkKey = { asOf: string; eli: string; jurisdiction: string };

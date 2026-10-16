@@ -127,6 +127,8 @@ export type SupportedProvisionCitationGrammar<
   normalizeReference: (
     reference: ProvisionReference,
   ) => ProvisionReference | null;
+  /** Where this grammar's references can be opened. */
+  target: "hosted" | "publisher";
   status: "supported";
 };
 
@@ -586,6 +588,7 @@ export const createProvisionCitationGrammar = <
       return citations;
     },
     status: "supported",
+    target: "hosted",
   };
 };
 
@@ -659,6 +662,7 @@ export const PROVISION_CITATION_GRAMMARS = {
   EU: {
     jurisdiction: "EU",
     status: "supported",
+    target: "publisher",
     unit: "article",
     anchor: euProvisionAnchor,
     parseAnchor: parseEuProvisionAnchor,
