@@ -30,6 +30,7 @@ export const visualRegistry = {
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-status": { label: "Chat status motion", layout: "plain" },
   "chat-citations": { label: "Chat case-law citations", layout: "plain" },
+  "chat-link-icons": { label: "Chat link icons", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
   autocomplete: { label: "Autocomplete", layout: "plain" },

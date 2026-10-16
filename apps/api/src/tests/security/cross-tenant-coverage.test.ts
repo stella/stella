@@ -206,6 +206,8 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
   "desktop-time-entries": {},
   chat: {
+    // Authenticated public-host icon bytes contain no tenant-owned records.
+    "link-icons/get": WAIVER_REASON.noTenantReadSurface,
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
     "get-model-options": WAIVER_REASON.noTenantReadSurface,
