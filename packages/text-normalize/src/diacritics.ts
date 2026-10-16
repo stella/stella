@@ -1,5 +1,4 @@
-// parser-output-unchanged: [us-courtlistener] the US parser reaches this module only through the package entry and calls normalizeUnicode, which this change leaves as it was.
-// parser-output-unchanged: [pl-uokik] the UOKiK adapter reaches this module only through the package entry; no case-law adapter, legal-ast or legal-atlas module calls stripDiacritics or foldToAscii.
+// parser-output-unchanged: scripts/parser-output-diff.ts reports every case-law adapter identical over its recorded fixtures with this change; search folds keep non-Latin spacing marks while slug and judge-key folds stay pinned.
 /**
  * Latin/combining-mark diacritic stripping for search keys and slugs.
  *
