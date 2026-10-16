@@ -832,3 +832,46 @@ describe.serial("verification run evidence reads", () => {
     ).toEqual([]);
   });
 });
+
+describe("matter proof minting ownership", () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "transaction-proof-predicates",
+  );
+  const sourcePath = "apps/api/src/lib/workspaces/consumer.ts";
+
+  test("rejects minting imports and re-exports outside trusted predicates", async () => {
+    const sources = [
+      'import { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'import * as mint from "../proofs/checked-transaction.ts";',
+      'export { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";',
+      'export * from "../proofs/checked-transaction";',
+      'const mint = await import("@/api/lib/proofs/checked-transaction");',
+    ];
+    for (const source of sources) {
+      expect(
+        await lintSingleRule("confine-owner", source, {
+          ruleOptions: { entries: [entry] },
+          sourcePath,
+          cwd: "scratch",
+        }),
+      ).toEqual([1]);
+    }
+  });
+
+  test("admits the matter predicate through the production ownership declaration", async () => {
+    expect(entry?.owner).toContain(
+      "apps/api/src/lib/workspaces/matter-access-proof.ts",
+    );
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        'import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";',
+        {
+          ruleOptions: { entries: [entry] },
+          sourcePath: "apps/api/src/lib/workspaces/matter-access-proof.ts",
+          cwd: "scratch",
+        },
+      ),
+    ).toEqual([]);
+  });
+});

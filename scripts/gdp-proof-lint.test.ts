@@ -55,6 +55,7 @@ const lint = async (
       ["bun", "--bun", "oxlint", "-c", config, "--format", "json", input],
       {
         cwd: path.resolve(import.meta.dir, ".."),
+        stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -75,6 +76,93 @@ const messages = async (source: string, ruleNames: string[]) =>
   (await lint(source, { ruleNames })).map(({ message }) => message);
 
 describe("GDP proof anti-forgery rules", () => {
+  test("blocks matter proof casts and object construction outside the predicate owner", async () => {
+    const ruleNames = ["no-matter-proof-forgery"];
+    const ownerImport = `import type { MatterReadable as Readable, MatterWritable } from "@/api/lib/workspaces/matter-access-proof";`;
+    expect(
+      await messages(
+        `${ownerImport} const forged = {} as Readable; const writable: MatterWritable = {}; const checked = {} satisfies Readable;`,
+        ruleNames,
+      ),
+    ).toEqual([
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+    ]);
+    expect(
+      await messages(
+        `import * as matterProof from "@/api/lib/workspaces/matter-access-proof"; type Readable = matterProof.MatterReadable; import type { MatterWritable as Writable } from "@/api/lib/workspaces/matter-access-proof"; const value: Writable = {} as Writable;`,
+        ruleNames,
+      ),
+    ).toEqual([
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+    ]);
+    expect(
+      await messages(
+        `import type { Proof } from "@gdp-ts/core"; type MatterProof = Proof<"MatterReadable", []>; const forged = {} as MatterProof;`,
+        ruleNames,
+      ),
+    ).toEqual([
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+    ]);
+    expect(
+      await messages(
+        `${ownerImport} declare const existing: Readable; const forwarded: Readable = existing;`,
+        ruleNames,
+      ),
+    ).toEqual([]);
+  });
+
+  test("resolves matter proof aliases before rejecting construction", async () => {
+    const violations = await messages(
+      `import type { Proof as Evidence } from "@gdp-ts/core";
+       const forged: Forward = {};
+       type Forward = Later;
+       type Later = Evidence<"MatterWritable", []>;
+       const inline = {} as import("@/api/lib/workspaces/matter-access-proof").MatterReadable;`,
+      ["no-matter-proof-forgery"],
+    );
+    expect(violations).toEqual([
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+    ]);
+  });
+
+  test("prevents existing predicates from minting matter-specific kinds", async () => {
+    const message =
+      "MatterReadable and MatterWritable transaction proofs may only be minted by matter-access-proof.ts.";
+    expect(
+      await messages(
+        `import { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction"; const alias = mint; alias({ kind: "MatterReadable" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction"; const kind = "MatterWritable"; const first = { kind }; const options = first; withCheckedTransaction(options);`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `import * as checked from "@/api/lib/proofs/checked-transaction"; checked.withCheckedTransaction({ kind: "MatterWritable" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction"; withCheckedTransaction({ kind: "SignalVisible" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([]);
+    expect(
+      await messages(
+        `import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction"; const options = loadOptions(); withCheckedTransaction(options);`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+  });
+
   test("upstream rejects renamed imports while the wrapper adds named call diagnostics", async () => {
     const source = `import { defineProof as mint } from "@gdp-ts/core";
       const proof = mint("Visible");`;
