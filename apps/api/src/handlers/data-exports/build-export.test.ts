@@ -402,6 +402,61 @@ describe("organisation data export admission", () => {
   );
 });
 
+describe("organisation data export archive paths", () => {
+  test("keeps a historical file and a mirrored folder of the same name apart", async () => {
+    const files = new Map(
+      ["r-1", "r-2", "c-1", "c-2"].map(
+        (id) => [id, fakeFile(`bytes of ${id}`)] as const,
+      ),
+    );
+    const version = (id: string) => ({
+      id: `ver-${id}`,
+      fileId: id,
+      file: files.get(id) ?? fakeFile(id),
+    });
+    const world: FakeWorld = {
+      ...basicWorld(),
+      matters: [
+        matterFixture({
+          id: "m-1",
+          name: "Alfa v. Beta",
+          // "Report" at version 1 is named "Report (v1)" under versions/,
+          // the mirrored name of this folder.
+          folders: [{ id: "folder-r", parentId: null, name: "Report (v1)" }],
+          documents: [
+            documentWithVersions({
+              id: "doc-r",
+              name: "Report",
+              versions: [version("r-1"), version("r-2")],
+            }),
+            documentWithVersions({
+              id: "doc-c",
+              name: "child.pdf",
+              parentId: "folder-r",
+              versions: [version("c-1"), version("c-2")],
+            }),
+          ],
+        }),
+      ],
+      files,
+    };
+    const { zips } = await run(world);
+    const paths = zips.flatMap((zip) =>
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name),
+    );
+    // No file path is also the directory of another file.
+    for (const path of paths) {
+      expect(
+        paths.some((other) => other.startsWith(`${path}/`)),
+        path,
+      ).toBe(false);
+    }
+    expect(paths.filter((path) => path.includes("/versions/"))).toHaveLength(2);
+  });
+});
+
 describe("organisation data export builder", () => {
   test("carries every document version with its verified checksum and path", async () => {
     const world = basicWorld();

@@ -460,18 +460,18 @@ const fileEntry = async function* ({
 
 type FolderDirectoriesArgs = {
   folders: readonly SourceFolder[];
-  documentsDir: string;
+  rootDir: string;
   allocator: ArchivePathAllocator;
 };
 
 /**
- * Map each folder id to its archive directory below `documentsDir`. Folders
+ * Map each folder id to its archive directory below `rootDir`. Folders
  * draw their paths from the part's allocator, so a file allocated later can
  * never take a name a folder already holds.
  */
 const folderDirectories = ({
   folders,
-  documentsDir,
+  rootDir,
   allocator,
 }: FolderDirectoriesArgs): Map<string, string> => {
   const byId = new Map(folders.map((folder) => [folder.id, folder]));
@@ -479,7 +479,7 @@ const folderDirectories = ({
   const resolving = new Set<string>();
   const resolve = (id: string | null): string => {
     if (id === null) {
-      return documentsDir;
+      return rootDir;
     }
     const cached = directories.get(id);
     if (cached !== undefined) {
@@ -489,7 +489,7 @@ const folderDirectories = ({
     // A parent outside the folder set (a task, a missing row) or a cycle
     // falls back to the root rather than recursing without end.
     if (folder === undefined || resolving.has(id)) {
-      return documentsDir;
+      return rootDir;
     }
     resolving.add(id);
     const directory = allocator.allocate(resolve(folder.parentId), folder.name);
@@ -544,7 +544,15 @@ const matterEntries = async function* ({
   const versionsDir = `${matterDir}/versions`;
   const directories = folderDirectories({
     folders: matter.folders,
-    documentsDir,
+    rootDir: documentsDir,
+    allocator: context.allocator,
+  });
+  // Earlier versions mirror the folder tree under versions/. Its directories
+  // are allocated before any file, like the current ones, so a historical
+  // file's name never takes a directory's path.
+  const historyDirectories = folderDirectories({
+    folders: matter.folders,
+    rootDir: versionsDir,
     allocator: context.allocator,
   });
   const documents: ManifestDocument[] = [];
@@ -553,7 +561,10 @@ const matterEntries = async function* ({
       document.parentId === null
         ? documentsDir
         : (directories.get(document.parentId) ?? documentsDir);
-    const historyDir = `${versionsDir}${currentDir.slice(documentsDir.length)}`;
+    const historyDir =
+      document.parentId === null
+        ? versionsDir
+        : (historyDirectories.get(document.parentId) ?? versionsDir);
     const versions: ManifestDocument["versions"] = [];
     const orderedVersions = document.versions.toSorted(
       (a, b) =>
