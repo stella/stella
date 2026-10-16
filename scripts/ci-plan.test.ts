@@ -3978,13 +3978,13 @@ test("split service suites preserve their scopes and independent verdicts", () =
   }
 });
 
-test("Bun cache saves are main-only and queue Turbo caches remain readable", () => {
+test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
   const configured = v.parse(
     v.object({ env: v.record(v.string(), v.string()) }),
     Bun.YAML.parse(workflow),
   );
   expect(configured.env["TURBO_CACHE"]).toBe(
-    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
+    `\${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && inputs.task_cache_producer == 'validated-main' && inputs.heavy_only == true && inputs.sha == github.sha)) && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
   );
   const cacheSteps = Object.values(ciJobs)
     .flatMap(
@@ -5163,6 +5163,9 @@ type DepthContext = {
   queueBrowserSuites?: string;
   corpusRequired?: boolean;
 };
+const bareExpression = (condition: string) =>
+  /^\$\{\{([\s\S]*)\}\}$/u.exec(condition.trim())?.[1] ?? condition;
+
 const runsAtDepth = (
   condition: string,
   {
@@ -5213,6 +5216,9 @@ const runsAtDepth = (
           return "true";
         }
         if (/^needs\.[\w-]+\.result$/u.test(path)) {
+          return "success";
+        }
+        if (path === "steps.install.outcome") {
           return "success";
         }
         throw new TypeError(`Unknown CI predicate context: ${path}`);
@@ -5317,6 +5323,44 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
       .map(([scope]) => scope),
   );
   const admitted = queueAdmittedJobs({ jobs: ciJobs });
+  // A shared job's part runs under the job's condition and its own step
+  // condition, and the shared job carries the PR and queue requirement.
+  const parts = Object.entries(ciJobs).flatMap(([name, body]) =>
+    jobScopes[name] === null
+      ? v
+          .parse(
+            v.object({
+              steps: v.optional(
+                v.array(
+                  v.looseObject({
+                    name: v.optional(v.string()),
+                    if: v.optional(v.string()),
+                  }),
+                ),
+                [],
+              ),
+            }),
+            body,
+          )
+          .steps.flatMap(({ name: stepName = "", if: stepIf = "true" }) => {
+            const part = /^([a-z0-9-]+): /u.exec(stepName)?.[1];
+            const scope = [...scopes].find((candidate) =>
+              stepIf.includes(`needs.ci-plan.outputs.${candidate} == 'true'`),
+            );
+            return part === undefined || scope === undefined
+              ? []
+              : [
+                  {
+                    name: `${name}/${part}`,
+                    scope,
+                    condition: `(${bareExpression(jobIf(body))}) && (${bareExpression(stepIf)})`,
+                    requiredOnPr: fastRequired.includes(name),
+                    requiredOnThin: admitted.includes(name),
+                  },
+                ];
+          })
+      : [],
+  );
   const checks = Object.entries(ciJobs).flatMap(([name, body]) => {
     const scope = jobScopes[name];
     if (typeof scope !== "string" || !scopes.has(scope)) {
@@ -5357,8 +5401,13 @@ test("path-scoped lint and test areas have required pre-merge coverage", () => {
     ];
   });
   expect(checks.length).toBeGreaterThan(0);
-  expect(new Set(checks.map(({ scope }) => scope))).toEqual(scopes);
-  expect(scopedCoverageViolations(checks)).toEqual([]);
+  expect(parts.map(({ name }) => name)).toContain(
+    "ci-quick-checks/ci-checks-docs",
+  );
+  expect(new Set([...checks, ...parts].map(({ scope }) => scope))).toEqual(
+    scopes,
+  );
+  expect(scopedCoverageViolations([...checks, ...parts])).toEqual([]);
 });
 
 test("path-scoped coverage rejects event and queue-depth exclusions", () => {
@@ -5868,6 +5917,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
+      "docs_checks_required",
       "docs_changed_files",
     ]),
   ];
@@ -5925,10 +5975,36 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
           },
         }) !== false,
     );
-    // The wall-clock expiry check runs on every candidate, docs-only included.
-    expect(scheduled).toEqual(["dated-waiver-expiry", "ci-checks-docs"]);
-    expect(resultJob.needs).toContain("ci-checks-docs");
-    expect(fastRequired).toContain("ci-checks-docs");
+    // The quick checks carry the wall-clock expiry check, which runs on every
+    // candidate, and the Markdown checks; the parser guard stays unplanned.
+    expect(scheduled).toEqual(["ci-quick-checks"]);
+    expect(resultJob.needs).toContain("ci-quick-checks");
+    expect(fastRequired).toContain("ci-quick-checks");
+    const partSelected = (prefix: string) =>
+      v
+        .parse(
+          v.object({
+            steps: v.array(
+              v.looseObject({ name: v.string(), if: v.optional(v.string()) }),
+            ),
+          }),
+          ciJobs["ci-quick-checks"],
+        )
+        .steps.filter(({ name }) => name.startsWith(prefix))
+        .map((step) =>
+          evaluate(step.if ?? "true", {
+            values: { ...values, "steps.install.outcome": "success" },
+            status: {
+              failure: false,
+              cancelled: false,
+              always: true,
+              success: true,
+            },
+          }),
+        );
+    expect(partSelected("ci-checks-docs: ")).toEqual([true]);
+    expect(partSelected("parser-version-guard: ")).toEqual([false]);
+    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true]);
     expect(
       evaluateResult({
         event,
@@ -5947,7 +6023,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
       evaluateResult({
         event,
         suiteDepth: depth,
-        results: { "ci-checks-docs": "failure" },
+        results: { "ci-quick-checks": "failure" },
       }),
     ).toBe(1);
   }
@@ -5962,6 +6038,7 @@ test("mixed documentation and code changes retain the complete code plan", () =>
       ),
       "desktop_browser_required",
       ...Object.values(fastJobScopes),
+      "docs_checks_required",
       "docs_changed_files",
     ]),
   ];

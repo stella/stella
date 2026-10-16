@@ -38,6 +38,10 @@ on:
       sha:
         type: string
         default: ""
+      task_cache_producer:
+        description: Validated main ancestry from the scheduled caller.
+        type: string
+        default: read-only
     secrets:
       DOCKERHUB_USERNAME:
         required: false
@@ -67,8 +71,10 @@ concurrency:
 permissions: {}
 
 env:
-  # Only main populates the shared cache; PR and queue runs restore it.
-  TURBO_CACHE: ${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
+  # Successful tasks from trusted runs publish shared results. Scheduled main
+  # producers supply validated ancestry and match the immutable event SHA.
+  # PRs may reuse local results within a job; shared storage stays read-only.
+  TURBO_CACHE: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && inputs.task_cache_producer == 'validated-main' && inputs.heavy_only == true && inputs.sha == github.sha)) && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
@@ -86,8 +92,9 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-    # Bound install attempts and planner execution below this job budget.
-    timeout-minutes: 15
+    # Bound install attempts, planner execution and generated sources below
+    # this job budget.
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
@@ -99,6 +106,7 @@ jobs:
       statuses: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      generated_sources_input_hash: ${{ steps.generate.outputs.input_hash }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
       root_checks: ${{ steps.root-checks.outputs.root_checks }}
@@ -434,8 +442,7 @@ jobs:
           # Mirrors prDepthJobs in scripts/main-heavy-plan.ts; a test runs this
           # step and compares the two.
           jobs = required.select do |job|
-            job != "ci-checks-docs" &&
-              (job == "ci-generated-sources" || job.start_with?("ci-checks-", "code-quality-"))
+            job.start_with?("ci-checks-", "code-quality-")
           end
           File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
             output.puts("pr_depth_jobs=#{JSON.generate(jobs)}")
@@ -1582,6 +1589,58 @@ jobs:
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
           fi
 
+      # Package checks restore generated sources produced here, after the
+      # install-free plan, so they wait for one runner instead of two in a row.
+      - name: Plan generated sources
+        id: generated-plan
+        if: >-
+          (github.event_name == 'merge_group' || steps.completed-depth.outputs.pr_depth_reused != 'true')
+          && (steps.pilot.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(steps.pilot-plan.outputs.fast_jobs || '[]'), 'ci-checks-generated'))
+          && steps.completed-depth.outputs.run_required != 'false'
+          && inputs.heavy_only != true
+          && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && steps.changed-files.outputs.package_checks_required == 'true'
+        run: echo "required=true" >> "$GITHUB_OUTPUT"
+      - name: Fetch submodules for generated sources
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
+        run: git submodule update --init --recursive
+      - name: Install generated source dependencies
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+      - name: Prepare local check environment
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
+        env:
+          STELLA_VERIFY: prepare
+        run: |
+          for app in apps/api apps/web; do
+            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
+          done
+      - name: Produce generated sources
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
+        env:
+          STELLA_VERIFY: prepare
+        id: generate
+        run: |
+          if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
+            unset CI_GENERATED_SOURCES_MANIFEST
+            bun scripts/ci-generated-sources.ts prepare
+          else
+            bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          fi
+      - name: Upload generated sources
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-sources-${{ steps.generate.outputs.input_hash }}
+          path: ${{ runner.temp }}/generated-sources/
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
+
       - &merge_group_cancel
         name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
@@ -1871,170 +1930,12 @@ jobs:
 
       - *merge_group_cancel
 
-  # Parser versions must advance whenever an adapter's parser inputs change.
-  # This guard reads Git history and needs no dependency installation.
-  parser-version-guard:
-    needs: ci-plan
-    if: >-
-      inputs.pr_depth_only != true
-      &&
-      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && (
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (
-      needs.ci-plan.outputs.trusted == 'true'
-      || github.event_name == 'workflow_dispatch'
-      )
-      )
-      && needs.ci-plan.outputs.package_checks_required == 'true'
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      # No install follows, so the shared package cache would only cost time.
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: package.json
-          no-cache: true
-
-      - name: Check parser version guard
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-          HEAD_SHA: ${{ github.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
-        run: |
-          bun test scripts/check-parser-versions.test.ts
-          bun scripts/check-parser-versions.ts
-
-      - *merge_group_cancel
-
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
   # checkout and the install.
-  ci-generated-sources:
-    needs: ci-plan
-    if: >-
-      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
-      &&
-      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && (
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.package_checks_required == 'true'
-      )
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: write
-    outputs:
-      input_hash: ${{ steps.generate.outputs.input_hash }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          submodules: true
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-
-      - name: Install dependencies
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
-      - name: Prepare local check environment
-        env:
-          STELLA_VERIFY: prepare
-        run: |
-          for app in apps/api apps/web; do
-            [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
-          done
-      - name: Produce generated sources
-        env:
-          STELLA_VERIFY: prepare
-        id: generate
-        run: |
-          if [[ "${STELLA_VERIFY_LOCAL:-false}" == true ]]; then
-            unset CI_GENERATED_SOURCES_MANIFEST
-            bun scripts/ci-generated-sources.ts prepare
-          else
-            bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
-          fi
-      - name: Upload generated sources
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: generated-sources-${{ steps.generate.outputs.input_hash }}
-          path: ${{ runner.temp }}/generated-sources/
-          retention-days: 1
-          if-no-files-found: error
-          include-hidden-files: true
-      - *merge_group_cancel
-
-  ci-checks-docs:
-    needs: ci-plan
-    if: >-
-      inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      inputs.heavy_only != true
-      && needs.ci-plan.outputs.trusted == 'true'
-      && needs.ci-plan.outputs.docs_checks_required == 'true'
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          submodules: true
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: "package.json"
-      - name: Install dependencies
-        id: install
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-        env:
-          NPM_TOKEN: ""
-      - name: Check changed Markdown consumers
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: bun scripts/ci-package-scope.ts --run-markdown-checks
-        env:
-          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
-      - *merge_group_cancel
-
   ci-checks-generated:
-    needs: [ci-plan, ci-generated-sources]
+    needs: ci-plan
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
@@ -2078,6 +1979,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -2094,7 +1998,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
       - name: Restore generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2138,7 +2042,6 @@ jobs:
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
-            chatgpt-app-submission.json \
             packages/api-contract/src/mcp-chat-tool-policy.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
@@ -2303,7 +2206,7 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-policy:
-    needs: [ci-plan, ci-generated-sources]
+    needs: ci-plan
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
@@ -2365,6 +2268,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -2403,7 +2309,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
       - name: Restore generated sources
         env:
@@ -2700,7 +2606,7 @@ jobs:
       - *merge_group_cancel
 
   ci-checks-rest:
-    needs: [ci-plan, ci-generated-sources]
+    needs: ci-plan
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
@@ -2934,6 +2840,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         id: install
@@ -2955,7 +2864,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
       - name: Restore generated sources
         env:
@@ -4300,6 +4209,15 @@ jobs:
           STELLA_VERIFY: check
         run: bun test scripts/typecheck-cache.test.ts
 
+      - name: Task result cache contract
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+          STELLA_VERIFY: check
+        id: static_check_120
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_120 != 'true') }}
+        run: bun test scripts/task-result-cache.test.ts
+
       - name: Test CI check partition
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -4622,6 +4540,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -5020,6 +4941,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -5097,7 +5021,7 @@ jobs:
       - *merge_group_cancel
 
   code-quality-api:
-    needs: [ci-plan, ci-generated-sources]
+    needs: ci-plan
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
@@ -5138,6 +5062,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -5151,7 +5078,7 @@ jobs:
       - name: Download generated sources
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
@@ -5238,7 +5165,7 @@ jobs:
       - *merge_group_cancel
 
   code-quality-web-rest:
-    needs: [ci-plan, ci-generated-sources]
+    needs: ci-plan
     if: >-
       (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
       &&
@@ -5279,6 +5206,9 @@ jobs:
         uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
         with:
           server-port: "0"
+          provider: github
+          cache-prefix: task-results-v1_
+          use-relative-cache-path: "true"
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
@@ -5292,7 +5222,7 @@ jobs:
       - name: Download generated sources
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: generated-sources-${{ needs.ci-generated-sources.outputs.input_hash }}
+          name: generated-sources-${{ needs.ci-plan.outputs.generated_sources_input_hash }}
           path: ${{ runner.temp }}/generated-sources
       - name: Restore generated sources
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
@@ -8128,37 +8058,72 @@ jobs:
 
       - *merge_group_cancel
 
-  # Expiry is wall-clock state: path scopes and previously completed runs
-  # cannot certify it. This required job runs for every merge candidate.
-  dated-waiver-expiry:
+  # Short checks share one runner, so each costs a few steps instead of a
+  # runner wait. Each part's step condition is its former job condition, and
+  # its step names keep the part's name for failure digests. A later part
+  # still runs after an earlier one fails, and any failure fails the job.
+  #
+  # dated-waiver-expiry: expiry is wall-clock state, so path scopes and
+  # previously completed runs cannot certify it. It runs for every merge
+  # candidate, which is why the job runs whenever the plan was not cancelled,
+  # including after a failed plan, completed-depth reuse and PR-depth runs.
+  ci-quick-checks:
+    needs: ci-plan
     if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: write
     steps:
-      - name: Checkout dated waiver guard inputs
+      # parser-version-guard reads Git history, so the checkout is full.
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+          submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
 
-      - name: Setup Bun for dated waiver guard
+      - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
 
-      - name: Install dated waiver guard dependencies
+      # Parser versions must advance whenever an adapter's parser inputs
+      # change. The guard needs no dependency installation.
+      - name: "parser-version-guard: Check parser version guard"
+        if: >-
+          !cancelled()
+          && inputs.pr_depth_only != true
+          && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        continue-on-error: false
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        run: |
+          bun test scripts/check-parser-versions.test.ts
+          bun scripts/check-parser-versions.ts
+
+      # The Markdown checks and the dated waiver guard share this install.
+      - name: Install dependencies
+        id: install
+        if: ${{ !cancelled() }}
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
-          log-file: "${{ runner.temp }}/bun-install/dated-waiver-expiry.log"
+          log-file: "${{ runner.temp }}/bun-install/ci-quick-checks.log"
         env:
           NPM_TOKEN: ""
 
       - name: Upload failed Bun install logs
-        if: failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'failure' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bun-install-${{ github.job }}
@@ -8166,12 +8131,27 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: List tracked files for dated waiver guard
+      - name: "ci-checks-docs: Check changed Markdown consumers"
+        if: >-
+          !cancelled()
+          && steps.install.outcome == 'success'
+          && inputs.pr_depth_only != true
+          && needs.ci-plan.outputs.run_required != 'false'
+          && needs.ci-plan.outputs.trusted == 'true'
+          && needs.ci-plan.outputs.docs_checks_required == 'true'
+        continue-on-error: false
+        run: bun scripts/ci-package-scope.ts --run-markdown-checks
+        env:
+          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
+
+      # The job condition is this part's condition, so it always runs here.
+      - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
         if: ${{ !cancelled() }}
         run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
 
-      - name: Check dated waiver expiry on the current tree
+      - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
         if: ${{ !cancelled() }}
+        continue-on-error: false
         run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
 
       - *merge_group_cancel
@@ -8185,12 +8165,9 @@ jobs:
     needs:
       [
         ci-plan,
-        dated-waiver-expiry,
-        ci-generated-sources,
+        ci-quick-checks,
         dependency-malware,
         docker-checks,
-        parser-version-guard,
-        ci-checks-docs,
         ci-checks-generated,
         ci-checks-policy,
         ci-checks-rest,
@@ -8292,12 +8269,10 @@ jobs:
           # entry to its job's `if:`, and a job missing here fails the run.
           JOB_SCOPES: >-
             {
-            "dated-waiver-expiry": null,
+            "ci-quick-checks": null,
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": "ci_browser_required",
-            "ci-generated-sources": "package_checks_required",
-            "ci-checks-docs": "docs_checks_required",
             "ci-checks-generated": "package_checks_required",
             "ci-checks-policy": "package_checks_required",
             "ci-checks-rest": "package_checks_required",
@@ -8318,7 +8293,6 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
-            "parser-version-guard": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
             "service-suites": "service_suites_required",
             "postgres-service-suites": "postgres_service_suites_required",
@@ -8337,7 +8311,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "browser_spec_selection_required"}
           FAST_REQUIRED: >-
-            ["dated-waiver-expiry", "desktop-rust-lint", "ci-browser", "ci-generated-sources", "ci-checks-docs", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "parser-version-guard", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
+            ["ci-quick-checks", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-malware", "ci-tests", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf"]
         run: |
           if [[ "$QUEUE_DEPTH" == thin ]]; then
             THIN_JOBS=$(jq -cn --argjson thin "$THIN_JOBS" --argjson required "$QUEUE_REQUIRED_JOBS" '$thin + $required | unique') || exit 1
