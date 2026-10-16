@@ -291,7 +291,7 @@ export const installPgliteWorkspaceAccessObjects = async (
   const visibilityStatements = readMigrationStatements(
     MATTER_VISIBILITY_MIGRATION_PATH,
   ).filter((statement) =>
-    /^(?:CREATE (?:OR REPLACE )?FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
+    /^(?:CREATE (?:OR REPLACE )?FUNCTION|CREATE (?:CONSTRAINT )?TRIGGER|REVOKE ALL ON FUNCTION|GRANT EXECUTE ON FUNCTION)/u.test(
       executableSql(statement),
     ),
   );

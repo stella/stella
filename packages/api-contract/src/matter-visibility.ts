@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 /**
  * Who can see a matter, independent of whether it has a client. Widest first:
  *
@@ -54,3 +56,16 @@ export const widensMatterVisibility = (
   from: MatterVisibility,
   to: MatterVisibility,
 ): boolean => MATTER_VISIBILITY_REACH[to] > MATTER_VISIBILITY_REACH[from];
+
+/** Offboarding cannot remove a matter's steward before an explicit handover. */
+export const MATTER_STEWARD_HANDOVER_REQUIRED_CODE =
+  "matter_steward_handover_required";
+export const MATTER_STEWARD_HANDOVER_MAX_MATTERS = 50;
+
+export const matterStewardHandoverMattersSchema = v.pipe(
+  v.array(v.object({ id: v.pipe(v.string(), v.uuid()), name: v.string() })),
+  v.maxLength(MATTER_STEWARD_HANDOVER_MAX_MATTERS),
+);
+export type MatterStewardHandoverMatter = v.InferOutput<
+  typeof matterStewardHandoverMattersSchema
+>[number];

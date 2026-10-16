@@ -15,10 +15,12 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- a client can be closed to everyone not assigned. External members never
 -- reach a matter without an assignment.
 --
+-- Existing rows start conservatively assigned-only; the bounded repair restores
+-- client matters to their previous admin reach before authorization cutover.
 -- Adding the column with a constant default is a metadata-only change; the
 -- CHECK is validated by the online phase after its bounded backfill.
 ALTER TABLE "workspaces"
-  ADD COLUMN "visibility" text DEFAULT 'admins_and_assigned' NOT NULL,
+  ADD COLUMN "visibility" text DEFAULT 'assigned_only' NOT NULL,
   ADD CONSTRAINT "workspaces_visibility_check"
     CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only')) NOT VALID;
 --> statement-breakpoint
@@ -32,7 +34,7 @@ LANGUAGE plpgsql AS $$
 BEGIN
   -- The creating user leads a clientless matter they made without a lead
   -- (the old writer assigns its creator), keeping the steward invariant.
-  -- Without a known creator the matter stays reachable by owners and admins.
+  -- A missing or unusable creator is refused by deferred steward validation.
   IF NEW.client_id IS NULL THEN
     NEW.lead_user_id := COALESCE(
       NEW.lead_user_id,
@@ -40,8 +42,7 @@ BEGIN
     );
   END IF;
   NEW.visibility := CASE
-    WHEN NEW.client_id IS NULL AND NEW.lead_user_id IS NOT NULL
-      THEN 'assigned_only'
+    WHEN NEW.client_id IS NULL THEN 'assigned_only'
     ELSE 'admins_and_assigned'
   END;
   RETURN NEW;
@@ -144,6 +145,14 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  IF NEW.visibility = 'assigned_only' THEN
+    -- Lock the candidate membership even when this assignment or matter is
+    -- uncommitted. A membership change either precedes this fresh validation
+    -- or waits and then sees this committed relationship.
+    PERFORM m.id FROM public.member AS m
+    WHERE m.organization_id = NEW.organization_id AND m.user_id = NEW.lead_user_id
+    ORDER BY m.id FOR SHARE OF m;
+  END IF;
   IF NEW.visibility = 'assigned_only' AND NOT EXISTS (
     SELECT 1 FROM public.member AS m
     JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
@@ -166,6 +175,47 @@ CREATE TRIGGER "workspace_keeps_matter_lead"
 BEFORE UPDATE OF "lead_user_id", "visibility", "organization_id" ON "workspaces"
 FOR EACH ROW
 EXECUTE FUNCTION public.enforce_workspace_keeps_matter_lead();
+--> statement-breakpoint
+
+-- INSERT validation waits until assignments in the creation transaction exist.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads the inserted matter and locks only its persisted candidate membership before checking stewardship
+CREATE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  matter public.workspaces%ROWTYPE;
+BEGIN
+  SELECT * INTO matter FROM public.workspaces WHERE id = NEW.id;
+  IF NOT FOUND OR matter.visibility <> 'assigned_only' THEN
+    RETURN NULL;
+  END IF;
+  PERFORM m.id FROM public.member AS m
+  WHERE m.organization_id = matter.organization_id AND m.user_id = matter.lead_user_id
+  ORDER BY m.id FOR SHARE OF m;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.member AS m
+    JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
+    WHERE m.organization_id = matter.organization_id
+      AND m.user_id = matter.lead_user_id
+      AND m.role IN ('owner', 'admin', 'member', 'intern')
+      AND wm.workspace_id = matter.id
+  ) THEN
+    RAISE EXCEPTION 'assigned-only matter requires an assigned internal steward'
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'workspace_keeps_matter_lead';
+  END IF;
+  RETURN NULL;
+END;
+$$;--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.enforce_inserted_workspace_keeps_matter_lead() FROM PUBLIC;--> statement-breakpoint
+
+CREATE CONSTRAINT TRIGGER inserted_workspace_keeps_matter_lead
+AFTER INSERT ON public.workspaces
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW EXECUTE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead();
 --> statement-breakpoint
 
 -- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; locks the old assignment's matter, reads only its persisted steward rows, refuses losing a usable steward, and writes nothing
@@ -337,10 +387,10 @@ BEGIN
   END IF;
   IF p_cursor IS NULL THEN
     RETURN QUERY SELECT w.id FROM public.workspaces w
-      WHERE w.client_id IS NULL ORDER BY w.id LIMIT p_size FOR UPDATE;
+      ORDER BY w.id LIMIT p_size FOR UPDATE;
   ELSE
     RETURN QUERY SELECT w.id FROM public.workspaces w
-      WHERE w.client_id IS NULL AND w.id > p_cursor
+      WHERE w.id > p_cursor
       ORDER BY w.id LIMIT p_size FOR UPDATE;
   END IF;
 END;

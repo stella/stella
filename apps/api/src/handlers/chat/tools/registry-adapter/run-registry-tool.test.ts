@@ -45,7 +45,7 @@ const selectScopedDb = (rows: readonly MatterRow[]): ScopedDb =>
 /** One matter row, so a list read answers with a page rather than its
  *  empty-state guidance. */
 const ONE_MATTER_ROW = {
-  id: WS_UUID,
+  id: toSafeId<"workspace">(WS_UUID),
   name: "Acme",
   reference: "REF-1",
   status: "active",
@@ -91,7 +91,7 @@ describe("runRegistryReadTool", () => {
     const registry = createChatRefRegistry();
     const rows = [
       {
-        id: WS_UUID,
+        id: toSafeId<"workspace">(WS_UUID),
         name: "Acme",
         reference: "REF-1",
         status: "active",
@@ -160,7 +160,7 @@ describe("runRegistryReadTool", () => {
     const registry = createChatRefRegistry();
     const rows = [
       {
-        id: WS_UUID,
+        id: toSafeId<"workspace">(WS_UUID),
         name: "Acme",
         reference: "REF-1",
         status: "active",
@@ -261,7 +261,7 @@ describe("runRegistryReadTool", () => {
     // though no per-field ref rule exists for it, and drop that leaf.
     const rows = [
       {
-        id: WS_UUID,
+        id: toSafeId<"workspace">(WS_UUID),
         name: "Acme",
         reference: OTHER_WS_UUID,
         status: "active",

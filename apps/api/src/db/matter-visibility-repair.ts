@@ -25,7 +25,7 @@ class MatterVisibilityRepairBlocked extends TaggedError(
   cause: unknown;
 }> {}
 
-// Repair only clientless legacy matters. The selected matter locks serialize
+// Repair legacy matters without widening clientless access. The selected matter locks serialize
 // membership role changes with the steward read and both writes.
 const REPAIR_STEWARDS_SQL = `
   UPDATE public.workspaces AS w
@@ -38,6 +38,7 @@ const REPAIR_STEWARDS_SQL = `
       ON m.user_id = wm.user_id
       AND m.organization_id = matter.organization_id
     WHERE matter.id = ANY(string_to_array($1, ',')::uuid[])
+      AND matter.client_id IS NULL
       AND m.role = ANY(string_to_array($2, ','))
       AND NOT EXISTS (
         SELECT 1
@@ -56,18 +57,10 @@ const REPAIR_STEWARDS_SQL = `
 
 const REPAIR_VISIBILITY_SQL = `
   UPDATE public.workspaces AS w
-  SET visibility = 'assigned_only'
+  SET visibility = CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
   WHERE w.id = ANY(string_to_array($1, ',')::uuid[])
-    AND EXISTS (
-      SELECT 1
-      FROM public.workspace_members AS wm
-      JOIN public.member AS m
-        ON m.user_id = wm.user_id
-        AND m.organization_id = w.organization_id
-      WHERE wm.workspace_id = w.id
-        AND wm.user_id = w.lead_user_id
-        AND m.role = ANY(string_to_array($2, ','))
-    )
+    AND w.visibility IS DISTINCT FROM
+      CASE WHEN w.client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
 `;
 
 type RepairRuntimeOptions = {
@@ -122,10 +115,7 @@ const backfill = async (
             ids.join(","),
             INTERNAL_MEMBER_ROLES.join(","),
           ]);
-          await tx.execute(REPAIR_VISIBILITY_SQL, [
-            ids.join(","),
-            INTERNAL_MEMBER_ROLES.join(","),
-          ]);
+          await tx.execute(REPAIR_VISIBILITY_SQL, [ids.join(",")]);
           return { cursor: next, done: false, value: null };
         }),
     });

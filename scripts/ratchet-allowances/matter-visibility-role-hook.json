@@ -1,5 +1,5 @@
 {
   "metric": "throw-outside-boundary",
-  "delta": 1,
-  "reason": "The organization plugin beforeUpdateMemberRole hook is a framework boundary. It throws the expected BAD_REQUEST APIError when a member must hand over assigned-only matters before an external role change; the database trigger separately enforces the concurrent invariant."
+  "delta": 2,
+  "reason": "Two error boundaries: the organization role-update framework hook throws its expected handover APIError; the web API-error decoder rejects malformed handover refusal metadata from the transport before rendering links. Both refuse at trust boundaries; database guards enforce concurrent stewardship separately."
 }

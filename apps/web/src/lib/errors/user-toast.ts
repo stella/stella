@@ -7,9 +7,11 @@ import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
+import { MatterStewardHandoverContent } from "@/components/matter-steward-handover-content";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -35,6 +37,15 @@ export const notifyUserError = (
   const diagnostic = providerDiagnosticFromThrown(error);
   const toast = {
     ...options,
+    ...(APIError.is(error) &&
+    error.affectedMatters !== undefined &&
+    error.affectedMatters.length > 0
+      ? {
+          description: createElement(MatterStewardHandoverContent, {
+            matters: error.affectedMatters,
+          }),
+        }
+      : {}),
     title:
       diagnostic === undefined
         ? userErrorFromThrown(error, fallback)

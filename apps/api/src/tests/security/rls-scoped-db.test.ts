@@ -35,69 +35,78 @@ const setupRlsScopedDb = async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  await testDb.insert(workspaces).values([
-    {
-      id: ownerPersonalWorkspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      name: "Owner personal workspace",
-      reference: `PERSONAL-${ownerPersonalWorkspaceId}`,
-    },
-    {
-      id: otherPersonalWorkspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      name: "Other personal workspace",
-      reference: `PERSONAL-${otherPersonalWorkspaceId}`,
-    },
-    {
-      id: scopedAuthorizationLifetimeWorkspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      leadUserId: ids.userA2,
-      name: "Scoped authorization lifetime workspace",
-      reference: `SCOPED-LIFETIME-${scopedAuthorizationLifetimeWorkspaceId}`,
-    },
-    {
-      id: safeAuthorizationLifetimeWorkspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      leadUserId: ids.userA2,
-      name: "Safe authorization lifetime workspace",
-      reference: `SAFE-LIFETIME-${safeAuthorizationLifetimeWorkspaceId}`,
-    },
-  ]);
-  await testDb.insert(workspaceMembers).values([
-    {
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: ownerPersonalWorkspaceId,
-      userId: ids.userAdmin,
-    },
-    {
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: scopedAuthorizationLifetimeWorkspaceId,
-      userId: ids.userA1,
-    },
-    {
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: scopedAuthorizationLifetimeWorkspaceId,
-      userId: ids.userA2,
-    },
-    {
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: safeAuthorizationLifetimeWorkspaceId,
-      userId: ids.userA1,
-    },
-    {
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: safeAuthorizationLifetimeWorkspaceId,
-      userId: ids.userA2,
-    },
-  ]);
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values([
+      {
+        id: ownerPersonalWorkspaceId,
+        leadUserId: ids.userAdmin,
+        organizationId: ids.orgA,
+        clientId: null,
+        visibility: "assigned_only",
+        name: "Owner personal workspace",
+        reference: `PERSONAL-${ownerPersonalWorkspaceId}`,
+      },
+      {
+        id: otherPersonalWorkspaceId,
+        leadUserId: ids.userA2,
+        organizationId: ids.orgA,
+        clientId: null,
+        visibility: "assigned_only",
+        name: "Other personal workspace",
+        reference: `PERSONAL-${otherPersonalWorkspaceId}`,
+      },
+      {
+        id: scopedAuthorizationLifetimeWorkspaceId,
+        organizationId: ids.orgA,
+        clientId: null,
+        visibility: "assigned_only",
+        leadUserId: ids.userA1,
+        name: "Scoped authorization lifetime workspace",
+        reference: `SCOPED-LIFETIME-${scopedAuthorizationLifetimeWorkspaceId}`,
+      },
+      {
+        id: safeAuthorizationLifetimeWorkspaceId,
+        organizationId: ids.orgA,
+        clientId: null,
+        visibility: "assigned_only",
+        leadUserId: ids.userA1,
+        name: "Safe authorization lifetime workspace",
+        reference: `SAFE-LIFETIME-${safeAuthorizationLifetimeWorkspaceId}`,
+      },
+    ]);
+    await tx.insert(workspaceMembers).values([
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: otherPersonalWorkspaceId,
+        userId: ids.userA2,
+      },
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: ownerPersonalWorkspaceId,
+        userId: ids.userAdmin,
+      },
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: scopedAuthorizationLifetimeWorkspaceId,
+        userId: ids.userA1,
+      },
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: scopedAuthorizationLifetimeWorkspaceId,
+        userId: ids.userA2,
+      },
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: safeAuthorizationLifetimeWorkspaceId,
+        userId: ids.userA1,
+      },
+      {
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: safeAuthorizationLifetimeWorkspaceId,
+        userId: ids.userA2,
+      },
+    ]);
+  });
 };
 
 beforeAll(setupRlsScopedDb, { timeout: 30_000 });
@@ -278,7 +287,7 @@ describe("createMembershipScopedDb", () => {
 
       const updated = await tx
         .update(workspaces)
-        .set({ leadUserId: null })
+        .set({ name: "Updated after member removal" })
         .where(eq(workspaces.id, scopedAuthorizationLifetimeWorkspaceId))
         .returning({ id: workspaces.id });
       const crossOrganizationRows = await tx

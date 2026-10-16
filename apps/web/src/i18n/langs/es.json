@@ -2554,6 +2554,7 @@
       "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
       "matterContactCapacityExceeded": "Este asunto contiene más contactos de los que se pueden mostrar. Elimine vínculos visibles con contactos para mostrar los contactos restantes.",
       "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
+      "matterStewardHandoverRequired": "Antes de continuar, transfiera los asuntos afectados a otro miembro interno asignado.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",

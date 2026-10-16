@@ -25,6 +25,7 @@ import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
@@ -1563,7 +1564,8 @@ export const createAuth = (
           ))
         ) {
           throw new APIError("BAD_REQUEST", {
-            code: "member_leads_assigned_only_matter",
+            code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+            affectedMatters: [],
             message:
               "Hand over the matters this member leads that are visible to assigned members only before changing their role.",
           });
@@ -1639,6 +1641,9 @@ export const createAuth = (
                   {
                     message: error.message,
                     ...(error.code === undefined ? {} : { code: error.code }),
+                    ...(error.affectedMatters === undefined
+                      ? {}
+                      : { affectedMatters: error.affectedMatters }),
                     ...(error.retryable === undefined
                       ? {}
                       : { retryable: error.retryable }),

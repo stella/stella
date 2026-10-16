@@ -36,6 +36,7 @@ if (!databaseUrl || !runPostgresTests) {
       "assignment deletion",
       "membership deletion",
       "lead clearing",
+      "new assignment handover",
     ] as const)(
       "narrowing a matter and %s never both commit",
       async (mutation) => {
@@ -86,12 +87,15 @@ if (!databaseUrl || !runPostgresTests) {
             organizationId,
             name: "Stewarded matter",
             reference: suffix,
-            leadUserId,
+            leadUserId:
+              mutation === "new assignment handover" ? ownerId : leadUserId,
             visibility: MATTER_VISIBILITY.adminsAndAssigned,
           });
-          await db
-            .insert(workspaceMembers)
-            .values({ workspaceId, userId: leadUserId });
+          await db.insert(workspaceMembers).values({
+            workspaceId,
+            userId:
+              mutation === "new assignment handover" ? ownerId : leadUserId,
+          });
 
           try {
             await withInterleaving({
@@ -103,6 +107,12 @@ if (!databaseUrl || !runPostgresTests) {
                   {
                     name: "checkSteward",
                     run: async (tx) => {
+                      if (mutation === "new assignment handover") {
+                        await tx
+                          .insert(workspaceMembers)
+                          .values({ workspaceId, userId: leadUserId });
+                        return;
+                      }
                       const locked = await withAggregateRowQuery({
                         tx,
                         aggregate: "workspace",
@@ -137,7 +147,12 @@ if (!databaseUrl || !runPostgresTests) {
                     run: async (tx) => {
                       await tx
                         .update(workspaces)
-                        .set({ visibility: MATTER_VISIBILITY.assignedOnly })
+                        .set({
+                          visibility: MATTER_VISIBILITY.assignedOnly,
+                          ...(mutation === "new assignment handover"
+                            ? { leadUserId }
+                            : {}),
+                        })
                         .where(eq(workspaces.id, workspaceId));
                     },
                   },
@@ -149,6 +164,7 @@ if (!databaseUrl || !runPostgresTests) {
                     name: "removeSteward",
                     run: async (tx) => {
                       switch (mutation) {
+                        case "new assignment handover":
                         case "role change":
                           await tx
                             .update(member)
@@ -190,7 +206,10 @@ if (!databaseUrl || !runPostgresTests) {
                   .update(workspaces)
                   .set({
                     visibility: MATTER_VISIBILITY.adminsAndAssigned,
-                    leadUserId,
+                    leadUserId:
+                      mutation === "new assignment handover"
+                        ? ownerId
+                        : leadUserId,
                   })
                   .where(eq(workspaces.id, workspaceId));
                 await db
@@ -206,10 +225,21 @@ if (!databaseUrl || !runPostgresTests) {
                     target: member.id,
                     set: { role: "member" },
                   });
-                await db
-                  .insert(workspaceMembers)
-                  .values({ workspaceId, userId: leadUserId })
-                  .onConflictDoNothing();
+                if (mutation === "new assignment handover") {
+                  await db
+                    .delete(workspaceMembers)
+                    .where(
+                      and(
+                        eq(workspaceMembers.workspaceId, workspaceId),
+                        eq(workspaceMembers.userId, leadUserId),
+                      ),
+                    );
+                } else {
+                  await db
+                    .insert(workspaceMembers)
+                    .values({ workspaceId, userId: leadUserId })
+                    .onConflictDoNothing();
+                }
               },
               readState: async () =>
                 await db.transaction(async (tx) => {
@@ -244,7 +274,7 @@ if (!databaseUrl || !runPostgresTests) {
                       }
                     : {
                         visibility: MATTER_VISIBILITY.adminsAndAssigned,
-                        usableSteward: false,
+                        usableSteward: mutation === "new assignment handover",
                       },
                 );
               },

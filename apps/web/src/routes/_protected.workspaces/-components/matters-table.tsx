@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -358,6 +359,7 @@ const MattersTableRow = ({
               />
               <InlineEdit
                 className="font-medium"
+                maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                 onCancel={ctx.rename.cancel}
                 onChange={ctx.rename.setDraft}
                 onCommit={ctx.rename.commit}

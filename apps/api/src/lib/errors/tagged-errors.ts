@@ -5,6 +5,7 @@
 // parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
 import { panic, TaggedError } from "better-result";
 
+import type { MatterStewardHandoverMatter } from "@stll/api-contract";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
@@ -155,6 +156,8 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  /** Only matters the authenticated caller already reaches. */
+  affectedMatters?: MatterStewardHandoverMatter[] | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -176,6 +179,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare affectedMatters?: HandlerErrorProps["affectedMatters"];
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -192,6 +196,7 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.affectedMatters = props.affectedMatters;
   }
 }
 

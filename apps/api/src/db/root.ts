@@ -28,6 +28,7 @@ import type {
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
+import { recoverOrphanedMatterSteward } from "@/api/lib/workspaces/visibility";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -185,4 +186,13 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     rootDb,
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
+  );
+
+/** Recovery is an explicit organization-management mutation, never an owner read. */
+export const recoverMatterSteward = async (
+  options: Parameters<typeof recoverOrphanedMatterSteward>[1],
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) => await recoverOrphanedMatterSteward(tx, options),
   );

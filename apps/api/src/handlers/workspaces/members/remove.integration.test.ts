@@ -10,8 +10,12 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { MATTER_VISIBILITY } from "@stll/api-contract";
+import {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 
+import { member } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -159,6 +163,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             workspaceId,
             userId: ids.userA1,
             actorUserId: ids.userA1,
+            managesOrganizationMatters: false,
             recordAuditEvent,
             dependencies,
           }),
@@ -256,93 +261,177 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
     throw new Error("Expected the integration test transaction to roll back");
   });
 
-  test("removing a private matter lead hands stewardship to its remaining internal assignee", async () => {
-    const outcome = await Result.tryPromise(
-      async () =>
-        await testDb.transaction(async (outerTx) => {
-          await outerTx
-            .update(workspaces)
-            .set({
-              leadUserId: ids.userA1,
-              visibility: MATTER_VISIBILITY.assignedOnly,
-            })
-            .where(eq(workspaces.id, ids.wsA2));
-          const rlsTx = markRlsDatabase(outerTx);
-          const safeDb = asTestRaw<SafeDb>(
-            createMembershipSafeDb(rlsTx, {
-              organizationId: ids.orgA,
-              serverValidatedWorkspaceIds: [ids.wsA2],
-              userId: ids.userA2,
-            }),
-          );
-          const recordAuditEvent = createAuditRecorder({
-            organizationId: ids.orgA,
-            workspaceId: ids.wsA2,
-            userId: ids.userA2,
-            request: new Request(
-              `https://api.example.test/v1/workspaces/${ids.wsA2}/members/${ids.userA1}`,
-            ),
-            server: null,
-          });
-          const result = await Result.gen(() =>
-            removeWorkspaceMemberHandler({
-              safeDb,
-              workspaceId: ids.wsA2,
-              userId: ids.userA1,
-              actorUserId: ids.userA2,
-              recordAuditEvent,
-              dependencies,
-            }),
-          );
-          expect(result).toEqual(Result.ok({ id: ids.memberA1wsA2 }));
-          await outerTx.execute(sql`RESET ROLE`);
-          expect(
+  test.each([
+    "lead",
+    "admin",
+    "assigned-member",
+    "lead-without-successor",
+  ] as const)(
+    "%s removal of a private matter lead respects stewardship authority",
+    async (actor) => {
+      const outcome = await Result.tryPromise(
+        async () =>
+          await testDb.transaction(async (outerTx) => {
+            const actorUserId = {
+              lead: ids.userA1,
+              admin: ids.userAdmin,
+              "assigned-member": ids.userA2,
+              "lead-without-successor": ids.userA1,
+            }[actor];
+            if (actor === "lead-without-successor") {
+              await outerTx
+                .update(member)
+                .set({ role: "external" })
+                .where(eq(member.id, ids.memberA2org));
+            }
+            if (actor === "admin") {
+              await outerTx.insert(workspaceMembers).values({
+                id: createSafeId<"workspaceMember">(),
+                workspaceId: ids.wsA2,
+                userId: ids.userAdmin,
+              });
+            }
             await outerTx
-              .select({
-                leadUserId: workspaces.leadUserId,
-                visibility: workspaces.visibility,
+              .update(workspaces)
+              .set({
+                leadUserId: ids.userA1,
+                visibility: MATTER_VISIBILITY.assignedOnly,
               })
-              .from(workspaces)
-              .where(eq(workspaces.id, ids.wsA2)),
-          ).toEqual([
-            {
-              leadUserId: ids.userA2,
-              visibility: MATTER_VISIBILITY.assignedOnly,
-            },
-          ]);
-          expect(
-            await outerTx
-              .select({ userId: workspaceMembers.userId })
-              .from(workspaceMembers)
-              .where(eq(workspaceMembers.workspaceId, ids.wsA2)),
-          ).toEqual([{ userId: ids.userA2 }]);
-          expect(
-            await outerTx
-              .select({
-                changes: auditLogs.changes,
-                metadata: auditLogs.metadata,
-              })
-              .from(auditLogs)
-              .where(eq(auditLogs.resourceId, ids.wsA2)),
-          ).toEqual([
-            {
-              changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
-              metadata: expect.objectContaining({
-                cause: "matter_steward_restored",
+              .where(eq(workspaces.id, ids.wsA2));
+            const rlsTx = markRlsDatabase(outerTx);
+            const safeDb = asTestRaw<SafeDb>(
+              createMembershipSafeDb(rlsTx, {
+                organizationId: ids.orgA,
+                serverValidatedWorkspaceIds: [ids.wsA2],
+                userId: actorUserId,
               }),
-            },
-          ]);
-          outerTx.rollback();
-        }),
-    );
-    if (outcome.isErr()) {
-      expect(outcome.error.cause).toBeInstanceOf(TransactionRollbackError);
-      return;
-    }
-    expect.unreachable(
-      "Expected the integration test transaction to roll back",
-    );
-  });
+            );
+            const recordAuditEvent = createAuditRecorder({
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              userId: actorUserId,
+              request: new Request(
+                `https://api.example.test/v1/workspaces/${ids.wsA2}/members/${ids.userA1}`,
+              ),
+              server: null,
+            });
+            const result = await Result.gen(() =>
+              removeWorkspaceMemberHandler({
+                safeDb,
+                workspaceId: ids.wsA2,
+                userId: ids.userA1,
+                actorUserId,
+                managesOrganizationMatters: actor === "admin",
+                recordAuditEvent,
+                dependencies,
+              }),
+            );
+            await outerTx.execute(sql`RESET ROLE`);
+            if (
+              actor === "assigned-member" ||
+              actor === "lead-without-successor"
+            ) {
+              if (result.isOk()) {
+                expect.unreachable(
+                  "Lead removal must be refused without authority or a successor",
+                );
+              }
+              expect(result.error.status).toBe(
+                actor === "assigned-member" ? 403 : 409,
+              );
+              if (actor === "lead-without-successor") {
+                expect(result.error.code).toBe(
+                  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+                );
+                expect(result.error.affectedMatters).toEqual([
+                  { id: ids.wsA2, name: expect.any(String) },
+                ]);
+              }
+              expect(
+                await outerTx
+                  .select({
+                    leadUserId: workspaces.leadUserId,
+                    visibility: workspaces.visibility,
+                  })
+                  .from(workspaces)
+                  .where(eq(workspaces.id, ids.wsA2)),
+              ).toEqual([
+                {
+                  leadUserId: ids.userA1,
+                  visibility: MATTER_VISIBILITY.assignedOnly,
+                },
+              ]);
+              expect(
+                await outerTx.$count(
+                  workspaceMembers,
+                  and(
+                    eq(workspaceMembers.workspaceId, ids.wsA2),
+                    eq(workspaceMembers.userId, ids.userA1),
+                  ),
+                ),
+              ).toBe(1);
+              expect(
+                await outerTx.$count(
+                  auditLogs,
+                  inArray(auditLogs.resourceId, [ids.wsA2, ids.memberA1wsA2]),
+                ),
+              ).toBe(0);
+              outerTx.rollback();
+            }
+            expect(result).toEqual(Result.ok({ id: ids.memberA1wsA2 }));
+            expect(
+              await outerTx
+                .select({
+                  leadUserId: workspaces.leadUserId,
+                  visibility: workspaces.visibility,
+                })
+                .from(workspaces)
+                .where(eq(workspaces.id, ids.wsA2)),
+            ).toEqual([
+              {
+                leadUserId: ids.userA2,
+                visibility: MATTER_VISIBILITY.assignedOnly,
+              },
+            ]);
+            expect(
+              await outerTx
+                .select({ userId: workspaceMembers.userId })
+                .from(workspaceMembers)
+                .where(eq(workspaceMembers.workspaceId, ids.wsA2)),
+            ).toEqual(
+              expect.arrayContaining([
+                { userId: ids.userA2 },
+                ...(actor === "admin" ? [{ userId: ids.userAdmin }] : []),
+              ]),
+            );
+            expect(
+              await outerTx
+                .select({
+                  changes: auditLogs.changes,
+                  metadata: auditLogs.metadata,
+                })
+                .from(auditLogs)
+                .where(eq(auditLogs.resourceId, ids.wsA2)),
+            ).toEqual([
+              {
+                changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
+                metadata: expect.objectContaining({
+                  cause: "matter_steward_restored",
+                }),
+              },
+            ]);
+            outerTx.rollback();
+          }),
+      );
+      if (outcome.isErr()) {
+        expect(outcome.error.cause).toBeInstanceOf(TransactionRollbackError);
+        return;
+      }
+      expect.unreachable(
+        "Expected the integration test transaction to roll back",
+      );
+    },
+  );
 
   test("the synchronous cap excludes closed ownership history", async () => {
     try {
@@ -410,6 +499,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             workspaceId: ids.wsA2,
             userId: ids.userA1,
             actorUserId: ids.userA2,
+            managesOrganizationMatters: false,
             recordAuditEvent,
             dependencies,
           }),

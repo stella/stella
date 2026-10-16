@@ -2554,6 +2554,7 @@
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
       "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie sichtbare Kontaktverknüpfungen, um die übrigen Kontakte anzuzeigen.",
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
+      "matterStewardHandoverRequired": "Übertragen Sie die betroffenen Akten einem anderen zugewiesenen internen Mitglied, bevor Sie fortfahren.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",

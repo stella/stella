@@ -184,14 +184,22 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
-  await testDb.insert(workspaces).values({
-    id: personalMatter.workspaceId,
-    organizationId: ids.orgA,
-    clientId: null,
-    visibility: "assigned_only",
-    name: "Personal matter",
-    reference: `REF-${personalMatter.workspaceId}`,
-    status: "active",
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id: personalMatter.workspaceId,
+      organizationId: ids.orgA,
+      clientId: null,
+      visibility: "assigned_only",
+      leadUserId: ids.userA2,
+      name: "Personal matter",
+      reference: `REF-${personalMatter.workspaceId}`,
+      status: "active",
+    });
+    await tx.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: personalMatter.workspaceId,
+      userId: ids.userA2,
+    });
   });
   await testDb.insert(entities).values({
     id: personalMatter.entityId,
@@ -369,7 +377,7 @@ describe("desktop edit session authorization", () => {
     const session = sessions.ownerOnClientMatter;
     await testDb
       .update(workspaces)
-      .set({ visibility: "assigned_only" })
+      .set({ visibility: "assigned_only", leadUserId: ids.userA1 })
       .where(eq(workspaces.id, ids.wsA1));
     try {
       const result = await authorizeDesktopEditSessionWithDb(
@@ -381,7 +389,7 @@ describe("desktop edit session authorization", () => {
     } finally {
       await testDb
         .update(workspaces)
-        .set({ visibility: "admins_and_assigned" })
+        .set({ visibility: "admins_and_assigned", leadUserId: null })
         .where(eq(workspaces.id, ids.wsA1));
     }
   });

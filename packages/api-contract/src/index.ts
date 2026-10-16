@@ -477,11 +477,17 @@ export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
 export {
   DEFAULT_MATTER_VISIBILITY,
   defaultMatterVisibilityFor,
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_STEWARD_HANDOVER_MAX_MATTERS,
+  matterStewardHandoverMattersSchema,
   MATTER_VISIBILITIES,
   MATTER_VISIBILITY,
   widensMatterVisibility,
 } from "./matter-visibility";
-export type { MatterVisibility } from "./matter-visibility";
+export type {
+  MatterVisibility,
+  MatterStewardHandoverMatter,
+} from "./matter-visibility";
 export {
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_VOCABULARIES,

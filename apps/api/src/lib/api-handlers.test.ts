@@ -1135,3 +1135,37 @@ test("BYOK provider diagnostics cross HTTP as a top-level field without entering
   });
   expect(JSON.stringify(error.toJSON())).not.toContain("Provider quota reason");
 });
+
+test("steward handover refusals carry authorized matter references through HTTP", async () => {
+  const affectedMatters = [
+    { id: "00000000-0000-4000-8000-000000000001", name: "Matter A" },
+  ];
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: "matter_steward_handover_required",
+          message: "Hand over the affected matters before continuing.",
+          affectedMatters,
+        }),
+      );
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const response = await endpoint.handler(createContext(endpoint, safeDb));
+  if (!("code" in response)) {
+    throw new TypeError("Expected error response");
+  }
+  expect(response.response).toMatchObject({
+    code: "matter_steward_handover_required",
+    affectedMatters,
+  });
+});

@@ -1637,6 +1637,7 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
           workspaceId,
           userId: reviewer,
           actorUserId: userId,
+          managesOrganizationMatters: false,
           recordAuditEvent: async () => undefined,
           dependencies: {
             broadcastSessionEvent: () => undefined,

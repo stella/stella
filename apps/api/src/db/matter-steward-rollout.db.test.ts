@@ -333,4 +333,33 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
     );
     expect(departing.rows).toEqual([]);
   });
+  test.each([
+    { label: "null", lead: null, assigned: false },
+    { label: "external", lead: EXTERNAL, assigned: true },
+    { label: "unassigned internal", lead: MEMBER, assigned: false },
+    { label: "assigned internal", lead: MEMBER, assigned: true },
+  ])("deferred INSERT validation: $label lead", async ({ lead, assigned }) => {
+    await using database = await migrated();
+    const id = "00000000-0000-4000-8000-0000000000a8";
+    await database.exec("BEGIN");
+    await database.query(
+      "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,'assigned_only')",
+      [id, ORG, lead],
+    );
+    if (assigned) {
+      await database.query(
+        "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('new_assignment',$1,$2)",
+        [id, lead],
+      );
+    }
+    const commit = await Result.tryPromise(() => database.exec("COMMIT"));
+    expect(commit.isOk()).toBe(lead === MEMBER && assigned);
+    if (commit.isErr()) {
+      await database.exec("ROLLBACK");
+    }
+    expect(
+      (await database.query("SELECT id FROM workspaces WHERE id = $1", [id]))
+        .rows,
+    ).toHaveLength(commit.isOk() ? 1 : 0);
+  });
 });

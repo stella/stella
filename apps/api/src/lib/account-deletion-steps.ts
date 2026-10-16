@@ -331,6 +331,7 @@ export const clearWorkspaceLeadRole = async (
       organizationId,
       workspaceIds: matters.map(({ id }) => id),
       departingUserId: currentUserId,
+      actorUserId: currentUserId,
       recordAuditEvent: accountDeletionAuditRecorder(
         organizationId,
         currentUserId,

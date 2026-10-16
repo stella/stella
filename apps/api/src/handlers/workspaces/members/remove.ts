@@ -30,6 +30,7 @@ import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifica
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
@@ -56,6 +57,7 @@ export type RemoveWorkspaceMemberProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   actorUserId: SafeId<"user">;
+  managesOrganizationMatters: boolean;
   reassignTo?: SafeId<"user"> | undefined;
   recordAuditEvent: AuditRecorder;
   dependencies?: RemoveWorkspaceMemberDependencies | undefined;
@@ -224,6 +226,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   workspaceId,
   userId,
   actorUserId,
+  managesOrganizationMatters,
   reassignTo,
   recordAuditEvent,
   dependencies = defaultRemoveWorkspaceMemberDependencies,
@@ -252,6 +255,20 @@ export const removeWorkspaceMemberHandler = async function* ({
 
       if (!workspace) {
         throw new HandlerError({ status: 404, message: "Member not found" });
+      }
+
+      if (
+        workspace.leadUserId === userId &&
+        actorUserId !== userId &&
+        !managesOrganizationMatters
+      ) {
+        abortTransaction(
+          new HandlerError({
+            status: 403,
+            message:
+              "Only the matter lead or an organization admin can remove the matter lead",
+          }),
+        );
       }
 
       const lockedRows = await tx
@@ -329,6 +346,7 @@ export const removeWorkspaceMemberHandler = async function* ({
           organizationId: workspace.organizationId,
           workspaceIds: [workspaceId],
           departingUserId: userId,
+          actorUserId,
           recordAuditEvent,
         });
         const clearedLeads = await tx
@@ -483,6 +501,7 @@ export const createRemoveWorkspaceMember = (
       params: { userId },
       body,
       user,
+      memberRole,
       recordAuditEvent,
     }) {
       return yield* removeWorkspaceMemberHandler({
@@ -490,6 +509,9 @@ export const createRemoveWorkspaceMember = (
         workspaceId,
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,
+        managesOrganizationMatters: hasManagementPermission(memberRole, {
+          workspace: ["update"],
+        }),
         reassignTo:
           body?.reassign_to === undefined
             ? undefined

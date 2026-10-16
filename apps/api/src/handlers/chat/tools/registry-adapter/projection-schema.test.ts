@@ -130,7 +130,7 @@ describe("projectForChat", () => {
 
   const matterRow = {
     createdAt: "2026-01-01T00:00:00.000Z",
-    id: WS_UUID,
+    id: toSafeId<"workspace">(WS_UUID),
     lastActivityAt: "2026-01-01T00:00:00.000Z",
     name: "Acme",
     reference: "REF-1",
@@ -818,7 +818,7 @@ describe("projectForChat", () => {
     const payload = {
       matters: [
         {
-          id: WS_UUID,
+          id: toSafeId<"workspace">(WS_UUID),
           name: "Acme",
           reference: "REF-1",
           status: "active",

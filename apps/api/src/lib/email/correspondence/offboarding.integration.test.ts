@@ -1027,6 +1027,7 @@ describe("correspondence offboarding", () => {
                   workspaceId: ids.wsA2,
                   userId: ids.userA1,
                   actorUserId: ids.userA2,
+                  managesOrganizationMatters: false,
                   recordAuditEvent: createAuditRecorder({
                     organizationId: ids.orgA,
                     workspaceId: ids.wsA2,

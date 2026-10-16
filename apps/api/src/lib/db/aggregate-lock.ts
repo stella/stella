@@ -2094,6 +2094,36 @@ export const lockMemberAccessRow = async ({
       .for(mode)
   ).at(0);
 
+type MemberAccessRowsLockOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userIds: readonly SafeId<"user">[];
+};
+
+/** Freeze actor and named steward roles in deterministic order for recovery. */
+export const lockMemberAccessRows = async ({
+  tx,
+  organizationId,
+  userIds,
+}: MemberAccessRowsLockOptions) => {
+  const ids = [...new Set(userIds)].toSorted();
+  if (ids.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({ userId: member.userId, role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        inArray(member.userId, ids),
+      ),
+    )
+    .orderBy(member.userId)
+    .limit(ids.length)
+    .for("share");
+};
+
 type MatterAccessRowsLockOptions = MemberAccessRowLockOptions & {
   workspaceIds: readonly SafeId<"workspace">[];
   /** Narrows the locked rows; `and(...)` may yield undefined (no filter). */

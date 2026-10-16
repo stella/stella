@@ -9,7 +9,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { MATTER_VISIBILITY } from "@stll/api-contract";
+import {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -152,11 +155,13 @@ test("organization offboarding hands a private matter to its remaining internal 
             .select({
               changes: auditLogs.changes,
               metadata: auditLogs.metadata,
+              workspaceId: auditLogs.workspaceId,
             })
             .from(auditLogs)
             .where(eq(auditLogs.resourceId, ids.wsA1)),
         ).toEqual([
           {
+            workspaceId: ids.wsA1,
             changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
             metadata: expect.objectContaining({
               cause: "matter_steward_restored",
@@ -173,11 +178,105 @@ test("organization offboarding hands a private matter to its remaining internal 
   expect.unreachable("Expected the integration test transaction to roll back");
 });
 
+test.each(["account", "organization"] as const)(
+  "%s offboarding refuses removal of a private matter's last internal steward",
+  async (scope) => {
+    await rollingBack(async (tx) => {
+      await tx
+        .update(workspaces)
+        .set({
+          leadUserId: ids.userA1,
+          visibility: MATTER_VISIBILITY.assignedOnly,
+        })
+        .where(eq(workspaces.id, ids.wsA1));
+      const before = await tx
+        .select({
+          id: workspaces.id,
+          name: workspaces.name,
+          leadUserId: workspaces.leadUserId,
+          visibility: workspaces.visibility,
+        })
+        .from(workspaces)
+        .where(eq(workspaces.id, ids.wsA1));
+      const refusal = await Result.tryPromise({
+        try: async () =>
+          await tx.transaction(async (savepoint) => {
+            const raw = asTestRaw<Transaction>(savepoint);
+            if (scope === "organization") {
+              await removeOrganizationMemberInTransaction(raw, {
+                organizationId: ids.orgA,
+                memberId: ids.memberA1org,
+                userId: ids.userA1,
+                actorUserId: ids.userAdmin,
+              });
+              return;
+            }
+            await clearWorkspaceLeadRole(raw, ids.userA1);
+            await reassignActiveTaskAssignmentsAndDropMemberships({
+              tx: raw,
+              currentUserId: ids.userA1,
+              deletionRequestId: createSafeId<"accountDeletionRequest">(),
+              reassignments: undefined,
+            });
+          }),
+        catch: (error) => error,
+      });
+      expect(refusal.isErr()).toBe(true);
+      if (refusal.isOk()) {
+        expect.unreachable(
+          "The last internal steward needs an explicit handover",
+        );
+      }
+      expect(refusal.error).toMatchObject({
+        status: 409,
+        code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+        affectedMatters:
+          scope === "account"
+            ? before.map(({ id, name }) => ({ id, name }))
+            : [],
+      });
+      await tx.execute(sql`RESET ROLE`);
+      expect(
+        await tx
+          .select({
+            id: workspaces.id,
+            name: workspaces.name,
+            leadUserId: workspaces.leadUserId,
+            visibility: workspaces.visibility,
+          })
+          .from(workspaces)
+          .where(eq(workspaces.id, ids.wsA1)),
+      ).toEqual(before);
+      expect(await tx.$count(member, eq(member.id, ids.memberA1org))).toBe(1);
+      expect(
+        await tx.$count(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, ids.wsA1),
+            eq(workspaceMembers.userId, ids.userA1),
+          ),
+        ),
+      ).toBe(1);
+      expect(
+        await tx.$count(
+          auditLogs,
+          inArray(auditLogs.resourceId, [ids.wsA1, ids.orgA]),
+        ),
+      ).toBe(0);
+    });
+  },
+);
+
 describe("account deletion governed ownership", () => {
   test("account erasure repairs private matter stewardship before dropping memberships", async () => {
     const outcome = await Result.tryPromise(
       async () =>
         await testDb.transaction(async (tx) => {
+          await tx.insert(workspaceMembers).values({
+            id: createSafeId<"workspaceMember">(),
+            workspaceId: ids.wsA1,
+            userId: ids.userA2,
+          });
           await tx
             .update(workspaces)
             .set({
@@ -206,8 +305,8 @@ describe("account deletion governed ownership", () => {
             expect.arrayContaining([
               {
                 id: ids.wsA1,
-                leadUserId: null,
-                visibility: MATTER_VISIBILITY.adminsAndAssigned,
+                leadUserId: ids.userA2,
+                visibility: MATTER_VISIBILITY.assignedOnly,
               },
               {
                 id: ids.wsA2,
@@ -234,6 +333,7 @@ describe("account deletion governed ownership", () => {
           const stewardAudits = await tx
             .select({
               resourceId: auditLogs.resourceId,
+              workspaceId: auditLogs.workspaceId,
               changes: auditLogs.changes,
             })
             .from(auditLogs)
@@ -243,16 +343,12 @@ describe("account deletion governed ownership", () => {
             expect.arrayContaining([
               {
                 resourceId: ids.wsA1,
-                changes: {
-                  leadUserId: { old: ids.userA1, new: null },
-                  visibility: {
-                    old: MATTER_VISIBILITY.assignedOnly,
-                    new: MATTER_VISIBILITY.adminsAndAssigned,
-                  },
-                },
+                workspaceId: ids.wsA1,
+                changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
               },
               {
                 resourceId: ids.wsA2,
+                workspaceId: ids.wsA2,
                 changes: { leadUserId: { old: ids.userA1, new: ids.userA2 } },
               },
             ]),

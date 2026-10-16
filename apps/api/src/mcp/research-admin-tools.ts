@@ -24,6 +24,7 @@ import {
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -955,6 +956,9 @@ const handleRemoveMember = async ({
       workspaceId,
       userId: brandPersistedUserId(userId),
       actorUserId: context.userId,
+      managesOrganizationMatters: hasManagementPermission(context.memberRole, {
+        workspace: ["update"],
+      }),
       reassignTo:
         reassignTo === undefined ? undefined : brandPersistedUserId(reassignTo),
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),

@@ -182,65 +182,69 @@ testState.beforeAll(async () => {
     type: "person",
     displayName: "Client",
   });
-  await testDb.insert(workspaces).values([
-    {
-      visibility: MATTER_VISIBILITY.adminsAndAssigned,
-      id: clientWorkspaceId,
-      organizationId: orgFull,
-      clientId: clientContactId,
-      name: "Client matter",
-      reference: "AUTH-CLIENT",
-    },
-    {
-      id: memberPersonalWorkspaceId,
-      organizationId: orgFull,
-      clientId: null,
-      name: "Member personal matter",
-      reference: "AUTH-PERSONAL",
-      visibility: "assigned_only",
-    },
-    {
-      id: clientlessOrganizationWorkspaceId,
-      organizationId: orgFull,
-      clientId: null,
-      name: "Internal know-how",
-      reference: "AUTH-KNOW-HOW",
-      visibility: "admins_and_assigned",
-    },
-    {
-      id: privateClientWorkspaceId,
-      organizationId: orgFull,
-      clientId: clientContactId,
-      name: "Private client matter",
-      reference: "AUTH-PRIVATE-CLIENT",
-      visibility: "assigned_only",
-    },
-    {
-      id: allMembersWorkspaceId,
-      organizationId: orgFull,
-      clientId: null,
-      name: "Engagement letter templates",
-      reference: "AUTH-ALL-MEMBERS",
-      visibility: "all_members",
-    },
-  ]);
-  await testDb.insert(workspaceMembers).values([
-    {
-      id: toSafeId<"workspaceMember">(tid()),
-      workspaceId: memberPersonalWorkspaceId,
-      userId: memberInFull,
-    },
-    {
-      id: toSafeId<"workspaceMember">(tid()),
-      workspaceId: clientlessOrganizationWorkspaceId,
-      userId: assignedMemberInFull,
-    },
-    {
-      id: toSafeId<"workspaceMember">(tid()),
-      workspaceId: privateClientWorkspaceId,
-      userId: memberInFull,
-    },
-  ]);
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values([
+      {
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
+        id: clientWorkspaceId,
+        organizationId: orgFull,
+        clientId: clientContactId,
+        name: "Client matter",
+        reference: "AUTH-CLIENT",
+      },
+      {
+        id: memberPersonalWorkspaceId,
+        organizationId: orgFull,
+        clientId: null,
+        name: "Member personal matter",
+        reference: "AUTH-PERSONAL",
+        visibility: "assigned_only",
+        leadUserId: memberInFull,
+      },
+      {
+        id: clientlessOrganizationWorkspaceId,
+        organizationId: orgFull,
+        clientId: null,
+        name: "Internal know-how",
+        reference: "AUTH-KNOW-HOW",
+        visibility: "admins_and_assigned",
+      },
+      {
+        id: privateClientWorkspaceId,
+        organizationId: orgFull,
+        clientId: clientContactId,
+        name: "Private client matter",
+        reference: "AUTH-PRIVATE-CLIENT",
+        visibility: "assigned_only",
+        leadUserId: memberInFull,
+      },
+      {
+        id: allMembersWorkspaceId,
+        organizationId: orgFull,
+        clientId: null,
+        name: "Engagement letter templates",
+        reference: "AUTH-ALL-MEMBERS",
+        visibility: "all_members",
+      },
+    ]);
+    await tx.insert(workspaceMembers).values([
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: memberPersonalWorkspaceId,
+        userId: memberInFull,
+      },
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: clientlessOrganizationWorkspaceId,
+        userId: assignedMemberInFull,
+      },
+      {
+        id: toSafeId<"workspaceMember">(tid()),
+        workspaceId: privateClientWorkspaceId,
+        userId: memberInFull,
+      },
+    ]);
+  });
 });
 
 afterAll(async () => {

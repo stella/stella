@@ -2554,6 +2554,7 @@
       "legalSourceFilePropertyMissing": "Sellel toimikul puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "matterContactCapacityExceeded": "Selles toimikus on rohkem kontakte, kui saab kuvada. Ülejäänud kontaktide kuvamiseks eemaldage nähtavaid kontaktiseoseid.",
       "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
+      "matterStewardHandoverRequired": "Enne jätkamist andke asjaomased toimikud üle teisele neile määratud siseliikmele.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",

@@ -72,6 +72,11 @@ assigned to that matter. Preserve this invariant when changing visibility,
 lead, matter membership, or organization membership and role. The database
 refuses writes that leave such a matter without a usable lead; application
 checks provide the actionable error before that constraint is reached.
+Never widen matter visibility automatically during offboarding, assignment
+removal, role changes, account deletion, or migration repair. Refuse the
+operation until an authorized person explicitly hands the matter to another
+assigned internal member. Refusal responses list only affected matters the
+caller already reaches; hidden matter names, identifiers and counts stay hidden.
 
 ### Server-bound audit events
 

@@ -213,6 +213,7 @@ describe("a matter's event stream when a member is removed", () => {
         workspaceId,
         userId: brandPersistedUserId(member.userId),
         actorUserId: identity.userId,
+        managesOrganizationMatters: false,
         recordAuditEvent: createAuditRecorder({
           ...identity,
           workspaceId,

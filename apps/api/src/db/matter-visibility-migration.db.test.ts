@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -246,7 +246,7 @@ describe("matter visibility migration", () => {
     });
   });
 
-  test("every assigned-only matter keeps a lead who can manage it; a matter nobody could manage stays reachable by owners and admins", async () => {
+  test("legacy clientless matters without an internal assignee stay assigned-only pending handover", async () => {
     const leadless = "00000000-0000-4000-8000-000000000011";
     const keptLead = "00000000-0000-4000-8000-000000000012";
     const memberless = "00000000-0000-4000-8000-000000000013";
@@ -302,8 +302,8 @@ describe("matter visibility migration", () => {
     const visibility = await visibilityById(database);
     expect(visibility[leadless]).toBe("assigned_only");
     expect(visibility[keptLead]).toBe("assigned_only");
-    expect(visibility[memberless]).toBe("admins_and_assigned");
-    expect(visibility[externalOnly]).toBe("admins_and_assigned");
+    expect(visibility[memberless]).toBe("assigned_only");
+    expect(visibility[externalOnly]).toBe("assigned_only");
     for (const repaired of [departedLead, unassignedLead, externalLead]) {
       expect(visibility[repaired]).toBe("assigned_only");
     }
@@ -312,14 +312,14 @@ describe("matter visibility migration", () => {
     expect(
       await authorizedFor(database, { organizationId: ORG, userId: MEMBER }),
     ).toContain(leadless);
-    // Owners and admins can recover the matters without a usable lead.
+    // Missing stewardship never grants owners or admins implicit read access.
     for (const userId of [OWNER, ADMIN]) {
       const granted = await authorizedFor(database, {
         organizationId: ORG,
         userId,
       });
-      expect(granted).toContain(memberless);
-      expect(granted).toContain(externalOnly);
+      expect(granted).not.toContain(memberless);
+      expect(granted).not.toContain(externalOnly);
       expect(granted).not.toContain(leadless);
     }
   });
@@ -375,11 +375,13 @@ describe("matter visibility migration", () => {
     const clientlessOrganizationMatter = "00000000-0000-4000-8000-000000000005";
     const privateClientMatter = "00000000-0000-4000-8000-000000000006";
     await database.exec(`
-      INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
-        ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'admins_and_assigned'),
-        ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'assigned_only');
+      BEGIN;
+      INSERT INTO workspaces (id, organization_id, client_id, visibility,lead_user_id) VALUES
+        ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'admins_and_assigned',NULL),
+        ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'assigned_only','${OTHER_MEMBER}');
       INSERT INTO workspace_members VALUES
         ('wm4', '${privateClientMatter}', '${OTHER_MEMBER}');
+      COMMIT;
     `);
 
     for (const userId of [OWNER, ADMIN]) {
@@ -445,21 +447,31 @@ describe("matter visibility migration", () => {
 
   test("a writer that omits visibility gets the visibility the old rule implied, with its creator as lead", async () => {
     await using database = await migrated();
-    // Without a known creator, a clientless matter stays manageable.
-    await database.exec(`
+    // Without a usable creator, clientless creation is refused.
+    const missingCreator = await Result.tryPromise(() =>
+      database.exec(`
       INSERT INTO workspaces (id, organization_id, client_id) VALUES
         ('00000000-0000-4000-8000-0000000000a5', '${ORG}', NULL);
-    `);
+    `),
+    );
+    expect(missingCreator.isErr()).toBe(true);
     await database.query("SELECT set_config('app.user_id', $1, false)", [
       MEMBER,
     ]);
     await database.exec(`
+      BEGIN;
       INSERT INTO workspaces (id, organization_id, client_id) VALUES
         ('00000000-0000-4000-8000-0000000000a1', '${ORG}', NULL),
         ('00000000-0000-4000-8000-0000000000a2', '${ORG}', '${CLIENT}');
       INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
         ('00000000-0000-4000-8000-0000000000a3', '${ORG}', NULL, 'all_members'),
-        ('00000000-0000-4000-8000-0000000000a4', '${ORG}', '${CLIENT}', 'assigned_only');
+        ('00000000-0000-4000-8000-0000000000a4', '${ORG}', '${CLIENT}', 'admins_and_assigned');
+      UPDATE workspaces SET lead_user_id = '${MEMBER}' WHERE id = '00000000-0000-4000-8000-0000000000a4';
+      INSERT INTO workspace_members (id,workspace_id,user_id) VALUES
+      ('legacy_created1','00000000-0000-4000-8000-0000000000a1','${MEMBER}'),
+      ('legacy_created4','00000000-0000-4000-8000-0000000000a4','${MEMBER}');
+      UPDATE workspaces SET visibility = 'assigned_only' WHERE id = '00000000-0000-4000-8000-0000000000a4';
+      COMMIT;
     `);
 
     const visibility = await visibilityById(database);
@@ -469,9 +481,7 @@ describe("matter visibility migration", () => {
     expect(visibility["00000000-0000-4000-8000-0000000000a2"]).toBe(
       "admins_and_assigned",
     );
-    expect(visibility["00000000-0000-4000-8000-0000000000a5"]).toBe(
-      "admins_and_assigned",
-    );
+    expect(visibility["00000000-0000-4000-8000-0000000000a5"]).toBeUndefined();
     const { rows } = await database.query<{ lead: string | null }>(
       "SELECT lead_user_id AS lead FROM workspaces WHERE id = '00000000-0000-4000-8000-0000000000a1'",
     );

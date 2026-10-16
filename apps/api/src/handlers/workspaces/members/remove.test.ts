@@ -115,6 +115,7 @@ describe("removeWorkspaceMember", () => {
         workspaceId,
         userId,
         actorUserId,
+        managesOrganizationMatters: false,
         recordAuditEvent: async () => undefined,
       }),
     );

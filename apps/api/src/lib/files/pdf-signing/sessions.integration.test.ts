@@ -18,6 +18,7 @@ import {
   entityVersions,
   pdfSigningSessions,
   properties,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
@@ -159,14 +160,22 @@ beforeAll(async () => {
   db = asTestRaw<typeof rootDb>(testDb);
   tokenDb = testTokenDb();
 
-  await testDb.insert(workspaces).values({
-    id: personalMatter.workspaceId,
-    organizationId: ids.orgA,
-    clientId: null,
-    visibility: "assigned_only",
-    name: "Personal matter",
-    reference: `REF-${personalMatter.workspaceId}`,
-    status: "active",
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id: personalMatter.workspaceId,
+      organizationId: ids.orgA,
+      clientId: null,
+      visibility: "assigned_only",
+      leadUserId: ids.userA2,
+      name: "Personal matter",
+      reference: `REF-${personalMatter.workspaceId}`,
+      status: "active",
+    });
+    await tx.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: personalMatter.workspaceId,
+      userId: ids.userA2,
+    });
   });
   await testDb.insert(entities).values({
     id: personalMatter.entityId,

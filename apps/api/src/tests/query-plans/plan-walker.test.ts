@@ -537,3 +537,44 @@ test("excludes only the real workspace authorization subplan", () => {
   };
   expect(withoutAuthorizationSubplans(otherSubplan)).toContain("SubPlan 30");
 });
+
+test.each([
+  {
+    functionName: "stella_authorized_workspace_ids",
+    hashed: true,
+    excluded: true,
+  },
+  { functionName: "other_workspace_ids", hashed: true, excluded: false },
+  {
+    functionName: "stella_authorized_workspace_ids",
+    hashed: false,
+    excluded: false,
+  },
+])(
+  "only a hashed canonical authorization function is excluded: %j",
+  ({ functionName, hashed, excluded }) => {
+    const scan =
+      scanOccurrences({
+        "Node Type": "Index Scan",
+        "Relation Name": "search_documents",
+        Filter: `workspace_id = (${hashed ? "hashed " : ""}SubPlan 4) AND (hashed SubPlan 40)`,
+        Plans: [
+          {
+            "Node Type": "Subquery Scan",
+            Alias: "aw",
+            "Parent Relationship": "SubPlan",
+            "Subplan Name": "SubPlan 4",
+            Plans: [
+              { "Node Type": "Seq Scan", "Relation Name": "workspaces" },
+              { "Node Type": "Seq Scan", "Relation Name": "member" },
+              { "Node Type": "Function Scan", "Function Name": functionName },
+            ],
+          },
+        ],
+      }).at(0) ?? panic("Authorization fixture has no scan");
+    expect(scan.subplans.at(0)?.functions).toContain(functionName);
+    const filtered = withoutAuthorizationSubplans(scan);
+    expect(filtered.includes("SubPlan 4)")).toBe(!excluded);
+    expect(filtered).toContain("SubPlan 40");
+  },
+);

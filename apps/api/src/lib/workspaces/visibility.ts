@@ -4,7 +4,11 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { MATTER_VISIBILITY } from "@stll/api-contract";
+import {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_STEWARD_HANDOVER_MAX_MATTERS,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
 import {
   INTERNAL_MEMBER_ROLES,
@@ -13,15 +17,19 @@ import {
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessWorkspaceRows,
+  lockMemberAccessRows,
   withAggregateRowQuery,
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /** The visibilities owners and admins reach without an assignment. */
 const ADMIN_REACHABLE_VISIBILITIES = [
@@ -52,13 +60,6 @@ export const reachesMatterWithoutAssignmentSql = (
       eq(visibility, MATTER_VISIBILITY.allMembers),
     ),
   );
-
-/**
- * SQL predicate for a caller already known to be an owner or admin: the
- * joined matter is one they reach without an assignment.
- */
-export const isAdminReachableMatter = () =>
-  inArray(workspaces.visibility, ADMIN_REACHABLE_VISIBILITIES);
 
 /**
  * Does this organization role reach a matter of this visibility without an
@@ -184,8 +185,8 @@ const restoredSteward = v.object({
 
 /**
  * Hand over assigned-only matters before a lead's assignment or membership
- * leaves. With no other internal assignee, widen to admins-and-assigned in
- * the same audited update that clears the lead. The departing user is never
+ * leaves. With no other internal assignee, refuse removal until handover.
+ * Visibility never widens automatically. The departing user is never
  * chosen. Locks serialize the candidate read with membership/assignment loss.
  */
 export const restoreMatterStewards = async (
@@ -194,11 +195,13 @@ export const restoreMatterStewards = async (
     organizationId,
     workspaceIds,
     departingUserId,
+    actorUserId,
     recordAuditEvent,
   }: {
     organizationId: SafeId<"organization">;
     workspaceIds: readonly SafeId<"workspace">[];
     departingUserId: string;
+    actorUserId: SafeId<"user">;
     recordAuditEvent: AuditRecorder;
   },
 ): Promise<void> => {
@@ -219,6 +222,47 @@ export const restoreMatterStewards = async (
     requested.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
+  const blocked = executedRows(
+    await tx.execute(sql`
+    SELECT w.id, w.name, EXISTS (
+      SELECT 1 FROM workspace_members actor_assignment
+      WHERE actor_assignment.workspace_id = w.id AND actor_assignment.user_id = ${actorUserId}
+    ) AS actor_reaches
+    FROM workspaces w
+    WHERE w.id IN (${ids}) AND w.organization_id = ${organizationId}
+      AND w.visibility = ${MATTER_VISIBILITY.assignedOnly}
+      AND NOT EXISTS (
+        SELECT 1 FROM workspace_members wm
+        JOIN member m ON m.user_id = wm.user_id AND m.organization_id = w.organization_id
+        WHERE wm.workspace_id = w.id AND wm.user_id <> ${departingUserId}
+          AND m.role IN (${internalRoles})
+      )
+    ORDER BY w.id
+  `),
+  ).map((row) =>
+    v.parse(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        actor_reaches: v.boolean(),
+      }),
+      row,
+    ),
+  );
+  if (blocked.length > 0) {
+    abortTransaction(
+      new HandlerError({
+        status: 409,
+        code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+        message:
+          "Hand over these matters to an assigned internal member before removing their steward.",
+        affectedMatters: blocked
+          .filter((row) => row.actor_reaches)
+          .slice(0, MATTER_STEWARD_HANDOVER_MAX_MATTERS)
+          .map(({ id, name }) => ({ id: brandPersistedWorkspaceId(id), name })),
+      }),
+    );
+  }
   const repaired = executedRows(
     await tx.execute(sql`
       WITH broken AS (
@@ -252,13 +296,9 @@ export const restoreMatterStewards = async (
       )
       UPDATE workspaces AS w
       SET
-        lead_user_id = steward.user_id,
-        visibility = CASE
-          WHEN steward.user_id IS NULL THEN ${MATTER_VISIBILITY.adminsAndAssigned}
-          ELSE w.visibility
-        END
+        lead_user_id = steward.user_id
       FROM broken
-      LEFT JOIN steward ON steward.workspace_id = broken.id
+      JOIN steward ON steward.workspace_id = broken.id
       WHERE w.id = broken.id
       RETURNING w.id, w.lead_user_id, broken.old_lead_user_id
     `),
@@ -273,24 +313,130 @@ export const restoreMatterStewards = async (
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
         resourceId: id,
+        workspaceId: brandPersistedWorkspaceId(id),
         changes: {
           leadUserId: { old: oldLeadUserId, new: leadUserId },
-          ...(leadUserId === null
-            ? {
-                visibility: {
-                  old: MATTER_VISIBILITY.assignedOnly,
-                  new: MATTER_VISIBILITY.adminsAndAssigned,
-                },
-              }
-            : {}),
         },
         metadata: {
           cause: "matter_steward_restored",
-          ...(leadUserId === null ? { visibilityChange: "widened" } : {}),
         },
       }),
     ),
   );
+};
+
+type RecoverOrphanedMatterStewardOptions = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  stewardUserId: SafeId<"user">;
+  actorUserId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Explicit admin recovery grants only the named steward access; it never widens visibility. */
+export const recoverOrphanedMatterSteward = async (
+  tx: Transaction,
+  {
+    organizationId,
+    workspaceId,
+    stewardUserId,
+    actorUserId,
+    recordAuditEvent,
+  }: RecoverOrphanedMatterStewardOptions,
+): Promise<void> => {
+  const memberships = await lockMemberAccessRows({
+    tx,
+    organizationId,
+    userIds: [actorUserId, stewardUserId],
+  });
+  const actor = memberships.find((row) => row.userId === actorUserId);
+  if (
+    !actor ||
+    !ORGANIZATION_MATTER_ADMIN_ROLES.some((role) => role === actor.role)
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 403,
+        message: "Organization matter management permission required",
+      }),
+    );
+  }
+  const steward = memberships.find((row) => row.userId === stewardUserId);
+  if (
+    !steward ||
+    !INTERNAL_MEMBER_ROLES.some((role) => role === steward.role)
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "Name an internal member of this organization as steward",
+      }),
+    );
+  }
+  const locked = await lockMatterAccessWorkspaceRows({
+    tx,
+    organizationId,
+    workspaceIds: [workspaceId],
+    mode: "update",
+  });
+  if (locked.length === 0) {
+    abortTransaction(
+      new HandlerError({ status: 404, message: "Matter not found" }),
+    );
+  }
+  const matter = await tx.query.workspaces.findFirst({
+    columns: { leadUserId: true, visibility: true },
+    where: { id: workspaceId, organizationId },
+  });
+  if (!matter) {
+    panic("Locked matter disappeared during steward recovery");
+  }
+  if (
+    matter.visibility !== MATTER_VISIBILITY.assignedOnly ||
+    (await hasUsableSteward(tx, {
+      organizationId,
+      workspaceId,
+      leadUserId: matter.leadUserId,
+    }))
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 409,
+        message: "Matter does not require steward recovery",
+      }),
+    );
+  }
+  const assignments = await tx
+    .insert(workspaceMembers)
+    .values({ workspaceId, userId: stewardUserId })
+    .onConflictDoNothing()
+    .returning({ id: workspaceMembers.id });
+  await tx
+    .update(workspaces)
+    .set({ leadUserId: stewardUserId })
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    );
+  await recordAuditEvent(tx, [
+    ...assignments.map(({ id }) => ({
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER,
+      resourceId: id,
+      workspaceId,
+      changes: { userId: { old: null, new: stewardUserId } },
+    })),
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+      resourceId: workspaceId,
+      workspaceId,
+      changes: { leadUserId: { old: matter.leadUserId, new: stewardUserId } },
+      metadata: { cause: "matter_steward_handover" },
+    },
+  ]);
 };
 
 /**

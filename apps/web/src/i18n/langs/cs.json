@@ -2554,6 +2554,7 @@
       "legalSourceFilePropertyMissing": "V tomto spisu chybí vlastnost souboru, takže dokument nelze vytvořit.",
       "matterContactCapacityExceeded": "Tento spis obsahuje více kontaktů, než lze zobrazit. Odebráním viditelných propojení s kontakty zobrazíte zbývající kontakty.",
       "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
+      "matterStewardHandoverRequired": "Než budete pokračovat, předejte dotčené spisy jinému přiřazenému internímu členovi.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",

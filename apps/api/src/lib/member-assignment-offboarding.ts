@@ -1502,6 +1502,7 @@ export const removeOrganizationMemberInTransaction = async (
     organizationId,
     workspaceIds: ledMatters.map(({ id }) => id),
     departingUserId: userId,
+    actorUserId,
     recordAuditEvent,
   });
   await tx

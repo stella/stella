@@ -963,7 +963,7 @@ describe("admin ending a member's timer", () => {
     await testDb.delete(timeTimers).where(eq(timeTimers.id, pausedId));
   });
 
-  test("admin listing hides an unstaffed clientless matter identifier", async () => {
+  test("admin listing excludes all timer metadata for an inaccessible assigned-only matter", async () => {
     const hiddenMatterId = createSafeId<"workspace">();
     try {
       await testDb.insert(workspaces).values({
@@ -979,6 +979,17 @@ describe("admin ending a member's timer", () => {
         workspaceId: hiddenMatterId,
         userId: actors.timekeeper.userId,
       });
+      await testDb
+        .update(workspaces)
+        .set({
+          leadUserId: actors.timekeeper.userId,
+          visibility: MATTER_VISIBILITY.assignedOnly,
+        })
+        .where(eq(workspaces.id, hiddenMatterId));
+      const unassignedId = await seedTimer({
+        owner: "colleague",
+        matterId: null,
+      });
       const id = await seedTimer({ matterId: hiddenMatterId });
       const result = await adminListTimers.handler(
         asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
@@ -989,11 +1000,14 @@ describe("admin ending a member's timer", () => {
       if (!("items" in result)) {
         throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
       }
-      expect(result.items.find((item) => item.id === id)).toMatchObject({
-        id,
-        ownerId: actors.timekeeper.userId,
+      expect(result.items.find((item) => item.id === id)).toBeUndefined();
+      expect(
+        result.items.find((item) => item.id === unassignedId),
+      ).toMatchObject({
+        id: unassignedId,
         matterId: null,
       });
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, unassignedId));
     } finally {
       await testDb
         .delete(timeTimers)

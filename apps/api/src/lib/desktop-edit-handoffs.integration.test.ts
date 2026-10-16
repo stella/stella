@@ -4,7 +4,11 @@ import { eq, inArray } from "drizzle-orm";
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
 import type { rootDb } from "@/api/db/root";
-import { desktopEditHandoffs, workspaces } from "@/api/db/schema";
+import {
+  desktopEditHandoffs,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -41,14 +45,22 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
-  await testDb.insert(workspaces).values({
-    id: personalMatterId,
-    organizationId: ids.orgA,
-    clientId: null,
-    visibility: "assigned_only",
-    name: "Personal matter",
-    reference: `REF-${personalMatterId}`,
-    status: "active",
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id: personalMatterId,
+      organizationId: ids.orgA,
+      clientId: null,
+      visibility: "assigned_only",
+      leadUserId: ids.userA2,
+      name: "Personal matter",
+      reference: `REF-${personalMatterId}`,
+      status: "active",
+    });
+    await tx.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: personalMatterId,
+      userId: ids.userA2,
+    });
   });
 });
 

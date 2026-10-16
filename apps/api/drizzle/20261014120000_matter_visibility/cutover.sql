@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked, read-only; returns the matters one organization member reaches under the existing view rule
 CREATE OR REPLACE FUNCTION public.stella_authorized_workspace_ids(
   p_organization_id text,
