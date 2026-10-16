@@ -22,6 +22,7 @@ import {
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { apiUrl } from "@/lib/api-url";
 import { STALE_TIME } from "@/lib/consts";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 /** Whose AI key the failed run called the provider with. */
 export type AnalysisFailureKey =
@@ -39,6 +40,8 @@ export type AnalysisError =
       code: AnalysisFailureCode;
       key: AnalysisFailureKey;
       providerDiagnostic?: ProviderDiagnostic;
+      /** The time before which the server starts no new run, retry included. */
+      retryAt?: Date;
     }
   | { kind: "unreadable" };
 
@@ -96,19 +99,34 @@ const parseAnalysisError = (value: Record<string, unknown>): AnalysisError => {
   }
   if (isMember(CASE_LAW_ANALYSIS_FAILURE_CODES, code)) {
     const key = parseFailureKey(value["key"]);
-    if (key === null) {
+    const retryAt = parseRetryAt(value["retryAt"]);
+    if (key === null || retryAt === null) {
       return UNREADABLE;
     }
+    const failed = {
+      kind: "failed",
+      code,
+      key,
+      ...(retryAt === undefined ? {} : { retryAt }),
+    } as const;
     const diagnostic = value["providerDiagnostic"];
     if (diagnostic === undefined) {
-      return { kind: "failed", code, key };
+      return failed;
     }
     const parsed = v.safeParse(providerDiagnosticSchema, diagnostic);
     return parsed.success
-      ? { kind: "failed", code, key, providerDiagnostic: parsed.output }
+      ? { ...failed, providerDiagnostic: parsed.output }
       : UNREADABLE;
   }
   return UNREADABLE;
+};
+
+/** A failure's retry time: absent, a valid ISO instant, or unreadable (null). */
+const parseRetryAt = (value: unknown): Date | undefined | null => {
+  if (value === undefined) {
+    return undefined;
+  }
+  return typeof value === "string" ? parseDeterministicDate(value) : null;
 };
 
 export const parseAnalysisResponse = (
