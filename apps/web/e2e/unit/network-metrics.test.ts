@@ -1,8 +1,13 @@
+import { panic } from "better-result";
 // Pure-logic tests for the network baseline metrics. These never open a page,
 // so they launch no browser and need no dev server or storageState.
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
+  WATERFALL_REQUEST_DELAY_MS,
   type NetworkBaseline,
   type RouteNetworkMetrics,
   browserRequestInterval,
@@ -10,7 +15,6 @@ import {
   deepestWaterfallSequence,
   diffNetworkBaseline,
   mergeNetworkBaseline,
-  mergeResampledMetrics,
   normalizeApiPath,
   responseSizeAllowance,
   waitForQuietPeriod,
@@ -40,365 +44,203 @@ describe("normalizeApiPath", () => {
   });
 });
 
-describe("waterfallDepth", () => {
-  test("empty input is 0", () => {
+describe("controlled launch waves", () => {
+  test("empty input has no levels", () => {
     expect(waterfallDepth([])).toBe(0);
+    expect(deepestWaterfallSequence([])).toEqual([]);
   });
 
-  test("fully parallel requests are one round", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 1, end: 9 },
-        { start: 2, end: 8 },
-      ]),
-    ).toBe(1);
+  test("a faster response never adds a launch level", () => {
+    // Mutation: the old response-overlap rule returns 1 then 2 and must fail.
+    for (const end of [100, 80]) {
+      const intervals = [
+        { start: 0, end, key: "a" },
+        { start: 90, end: 200, key: "b" },
+      ];
+      expect(waterfallDepth(intervals)).toBe(1);
+      expect(deepestWaterfallSequence(intervals)).toEqual([["a", "b"]]);
+    }
   });
 
-  test("distinct non-overlapping waves are separate rounds", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: 30 },
-      ]),
-    ).toBe(3);
+  test("invoices waves keep depth across server times and launch jitter", () => {
+    const waves = [
+      ["get-session"],
+      ["professional-use"],
+      ["workspace", "preferences", "billing"],
+      ["get-active-member-role"],
+      [
+        "invoices",
+        "contacts",
+        "accounts",
+        "tax-rates",
+        "currencies",
+        "templates",
+      ],
+    ];
+    const requestCount = waves.flat().length;
+    assertProperty(
+      "invoices waves keep depth across server times and launch jitter",
+      fc.property(
+        fc.array(
+          fc.record({
+            serverMs: fc.integer({ min: 0, max: 200 }),
+            jitterMs: fc.integer({
+              min: 0,
+              max: WATERFALL_REQUEST_DELAY_MS / 2 - 1,
+            }),
+            processingMs: fc.integer({ min: 10, max: 100 }),
+          }),
+          { minLength: requestCount, maxLength: requestCount },
+        ),
+        (samples) => {
+          let offset = 0;
+          let waveStart = 0;
+          const intervals = waves.flatMap((wave) => {
+            const launched = wave.map((key) => {
+              const sample = samples.at(offset++);
+              if (sample === undefined) {
+                panic("generator must supply every request");
+              }
+              const start = waveStart + sample.jitterMs;
+              return {
+                start,
+                end: start + WATERFALL_REQUEST_DELAY_MS + sample.serverMs,
+                key,
+                processingMs: sample.processingMs,
+              };
+            });
+            // Includes parsing, query settling, rendering and mounting after the response.
+            waveStart = Math.max(
+              ...launched.map(({ end, processingMs }) => end + processingMs),
+            );
+            return launched;
+          });
+          expect(waterfallDepth(intervals)).toBe(5);
+          expect(
+            deepestWaterfallSequence(intervals).map((level) =>
+              level.toSorted(),
+            ),
+          ).toEqual(waves.map((wave) => wave.toSorted()));
+          expect(
+            deepestWaterfallSequence(intervals.toReversed()).map((level) =>
+              level.toSorted(),
+            ),
+          ).toEqual(waves.map((wave) => wave.toSorted()));
+          expect(
+            waterfallDepth(
+              intervals.map((interval) => ({
+                ...interval,
+                end: interval.end + 10_000,
+              })),
+            ),
+          ).toBe(5);
+        },
+      ),
+    );
   });
 
-  test("mixed overlap counts only distinct waves", () => {
+  test("arbitrary request graphs preserve launch depth across response speeds", () => {
+    assertProperty(
+      "arbitrary request graphs preserve launch depth across response speeds",
+      fc.property(
+        fc.array(
+          fc.array(
+            fc.record({
+              jitterMs: fc.integer({
+                min: 0,
+                max: WATERFALL_REQUEST_DELAY_MS / 2 - 1,
+              }),
+              serverMs: fc.integer({ min: 0, max: 200 }),
+            }),
+            { minLength: 1, maxLength: 8 },
+          ),
+          { minLength: 1, maxLength: 8 },
+        ),
+        (waves) => {
+          let waveStart = 0;
+          const intervals = waves.flatMap((wave) => {
+            const launched = wave.map(({ jitterMs, serverMs }) => {
+              const start = waveStart + jitterMs;
+              return {
+                start,
+                end: start + WATERFALL_REQUEST_DELAY_MS + serverMs,
+              };
+            });
+            waveStart = Math.max(...launched.map(({ end }) => end)) + 100;
+            return launched;
+          });
+          expect(waterfallDepth(intervals)).toBe(waves.length);
+          expect(
+            waterfallDepth(
+              intervals.map(({ start }) => ({ start, end: start + 1 })),
+            ),
+          ).toBe(waves.length);
+        },
+      ),
+    );
+  });
+
+  test("clusters anchor at the first launch instead of chaining adjacent jitter", () => {
     expect(
       waterfallDepth([
-        { start: 0, end: 100 },
-        { start: 2, end: 12 },
-        { start: 100, end: 120 },
+        { start: 0, end: 1000 },
+        { start: 100, end: 1100 },
+        { start: 200, end: 1200 },
       ]),
     ).toBe(2);
   });
 
-  test("a long parallel request prevents false chains through fast replies", () => {
-    expect(
-      waterfallDepth([
-        { start: 0, end: 500 },
-        { start: 2, end: 10 },
-        { start: 10, end: 20 },
-        { start: 20, end: 30 },
-      ]),
-    ).toBe(1);
-  });
-
-  test("a faster response can raise the reading by one", () => {
-    // Pins the asymmetry the route-smoke resampling exists for: the same two
-    // requests read as one round or two depending only on how quickly the
-    // first one answered. Any change that makes this deterministic can drop
-    // WATERFALL_DEPTH_RESAMPLES.
-    const overlapping = [
-      { start: 0, end: 100 },
-      { start: 90, end: 200 },
-    ];
-    const firstAnsweredFaster = [
-      { start: 0, end: 80 },
-      { start: 90, end: 200 },
-    ];
-
-    expect(waterfallDepth(overlapping)).toBe(1);
-    expect(waterfallDepth(firstAnsweredFaster)).toBe(2);
-  });
-
-  test("resampling keeps the shallowest depth but every other regression", () => {
-    const first: RouteNetworkMetrics = {
-      requests: ["GET /v1/a", "GET /v1/new"],
-      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
-      depth: 4,
-      depthChain: [
-        ["GET /v1/a"],
-        ["GET /v1/a"],
-        ["GET /v1/new"],
-        ["GET /v1/a"],
-      ],
-      dbQueries: { "GET /v1/a": 40 },
-      missingDbQueryCounts: { "GET /v1/new": 1 },
-      responseSizes: { "GET /v1/a": 90_000 },
-      missingResponseSizeCounts: {},
-    };
-    const shallower: RouteNetworkMetrics = {
-      requests: ["GET /v1/a"],
-      requestCounts: { "GET /v1/a": 1 },
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/a"], ["GET /v1/a"]],
-      dbQueries: { "GET /v1/a": 4 },
-      missingDbQueryCounts: {},
-      responseSizes: { "GET /v1/a": 1000 },
-      missingResponseSizeCounts: { "GET /v1/a": 1 },
-    };
-
-    expect(mergeResampledMetrics(first, shallower)).toEqual({
-      requests: ["GET /v1/a", "GET /v1/new"],
-      requestCounts: { "GET /v1/a": 2, "GET /v1/new": 1 },
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/a"], ["GET /v1/a"]],
-      dbQueries: { "GET /v1/a": 40 },
-      missingDbQueryCounts: { "GET /v1/new": 1 },
-      responseSizes: { "GET /v1/a": 90_000 },
-      missingResponseSizeCounts: { "GET /v1/a": 1 },
-    });
-  });
-
-  test("the kept depth keeps its own chain when the second sample is deeper", () => {
-    const shallow: RouteNetworkMetrics = {
-      requests: ["GET /v1/a"],
-      requestCounts: { "GET /v1/a": 1 },
-      depth: 2,
-      depthChain: [["GET /v1/a"], ["GET /v1/b"]],
-      dbQueries: {},
-      missingDbQueryCounts: {},
-      responseSizes: {},
-      missingResponseSizeCounts: {},
-    };
-    const deeper: RouteNetworkMetrics = {
-      ...shallow,
-      depth: 3,
-      depthChain: [["GET /v1/a"], ["GET /v1/b"], ["GET /v1/c"]],
-    };
-
-    const merged = mergeResampledMetrics(shallow, deeper);
-    expect(merged.depth).toBe(2);
-    expect(merged.depthChain).toEqual([["GET /v1/a"], ["GET /v1/b"]]);
-  });
-
-  test("an independent late request does not chain", () => {
-    // A quiet gap between launches makes this an idle prefetch, not another
-    // route-load round.
-    expect(
-      waterfallDepth([
-        { start: 0, end: 10 },
-        { start: 800, end: 900 },
-      ]),
-    ).toBe(1);
-  });
-
-  test("a strict chain of n requests is depth n", () => {
-    const chain = Array.from({ length: 6 }, (_, index) => ({
-      start: index * 20,
-      end: index * 20 + 20,
-    }));
-
-    expect(waterfallDepth(chain)).toBe(6);
-  });
-
-  test("a stalled parallel burst is still one round", () => {
-    const burst = [
-      { start: 0, end: 40 },
-      { start: 1, end: 55 },
-      { start: 2, end: 30 },
-    ];
-    const underLoad = burst.map(({ start, end }) => ({
-      start,
-      end: end * 20,
-    }));
-
-    expect(waterfallDepth(burst)).toBe(1);
-    expect(waterfallDepth(underLoad)).toBe(1);
-  });
-
-  test("a slower response cannot close an idle gap into an extra level", () => {
-    // The CI failure shape: an idle prefetch launched after a quiet gap is its
-    // own observation sequence. A response that grows under load may now run
-    // past that launch, and must not thereby fold the prefetch into the route's
-    // round count.
-    const observed = [
-      { start: 0, end: 10 },
-      { start: 600, end: 610 },
-      { start: 615, end: 625 },
-    ];
-    const underLoad = [
-      { start: 0, end: 150 },
-      { start: 600, end: 610 },
-      { start: 615, end: 625 },
-    ];
-
-    expect(waterfallDepth(observed)).toBe(2);
-    expect(waterfallDepth(underLoad)).toBe(2);
-  });
-
-  test("a chain whose parent outruns the sequence gap opens a new sequence", () => {
-    // The documented sensitivity cost of reading launch times: telling this
-    // apart from an idle prefetch would need the parent's duration, and every
-    // rule that reads response ends loses load-monotonicity.
-    expect(
-      waterfallDepth([
-        { start: 0, end: 600 },
-        { start: 600, end: 610 },
-      ]),
-    ).toBe(1);
-  });
-
-  // Deterministic LCG so the properties replay the same timelines every run.
-  const pseudoRandom = (seed: number) => {
-    let state = seed;
-    return () => {
-      state = (state * 48_271) % 2_147_483_647;
-      return state;
-    };
-  };
-
-  // Launch gaps deliberately straddle the 500ms observation-sequence boundary.
-  // A generator whose starts all sit a few ms apart never reaches that branch,
-  // which is how the previous formulation's non-monotonicity survived a
-  // property test.
-  const STARTS = [0, 2, 75, 77, 150, 225, 900, 905, 1600, 1610, 1612];
-
-  test("a slower response never deepens a waterfall", () => {
-    for (let seed = 1; seed <= 256; seed++) {
-      const nextRandom = pseudoRandom(seed);
-      const intervals = STARTS.map((start) => ({
-        start,
-        end: start + 1 + (nextRandom() % 100),
-      }));
-      const underLoad = intervals.map(({ start, end }) => ({
-        start,
-        end: end + (nextRandom() % 1000),
-      }));
-
-      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
-        waterfallDepth(intervals),
-      );
-    }
-  });
-
-  test("a uniformly slower runner never deepens a waterfall", () => {
-    for (let seed = 1; seed <= 256; seed++) {
-      const nextRandom = pseudoRandom(seed);
-      const intervals = STARTS.map((start) => ({
-        start,
-        end: start + 1 + (nextRandom() % 300),
-      }));
-      const scale = 1 + (nextRandom() % 10);
-      const underLoad = intervals.map(({ start, end }) => ({
-        start: start * scale,
-        end: end * scale,
-      }));
-
-      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
-        waterfallDepth(intervals),
-      );
-    }
-  });
-
-  test("interval order cannot change launch rounds", () => {
-    const intervals = [
-      { start: 0, end: 10 },
-      { start: 2, end: 12 },
-      { start: 12, end: 20 },
-      { start: 15, end: 25 },
-      { start: 25, end: 35 },
-    ];
-
-    expect(waterfallDepth(intervals)).toBe(3);
-    expect(waterfallDepth(intervals.toReversed())).toBe(3);
-  });
-});
-
-describe("deepestWaterfallSequence", () => {
-  const keyed = (
-    starts: readonly { start: number; end: number; key: string }[],
-  ) => deepestWaterfallSequence([...starts]);
-
-  test("empty input has no levels", () => {
-    expect(deepestWaterfallSequence([])).toEqual([]);
-  });
-
-  test("a strict chain names one request per level, in launch order", () => {
-    const chain = Array.from({ length: 4 }, (_, index) => ({
-      start: index * 20,
-      end: index * 20 + 20,
-      key: `GET /v1/step-${index}`,
-    }));
-
-    expect(keyed(chain)).toEqual([
-      ["GET /v1/step-0"],
-      ["GET /v1/step-1"],
-      ["GET /v1/step-2"],
-      ["GET /v1/step-3"],
-    ]);
-  });
-
-  test("a parallel burst is one level holding every key", () => {
-    expect(
-      keyed([
-        { start: 0, end: 40, key: "GET /v1/a" },
-        { start: 1, end: 55, key: "GET /v1/b" },
-        { start: 2, end: 30, key: "GET /v1/c" },
-      ]),
-    ).toEqual([["GET /v1/a", "GET /v1/b", "GET /v1/c"]]);
-  });
-
-  test("a faster response names the request that reads as the extra level", () => {
-    // Same pair as "a faster response can raise the reading by one": the chain
-    // has to say which request moved, so a re-run can be judged.
-    const overlapping = [
-      { start: 0, end: 100, key: "GET /v1/a" },
-      { start: 90, end: 200, key: "GET /v1/b" },
-    ];
-    const firstAnsweredFaster = [
-      { start: 0, end: 80, key: "GET /v1/a" },
-      { start: 90, end: 200, key: "GET /v1/b" },
-    ];
-
-    expect(keyed(overlapping)).toEqual([["GET /v1/a", "GET /v1/b"]]);
-    expect(keyed(firstAnsweredFaster)).toEqual([["GET /v1/a"], ["GET /v1/b"]]);
-  });
-
-  test("reports the deepest sequence, not the last one", () => {
-    expect(
-      keyed([
-        { start: 0, end: 10, key: "GET /v1/a" },
-        { start: 10, end: 20, key: "GET /v1/b" },
-        { start: 20, end: 30, key: "GET /v1/c" },
-        { start: 900, end: 910, key: "GET /v1/late" },
-        { start: 910, end: 920, key: "GET /v1/later" },
-      ]),
-    ).toEqual([["GET /v1/a"], ["GET /v1/b"], ["GET /v1/c"]]);
-  });
-
-  test("a request still open across a launch gap is named in the new sequence", () => {
-    // A stays in flight past the gap after B launches; B..E overlap A, not each
-    // other, so A is what makes them one level and must appear in it.
-    expect(
-      keyed([
-        { start: 0, end: 2000, key: "GET /v1/a" },
-        { start: 600, end: 610, key: "GET /v1/b" },
-        { start: 1000, end: 1010, key: "GET /v1/c" },
-        { start: 1400, end: 1410, key: "GET /v1/d" },
-        { start: 1800, end: 1810, key: "GET /v1/e" },
-        { start: 2000, end: 2010, key: "GET /v1/f" },
-      ]),
-    ).toEqual([
-      ["GET /v1/a", "GET /v1/b", "GET /v1/c", "GET /v1/d", "GET /v1/e"],
-      ["GET /v1/f"],
-    ]);
-  });
-
-  test("keyless intervals still yield one level per round", () => {
+  test("the launch threshold is half the injected request delay", () => {
+    const threshold = WATERFALL_REQUEST_DELAY_MS / 2;
     expect(
       deepestWaterfallSequence([
-        { start: 0, end: 10 },
-        { start: 10, end: 20 },
+        { start: 0, end: 1000, key: "first" },
+        { start: threshold - 1, end: 1000, key: "parallel" },
+        { start: threshold, end: 1000, key: "next" },
       ]),
-    ).toEqual([[], []]);
+    ).toEqual([["first", "parallel"], ["next"]]);
   });
 
-  test("depth is the chain length", () => {
-    const intervals = [
-      { start: 0, end: 10, key: "GET /v1/a" },
-      { start: 2, end: 12, key: "GET /v1/b" },
-      { start: 12, end: 20, key: "GET /v1/c" },
-      { start: 15, end: 25, key: "GET /v1/d" },
-      { start: 25, end: 35, key: "GET /v1/e" },
-    ];
+  test("dependent processing can exceed five milliseconds", () => {
+    expect(
+      waterfallDepth([
+        { start: 0, end: 250 },
+        { start: 350, end: 600 },
+        { start: 700, end: 950 },
+      ]),
+    ).toBe(3);
+  });
 
-    expect(deepestWaterfallSequence(intervals)).toHaveLength(
-      waterfallDepth(intervals),
-    );
+  test("idle prefetch splits after delay plus processing; deepest sequence wins", () => {
+    const intervals = [
+      { start: 0, end: 250, key: "a" },
+      { start: 600, end: 850, key: "b" },
+      { start: 1200, end: 1450, key: "c" },
+      { start: 3000, end: 3250, key: "prefetch" },
+      { start: 3300, end: 3550, key: "prefetch-child" },
+    ];
+    expect(deepestWaterfallSequence(intervals)).toEqual([["a"], ["b"], ["c"]]);
+    expect(waterfallDepth(intervals)).toBe(3);
+  });
+
+  test("equal-depth sequences keep the earliest chain", () => {
+    expect(
+      deepestWaterfallSequence([
+        { start: 0, end: 250, key: "first" },
+        { start: 300, end: 550, key: "second" },
+        { start: 2000, end: 2250, key: "late" },
+        { start: 2300, end: 2550, key: "later" },
+      ]),
+    ).toEqual([["first"], ["second"]]);
+  });
+
+  test("keyless requests still contribute levels", () => {
+    expect(
+      deepestWaterfallSequence([
+        { start: 0, end: 250 },
+        { start: 300, end: 550 },
+      ]),
+    ).toEqual([[], []]);
   });
 });
 

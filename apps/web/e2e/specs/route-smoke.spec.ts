@@ -28,13 +28,11 @@ import {
 import { createUploadedDocumentRoute } from "../helpers/document";
 import {
   type RouteNetworkMetrics,
-  WATERFALL_DEPTH_RESAMPLES,
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
-  baselineWaterfallDepth,
   createNetworkCollector,
+  delayWaterfallRequests,
   mergeNetworkBaseline,
-  mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
@@ -495,29 +493,7 @@ const smokeRouteTarget = async ({
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
-  // A deeper reading than the budget is either a regression or a fast sample
-  // over-reading by one; only more samples tell them apart. A regression
-  // survives every re-measurement, jitter does not. Samples run one at a time
-  // on purpose: a second page in flight would distort the timing being read.
-  const budget = baselineWaterfallDepth(route.template);
-  const resampleDeeperReading = async (
-    metrics: RouteNetworkMetrics,
-    remaining: number,
-  ): Promise<RouteNetworkMetrics> => {
-    if (budget === null || metrics.depth <= budget || remaining === 0) {
-      return metrics;
-    }
-    const again = await measureRouteTarget({ browser, route });
-    return resampleDeeperReading(
-      mergeResampledMetrics(metrics, again),
-      remaining - 1,
-    );
-  };
-
-  const metrics = await resampleDeeperReading(
-    await measureRouteTarget({ browser, route }),
-    WATERFALL_DEPTH_RESAMPLES,
-  );
+  const metrics = await measureRouteTarget({ browser, route });
   // Stored under the template it received; redirect targets arrive as
   // "<template> target".
   results.set(route.template, metrics);
@@ -539,11 +515,13 @@ const measureRouteTarget = async ({
   const detachNetwork = network.trackPage(page);
 
   try {
+    await delayWaterfallRequests(page);
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
       minimumObservationMs: DEFAULT_SETTLE_MS,
-      timeoutMs: route.settleMs ?? DEFAULT_SETTLE_MS,
+      // Allow injected request waves to finish; quiet activity still exits early.
+      timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);

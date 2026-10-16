@@ -366,22 +366,30 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// A request launched this long after the previous LAUNCH starts a new
-// observation sequence, not another route-load round: an idle prefetch that
-// fires once the route has settled is not a level the user waits through. The
-// split reads start times only, so how long a response takes can never move an
-// observation boundary.
-//
-// Reading launch times rather than the gap since the previous response ENDED is
-// what buys load-monotonicity, and it costs sensitivity: a dependent request
-// whose parent took longer than this gap opens a new sequence instead of
-// counting a level. The three properties are not simultaneously satisfiable —
-// separating a dependent request from an idle prefetch requires knowing how long
-// the parent ran, and any rule that reads response ends lets a response growing
-// under load close a gap it used to exceed, which is exactly the failure this
-// metric had. Under-counting a slow chain is the safer of the two errors for a
-// guard whose baselines are only ever compared upward.
-const REQUEST_SEQUENCE_GAP_MS = 500;
+// Measurement intervention: hold each tracked API request before sending it.
+// Start with 250 ms: the 125 ms clustering window allows response parsing,
+// query settling and mounting jitter without relying on response end times.
+// Local shard calibration is required before claiming this margin is measured.
+export const WATERFALL_REQUEST_DELAY_MS = 250;
+const WATERFALL_LAUNCH_CLUSTER_MS = WATERFALL_REQUEST_DELAY_MS / 2;
+// Leave 750 ms for server/processing work beyond the injected delay before
+// treating a later launch as idle prefetch rather than another load wave.
+const REQUEST_SEQUENCE_GAP_MS = WATERFALL_REQUEST_DELAY_MS + 750;
+
+// Install before navigation; share the collector's origin and resource filter
+// so every request counted by the gate receives the same intervention.
+export const delayWaterfallRequests = async (page: Page): Promise<void> => {
+  const apiOrigin = new URL(DEFAULT_API_URL).origin;
+  await page.route(
+    (url) => url.origin === apiOrigin,
+    async (route) => {
+      if (isTrackedApiRequest(route.request(), apiOrigin)) {
+        await ownerSleep(WATERFALL_REQUEST_DELAY_MS);
+      }
+      await route.continue();
+    },
+  );
+};
 
 export type WaterfallInterval = {
   start: number;
@@ -391,37 +399,12 @@ export type WaterfallInterval = {
   key?: string;
 };
 
-// Depth = the most consecutive busy blocks inside any one observation sequence,
-// where a busy block is a maximal run of requests whose intervals overlap. Two
-// requests that were in flight at the same instant are never counted as two
-// levels, so this is a lower bound on true causal depth: a request that depends
-// on a fast response stays hidden behind an unrelated slow one.
-//
-// Load-monotonicity is the property the guard rests on: neither a slower
-// response nor a uniformly stretched timeline can raise the result. The
-// converse does not hold: a FASTER response ends a busy block earlier, so an
-// unrelated request that used to overlap it now launches after it and reads
-// as one more level. A single lucky sample therefore over-reads by one on a
-// route that did not change, which is why the route-smoke suite re-measures a
-// route before treating a deeper reading as a regression
-// (`WATERFALL_DEPTH_RESAMPLES`). Timing alone cannot separate a dependent
-// launch from a coincidentally later one; sampling is the honest fix. Two
-// rules buy the monotonicity that does hold:
-//   1. The sequence split reads LAUNCH times only. Segment boundaries therefore
-//      cannot move when responses take longer, and a uniform slowdown widens
-//      launch gaps, which only splits a sequence further.
-//   2. Coverage (`busyUntil`) is a running max over every end seen so far and is
-//      never rewound at a boundary. A still-in-flight long request keeps masking
-//      the requests that overlap it even across a split, so a split can only
-//      lower the count, never unmask a chain hiding behind that request.
-// The previous formulation broke rule 1: it counted rounds through a counter
-// that reset on a gap measured from the END of the previous round, so a response
-// that grew under load could close that gap, skip the reset, and carry the count
-// forward into a deeper reading with no change to the route at all.
-//
-// Returns the busy blocks of the deepest sequence in launch order, one entry per
-// level, each holding every request key that shared that level's block. Depth is
-// its length, so the number and the chain behind it can never disagree.
+// Under the request hold above, dependent launches are separated by at least
+// D; launches within D/2 of a wave's first launch share a level. Anchor each
+// cluster at its first launch so a train of jitter cannot merge later waves.
+// Response ends never affect levels or idle-prefetch splits. This measures
+// launch waves under the intervention, not causality in an unmodified trace.
+// Ties retain the earliest deepest sequence; depth and diagnostics share it.
 export const deepestWaterfallSequence = (
   intervals: WaterfallInterval[],
 ): string[][] => {
@@ -430,48 +413,32 @@ export const deepestWaterfallSequence = (
   if (first === undefined) {
     return [];
   }
-
   const keysOf = ({ key }: WaterfallInterval): string[] =>
     key === undefined ? [] : [key];
-
-  // A sequence split rebinds `blocks` instead of clearing it, so `best` keeps
-  // pointing at the winning sequence while that sequence is still growing;
-  // `bestDepth` then trims it to the prefix that actually counted. Ties keep
-  // the earliest sequence: the first chain to reach the depth is the one the
-  // route loaded through.
-  let currentBlock = keysOf(first);
-  let blocks = [currentBlock];
-  let best = blocks;
+  let currentLevel = keysOf(first);
+  let levels = [currentLevel];
+  let best = levels;
   let bestDepth = 1;
   let previousStart = first.start;
-  let busyUntil = first.end;
-  const launched: WaterfallInterval[] = [first];
+  let levelStart = first.start;
 
   for (const interval of sorted.slice(1)) {
-    const launchGap = interval.start - previousStart;
-    previousStart = interval.start;
-
-    if (launchGap > REQUEST_SEQUENCE_GAP_MS) {
-      // `busyUntil` carries a still-open request across the gap, and that
-      // request is what keeps the new sequence's first block busy; name it, or
-      // the chain would show its followers as parallel with nothing to wait on.
-      currentBlock = launched
-        .filter(({ end }) => end > interval.start)
-        .flatMap(keysOf)
-        .concat(keysOf(interval));
-      blocks = [currentBlock];
-    } else if (interval.start >= busyUntil) {
-      currentBlock = keysOf(interval);
-      blocks.push(currentBlock);
-      if (blocks.length > bestDepth) {
-        best = blocks;
-        bestDepth = blocks.length;
+    if (interval.start - previousStart > REQUEST_SEQUENCE_GAP_MS) {
+      currentLevel = keysOf(interval);
+      levels = [currentLevel];
+      levelStart = interval.start;
+    } else if (interval.start - levelStart >= WATERFALL_LAUNCH_CLUSTER_MS) {
+      currentLevel = keysOf(interval);
+      levels.push(currentLevel);
+      levelStart = interval.start;
+      if (levels.length > bestDepth) {
+        best = levels;
+        bestDepth = levels.length;
       }
     } else {
-      currentBlock.push(...keysOf(interval));
+      currentLevel.push(...keysOf(interval));
     }
-    busyUntil = Math.max(busyUntil, interval.end);
-    launched.push(interval);
+    previousStart = interval.start;
   }
   return best.slice(0, bestDepth);
 };
@@ -611,7 +578,7 @@ const pushNewRequestProblems = ({
 };
 
 // One line per level of the deepest sequence. Several keys on a level means
-// those requests overlapped, so they cost one round between them, not several.
+// those requests launched in the same measured wave.
 const formatDepthChain = (depthChain: string[][]): string => {
   if (!depthChain.some((keys) => keys.length > 0)) {
     return "";
@@ -897,64 +864,6 @@ const readNetworkBaseline = (): NetworkBaseline | null => {
     throw new Error(`Invalid network baseline shape in ${BASELINE_RELATIVE}`);
   }
   return parsed;
-};
-
-// How many extra measurements a route gets when its first sample reads deeper
-// than the committed budget. Depth is a timing lower bound that a fast sample
-// can over-read by one (see `waterfallDepth`); a real extra round shows up in
-// every sample, jitter does not. Only suspected regressions pay for the extra
-// navigations.
-export const WATERFALL_DEPTH_RESAMPLES = 2;
-
-/** Committed depth budget for a route, or null when it has no baseline entry. */
-export const baselineWaterfallDepth = (route: string): number | null =>
-  readNetworkBaseline()?.[route]?.depth ?? null;
-
-const maxPerKey = (
-  left: Record<string, number>,
-  right: Record<string, number>,
-): Record<string, number> => {
-  const merged: Record<string, number> = { ...left };
-  for (const [key, value] of Object.entries(right)) {
-    merged[key] = Math.max(merged[key] ?? 0, value);
-  }
-  return Object.fromEntries(
-    Object.entries(merged).toSorted(([a], [b]) => a.localeCompare(b)),
-  );
-};
-
-/**
- * Fold a re-measurement into the metrics of one route. Depth takes the
- * minimum, because only jitter can push a sample above the true depth. Every
- * other dimension takes the union or per-key maximum, so a regression the
- * first sample caught (a new request, an N+1, an oversized body) survives a
- * later sample that happened to read shallower.
- */
-export const mergeResampledMetrics = (
-  current: RouteNetworkMetrics,
-  candidate: RouteNetworkMetrics,
-): RouteNetworkMetrics => {
-  // The chain travels with the depth it explains; a chain from the discarded
-  // sample would name levels the merged reading does not claim.
-  const shallowest = candidate.depth < current.depth ? candidate : current;
-  return {
-    requests: [
-      ...new Set([...current.requests, ...candidate.requests]),
-    ].toSorted(),
-    requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
-    depth: shallowest.depth,
-    depthChain: shallowest.depthChain,
-    dbQueries: maxPerKey(current.dbQueries, candidate.dbQueries),
-    missingDbQueryCounts: maxPerKey(
-      current.missingDbQueryCounts,
-      candidate.missingDbQueryCounts,
-    ),
-    responseSizes: maxPerKey(current.responseSizes, candidate.responseSizes),
-    missingResponseSizeCounts: maxPerKey(
-      current.missingResponseSizeCounts,
-      candidate.missingResponseSizeCounts,
-    ),
-  };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
