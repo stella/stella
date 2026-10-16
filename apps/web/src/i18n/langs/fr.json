@@ -173,6 +173,7 @@
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
       "holdOutOfScoring": "Exclure de la notation",
+      "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
       "interpretationNote": "Note d’interprétation",
       "interpretationNotePlaceholder": "Si le sens de cette preuve est contesté, précisez comment. Laissez vide sinon.",
@@ -1325,6 +1326,7 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "messageUnavailable": "Ce message ne peut pas être affiché.",
     "mockModel": {
       "description": "Réponses prédéfinies du modèle simulé local",
       "label": "IA simulée"
@@ -1490,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
+      "add_matter_member": "Ajouter un membre au dossier",
       "apply-active-docx-edits": "Préparation des modifications",
       "ares_lookup_company": "Recherche des données d’entreprise",
       "ares_search_companies": "Recherche des données d’entreprise",
@@ -1546,7 +1549,6 @@
       "list_stories": "Liste des parties du document",
       "list_templates": "Liste des modèles",
       "load-skill": "Lecture des consignes",
-      "manage_organization": "Gérer l’organisation",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
       "read-skill-resource": "Lecture des consignes",
@@ -1556,6 +1558,7 @@
       "read_section": "Lecture d'une section",
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
+      "remove_matter_member": "Retirer un membre du dossier",
       "reply_comment": "Réponse au commentaire",
       "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
@@ -1589,6 +1592,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "update_organization_settings": "Modifier les paramètres de l’équipe",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
@@ -2554,6 +2558,10 @@
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
+      "validationInvalid": "Un champ contient une valeur qui ne peut pas être enregistrée.",
+      "validationRequired": "Un champ obligatoire est vide.",
+      "validationTooLong": "Trop long : {limit, number} caractères au maximum.",
+      "validationTooShort": "Trop court : {limit, number} caractères au minimum.",
       "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
       "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."

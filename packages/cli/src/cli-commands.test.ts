@@ -1649,26 +1649,18 @@ describe("template persistence discriminator split", () => {
   });
 });
 
-describe("organization discriminator split (S2/Phase 4)", () => {
-  test("add-member injects action and forwards the flag args", async () => {
+describe("matter membership commands", () => {
+  test("add-member forwards its required inputs", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: [
-        "organization",
-        "add-member",
-        "--matter-id",
-        "w1",
-        "--user-id",
-        "u1",
-      ],
+      args: ["matter", "add-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
       token: makeToken(["admin_write"]),
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.name).toBe("add_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "add_member",
       matter_id: "w1",
       user_id: "u1",
     });
@@ -1677,14 +1669,7 @@ describe("organization discriminator split (S2/Phase 4)", () => {
   test("remove-member is destructive: non-TTY without --yes aborts (exit 7)", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: [
-        "organization",
-        "remove-member",
-        "--matter-id",
-        "w1",
-        "--user-id",
-        "u1",
-      ],
+      args: ["matter", "remove-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
       token: makeToken(["admin_write"]),
     });
@@ -1693,17 +1678,24 @@ describe("organization discriminator split (S2/Phase 4)", () => {
     expect(server.requests).toHaveLength(0);
   });
 
-  test("update-settings injects its action value", async () => {
+  test("update-settings forwards settings without an action discriminator", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: ["organization", "update-settings", "--matter-number-padding", "4"],
+      args: [
+        "organization",
+        "update-settings",
+        "--matter-number-pattern",
+        "{year}-{number}",
+        "--matter-number-padding",
+        "4",
+      ],
       url: server.url,
       token: makeToken(["admin_write"]),
     });
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "update_org_settings",
+      matter_number_pattern: "{year}-{number}",
       matter_number_padding: 4,
     });
   });
@@ -1723,7 +1715,6 @@ describe("organization discriminator split (S2/Phase 4)", () => {
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "update_org_settings",
       document_processing_mode: "searchable-text",
     });
   });
@@ -1973,7 +1964,7 @@ describe("destructive confirm injection (S4)", () => {
     const server = startMockServer(() => ({ toolPayload: { removed: true } }));
     const result = await runCli({
       args: [
-        "organization",
+        "matter",
         "remove-member",
         "--matter-id",
         "w1",
@@ -1986,9 +1977,8 @@ describe("destructive confirm injection (S4)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.name).toBe("remove_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "remove_member",
       matter_id: "w1",
       user_id: "u1",
       confirm: true,

@@ -173,6 +173,7 @@
       "heldDescription": "Význam těchto extrahovaných údajů je <strong>skutečně nejistý</strong> — jejich obsah je předběžný nebo nepotvrzený, nejde pouze o ručně psaný text. Do hodnocení se nezahrnou, dokud je kontrolující osoba nepotvrdí, neupraví nebo nepřepíše. Čitelný zdroj se nikdy nezařadí do fronty jen kvůli svému médiu.",
       "heldForReview": "Pozastaveno ke kontrole",
       "holdOutOfScoring": "Vyloučit z hodnocení",
+      "inScoring": "Zahrnuto do hodnocení",
       "includeInScoring": "Zahrnout do hodnocení",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Pokud je význam tohoto důkazu sporný, popište jak. Pokud sporný není, nechte pole prázdné.",
@@ -1325,6 +1326,7 @@
       "loadError": "Nepodařilo se načíst položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "messageUnavailable": "Tuto zprávu nelze zobrazit.",
     "mockModel": {
       "description": "Předpřipravené odpovědi místního simulovaného modelu",
       "label": "Simulovaná AI"
@@ -1490,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Přidávání komentáře",
+      "add_matter_member": "Přidat člena spisu",
       "apply-active-docx-edits": "Připravuji úpravy dokumentu",
       "ares_lookup_company": "Hledám záznamy o firmě",
       "ares_search_companies": "Hledám záznamy o firmách",
@@ -1546,7 +1549,6 @@
       "list_stories": "Výpis částí dokumentu",
       "list_templates": "Výpis vzorů",
       "load-skill": "Čtu pokyny",
-      "manage_organization": "Spravovat organizaci",
       "read-contact": "Čtení kontaktu",
       "read-content-across-matters": "Čtení obsahu napříč spisy",
       "read-skill-resource": "Čtu pokyny",
@@ -1556,6 +1558,7 @@
       "read_section": "Čtení oddílu",
       "read_story": "Čtení části dokumentu",
       "remember": "Ukládání do paměti",
+      "remove_matter_member": "Odebrat člena spisu",
       "reply_comment": "Odpovídání na komentář",
       "request_secret": "Žádost o soukromý přístupový údaj",
       "resolve_comment": "Řešení komentáře",
@@ -1589,6 +1592,7 @@
       "suggest_template_fields": "Navrhuji pole vzoru",
       "unknown": "Použití nástroje",
       "update-entity-fields": "Aktualizace metadat",
+      "update_organization_settings": "Upravit nastavení týmu",
       "update_reader_annotation": "Upravit zvýraznění nebo komentář",
       "use-browser": "Používání vašeho prohlížeče",
       "use_connector_secret": "Použití přístupového údaje konektoru",
@@ -2554,6 +2558,10 @@
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
+      "validationInvalid": "Pole obsahuje hodnotu, kterou nelze uložit.",
+      "validationRequired": "Povinné pole je prázdné.",
+      "validationTooLong": "Příliš dlouhé: použijte nejvýše {limit, number} znaků.",
+      "validationTooShort": "Příliš krátké: použijte alespoň {limit, number} znaků.",
       "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
       "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
