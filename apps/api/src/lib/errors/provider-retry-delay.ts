@@ -47,7 +47,12 @@ const headerValue = (headers: unknown, name: string): string | undefined => {
     return headers.get(name) ?? undefined;
   }
   if (isRecord(headers)) {
-    const value = headers[name] ?? headers[name.toLowerCase()];
+    // Header names are case-insensitive; a plain object keeps the provider's
+    // spelling (`Retry-After`, `retry-after`).
+    const key = Object.keys(headers).find(
+      (candidate) => candidate.toLowerCase() === name,
+    );
+    const value = key === undefined ? undefined : headers[key];
     return typeof value === "string" ? value : undefined;
   }
   return undefined;

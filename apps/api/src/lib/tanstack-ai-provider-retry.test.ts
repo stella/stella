@@ -1,9 +1,19 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  ModelDeadlineExceededError,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
 import { PROVIDER_RETRY_WAIT_CAP_MS } from "@/api/lib/errors/provider-retry-delay";
-import { withProviderRetryWait } from "@/api/lib/tanstack-ai-generate";
+import {
+  AIGenerationCancelledError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
+import {
+  withGenerationDeadline,
+  withProviderRetryWait,
+} from "@/api/lib/tanstack-ai-generate";
 
 const rateLimited = (retryAfterMs: number | undefined) =>
   new ProviderCallError({
@@ -73,9 +83,9 @@ describe("withProviderRetryWait", () => {
     });
   }
 
-  test("the caller's deadline cancels the wait", async () => {
+  test("a cancellation during the wait ends as a cancelled generation", async () => {
     const controller = new AbortController();
-    const reason = new Error("deadline");
+    const reason = new Error("caller left");
     const call = scripted([rateLimited(PROVIDER_RETRY_WAIT_CAP_MS)]);
     const pending = Result.tryPromise({
       try: async () => await withProviderRetryWait(controller.signal, call.run),
@@ -85,7 +95,30 @@ describe("withProviderRetryWait", () => {
     controller.abort(reason);
     const outcome = await pending;
     expect(call.calls).toHaveLength(1);
-    expect(Result.isError(outcome) && outcome.error).toBe(reason);
+    if (!Result.isError(outcome)) {
+      return panic("expected the cancelled wait to fail");
+    }
+    const error = outcome.error;
+    if (!(error instanceof HandlerError)) {
+      return panic("expected a HandlerError");
+    }
+    expect(error.cause).toBeInstanceOf(AIGenerationCancelledError);
+  });
+
+  test("a deadline during the wait settles as the deadline", async () => {
+    const call = scripted([rateLimited(PROVIDER_RETRY_WAIT_CAP_MS)]);
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await withGenerationDeadline(
+          { deadlineMs: 20 },
+          async (signal) => await withProviderRetryWait(signal, call.run),
+        ),
+      catch: (error: unknown) => error,
+    });
+    expect(call.calls).toHaveLength(1);
+    expect(Result.isError(outcome) && outcome.error).toBeInstanceOf(
+      ModelDeadlineExceededError,
+    );
   });
 
   test("an SDK error not yet wrapped is read the same way", async () => {

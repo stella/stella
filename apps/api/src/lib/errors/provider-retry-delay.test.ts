@@ -84,6 +84,17 @@ describe("providerRetryDelayMs sources", () => {
     ).toBe(250);
   });
 
+  test("plain header objects match names in any case", () => {
+    expect(providerRetryDelayMs({ headers: { "Retry-After": "7" } })).toBe(
+      7000,
+    );
+    expect(
+      providerRetryDelayMs({
+        response: { headers: { "Retry-After-Ms": "120", "RETRY-AFTER": "9" } },
+      }),
+    ).toBe(120);
+  });
+
   test("retry-after as an HTTP date counts from now and never goes negative", () => {
     expect(
       providerRetryDelayMs(
