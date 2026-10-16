@@ -1,3 +1,4 @@
+// parser-output-unchanged: publisher access admission and connection lifetime change request scheduling; successful payload parsing is unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
 // parser-output-unchanged: isolate default test gate state through a lightweight runner signal; production requests and parsed output are unchanged.
@@ -16,6 +17,27 @@ import {
 } from "./publisher-gate-fixture-state";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
+
+const TRY_ACQUIRE_CONNECTION_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+if redis.call("EXISTS", KEYS[2]) == 1 then return 0 end
+local reserved = tonumber(redis.call("GET", KEYS[1])) or now
+if reserved > now then return 0 end
+redis.call("PSETEX", KEYS[2], tonumber(ARGV[2]), ARGV[1])
+redis.call("PSETEX", KEYS[1], tonumber(ARGV[3]) * 2, tostring(now + tonumber(ARGV[3])))
+return 1
+`;
+
+const RELEASE_CONNECTION_SCRIPT = `
+if redis.call("GET", KEYS[2]) ~= ARGV[1] then return 0 end
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local interval = tonumber(ARGV[2])
+redis.call("PSETEX", KEYS[1], interval * 2, tostring(now + interval))
+redis.call("DEL", KEYS[2])
+return 1
+`;
 
 const TRY_RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
@@ -83,6 +105,7 @@ type PublisherRequestGateConfig = {
 export type PublisherRequestGateDependencies = {
   redis: () => PublisherGateClient | Promise<PublisherGateClient>;
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
+  now?: () => number;
 };
 
 const fixtureDependencies =
@@ -178,14 +201,44 @@ const defaultDependencies = (
   let generation = publisherGateFixtureGeneration();
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
+  let localConnection: { token: string; expiresAt: number } | undefined;
   const localRedis: PublisherGateClient = {
     send: (_command, args) => {
       if (generation !== publisherGateFixtureGeneration()) {
         generation = publisherGateFixtureGeneration();
         localNextRequestAt = 0;
         localCooldownUntil = 0;
+        localConnection = undefined;
       }
       const now = Temporal.Now.instant().epochMilliseconds;
+      if (args[0] === TRY_ACQUIRE_CONNECTION_SCRIPT) {
+        if (
+          (localConnection?.expiresAt ?? 0) > now ||
+          localNextRequestAt > now
+        ) {
+          return 0;
+        }
+        const token = args.at(4);
+        const holdMs = Number(args.at(5));
+        if (token === undefined) {
+          return panic("Publisher connection reservation requires an owner");
+        }
+        localConnection = { token, expiresAt: now + holdMs };
+        localNextRequestAt = now + intervalMs;
+        return 1;
+      }
+      if (args[0] === RELEASE_CONNECTION_SCRIPT) {
+        if (
+          localConnection === undefined ||
+          localConnection.token !== args.at(4) ||
+          localConnection.expiresAt <= now
+        ) {
+          return 0;
+        }
+        localConnection = undefined;
+        localNextRequestAt = now + intervalMs;
+        return 1;
+      }
       if (args[0] === READ_COOLDOWN_SCRIPT) {
         return localCooldownUntil > now ? localCooldownUntil : 0;
       }
@@ -254,11 +307,18 @@ export class PublisherPacingStopped extends TaggedError(
   cause?: unknown;
 }> {}
 
+type AcquirePublisherConnectionOptions = {
+  token: string;
+  holdMs: number;
+  signal?: AbortSignal | undefined;
+};
+
 export const createPublisherRequestSlot = (
   { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
   dependencies = defaultDependencies(intervalMs, cooldown),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
+  const connectionKey = `{${key}}:connection`;
   type CommandWaitOptions = {
     signal?: AbortSignal | undefined;
     replies?: readonly number[];
@@ -380,6 +440,50 @@ export const createPublisherRequestSlot = (
     return reply === 1;
   };
   return Object.assign(reserve, {
+    now: () =>
+      (fixtureDependencies.getStore() ?? dependencies).now?.() ??
+      Temporal.Now.instant().epochMilliseconds,
+    sleep: async (durationMs: number, signal?: AbortSignal) =>
+      await (fixtureDependencies.getStore() ?? dependencies).sleep(
+        durationMs,
+        signal,
+      ),
+    tryAcquireConnection: async ({
+      token,
+      holdMs,
+      signal,
+    }: AcquirePublisherConnectionOptions) =>
+      (await commandWait(
+        [
+          TRY_ACQUIRE_CONNECTION_SCRIPT,
+          "2",
+          key,
+          connectionKey,
+          token,
+          String(holdMs),
+          String(intervalMs),
+        ],
+        { signal, replies: [0, 1] },
+      )) === 1,
+    releaseConnection: async (token: string) => {
+      const released = await commandWait(
+        [
+          RELEASE_CONNECTION_SCRIPT,
+          "2",
+          key,
+          connectionKey,
+          token,
+          String(intervalMs),
+        ],
+        { replies: [0, 1] },
+      );
+      if (released !== 1) {
+        throw new PublisherPacingStopped({
+          message: "Publisher connection ownership lost",
+          status: "pacing-unavailable",
+        });
+      }
+    },
     tryReserve: async (signal?: AbortSignal) => await tryReserve({ signal }),
     reserveImmediately: async (signal?: AbortSignal): Promise<void> => {
       await tryReserve({ signal, mode: "immediate" });

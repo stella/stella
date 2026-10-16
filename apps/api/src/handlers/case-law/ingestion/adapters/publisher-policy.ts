@@ -1,3 +1,4 @@
+// parser-output-unchanged: publisher access admission and connection lifetime change request scheduling; successful payload parsing is unchanged.
 // parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 // parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.
 /**
@@ -32,10 +33,13 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { evaluatePublisherAccessPolicy } from "@/api/lib/legal-search/publisher-access-policy";
 import {
   PUBLISHER_GATES,
   type PublisherGateId,
 } from "@/api/lib/legal-search/publisher-gates";
+
+import { runPublisherConnectionRequest } from "./publisher-connection";
 
 export {
   NALUS_DAILY_REQUEST_LIMIT,
@@ -92,6 +96,49 @@ export const publisherHosts = (adapterKey: AdapterKey): readonly string[] =>
 /** Minimum gap between two requests the adapter sends to its publisher. */
 export const publisherRequestIntervalMs = (adapterKey: AdapterKey): number =>
   PUBLISHER_GATES[ADAPTER_PUBLISHER_GATES[adapterKey]].intervalMs;
+
+export const publisherAccessAdmission = (
+  adapterKey: AdapterKey,
+  nowEpochMs: number,
+) => {
+  const gate = PUBLISHER_GATES[ADAPTER_PUBLISHER_GATES[adapterKey]];
+  return evaluatePublisherAccessPolicy(
+    "access" in gate ? gate.access.schedule : { type: "unrestricted" },
+    nowEpochMs,
+  );
+};
+
+type WithPublisherConnectionOptions = {
+  adapterKey: AdapterKey;
+  gateId: PublisherGateId;
+  signal?: AbortSignal | undefined;
+  request: (signal: AbortSignal | undefined) => Promise<Response>;
+};
+
+export const withPublisherConnection = async ({
+  adapterKey,
+  gateId,
+  signal,
+  request,
+}: WithPublisherConnectionOptions): Promise<Response> => {
+  const gate = PUBLISHER_GATES[gateId];
+  if (!("access" in gate) || !publisherGateReserves()) {
+    await reservePublisherGateSlot(gateId, signal);
+    return await request(signal);
+  }
+  const immediate = immediateRequestGate.getStore();
+  return await runPublisherConnectionRequest({
+    adapterKey,
+    access: gate.access,
+    slot:
+      immediate?.gateId === gateId
+        ? immediate.slot
+        : getPublisherGateSlot(gateId),
+    signal,
+    request,
+    ...(immediate?.gateId === gateId ? { mode: "immediate" } : {}),
+  });
+};
 
 /** What the declared interval leaves the whole slice per publisher per day. */
 export const publisherRequestsPerDay = (gateId: PublisherGateId): number =>

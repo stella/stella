@@ -48,6 +48,7 @@ import {
   listAdapters,
   listDeferredDocumentDrains,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { publisherAccessAdmission } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -121,6 +122,7 @@ import {
 } from "./ingestion-alert-health";
 import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
+import { acquirePublisherCycleSlot } from "./publisher-access";
 import {
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
@@ -808,12 +810,29 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // the DB-write slot, so without this every source crawls its backlog
       // at once and saturates the worker. Held only for the cycle and
       // released before the inter-cycle delay, so idle adapters free the slot.
-      await cycleSemaphore.acquire();
-      // A loop that queued on acquire() passed the drain check before the
-      // signal arrived; hand the slot back instead of starting a new cycle.
-      if (isDraining()) {
-        cycleSemaphore.release();
-        return;
+      const slot = await acquirePublisherCycleSlot({
+        adapterKey,
+        admission: publisherAccessAdmission,
+        now: () => Temporal.Now.instant().epochMilliseconds,
+        sleep: async (milliseconds) => await Bun.sleep(milliseconds),
+        isDraining,
+        acquire: async () => await cycleSemaphore.acquire(),
+        release: () => cycleSemaphore.release(),
+      });
+      switch (slot.type) {
+        case "unavailable":
+          logger.error("case_law.ingestion.publisher_access_unavailable", {
+            adapterKey,
+            reason: slot.reason,
+          });
+          return;
+        case "drained":
+          return;
+        case "acquired":
+          break;
+        default:
+          slot satisfies never;
+          return panic("Unhandled publisher cycle admission");
       }
       let attempt: CycleAttempt;
       // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
@@ -1018,10 +1037,39 @@ export const runCaseLawIngest = async (
     if (isDraining()) {
       return 0;
     }
-    const attempt = await runOneCycle(match.adapterKey, match.name, {
-      maxPages,
-      maxDecisions,
+    const slot = await acquirePublisherCycleSlot({
+      adapterKey: match.adapterKey,
+      admission: publisherAccessAdmission,
+      now: () => Temporal.Now.instant().epochMilliseconds,
+      sleep: async (milliseconds) => await Bun.sleep(milliseconds),
+      isDraining,
+      acquire: async () => await cycleSemaphore.acquire(),
+      release: () => cycleSemaphore.release(),
     });
+    switch (slot.type) {
+      case "unavailable":
+        logger.error("case_law.ingestion.publisher_access_unavailable", {
+          adapterKey: match.adapterKey,
+          reason: slot.reason,
+        });
+        return 1;
+      case "drained":
+        return 0;
+      case "acquired":
+        break;
+      default:
+        slot satisfies never;
+        return panic("Unhandled publisher cycle admission");
+    }
+    let attempt: CycleAttempt;
+    try {
+      attempt = await runOneCycle(match.adapterKey, match.name, {
+        maxPages,
+        maxDecisions,
+      });
+    } finally {
+      cycleSemaphore.release();
+    }
     if (attempt.type === "lease_busy" || attempt.type === "drained") {
       return 0;
     }

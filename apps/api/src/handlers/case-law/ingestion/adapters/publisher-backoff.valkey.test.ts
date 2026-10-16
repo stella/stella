@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createRedisClient } from "@/api/lib/redis-client";
 
@@ -60,7 +62,7 @@ const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
   } finally {
     try {
       if (first.connected) {
-        await first.send("DEL", [key, cooldownKey]);
+        await first.send("DEL", [key, cooldownKey, `{${key}}:connection`]);
       }
     } finally {
       first.close();
@@ -133,6 +135,80 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("publisher backoff (valkey)", () => {
+    test("connection ownership serializes clients through release and the following interval", async () => {
+      await withStore(async ({ first, second, key, gate }) => {
+        const firstGate = gate({ client: first, intervalMs: 500 });
+        const secondGate = gate({ client: second, intervalMs: 500 });
+        expect(
+          await firstGate.tryAcquireConnection({
+            token: "first",
+            holdMs: 5000,
+          }),
+        ).toBe(true);
+        expect(
+          await secondGate.tryAcquireConnection({
+            token: "second",
+            holdMs: 5000,
+          }),
+        ).toBe(false);
+        await firstGate.releaseConnection("first");
+        expect(await first.send("EXISTS", [`{${key}}:connection`])).toBe(0);
+        expect(
+          await secondGate.tryAcquireConnection({
+            token: "second",
+            holdMs: 5000,
+          }),
+        ).toBe(false);
+        const nextStart = Number(await first.send("GET", [key]));
+        await abortableSleep(
+          Math.max(0, nextStart - (await redisNow(first))) + 1,
+        );
+        expect(
+          await secondGate.tryAcquireConnection({
+            token: "second",
+            holdMs: 5000,
+          }),
+        ).toBe(true);
+        await secondGate.releaseConnection("second");
+      });
+    });
+
+    test("expired connection ownership recovers and a stale owner cannot release its successor", async () => {
+      await withStore(async ({ first, second, key, gate }) => {
+        const firstGate = gate({ client: first });
+        const secondGate = gate({ client: second });
+        expect(
+          await firstGate.tryAcquireConnection({
+            token: "crashed",
+            holdMs: 200,
+          }),
+        ).toBe(true);
+        const connectionKey = `{${key}}:connection`;
+        const expiresAfter = await positiveTtl(first, connectionKey);
+        await abortableSleep(expiresAfter + INTERVAL_MS);
+        expect(await first.send("EXISTS", [connectionKey])).toBe(0);
+        expect(
+          await secondGate.tryAcquireConnection({
+            token: "winner",
+            holdMs: 5000,
+          }),
+        ).toBe(true);
+        expect(
+          await rejectionOf(firstGate.releaseConnection("crashed")),
+        ).toMatchObject({
+          message: expect.stringMatching("Publisher connection ownership lost"),
+        });
+        expect(await first.send("GET", [connectionKey])).toBe("winner");
+        expect(
+          await firstGate.tryAcquireConnection({
+            token: "intruder",
+            holdMs: 5000,
+          }),
+        ).toBe(false);
+        await secondGate.releaseConnection("winner");
+      });
+    });
+
     test("immediate reservations share queued slots across clients without extending a busy gate", async () => {
       await withStore(async ({ first, second, key, gate }) => {
         const firstGate = gate({ client: first, intervalMs: COOLDOWN_MS });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: publisher access admission and connection lifetime change request scheduling; successful payload parsing is unchanged.
 import { Result, panic } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
@@ -26,9 +27,9 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   deferPublisherGate,
-  reservePublisherGateSlot,
   type PublisherGateId,
   publisherRunControls,
+  withPublisherConnection,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
@@ -230,8 +231,12 @@ const fetchPublisherRequest = async (
     });
   };
   if (controls === undefined) {
-    await reservePublisherGateSlot(gateId, requestInit.signal);
-    return await request(url, requestInit);
+    return await withPublisherConnection({
+      adapterKey,
+      gateId,
+      signal: requestInit.signal,
+      request: async (signal) => await request(url, { ...requestInit, signal }),
+    });
   }
   const fetchTarget = async (
     requestedTarget: string,
@@ -241,17 +246,24 @@ const fetchPublisherRequest = async (
       yield* Result.await(controls.check());
       const target = yield* publisherTarget(adapterKey, requestedTarget);
       yield* Result.await(controls.chargeRequest());
-      yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await reservePublisherGateSlot(gateId, requestInit.signal),
-          catch: (error) => error,
-        }),
-      );
-      yield* controls.checkBeforeSend();
       const fetched = await Result.tryPromise({
         try: async () =>
-          await request(target, { ...requestInit, redirect: "manual" }),
+          await withPublisherConnection({
+            adapterKey,
+            gateId,
+            signal: requestInit.signal,
+            request: async (signal) => {
+              const checked = controls.checkBeforeSend();
+              if (checked.isErr()) {
+                throw checked.error;
+              }
+              return await request(target, {
+                ...requestInit,
+                signal,
+                redirect: "manual",
+              });
+            },
+          }),
         catch: (error) => error,
       });
       if (fetched.isErr()) {

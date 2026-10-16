@@ -155,7 +155,7 @@ describe("every publisher request goes through the gate", () => {
       // A gate wrapper earns its exemption by reserving; one that stopped
       // would otherwise keep the exemption and spend nothing.
       expect(await sourceOf(entry)).toMatch(
-        /createPublisherSlot|reservePublisherSlot|reservePublisherGateSlot|createPublisherRequestSlot|createPublisherGateSlot/u,
+        /createPublisherSlot|reservePublisherSlot|reservePublisherGateSlot|createPublisherRequestSlot|createPublisherGateSlot|withPublisherConnection/u,
       );
     }
   });

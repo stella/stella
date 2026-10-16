@@ -1,5 +1,8 @@
+// parser-output-unchanged: publisher access admission and connection lifetime change request scheduling; successful payload parsing is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
+
+import type { PublisherAccessPolicy } from "./publisher-access-policy";
 
 type PublisherGate = {
   /** Named in gate errors and logs; the publisher, not the adapter. */
@@ -12,7 +15,15 @@ type PublisherGate = {
    * `publisher-target.ts`.
    */
   readonly hosts: readonly string[];
+  readonly access?: {
+    readonly schedule: PublisherAccessPolicy;
+    readonly maxConcurrentConnections: 1;
+    readonly maxConnectionMs: number;
+    readonly maxResponseBytes: number;
+  };
 };
+
+export type PublisherGateAccess = NonNullable<PublisherGate["access"]>;
 
 /**
  * A politeness floor, not a publisher statement.
@@ -58,6 +69,13 @@ export const PUBLISHER_GATES = {
     publisher: "RIS",
     intervalMs: 5000,
     hosts: ["data.bka.gv.at", "ogd.ris.bka.gv.at", "www.ris.bka.gv.at"],
+    // https://ris.bka.gv.at/RisInfo/OGD-FAQ.pdf: bulk access conditions.
+    access: {
+      schedule: { type: "scheduled", schedule: "austrian-off-hours" },
+      maxConcurrentConnections: 1,
+      maxConnectionMs: 60_000,
+      maxResponseBytes: 32 * 1024 * 1024,
+    },
   },
   /** findok.bmf.gv.at. */
   "findok-bmf": {
