@@ -204,11 +204,52 @@ describe("GDP proof anti-forgery rules", () => {
         ["no-matter-proof-kind-outside-owner"],
       ),
     ).toEqual([message]);
+    // A kind is never resolved through a binding: a shadowing parameter, a
+    // `.call` and a namespace alias all escape the one admitted shape.
+    expect(
+      await messages(
+        `${mint} const kind = "SignalVisible"; function check(kind) { withCheckedTransaction({ kind }); }`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `${mint} withCheckedTransaction.call(undefined, { kind: "MatterWritable" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
+    expect(
+      await messages(
+        `import * as checked from "@/api/lib/proofs/checked-transaction"; const alias = checked; alias.withCheckedTransaction({ kind: "MatterWritable" });`,
+        ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([message]);
     // The shape every registered predicate uses stays admitted.
     expect(
       await messages(
-        `${mint} const kind = "SignalVisibleTo"; withCheckedTransaction({ kind, tx, organizationId, check: async (id) => id, "entityId": entity });`,
+        `${mint} withCheckedTransaction({ kind: "SignalVisibleTo", tx, organizationId, check: async (id) => id, "entityId": entity });`,
         ["no-matter-proof-kind-outside-owner"],
+      ),
+    ).toEqual([]);
+  });
+
+  test("a generic helper or a parsed value cannot stand in for a matter proof", async () => {
+    const ruleNames = ["no-matter-proof-forgery"];
+    const ownerImport = `import type { MatterReadable } from "@/api/lib/workspaces/matter-access-proof";`;
+    expect(
+      await messages(
+        `${ownerImport} const viaHelper = asTestRaw<MatterReadable<1, 2, 3, 4>>({}); const parsed: MatterReadable<1, 2, 3, 4> = JSON.parse(raw); const copied: MatterReadable<1, 2, 3, 4> = { ...other };`,
+        ruleNames,
+      ),
+    ).toEqual([
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.",
+    ]);
+    expect(
+      await messages(
+        `${ownerImport} const passed: MatterReadable<1, 2, 3, 4> = context.proof;`,
+        ruleNames,
       ),
     ).toEqual([]);
   });

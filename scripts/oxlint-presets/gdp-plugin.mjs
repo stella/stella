@@ -154,8 +154,28 @@ const noMatterProofForgery = {
       TSSatisfiesExpression(node) {
         pending.push(node.typeAnnotation);
       },
+      // A generic helper (an identity cast, a test helper) can return any type
+      // argument it is given, so naming a matter proof there constructs one.
+      CallExpression(node) {
+        pending.push(node.typeArguments ?? node.typeParameters);
+      },
+      NewExpression(node) {
+        pending.push(node.typeArguments ?? node.typeParameters);
+      },
+      // An annotation only passes along an existing proof; any other value
+      // (a literal, a parsed or spread copy, a call result) fabricates one.
       VariableDeclarator(node) {
-        if (node.init?.type !== "ObjectExpression") {
+        // Assertions are reported by their own visitors.
+        if (
+          node.init === null ||
+          [
+            "Identifier",
+            "MemberExpression",
+            "TSAsExpression",
+            "TSSatisfiesExpression",
+            "TSTypeAssertion",
+          ].includes(node.init?.type)
+        ) {
           return;
         }
         pending.push(node.id.typeAnnotation?.typeAnnotation);
@@ -201,30 +221,15 @@ const noMatterProofKindOutsideOwner = {
     }
     const mintBindings = new Set();
     const mintNamespaces = new Set();
-    const kindBindings = new Map();
     const message =
       "MatterReadable and MatterWritable transaction proofs may only be minted by matter-access-proof.ts.";
-    const isMintCall = (callee) =>
-      (callee.type === "Identifier" && mintBindings.has(callee.name)) ||
-      (callee.type === "MemberExpression" &&
-        callee.object.type === "Identifier" &&
-        mintNamespaces.has(callee.object.name) &&
-        (callee.computed
-          ? callee.property.value === "withCheckedTransaction"
-          : callee.property.name === "withCheckedTransaction"));
-    const kindDisposition = (expression) => {
-      if (
-        expression?.type === "Literal" &&
-        typeof expression.value === "string"
-      ) {
-        return ["MatterReadable", "MatterWritable"].includes(expression.value)
-          ? "matter"
-          : "safe";
-      }
-      return expression?.type === "Identifier"
-        ? kindBindings.get(expression.name)
-        : undefined;
-    };
+    const MINT = "withCheckedTransaction";
+    const memberName = (member) =>
+      member.computed
+        ? member.property.type === "Literal"
+          ? member.property.value
+          : undefined
+        : member.property.name;
     const propertyName = (property) => {
       if (property.computed) {
         return property.key.type === "Literal" &&
@@ -236,29 +241,36 @@ const noMatterProofKindOutsideOwner = {
         ? property.key.name
         : property.key.value;
     };
-    // Only an inline object literal can be proven safe: a binding can be
-    // changed before the call, a spread or unresolved computed key can supply
-    // another kind, and the last of duplicate keys wins. Anything else is
-    // unknown and reported.
-    const optionsDisposition = (expression) => {
+    // One shape is admitted outside the owner: the mint function called
+    // directly with an inline options literal whose plain `kind` key holds a
+    // string literal that is not a matter kind. A binding can be changed or
+    // shadowed, a spread or unresolved computed key can supply another kind,
+    // and the last of duplicate keys wins, so anything else is reported.
+    const isSafeOptions = (expression) => {
       if (expression?.type !== "ObjectExpression") {
-        return "unknown";
+        return false;
       }
       let kind;
       for (const property of expression.properties) {
         if (property.type !== "Property") {
-          return "unknown";
+          return false;
         }
         const name = propertyName(property);
         if (name === undefined) {
-          return "unknown";
+          return false;
         }
         if (name === "kind") {
           kind = property.value;
         }
       }
-      return kindDisposition(kind) ?? "unknown";
+      return (
+        kind?.type === "Literal" &&
+        typeof kind.value === "string" &&
+        !["MatterReadable", "MatterWritable"].includes(kind.value)
+      );
     };
+    const isDirectCallee = (node) =>
+      node.parent?.type === "CallExpression" && node.parent.callee === node;
     return {
       ImportDeclaration(node) {
         if (
@@ -274,7 +286,7 @@ const noMatterProofKindOutsideOwner = {
           }
           if (
             specifier.type === "ImportSpecifier" &&
-            specifier.imported.name === "withCheckedTransaction" &&
+            specifier.imported.name === MINT &&
             specifier.importKind !== "type"
           ) {
             mintBindings.add(specifier.local.name);
@@ -291,44 +303,43 @@ const noMatterProofKindOutsideOwner = {
           context.report({ node, message });
         }
       },
-      VariableDeclarator(node) {
+      // Every reference to the mint function, or to the namespace that
+      // carries it, must be that direct call: aliases, `.call`/`.apply`,
+      // destructuring, forwarding and re-exports cannot be followed safely.
+      Identifier(node) {
+        const parent = node.parent;
         if (
-          node.id.type === "ObjectPattern" &&
-          node.init?.type === "Identifier" &&
-          mintNamespaces.has(node.init.name)
+          parent?.type === "ImportSpecifier" ||
+          parent?.type === "ImportNamespaceSpecifier" ||
+          parent?.type === "TSQualifiedName" ||
+          (parent?.type === "MemberExpression" &&
+            parent.property === node &&
+            !parent.computed) ||
+          (parent?.type === "Property" && parent.key === node && !parent.shorthand)
         ) {
-          for (const property of node.id.properties) {
-            if (
-              property.type === "Property" &&
-              propertyName(property) === "withCheckedTransaction" &&
-              property.value.type === "Identifier"
-            ) {
-              mintBindings.add(property.value.name);
-            }
+          return;
+        }
+        if (mintBindings.has(node.name)) {
+          if (!isDirectCallee(node) || !isSafeOptions(parent.arguments.at(0))) {
+            context.report({ node, message });
           }
           return;
         }
-        if (node.id.type !== "Identifier") {
+        if (!mintNamespaces.has(node.name)) {
+          return;
+        }
+        if (parent?.type !== "MemberExpression" || parent.object !== node) {
+          context.report({ node, message });
+          return;
+        }
+        const name = memberName(parent);
+        if (name === undefined) {
+          context.report({ node, message });
           return;
         }
         if (
-          (node.init?.type === "Identifier" &&
-            mintBindings.has(node.init.name)) ||
-          (node.init?.type === "MemberExpression" && isMintCall(node.init))
-        ) {
-          mintBindings.add(node.id.name);
-        }
-        // A `let` binding can be reassigned to a matter kind before use.
-        const kind =
-          node.parent?.kind === "const" ? kindDisposition(node.init) : undefined;
-        if (kind) {
-          kindBindings.set(node.id.name, kind);
-        }
-      },
-      CallExpression(node) {
-        if (
-          isMintCall(node.callee) &&
-          optionsDisposition(node.arguments.at(0)) !== "safe"
+          name === MINT &&
+          (!isDirectCallee(parent) || !isSafeOptions(parent.parent.arguments.at(0)))
         ) {
           context.report({ node, message });
         }
