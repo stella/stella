@@ -911,6 +911,11 @@ const initializeInspectorScope = (
   }
   if (inspectorBroadcastSession?.scopeKey !== scopeKey) {
     const persisted = readPersistedInspectorState(scope);
+    // Nothing to restore: a flag left by an earlier start has nothing to
+    // guard any more.
+    if (persisted === null && recovering) {
+      writeRestorePending(scope, false);
+    }
     if (persisted !== null) {
       const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
       if (recovering) {
@@ -938,9 +943,6 @@ const initializeInspectorScope = (
         reviveSuggestion: null,
       });
     } else if (switchingScope) {
-      if (recovering) {
-        writeRestorePending(scope, false);
-      }
       store.setState({
         tabs: [],
         groups: [],

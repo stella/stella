@@ -6,11 +6,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
  * still loading its document. Renders nothing.
  */
 export const InspectorRestoreHold = ({ ready }: { ready: boolean }) => {
-  useExternalSyncEffect(() => {
-    if (ready) {
-      return;
-    }
-    return holdInspectorRestoreSettle();
-  }, [ready]);
+  useExternalSyncEffect(
+    () => (ready ? undefined : holdInspectorRestoreSettle()),
+    [ready],
+  );
   return null;
 };
