@@ -5,7 +5,7 @@ import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapt
 import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
   PL_KIO_HTML_BUDGET,
-  inspectPlKioHtmlBudget,
+  readPlKioHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 
 const targetBytes = Number(process.argv.at(2));
@@ -29,7 +29,7 @@ const countMarkupTokens = (html: string) => {
 
 const spanCount = Math.min(
   Math.floor(targetBytes / 256),
-  Math.floor((PL_KIO_HTML_BUDGET.maxMarkupTokens - 204) / 3),
+  Math.floor((PL_KIO_HTML_BUDGET.maxDomAllocations - 204) / 3),
 );
 const prefix = "<html><body>";
 const suffix = "</body></html>";
@@ -54,27 +54,45 @@ const text = "Izba stwierdza okolicznosci. ";
 const padding = text
   .repeat(Math.ceil(paddingBytes / text.length))
   .slice(0, paddingBytes);
-const documentHtml = markup.replace("</span>", () => `${padding}</span>`);
+const substantiveHtml = markup.replace("</span>", () => `${padding}</span>`);
+const workload = process.argv.at(3) ?? "accepted";
+const documentHtmlOf = (kind: string) => {
+  switch (kind) {
+    case "accepted":
+      return substantiveHtml;
+    case "svg":
+      return `<svg><script>${"<g></g>".repeat(100_000)}</script></svg>`;
+    case "attributes":
+      return `<div ${Array.from({ length: 30_000 }, (_, index) => `a${index}`).join(" ")}></div>`;
+    case "plaintext":
+      return "x\n\n".repeat(100_000);
+    default:
+      return panic(`Unknown KIO memory workload: ${kind}`);
+  }
+};
+const documentHtml = documentHtmlOf(workload);
 const documentBytes = Buffer.byteLength(documentHtml);
-const budget = inspectPlKioHtmlBudget(documentHtml);
+const budget = readPlKioHtml(documentHtml).type;
+// Each span allocates an element, an attribute and a text node; parse5 also
+// creates document/html/head/body nodes for this fragment.
 const boundaryRepeats = Math.floor(
-  (PL_KIO_HTML_BUDGET.maxMarkupTokens - 5) / 3,
+  (PL_KIO_HTML_BUDGET.maxDomAllocations - 4) / 3,
 );
-const markupBoundaryHtml = `${'<span a="x">text</span>'.repeat(boundaryRepeats)}<span a="x">x</span><span></span>`;
-const boundaryBudget = inspectPlKioHtmlBudget(markupBoundaryHtml);
-const overflowBudget = inspectPlKioHtmlBudget(`${markupBoundaryHtml}<span>`);
+const markupBoundaryHtml = '<span a="x">text</span>'.repeat(boundaryRepeats);
+const boundaryBudget = readPlKioHtml(markupBoundaryHtml).type;
+const overflowBudget = readPlKioHtml(
+  `${markupBoundaryHtml}<span>x</span>`,
+).type;
 const markupTokens = countMarkupTokens(documentHtml);
 if (
-  documentBytes !== targetBytes ||
+  (workload === "accepted" && documentBytes !== targetBytes) ||
   targetBytes > PL_KIO_HTML_BUDGET.maxBytes ||
-  budget.type !== "accepted" ||
-  countMarkupTokens(markupBoundaryHtml) !==
-    PL_KIO_HTML_BUDGET.maxMarkupTokens ||
-  boundaryBudget.type !== "accepted" ||
-  overflowBudget.type !== "markup-budget-exceeded"
+  (workload === "accepted" && budget !== "accepted") ||
+  boundaryBudget !== "accepted" ||
+  overflowBudget !== "markup-budget-exceeded"
 ) {
   panic(
-    `KIO fixture missed its budget boundary: ${documentBytes}/${targetBytes}, ${budget.type}/${boundaryBudget.type}/${overflowBudget.type}`,
+    `KIO fixture missed its budget boundary: ${documentBytes}/${targetBytes}, ${budget}/${boundaryBudget}/${overflowBudget}`,
   );
 }
 
@@ -103,12 +121,12 @@ process.stdout.write(
     targetBytes,
     documentBytes,
     fulltextChars: decision.fulltext?.length ?? 0,
-    astBlocks: decision.documentAst.blocks.length,
+    astBlocks: decision.documentAst.blocks?.length ?? 0,
     rawEnvelopeBytes: Buffer.byteLength(decision.sourceRaw ?? ""),
     rawContainsDocument: true,
-    budgetType: budget.type,
+    budgetType: decision.metadata["documentStatus"] ?? budget,
     markupTokens,
-    boundaryBudgetType: boundaryBudget.type,
-    overflowBudgetType: overflowBudget.type,
+    boundaryBudgetType: boundaryBudget,
+    overflowBudgetType: overflowBudget,
   })}\n`,
 );

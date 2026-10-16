@@ -279,6 +279,7 @@ export const validateAst = (
   html: string,
   blocks: Block[],
   options?: {
+    sourceDocument?: cheerio.CheerioAPI | undefined;
     minRetainedPct?: number;
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
@@ -292,7 +293,7 @@ export const validateAst = (
 
   // ── 1. Content completeness ────────────────────────────
 
-  const $ = cheerio.load(html);
+  const $ = options?.sourceDocument ?? cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
   // <br> is a word boundary in the rendered document, but cheerio's
   // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →

@@ -38,7 +38,6 @@ import {
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
-  inspectPlKioHtmlBudget,
   PL_KIO_DOCUMENT_REJECTION,
   PL_KIO_HTML_BUDGET,
 } from "./pl-kio-response-budget";
@@ -380,32 +379,38 @@ describe("building a ruling from its three pages", () => {
     ).toBe(true);
   });
 
-  test("markup beyond the allocation budget is typed and preserved for replay", async () => {
-    const documentHtml = `<p>${"<span>text</span>".repeat(PL_KIO_HTML_BUDGET.maxMarkupTokens)}</p>`;
-    expect(inspectPlKioHtmlBudget(documentHtml).type).toBe(
-      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-    );
-    const decision = built(
-      assemblePlKioDecision({
-        item: { id: "30308", signature: "KIO 2845/25" },
-        detailHtml: await fixtureText("pl-kio-detail-30308.html"),
-        document: { type: "read", html: documentHtml },
-      }),
-    );
-    expect(decision.fulltext).toBeUndefined();
-    expect(decision.metadata["documentStatus"]).toBe(
-      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-    );
-    expect(
-      Object.values(decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {}),
-    ).toContain(documentHtml);
-    expect(plKioAdapter.reconciliation?.heldWithoutDocument?.reasons).toContain(
-      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-    );
-  });
+  test.each([
+    `<p>${"<span>text</span>".repeat(100_000)}</p>`,
+    `<svg><script>${"<g></g>".repeat(100_000)}</script></svg>`,
+    `<div ${Array.from({ length: 30_000 }, (_, i) => `a${i}`).join(" ")}></div>`,
+    "x\n\n".repeat(100_000),
+    `<table>${"x<tr><td>y</td></tr>".repeat(30_000)}</table>`,
+  ])(
+    "excessive DOM or plaintext expansion is typed and preserved for replay (%#)",
+    async (documentHtml) => {
+      const decision = built(
+        assemblePlKioDecision({
+          item: { id: "30308", signature: "KIO 2845/25" },
+          detailHtml: await fixtureText("pl-kio-detail-30308.html"),
+          document: { type: "read", html: documentHtml },
+        }),
+      );
+      expect(decision.fulltext).toBeUndefined();
+      expect(
+        decision.metadata["documentStatus"] ===
+          PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+      ).toBe(true);
+      expect(
+        Object.values(decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {}),
+      ).toContain(documentHtml);
+      expect(
+        plKioAdapter.reconciliation?.heldWithoutDocument?.reasons,
+      ).toContain(PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED);
+    },
+  );
 
   test("listing and detail readers reject excessive markup before building their DOM", async () => {
-    const markup = "<span></span>".repeat(PL_KIO_HTML_BUDGET.maxMarkupTokens);
+    const markup = "<span></span>".repeat(PL_KIO_HTML_BUDGET.maxDomAllocations);
     const listing = await fixtureText("pl-kio-listing-2025-09-01-p1.html");
     const detail = await fixtureText("pl-kio-detail-30308.html");
     expect(readPlKioListing(listing)).not.toBeNull();
@@ -913,10 +918,11 @@ describe("walking a month", () => {
       for (const decision of page.value.decisions) {
         expect(decision.isListingOnly).toBeUndefined();
         expect(decision.fulltext).toBeUndefined();
-        expect(decision.metadata["documentStatus"]).toBe(
-          PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
-        );
-        const replay = plKioAdapter.reparseStoredRaw?.({
+        expect(
+          decision.metadata["documentStatus"] ===
+            PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ).toBe(true);
+        const replay = await plKioAdapter.reparseStoredRaw?.({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
           contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
           sourceDocumentId: "30308",
@@ -932,9 +938,10 @@ describe("walking a month", () => {
         });
         expect(replay?.type).toBe("parsed");
         if (replay?.type === "parsed") {
-          expect(replay.result.metadata["documentStatus"]).toBe(
-            PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
-          );
+          expect(
+            replay.result.metadata["documentStatus"] ===
+              PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+          ).toBe(true);
         }
         expect(decision.metadata["presiding"] === "Ewa Sikorska").toBe(true);
       }

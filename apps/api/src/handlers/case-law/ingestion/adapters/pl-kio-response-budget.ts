@@ -1,9 +1,12 @@
-import { Tokenizer } from "htmlparser2";
+import { Result, TaggedError } from "better-result";
+import * as cheerio from "cheerio";
+import { isText } from "domhandler";
 import { Buffer } from "node:buffer";
+import { adapter } from "parse5-htmlparser2-tree-adapter";
 
 export const PL_KIO_HTML_BUDGET = {
   maxBytes: 2 * 1024 * 1024,
-  maxMarkupTokens: 20_000,
+  maxDomAllocations: 20_000,
 } as const;
 
 export const PL_KIO_DOCUMENT_REJECTION = {
@@ -11,47 +14,90 @@ export const PL_KIO_DOCUMENT_REJECTION = {
   MARKUP_BUDGET_EXCEEDED: "markup-budget-exceeded",
 } as const;
 
-/** Count tag and attribute-name tokens without constructing DOM or attribute maps. */
-export const inspectPlKioHtmlBudget = (html: string) => {
+export class PlKioHtmlBudgetError extends TaggedError("PlKioHtmlBudgetError")<{
+  message: string;
+  reason: (typeof PL_KIO_DOCUMENT_REJECTION)[keyof typeof PL_KIO_DOCUMENT_REJECTION];
+}> {}
+
+/** Bound allocations in the same parse5 tree builder that Cheerio consumes. */
+export const loadPlKioHtml = (html: string) => {
   if (Buffer.byteLength(html, "utf-8") > PL_KIO_HTML_BUDGET.maxBytes) {
-    return { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED } as const;
+    throw new PlKioHtmlBudgetError({
+      message: "KIO HTML exceeds byte budget",
+      reason: PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+    });
   }
-  let tokens = 0;
-  const countToken = () => {
-    tokens += 1;
-    if (tokens > PL_KIO_HTML_BUDGET.maxMarkupTokens) {
-      tokenizer.pause();
+  let allocations = 0;
+  const charge = (count: number) => {
+    allocations += count;
+    if (allocations > PL_KIO_HTML_BUDGET.maxDomAllocations) {
+      throw new PlKioHtmlBudgetError({
+        message: "KIO HTML exceeds DOM allocation budget",
+        reason: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+      });
     }
   };
-  const ignore = () => undefined;
-  const tokenizer = new Tokenizer(
-    { decodeEntities: false },
-    {
-      onattribname: countToken,
-      onopentagname: countToken,
-      onclosetag: countToken,
-      oncomment: countToken,
-      oncdata: countToken,
-      ondeclaration: countToken,
-      onprocessinginstruction: countToken,
-      onattribdata: ignore,
-      onattribentity: ignore,
-      onattribend: ignore,
-      onopentagend: ignore,
-      onselfclosingtag: ignore,
-      ontext: ignore,
-      ontextentity: ignore,
-      onend: ignore,
+  const treeAdapter = {
+    ...adapter,
+    createDocument: () => {
+      charge(1);
+      return adapter.createDocument();
     },
-  );
-  tokenizer.write(html);
-  if (tokens <= PL_KIO_HTML_BUDGET.maxMarkupTokens) {
-    tokenizer.end();
+    createDocumentFragment: () => {
+      charge(1);
+      return adapter.createDocumentFragment();
+    },
+    createElement: (...args) => {
+      charge(1 + args[2].length);
+      return adapter.createElement(...args);
+    },
+    createCommentNode: (...args) => {
+      charge(1);
+      return adapter.createCommentNode(...args);
+    },
+    createTextNode: (...args) => {
+      charge(1);
+      return adapter.createTextNode(...args);
+    },
+    // These methods allocate internally without calling the wrapped constructors.
+    insertText: (parent, text) => {
+      const last = parent.children.at(-1);
+      if (last === undefined || !isText(last)) {
+        charge(1);
+      }
+      return adapter.insertText(parent, text);
+    },
+    insertTextBefore: (parent, text, reference) => {
+      const previous = reference.prev;
+      if (previous === null || !isText(previous)) {
+        charge(1);
+      }
+      return adapter.insertTextBefore(parent, text, reference);
+    },
+    setDocumentType: (...args) => {
+      charge(1);
+      return adapter.setDocumentType(...args);
+    },
+    adoptAttributes: (...args) => {
+      charge(args[1].length);
+      return adapter.adoptAttributes(...args);
+    },
+  } satisfies typeof adapter;
+  return cheerio.load(html, { treeAdapter });
+};
+
+export const readPlKioHtml = (html: string) => {
+  const result = Result.try({
+    try: () => loadPlKioHtml(html),
+    catch: (error) => {
+      if (error instanceof PlKioHtmlBudgetError) {
+        return error;
+      }
+      throw error;
+    },
+  });
+  if (Result.isError(result)) {
+    return { type: result.error.reason };
   }
-  if (tokens > PL_KIO_HTML_BUDGET.maxMarkupTokens) {
-    return {
-      type: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-    } as const;
-  }
-  return { type: "accepted" } as const;
+  return { type: "accepted", document: result.value } as const;
 };

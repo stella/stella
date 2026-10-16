@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
 
 import {
-  inspectPlKioHtmlBudget,
+  readPlKioHtml,
   PL_KIO_DOCUMENT_REJECTION,
   PL_KIO_HTML_BUDGET,
 } from "./pl-kio-response-budget";
 
 test("the HTML byte budget counts UTF-8 bytes rather than characters", () => {
   const atBudget = "ą".repeat(PL_KIO_HTML_BUDGET.maxBytes / 2);
-  expect(inspectPlKioHtmlBudget(atBudget)).toEqual({ type: "accepted" });
-  expect(inspectPlKioHtmlBudget(`${atBudget}ą`)).toEqual({
+  expect(readPlKioHtml(atBudget).type).toBe("accepted");
+  expect(readPlKioHtml(`${atBudget}ą`)).toEqual({
     type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
   });
 });
@@ -17,11 +17,11 @@ test("the HTML byte budget counts UTF-8 bytes rather than characters", () => {
 test.each(["<b></b>", '<div a="b"></div>'])(
   "markup allocation is bounded independently of bytes for %s",
   (markup) => {
-    const input = markup.repeat(PL_KIO_HTML_BUDGET.maxMarkupTokens + 1);
+    const input = markup.repeat(PL_KIO_HTML_BUDGET.maxDomAllocations + 1);
     expect(new TextEncoder().encode(input).byteLength).toBeLessThan(
       PL_KIO_HTML_BUDGET.maxBytes,
     );
-    expect(inspectPlKioHtmlBudget(input)).toEqual({
+    expect(readPlKioHtml(input)).toEqual({
       type: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
     });
   },
@@ -40,7 +40,7 @@ test.each([
   "distinct valueless attributes are counted in $prefix",
   ({ prefix, suffix, separator }) => {
     const attributes = Array.from(
-      { length: PL_KIO_HTML_BUDGET.maxMarkupTokens },
+      { length: PL_KIO_HTML_BUDGET.maxDomAllocations },
       (_, index) => `a${index}`,
     ).join(separator);
     const input = `${prefix}${attributes}${suffix}`;
@@ -48,7 +48,7 @@ test.each([
       PL_KIO_HTML_BUDGET.maxBytes,
     );
     expect(input.split("<").length - 1).toBeLessThan(5);
-    expect(inspectPlKioHtmlBudget(input)).toEqual({
+    expect(readPlKioHtml(input)).toEqual({
       type: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
     });
   },

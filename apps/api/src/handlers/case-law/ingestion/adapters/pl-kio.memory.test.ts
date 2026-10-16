@@ -13,7 +13,7 @@ const MEMORY_BUDGET_BYTES = 1024 * 1024 * 1024;
 const MEMORY_WORKLOAD_TIMEOUT_MS = 180_000;
 const RESPONSE_SIZES = [256 * 1024, 1024 * 1024, PL_KIO_HTML_BUDGET.maxBytes];
 
-const runMemoryChild = async (targetBytes: number) => {
+const runMemoryChild = async (targetBytes: number, workload = "accepted") => {
   const child = Bun.spawn(
     [
       process.execPath,
@@ -21,6 +21,7 @@ const runMemoryChild = async (targetBytes: number) => {
       path.join(API_ROOT, "src/tests/setup-env.ts"),
       MEMORY_CHILD,
       String(targetBytes),
+      workload,
     ],
     {
       cwd: API_ROOT,
@@ -101,7 +102,7 @@ test(
       expect(receipt.overflowBudgetType).toBe("markup-budget-exceeded");
       if (targetBytes === PL_KIO_HTML_BUDGET.maxBytes) {
         expect(receipt.markupTokens).toBeGreaterThanOrEqual(
-          PL_KIO_HTML_BUDGET.maxMarkupTokens * 0.9,
+          PL_KIO_HTML_BUDGET.maxDomAllocations * 0.9,
         );
       }
       expect(peakBytes).toBeGreaterThan(0);
@@ -118,6 +119,28 @@ test(
         }),
       );
     }
+  },
+  MEMORY_WORKLOAD_TIMEOUT_MS,
+);
+
+test.each(["svg", "attributes", "plaintext"])(
+  "rejected %s expansion stays within memory headroom through production assembly",
+  async (workload) => {
+    const { receipt, peakBytes } = await runMemoryChild(256 * 1024, workload);
+    expect(receipt.documentBytes).toBeLessThan(PL_KIO_HTML_BUDGET.maxBytes);
+    expect(receipt.budgetType).toBe("markup-budget-exceeded");
+    expect(receipt.fulltextChars).toBe(0);
+    expect(receipt.astBlocks).toBe(0);
+    expect(receipt.rawContainsDocument).toBe(true);
+    expect(peakBytes).toBeGreaterThan(0);
+    expect(peakBytes).toBeLessThan(MEMORY_BUDGET_BYTES);
+    console.log(
+      JSON.stringify({
+        workload,
+        peakBytes,
+        memoryBudgetBytes: MEMORY_BUDGET_BYTES,
+      }),
+    );
   },
   MEMORY_WORKLOAD_TIMEOUT_MS,
 );

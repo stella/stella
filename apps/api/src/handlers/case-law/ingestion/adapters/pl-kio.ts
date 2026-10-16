@@ -1,7 +1,8 @@
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { Result, panic } from "better-result";
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
+import { Buffer } from "node:buffer";
 
 import {
   DECISION_IDENTIFIER_TYPES,
@@ -115,7 +116,9 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { logDocumentParseFailure } from "./document-parse-failure";
 import {
-  inspectPlKioHtmlBudget,
+  readPlKioHtml,
+  loadPlKioHtml,
+  PlKioHtmlBudgetError,
   PL_KIO_DOCUMENT_REJECTION,
   PL_KIO_HTML_BUDGET,
 } from "./pl-kio-response-budget";
@@ -335,10 +338,11 @@ const readPlKioListingItem = (
  * without it is an error page or a challenge, never an empty listing.
  */
 export const readPlKioListing = (html: string): PlKioListingPage | null => {
-  if (inspectPlKioHtmlBudget(html).type !== "accepted") {
+  const parsed = readPlKioHtml(html);
+  if (parsed.type !== "accepted") {
     return null;
   }
-  const $ = cheerio.load(html);
+  const $ = parsed.document;
   const rawCounts = $("#resultCounts").attr("value");
   const counts = rawCounts?.split(",").map((part) => Number(part.trim()));
   if (
@@ -397,7 +401,11 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
   if (item.html === undefined) {
     return [canonicalId];
   }
-  const $ = cheerio.load(item.html);
+  const parsed = readPlKioHtml(item.html);
+  if (parsed.type !== "accepted") {
+    return [canonicalId];
+  }
+  const $ = parsed.document;
   const legacyId = plKioQuarantineId(
     readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
   );
@@ -498,10 +506,11 @@ const KIND_HREF = /[?&]Kind=(?<kind>[A-Z]+)/u;
  * "no such page" answer is a full HTML page under a 404, handled before).
  */
 export const readPlKioDetail = (html: string): PlKioDetail | null => {
-  if (inspectPlKioHtmlBudget(html).type !== "accepted") {
+  const parsed = readPlKioHtml(html);
+  if (parsed.type !== "accepted") {
     return null;
   }
-  const $ = cheerio.load(html);
+  const $ = parsed.document;
   const metrics = $(".details-metrics");
   if (metrics.length === 0) {
     return null;
@@ -837,33 +846,27 @@ type PlKioDocumentReadState = {
   rawParts: SourceRawParts;
 };
 
+const plKioParseError = (error: unknown, state: PlKioDocumentReadState) => {
+  if (error instanceof PlKioHtmlBudgetError) {
+    state.rejection = error.reason;
+  }
+  return errorTag(error);
+};
+
 const plKioDocumentOf = (
   document: AssemblePlKioDecisionOptions["document"],
 ): PlKioDocumentReadState => {
   switch (document.type) {
-    case "read": {
-      const budget = inspectPlKioHtmlBudget(document.html);
-      switch (budget.type) {
-        case "accepted":
-          return {
-            html: document.html,
-            rejection: undefined,
-            rawParts: { [RAW_PART.DOCUMENT]: document.html },
-          };
-        case PL_KIO_DOCUMENT_REJECTION.OVERSIZED:
-        case PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED:
-          return {
-            html: document.html,
-            rejection: budget.type,
-            rawParts: { [RAW_PART.DOCUMENT]: document.html },
-          };
-        default:
-          budget satisfies never;
-          return panic(
-            `Unhandled procurement document budget: ${JSON.stringify(budget)}`,
-          );
-      }
-    }
+    case "read":
+      return {
+        html: document.html,
+        rejection:
+          Buffer.byteLength(document.html, "utf-8") >
+          PL_KIO_HTML_BUDGET.maxBytes
+            ? PL_KIO_DOCUMENT_REJECTION.OVERSIZED
+            : undefined,
+        rawParts: { [RAW_PART.DOCUMENT]: document.html },
+      };
     case "unavailable":
       return { html: undefined, rejection: undefined, rawParts: {} };
     case PL_KIO_DOCUMENT_REJECTION.OVERSIZED:
@@ -1057,6 +1060,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
+              loadHtml: loadPlKioHtml,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",
@@ -1065,7 +1069,7 @@ export const assemblePlKioDecision = ({
               documentId: sourceDocumentId,
               sourceSystem: PL_KIO_SOURCE_SYSTEM,
             }),
-          catch: errorTag,
+          catch: (error) => plKioParseError(error, documentReadState),
         });
   if (parsed !== null && Result.isError(parsed)) {
     logDocumentParseFailure({
@@ -1919,7 +1923,12 @@ export const plKioAdapter = defineSourceAdapter({
     heldRequiresDetail: true,
     heldWithoutDocument: {
       metadataKey: "documentStatus",
-      reasons: Object.values(PL_KIO_DOCUMENT_REJECTION),
+      reasons: [
+        PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ...Object.values(PL_KIO_DOCUMENT_REJECTION).filter(
+          (reason) => reason !== PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ),
+      ],
     },
     listSlicePage: listPlKioSlicePage,
     buildDecision: buildPlKioFromPayload,
