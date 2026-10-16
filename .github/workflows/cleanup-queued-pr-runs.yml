@@ -89,7 +89,9 @@ jobs:
                 }
                 if (current.labels?.some((label) => label.name === PROTECT_LABEL)) return null;
               }
-              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
+              // A re-run keeps the run's created_at; run_started_at moves to the
+              // latest attempt, so a fresh re-run of an old run is not stale.
+              if (Date.parse(run.run_started_at ?? run.created_at) < cutoff) return "queued over six hours";
               if (associated.length === 0) return null;
               for (const pull of associated) {
                 // Target runs use the base SHA as head_sha. Only their

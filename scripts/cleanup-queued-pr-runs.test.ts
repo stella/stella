@@ -33,6 +33,7 @@ type Run = {
   event: string;
   head_sha: string;
   created_at: string;
+  run_started_at?: string;
   pull_requests: { number: number; head?: { sha: string } }[];
 };
 const queued = (event = "pull_request_target"): Run => ({
@@ -978,4 +979,18 @@ test("a run is not deferred when any of its pull requests is protected", async (
   });
   expect(result.cancelled).toEqual([]);
   expect(result.events).toEqual([]);
+});
+
+test("a re-run of an old run is aged by its latest attempt", async () => {
+  const hoursAgo = (hours: number) =>
+    new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const rerun = {
+    ...queued("pull_request"),
+    head_sha: "current",
+    created_at: hoursAgo(30),
+    run_started_at: hoursAgo(1),
+  };
+  expect((await cleanup({ run: rerun })).cancelled).toEqual([]);
+  const staleRerun = { ...rerun, run_started_at: hoursAgo(7) };
+  expect((await cleanup({ run: staleRerun })).cancelled).toEqual([1]);
 });
