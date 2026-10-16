@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { legislationDocuments } from "@/api/db/schema";
@@ -23,7 +24,7 @@ import {
 } from "@/api/lib/legal-search/legislation-canonical-source";
 import {
   derivedAiLegislationVersion,
-  redistributableLegislationVersion,
+  redistributableLegislationVersionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -78,6 +79,8 @@ type StoredVersionReadOptions = {
   legislationDb: LegislationReadDb;
   id: SafeId<"legislationDocument">;
   purpose?: "reader" | "derived-ai";
+  /** The surface this read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -90,10 +93,11 @@ type StoredVersionReadOptions = {
 const storedVersionGate = ({
   id,
   purpose = "reader",
-}: Pick<StoredVersionReadOptions, "id" | "purpose">) =>
+  surface,
+}: Pick<StoredVersionReadOptions, "id" | "purpose" | "surface">) =>
   and(
     eq(legislationDocuments.id, id),
-    redistributableLegislationVersion,
+    redistributableLegislationVersionFor(surface),
     purpose === "derived-ai" ? derivedAiLegislationVersion : undefined,
   );
 
@@ -138,6 +142,7 @@ type ReadVersionTextOptions = {
   legislationDb: LegislationReadDb;
   /** Names the reading endpoint in a payload-unavailable capture. */
   step: string;
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -149,6 +154,7 @@ export const readVersionText = async ({
   row: { id, textS3Key, fulltext },
   legislationDb,
   step,
+  surface,
 }: ReadVersionTextOptions): Promise<string | null> => {
   const source = canonicalLegislationTextSource(
     { textS3Key },
@@ -164,7 +170,7 @@ export const readVersionText = async ({
         step,
         read: async () => await readCorpusText(source.key),
         fallback: async () =>
-          await readStoredVersionText({ legislationDb, id }),
+          await readStoredVersionText({ legislationDb, id, surface }),
       });
     default: {
       source satisfies never;
@@ -188,6 +194,7 @@ export type ReadVersionAstOptions = {
   /** Names the reading endpoint in a payload-unavailable capture. */
   step: string;
   purpose?: "reader" | "derived-ai";
+  surface: PublicCountrySurface;
 };
 
 /**
@@ -205,6 +212,7 @@ export const readVersionAst = async ({
   legislationDb,
   step,
   purpose = "reader",
+  surface,
 }: ReadVersionAstOptions): Promise<DocumentAst | EmptyAst | null> => {
   const source = canonicalLegislationAstSource(row, corpusStorageMode);
   switch (source.type) {
@@ -218,7 +226,12 @@ export const readVersionAst = async ({
         read: async () => await versionAstCache.read(source.key),
         fallback: async () =>
           parsePersistedCorpusAst(
-            await readStoredVersionAst({ legislationDb, id: row.id, purpose }),
+            await readStoredVersionAst({
+              legislationDb,
+              id: row.id,
+              purpose,
+              surface,
+            }),
           ),
       });
     default: {

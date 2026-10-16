@@ -63,6 +63,7 @@ import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
@@ -2827,10 +2828,10 @@ testState.beforeAll(async () => {
     chatThreadOfB(chatSendThreadB),
     { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
-  const chatText = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const chatText = (text: string) =>
+    toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: text }],
+    });
   await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
   await testDb.insert(chatThreads).values({
     ...chatThreadOfB(chatMatterThreadB),

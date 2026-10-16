@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -302,7 +302,7 @@ const countSitemapMonths = async (
     await setTransactionBudget(tx, budget);
     const months: CountryMonths = new Map();
     let pages = 0;
-    for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
+    for (const country of PUBLIC_CASE_LAW_PAGE_COUNTRIES) {
       for (const phase of ["dated", "undated"] as const) {
         let cursor: SitemapRefreshCursor | null = null;
         do {
