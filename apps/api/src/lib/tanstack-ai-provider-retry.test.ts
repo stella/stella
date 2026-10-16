@@ -102,6 +102,36 @@ describe("withProviderRetryWait", () => {
     ).toBeInstanceOf(AIGenerationCancelledError);
   });
 
+  test("a wait the deadline cannot cover is skipped and the refusal keeps its delay", async () => {
+    const refusal = rateLimited(PROVIDER_RETRY_WAIT_CAP_MS);
+    const call = scripted([refusal]);
+    const started = performance.now();
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await withGenerationDeadline(
+          { deadlineMs: 2000 },
+          async (signal, deadlineAt) =>
+            await withProviderRetryWait(signal, call.run, deadlineAt),
+        ),
+      catch: (error: unknown) => error,
+    });
+    expect(call.calls).toHaveLength(1);
+    expect(Result.isError(outcome) && outcome.error).toBe(refusal);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  test("a wait the deadline covers still runs once more", async () => {
+    const call = scripted([rateLimited(20)]);
+    expect(
+      await withGenerationDeadline(
+        { deadlineMs: 5000 },
+        async (signal, deadlineAt) =>
+          await withProviderRetryWait(signal, call.run, deadlineAt),
+      ),
+    ).toBe("answer");
+    expect(call.calls).toHaveLength(2);
+  });
+
   test("a deadline during the wait settles as the deadline", async () => {
     const call = scripted([rateLimited(PROVIDER_RETRY_WAIT_CAP_MS)]);
     const outcome = await Result.tryPromise({

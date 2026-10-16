@@ -214,6 +214,8 @@ const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
     "get-model-options": WAIVER_REASON.noTenantReadSurface,
     // Rewrites the prompt text in the request body; reads no stored record.
     "improve-prompt": WAIVER_REASON.noTenantReadSurface,
+    // Plans a chart from the table in the request body; reads no stored record.
+    "table-chart": WAIVER_REASON.noTenantReadSurface,
   },
 };
 

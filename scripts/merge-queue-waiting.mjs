@@ -59,13 +59,16 @@ export const mergeQueueWaiting = async ({ github, repo }) => {
 
 /**
  * Lets a pull request side workflow give its runners to the merge queue.
- * A first attempt that finds merge-group work waiting either skips (`polls`
+ * Disabled (the `CI_YIELD_TO_MERGE_QUEUE` repository variable is not `on`),
+ * it always runs. Otherwise a first attempt that finds merge-group work
+ * waiting either skips (`polls`
  * is 0) or checks again every `intervalMs` until the queue clears, and runs
  * once `polls` checks have passed. A re-run, a Dependabot run and an idle
  * queue run at once, matching the pull request CI yield.
  * @param {{
  *   github: ActionsClient,
  *   context: { actor: string, repo: Repository },
+ *   enabled: boolean,
  *   attempt: number,
  *   polls: number,
  *   intervalMs: number,
@@ -77,13 +80,14 @@ export const mergeQueueWaiting = async ({ github, repo }) => {
 export const mergeQueueGate = async ({
   github,
   context,
+  enabled,
   attempt,
   polls,
   intervalMs,
   sleep,
   notice,
 }) => {
-  if (context.actor === "dependabot[bot]" || attempt > 1) {
+  if (!enabled || context.actor === "dependabot[bot]" || attempt > 1) {
     return "run";
   }
   const waiting = async () =>

@@ -236,26 +236,30 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings preserve legacy results at every work-budget boundary", () => {
+test("cached absent spellings replay uncached results at every work-budget boundary", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
   expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  expect(screen(compact, query, { cutoff: 0.65 }).unwrap()).toEqual(
+  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
+  // Fuzzy selection spends less work than the legacy scan, so the legacy
+  // index cannot place the boundaries; an uncached index is the oracle.
   let failures = 0;
   let successes = 0;
   for (let maxWork = 1; maxWork <= 3000; maxWork += 25) {
     const options = { cutoff: 0.65, maxWork };
-    const expected = legacyScreen(legacy, query, options);
+    const expected = screen(buildScreeningIndex(lists), query, options);
     const actual = screen(compact, query, options);
     expect(legacyScreenOutcome(actual)).toEqual(legacyScreenOutcome(expected));
     if (expected.isErr()) {
       expect(expected.error.code).toBe("work-limit");
       failures += 1;
     } else {
+      expect(expected.value).toEqual(complete);
       successes += 1;
     }
   }
