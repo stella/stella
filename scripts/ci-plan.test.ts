@@ -30,7 +30,10 @@ import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json" with { ty
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json" with { type: "json" };
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
-import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import {
+  API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
+} from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
@@ -5685,7 +5688,7 @@ test("workflow and planner changes run every planner test as a merge-group gate"
       expect(admitted, file).toContain(job);
       expect(resultJob.needs, file).toContain(job);
       expect(jobScopes[job], job).toBe(
-        job === "dated-waiver-expiry" ? null : "package_checks_required",
+        job === "ci-quick-checks" ? null : "package_checks_required",
       );
       const body = v.parse(v.record(v.string(), v.unknown()), ciJobs[job]);
       expect(body["continue-on-error"] ?? false, job).toBe(false);
@@ -6054,7 +6057,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
         );
     expect(partSelected("ci-checks-docs: ")).toEqual([true]);
     expect(partSelected("parser-version-guard: ")).toEqual([false]);
-    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true]);
+    expect(partSelected("dated-waiver-expiry: ")).toEqual([true, true, true]);
     expect(
       evaluateResult({
         event,
@@ -6494,7 +6497,7 @@ test("API planning only loads dependencies after installation and emits install-
           declaredShards.some((candidate) => candidate === shard),
         ),
       ).toBe(true);
-      if (!selected && expected === "4") {
+      if (!selected && expected === String(API_TEST_SHARD_IDS.length)) {
         expect(emittedMatrix.shard).toEqual([...declaredShards]);
       }
       if (selected) {

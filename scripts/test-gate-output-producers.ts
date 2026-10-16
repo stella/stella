@@ -1,3 +1,5 @@
+import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+
 export type TrustedOutputProducer = {
   readonly workflow: string;
   readonly job: string;
@@ -99,7 +101,7 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     outputNames: ["ci_tests_matrix"],
     semantics: "selection",
     proofTest: "scripts/ci-plan.test.ts",
-    declaredShards: ["api-1", "api-2", "api-3", "api-4", "rest-web"],
+    declaredShards: FULL_TEST_JOB_SHARDS,
   },
   {
     workflow: ".github/workflows/ci.yml",
@@ -128,7 +130,6 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
       "reuse_static_check_009",
       "reuse_static_check_012",
       "reuse_static_check_014",
-      "reuse_static_check_016",
       "reuse_static_check_021",
       "reuse_static_check_026",
       "reuse_static_check_030",

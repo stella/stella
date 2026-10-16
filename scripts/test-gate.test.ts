@@ -246,14 +246,14 @@ context("test registration census", () => {
   );
 
   check.each([
-    { body: "if (process.env.X) {} else return;", disabled: true },
+    { body: "if (process.env.GITHUB_ACTIONS) {} else return;", disabled: true },
     { body: "if (enabled) {} else if (true) return;", disabled: true },
     { body: "if (true) {} else if (enabled) {} else return;", disabled: true },
     { body: "!enabled && ctx.skip();", disabled: true },
     { body: "enabled || test['skip']();", disabled: true },
     { body: "enabled ? work() : ctx.skip();", disabled: true },
     {
-      body: "switch (process.env.X) { case 'yes': break; default: return; }",
+      body: "switch (process.env.GITHUB_ACTIONS) { case 'yes': break; default: return; }",
       disabled: true,
     },
     {
@@ -271,12 +271,12 @@ context("test registration census", () => {
       disabled: false,
     },
     {
-      body: "switch (process.env.X) { case 'yes': work(); break; default: work(); }",
+      body: "switch (process.env.GITHUB_ACTIONS) { case 'yes': work(); break; default: work(); }",
       disabled: false,
     },
     { body: "enabled && work();", disabled: false },
   ])("environment-controlled callback exit: $body", ({ body, disabled }) => {
-    const source = `const enabled = process.env.X === 'yes';
+    const source = `const enabled = process.env.GITHUB_ACTIONS === 'yes';
       test('controlled', (ctx) => { ${body} expect(actual).toBe(expected); });`;
     const findings = parseTestRegistrations("fixture.test.ts", source);
     if (disabled) {
@@ -1937,7 +1937,7 @@ jobs:
       expression: "contains(steps.selection.outputs.required, 'true')",
       extra: "",
       credited: false,
-      reason: "unsupported atom",
+      reason: "may be an empty or non-boolean string",
       events: undefined,
     },
     {
@@ -3634,7 +3634,7 @@ context("root test runner coverage", () => {
       "e2e-production-shard",
       (job) =>
         job.replace(
-          "        if: >-\n          steps.e2e-stack.outputs.status == 'ready'\n          && matrix.shard != 'network-baseline'\n",
+          "        if: >-\n          steps.e2e-stack.outcome == 'success'\n          && matrix.shard != 'network-baseline'\n",
           "        if: success()\n",
         ),
     );
@@ -3665,11 +3665,16 @@ context("root test runner coverage", () => {
       [
         "baseline-only collector matrix",
         (source) =>
-          source.replace("shard: [1, 2]", "shard: [network-baseline]"),
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace("shard: [1, 2]", "shard: [network-baseline]"),
+          ),
       ],
       [
         "incomplete production shard matrix",
-        (source) => source.replace("shard: [1, 2]", "shard: [1]"),
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace("shard: [1, 2]", "shard: [1]"),
+          ),
       ],
       [
         "changed collector command",
