@@ -744,14 +744,11 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
-const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
 const CANCELLATION_EXCEPTIONS = new Set([
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
-  "marketing-screenshots",
-  CANCEL_REUSABLE_JOB,
   ...MAIN_ONLY_JOBS,
 ]);
 const cancellationJobSchema = v.looseObject({
@@ -803,14 +800,12 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   for (const [id, value] of Object.entries(ciJobs)) {
     const body = v.parse(cancellationJobSchema, value);
     expect(body.permissions?.["actions"] === "write", id).toBe(
-      eligible.has(id) || id === CANCEL_REUSABLE_JOB || MAIN_ONLY_JOBS.has(id),
+      eligible.has(id) || MAIN_ONLY_JOBS.has(id),
     );
     const cancellations =
       body.steps?.filter(({ name }) => name === CANONICAL_CANCEL_STEP.name) ??
       [];
-    expect(cancellations.length, id).toBe(
-      Number(eligible.has(id) || id === CANCEL_REUSABLE_JOB),
-    );
+    expect(cancellations.length, id).toBe(Number(eligible.has(id)));
     if (!eligible.has(id)) {
       continue;
     }
@@ -839,34 +834,14 @@ test("every eligible CI job cancels a failed merge group in its final step with 
   expect(jobIf(ciJobs["heavy-web-build"])).toContain(
     "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
   );
-  expect(resultJob.needs).not.toContain(CANCEL_REUSABLE_JOB);
-  for (const id of [
-    "route-smoke",
-    "e2e-production-shard",
-    "marketing-screenshots",
-  ]) {
+  for (const id of ["route-smoke", "e2e-production-shard"]) {
     expect(jobIf(ciJobs[id]), id).toContain(
       "(github.event_name != 'merge_group' || !cancelled())",
     );
   }
 });
 
-test("all failure tails and screenshot cancellation use the canonical same-run API step", async () => {
-  const helper = v.parse(
-    v.looseObject({
-      needs: v.string(),
-      if: v.string(),
-      "timeout-minutes": v.number(),
-      permissions: v.record(v.string(), v.string()),
-      steps: v.array(v.unknown()),
-    }),
-    ciJobs[CANCEL_REUSABLE_JOB],
-  );
-  expect(helper.needs).toBe("marketing-screenshots");
-  expect(helper.if).toBe("failure() && github.event_name == 'merge_group'");
-  expect(helper["timeout-minutes"]).toBe(1);
-  expect(helper.permissions).toEqual({ actions: "write" });
-  expect(helper.steps).toEqual([CANONICAL_CANCEL_STEP]);
+test("failure tails use the canonical same-run API step", async () => {
   const cancel = CANONICAL_CANCEL_STEP;
   for (const event of [
     "pull_request",
@@ -877,7 +852,7 @@ test("all failure tails and screenshot cancellation use the canonical same-run A
     for (const failed of [false, true]) {
       const calls: unknown[] = [];
       const enabled: unknown = new Script(
-        `Boolean(${helper.if})`,
+        `Boolean(failure() && github.event_name == 'merge_group')`,
       ).runInNewContext({
         failure: () => failed,
         github: { event_name: event },
@@ -1303,9 +1278,6 @@ test("the result gate evaluates every job in the workflow", () => {
       Object.keys(ciJobs).filter(
         (job) =>
           job !== "ci-result" &&
-          // It only shortens a failing run; gating on it would let a failed
-          // cancellation request block the result (bound above).
-          job !== CANCEL_REUSABLE_JOB &&
           !MAIN_ONLY_JOBS.has(job) &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
@@ -2008,25 +1980,20 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
-test("a planned release screenshot check certifies the merge group", () => {
-  // The planner selects it only for release pull requests and tags, so a
-  // full-depth gate would skip it on the pull request every time.
-  expect(jobIf(ciJobs["marketing-screenshots"])).toContain(
-    "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
-  );
-  expect(heavyJobs).toContain("marketing-screenshots");
+test("normal CI does not plan or depend on marketing screenshots", () => {
+  expect(ciJobs["marketing-screenshots"]).toBeUndefined();
+  expect(ciJobs["marketing-screenshots-cancel"]).toBeUndefined();
+  expect(resultJob.needs).not.toContain("marketing-screenshots");
+  expect(heavyJobs).not.toContain("marketing-screenshots");
   expect(fastRequired).not.toContain("marketing-screenshots");
-  const event = EVENT.mergeGroup;
-  expect(
-    evaluateResult({ event, results: { "marketing-screenshots": "skipped" } }),
-  ).toBe(1);
-  expect(
-    evaluateResult({
-      event,
-      results: { "marketing-screenshots": "skipped" },
-      unplannedScopes: ["marketing_screenshots_required"],
-    }),
-  ).toBe(0);
+  expect(Object.values(jobScopes)).not.toContain(
+    "marketing_screenshots_required",
+  );
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["marketing_screenshots_required"]).toBeUndefined();
 });
 
 test("path-scoped platform checks run in the merge group", () => {
@@ -3108,160 +3075,6 @@ test("a failed API image run annotates the failing lines, escaped", () => {
   expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
-});
-
-test("marketing screenshots are planned only for ready same-repository releases or release tags", () => {
-  const plan = v.parse(
-    v.object({
-      outputs: v.record(v.string(), v.string()),
-      steps: v.array(
-        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
-      ),
-    }),
-    ciJobs["ci-plan"],
-  );
-  expect(plan.outputs["marketing_screenshots_required"]).toBe(
-    ["$", "{{ steps.marketing-release.outputs.required }}"].join(""),
-  );
-  const command = v.parse(
-    v.string(),
-    plan.steps.find(({ name }) => name === "Plan release marketing screenshots")
-      ?.run,
-  );
-  const directory = mkdtempSync(
-    nodePath.join(tmpdir(), "marketing-release-plan-"),
-  );
-  const output = nodePath.join(directory, "output");
-  const listing = [
-    {
-      number: 7,
-      title: "chore: release v1.2.3",
-      isDraft: false,
-      isCrossRepository: false,
-    },
-    {
-      number: 8,
-      title: "fix: ordinary",
-      isDraft: false,
-      isCrossRepository: false,
-    },
-    {
-      number: 9,
-      title: "chore: release v1.2.3",
-      isDraft: true,
-      isCrossRepository: false,
-    },
-    {
-      number: 10,
-      title: "chore: release v1.2.3",
-      isDraft: false,
-      isCrossRepository: true,
-    },
-  ];
-  writeFileSync(
-    nodePath.join(directory, "listing.json"),
-    JSON.stringify(listing),
-  );
-  writeFileSync(
-    nodePath.join(directory, "gh"),
-    [
-      "#!/usr/bin/env bash",
-      "set -euo pipefail",
-      '[[ "$*" == "pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository" ]] || exit 3',
-      'cat "$(dirname "$0")/listing.json"',
-    ].join("\n"),
-    { mode: 0o755 },
-  );
-  const cases = [
-    {
-      event: "pull_request",
-      number: "7",
-      ref: "refs/pull/7/merge",
-      head: "",
-      required: true,
-    },
-    {
-      event: "pull_request",
-      number: "8",
-      ref: "refs/pull/8/merge",
-      head: "",
-      required: false,
-    },
-    {
-      event: "pull_request",
-      number: "9",
-      ref: "refs/pull/9/merge",
-      head: "",
-      required: false,
-    },
-    {
-      event: "pull_request",
-      number: "10",
-      ref: "refs/pull/10/merge",
-      head: "",
-      required: false,
-    },
-    {
-      event: "merge_group",
-      number: "",
-      ref: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
-      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
-      required: true,
-    },
-    {
-      event: "merge_group",
-      number: "",
-      ref: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
-      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
-      required: false,
-    },
-    {
-      event: "workflow_dispatch",
-      number: "",
-      ref: "refs/tags/v1.2.3",
-      head: "",
-      required: true,
-    },
-    {
-      event: "workflow_dispatch",
-      number: "",
-      ref: "refs/tags/ordinary",
-      head: "",
-      required: false,
-    },
-    {
-      event: "workflow_dispatch",
-      number: "",
-      ref: "refs/heads/main",
-      head: "",
-      required: false,
-    },
-  ];
-  try {
-    for (const { event, number, ref, head, required } of cases) {
-      writeFileSync(output, "");
-      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
-        cwd: nodePath.resolve(import.meta.dir, ".."),
-        env: {
-          PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
-          EVENT_NAME: event,
-          PR_NUMBER: number,
-          GITHUB_REF: ref,
-          MERGE_GROUP_HEAD_REF: head,
-          REPOSITORY: "stella/stella",
-          GITHUB_OUTPUT: output,
-        },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
-      expect(readFileSync(output, "utf-8"), `${event} ${ref}`).toBe(
-        `required=${String(required)}\n`,
-      );
-    }
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 test("spec-tree PRs plan production shards and their web build at fast depth", () => {

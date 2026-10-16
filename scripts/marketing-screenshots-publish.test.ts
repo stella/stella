@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -13,6 +14,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (name: string) =>
@@ -20,10 +23,7 @@ const read = (name: string) =>
     new URL(`../.github/workflows/${name}`, import.meta.url),
     "utf-8",
   );
-// Built, not written literally: a `${...}` in a plain string reads as a
-// broken template literal to the linter.
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
-
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   id: v.optional(v.string()),
@@ -34,7 +34,7 @@ const stepSchema = v.looseObject({
   env: v.optional(v.record(v.string(), v.unknown())),
 });
 const jobSchema = v.looseObject({
-  if: v.optional(v.string()),
+  needs: v.optional(v.union([v.string(), v.array(v.string())])),
   environment: v.optional(v.string()),
   permissions: v.optional(v.record(v.string(), v.string())),
   steps: v.optional(v.array(stepSchema)),
@@ -44,20 +44,29 @@ const jobsOf = (workflow: unknown) =>
     .jobs;
 const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
-
-const reusable = Bun.YAML.parse(read("marketing-screenshots.yml"));
-const captureWorkflow = Bun.YAML.parse(
-  read("marketing-screenshots-capture.yml"),
-);
-const publishWorkflow = Bun.YAML.parse(
-  read("marketing-screenshots-publish.yml"),
-);
-const updateWorkflow = Bun.YAML.parse(read("marketing-screenshots-update.yml"));
-
+const workflowSource = read("marketing-screenshots-update.yml");
+const publishWorkflow = Bun.YAML.parse(workflowSource);
+const captureSource = read("marketing-screenshots-capture.yml");
+const captureWorkflow = Bun.YAML.parse(captureSource);
+const scriptOf = (job: string, name: string) =>
+  v.parse(
+    v.object({ script: v.string() }),
+    workflowStepByName(workflowJobSteps(publishWorkflow, job), name)["with"],
+  ).script;
+const executable = (job: string, name: string) =>
+  new Script(`(async () => { ${scriptOf(job, name)} })()`);
 const HEAD = "a".repeat(40);
+const PUBLISHED = "b".repeat(40);
+const PRODUCT = "apps/landing/public/media/products/workspace-light.png";
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.from("pixels"),
+]);
+const BLOB = createHash("sha1")
+  .update(`blob ${PNG.length}\0`)
+  .update(PNG)
+  .digest("hex");
 
-// Commands the publish job's shell steps may run: shell builtins and
-// coreutils that read or copy files, nothing that executes a file.
 const PUBLISH_SHELL_COMMANDS = new Set([
   "[[",
   "cd",
@@ -70,6 +79,7 @@ const PUBLISH_SHELL_COMMANDS = new Set([
   "fi",
   "find",
   "for",
+  "git",
   "head",
   "if",
   "od",
@@ -103,326 +113,1205 @@ const commandsOf = (script: string): string[] =>
         !/^(?:!|\]\]|\)\)?|\(\(|\\|count|done<|fi\)?)$/u.test(word),
     );
 
-describe("screenshot regeneration trust boundary", () => {
-  test("the shell allowlist sees commands that would run branch files", () => {
-    for (const script of [
-      "bash scripts/x.sh",
-      "./tool --flag",
-      "if true; then python tool.py; fi",
-      "x=$(node -e 1)",
-      "echo ok && sh run.sh",
-      "find . | xargs rm",
-    ]) {
-      expect(
-        commandsOf(script).every((command) =>
-          PUBLISH_SHELL_COMMANDS.has(command),
-        ),
-        script,
-      ).toBe(false);
-    }
-  });
-
-  test("only the publish job can read the push key, in its environment", () => {
-    for (const workflow of [reusable, captureWorkflow, updateWorkflow]) {
-      expect(JSON.stringify(workflow)).not.toContain(
-        "STELLA_RELEASE_APP_PRIVATE_KEY",
-      );
-      for (const job of Object.values(jobsOf(workflow))) {
-        expect(job.environment).toBeUndefined();
-      }
-    }
-    expect(jobsOf(publishWorkflow)["publish"]?.environment).toBe("release-app");
-  });
-
-  test("branch code runs only on the branch's own ref, never on main", () => {
-    const capture = jobsOf(captureWorkflow)["capture"];
-    expect(capture?.if).toContain("github.ref != 'refs/heads/main'");
-    expect(capture?.if).toContain("startsWith(github.ref, 'refs/heads/')");
-    expect(capture?.permissions).toEqual({ contents: "read" });
-    const steps = stepsOf(captureWorkflow, "capture");
-    expect(steps.find((step) => step.name === "Checkout")?.with?.["ref"]).toBe(
-      githubExpression("github.sha"),
-    );
-    expect(
-      steps.find((step) => step.name === "Upload regenerated baselines")
-        ?.with?.["name"],
-    ).toBe("marketing-screenshots");
-    for (const step of steps) {
-      expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
-    }
-    // The dispatch on main runs no branch code: it only starts the capture.
-    for (const step of stepsOf(updateWorkflow, "update")) {
-      expect(step.uses?.startsWith("./") ?? false).toBe(false);
-      expect(step.uses?.startsWith("actions/checkout@") ?? false).toBe(false);
-    }
-    // The comparison workflow no longer regenerates anything.
-    expect(Object.keys(jobsOf(reusable))).toEqual(["check"]);
-  });
-
-  test("the publish job runs no branch code and mints the token last", () => {
-    const publish = stepsOf(publishWorkflow, "publish");
-    // An allowlist, not a denylist: the job holds the push key, so every
-    // step is pinned by name and action, and shell steps may only call the
-    // commands above. Anything new fails here until reviewed.
-    expect(publish.map((step) => [step.name, step.uses ?? "run"])).toEqual([
-      [
-        "Select the branch",
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
-      ],
-      [
-        "Checkout the captured head",
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-      ],
-      [
-        "Download regenerated baselines",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-      ],
-      ["Stage validated baselines", "run"],
-      [
-        "Mint App token",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
-      ],
-      [
-        "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-      ],
+describe("pre-release screenshot workflow", () => {
+  test("one reusable manual workflow awaits the capture and publishes", () => {
+    const names = readdirSync(
+      new URL("../.github/workflows/", import.meta.url),
+    ).filter((name) => name.startsWith("marketing-screenshots"));
+    expect(names.toSorted()).toEqual([
+      "marketing-screenshots-capture.yml",
+      "marketing-screenshots-update.yml",
     ]);
+    const workflows = readdirSync(
+      new URL("../.github/workflows/", import.meta.url),
+    ).filter((name) => name.endsWith(".yml"));
+    expect(
+      workflows.filter(
+        (name) =>
+          read(name).includes("/marketing-capture") ||
+          read(name).includes("test:e2e:marketing"),
+      ),
+    ).toEqual(["marketing-screenshots-capture.yml"]);
+    expect(
+      workflows
+        .filter(
+          (name) =>
+            !names.includes(name) &&
+            read(name).includes("marketing-screenshots-update.yml"),
+        )
+        .toSorted(),
+    ).toEqual(["release-pr.yml", "release-tag.yml"]);
+    const triggers = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      publishWorkflow,
+    ).on;
+    expect(Object.keys(triggers).toSorted()).toEqual([
+      "workflow_call",
+      "workflow_dispatch",
+    ]);
+    expect(workflowSource).not.toContain("workflow_run:");
+    expect(captureSource).not.toContain("workflow_run:");
+    expect(jobsOf(publishWorkflow)["publish"]?.needs).toEqual([
+      "select",
+      "capture",
+    ]);
+    for (const name of ["ci.yml", "nightly-test.yml"]) {
+      expect(read(name)).not.toContain("marketing-screenshots");
+      expect(read(name)).not.toContain("marketing_screenshots_required");
+    }
+    for (const name of ["release-pr.yml", "release-tag.yml"]) {
+      expect(read(name)).toContain(
+        "uses: ./.github/workflows/marketing-screenshots-update.yml",
+      );
+    }
+    const release = jobsOf(Bun.YAML.parse(read("release-pr.yml")));
+    expect(release["screenshot-plan"]?.needs).toBe("version");
+    expect(release["marketing-screenshots"]?.needs).toBe("screenshot-plan");
+    expect(release["marketing-screenshots"]?.["if"]).toBe(
+      "needs.screenshot-plan.outputs.branch != ''",
+    );
+  });
+
+  // Runs of the update workflow use main's ref and therefore main's cache
+  // scope (the runtime credentials actions/cache uses). Branch install,
+  // build and spec code must never execute there: `save: false` only turns
+  // off one cooperative save step, not what the branch's code can do.
+  test("no job on main's ref executes code from a checked-out tree", () => {
+    const jobs = jobsOf(publishWorkflow);
+    for (const [name, job] of Object.entries(jobs)) {
+      const steps = stepsOf(publishWorkflow, name);
+      for (const step of steps) {
+        // A local action or a cache action would run or restore tree content.
+        expect(
+          step.uses?.startsWith("./") ?? false,
+          `${name}: ${step.uses}`,
+        ).toBe(false);
+        expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
+        expect(step.uses?.includes("setup-bun") ?? false).toBe(false);
+      }
+      const checkouts = steps.filter((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      );
+      if (name !== "publish") {
+        // Only the publish job has a checkout, and it executes nothing from
+        // it (its shell commands are pinned below).
+        expect(checkouts, name).toEqual([]);
+        expect(
+          steps.filter((step) => step.run !== undefined),
+          name,
+        ).toEqual([]);
+      }
+      expect(JSON.stringify(job)).not.toContain("marketing-capture");
+      expect(JSON.stringify(job)).not.toContain("DOCKERHUB");
+    }
+    const publish = stepsOf(publishWorkflow, "publish");
     for (const step of publish) {
       if (step.run !== undefined) {
-        expect(commandsOf(step.run), step.name).toEqual(
-          commandsOf(step.run).filter((command) =>
-            PUBLISH_SHELL_COMMANDS.has(command),
-          ),
-        );
+        for (const command of commandsOf(step.run)) {
+          expect(PUBLISH_SHELL_COMMANDS.has(command), command).toBe(true);
+        }
       }
     }
-    const checkout = publish.find((step) =>
-      step.uses?.startsWith("actions/checkout@"),
+  });
+
+  test("branch code runs only in a capture dispatched on the branch's own ref", () => {
+    const triggers = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      captureWorkflow,
+    ).on;
+    expect(Object.keys(triggers)).toEqual(["workflow_dispatch"]);
+    expect(
+      v.parse(v.looseObject({ permissions: v.unknown() }), captureWorkflow)
+        .permissions,
+    ).toEqual({});
+    const jobs = jobsOf(captureWorkflow);
+    expect(Object.keys(jobs)).toEqual(["capture"]);
+    const capture = v.parse(
+      v.looseObject({ if: v.string(), permissions: v.unknown() }),
+      jobs["capture"],
     );
-    expect(checkout?.with?.["persist-credentials"]).toBe(false);
-    expect(checkout?.with?.["submodules"]).toBeUndefined();
-    expect(checkout?.with?.["ref"]).toBe(
-      githubExpression("steps.select.outputs.head"),
+    // Never the default branch, whose cache scope main runs restore.
+    expect(capture.if.replaceAll(/\s+/gu, " ").trim()).toBe(
+      "startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)",
     );
-    const download = publish.find(
+    // The job that runs branch code holds no write permission, no
+    // deployment environment and no release key.
+    expect(capture.permissions).toEqual({ contents: "read" });
+    expect(jobs["capture"]?.environment).toBeUndefined();
+    expect(captureSource).not.toContain("RELEASE_APP");
+    expect(captureSource).not.toContain("github-token");
+    const steps = stepsOf(captureWorkflow, "capture");
+    expect(
+      steps.find((step) => step.name === "Checkout the release tree")?.with,
+    ).toMatchObject({
+      ref: githubExpression("inputs.sha"),
+      "persist-credentials": false,
+    });
+    expect(
+      steps.find((step) => step.name === "Capture marketing screenshots"),
+    ).toMatchObject({
+      uses: "./.github/actions/marketing-capture",
+      with: { mode: "update" },
+    });
+    expect(
+      steps.find((step) => step.name === "Upload regenerated baselines")?.with,
+    ).toMatchObject({
+      name: "marketing-screenshots",
+      path: "apps/landing/public/media/products/*.png",
+    });
+
+    // The main-ref jobs that hold privileged writes never share a job with
+    // branch code: the capture job only dispatches and waits.
+    const updateJobs = jobsOf(publishWorkflow);
+    expect(updateJobs["capture"]?.permissions).toEqual({ actions: "write" });
+    expect(updateJobs["capture"]?.environment).toBeUndefined();
+    expect(JSON.stringify(updateJobs["capture"])).not.toContain(
+      "STELLA_RELEASE_APP_PRIVATE_KEY",
+    );
+    expect(updateJobs["capture"]?.needs).toEqual(["select", "prepare"]);
+    expect(updateJobs["prepare"]?.environment).toBe("release-app");
+    expect(updateJobs["prepare"]?.permissions).toEqual({});
+    const download = stepsOf(publishWorkflow, "publish").find(
       (step) => step.name === "Download regenerated baselines",
     );
     expect(download?.with).toMatchObject({
       name: "marketing-screenshots",
-      "run-id": githubExpression("steps.select.outputs.run"),
+      "run-id": githubExpression("needs.capture.outputs.run-id"),
     });
-    const index = (name: string) =>
-      publish.findIndex((step) => step.name === name);
-    expect(index("Stage validated baselines")).toBeGreaterThan(
-      index("Download regenerated baselines"),
+    const action = readFileSync(
+      new URL(
+        "../.github/actions/marketing-capture/action.yml",
+        import.meta.url,
+      ),
+      "utf-8",
     );
-    expect(index("Mint App token")).toBeGreaterThan(
-      index("Stage validated baselines"),
+    expect(action).toContain("save: false");
+  });
+
+  test("publication validates artifact data before minting its isolated App token", () => {
+    const jobs = jobsOf(publishWorkflow);
+    expect(jobs["publish"]?.environment).toBe("release-app");
+    for (const [name, job] of Object.entries(jobs)) {
+      if (name !== "publish" && name !== "prepare") {
+        expect(JSON.stringify(job)).not.toContain(
+          "STELLA_RELEASE_APP_PRIVATE_KEY",
+        );
+      }
+    }
+    const steps = stepsOf(publishWorkflow, "publish");
+    for (const step of steps) {
+      expect(step.uses?.startsWith("./") ?? false).toBe(false);
+      expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
+      if (step.run !== undefined) {
+        for (const command of commandsOf(step.run)) {
+          expect(PUBLISH_SHELL_COMMANDS.has(command), command).toBe(true);
+        }
+      }
+    }
+    const checkout = steps.find(
+      (step) => step.name === "Checkout the captured head",
     );
-    expect(index("Push regenerated baselines")).toBe(publish.length - 1);
-    // Append mode builds on the checked-out head, the commit the capture ran
-    // on, so a push that landed since fails instead of being overwritten.
-    expect(publish.at(-1)?.with).toMatchObject({
+    expect(checkout?.with).toMatchObject({
+      ref: githubExpression("needs.select.outputs.head"),
+      "persist-credentials": false,
+    });
+    expect(checkout?.with?.["submodules"]).toBeUndefined();
+    const download = steps.find(
+      (step) => step.name === "Download regenerated baselines",
+    );
+    expect(download?.with?.["run-id"]).toBe(
+      githubExpression("needs.capture.outputs.run-id"),
+    );
+    expect(download?.with?.["name"]).toBe("marketing-screenshots");
+    const position = (name: string) =>
+      steps.findIndex((step) => step.name === name);
+    expect(position("Mint App token")).toBeGreaterThan(
+      position("Stage validated baselines"),
+    );
+    expect(position("Mint App token")).toBeGreaterThan(
+      position("Classify baseline changes"),
+    );
+    expect(
+      steps.find((step) => step.name === "Push regenerated baselines")?.with,
+    ).toMatchObject({
       mode: "append",
-      branch: githubExpression("steps.select.outputs.branch"),
+      branch: githubExpression("needs.select.outputs.branch"),
       paths: "apps/landing/public/media/products/*.png",
     });
+    expect(
+      steps.find((step) => step.name === "Push regenerated baselines")?.if,
+    ).toBe(
+      "steps.changes.outputs.result == 'changed' && steps.publication.outputs.result != 'reuse'",
+    );
+    expect(
+      steps.find(
+        (step) => step.name === "Verify publication and report review result",
+      )?.env,
+    ).toMatchObject({
+      PUBLICATION_RESULT: githubExpression("steps.publication.outputs.result"),
+      PUBLISHED_HEAD: githubExpression(
+        "steps.commit.outputs.commit-sha || steps.publication.outputs.head",
+      ),
+    });
+    expect(
+      position("Verify publication and report review result"),
+    ).toBeGreaterThan(position("Push regenerated baselines"));
   });
 });
 
-describe("publish selection", () => {
-  const select = new Script(
-    `(async () => { ${
-      v.parse(
-        v.object({ script: v.string() }),
-        workflowStepByName(
-          workflowJobSteps(publishWorkflow, "publish"),
-          "Select the branch",
-        )["with"],
-      ).script
-    } })()`,
-  );
-  type Scenario = {
-    run: Record<string, unknown>;
-    pulls: Record<string, unknown>[];
-    artifacts: { name: string; expired: boolean }[];
-  };
-  const scenario = (): Scenario => ({
+describe("capture dispatch on the release branch", () => {
+  const dispatch = executable("capture", "Capture on the release branch");
+  const BRANCH = "changeset-release/main";
+  const scenario = () => ({
+    branch: BRANCH,
+    head: HEAD,
+    runId: 42 as number | undefined,
     run: {
-      id: 7,
+      id: 42,
+      status: "completed",
+      conclusion: "success",
       path: ".github/workflows/marketing-screenshots-capture.yml",
       event: "workflow_dispatch",
-      head_branch: "feat/ui",
-      head_sha: HEAD,
+      head_branch: BRANCH,
+      display_title: "Capture marketing screenshots 7-1",
       head_repository: { full_name: "stella/stella" },
+      html_url: "https://github.com/stella/stella/actions/runs/42",
     },
-    pulls: [
-      {
-        head: {
-          ref: "feat/ui",
-          sha: HEAD,
-          repo: { full_name: "stella/stella" },
+  });
+  const dispatchFor = async (input: ReturnType<typeof scenario>) => {
+    const outputs: Record<string, string> = {};
+    const dispatches: unknown[] = [];
+    const builder = {
+      addHeading: () => builder,
+      addLink: () => builder,
+      write: async () => {},
+    };
+    await dispatch.runInNewContext({
+      context: { repo: { owner: "stella", repo: "stella" }, runId: 7 },
+      process: {
+        env: {
+          BRANCH: input.branch,
+          CAPTURE_HEAD: input.head,
+          GITHUB_RUN_ATTEMPT: "1",
         },
       },
-    ],
-    artifacts: [{ name: "marketing-screenshots", expired: false }],
-  });
-  const selectFor = async (input: Scenario) => {
-    const outputs: Record<string, string> = {};
-    const failures: string[] = [];
-    const notices: string[] = [];
-    await select.runInNewContext({
-      context: {
-        repo: { owner: "stella", repo: "stella" },
-        payload: { workflow_run: input.run },
+      setTimeout: (callback: () => void) => {
+        callback();
       },
+      Date,
       core: {
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
         },
-        setFailed: (message: string) => {
-          failures.push(message);
+        summary: builder,
+      },
+      github: {
+        rest: {
+          actions: {
+            createWorkflowDispatch: async (params: unknown) => {
+              dispatches.push(params);
+              return input.runId === undefined
+                ? { status: 204, data: undefined }
+                : { status: 200, data: { workflow_run_id: input.runId } };
+            },
+            listWorkflowRuns: async (params: unknown) => {
+              expect(params).toMatchObject({
+                workflow_id: "marketing-screenshots-capture.yml",
+                branch: BRANCH,
+                event: "workflow_dispatch",
+              });
+              return { data: { workflow_runs: [input.run] } };
+            },
+            getWorkflowRun: async () => ({ data: input.run }),
+          },
+        },
+      },
+    });
+    return { outputs, dispatches };
+  };
+
+  test("dispatches the capture on the branch's ref and returns its run", async () => {
+    expect(await dispatchFor(scenario())).toEqual({
+      outputs: { "run-id": "42" },
+      dispatches: [
+        {
+          owner: "stella",
+          repo: "stella",
+          workflow_id: "marketing-screenshots-capture.yml",
+          ref: BRANCH,
+          inputs: { sha: HEAD, request: "7-1" },
+          return_run_details: true,
+        },
+      ],
+    });
+  });
+
+  test("finds the dispatched run by its request when no run id is returned", async () => {
+    const input = scenario();
+    input.runId = undefined;
+    expect((await dispatchFor(input)).outputs).toEqual({ "run-id": "42" });
+  });
+
+  for (const [name, change, message] of [
+    [
+      "main",
+      (input: ReturnType<typeof scenario>) => {
+        input.branch = "main";
+      },
+      "release branch",
+    ],
+    [
+      "a short commit",
+      (input: ReturnType<typeof scenario>) => {
+        input.head = "abc";
+      },
+      "full commit SHA",
+    ],
+    [
+      "a run on another branch",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.head_branch = "main";
+      },
+      "is not this capture",
+    ],
+    [
+      "a run of another workflow",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.path = ".github/workflows/ci.yml";
+      },
+      "is not this capture",
+    ],
+    [
+      "a failed capture",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.conclusion = "failure";
+      },
+      "concluded failure",
+    ],
+  ] as const) {
+    test(`refuses ${name}`, async () => {
+      const input = scenario();
+      change(input);
+      expect(await rejectionOf(dispatchFor(input))).toMatchObject({
+        message: expect.stringContaining(message),
+      });
+    });
+  }
+});
+
+describe("versioned release screenshot planning", () => {
+  const releaseWorkflow = Bun.YAML.parse(read("release-pr.yml"));
+  const script = v.parse(
+    v.object({ script: v.string() }),
+    workflowStepByName(
+      workflowJobSteps(releaseWorkflow, "screenshot-plan"),
+      "Select the versioned release pull request",
+    )["with"],
+  ).script;
+  const select = new Script(`(async () => { ${script} })()`);
+  const release = () => ({
+    head: {
+      ref: "changeset-release/main",
+      repo: { full_name: "stella/stella" },
+    },
+    base: { ref: "main" },
+  });
+  const planFor = async (pulls: ReturnType<typeof release>[]) => {
+    const outputs: Record<string, string> = {};
+    const notices: string[] = [];
+    await select.runInNewContext({
+      context: { repo: { owner: "stella", repo: "stella" } },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
         },
         notice: (message: string) => {
           notices.push(message);
         },
       },
       github: {
-        paginate: async (_route: unknown, params: Record<string, unknown>) => {
-          expect(params["head"]).toBe(
-            `stella:${String(input.run["head_branch"])}`,
-          );
-          return input.pulls;
+        paginate: async (_route: unknown, params: unknown) => {
+          expect(params).toMatchObject({
+            state: "open",
+            head: "stella:changeset-release/main",
+          });
+          return pulls;
         },
-        rest: {
-          pulls: { list: "pulls.list" },
-          actions: {
-            listWorkflowRunArtifacts: async (
-              params: Record<string, unknown>,
-            ) => {
-              expect(params["run_id"]).toBe(input.run["id"]);
-              return { data: { artifacts: input.artifacts } };
-            },
-          },
-        },
+        rest: { pulls: { list: "pulls.list" } },
       },
     });
-    return { outputs, failures, notices };
+    return { outputs, notices };
   };
-
-  test("publishes to the branch the capture ran on", async () => {
-    expect(await selectFor(scenario())).toEqual({
-      outputs: { branch: "feat/ui", head: HEAD, run: "7" },
-      failures: [],
+  test("reports no checklist when versioning created no release pull request", async () => {
+    const result = await planFor([]);
+    expect(result.outputs).toEqual({});
+    expect(result.notices).toHaveLength(1);
+  });
+  test("selects the same-repository versioned release branch", async () => {
+    expect(await planFor([release()])).toEqual({
+      outputs: { branch: "changeset-release/main" },
       notices: [],
     });
   });
-
-  // The capture for a fork's pull request runs on a branch without one.
-  test("leaves a branch with no pull request to its artifact", async () => {
-    const input = scenario();
-    input.pulls = [];
-    const result = await selectFor(input);
+  test("refuses multiple versioned release pull requests", async () => {
+    expect(await rejectionOf(planFor([release(), release()]))).toMatchObject({
+      message: expect.stringContaining(
+        "Multiple versioned release pull requests",
+      ),
+    });
+  });
+  test("does not schedule screenshots for a fork release branch", async () => {
+    const pull = release();
+    pull.head.repo.full_name = "fork/stella";
+    const result = await planFor([pull]);
     expect(result.outputs).toEqual({});
-    expect(result.failures).toEqual([]);
     expect(result.notices).toHaveLength(1);
   });
+});
 
-  // A fork's pull request from a same-named branch is not this branch's.
-  test("never publishes to a fork's pull request of the same branch name", async () => {
-    const input = scenario();
-    input.pulls = [
+describe("release tree selection", () => {
+  const select = executable("select", "Select the release tree");
+  const scenario = () => ({
+    workflowRef: "refs/heads/main",
+    branch: "release/test",
+    ref: "",
+    comparison: "ahead",
+    pulls: [
       {
         head: {
-          ref: "feat/ui",
+          ref: "release/test",
           sha: HEAD,
-          repo: { full_name: "someone/stella" },
+          repo: { full_name: "stella/stella" },
+        },
+        base: { ref: "main" },
+      },
+    ],
+  });
+  const selectFor = async (input: ReturnType<typeof scenario>) => {
+    const outputs: Record<string, string> = {};
+    await select.runInNewContext({
+      context: {
+        repo: { owner: "stella", repo: "stella" },
+        ref: input.workflowRef,
+      },
+      process: { env: { BRANCH: input.branch, RELEASE_REF: input.ref } },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
         },
       },
-    ];
-    const result = await selectFor(input);
-    expect(result.outputs).toEqual({});
-    expect(result.failures).toEqual([]);
-  });
-
-  const refused: { name: string; change: (input: Scenario) => void }[] = [
-    {
-      name: "another workflow's run",
-      change: (input) => {
-        input.run["path"] = ".github/workflows/x.yml";
-      },
-    },
-    {
-      name: "a non-dispatch run",
-      change: (input) => {
-        input.run["event"] = "push";
-      },
-    },
-    {
-      name: "main",
-      change: (input) => {
-        input.run["head_branch"] = "main";
-      },
-    },
-    ...["feat/a..b", "-feat", "feat ui", ""].map((branch) => ({
-      name: `the branch name ${JSON.stringify(branch)}`,
-      change: (input: Scenario) => {
-        input.run["head_branch"] = branch;
-      },
-    })),
-    {
-      name: "a malformed head SHA",
-      change: (input) => {
-        input.run["head_sha"] = "abc123";
-      },
-    },
-    {
-      name: "a fork",
-      change: (input) => {
-        input.run["head_repository"] = { full_name: "someone/stella" };
-      },
-    },
-    {
-      name: "a branch heading two pull requests",
-      change: (input) => {
-        input.pulls = [...input.pulls, ...input.pulls];
-      },
-    },
-    {
-      name: "a branch that moved since the capture",
-      change: (input) => {
-        input.pulls = [
-          {
-            head: {
-              ref: "feat/ui",
-              sha: "e".repeat(40),
-              repo: { full_name: "stella/stella" },
-            },
+      github: {
+        paginate: async () => input.pulls,
+        rest: {
+          pulls: { list: "pulls.list" },
+          git: { getRef: async () => ({ data: { object: { sha: HEAD } } }) },
+          repos: {
+            compareCommits: async () => ({
+              data: { status: input.comparison },
+            }),
           },
-        ];
+        },
       },
+    });
+    return outputs;
+  };
+  test("selects exactly one same-repository release pull request", async () => {
+    expect(await selectFor(scenario())).toEqual({
+      branch: "release/test",
+      head: HEAD,
+      target: "existing-pr",
+    });
+  });
+  test("selects main or its verified ancestor for a new review branch", async () => {
+    for (const ref of ["", "c".repeat(40)]) {
+      const input = scenario();
+      input.branch = "";
+      input.ref = ref;
+      expect(await selectFor(input)).toEqual({
+        branch: `release/marketing-screenshots-${ref || HEAD}`,
+        head: ref || HEAD,
+        target: "new-pr",
+      });
+    }
+  });
+  const refused = [
+    {
+      name: "workflow code outside main",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.workflowRef = "refs/heads/release/test";
+      },
+      message: "from main",
     },
     {
-      name: "a run without baselines",
-      change: (input) => {
-        input.artifacts = [];
+      name: "both branch and commit",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.ref = HEAD;
       },
+      message: "not both",
     },
     {
-      name: "expired baselines",
-      change: (input) => {
-        input.artifacts = [{ name: "marketing-screenshots", expired: true }];
+      name: "missing pull request",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.pulls = [];
       },
+      message: "exactly one",
     },
+    {
+      name: "multiple pull requests",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.pulls.push(...input.pulls);
+      },
+      message: "exactly one",
+    },
+    {
+      name: "fork pull request",
+      change: (input: ReturnType<typeof scenario>) => {
+        for (const pull of input.pulls) {
+          pull.head.repo.full_name = "fork/stella";
+        }
+      },
+      message: "exactly one",
+    },
+    {
+      name: "another base branch",
+      change: (input: ReturnType<typeof scenario>) => {
+        for (const pull of input.pulls) {
+          pull.base.ref = "other";
+        }
+      },
+      message: "exactly one",
+    },
+    {
+      name: "malformed commit",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.branch = "";
+        input.ref = "abc";
+      },
+      message: "full SHA",
+    },
+    {
+      name: "commit outside main",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.branch = "";
+        input.ref = HEAD;
+        input.comparison = "diverged";
+      },
+      message: "not on main",
+    },
+    ...["main", "-branch", "release/..", "release bad"].map((branch) => ({
+      name: `unsafe branch ${branch}`,
+      change: (input: ReturnType<typeof scenario>) => {
+        input.branch = branch;
+      },
+      message: "invalid review branch",
+    })),
   ];
-  for (const { name, change } of refused) {
-    // A refusal fails the run instead of finishing green with nothing pushed.
+  for (const { name, change, message } of refused) {
     test(`refuses ${name}`, async () => {
       const input = scenario();
       change(input);
-      const result = await selectFor(input);
-      expect(result.outputs).toEqual({});
-      expect(result.failures).toHaveLength(1);
+      expect(await rejectionOf(selectFor(input))).toMatchObject({
+        message: expect.stringContaining(message),
+      });
+    });
+  }
+});
+
+describe("publication verification", () => {
+  const verify = executable(
+    "publish",
+    "Verify publication and report review result",
+  );
+  const reviewPull = (mergedAt: string | null = null) => ({
+    head: {
+      ref: "release/test",
+      sha: PUBLISHED,
+      repo: { full_name: "stella/stella" },
+    },
+    base: { ref: "main" },
+    state: "open",
+    merged_at: mergedAt,
+    html_url: "https://github.com/stella/stella/pull/1",
+  });
+  const scenario = () => {
+    const pulls: ReturnType<typeof reviewPull>[] = [];
+    return {
+      result: "changed",
+      target: "existing-pr",
+      remote: PUBLISHED,
+      operation: "committed",
+      publication: "append",
+      pulls,
+      failure: "",
+      published: PUBLISHED,
+      status: "ahead",
+      commits: [{ parents: [{ sha: HEAD }] }],
+      expected: [PRODUCT],
+      files: [{ filename: PRODUCT, sha: BLOB }],
+    };
+  };
+  const verifyFor = async (input: ReturnType<typeof scenario>) => {
+    const outputs: Record<string, string> = {};
+    const reviews: unknown[] = [];
+    const summary: string[] = [];
+    const builder = {
+      addHeading: (value: string) => {
+        summary.push(value);
+        return builder;
+      },
+      addRaw: (value: string) => {
+        summary.push(value);
+        return builder;
+      },
+      addLink: (_label: string, value: string) => {
+        summary.push(value);
+        return builder;
+      },
+      write: async () => {},
+    };
+    await verify.runInNewContext({
+      context: {
+        repo: { owner: "stella", repo: "stella" },
+        serverUrl: "https://github.com",
+      },
+      process: {
+        env: {
+          CHANGE_RESULT: input.result,
+          TARGET: input.target,
+          BRANCH: "release/test",
+          CAPTURE_HEAD: HEAD,
+          COMMIT_OPERATION: input.operation,
+          PUBLICATION_RESULT: input.publication,
+          PUBLISHED_HEAD: input.published,
+        },
+      },
+      require: (moduleName: string) => {
+        switch (moduleName) {
+          case "node:crypto":
+            return {
+              createHash: (algorithm: string) => {
+                expect(algorithm).toBe("sha1");
+                return createHash("sha1");
+              },
+            };
+          case "node:fs":
+            return {
+              readFileSync: (name: string) => {
+                expect(name).toBe(PRODUCT);
+                return PNG;
+              },
+            };
+          case "node:child_process":
+            return {
+              execFileSync: (command: string, args: string[]) => {
+                expect(command).toBe("git");
+                expect(args).toEqual(["diff", "--cached", "--name-only", "-z"]);
+                return Buffer.from(
+                  input.expected.join("\0") +
+                    (input.expected.length ? "\0" : ""),
+                );
+              },
+            };
+          default:
+            throw new TypeError(`Unexpected module ${moduleName}`);
+        }
+      },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+        summary: builder,
+      },
+      github: {
+        paginate: async (_route: unknown, params: unknown) => {
+          if (input.failure === "list-pulls") {
+            throw new TypeError("API list failure");
+          }
+          expect(params).toMatchObject({
+            state: "all",
+            head: "stella:release/test",
+          });
+          return input.pulls;
+        },
+        rest: {
+          git: {
+            getRef: async () => {
+              if (input.failure === "get-ref") {
+                throw new TypeError("API lookup failure");
+              }
+              return { data: { object: { sha: input.remote } } };
+            },
+          },
+          repos: {
+            compareCommits: async (params: unknown) => {
+              if (input.failure === "compare") {
+                throw new TypeError("API comparison failure");
+              }
+              expect(params).toMatchObject({ base: HEAD, head: input.remote });
+              return {
+                data: {
+                  status: input.status,
+                  commits: input.commits,
+                  files: input.files,
+                },
+              };
+            },
+          },
+          pulls: {
+            list: "pulls.list",
+            create: async (request: unknown) => {
+              if (input.failure === "create-pull") {
+                throw new TypeError("API create failure");
+              }
+              reviews.push(request);
+              input.pulls.push(reviewPull());
+              return {
+                data: { html_url: "https://github.com/stella/stella/pull/1" },
+              };
+            },
+          },
+        },
+      },
+    });
+    return { outputs, reviews, summary };
+  };
+  test("reports unchanged regeneration explicitly", async () => {
+    const input = scenario();
+    input.result = "no-change";
+    const result = await verifyFor(input);
+    expect(result.outputs).toEqual({ result: "no-change", head: HEAD });
+    expect(result.reviews).toEqual([]);
+    expect(result.summary.join(" ")).toContain("no-change");
+  });
+  test("reports a verified appended commit for review", async () => {
+    const result = await verifyFor(scenario());
+    expect(result.outputs).toEqual({ result: "published", head: PUBLISHED });
+    expect(result.summary.join(" ")).toContain("compare/release/test");
+  });
+  test("opens a draft review pull request after verified publication", async () => {
+    const input = scenario();
+    input.target = "new-pr";
+    const result = await verifyFor(input);
+    expect(result.reviews).toHaveLength(1);
+    expect(result.reviews.at(0)).toMatchObject({
+      head: "release/test",
+      base: "main",
+      draft: true,
+    });
+    expect(result.outputs["result"]).toBe("published");
+  });
+  const prepare = executable(
+    "publish",
+    "Prepare the baseline review publication",
+  );
+  const publicationState = () => {
+    const extraRefs: { ref: string; object: { sha: string } }[] = [];
+    return { branchHead: "", creations: 0, commits: 0, failure: "", extraRefs };
+  };
+  const prepareFor = async (state: ReturnType<typeof publicationState>) => {
+    const outputs: Record<string, string> = {};
+    await prepare.runInNewContext({
+      context: { repo: { owner: "stella", repo: "stella" } },
+      process: { env: { BRANCH: "release/test", CAPTURE_HEAD: HEAD } },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+      },
+      github: {
+        paginate: async (_route: unknown, params: unknown) => {
+          if (state.failure === "list") {
+            throw new TypeError("API ref list failure");
+          }
+          expect(params).toMatchObject({ ref: "heads/release/test" });
+          return state.branchHead
+            ? [
+                {
+                  ref: "refs/heads/release/test",
+                  object: { sha: state.branchHead },
+                },
+                ...state.extraRefs,
+              ]
+            : state.extraRefs;
+        },
+        rest: {
+          git: {
+            listMatchingRefs: "git.listMatchingRefs",
+            createRef: async (params: unknown) => {
+              if (state.failure === "create") {
+                throw new TypeError("API ref create failure");
+              }
+              if (state.branchHead) {
+                throw new TypeError("Reference already exists");
+              }
+              expect(params).toMatchObject({
+                ref: "refs/heads/release/test",
+                sha: HEAD,
+              });
+              state.branchHead = HEAD;
+              state.creations += 1;
+            },
+          },
+        },
+      },
+    });
+    return outputs;
+  };
+  const publishCycle = async (
+    state: ReturnType<typeof publicationState>,
+    input: ReturnType<typeof scenario>,
+  ) => {
+    const selected = await prepareFor(state);
+    input.target = "new-pr";
+    input.publication = String(selected["result"]);
+    const predicate = v.parse(
+      v.string(),
+      stepsOf(publishWorkflow, "publish").find(
+        (step) => step.name === "Push regenerated baselines",
+      )?.if,
+    );
+    const shouldCommit = new Script(`Boolean(${predicate})`).runInNewContext({
+      steps: {
+        changes: { outputs: { result: input.result } },
+        publication: { outputs: { result: selected["result"] } },
+      },
+    });
+    if (shouldCommit) {
+      state.commits += 1;
+      state.branchHead = PUBLISHED;
+      input.operation = "committed";
+    } else {
+      input.operation = "";
+    }
+    input.remote = state.branchHead;
+    input.published = state.branchHead;
+    return verifyFor(input);
+  };
+  test("repeated publication of one captured tree creates one branch, commit, and review", async () => {
+    const state = publicationState();
+    const input = scenario();
+    const first = await publishCycle(state, input);
+    const second = await publishCycle(state, input);
+    expect(first.outputs).toEqual({ result: "published", head: PUBLISHED });
+    expect(second.outputs).toEqual(first.outputs);
+    expect(first.reviews).toHaveLength(1);
+    expect(second.reviews).toEqual([]);
+    expect(input.pulls).toHaveLength(1);
+    expect(state.creations).toBe(1);
+    expect(state.commits).toBe(1);
+  });
+  test("recovers a branch created before its baseline commit", async () => {
+    const state = publicationState();
+    state.branchHead = HEAD;
+    const result = await publishCycle(state, scenario());
+    expect(result.outputs["result"]).toBe("published");
+    expect(state.creations).toBe(0);
+    expect(state.commits).toBe(1);
+  });
+  test("recovers a committed baseline whose review pull request was not created", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    const result = await publishCycle(state, scenario());
+    expect(result.outputs["result"]).toBe("published");
+    expect(result.reviews).toHaveLength(1);
+    expect(state.creations).toBe(0);
+    expect(state.commits).toBe(0);
+  });
+  test("rejects different PNG content on a reused publication with a typed conflict", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    const input = scenario();
+    input.files = [{ filename: PRODUCT, sha: HEAD }];
+    expect(await rejectionOf(publishCycle(state, input))).toMatchObject({
+      name: "BaselinePublicationConflict",
+      code: "BASELINE_PUBLICATION_CONFLICT",
+      message: expect.stringContaining("does not match capture"),
+    });
+    expect(state.commits).toBe(0);
+    expect(input.pulls).toEqual([]);
+  });
+  test("matching-ref prefixes do not count as the publication branch", async () => {
+    const state = publicationState();
+    state.extraRefs.push({
+      ref: "refs/heads/release/test-other",
+      object: { sha: PUBLISHED },
+    });
+    expect(await prepareFor(state)).toEqual({ result: "append", head: HEAD });
+    expect(state.creations).toBe(1);
+  });
+  test("refuses ambiguous exact publication refs", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    state.extraRefs.push({
+      ref: "refs/heads/release/test",
+      object: { sha: PUBLISHED },
+    });
+    expect(await rejectionOf(prepareFor(state))).toMatchObject({
+      message: "Ambiguous baseline publication branch",
+    });
+  });
+  for (const failure of ["list", "create"]) {
+    test(`propagates publication ref API ${failure} failure`, async () => {
+      const state = publicationState();
+      state.failure = failure;
+      expect(await rejectionOf(prepareFor(state))).toMatchObject({
+        name: "TypeError",
+        message: `API ref ${failure} failure`,
+      });
+    });
+  }
+  for (const failure of ["list-pulls", "create-pull"]) {
+    test(`propagates review API ${failure} failure`, async () => {
+      const input = scenario();
+      input.target = "new-pr";
+      input.failure = failure;
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "TypeError",
+        message:
+          failure === "list-pulls" ? "API list failure" : "API create failure",
+      });
+    });
+  }
+  for (const failure of ["get-ref", "compare"]) {
+    test(`propagates publication verification API ${failure} failure`, async () => {
+      const input = scenario();
+      input.failure = failure;
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "TypeError",
+        message:
+          failure === "get-ref"
+            ? "API lookup failure"
+            : "API comparison failure",
+      });
+    });
+  }
+  test("reuses a merged review at the verified publication head", async () => {
+    const input = scenario();
+    input.target = "new-pr";
+    const pull = reviewPull("2026-01-01T00:00:00Z");
+    pull.state = "closed";
+    input.pulls.push(pull);
+    const result = await verifyFor(input);
+    expect(result.reviews).toEqual([]);
+    expect(result.outputs["result"]).toBe("published");
+  });
+  const reviewConflicts = [
+    {
+      name: "duplicate review",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.pulls.push(reviewPull(), reviewPull());
+      },
+    },
+    {
+      name: "review at another head",
+      change: (input: ReturnType<typeof scenario>) => {
+        const pull = reviewPull();
+        pull.head.sha = HEAD;
+        input.pulls.push(pull);
+      },
+    },
+    {
+      name: "closed unmerged review",
+      change: (input: ReturnType<typeof scenario>) => {
+        const pull = reviewPull();
+        pull.state = "closed";
+        input.pulls.push(pull);
+      },
+    },
+  ];
+  for (const { name, change } of reviewConflicts) {
+    test(`reports typed conflict for ${name}`, async () => {
+      const input = scenario();
+      input.target = "new-pr";
+      change(input);
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "BaselinePublicationConflict",
+        code: "BASELINE_PUBLICATION_CONFLICT",
+      });
+    });
+  }
+  const refused = [
+    {
+      name: "no-op push",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.remote = HEAD;
+      },
+      message: "not committed",
+    },
+    {
+      name: "stale parent",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.commits = [{ parents: [{ sha: PUBLISHED }] }];
+      },
+      message: "captured head",
+    },
+    {
+      name: "merge commit",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.commits = [{ parents: [{ sha: HEAD }, { sha: PUBLISHED }] }];
+      },
+      message: "captured head",
+    },
+    {
+      name: "empty comparison",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.commits = [];
+      },
+      message: "captured head",
+    },
+    {
+      name: "non-ahead comparison",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.status = "diverged";
+      },
+      message: "captured head",
+    },
+    {
+      name: "uncommitted action result",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.operation = "no-change";
+      },
+      message: "not committed",
+    },
+    {
+      name: "invalid action head",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.published = "bad";
+      },
+      message: "not committed",
+    },
+    {
+      name: "branch moved after push",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.remote = "c".repeat(40);
+      },
+      message: "moved after",
+    },
+    {
+      name: "wrong PNG content",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.files = [{ filename: PRODUCT, sha: HEAD }];
+      },
+      message: "does not match capture",
+    },
+    {
+      name: "missing PNG",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.files = [];
+      },
+      message: "file set",
+    },
+    {
+      name: "extra committed file",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.files.push({ filename: "extra", sha: HEAD });
+      },
+      message: "file set",
+    },
+    {
+      name: "missing classification",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.result = "";
+      },
+      message: "classification",
+    },
+    {
+      name: "empty staged set",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.expected = [];
+      },
+      message: "no staged PNGs",
+    },
+    {
+      name: "non-baseline staged path",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.expected = ["other"];
+      },
+      message: "non-baseline path",
+    },
+    {
+      name: "unknown target",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.target = "";
+      },
+      message: "Unknown publication target",
+    },
+  ];
+  for (const { name, change, message } of refused) {
+    test(`fails loudly for ${name}`, async () => {
+      const input = scenario();
+      change(input);
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        message: expect.stringContaining(message),
+      });
+    });
+  }
+});
+
+describe("baseline change classification", () => {
+  const command = v.parse(
+    v.object({ run: v.string() }),
+    workflowStepByName(
+      workflowJobSteps(publishWorkflow, "publish"),
+      "Classify baseline changes",
+    ),
+  ).run;
+  for (const change of ["unchanged", "modified", "new"] as const) {
+    test(`classifies ${change} PNGs from the Git index`, () => {
+      const root = mkdtempSync(path.join(tmpdir(), "marketing-classify-"));
+      try {
+        const git = (args: string[]) => {
+          const result = Bun.spawnSync(["git", ...args], {
+            cwd: root,
+            env: {
+              ...process.env,
+              GIT_AUTHOR_NAME: "Fixture",
+              GIT_AUTHOR_EMAIL: "fixture@example.test",
+              GIT_COMMITTER_NAME: "Fixture",
+              GIT_COMMITTER_EMAIL: "fixture@example.test",
+            },
+          });
+          expect(result.exitCode, result.stderr.toString()).toBe(0);
+          return result.stdout.toString().trim();
+        };
+        git(["init", "--quiet"]);
+        mkdirSync(path.dirname(path.join(root, PRODUCT)), { recursive: true });
+        writeFileSync(path.join(root, PRODUCT), PNG);
+        git(["add", "--", PRODUCT]);
+        const tree = git(["write-tree"]);
+        const head = git(["commit-tree", tree, "-m", "Baseline fixture"]);
+        git(["update-ref", "HEAD", head]);
+        if (change === "modified") {
+          writeFileSync(
+            path.join(root, PRODUCT),
+            Buffer.concat([PNG, Buffer.from("changed")]),
+          );
+        }
+        if (change === "new") {
+          writeFileSync(path.join(root, path.dirname(PRODUCT), "new.png"), PNG);
+        }
+        const output = path.join(root, "output");
+        const summary = path.join(root, "summary");
+        writeFileSync(output, "");
+        writeFileSync(summary, "");
+        const result = Bun.spawnSync(["bash", "-c", command], {
+          cwd: root,
+          env: {
+            ...process.env,
+            GITHUB_OUTPUT: output,
+            GITHUB_STEP_SUMMARY: summary,
+          },
+        });
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(readFileSync(output, "utf-8")).toBe(
+          `result=${change === "unchanged" ? "no-change" : "changed"}\n`,
+        );
+        expect(readFileSync(summary, "utf-8").length > 0).toBe(
+          change !== "unchanged",
+        );
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
     });
   }
 });

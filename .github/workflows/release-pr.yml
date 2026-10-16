@@ -83,3 +83,44 @@ jobs:
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
+
+  screenshot-plan:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      branch: ${{ steps.release.outputs.branch }}
+    steps:
+      - name: Select the versioned release pull request
+        id: release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', head: `${owner}:changeset-release/main`, per_page: 100,
+            });
+            const candidates = pulls.filter(pull => pull.head.repo?.full_name === `${owner}/${repo}`
+              && pull.head.ref === 'changeset-release/main' && pull.base.ref === 'main');
+            if (candidates.length > 1) throw new Error('Multiple versioned release pull requests');
+            if (candidates.length === 0) {
+              core.notice('No versioned release pull request; no screenshot checklist is due');
+              return;
+            }
+            core.setOutput('branch', candidates[0].head.ref);
+
+  marketing-screenshots:
+    name: Pre-release screenshot checklist
+    needs: screenshot-plan
+    if: needs.screenshot-plan.outputs.branch != ''
+    uses: ./.github/workflows/marketing-screenshots-update.yml
+    with:
+      branch: ${{ needs.screenshot-plan.outputs.branch }}
+    secrets: inherit
+    permissions:
+      # Dispatches the capture run on the release branch and reads its artifact.
+      actions: write
+      contents: read
+      pull-requests: read

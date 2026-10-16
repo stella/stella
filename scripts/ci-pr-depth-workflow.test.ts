@@ -130,16 +130,10 @@ const ciJobs = v.parse(
 );
 const REUSE_SKIP = "needs.ci-plan.outputs.pr_depth_reused != 'true'";
 const MAIN_SKIP = "inputs.pr_depth_only != true";
-// Jobs that only orchestrate: the planner, the result gate and a cancellation
-// helper that acts on another job's failure. The quick checks also run on a
-// PR-depth run for the wall-clock waiver guard; each other part's step keeps
-// the main skip.
-const ORCHESTRATION_JOBS = new Set([
-  "ci-plan",
-  "ci-result",
-  "ci-quick-checks",
-  "marketing-screenshots-cancel",
-]);
+// Jobs that only orchestrate: the planner and the result gate. The quick
+// checks also run on a PR-depth run for the wall-clock waiver guard; each
+// other part's step keeps the main skip.
+const ORCHESTRATION_JOBS = new Set(["ci-plan", "ci-result", "ci-quick-checks"]);
 
 type SkipViolationsOptions = {
   jobs: typeof ciJobs;

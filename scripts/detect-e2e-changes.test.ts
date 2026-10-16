@@ -56,13 +56,7 @@ const productionE2eSetup = readFileSync(
   ),
   "utf-8",
 );
-const marketingWorkflow = readFileSync(
-  path.join(
-    import.meta.dirname,
-    "../.github/workflows/marketing-screenshots.yml",
-  ),
-  "utf-8",
-);
+
 const marketingUpdateWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
@@ -70,6 +64,7 @@ const marketingUpdateWorkflow = readFileSync(
   ),
   "utf-8",
 );
+
 const marketingCaptureWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
@@ -77,13 +72,7 @@ const marketingCaptureWorkflow = readFileSync(
   ),
   "utf-8",
 );
-const marketingPublishWorkflow = readFileSync(
-  path.join(
-    import.meta.dirname,
-    "../.github/workflows/marketing-screenshots-publish.yml",
-  ),
-  "utf-8",
-);
+
 const marketingCapture = readFileSync(
   path.join(
     import.meta.dirname,
@@ -172,7 +161,6 @@ const contractWorkflow = (value: unknown) => ({
   ),
 });
 const ciContract = contractWorkflow(Bun.YAML.parse(workflow));
-const marketingContract = contractWorkflow(Bun.YAML.parse(marketingWorkflow));
 const mainHeavyContract = contractWorkflow(
   Bun.YAML.parse(
     readFileSync(
@@ -197,15 +185,6 @@ const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
       step.with?.["ref"] !== undefined,
   ),
 );
-const marketingCheckout = (job: string) => {
-  const checkout = marketingContract.jobs[job]?.steps?.find(
-    ({ name }) => name === "Checkout",
-  );
-  if (!checkout) {
-    throw new Error(`Missing marketing ${job} checkout`);
-  }
-  return requiredExpression(checkout.with?.["ref"]);
-};
 
 // Job bodies are sliced from the workflow text for text assertions, while
 // their steps come from the whole parsed workflow: a step may be a YAML alias
@@ -345,7 +324,7 @@ describe("detect-e2e-changes", () => {
     expect(detects("landing", [file])).toBe("false");
   });
 
-  test("a marketing-test-only change waits for the nightly suite", () => {
+  test("keeps marketing-test-only changes out of normal core E2E", () => {
     const files = ["apps/web/e2e/marketing/product-screenshots.spec.ts"];
     expect(detects("core", files)).toBe("false");
     expect(detects("landing", files)).toBe("false");
@@ -400,7 +379,8 @@ describe("detect-e2e-changes", () => {
       "packages/ui/src/components/button.tsx",
       "packages/locales/src/en.ts",
       "apps/landing/public/media/products/editor.png",
-      ".github/workflows/marketing-screenshots.yml",
+      ".github/workflows/marketing-screenshots-update.yml",
+      ".github/workflows/marketing-screenshots-capture.yml",
       ".github/actions/marketing-capture/action.yml",
     ]) {
       expect(detects("marketing", [file])).toBe("true");
@@ -450,7 +430,6 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Checkout",
       "Resolve available CI images",
-      "Plan release marketing screenshots",
       "Setup Bun for dependency scope",
       "Check changed file scope",
     ]) {
@@ -664,7 +643,6 @@ describe("detect-e2e-changes", () => {
     // what it exercises, so a new consumer cannot quietly widen the stack the
     // PR jobs pay for.
     expect(e2eStackSetup).not.toContain("gotenberg");
-    expect(marketingWorkflow).not.toContain("gotenberg");
     expect(marketingCapture).toContain("extra-services: gotenberg");
   });
 
@@ -947,141 +925,34 @@ describe("detect-e2e-changes", () => {
     }
   });
 
-  test("checks shipped product screenshots on planned releases", () => {
-    const plan = workflowJob("ci-plan");
-    expect(plan).toContain(
-      `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
-    );
-    expect(
-      requiredExpression(
-        workflowStepValue(plan, "Plan release marketing screenshots")["if"],
-      ),
-    ).toBe(
-      "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
-    );
-
-    const screenshots = workflowJob("marketing-screenshots");
-    expect(ciContract.jobs["marketing-screenshots"]?.needs).toEqual([
-      "ci-plan",
-      "web-build",
-      "heavy-web-build",
-    ]);
-    expect(screenshots).toContain("always()");
-    expect(screenshots).toContain(
-      "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
-    );
-    const predicate = requiredExpression(
-      ciContract.jobs["marketing-screenshots"]?.if,
-    );
-    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
-      for (const planned of [false, true]) {
-        for (const trusted of [false, true]) {
-          for (const buildRequired of [false, true]) {
-            for (const webResult of ["success", "skipped", "failure"]) {
-              for (const heavyResult of ["success", "skipped", "failure"]) {
-                for (const cancelled of [false, true]) {
-                  const context = {
-                    github: { event_name: event },
-                    inputs: { pr_depth_only: false },
-                    needs: {
-                      "ci-plan": {
-                        outputs: {
-                          queue_depth: "full",
-                          run_required: "true",
-                          trusted: String(trusted),
-                          marketing_screenshots_required: String(planned),
-                          web_build_required: String(buildRequired),
-                        },
-                      },
-                      "web-build": { result: webResult },
-                      "heavy-web-build": { result: heavyResult },
-                    },
-                    always: () => true,
-                    cancelled: () => cancelled,
-                  };
-                  const certified =
-                    event !== "pull_request" &&
-                    planned &&
-                    (trusted || event === "workflow_dispatch") &&
-                    (!buildRequired ||
-                      webResult === "success" ||
-                      heavyResult === "success") &&
-                    (event !== "merge_group" || !cancelled);
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    certified,
-                  );
-                  context.needs["ci-plan"].outputs.queue_depth = "thin";
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    certified,
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
+  test("keeps marketing capture and publication outside normal CI", () => {
+    for (const source of [workflow, nightlyWorkflow]) {
+      expect(source).not.toContain("marketing-screenshots");
+      expect(source).not.toContain("marketing_screenshots_required");
+      expect(source).not.toContain("marketing-capture");
     }
-    expect(screenshots).toContain(
-      "uses: ./.github/workflows/marketing-screenshots.yml",
+    const update = contractRecord(Bun.YAML.parse(marketingUpdateWorkflow));
+    expect(Object.keys(contractRecord(update["on"])).toSorted()).toEqual([
+      "workflow_call",
+      "workflow_dispatch",
+    ]);
+    const jobs = contractWorkflow(update).jobs;
+    const needs = jobs["publish"]?.needs;
+    expect(Array.isArray(needs) ? needs : [needs]).toContain("capture");
+    // Branch code runs only in the capture workflow, dispatched on the
+    // release branch's own ref; the main-ref workflow waits for it.
+    expect(marketingUpdateWorkflow).not.toContain("marketing-capture");
+    expect(jobOf(marketingUpdateWorkflow, "capture")).toContain(
+      "createWorkflowDispatch",
     );
-    expect(screenshots).toContain("mode: check");
-
-    // Only the update path pushes, and only with the App token, so the check
-    // job stays read-only.
-    expect(screenshots).toContain("contents: read");
-    expect(screenshots).not.toContain("STELLA_RELEASE_APP_PRIVATE_KEY");
-
-    const result = workflowJob("ci-result");
-    expect(result).toContain("marketing-screenshots");
+    expect(jobOf(marketingCaptureWorkflow, "capture")).toContain(
+      "uses: ./.github/actions/marketing-capture",
+    );
+    expect(marketingUpdateWorkflow).not.toContain("workflow_run:");
+    expect(marketingCaptureWorkflow).not.toContain("workflow_run:");
   });
 
-  test("regenerates a branch's baselines from workflow code on main", () => {
-    // The release App key must only ever run workflow code from main, so the
-    // update workflow is dispatched on the default branch and told which
-    // branch to rewrite; a `--ref <branch>` dispatch would hand the key that
-    // branch's copy of both files.
-    expect(marketingUpdateWorkflow).toContain(
-      [
-        "      branch:",
-        "        description: The same-repository branch whose baselines to regenerate",
-        "        required: true",
-      ].join("\n"),
-    );
-    expect(marketingUpdateWorkflow).toContain(
-      `group: marketing-screenshots-update-${githubExpression("inputs.branch")}`,
-    );
-    expect(marketingUpdateWorkflow).not.toContain("--ref");
-
-    // The dispatch on main only validates the branch and starts the capture
-    // on that branch's own ref; it runs no branch code and holds no key.
-    const update = jobOf(marketingUpdateWorkflow, "update");
-    const validate = workflowStepRun(update, "Validate inputs");
-    expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
-    expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
-    expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
-    expect(validate).toContain('"$BRANCH" == *".."*');
-    expect(validate).toContain('"$BRANCH" == -*');
-    expect(update).toContain(
-      "workflow_id: 'marketing-screenshots-capture.yml'",
-    );
-    // Workflow source text, not an env read of this process.
-    expect(update).toMatch(/ref: process\.env\.BRANCH,/u);
-    expect(marketingUpdateWorkflow).not.toContain("secrets.");
-
-    // The capture runs on the branch's ref and never on main; it holds no
-    // push credential. The publish run mints the token only after it has
-    // validated the PNGs.
-    const capture = jobOf(marketingCaptureWorkflow, "capture");
-    expect(capture).toContain("github.ref != 'refs/heads/main'");
-    expect(capture).not.toContain("Mint App token");
-    expect(capture).not.toContain("environment:");
-    const publish = jobOf(marketingPublishWorkflow, "publish");
-    expect(publish.indexOf("- name: Stage validated baselines")).toBeLessThan(
-      publish.indexOf("- name: Mint App token"),
-    );
-    expect(workflowStepValue(capture, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("github.sha"),
-    });
+  test("checks out the validated tree for main-heavy suites", () => {
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
       const context = {
@@ -1097,15 +968,6 @@ describe("detect-e2e-changes", () => {
           ref: "unvalidated-ref",
         },
       };
-      expect(evaluateExpression(marketingCheckout("check"), context)).toBe("");
-      expect(
-        evaluateExpression(
-          requiredExpression(
-            ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
-          ),
-          context,
-        ),
-      ).toBe("");
       for (const checkout of checkoutRefs) {
         expect(
           evaluateExpression(
@@ -1170,17 +1032,6 @@ describe("detect-e2e-changes", () => {
           : validatedSha,
       );
     }
-    expect(
-      evaluateExpression(
-        requiredExpression(
-          ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
-        ),
-        heavyContext,
-      ),
-    ).toBe(validatedSha);
-    expect(evaluateExpression(marketingCheckout("check"), heavyContext)).toBe(
-      validatedSha,
-    );
     for (const job of Object.values(ciContract.jobs)) {
       for (const item of job.steps ?? []) {
         const expectedSha = item.with?.["expected-sha"];
@@ -1203,40 +1054,8 @@ describe("detect-e2e-changes", () => {
     expect(
       validateSteps.find(({ name }) => name === "Fetch main history")?.run,
     ).toContain("show origin/main:scripts/verify-release-tree-proof.sh");
-    // The push is an API commit appended to the named branch: GitHub signs
-    // it, so it cannot leave a person's pull request behind the
-    // signed-commits rule.
-    const push = workflowStepValue(publish, "Push regenerated baselines");
-    expect(push["uses"]).toContain(
-      "stella/.github/.github/actions/signed-commit@",
-    );
-    expect(push["with"]).toMatchObject({
-      mode: "append",
-      branch: githubExpression("steps.select.outputs.branch"),
-    });
-
     // Nightly checks continue to use their triggering ref.
     expect(nightlyWorkflow).not.toContain("ref: ");
-  });
-
-  test("publishes regenerated baselines a fork pull request can commit itself", () => {
-    const upload = workflowStepValue(
-      jobOf(marketingCaptureWorkflow, "capture"),
-      "Upload regenerated baselines",
-    );
-    expect(upload["uses"]).toBe(
-      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-    );
-    expect(upload["with"]).toMatchObject({
-      name: "marketing-screenshots",
-      path: "apps/landing/public/media/products/*.png",
-      "retention-days": 7,
-    });
-    // The capture run's own artifact: a run that cannot push (a fork's
-    // change) still hands over the PNGs.
-    expect(marketingCaptureWorkflow).not.toContain(
-      "Push regenerated baselines",
-    );
   });
 
   // A setup action that reports "not ready" through an output and exits 0
@@ -1406,31 +1225,22 @@ describe("detect-e2e-changes", () => {
       "uses: ./.github/actions/setup-e2e-stack",
     );
     expect(marketingCapture).not.toContain("outputs.status");
-    expect(marketingWorkflow).not.toContain("steps.e2e-stack");
+    expect(marketingUpdateWorkflow).not.toContain("steps.e2e-stack");
+    expect(marketingCaptureWorkflow).not.toContain("steps.e2e-stack");
   });
 
-  test("keeps one capture body behind both screenshot directions", () => {
-    // The shared body is a composite action so check and update cannot drift;
-    // only the checkout differs, because update captures a named branch.
-    for (const source of [marketingWorkflow, marketingCaptureWorkflow]) {
-      expect(
-        source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
-      ).toHaveLength(1);
-    }
-    expect(marketingPublishWorkflow).not.toContain("marketing-capture");
-    expect(marketingWorkflow).not.toContain("test:e2e:marketing");
+  test("keeps capture and cleanup in one composite action", () => {
+    expect(
+      marketingCaptureWorkflow.match(
+        /uses: \.\/\.github\/actions\/marketing-capture/gu,
+      ),
+    ).toHaveLength(1);
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
     // web server.
     expect(
       actionStep(marketingCapture, "Stop production web server"),
     ).toContain("if: always()");
-    // An unrecognised mode must fail loudly: the check job always runs and
-    // requires check mode, instead of being skipped green.
-    expect(jobOf(marketingWorkflow, "check")).not.toContain("if: inputs.mode");
-    expect(
-      workflowStepRun(jobOf(marketingWorkflow, "check"), "Require check mode"),
-    ).toContain('if [[ "$MODE" != check ]]');
     expect(actionStep(marketingCapture, "Validate mode")).toContain(
       "Unknown marketing screenshot mode",
     );
@@ -1533,9 +1343,8 @@ describe("detect-e2e-changes", () => {
     expect(productionE2eSetup).toContain("Download production web build");
     expect(productionE2eSetup).toContain("Validate production web build");
 
-    // The marketing capture serves that same build, never the Vite dev
-    // server: PR CI hands the artifact over, and the callers without a
-    // web-build job (nightly, update) build in place with the same flags.
+    // Pre-release capture uses a production build, either an artifact
+    // supplied by its caller or a build made in place with the same flags.
     expect(marketingCapture).not.toContain("vite --port");
     for (const stepName of [
       "Wait for production web build",
@@ -1548,15 +1357,6 @@ describe("detect-e2e-changes", () => {
     }
     const buildInPlace = actionStep(marketingCapture, "Build production web");
     expect(buildInPlace).toContain("if: inputs.web-build-artifact == ''");
-    expect(marketingWorkflow).toContain(
-      `web-build-artifact: ${githubExpression("inputs.web-build-artifact")}`,
-    );
-    expect(workflowJob("marketing-screenshots")).toContain(
-      "web-build-artifact:",
-    );
-    expect(webBuild).toContain(
-      "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
-    );
   });
 
   test("scopes browser work before every dependency setup step", () => {
@@ -1607,9 +1407,7 @@ describe("detect-e2e-changes", () => {
     expect(playwrightSetup).not.toContain("install-deps.sh");
     expect(playwrightSetup).toContain("--offline");
     expect(playwrightSetup).toContain("verify-browsers.sh");
-    expect(nightlyWorkflow).toContain(
-      "uses: ./.github/workflows/marketing-screenshots.yml",
-    );
+    expect(nightlyWorkflow).not.toContain("marketing-screenshots");
   });
 
   test("pins all browser commands to one image matching the locked Playwright version", () => {
@@ -1729,13 +1527,17 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingPublishWorkflow, "publish")).toContain(
+    expect(jobOf(marketingUpdateWorkflow, "publish")).toContain(
       "environment: release-app",
     );
-    expect(jobOf(marketingCaptureWorkflow, "capture")).not.toContain(
+    expect(jobOf(marketingUpdateWorkflow, "prepare")).toContain(
+      "environment: release-app",
+    );
+    expect(jobOf(marketingUpdateWorkflow, "capture")).not.toContain(
       "environment:",
     );
-    expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
+    expect(marketingCaptureWorkflow).not.toContain("environment:");
+    expect(marketingCaptureWorkflow).not.toContain("RELEASE_APP");
 
     // A job that calls a reusable workflow cannot declare an environment:
     // GitHub allows only name, uses, with, secrets, strategy, needs, if,

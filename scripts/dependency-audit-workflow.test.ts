@@ -45,7 +45,7 @@ const workflowSchema = v.looseObject({
       concurrency: v.optional(
         v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
       ),
-      steps: v.array(stepSchema),
+      steps: v.optional(v.array(stepSchema), []),
     }),
   ),
 });

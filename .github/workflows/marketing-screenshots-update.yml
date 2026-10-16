@@ -1,77 +1,463 @@
-name: Update marketing screenshots
+name: Pre-release marketing screenshots
 
 defaults:
   run:
     shell: bash
 
-# When a PR fails the `marketing-screenshots` check because its UI change is
-# intended, dispatch this workflow on the default branch and name the PR's
-# branch:
-#
-#   gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
-#
-# It only starts marketing-screenshots-capture.yml on that branch's own ref,
-# where the branch's code regenerates the baselines without any release
-# secret and without touching main's caches. When the capture completes,
-# marketing-screenshots-publish.yml (from main) validates the PNGs as data and
-# pushes them, which re-runs the PR's checks against the new head. Baselines
-# are never regenerated on a developer machine, so the comparison tolerance
-# only has to cover run-to-run noise on one runner image.
-
+# Runs of this workflow use main's ref, so they never execute branch code: the
+# capture job dispatches marketing-screenshots-capture.yml on the captured
+# branch's own ref, whose cache scope is that branch, and waits for it.
+# Publication treats that run's artifact as data and runs no code from the
+# captured tree. No step relies on workflow_run delivery.
 on:
   workflow_dispatch:
     inputs:
       branch:
-        description: The same-repository branch whose baselines to regenerate
-        required: true
+        description: Open same-repository release branch; blank creates a baseline review PR
+        required: false
         type: string
+      ref:
+        description: Main commit to capture when branch is blank; blank selects main
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      branch:
+        required: false
+        default: ""
+        type: string
+      ref:
+        required: false
+        default: ""
+        type: string
+    secrets:
+      STELLA_RELEASE_APP_PRIVATE_KEY:
+        required: false
+    outputs:
+      result:
+        description: published or no-change
+        value: ${{ jobs.publish.outputs.result }}
+      head:
+        description: Verified publication head
+        value: ${{ jobs.publish.outputs.head }}
 
 concurrency:
-  group: marketing-screenshots-update-${{ inputs.branch }}
+  # Main and an explicit main SHA can select the same publication branch.
+  group: marketing-screenshots-update-${{ inputs.branch || 'main' }}
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
-  update:
+  select:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      # Starting the capture run on the branch.
-      actions: write
       contents: read
+      pull-requests: read
+    outputs:
+      branch: ${{ steps.select.outputs.branch }}
+      head: ${{ steps.select.outputs.head }}
+      target: ${{ steps.select.outputs.target }}
     steps:
-      - name: Validate inputs
-        env:
-          BRANCH: ${{ inputs.branch }}
-          WORKFLOW_REF: ${{ github.ref_name }}
-        run: |
-          # `branch` becomes the ref of the capture run, so it has to be a
-          # plain branch name and nothing that reads as an option or a path
-          # traversal.
-          if [[ "$BRANCH" == "main" ]]; then
-            echo "::error::main's baselines are regenerated through a pull request, never pushed in place"
-            exit 1
-          fi
-          if [[ ! "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ || "$BRANCH" == *".."* || "$BRANCH" == -* ]]; then
-            echo "::error::Not a plain branch name: $BRANCH"
-            exit 1
-          fi
-          if [[ "$WORKFLOW_REF" != "main" ]]; then
-            echo "::error::Dispatch this on main, not $WORKFLOW_REF; pass the branch with -f branch=<pr-branch>"
-            exit 1
-          fi
-
-      # A fork PR's branch does not exist here; its author takes the PNGs
-      # from a capture run's artifact on a same-repository branch.
-      - name: Start the capture on the branch
+      - name: Select the release tree
+        id: select
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           BRANCH: ${{ inputs.branch }}
+          RELEASE_REF: ${{ inputs.ref }}
         with:
           script: |
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: 'marketing-screenshots-capture.yml',
-              ref: process.env.BRANCH,
+            const { owner, repo } = context.repo;
+            const refuse = reason => { throw new Error(`Not regenerating: ${reason}`); };
+            if (context.ref !== 'refs/heads/main') refuse('run the pre-release checklist from main');
+            const branch = process.env.BRANCH || '';
+            const ref = process.env.RELEASE_REF || '';
+            if (branch) {
+              if (ref) refuse('choose a branch or a main commit, not both');
+              if (!/^[A-Za-z0-9._/-]+$/u.test(branch) || branch.includes('..')
+                || branch.startsWith('-') || branch === 'main') refuse('invalid review branch');
+              const pulls = await github.paginate(github.rest.pulls.list, {
+                owner, repo, state: 'open', head: `${owner}:${branch}`, per_page: 100,
+              });
+              const candidates = pulls.filter(pull => pull.head.ref === branch
+                && pull.head.repo?.full_name === `${owner}/${repo}` && pull.base.ref === 'main');
+              if (candidates.length !== 1) refuse('branch must head exactly one open pull request into main');
+              core.setOutput('branch', branch);
+              core.setOutput('head', candidates[0].head.sha);
+              core.setOutput('target', 'existing-pr');
+              return;
+            }
+            if (ref && !/^[0-9a-f]{40}$/u.test(ref)) refuse('main commit must be a full SHA');
+            const { data: main } = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            const head = ref || main.object.sha;
+            const { data: comparison } = await github.rest.repos.compareCommits({
+              owner, repo, base: head, head: main.object.sha,
             });
+            if (!['ahead', 'identical'].includes(comparison.status)) refuse('commit is not on main');
+            core.setOutput('branch', `release/marketing-screenshots-${head}`);
+            core.setOutput('head', head);
+            core.setOutput('target', 'new-pr');
+
+  # A main commit has no branch of its own yet: give it its publication branch
+  # so its capture can run in that branch's scope. Only the API runs here.
+  prepare:
+    needs: select
+    if: needs.select.outputs.target == 'new-pr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-app
+    permissions: {}
+    steps:
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Create the capture branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
+            });
+            const matches = refs.filter(ref => ref.ref === `refs/heads/${branch}`);
+            if (matches.length > 1) throw new Error('Ambiguous baseline publication branch');
+            // An existing branch is an earlier publication of this tree; the
+            // publish job verifies it against the new capture.
+            if (matches.length === 1) return;
+            await github.rest.git.createRef({
+              owner, repo, ref: `refs/heads/${branch}`, sha: process.env.CAPTURE_HEAD,
+            });
+
+  # Branch code never runs in this workflow, whose runs use main's ref and
+  # cache scope. The capture runs as marketing-screenshots-capture.yml
+  # dispatched on the captured branch; this job only waits for that run.
+  capture:
+    needs: [select, prepare]
+    if: >-
+      !cancelled()
+      && needs.select.result == 'success'
+      && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+    outputs:
+      run-id: ${{ steps.capture.outputs.run-id }}
+    steps:
+      - name: Capture on the release branch
+        id: capture
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow = 'marketing-screenshots-capture.yml';
+            const branch = process.env.BRANCH || '';
+            const head = process.env.CAPTURE_HEAD || '';
+            if (!branch || branch === 'main' || !/^[0-9a-f]{40}$/u.test(head))
+              throw new Error('Capture needs a release branch and a full commit SHA');
+            const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const title = `Capture marketing screenshots ${request}`;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const deadline = Date.now() + 40 * 60 * 1000;
+            const dispatched = await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: workflow, ref: branch,
+              inputs: { sha: head, request }, return_run_details: true,
+            });
+            let id = dispatched.data?.workflow_run_id;
+            while (!id) {
+              if (Date.now() > deadline) throw new Error('Dispatched capture run did not appear');
+              await sleep(10000);
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: workflow, branch, event: 'workflow_dispatch', per_page: 50,
+              });
+              const runs = data.workflow_runs.filter(run => run.display_title === title);
+              if (runs.length > 1) throw new Error('Ambiguous dispatched capture run');
+              id = runs[0]?.id;
+            }
+            let run;
+            for (;;) {
+              ({ data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id }));
+              if (run.status === 'completed') break;
+              if (Date.now() > deadline) throw new Error(`Capture run ${run.html_url} did not finish in time`);
+              await sleep(30000);
+            }
+            // The awaited run must be this capture on the release branch's own
+            // ref, never on main, and it must have succeeded.
+            if (run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
+              || run.head_branch !== branch || run.display_title !== title
+              || run.head_repository?.full_name !== `${owner}/${repo}`)
+              throw new Error(`Run ${id} is not this capture on ${branch}`);
+            if (run.conclusion !== 'success')
+              throw new Error(`Capture run ${run.html_url} concluded ${run.conclusion}`);
+            core.setOutput('run-id', String(id));
+            await core.summary.addHeading('Marketing screenshots: captured')
+              .addLink(`Capture run on ${branch}`, run.html_url).write();
+
+  publish:
+    needs: [select, capture]
+    # The capture job runs after a skipped prepare job; require its success
+    # explicitly so that skip does not propagate here.
+    if: >-
+      !cancelled()
+      && needs.select.result == 'success'
+      && needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release-app
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      result: ${{ steps.verify.outputs.result }}
+      head: ${{ steps.verify.outputs.head }}
+    steps:
+      - name: Checkout the captured head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.select.outputs.head }}
+      - name: Download regenerated baselines
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: marketing-screenshots
+          path: ${{ runner.temp }}/regenerated-baselines
+          run-id: ${{ needs.capture.outputs.run-id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+      - name: Stage validated baselines
+        env:
+          SOURCE: ${{ runner.temp }}/regenerated-baselines
+          TARGET: apps/landing/public/media/products
+        run: |
+          set -euo pipefail
+          # Only flat, regular PNG files with plain names cross from the
+          # capture job; anything else fails before the token exists.
+          count=0
+          while IFS= read -r -d '' entry; do
+            name="${entry#"$SOURCE"/}"
+            if [[ -L "$entry" || ! -f "$entry" ]]; then
+              echo "::error::Not a regular file: $name"
+              exit 1
+            fi
+            if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.png$ ]]; then
+              echo "::error::Unexpected file in the regenerated baselines: $name"
+              exit 1
+            fi
+            if (( $(wc -c < "$entry") > 20000000 )); then
+              echo "::error::Baseline is implausibly large: $name"
+              exit 1
+            fi
+            if [[ "$(head -c 8 "$entry" | LC_ALL=C od -An -tx1 | tr -d ' \n')" != "89504e470d0a1a0a" ]]; then
+              echo "::error::Not a PNG: $name"
+              exit 1
+            fi
+            count=$((count + 1))
+          done < <(find "$SOURCE" -mindepth 1 -print0)
+          if (( count == 0 )); then
+            echo "::error::The capture job uploaded no baselines"
+            exit 1
+          fi
+          # The branch decides what sits at TARGET; it must resolve to the
+          # products directory inside this checkout, not through a symlink.
+          if [[ -L "$TARGET" || ! -d "$TARGET" \
+            || "$(cd -- "$TARGET" && pwd -P)" != "$(pwd -P)/$TARGET" ]]; then
+            echo "::error::$TARGET is not the products directory of this checkout"
+            exit 1
+          fi
+          for entry in "$TARGET"/*.png; do
+            if [[ -L "$entry" ]]; then
+              echo "::error::$entry is a symlink in the branch"
+              exit 1
+            fi
+          done
+          cp -- "$SOURCE"/*.png "$TARGET"/
+
+      - name: Classify baseline changes
+        id: changes
+        run: |
+          set -euo pipefail
+          git add -- apps/landing/public/media/products/*.png
+          if git diff --cached --quiet; then
+            echo "result=no-change" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=changed" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Mint App token
+        if: steps.changes.outputs.result == 'changed' || needs.select.outputs.target == 'new-pr'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Prepare the baseline review publication
+        id: publication
+        if: steps.changes.outputs.result == 'changed' && needs.select.outputs.target == 'new-pr'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const head = process.env.CAPTURE_HEAD;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
+            });
+            const matches = refs.filter(ref => ref.ref === `refs/heads/${branch}`);
+            if (matches.length > 1) throw new Error('Ambiguous baseline publication branch');
+            if (matches.length === 1) {
+              const published = matches[0].object.sha;
+              core.setOutput('result', published === head ? 'append' : 'reuse');
+              core.setOutput('head', published);
+              return;
+            }
+            await github.rest.git.createRef({
+              owner, repo, ref: `refs/heads/${branch}`, sha: head,
+            });
+            core.setOutput('result', 'append');
+            core.setOutput('head', head);
+
+      - name: Push regenerated baselines
+        id: commit
+        if: steps.changes.outputs.result == 'changed' && steps.publication.outputs.result != 'reuse'
+        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: append
+          branch: ${{ needs.select.outputs.branch }}
+          paths: apps/landing/public/media/products/*.png
+          commit-message: "chore(landing): regenerate marketing screenshots"
+
+      - name: Remove the unused capture branch
+        if: steps.changes.outputs.result == 'no-change' && needs.select.outputs.target == 'new-pr'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
+            });
+            const match = refs.find(ref => ref.ref === `refs/heads/${branch}`);
+            // Only the branch the prepare job created at the captured head; a
+            // published baseline commit stays for its review.
+            if (match?.object.sha === process.env.CAPTURE_HEAD) {
+              await github.rest.git.deleteRef({ owner, repo, ref: `heads/${branch}` });
+            }
+
+      - name: Verify publication and report review result
+        id: verify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CHANGE_RESULT: ${{ steps.changes.outputs.result }}
+          TARGET: ${{ needs.select.outputs.target }}
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+          COMMIT_OPERATION: ${{ steps.commit.outputs.operation }}
+          PUBLICATION_RESULT: ${{ steps.publication.outputs.result }}
+          PUBLISHED_HEAD: ${{ steps.commit.outputs.commit-sha || steps.publication.outputs.head }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const { createHash } = require('node:crypto');
+            const { readFileSync } = require('node:fs');
+            const { owner, repo } = context.repo;
+            const { CHANGE_RESULT: result, TARGET: target, BRANCH: branch, CAPTURE_HEAD: head } = process.env;
+            class BaselinePublicationConflict extends Error {
+              constructor(message) {
+                super(`BASELINE_PUBLICATION_CONFLICT: ${message}`);
+                this.name = 'BaselinePublicationConflict';
+                this.code = 'BASELINE_PUBLICATION_CONFLICT';
+              }
+            }
+            const refuse = message => { throw new BaselinePublicationConflict(message); };
+            if (result === 'no-change') {
+              core.setOutput('result', 'no-change');
+              core.setOutput('head', head);
+              await core.summary.addHeading('Marketing screenshots: no-change')
+                .addRaw(`Regenerated PNGs match commit ${head}.`).write();
+              return;
+            }
+            if (result !== 'changed') throw new Error('Missing baseline change classification');
+            if ((process.env.COMMIT_OPERATION !== 'committed' && process.env.PUBLICATION_RESULT !== 'reuse')
+              || !/^[0-9a-f]{40}$/u.test(process.env.PUBLISHED_HEAD || ''))
+              throw new Error('Changed PNGs were not committed');
+            const { data: remote } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+            if (remote.object.sha === head) throw new Error('Changed PNGs were not committed');
+            if (remote.object.sha !== process.env.PUBLISHED_HEAD) refuse('Publication branch moved after the push');
+            const { data: commit } = await github.rest.repos.compareCommits({ owner, repo, base: head, head: remote.object.sha });
+            if (commit.status !== 'ahead' || commit.commits.length === 0
+              || commit.commits[0].parents.length !== 1 || commit.commits[0].parents[0].sha !== head)
+              refuse('Publication does not append to the captured head');
+            const expected = execFileSync('git', ['diff', '--cached', '--name-only', '-z']).toString().split('\0').filter(Boolean);
+            if (!expected.length) throw new Error('Changed result has no staged PNGs');
+            if (commit.files?.length !== expected.length) refuse('Publication has an unexpected file set');
+            for (const name of expected) {
+              if (!/^apps\/landing\/public\/media\/products\/[A-Za-z0-9][A-Za-z0-9._-]*\.png$/u.test(name))
+                throw new Error('Publication contains a non-baseline path');
+              const content = readFileSync(name);
+              const blob = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
+              if (!commit.files.some(file => file.filename === name && file.sha === blob))
+                refuse(`Published PNG does not match capture: ${name}`);
+            }
+            let review;
+            if (target === 'new-pr') {
+              const pulls = await github.paginate(github.rest.pulls.list, {
+                owner, repo, state: 'all', head: `${owner}:${branch}`, per_page: 100,
+              });
+              const candidates = pulls.filter(pull => pull.head.ref === branch
+                && pull.head.repo?.full_name === `${owner}/${repo}` && pull.base.ref === 'main');
+              if (candidates.length > 1) refuse('Multiple baseline review pull requests');
+              if (candidates.length === 1) {
+                const pull = candidates[0];
+                if (pull.head.sha !== remote.object.sha || (pull.state !== 'open' && !pull.merged_at))
+                  refuse('Existing baseline pull request does not represent this publication');
+                review = pull.html_url;
+              } else {
+                const { data: pull } = await github.rest.pulls.create({
+                  owner, repo, head: branch, base: 'main', draft: true,
+                  title: 'chore: refresh pre-release marketing screenshots',
+                  body: `Regenerated product PNGs for review, captured from ${head}.`,
+                });
+                review = pull.html_url;
+              }
+            } else if (target === 'existing-pr') {
+              review = `${context.serverUrl}/${owner}/${repo}/compare/${branch}`;
+            } else {
+              throw new Error('Unknown publication target');
+            }
+            core.setOutput('result', 'published');
+            core.setOutput('head', remote.object.sha);
+            await core.summary.addHeading('Marketing screenshots: published')
+              .addLink('Review regenerated PNGs', review).addRaw(` Commit: ${remote.object.sha}`).write();

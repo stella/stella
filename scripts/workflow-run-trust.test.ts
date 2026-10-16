@@ -26,7 +26,6 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
   "cla.yml",
   "generated-conflicts-publish.yml",
-  "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",

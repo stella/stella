@@ -766,32 +766,6 @@ const assertMainSelection = (workflow: typeof main) => {
   }
 };
 
-test("failure-only cancellation jobs resolve both successful and failed dependencies", () => {
-  const cancellations = Object.entries(ci.jobs).filter(([, job]) =>
-    job.if?.includes("failure()"),
-  );
-  expect(cancellations.length).toBeGreaterThan(0);
-  for (const [id, job] of cancellations) {
-    for (const event of events) {
-      for (const failed of [false, true]) {
-        const value = context({ event, variable: "full", queueDepth: "full" });
-        value.failure = () => failed;
-        expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
-          failed && event.event === "merge_group",
-        );
-        if (event.event === "merge_group") {
-          const unresolved = Object.fromEntries(
-            Object.entries(value).filter(([key]) => key !== "failure"),
-          );
-          expect(() => selected(job.if, unresolved)).toThrow(
-            "Unresolved queue workflow expression",
-          );
-        }
-      }
-    }
-  }
-});
-
 test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
   expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
   const cases = events
@@ -851,6 +825,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const retiredJobs = new Set([
     "merge-group-fail-fast",
     "ci-generated-sources",
+    "marketing-screenshots",
+    "marketing-screenshots-cancel",
   ]);
   const collapsedJobs = new Map([
     ["code-quality-web", "code-quality-web-rest"],
@@ -894,7 +870,6 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         ),
         "api-test-durations",
         "postgres-service-suites",
-        "marketing-screenshots-cancel",
         "ci-quick-checks",
         "code-quality-web-rest",
         "desktop-rust-tests",
