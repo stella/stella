@@ -259,6 +259,13 @@ describe("GDP proof anti-forgery rules", () => {
         ruleNames,
       ),
     ).toEqual([forged, forged]);
+    for (const source of [
+      `export type { MatterReadable } from "@/api/lib/workspaces/matter-access-proof";`,
+      `export type { MatterAccessContext as Context } from "@/api/lib/workspaces/matter-access-proof";`,
+      `export * from "@/api/lib/workspaces/matter-access-proof";`,
+    ]) {
+      expect(await messages(source, ruleNames)).toEqual([forged]);
+    }
   });
 
   test("the access context stays inside its withMatterAccess callback", async () => {
@@ -272,6 +279,9 @@ describe("GDP proof anti-forgery rules", () => {
       `async ({ proof }) => { saved = proof; return Result.ok(1); }`,
       `async ({ tx, proof }) => { pending.push(async () => write({ tx, proof })); return Result.ok(1); }`,
       `async ({ tx }) => { holder.tx = tx; return Result.ok(1); }`,
+      `async (context) => { const later = () => checkedWrite(context); return Result.ok(later); }`,
+      `async (context) => { const alias = context; const again = alias; return Result.ok({ again }); }`,
+      `async (context) => Result.ok(context.proof)`,
     ]) {
       expect(
         await messages(
@@ -289,6 +299,8 @@ describe("GDP proof anti-forgery rules", () => {
     // Consumption inside the callback, including local closures and helpers.
     for (const body of [
       `async ({ tx, proof }) => Result.ok(await write({ tx, proof }))`,
+      `async (context) => Result.ok({ matterId: context.matter.value })`,
+      `async ({ tx, proof }) => { const helper = async () => await write({ tx, proof }); await helper(); return Result.ok(1); }`,
       `async ({ tx, proof }) => { const rows = await Promise.all(items.map(async (item) => await write({ tx, proof, item }))); let last = proof; last = proof; return Result.ok(rows.length); }`,
     ]) {
       expect(

@@ -157,6 +157,24 @@ const noMatterProofForgery = {
           }
         }
       },
+      // Re-exported proof types would reach other modules under names this
+      // rule does not trace back to the owner.
+      ExportNamedDeclaration(node) {
+        if (
+          node.source &&
+          resolvedModule(node.source.value, filename) === matterProofOwner &&
+          node.specifiers.some((specifier) =>
+            GUARDED_PROOF_TYPES.includes(specifier.local.name),
+          )
+        ) {
+          context.report({ node, message });
+        }
+      },
+      ExportAllDeclaration(node) {
+        if (resolvedModule(node.source.value, filename) === matterProofOwner) {
+          context.report({ node, message });
+        }
+      },
       TSAsExpression(node) {
         pending.push(node.typeAnnotation);
       },
@@ -504,6 +522,14 @@ const noMatterAccessContextEscape = {
         case "Identifier": {
           return names.has(node.name);
         }
+        case "MemberExpression": {
+          // `.value` unwraps a named value into plain data (an id), which is
+          // not evidence; any other member read keeps the context alive.
+          return (
+            !(!node.computed && node.property.name === "value") &&
+            carries(node.object, names)
+          );
+        }
         case "ArrowFunctionExpression":
         case "FunctionExpression": {
           return references(node.body, names);
@@ -556,8 +582,35 @@ const noMatterAccessContextEscape = {
       }
       return node?.type === "Identifier" ? node.name : undefined;
     };
+    // Locals bound to a carrying value (a closure over the context, an alias
+    // of it) carry it as well; repeat until no new name is added.
+    const carryingLocals = (root, names) => {
+      const declarators = [];
+      const collect = (node) => {
+        if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+          declarators.push(node);
+        }
+        for (const child of children(node)) {
+          collect(child);
+        }
+      };
+      collect(root);
+      let size;
+      do {
+        size = names.size;
+        for (const declarator of declarators) {
+          if (carries(declarator.init, names)) {
+            names.add(declarator.id.name);
+          }
+        }
+      } while (names.size !== size);
+      return names;
+    };
     const checkCallback = (callback) => {
-      const names = patternNames(callback.params.at(0), new Set());
+      const names = carryingLocals(
+        callback.body,
+        patternNames(callback.params.at(0), new Set()),
+      );
       const local = declaredWithin(callback.body);
       const isOuter = (target) => {
         const root = rootIdentifier(target);
