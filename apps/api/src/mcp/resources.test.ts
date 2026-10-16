@@ -6,7 +6,6 @@ import { describe, expect, test } from "bun:test";
 import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
-  MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@stll/api-contract";
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -15,7 +14,11 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { LIMITS } from "@/api/lib/limits";
-import { MCP_MODES } from "@/api/mcp/constants";
+import {
+  getMcpResourceScopes,
+  getMcpResourceUrl,
+  MCP_MODES,
+} from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import {
   buildLegislationWorkflowReference,
@@ -476,12 +479,11 @@ describe("MCP resources", () => {
       description:
         "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
       connection: {
-        endpoint: "https://api.stll.app/mcp",
-        oauth_scopes: MCP_DEFAULT_RESOURCE_SCOPES,
+        endpoint: getMcpResourceUrl("default"),
+        oauth_scopes: getMcpResourceScopes("default"),
         install: {
-          claude:
-            "claude mcp add --transport http stella https://api.stll.app/mcp",
-          codex: "codex mcp add stella --url https://api.stll.app/mcp",
+          claude: `claude mcp add --transport http stella ${getMcpResourceUrl("default")}`,
+          codex: `codex mcp add stella --url ${getMcpResourceUrl("default")}`,
         },
       },
     });

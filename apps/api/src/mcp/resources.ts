@@ -7,8 +7,6 @@ import type {
 import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
-  MCP_DEFAULT_RESOURCE_SCOPES,
-  MCP_HTTP_PATH,
 } from "@stll/api-contract";
 import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
@@ -20,6 +18,7 @@ import {
 import { envBase } from "@/api/env-base";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { getMcpResourceScopes, getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -118,13 +117,6 @@ const servedWhereItsToolsAreListed = (
 });
 
 const PRODUCT_IDENTITY_URI = "stella://about";
-const STELLA_API_ORIGIN = "https://api.stll.app";
-const MCP_ENDPOINT = `${STELLA_API_ORIGIN}${MCP_HTTP_PATH}`;
-
-const MCP_INSTALL_COMMANDS = {
-  claude: `claude mcp add --transport http stella ${MCP_ENDPOINT}`,
-  codex: `codex mcp add stella --url ${MCP_ENDPOINT}`,
-} as const;
 
 const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
@@ -136,15 +128,28 @@ const STELLA_PRODUCT_IDENTITY = {
   support: "https://stll.app/support/",
   description:
     "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
-  connection: {
-    endpoint: MCP_ENDPOINT,
-    oauth_scopes: MCP_DEFAULT_RESOURCE_SCOPES,
-    install: MCP_INSTALL_COMMANDS,
-  },
 } as const;
 
-const buildProductIdentity = (): string =>
-  JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
+// The endpoint is this deployment's own, so a self-hosted server never
+// advertises another origin.
+const buildProductIdentity = (mode: McpMode): string => {
+  const endpoint = getMcpResourceUrl(mode);
+  return JSON.stringify(
+    {
+      ...STELLA_PRODUCT_IDENTITY,
+      connection: {
+        endpoint,
+        oauth_scopes: getMcpResourceScopes(mode),
+        install: {
+          claude: `claude mcp add --transport http stella ${endpoint}`,
+          codex: `codex mcp add stella --url ${endpoint}`,
+        },
+      },
+    },
+    null,
+    2,
+  );
+};
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
   {
