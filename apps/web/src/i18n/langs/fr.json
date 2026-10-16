@@ -1327,6 +1327,7 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "messageUnavailable": "Ce message ne peut pas être affiché.",
     "mockModel": {
       "description": "Réponses prédéfinies du modèle simulé local",
       "label": "IA simulée"
@@ -1492,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
+      "add_matter_member": "Ajouter un membre au dossier",
       "apply-active-docx-edits": "Préparation des modifications",
       "ares_lookup_company": "Recherche des données d’entreprise",
       "ares_search_companies": "Recherche des données d’entreprise",
@@ -1548,7 +1550,6 @@
       "list_stories": "Liste des parties du document",
       "list_templates": "Liste des modèles",
       "load-skill": "Lecture des consignes",
-      "manage_organization": "Gérer l’organisation",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
       "read-skill-resource": "Lecture des consignes",
@@ -1558,6 +1559,7 @@
       "read_section": "Lecture d'une section",
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
+      "remove_matter_member": "Retirer un membre du dossier",
       "reply_comment": "Réponse au commentaire",
       "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
@@ -1591,6 +1593,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "update_organization_settings": "Modifier les paramètres de l’équipe",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",

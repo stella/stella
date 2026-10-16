@@ -1327,6 +1327,7 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "messageUnavailable": "لا يمكن عرض هذه الرسالة.",
     "mockModel": {
       "description": "ردود ثابتة من نموذج المحاكاة المحلي",
       "label": "ذكاء اصطناعي مُحاكى"
@@ -1492,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "إضافة تعليق",
+      "add_matter_member": "إضافة عضو إلى ملف قانوني",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",
       "ares_lookup_company": "البحث في سجلات الشركات",
       "ares_search_companies": "البحث في سجلات الشركات",
@@ -1548,7 +1550,6 @@
       "list_stories": "سرد أجزاء المستند",
       "list_templates": "سرد القوالب",
       "load-skill": "قراءة الإرشادات",
-      "manage_organization": "إدارة المؤسسة",
       "read-contact": "قراءة جهة الاتصال",
       "read-content-across-matters": "قراءة المحتوى عبر الملفات القانونية",
       "read-skill-resource": "قراءة الإرشادات",
@@ -1558,6 +1559,7 @@
       "read_section": "قراءة قسم",
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
+      "remove_matter_member": "إزالة عضو من ملف قانوني",
       "reply_comment": "الرد على التعليق",
       "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
@@ -1591,6 +1593,7 @@
       "suggest_template_fields": "اقتراح حقول القالب",
       "unknown": "استخدام أداة",
       "update-entity-fields": "تحديث البيانات الوصفية",
+      "update_organization_settings": "تحديث إعدادات الفريق",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",

@@ -1327,6 +1327,7 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "messageUnavailable": "Nie można wyświetlić tej wiadomości.",
     "mockModel": {
       "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
       "label": "Symulowane AI"
@@ -1492,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Dodawanie komentarza",
+      "add_matter_member": "Dodaj członka sprawy",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
       "ares_lookup_company": "Wyszukiwanie danych firmy",
       "ares_search_companies": "Wyszukiwanie danych firm",
@@ -1548,7 +1550,6 @@
       "list_stories": "Wyświetlanie części dokumentu",
       "list_templates": "Wyświetlanie szablonów",
       "load-skill": "Odczytywanie wskazówek",
-      "manage_organization": "Zarządzaj organizacją",
       "read-contact": "Odczyt kontaktu",
       "read-content-across-matters": "Odczyt treści w różnych sprawach",
       "read-skill-resource": "Odczytywanie wskazówek",
@@ -1558,6 +1559,7 @@
       "read_section": "Odczytywanie sekcji",
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
+      "remove_matter_member": "Usuń członka sprawy",
       "reply_comment": "Odpowiadanie na komentarz",
       "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
@@ -1591,6 +1593,7 @@
       "suggest_template_fields": "Proponowanie pól szablonu",
       "unknown": "Używanie narzędzia",
       "update-entity-fields": "Aktualizacja metadanych",
+      "update_organization_settings": "Zaktualizuj ustawienia zespołu",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",

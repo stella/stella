@@ -1327,6 +1327,7 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "messageUnavailable": "Diese Nachricht kann nicht angezeigt werden.",
     "mockModel": {
       "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
       "label": "Simulierte KI"
@@ -1492,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Kommentar hinzufügen",
+      "add_matter_member": "Aktenmitglied hinzufügen",
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
       "ares_lookup_company": "Firmendaten suchen",
       "ares_search_companies": "Firmendaten suchen",
@@ -1548,7 +1550,6 @@
       "list_stories": "Dokumentteile auflisten",
       "list_templates": "Vorlagen auflisten",
       "load-skill": "Hinweise lesen",
-      "manage_organization": "Organisation verwalten",
       "read-contact": "Kontakt lesen",
       "read-content-across-matters": "Inhalte aktenübergreifend lesen",
       "read-skill-resource": "Hinweise lesen",
@@ -1558,6 +1559,7 @@
       "read_section": "Abschnitt lesen",
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
+      "remove_matter_member": "Aktenmitglied entfernen",
       "reply_comment": "Auf Kommentar antworten",
       "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
@@ -1591,6 +1593,7 @@
       "suggest_template_fields": "Vorlagenfelder werden vorgeschlagen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",
+      "update_organization_settings": "Teameinstellungen aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",

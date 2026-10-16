@@ -1327,6 +1327,7 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "messageUnavailable": "Šo ziņojumu nevar parādīt.",
     "mockModel": {
       "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
       "label": "Simulēts AI"
@@ -1492,6 +1493,7 @@
     },
     "tool": {
       "add_comment": "Komentāra pievienošana",
+      "add_matter_member": "Pievienot lietas dalībnieku",
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
       "ares_lookup_company": "Uzņēmuma datu meklēšana",
       "ares_search_companies": "Uzņēmumu datu meklēšana",
@@ -1548,7 +1550,6 @@
       "list_stories": "Dokumenta daļu uzskaitīšana",
       "list_templates": "Veidņu saraksts",
       "load-skill": "Norādījumu lasīšana",
-      "manage_organization": "Pārvaldīt organizāciju",
       "read-contact": "Kontaktpersonas lasīšana",
       "read-content-across-matters": "Satura lasīšana vairākās lietās",
       "read-skill-resource": "Norādījumu lasīšana",
@@ -1558,6 +1559,7 @@
       "read_section": "Sadaļas lasīšana",
       "read_story": "Dokumenta daļas lasīšana",
       "remember": "Saglabāšana atmiņā",
+      "remove_matter_member": "Noņemt lietas dalībnieku",
       "reply_comment": "Atbildēšana uz komentāru",
       "request_secret": "Pieprasa privātu piekļuves informāciju",
       "resolve_comment": "Komentāra atrisināšana",
@@ -1591,6 +1593,7 @@
       "suggest_template_fields": "Iesaka veidnes laukus",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",
+      "update_organization_settings": "Atjaunināt komandas iestatījumus",
       "update_reader_annotation": "Rediģēt izcēlumu vai komentāru",
       "use-browser": "Jūsu pārlūkprogrammas izmantošana",
       "use_connector_secret": "Izmanto savienotāja piekļuves informāciju",

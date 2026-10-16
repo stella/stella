@@ -1330,6 +1330,7 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "messageUnavailable": "This message can't be displayed.";
     "mockModel": {
       "description": "Canned replies from the local mock model";
       "label": "Mock AI";
@@ -1495,6 +1496,7 @@ type Messages = {
     };
     "tool": {
       "add_comment": "Adding comment";
+      "add_matter_member": "Add matter member";
       "apply-active-docx-edits": "Preparing document edits";
       "ares_lookup_company": "Searching company records";
       "ares_search_companies": "Searching company records";
@@ -1551,7 +1553,6 @@ type Messages = {
       "list_stories": "Listing document parts";
       "list_templates": "Listing templates";
       "load-skill": "Reading guidance";
-      "manage_organization": "Manage organization";
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
@@ -1561,6 +1562,7 @@ type Messages = {
       "read_section": "Reading a section";
       "read_story": "Reading a document part";
       "remember": "Remembering";
+      "remove_matter_member": "Remove matter member";
       "reply_comment": "Replying to comment";
       "request_secret": "Requesting a private credential";
       "resolve_comment": "Resolving comment";
@@ -1594,6 +1596,7 @@ type Messages = {
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";
+      "update_organization_settings": "Update team settings";
       "update_reader_annotation": "Edit highlight or comment";
       "use-browser": "Using your browser";
       "use_connector_secret": "Using connector credential";
