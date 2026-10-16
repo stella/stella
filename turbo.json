@@ -757,10 +757,7 @@
     // restores them and lint waits for it.
     "@stll/mcp-apps#typecheck": {
       "cache": true,
-      "dependsOn": [
-        "transit",
-        "^generate:capability-runtime"
-      ],
+      "dependsOn": ["transit", "^generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -792,7 +789,8 @@
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
-        "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts"
+        "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts",
+        "$TURBO_ROOT$/bun.lock"
       ],
       "outputs": [
         "src/*/generated/app.html.txt",
@@ -807,9 +805,7 @@
       ]
     },
     "@stll/mcp-apps#lint": {
-      "dependsOn": [
-        "typecheck"
-      ],
+      "dependsOn": ["typecheck"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
