@@ -218,6 +218,24 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "case_law_provision_extractions_jurisdiction_due_idx",
     tableName: "case_law_provision_extractions",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_pending_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "pending_since", "decision_id") WHERE "pending_since" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_provision_extractions USING btree (jurisdiction, pending_since, decision_id) WHERE (pending_since IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_provision_extractions_pending_idx",
+    tableName: "case_law_provision_extractions",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_clock_seed_idx" ON public."case_law_provision_extractions" USING btree ("decision_id") WHERE "due_at" IS NOT NULL AND "pending_since" IS NULL',
+    definitionBody:
+      "ON public.case_law_provision_extractions USING btree (decision_id) WHERE ((due_at IS NOT NULL) AND (pending_since IS NULL))",
+    isUnique: false,
+    name: "case_law_provision_extractions_clock_seed_idx",
+    tableName: "case_law_provision_extractions",
+  },
   DOCUMENT_OUTSTANDING_INDEX,
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   {

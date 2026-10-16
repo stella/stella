@@ -686,7 +686,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat | 17 |
 | auth_plumbing | 32 |
 | billing_ui | 1 |
-| chat_thread_ui | 11 |
+| chat_thread_ui | 12 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |

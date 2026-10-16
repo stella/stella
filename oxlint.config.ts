@@ -3194,6 +3194,8 @@ const config = defineConfig({
     {
       files: [
         "apps/web/src/components/chat/**/*.tsx",
+        "apps/web/src/components/ai-elements/message-response.tsx",
+        "apps/web/src/features/chat/components/proxy-chat-link.tsx",
         "apps/web/src/components/legal-reader/*chat*.tsx",
         "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
         "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
