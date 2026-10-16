@@ -193,6 +193,39 @@ test("dependency metadata selects tooling, runtime consumers, shared base, and u
         .type,
     ).toBe("shared-base");
 
+    // Already-locked packages: no package record changes, but the dependency
+    // edges do, so neither change is tooling-only.
+    const edgesBase = head;
+    lock.packages["runtime-next"] = ["runtime-next@1.0.0"];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    const locked = commit("lock a second runtime package");
+    lock.workspaces["packages/core"].dependencies = {
+      "runtime-next": "1.0.0",
+    };
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    const switched = commit("switch core to the already-locked package");
+    expect(
+      dependencyScope({ base: locked, head: switched, changed: ["bun.lock"] })
+        .type,
+    ).not.toBe("dev-tooling");
+    const rootManifest = JSON.parse(
+      readFileSync(path.join(root, "package.json"), "utf-8"),
+    );
+    rootManifest.devDependencies["runtime-next"] = "1.0.0";
+    writeFileSync(
+      path.join(root, "package.json"),
+      JSON.stringify(rootManifest),
+    );
+    const rootDev = commit("root dev dependency on a runtime package");
+    expect(
+      dependencyScope({
+        base: switched,
+        head: rootDev,
+        changed: ["package.json"],
+      }).type,
+    ).not.toBe("dev-tooling");
+    expect(edgesBase).not.toBe(locked);
+
     // A runtime change to the root workspace closure has no source path a
     // selector could match, so it selects everything.
     const rootBase = head;

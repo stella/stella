@@ -150,6 +150,39 @@ const manifestsDevOnly = (
   return devOnly;
 };
 
+/**
+ * Whether every lockfile workspace dependency edge that changed is a dev-tool
+ * dev dependency. A workspace can switch to another version already present in
+ * the lockfile without any package record changing, so package records alone
+ * cannot prove a tooling-only change.
+ */
+const workspaceEdgesDevOnly = (before: Lockfile, after: Lockfile): boolean => {
+  const directories = new Set([
+    ...Object.keys(before.workspaces),
+    ...Object.keys(after.workspaces),
+  ]);
+  for (const directory of directories) {
+    const oldWorkspace = before.workspaces[directory];
+    const newWorkspace = after.workspaces[directory];
+    if (oldWorkspace === undefined || newWorkspace === undefined) {
+      return false;
+    }
+    for (const key of manifestChangedKeys(oldWorkspace, newWorkspace)) {
+      if (key !== "devDependencies") {
+        return false;
+      }
+    }
+    if (
+      changedDevDependencies(oldWorkspace, newWorkspace).some(
+        (name) => !DEV_TOOL.test(name),
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /** Workspaces whose resolved closure changed, plus every consumer; undefined when a workspace has no name. */
 const affectedWorkspaces = (
   before: Lockfile,
@@ -257,7 +290,15 @@ export const dependencyScope = ({
   const ordinary = changed.filter((file) => !dependencyFiles.includes(file));
   // Dev tooling changes only what lint and type checks read; the plan keeps
   // package checks on and selects tests for the PR's other files alone.
-  if (manifestsDev && [...changedNames].every((name) => DEV_TOOL.test(name))) {
+  const rootDevOnly = changedDevDependencies(beforeRoot, afterRoot).every(
+    (name) => DEV_TOOL.test(name),
+  );
+  if (
+    manifestsDev &&
+    rootDevOnly &&
+    workspaceEdgesDevOnly(before, after) &&
+    [...changedNames].every((name) => DEV_TOOL.test(name))
+  ) {
     return { type: "dev-tooling", files: ordinary };
   }
   const affected = affectedWorkspaces(before, after, manifests);
