@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
@@ -167,6 +168,36 @@ export const emitSanctionsScreeningWorkMetric = ({
     },
     source,
     [SANCTIONS_SCREENING_WORK_METRIC]: percent,
+  });
+};
+
+const SANCTIONS_SCREENING_COMPLETION_METRIC =
+  "SanctionsScreeningListCompletion";
+
+/** One complete or incomplete result per source; subjects never become dimensions. */
+export const emitSanctionsScreeningCompletionMetric = ({
+  source,
+  outcome,
+}: {
+  source: SanctionsSource;
+  outcome: "complete" | "incomplete";
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source", "outcome"]],
+          Metrics: [
+            { Name: SANCTIONS_SCREENING_COMPLETION_METRIC, Unit: "Count" },
+          ],
+        },
+      ],
+    },
+    source,
+    outcome,
+    [SANCTIONS_SCREENING_COMPLETION_METRIC]: 1,
   });
 };
 

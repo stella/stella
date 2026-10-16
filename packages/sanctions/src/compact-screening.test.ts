@@ -106,8 +106,9 @@ type LegacyEquivalenceOptions = {
   queries: readonly ScreeningQuery[];
 };
 
-const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
-  result.isErr() ? { error: result.error } : { value: result.value };
+const legacyScreenOutcome = (
+  result: ReturnType<typeof legacyScreen> | ReturnType<typeof screen>,
+) => (result.isErr() ? { error: result.error } : { value: result.value });
 
 type LegacyScreenOutcome = ReturnType<typeof legacyScreenOutcome>;
 
@@ -121,7 +122,9 @@ const assertLegacyEquivalence = ({
     const legacyResult =
       expected.at(queryIndex) ?? panic("Missing legacy screening result");
     const actual = screen(index, query, options);
-    expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
+    expect(legacyScreenOutcome(actual), JSON.stringify(query)).toEqual(
+      legacyResult,
+    );
   }
 };
 
@@ -150,15 +153,13 @@ const expectAliasHit = ({
   ).toBe(expectedName);
 };
 
-test("compact and cooperative screening preserve legacy results and full entries", async () => {
+test("compact and cooperative screening preserve complete results and full entries", async () => {
   const lists = equivalenceLists();
   const queries = successfulQueries(lists);
   const expected = (() => {
-    const legacy = buildLegacyScreeningIndex(lists);
+    const baseline = buildScreeningIndex(lists);
     return queries.map((query) =>
-      legacyScreenOutcome(
-        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-      ),
+      legacyScreenOutcome(screen(baseline, query, { cutoff: 0.65, limit: 25 })),
     );
   })();
   Bun.gc(true);
@@ -207,6 +208,21 @@ test("compact and cooperative screening preserve legacy results and full entries
   assertLegacyEquivalence({ index: cooperative, expected, queries });
 }, 120_000);
 
+test("compact screening preserves independent legacy scores on small editions", () => {
+  const lists = equivalenceLists([3, 2, 2]);
+  const queries = successfulQueries(lists);
+  const legacy = buildLegacyScreeningIndex(lists);
+  assertLegacyEquivalence({
+    index: buildScreeningIndex(lists),
+    queries,
+    expected: queries.map((query) =>
+      legacyScreenOutcome(
+        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
+      ),
+    ),
+  });
+});
+
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);
   const lists = equivalenceLists([20, 10, 10]);
@@ -236,21 +252,34 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings replay uncached results at every work-budget boundary", () => {
+test("repeated absent spellings replay fresh results across the work-budget boundary", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
   expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  let completeWork = 0;
+  const complete = screen(compact, query, {
+    cutoff: 0.65,
+    onWork: ({ spent }) => {
+      completeWork = spent;
+    },
+  }).unwrap();
+  expect(completeWork).toBeGreaterThan(1);
   expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  // Fuzzy selection spends less work than the legacy scan, so the legacy
-  // index cannot place the boundaries; an uncached index is the oracle.
+  // Work accounting belongs to the entity index; compare repeated and fresh
+  // lookups at the same budget rather than the historical scan cost.
   let failures = 0;
   let successes = 0;
-  for (let maxWork = 1; maxWork <= 3000; maxWork += 25) {
+  for (const maxWork of [
+    1,
+    Math.floor(completeWork / 2),
+    completeWork - 1,
+    completeWork,
+    completeWork + 1,
+  ]) {
     const options = { cutoff: 0.65, maxWork };
     const expected = screen(buildScreeningIndex(lists), query, options);
     const actual = screen(compact, query, options);

@@ -12,7 +12,6 @@ import type {
 } from "./entry";
 import {
   matchNames,
-  MAX_SCREENING_WORK,
   nameIndexSteps,
   runSteps,
   spendScreeningWork,
@@ -27,10 +26,16 @@ import {
   nameReading,
   hasExcessQueryTokens,
   MAX_QUERY_TOKENS,
+  MAX_QUERY_CHARACTERS,
 } from "./normalise";
 import type { NameReading } from "./normalise";
 import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
 import type { ScreeningEntry } from "./screening-entries";
+import {
+  screeningWorkBound,
+  screeningWorkStatsSteps,
+  type ScreeningWorkStats,
+} from "./screening-work-bound";
 import { isCalendarDate } from "./values";
 
 /**
@@ -68,6 +73,7 @@ export type ScreeningIndex = {
   readonly entryStorage: Pick<ScreeningEntries, "hydrate">;
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
+  readonly workStats: ScreeningWorkStats;
   readonly identifierEntries: Pick<IdentifierPostings, "get">;
 };
 
@@ -100,11 +106,13 @@ function* screeningIndexSteps(
       yield;
     }
   }
+  const names = yield* nameIndexSteps(sourceEntries);
   return {
+    workStats: yield* screeningWorkStatsSteps(names, entries.entries),
     entries: entries.entries,
     entryStorage: entries,
     versions: lists.map((list) => list.version),
-    names: yield* nameIndexSteps(sourceEntries),
+    names,
     identifierEntries,
   };
 }
@@ -261,13 +269,17 @@ export type ScreeningResult = {
   versions: readonly ListVersion[];
   /** The best `limit` of the entries at or above the cutoff. */
   possibleMatches: PossibleMatch[];
-  /** Count found at or above the cutoff; a lower bound when candidate scoring is truncated. */
+  /** Exact count found at or above the cutoff before limiting displayed matches. */
   totalMatches: number;
   truncated: boolean;
 };
 
 export class ScreeningQueryError extends TaggedError("ScreeningQueryError")<{
-  code: "empty-query" | "invalid-birth-date" | "excess-query-tokens";
+  code:
+    | "empty-query"
+    | "invalid-birth-date"
+    | "excess-query-tokens"
+    | "excess-query-characters";
   message: string;
 }> {}
 
@@ -293,7 +305,7 @@ type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
-  /** Optional tighter budget; callers cannot exceed the global work bound. */
+  /** Optional tighter budget; for exercising the defensive invariant. */
   maxWork?: number;
   /** Receives the work a completed screening spent, for headroom monitoring. */
   onWork?: (usage: ScreeningWorkUsage) => void;
@@ -490,7 +502,6 @@ type ScreenNameReadingsOptions = {
   index: NameIndex;
   readings: readonly NameReading[];
   ceiling: (queryShare: number) => number;
-  rankEntry: (entry: number, nameScore: number) => number | undefined;
   cutoff: number;
   work: ScreeningWorkBudget;
 };
@@ -500,7 +511,6 @@ const screenNameReadings = ({
   index,
   readings,
   ceiling,
-  rankEntry,
   cutoff,
   work,
 }: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
@@ -520,7 +530,6 @@ const screenNameReadings = ({
       index,
       reading,
       ceiling,
-      rankEntry,
       cutoff,
       work,
     });
@@ -555,6 +564,14 @@ const prepareScreeningQuery = (
       new ScreeningQueryError({
         code: "invalid-birth-date",
         message: "the birth date is not a valid calendar date",
+      }),
+    );
+  }
+  if (query.name.length > MAX_QUERY_CHARACTERS) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "excess-query-characters",
+        message: `the name must contain at most ${MAX_QUERY_CHARACTERS} characters`,
       }),
     );
   }
@@ -601,12 +618,7 @@ const prepareScreeningQuery = (
 export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
-  {
-    cutoff,
-    limit = DEFAULT_LIMIT,
-    maxWork = MAX_SCREENING_WORK,
-    onWork,
-  }: ScreenOptions,
+  { cutoff, limit = DEFAULT_LIMIT, maxWork, onWork }: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
@@ -615,17 +627,22 @@ export const screen = (
     panic(`limit must be a positive integer, got ${limit}`);
   }
   if (
-    !Number.isInteger(maxWork) ||
-    maxWork < 1 ||
-    maxWork > MAX_SCREENING_WORK
+    maxWork !== undefined &&
+    (!Number.isSafeInteger(maxWork) || maxWork < 1)
   ) {
-    panic(`maxWork must be within 1..${MAX_SCREENING_WORK}, got ${maxWork}`);
+    panic(`maxWork must be a positive safe integer, got ${maxWork}`);
   }
   const prepared = prepareScreeningQuery(query);
   if (prepared.isErr()) {
     return prepared;
   }
   const { readings, identifierKeys } = prepared.value;
+  const staticBound = screeningWorkBound({
+    stats: index.workStats,
+    readings,
+    identifierCount: identifierKeys.size,
+  });
+  const workBudgetLimit = Math.min(maxWork ?? staticBound, staticBound);
 
   // The best final score a name could reach if every identity field matched,
   // given the share of the query it explains; the geometric mean with the
@@ -641,35 +658,13 @@ export const screen = (
     return score;
   };
   const work = {
-    remaining: maxWork,
+    remaining: workBudgetLimit,
     exhausted: false,
-    selection: "complete" as const,
   };
   const matched = screenNameReadings({
     index: index.names,
     readings,
     ceiling,
-    rankEntry: (entryIndex, nameScore) => {
-      const entry = index.entries.get(entryIndex);
-      if (
-        !spendScreeningWork(
-          work,
-          entry.birthDates.length +
-            entry.nationalities.length +
-            entry.identifiers.length +
-            1,
-        )
-      ) {
-        return undefined;
-      }
-      return scoreNameEvidence({
-        cutoff,
-        nameScore,
-        birth: compareBirthDates(query.birthDate, entry.birthDates),
-        nationality: nationalityComparison(query.nationality, entry),
-        entityType: entityTypeComparison(query.entityType, entry),
-      });
-    },
     cutoff,
     work,
   });
@@ -731,7 +726,7 @@ export const screen = (
     evidence: match.evidence,
     entry: index.entryStorage.hydrate(match.entryIndex),
   }));
-  onWork?.({ spent: maxWork - work.remaining, limit: maxWork });
+  onWork?.({ spent: workBudgetLimit - work.remaining, limit: workBudgetLimit });
   return Result.ok({
     cutoff,
     versions: index.versions,
