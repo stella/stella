@@ -295,7 +295,7 @@ for (const { id: source } of sources) {
   // Script boundary: retain coverage for every edition even if one fixture fails.
   try {
     const loaded = await Result.tryPromise({
-      try: () => loadEdition(source),
+      try: async () => loadEdition(source),
       catch: () =>
         ({
           status: "NOT COVERED",
