@@ -18,6 +18,7 @@ import {
 import { envBase } from "@/api/env-base";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { getMcpResourceScopes, getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -129,8 +130,26 @@ const STELLA_PRODUCT_IDENTITY = {
     "Open-source legal workspace for matters, documents, review, and AI-assisted legal work.",
 } as const;
 
-const buildProductIdentity = (): string =>
-  JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
+// The endpoint is this deployment's own, so a self-hosted server never
+// advertises another origin.
+const buildProductIdentity = (mode: McpMode): string => {
+  const endpoint = getMcpResourceUrl(mode);
+  return JSON.stringify(
+    {
+      ...STELLA_PRODUCT_IDENTITY,
+      connection: {
+        endpoint,
+        oauth_scopes: getMcpResourceScopes(mode),
+        install: {
+          claude: `claude mcp add --transport http stella ${endpoint}`,
+          codex: `codex mcp add stella --url ${endpoint}`,
+        },
+      },
+    },
+    null,
+    2,
+  );
+};
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
   {
