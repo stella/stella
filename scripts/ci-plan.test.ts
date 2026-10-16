@@ -601,6 +601,8 @@ test("dependency jobs follow dependency inputs and skip unrelated changes", () =
     "requirements.txt",
     ".github/workflows/ci.yml",
     ".github/actions/example/action.yml",
+    "action.yml",
+    "action.yaml",
   ];
   const cases = [
     ...dependencyInputs.map((file) => ({ files: [file], expected: "true" })),
