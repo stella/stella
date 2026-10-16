@@ -521,7 +521,7 @@ const generatedOutputGuardPlan = (
 
 test("the generated-output guards run when their inputs change", () => {
   for (const file of [
-    "packages/ui/src/button.tsx",
+    "packages/sha256/src/index.ts",
     "patches/some-package@1.0.0.patch",
     "bun.lock",
     "bunfig.toml",
@@ -536,11 +536,21 @@ test("the generated-output guards run when their inputs change", () => {
     "apps/api/tsconfig.json",
     "apps/web/package.json",
     "apps/web/src/generated/api-routes.gen.ts",
-    "apps/web/src/routes/index.tsx",
     "types/wasm.d.ts",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "false"]);
   }
+  // Web and UI sources are outside the API type graph the generator reads, so
+  // they no longer run the API types guard (the published-exports guard still
+  // follows packages).
+  expect(generatedOutputGuardPlan(["apps/web/src/routes/index.tsx"])).toEqual([
+    "false",
+    "false",
+  ]);
+  expect(generatedOutputGuardPlan(["packages/ui/src/button.tsx"])).toEqual([
+    "false",
+    "true",
+  ]);
   for (const file of [
     "scripts/check-published-exports.ts",
     "scripts/prepare-publish.ts",
