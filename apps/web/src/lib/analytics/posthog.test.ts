@@ -426,8 +426,9 @@ describe("PostHog browser analytics adapter", () => {
     });
 
     expect(sanitized?.properties).toEqual({
-      $exception_fingerprint:
-        '["QuotaExceededError","browser:unhandled-error",null,null,[]]',
+      $exception_fingerprint: expect.stringMatching(
+        /^\["QuotaExceededError","browser:[^"]+",null,null,\[\]\]$/u,
+      ),
       $exception_list: [{ type: "QuotaExceededError", value: "" }],
       $exception_type: "QuotaExceededError",
     });
@@ -443,11 +444,15 @@ describe("PostHog browser analytics adapter", () => {
       })?.properties?.["$exception_fingerprint"];
 
     // A message-less DOM exception carries the bare name as its value.
-    expect(fingerprintOf("NetworkError")).toBe(
-      '["NetworkError","browser:unhandled-error",null,null,[]]',
+    expect(fingerprintOf("NetworkError")).toEqual(
+      expect.stringMatching(
+        /^\["NetworkError","browser:[^"]+",null,null,\[\]\]$/u,
+      ),
     );
-    expect(fingerprintOf("NotAllowedError: denied")).toBe(
-      '["NotAllowedError","browser:unhandled-error",null,null,[]]',
+    expect(fingerprintOf("NotAllowedError: denied")).toEqual(
+      expect.stringMatching(
+        /^\["NotAllowedError","browser:[^"]+",null,null,\[\]\]$/u,
+      ),
     );
     expect(fingerprintOf("NetworkError")).not.toBe(
       fingerprintOf("SecurityError"),
@@ -467,8 +472,9 @@ describe("PostHog browser analytics adapter", () => {
     });
 
     expect(sanitized?.properties).toEqual({
-      $exception_fingerprint:
-        '["DOMException","browser:unhandled-error",null,null,[]]',
+      $exception_fingerprint: expect.stringMatching(
+        /^\["DOMException","browser:[^"]+",null,null,\[\]\]$/u,
+      ),
       $exception_list: [{ type: "DOMException", value: "" }],
       $exception_type: "DOMException",
     });
@@ -533,8 +539,9 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint:
-          '["UnhandledRejection","browser:unhandled-error",null,null,[]]',
+        $exception_fingerprint: expect.stringMatching(
+          /^\["UnhandledRejection","browser:[^"]+",null,null,\[\]\]$/u,
+        ),
         $exception_list: [{ type: "UnhandledRejection", value: "" }],
         $exception_type: "UnhandledRejection",
       },
@@ -559,8 +566,9 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint:
-          '["TypeError","browser:unhandled-error",null,null,[]]',
+        $exception_fingerprint: expect.stringMatching(
+          /^\["TypeError","browser:[^"]+",null,null,\[\]\]$/u,
+        ),
         $exception_list: [
           {
             type: "TypeError",
@@ -1192,7 +1200,66 @@ describe("PostHog browser analytics adapter", () => {
     expect(sanitizedFreeForm?.properties).not.toContainKey("area");
   });
 
-  test("fingerprints exceptions from structure, never from message content", () => {
+  test("automatic TypeErrors retain their crash path across rebuilds", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+    const fingerprint = ({
+      asset,
+      line,
+      message,
+    }: {
+      asset: string;
+      line: number;
+      message: string;
+    }) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $exception_list: [
+            {
+              type: "TypeError",
+              value: message,
+              stacktrace: {
+                frames: [
+                  {
+                    in_app: true,
+                    filename: new URL(
+                      `/assets/${asset}.js`,
+                      env.VITE_PUBLIC_APP_URL,
+                    ).toString(),
+                    lineno: line,
+                    colno: 51,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      })?.properties?.["$exception_fingerprint"];
+    const before = {
+      asset: "chat-runtime-D3kfQx9a",
+      line: 766,
+      message: 'Cannot read "private value" at 123',
+    };
+    const original = fingerprint(before);
+    expect(typeof original).toBe("string");
+    expect(
+      fingerprint({ ...before, asset: "document-panel-D3kfQx9a" }),
+    ).not.toBe(original);
+    expect(
+      fingerprint({ ...before, message: "Cannot convert object to primitive" }),
+    ).not.toBe(original);
+    expect(
+      fingerprint({
+        ...before,
+        asset: "chat-runtime-Ck2pW7dm",
+        line: 767,
+        message: 'Cannot read "other private value" at 987',
+      }),
+    ).toBe(original);
+    expect(original).not.toContain("private");
+  });
+
+  test("fingerprints automatic exceptions without sending readable message content", () => {
     createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     // Production-shaped event: PII in the message, a token-bearing query
@@ -1232,8 +1299,10 @@ describe("PostHog browser analytics adapter", () => {
       initOptions?.before_send(crashInMatterView)?.properties?.[
         "$exception_fingerprint"
       ];
-    expect(fingerprint).toBe(
-      '["RangeError","browser:unhandled-error",null,null,[]]',
+    expect(fingerprint).toEqual(
+      expect.stringMatching(
+        /^\["RangeError","browser:[^"]+",null,null,\[\]\]$/u,
+      ),
     );
 
     // Deterministic: the same defect groups into the same issue.
@@ -1450,8 +1519,9 @@ describe("PostHog browser analytics adapter", () => {
       properties: {
         token: "phc_test",
         distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
-        $exception_fingerprint:
-          '["TypeError","browser:unhandled-error",null,null,[]]',
+        $exception_fingerprint: expect.stringMatching(
+          /^\["TypeError","browser:[^"]+",null,null,\[\]\]$/u,
+        ),
         $exception_list: [
           {
             type: "TypeError",
@@ -1558,8 +1628,9 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         error_reference: "ERR-DEAD-BEEF-1234",
-        $exception_fingerprint:
-          '["TypeError","browser:unhandled-error",null,null,[]]',
+        $exception_fingerprint: expect.stringMatching(
+          /^\["TypeError","browser:[^"]+",null,null,\[\]\]$/u,
+        ),
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
@@ -1575,8 +1646,9 @@ describe("PostHog browser analytics adapter", () => {
     expect(rejected).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint:
-          '["TypeError","browser:unhandled-error",null,null,[]]',
+        $exception_fingerprint: expect.stringMatching(
+          /^\["TypeError","browser:[^"]+",null,null,\[\]\]$/u,
+        ),
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
@@ -1917,8 +1989,10 @@ describe("PostHog browser analytics adapter", () => {
         error_code: "conflict",
       },
     });
-    expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
-      '["ApiError","browser:unhandled-error",409,"conflict",[]]',
+    expect(sanitized?.properties?.["$exception_fingerprint"]).toEqual(
+      expect.stringMatching(
+        /^\["ApiError","browser:[^"]+",409,"conflict",\[\]\]$/u,
+      ),
     );
     expect(sanitized?.properties?.["error_status"]).toBe(409);
     expect(sanitized?.properties?.["error_code"]).toBe("conflict");
@@ -1932,8 +2006,8 @@ describe("PostHog browser analytics adapter", () => {
         error_code: "Client Smith asked for jana.novakova@example.com",
       },
     });
-    expect(rejected?.properties?.["$exception_fingerprint"]).toBe(
-      '["ApiError","browser:unhandled-error",null,null,[]]',
+    expect(rejected?.properties?.["$exception_fingerprint"]).toEqual(
+      expect.stringMatching(/^\["ApiError","browser:[^"]+",null,null,\[\]\]$/u),
     );
     expect(rejected?.properties).not.toContainKey("error_status");
     expect(rejected?.properties).not.toContainKey("error_code");

@@ -18,6 +18,7 @@ import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnosti
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import {
   fingerprintExceptionEvent,
+  automaticExceptionKey,
   isExceptionFingerprintKey,
   capturedExceptionIdentity,
   sanitizeFingerprintFields,
@@ -439,7 +440,11 @@ const sanitizeExceptionEvent = (
   const declaredKey = properties["exception_key"];
   const key = isExceptionFingerprintKey(declaredKey)
     ? declaredKey
-    : "browser:unhandled-error";
+    : automaticExceptionKey({
+        entries: sanitizedList,
+        message: readStringField(entries.at(-1), "value"),
+        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+      });
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];
@@ -456,8 +461,8 @@ const sanitizeExceptionEvent = (
       ...(route === undefined
         ? {}
         : { $current_url: route.url, $pathname: route.pathname }),
-      // Grouping identity derived from the sanitized list, so nothing the
-      // redaction removed can reach it.
+      // Explicit owners are preferred; SDK captures use asset ownership and an
+      // opaque normalized message shape. Source positions remain diagnostic.
       $exception_fingerprint: fingerprintExceptionEvent({
         key,
         entries:

@@ -132,3 +132,74 @@ export const sanitizeFingerprintFields = (
 export const routeExceptionFingerprintKey = (
   routeTemplate: string,
 ): ExceptionFingerprintKey => `routeError:${encodeURIComponent(routeTemplate)}`;
+
+const AUTOMATIC_MESSAGE_LIMIT = 8192;
+const HASH_OFFSET = 14_695_981_039_346_656_037n;
+const HASH_PRIME = 1_099_511_628_211n;
+const HASH_BITS = 64;
+
+/** A bounded opaque identity; readable messages remain excluded from events. */
+const automaticMessageHash = (message: string): string => {
+  const normalized = message
+    .slice(0, AUTOMATIC_MESSAGE_LIMIT)
+    .replace(
+      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|“[^”]*”|‘[^’]*’|«[^»]*»/gu,
+      "<value>",
+    )
+    .replace(/https?:\/\/\S+|[^\s@]+@[^\s@]+\.[^\s@]+/gu, "<value>")
+    .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/giu, "<id>")
+    .replace(/\b[0-9a-f]{16,}\b|\b[0-9A-HJKMNP-TV-Z]{26}\b/giu, "<id>")
+    .replace(/\b[A-Za-z_-]*\d[A-Za-z0-9_-]*\b/gu, "<id>")
+    .replace(/\d+(?:\.\d+)?/gu, "<number>")
+    .replace(/\s+/gu, " ")
+    .trim();
+  let hash = HASH_OFFSET;
+  for (const character of normalized) {
+    hash = BigInt.asUintN(
+      HASH_BITS,
+      hash * HASH_PRIME + BigInt(character.codePointAt(0) ?? 0),
+    );
+  }
+  return hash.toString(16);
+};
+
+type AutomaticExceptionKeyOptions = {
+  entries: readonly {
+    stacktrace?: { frames: readonly { filename?: string; in_app?: boolean }[] };
+  }[];
+  message: string;
+  firstPartyOrigin: string;
+};
+
+/** SDK captures have no declared caller: use an owned asset and message shape. */
+export const automaticExceptionKey = ({
+  entries,
+  message,
+  firstPartyOrigin,
+}: AutomaticExceptionKeyOptions): ExceptionFingerprintKey => {
+  const appOrigin = new URL(firstPartyOrigin).origin;
+  for (const entry of entries.toReversed()) {
+    const frames = entry.stacktrace?.frames ?? [];
+    for (const frame of frames.toReversed()) {
+      if (
+        frame.in_app === false ||
+        frame.filename === undefined ||
+        !URL.canParse(frame.filename, firstPartyOrigin)
+      ) {
+        continue;
+      }
+      const url = new URL(frame.filename, firstPartyOrigin);
+      if (url.origin !== appOrigin || !url.pathname.startsWith("/assets/")) {
+        continue;
+      }
+      const basename = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
+      if (!/^[A-Za-z0-9_.-]{1,160}\.m?js$/u.test(basename)) {
+        continue;
+      }
+      // Vite emits an eight-character content hash, separate from the asset owner.
+      const owner = basename.replace(/-[A-Za-z0-9_-]{8}(?=\.m?js$)/u, "");
+      return `browser:${owner}.${automaticMessageHash(message)}`;
+    }
+  }
+  return `browser:frameless.${automaticMessageHash(message)}`;
+};

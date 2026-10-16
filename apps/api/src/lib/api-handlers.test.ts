@@ -1,5 +1,6 @@
 import { Result, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
@@ -12,6 +13,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
+import { resetCaptureWindows } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
@@ -521,6 +523,74 @@ describe("createSafeRootHandler permission gate", () => {
     expect(bodyRan).toBe(true);
     expect(result).toEqual({ ok: true });
   });
+});
+
+test("safe handlers group plain errors by declared route across source-line moves", async () => {
+  const analytics = installRecordingAnalytics();
+  const recordingLogger = installRecordingLogger();
+  let sourceLine = 100;
+  const createFailingEndpoint = () =>
+    createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        const error = new Error("Handler failed");
+        error.stack = `Error: Handler failed\n    at performOperation (/app/operation.ts:${sourceLine}:9)`;
+        return Result.ok(await Promise.reject(error));
+      },
+    );
+  const first = createFailingEndpoint();
+  const second = createFailingEndpoint();
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = new Elysia()
+    .get("/first/:entityId", ({ request, route }) =>
+      first.handler({ ...createContext(first, safeDb), request, route }),
+    )
+    .get("/second/:entityId", ({ request, route }) =>
+      second.handler({ ...createContext(second, safeDb), request, route }),
+    );
+  try {
+    for (const path of [
+      "/first/first-private-id",
+      "/second/second-private-id",
+    ]) {
+      const response = await app.handle(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(500);
+    }
+    const original = analytics.exceptions();
+    expect(original).toHaveLength(2);
+    const firstFingerprint = original.at(0)?.properties.$exception_fingerprint;
+    const secondFingerprint = original.at(1)?.properties.$exception_fingerprint;
+    expect(firstFingerprint).toContain("GET./first/:entityId");
+    expect(secondFingerprint).toContain("GET./second/:entityId");
+    expect(firstFingerprint).not.toBe(secondFingerprint);
+    expect(JSON.stringify(original)).not.toContain("private-id");
+
+    sourceLine += 10;
+    resetCaptureWindows();
+    const shifted = await app.handle(
+      new Request("https://example.test/first/another-private-id"),
+    );
+    expect(shifted.status).toBe(500);
+    const captures = analytics.exceptions();
+    expect(captures).toHaveLength(3);
+    expect(captures.at(2)?.properties.$exception_fingerprint).toBe(
+      firstFingerprint,
+    );
+    expect(captures.at(2)?.properties["error.cause.frame"]).not.toBe(
+      captures.at(0)?.properties["error.cause.frame"],
+    );
+  } finally {
+    recordingLogger.restore();
+    analytics.restore();
+  }
 });
 
 describe("request.failed severity", () => {

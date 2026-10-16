@@ -6,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   capturedExceptionIdentity,
+  automaticExceptionKey,
   fingerprintExceptionEvent,
   isExceptionFingerprintKey,
   routeExceptionFingerprintKey,
@@ -167,4 +168,75 @@ test("route owner keys preserve distinct templates without resolved identifiers"
   ].map(routeExceptionFingerprintKey);
   expect(new Set(keys).size).toBe(keys.length);
   expect(keys.every(isExceptionFingerprintKey)).toBe(true);
+});
+
+const automaticKey = ({
+  owner,
+  hash,
+  line,
+  message,
+}: {
+  owner: string;
+  hash: string;
+  line: number;
+  message: string;
+}) => {
+  const input = {
+    firstPartyOrigin: "https://app.example",
+    message,
+    entries: [
+      {
+        stacktrace: {
+          frames: [
+            {
+              in_app: true,
+              filename: `https://app.example/assets/${owner}-${hash}.js?token=private`,
+              lineno: line,
+              colno: line,
+            },
+          ],
+        },
+      },
+    ],
+  };
+  return automaticExceptionKey(input);
+};
+
+test("automatic exception paths survive rebuilds and data substitutions", () => {
+  assertProperty(
+    "automatic exception paths survive rebuilds and data substitutions",
+    fc.property(fc.uuid(), fc.uuid(), fc.nat(), (beforeId, afterId, shift) => {
+      const before = {
+        owner: "chat-runtime",
+        hash: "D3kfQx9a",
+        line: 10,
+        message: `Failed to decode "private before" for ${beforeId} at 42`,
+      };
+      const after = {
+        ...before,
+        hash: "Ck2pW7dm",
+        line: 11 + shift,
+        message: `Failed to decode "private after" for ${afterId} at 765`,
+      };
+      expect(before).not.toEqual(after);
+      expect(automaticKey(before)).toBe(automaticKey(after));
+      expect(automaticKey(before)).not.toContain("private");
+      expect(automaticKey(before)).not.toContain(beforeId);
+    }),
+  );
+});
+
+test("automatic exceptions distinguish crash owners and stable message shapes", () => {
+  const input = {
+    owner: "chat-runtime",
+    hash: "D3kfQx9a",
+    line: 10,
+    message: "Cannot read property of undefined",
+  };
+  expect(automaticKey(input)).not.toBe(
+    automaticKey({ ...input, owner: "document-panel" }),
+  );
+  expect(automaticKey(input)).not.toBe(
+    automaticKey({ ...input, message: "Cannot convert object to primitive" }),
+  );
 });

@@ -2482,7 +2482,9 @@ const logAndCaptureSafeError = ({
   // already carries the rejecting frame.
   if (telemetry === "capture") {
     captureObservedError(error, {
-      fingerprintKey: "lib.logAndCaptureSafeError",
+      // HTTP routes are declared templates; MCP routes carry capability IDs.
+      // Neither contains resolved request values.
+      fingerprintKey: `safeHandler.${request.method}.${route}`,
       request,
       context: {
         method: request.method,
