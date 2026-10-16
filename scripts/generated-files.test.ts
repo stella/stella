@@ -1054,6 +1054,34 @@ test("web messages have one derived owner and are generated wherever the route t
   expect(root.scripts.generate).toContain("generate:messages");
 });
 
+test("web catalog checks pass without the derived message declarations", async () => {
+  const output = new URL(
+    "../apps/web/src/i18n/langs/messages.gen.ts",
+    import.meta.url,
+  );
+  const existing = (await Bun.file(output).exists())
+    ? await Bun.file(output).bytes()
+    : undefined;
+  await rm(output, { force: true });
+  try {
+    const check = Bun.spawnSync(
+      ["bun", "--filter", "@stll/web", "i18n:check"],
+      {
+        cwd: new URL("..", import.meta.url).pathname,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(new TextDecoder().decode(check.stderr)).toBe("");
+    expect(check.exitCode).toBe(0);
+    expect(await Bun.file(output).exists()).toBe(false);
+  } finally {
+    if (existing !== undefined) {
+      await writeFile(output, existing);
+    }
+  }
+}, 30_000);
+
 test("long optional runs accept dispatch only", () => {
   for (const file of [
     "bundle-size-nightly.yml",
