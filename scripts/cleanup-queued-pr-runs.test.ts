@@ -222,6 +222,17 @@ test("the six-hour rule still applies without a resolvable PR", async () => {
   expect(result.readPulls).toEqual([]);
 });
 
+test("a protected pull request's run is not cancelled even after six hours", async () => {
+  const run = {
+    ...queued("pull_request"),
+    pull_requests: [{ number: 12, head: { sha: "current" } }],
+    created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+  };
+  const result = await cleanup({ run, labels: ["ci-protect"] });
+  expect(result.cancelled).toEqual([]);
+  expect(result.forced).toEqual([]);
+});
+
 test("non-PR events and runs that already started are never cancelled", async () => {
   for (const event of [
     "push",
