@@ -130,6 +130,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/catalogue/": "crud",
   "GET /v1/catalogue/native-tool-deploy-availability": "crud",
   "GET /v1/chat/decision-threads/:decisionId": "crud",
+  "GET /v1/chat/link-icons/:hostname": "crud",
   "GET /v1/chat/model-options": "crud",
   "GET /v1/chat/skill-availability": "crud",
   "GET /v1/chat/threads": "crud",

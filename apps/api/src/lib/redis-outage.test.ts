@@ -42,7 +42,7 @@ describe("link icons during a Valkey outage", () => {
     if (result.status === "ok" && result.value.type === "lease") {
       outboundRequests++;
     }
-    expect(result).toEqual({ status: "ok", value: { type: "no-icon" } });
+    expect(result).toEqual({ status: "ok", value: { type: "temporary" } });
     expect(outboundRequests).toBe(0);
     cache.close();
   });
