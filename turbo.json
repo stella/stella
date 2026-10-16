@@ -89,7 +89,6 @@
     "@stll/web#generate:api-types": {
       "dependsOn": [
         "generate:route-tree",
-        "generate:messages",
         "@stll/api#generate:capability-runtime"
       ],
       "inputs": [

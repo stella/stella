@@ -998,10 +998,14 @@ test("web messages have one derived owner and are generated wherever the route t
       .toSorted(),
   ).toEqual([...owner.inputs].toSorted());
   // Every task that needs the derived route tree reads the web sources, and
-  // those import the message declarations too.
+  // those import the message declarations too. API type generation reads the
+  // routes only.
   for (const [name, task] of Object.entries(config.tasks)) {
     const dependsOn = task.dependsOn ?? [];
-    if (dependsOn.includes("generate:route-tree")) {
+    if (
+      dependsOn.includes("generate:route-tree") &&
+      name !== "@stll/web#generate:api-types"
+    ) {
       expect(dependsOn, name).toContain("generate:messages");
     }
     if (dependsOn.includes("@stll/web#generate:route-tree")) {
@@ -1017,9 +1021,20 @@ test("web messages have one derived owner and are generated wherever the route t
       ),
     ),
   );
+  // Outside Turbo, scripts generate both through one producer step, a shape
+  // the Docker source closure and the shell parsers recognise.
+  expect(manifests.scripts["generate:web-sources"]).toBe(
+    "bun run generate:route-tree && bun run generate:messages",
+  );
   for (const [name, script] of Object.entries(manifests.scripts)) {
-    if (script.includes("bun run generate:route-tree")) {
-      expect(script, name).toContain("bun run generate:messages");
+    if (name === "generate:web-sources") {
+      continue;
+    }
+    expect(script, name).not.toContain("bun run generate:route-tree");
+    if (script.includes('[ -n "$TURBO_HASH" ]')) {
+      expect(script, name).toContain(
+        '([ -n "$TURBO_HASH" ] || bun run generate:web-sources)',
+      );
     }
   }
   const root = v.parse(
