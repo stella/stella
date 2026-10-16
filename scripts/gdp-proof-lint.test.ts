@@ -233,6 +233,73 @@ describe("GDP proof anti-forgery rules", () => {
     ).toEqual([]);
   });
 
+  test("no module re-exports the proof boundary as a facade", async () => {
+    const message =
+      "MatterReadable and MatterWritable transaction proofs may only be minted by matter-access-proof.ts.";
+    for (const source of [
+      `export { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction";`,
+      `export { withCheckedTransaction as mint } from "@/api/lib/proofs/checked-transaction";`,
+      `export * from "@/api/lib/proofs/checked-transaction";`,
+      `export * as checked from "@/api/lib/proofs/checked-transaction";`,
+      `import { withCheckedTransaction } from "@/api/lib/proofs/checked-transaction"; export { withCheckedTransaction };`,
+    ]) {
+      expect(
+        await messages(source, ["no-matter-proof-kind-outside-owner"]),
+      ).toEqual([message]);
+    }
+  });
+
+  test("indexed and queried proof types count as matter proofs", async () => {
+    const ruleNames = ["no-matter-proof-forgery"];
+    const forged =
+      "Only matter-access-proof.ts may cast or construct MatterReadable/MatterWritable.";
+    expect(
+      await messages(
+        `import type { MatterAccessContext } from "@/api/lib/workspaces/matter-access-proof"; const viaIndex = asTestRaw<MatterAccessContext<"write", 1, 2, 3, 4>["proof"]>({}); const viaQuery = {} as typeof context.proof;`,
+        ruleNames,
+      ),
+    ).toEqual([forged, forged]);
+  });
+
+  test("the access context stays inside its withMatterAccess callback", async () => {
+    const ruleNames = ["no-matter-access-context-escape"];
+    const message =
+      "Consume the matter access context inside its withMatterAccess callback; do not return, store or capture it beyond the callback.";
+    const access = `import { withMatterAccess } from "@/api/lib/workspaces/matter-access-proof";`;
+    for (const body of [
+      `async ({ tx, proof }) => Result.ok(() => write({ tx, proof }))`,
+      `async (context) => { return Result.ok({ later: context }); }`,
+      `async ({ proof }) => { saved = proof; return Result.ok(1); }`,
+      `async ({ tx, proof }) => { pending.push(async () => write({ tx, proof })); return Result.ok(1); }`,
+      `async ({ tx }) => { holder.tx = tx; return Result.ok(1); }`,
+    ]) {
+      expect(
+        await messages(
+          `${access} let saved; await withMatterAccess(options, ${body});`,
+          ruleNames,
+        ),
+      ).toEqual([message]);
+    }
+    expect(
+      await messages(
+        `${access} await withMatterAccess(options, run);`,
+        ruleNames,
+      ),
+    ).toEqual([message]);
+    // Consumption inside the callback, including local closures and helpers.
+    for (const body of [
+      `async ({ tx, proof }) => Result.ok(await write({ tx, proof }))`,
+      `async ({ tx, proof }) => { const rows = await Promise.all(items.map(async (item) => await write({ tx, proof, item }))); let last = proof; last = proof; return Result.ok(rows.length); }`,
+    ]) {
+      expect(
+        await messages(
+          `${access} await withMatterAccess(options, ${body});`,
+          ruleNames,
+        ),
+      ).toEqual([]);
+    }
+  });
+
   test("a generic helper or a parsed value cannot stand in for a matter proof", async () => {
     const ruleNames = ["no-matter-proof-forgery"];
     const ownerImport = `import type { MatterReadable } from "@/api/lib/workspaces/matter-access-proof";`;

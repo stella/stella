@@ -28,6 +28,13 @@ const resolvedModule = (source, filename) => {
   const resolved = path.resolve(path.dirname(filename), source);
   return /\.[cm]?[jt]sx?$/u.test(resolved) ? resolved : `${resolved}.ts`;
 };
+// The proof types, and the access context whose `proof` field is one: a
+// type argument naming either constructs a proof through a generic helper.
+const GUARDED_PROOF_TYPES = [
+  "MatterReadable",
+  "MatterWritable",
+  "MatterAccessContext",
+];
 const isMatterProofType = (
   node,
   { guarded, namespaces, filename, rawTypes },
@@ -52,7 +59,14 @@ const isMatterProofType = (
     return (
       resolvedModule(node.source.value, filename) === matterProofOwner &&
       qualifier?.type === "Identifier" &&
-      ["MatterReadable", "MatterWritable"].includes(qualifier.name)
+      GUARDED_PROOF_TYPES.includes(qualifier.name)
+    );
+  }
+  // `typeof context.proof` names a received proof's exact type.
+  if (node?.type === "TSTypeQuery") {
+    return (
+      node.exprName?.type === "TSQualifiedName" &&
+      node.exprName.right.name === "proof"
     );
   }
   if (node?.type !== "TSTypeReference") {
@@ -67,7 +81,7 @@ const isMatterProofType = (
     : name.type === "TSQualifiedName" &&
         name.left.type === "Identifier" &&
         (guarded.has(name.left.name) || namespaces.has(name.left.name)) &&
-        ["MatterReadable", "MatterWritable"].includes(name.right.name);
+        GUARDED_PROOF_TYPES.includes(name.right.name);
 };
 
 const noMatterProofForgery = {
@@ -136,9 +150,7 @@ const noMatterProofForgery = {
             }
             if (
               specifier.type === "ImportSpecifier" &&
-              ["MatterReadable", "MatterWritable"].includes(
-                specifier.imported.name,
-              )
+              GUARDED_PROOF_TYPES.includes(specifier.imported.name)
             ) {
               guarded.add(specifier.local.name);
             }
@@ -293,6 +305,25 @@ const noMatterProofKindOutsideOwner = {
           }
         }
       },
+      // A re-export would give other modules a facade that neither rule
+      // resolves back to the boundary.
+      ExportNamedDeclaration(node) {
+        if (
+          node.source &&
+          resolvedModule(node.source.value, filename) ===
+            checkedTransactionModule
+        ) {
+          context.report({ node, message });
+        }
+      },
+      ExportAllDeclaration(node) {
+        if (
+          resolvedModule(node.source.value, filename) ===
+          checkedTransactionModule
+        ) {
+          context.report({ node, message });
+        }
+      },
       ImportExpression(node) {
         // The minting module is never loaded dynamically outside its owners.
         if (
@@ -312,6 +343,10 @@ const noMatterProofKindOutsideOwner = {
           parent?.type === "ImportSpecifier" ||
           parent?.type === "ImportNamespaceSpecifier" ||
           parent?.type === "TSQualifiedName" ||
+          // An export is reported once, at its local name.
+          (parent?.type === "ExportSpecifier" &&
+            parent.exported === node &&
+            parent.local !== node) ||
           (parent?.type === "MemberExpression" &&
             parent.property === node &&
             !parent.computed) ||
@@ -348,6 +383,256 @@ const noMatterProofKindOutsideOwner = {
   },
 };
 
+
+// The access context (`tx`, `matter`, `actor`, `proof`) is consumed inside the
+// `withMatterAccess` callback. Its ghost names keep a returned or stored proof
+// from type-checking, but a closure that captures them carries a plain function
+// type out of the callback and could act after the transaction ended.
+const noMatterAccessContextEscape = {
+  meta: {
+    type: "problem",
+    docs: {
+      description:
+        "Consume the matter access context inside its withMatterAccess callback.",
+    },
+    schema: [],
+  },
+  create(context) {
+    const filename = path.resolve(context.filename);
+    if (filename === matterProofOwner) {
+      return {};
+    }
+    const accessBindings = new Set();
+    const accessNamespaces = new Set();
+    const message =
+      "Consume the matter access context inside its withMatterAccess callback; do not return, store or capture it beyond the callback.";
+    const isAccessCall = (callee) =>
+      (callee.type === "Identifier" && accessBindings.has(callee.name)) ||
+      (callee.type === "MemberExpression" &&
+        callee.object.type === "Identifier" &&
+        accessNamespaces.has(callee.object.name) &&
+        !callee.computed &&
+        callee.property.name === "withMatterAccess");
+    const children = (node) =>
+      Object.entries(node).flatMap(([key, value]) => {
+        if (key === "parent" || !value || typeof value !== "object") {
+          return [];
+        }
+        return (Array.isArray(value) ? value : [value]).filter(
+          (child) => child && typeof child.type === "string",
+        );
+      });
+    const isFunction = (node) =>
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionExpression" ||
+      node.type === "FunctionDeclaration";
+    const references = (node, names) => {
+      if (node.type === "Identifier" && names.has(node.name)) {
+        return true;
+      }
+      return children(node).some((child) => references(child, names));
+    };
+    const patternNames = (pattern, into) => {
+      if (!pattern) {
+        return into;
+      }
+      if (pattern.type === "Identifier") {
+        into.add(pattern.name);
+      } else if (pattern.type === "ObjectPattern") {
+        for (const property of pattern.properties) {
+          patternNames(
+            property.type === "RestElement" ? property.argument : property.value,
+            into,
+          );
+        }
+      } else if (pattern.type === "ArrayPattern") {
+        for (const element of pattern.elements) {
+          patternNames(element, into);
+        }
+      } else if (pattern.type === "AssignmentPattern") {
+        patternNames(pattern.left, into);
+      } else if (pattern.type === "RestElement") {
+        patternNames(pattern.argument, into);
+      }
+      return into;
+    };
+    const declaredWithin = (root) => {
+      const declared = new Set();
+      const visit = (node) => {
+        if (node.type === "VariableDeclarator") {
+          patternNames(node.id, declared);
+        }
+        if (isFunction(node)) {
+          for (const param of node.params) {
+            patternNames(param, declared);
+          }
+          if (node.id) {
+            declared.add(node.id.name);
+          }
+        }
+        for (const child of children(node)) {
+          visit(child);
+        }
+      };
+      visit(root);
+      return declared;
+    };
+    // Wrappers that hand their argument back unchanged.
+    const isTransparentCall = (node) => {
+      const callee = node.callee;
+      if (callee.type === "Identifier") {
+        return ["Ok", "Err"].includes(callee.name);
+      }
+      return (
+        callee.type === "MemberExpression" &&
+        callee.object.type === "Identifier" &&
+        !callee.computed &&
+        ((callee.object.name === "Result" &&
+          ["ok", "err"].includes(callee.property.name)) ||
+          (callee.object.name === "Promise" &&
+            callee.property.name === "resolve") ||
+          (callee.object.name === "Object" &&
+            ["assign", "freeze"].includes(callee.property.name)))
+      );
+    };
+    // Whether evaluating `node` yields a context value or a closure over one.
+    const carries = (node, names) => {
+      if (!node) {
+        return false;
+      }
+      switch (node.type) {
+        case "Identifier": {
+          return names.has(node.name);
+        }
+        case "ArrowFunctionExpression":
+        case "FunctionExpression": {
+          return references(node.body, names);
+        }
+        case "ObjectExpression": {
+          return node.properties.some((property) =>
+            carries(
+              property.type === "SpreadElement" ? property.argument : property.value,
+              names,
+            ),
+          );
+        }
+        case "ArrayExpression": {
+          return node.elements.some((element) =>
+            carries(element?.type === "SpreadElement" ? element.argument : element, names),
+          );
+        }
+        case "ConditionalExpression": {
+          return carries(node.consequent, names) || carries(node.alternate, names);
+        }
+        case "LogicalExpression": {
+          return carries(node.left, names) || carries(node.right, names);
+        }
+        case "SequenceExpression": {
+          return carries(node.expressions.at(-1), names);
+        }
+        case "AwaitExpression":
+        case "TSAsExpression":
+        case "TSSatisfiesExpression":
+        case "TSNonNullExpression":
+        case "TSTypeAssertion":
+        case "ParenthesizedExpression": {
+          return carries(node.expression ?? node.argument, names);
+        }
+        case "CallExpression": {
+          return (
+            isTransparentCall(node) &&
+            node.arguments.some((argument) => carries(argument, names))
+          );
+        }
+        default: {
+          return false;
+        }
+      }
+    };
+    const rootIdentifier = (target) => {
+      let node = target;
+      while (node?.type === "MemberExpression") {
+        node = node.object;
+      }
+      return node?.type === "Identifier" ? node.name : undefined;
+    };
+    const checkCallback = (callback) => {
+      const names = patternNames(callback.params.at(0), new Set());
+      const local = declaredWithin(callback.body);
+      const isOuter = (target) => {
+        const root = rootIdentifier(target);
+        return root === undefined || !local.has(root);
+      };
+      if (callback.body.type !== "BlockStatement") {
+        if (carries(callback.body, names)) {
+          context.report({ node: callback.body, message });
+        }
+      }
+      const visit = (node, nested) => {
+        if (!nested && node.type === "ReturnStatement" && carries(node.argument, names)) {
+          context.report({ node, message });
+        }
+        if (
+          node.type === "AssignmentExpression" &&
+          isOuter(node.left) &&
+          carries(node.right, names)
+        ) {
+          context.report({ node, message });
+        }
+        if (
+          node.type === "CallExpression" &&
+          node.callee.type === "MemberExpression" &&
+          isOuter(node.callee.object) &&
+          node.arguments.some((argument) => carries(argument, names))
+        ) {
+          // Storing into an outer collection (push, set, add) keeps it alive.
+          const method = node.callee.computed ? undefined : node.callee.property.name;
+          if (["push", "unshift", "set", "add", "splice"].includes(method)) {
+            context.report({ node, message });
+          }
+        }
+        for (const child of children(node)) {
+          visit(child, nested || isFunction(child));
+        }
+      };
+      visit(callback.body, false);
+    };
+    return {
+      ImportDeclaration(node) {
+        if (resolvedModule(node.source.value, filename) !== matterProofOwner) {
+          return;
+        }
+        for (const specifier of node.specifiers) {
+          if (specifier.type === "ImportNamespaceSpecifier") {
+            accessNamespaces.add(specifier.local.name);
+          }
+          if (
+            specifier.type === "ImportSpecifier" &&
+            specifier.imported.name === "withMatterAccess"
+          ) {
+            accessBindings.add(specifier.local.name);
+          }
+        }
+      },
+      CallExpression(node) {
+        if (!isAccessCall(node.callee)) {
+          return;
+        }
+        const callback = node.arguments.at(1);
+        // Only an inline callback can be checked for escapes.
+        if (
+          callback?.type !== "ArrowFunctionExpression" &&
+          callback?.type !== "FunctionExpression"
+        ) {
+          context.report({ node, message });
+          return;
+        }
+        checkCallback(callback);
+      },
+    };
+  },
+};
+
 // Preserve named calls and constructor extractions alongside upstream checks.
 export default {
   ...plugin,
@@ -355,6 +640,7 @@ export default {
     ...plugin.rules,
     "no-matter-proof-forgery": noMatterProofForgery,
     "no-matter-proof-kind-outside-owner": noMatterProofKindOutsideOwner,
+    "no-matter-access-context-escape": noMatterAccessContextEscape,
     "no-define-proof": {
       ...noDefineProof,
       create(context) {

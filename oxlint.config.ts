@@ -1730,6 +1730,7 @@ const config = defineConfig({
         ],
         "gdp-ts/no-matter-proof-forgery": "error",
         "gdp-ts/no-matter-proof-kind-outside-owner": "error",
+        "gdp-ts/no-matter-access-context-escape": "error",
       },
     },
     {

@@ -57,8 +57,10 @@ export const matterProofCannotEscape = async (
   options: Parameters<typeof withMatterAccess<"read", unknown, never>>[0],
 ) => {
   // @ts-expect-error The transaction's ghost name cannot escape its continuation.
+  // oxlint-disable-next-line gdp-ts/no-matter-access-context-escape -- compile-only negative case proves the escape fails to type-check
   await withMatterAccess(options, async ({ proof }) => Result.ok(proof));
   // @ts-expect-error A named transaction cannot escape for use in another scope.
+  // oxlint-disable-next-line gdp-ts/no-matter-access-context-escape -- compile-only negative case proves the escape fails to type-check
   await withMatterAccess(options, async ({ tx }) => Result.ok(tx));
 };
 

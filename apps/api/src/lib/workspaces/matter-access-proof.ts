@@ -51,7 +51,12 @@ type WithMatterAccessOptions<Need extends MatterAccessNeed> = {
   lock?: (tx: Transaction) => Promise<Result<void, HandlerError>>;
 };
 
-/** Evidence retains the exact actor, matter, organization and transaction names. */
+/**
+ * Evidence retains the exact actor, matter, organization and transaction
+ * names. Consume the context inside `run`: the proof is valid only while that
+ * transaction is open, so returning, storing or capturing `tx`/`proof` beyond
+ * the callback is rejected by `gdp-ts/no-matter-access-context-escape`.
+ */
 export const withMatterAccess = async <
   const Need extends MatterAccessNeed,
   R,
