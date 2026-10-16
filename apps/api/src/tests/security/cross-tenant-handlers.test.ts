@@ -639,6 +639,7 @@ const savedSearchCriteria = (
 // Desktop credential B is user A1 bound to organization B: a successful
 // write lands in matter B1 under organization B and that user, nowhere else.
 const expectDesktopEntryOwnedByB = async (entryId: string) => {
+  const safeEntryId = toSafeId<"timeEntry">(entryId);
   const rows = await testDb
     .select({
       id: timeEntries.id,
@@ -647,10 +648,10 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
       userId: timeEntries.userId,
     })
     .from(timeEntries)
-    .where(eq(timeEntries.id, toSafeId<"timeEntry">(entryId)));
+    .where(eq(timeEntries.id, safeEntryId));
   expect(rows).toEqual([
     {
-      id: entryId,
+      id: safeEntryId,
       workspaceId: ids.wsB1,
       organizationId: ids.orgB,
       userId: ids.userA1,
