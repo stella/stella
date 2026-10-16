@@ -1721,7 +1721,8 @@
       "toggleLabel": "Búsqueda web",
       "toggleOff": "Desactivar búsqueda web",
       "toggleOn": "Activar búsqueda web"
-    }
+    },
+    "workedFor": "Tiempo de trabajo: {duration}"
   },
   "clauses": {
     "addVariant": "Añadir variante",
