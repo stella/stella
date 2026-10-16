@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
+import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -25,20 +26,22 @@ export const isCanonicalIconHostname = (hostname: string): boolean => {
   return Result.isOk(parsed) && parsed.value.hostname === hostname;
 };
 
-export type LinkIcon = {
-  bytes: Uint8Array;
-  mime: "image/png" | "image/x-icon";
-};
-
-type LinkIconResult =
-  | { type: "icon"; icon: LinkIcon }
-  | { type: "capacity" }
-  | { type: "no-icon" };
-
-const noIcon = (reason: string): LinkIconResult => {
+const unavailableIcon = ({
+  type,
+  reason,
+}: {
+  type: "no-icon" | "temporary";
+  reason: string;
+}): LinkIconOutcome => {
   logger.debug("chat.link_icon.unavailable", { reason });
-  return { type: "no-icon" };
+  return { type };
 };
+
+const isRetryableIconStatus = (status: number) =>
+  status === 408 ||
+  status === 425 ||
+  status === 429 ||
+  (status >= 500 && status <= 599);
 
 type OriginOptions = {
   fetchBytes?: typeof safeOutboundFetchBytes;
@@ -55,12 +58,12 @@ export const createLinkIconOrigin = ({
   return async (
     hostname: string,
     permit: ThirdPartyOutboundPermit,
-  ): Promise<LinkIconResult> => {
+  ): Promise<LinkIconOutcome> => {
     if (!isCanonicalIconHostname(hostname)) {
-      return noIcon("hostname");
+      return unavailableIcon({ type: "no-icon", reason: "hostname" });
     }
     if (active >= MAX_ORIGIN_CONCURRENCY) {
-      return { type: "capacity" };
+      return unavailableIcon({ type: "temporary", reason: "capacity" });
     }
     active += 1;
     const deadline = now() + ORIGIN_DEADLINE_MS;
@@ -72,7 +75,7 @@ export const createLinkIconOrigin = ({
       for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
         const timeoutMs = deadline - now();
         if (timeoutMs <= 0 || signal.aborted) {
-          return noIcon("deadline");
+          return unavailableIcon({ type: "temporary", reason: "deadline" });
         }
         // Each invocation resolves and validates the complete DNS answer, then
         // pins those addresses to the socket, including redirected hosts.
@@ -89,28 +92,37 @@ export const createLinkIconOrigin = ({
           },
         });
         if (Result.isError(response)) {
-          return noIcon("transport");
+          return unavailableIcon({ type: "temporary", reason: "transport" });
         }
         const { headers, status, body } = response.value;
         remainingBytes -= body.byteLength;
         if (remainingBytes < 0) {
-          return noIcon("size");
+          return unavailableIcon({ type: "no-icon", reason: "size" });
         }
         if ([301, 302, 303, 307, 308].includes(status)) {
           if (hop === MAX_REDIRECTS) {
-            return noIcon("redirect_limit");
+            return unavailableIcon({
+              type: "no-icon",
+              reason: "redirect_limit",
+            });
           }
           if (remainingBytes === 0) {
-            return noIcon("size");
+            return unavailableIcon({ type: "no-icon", reason: "size" });
           }
           const location = headers.get("location");
           if (!location) {
-            return noIcon("redirect_location");
+            return unavailableIcon({
+              type: "no-icon",
+              reason: "redirect_location",
+            });
           }
           const redirectBase = url;
           const redirected = Result.try(() => new URL(location, redirectBase));
           if (Result.isError(redirected)) {
-            return noIcon("redirect_location");
+            return unavailableIcon({
+              type: "no-icon",
+              reason: "redirect_location",
+            });
           }
           const parsed = parseSafeOutboundUrl(redirected.value.toString());
           if (
@@ -121,27 +133,33 @@ export const createLinkIconOrigin = ({
             parsed.value.search !== "" ||
             parsed.value.pathname !== "/favicon.ico"
           ) {
-            return noIcon("redirect_target");
+            return unavailableIcon({
+              type: "no-icon",
+              reason: "redirect_target",
+            });
           }
           url = parsed.value;
           continue;
         }
+        if (isRetryableIconStatus(status)) {
+          return unavailableIcon({ type: "temporary", reason: "status" });
+        }
         if (status !== 200) {
-          return noIcon("status");
+          return unavailableIcon({ type: "no-icon", reason: "status" });
         }
         const encoding = headers.get("content-encoding");
         if (encoding !== null && encoding.toLowerCase() !== "identity") {
-          return noIcon("encoding");
+          return unavailableIcon({ type: "no-icon", reason: "encoding" });
         }
         const mime =
           headers.get("content-type")?.split(";").at(0)?.trim().toLowerCase() ??
           "";
         const bytes = new Uint8Array(body);
         if (!isValidLinkIconImage(bytes, mime)) {
-          return noIcon("image");
+          return unavailableIcon({ type: "no-icon", reason: "image" });
         }
         if (now() >= deadline) {
-          return noIcon("deadline");
+          return unavailableIcon({ type: "temporary", reason: "deadline" });
         }
         return {
           type: "icon",
@@ -151,7 +169,7 @@ export const createLinkIconOrigin = ({
           },
         };
       }
-      return noIcon("redirect_limit");
+      return unavailableIcon({ type: "no-icon", reason: "redirect_limit" });
     } finally {
       active -= 1;
     }

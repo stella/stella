@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -8,7 +8,7 @@ import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 
-import type { LinkIcon } from "./origin";
+import type { CacheableLinkIconOutcome, LinkIconOutcome } from "./outcome";
 
 type RedisLike = {
   connect: () => Promise<unknown>;
@@ -16,11 +16,7 @@ type RedisLike = {
   close: () => void;
 };
 type ConnectionAttempt = { client: RedisLike; ready: Promise<unknown> };
-type ReadResult =
-  | { type: "hit"; icon: LinkIcon }
-  | { type: "no-icon" }
-  | { type: "temporary" }
-  | { type: "lease"; token: string };
+type ReadResult = LinkIconOutcome | { type: "lease"; token: string };
 type CacheOptions = {
   createRedis?: () => RedisLike;
   onRedisError?: (error: unknown) => void;
@@ -202,7 +198,7 @@ export const createLinkIconCache = ({
       switch (value.charAt(0)) {
         case "P":
           return {
-            type: "hit",
+            type: "icon",
             icon: {
               bytes: Buffer.from(value.slice(1), "base64"),
               mime: "image/png",
@@ -210,7 +206,7 @@ export const createLinkIconCache = ({
           };
         case "I":
           return {
-            type: "hit",
+            type: "icon",
             icon: {
               bytes: Buffer.from(value.slice(1), "base64"),
               mime: "image/x-icon",
@@ -225,25 +221,38 @@ export const createLinkIconCache = ({
     store: async ({
       hostname,
       token,
-      icon,
+      outcome,
     }: {
       hostname: string;
       token: string;
-      icon: LinkIcon | null;
+      outcome: CacheableLinkIconOutcome;
     }): Promise<boolean> => {
-      if (icon !== null && icon.bytes.byteLength > 65_536) {
-        return false;
+      let value: string;
+      let ttl: number;
+      switch (outcome.type) {
+        case "icon": {
+          const { icon } = outcome;
+          if (icon.bytes.byteLength > 65_536) {
+            return false;
+          }
+          value = `${icon.mime === "image/png" ? "P" : "I"}${Buffer.from(icon.bytes).toString("base64")}`;
+          ttl = POSITIVE_TTL;
+          break;
+        }
+        case "no-icon":
+          value = "N";
+          ttl = NEGATIVE_TTL;
+          break;
+        default:
+          outcome satisfies never;
+          return panic("Unhandled cacheable link icon outcome");
       }
-      const value =
-        icon === null
-          ? "N"
-          : `${icon.mime === "image/png" ? "P" : "I"}${Buffer.from(icon.bytes).toString("base64")}`;
       return (
         (await command(FILL, [
           sha256Hex(hostname),
           token,
           value,
-          String(icon === null ? NEGATIVE_TTL : POSITIVE_TTL),
+          String(ttl),
           String(BYTE_BUDGET),
         ])) === "S"
       );

@@ -68,10 +68,10 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
         await cache.store({
           hostname: subject.hostname,
           token: lease.token,
-          icon,
+          outcome: { type: "icon", icon },
         }),
       ).toBe(true);
-      expect(await cache.readOrLease(subject)).toEqual({ type: "hit", icon });
+      expect(await cache.readOrLease(subject)).toEqual({ type: "icon", icon });
       const positiveExpiry = Number(
         await raw.send("ZSCORE", [expiry, hostField(subject.hostname)]),
       );
@@ -87,7 +87,7 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
         await cache.store({
           hostname: negative.hostname,
           token: miss.token,
-          icon: null,
+          outcome: { type: "no-icon" },
         }),
       ).toBe(true);
       expect(await cache.readOrLease(negative)).toEqual({ type: "no-icon" });
@@ -178,7 +178,11 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
           break;
         }
         if (
-          !(await fixture.cache.store({ hostname, token: result.token, icon }))
+          !(await fixture.cache.store({
+            hostname,
+            token: result.token,
+            outcome: { type: "icon", icon },
+          }))
         ) {
           refused = true;
           break;

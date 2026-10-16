@@ -22,7 +22,7 @@ test("favicon bytes require an authenticated chat principal", async () => {
 
 test("missing icons have a typed fallback and private nosniff headers", async () => {
   const response = await new Elysia()
-    .get("/", ({ set }) => linkIconBody(null, set))
+    .get("/", ({ set }) => linkIconBody({ type: "no-icon" }, set))
     .handle(new Request("http://localhost/"));
   expect(await response.json()).toEqual({ type: "no-icon" });
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -32,7 +32,9 @@ test("missing icons have a typed fallback and private nosniff headers", async ()
 test("verified bytes retain their MIME and never expose the origin URL", async () => {
   const bytes = new Uint8Array([1, 2, 3]);
   const response = await new Elysia()
-    .get("/", ({ set }) => linkIconBody({ bytes, mime: "image/png" }, set))
+    .get("/", ({ set }) =>
+      linkIconBody({ type: "icon", icon: { bytes, mime: "image/png" } }, set),
+    )
     .handle(new Request("http://localhost/"));
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
   expect(response.headers.get("content-type")).toBe("image/png");
@@ -42,7 +44,7 @@ test("verified bytes retain their MIME and never expose the origin URL", async (
 
 test("temporary icon refusals are never cached by the browser", async () => {
   const response = await new Elysia()
-    .get("/", ({ set }) => linkIconBody("temporary", set))
+    .get("/", ({ set }) => linkIconBody({ type: "temporary" }, set))
     .handle(new Request("http://localhost/"));
   expect(await response.json()).toEqual({ type: "temporary" });
   expect(response.headers.get("cache-control")).toContain("no-store");

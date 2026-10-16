@@ -113,7 +113,7 @@ test("does not begin another hop after the total deadline", async () => {
     },
   });
   expect(await origin("example.com", grantThirdPartyOutboundPermit())).toEqual({
-    type: "no-icon",
+    type: "temporary",
   });
   expect(calls).toBe(1);
 });
@@ -160,10 +160,27 @@ test("admits at most two concurrent origin requests and releases capacity", asyn
   const permit = grantThirdPartyOutboundPermit();
   const first = origin("example.com", permit);
   const second = origin("example.org", permit);
-  expect(await origin("example.net", permit)).toEqual({ type: "capacity" });
+  expect(await origin("example.net", permit)).toEqual({ type: "temporary" });
   expect(calls).toBe(2);
   finish?.();
   await Promise.all([first, second]);
   await origin("example.net", permit);
   expect(calls).toBe(3);
 });
+
+for (const status of [408, 425, 429, 500, 501, 502, 503, 504, 599]) {
+  test(`HTTP ${status} is temporary rather than evidence of a missing icon`, async () => {
+    const origin = createLinkIconOrigin({
+      fetchBytes: async () =>
+        Result.ok({
+          status,
+          ok: false,
+          body: new ArrayBuffer(0),
+          headers: new Headers(),
+        }),
+    });
+    expect(
+      await origin("example.com", grantThirdPartyOutboundPermit()),
+    ).toEqual({ type: "temporary" });
+  });
+}

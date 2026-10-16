@@ -56,17 +56,20 @@ test("positive cache envelopes round trip bytes and oversized fills are rejected
   await cache.store({
     hostname: subject.hostname,
     token: "lease",
-    icon: { bytes, mime: "image/png" },
+    outcome: { type: "icon", icon: { bytes, mime: "image/png" } },
   });
   expect(await cache.readOrLease(subject)).toEqual({
-    type: "hit",
+    type: "icon",
     icon: { bytes, mime: "image/png" },
   });
   const before = sends;
   await cache.store({
     hostname: subject.hostname,
     token: "lease",
-    icon: { bytes: new Uint8Array(65_537), mime: "image/png" },
+    outcome: {
+      type: "icon",
+      icon: { bytes: new Uint8Array(65_537), mime: "image/png" },
+    },
   });
   expect(sends).toBe(before);
   cache.close();
