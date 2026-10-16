@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { OnboardingWizard } from "@/routes/onboarding/-components/onboarding-wizard";
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
@@ -10,6 +11,7 @@ import { onboardingSearchSchema } from "@/routes/onboarding/-search";
 const isDev = import.meta.env.DEV;
 
 export const Route = createFileRoute("/onboarding")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   validateSearch: onboardingSearchSchema,
   beforeLoad: async ({ context, search }) => {
     const authContext = await loadAuthContext(context.queryClient);

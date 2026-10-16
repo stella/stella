@@ -4,6 +4,10 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
 import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
+import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
@@ -17,6 +21,10 @@ import {
 const guarded = !isPublicKnowledgeEnabled();
 
 export const Route = createFileRoute("/knowledge")({
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.knowledge,
+    providerScopes: MEMBER_PROVIDER_SCOPES,
+  },
   // Off behind sign-in; otherwise the root's public-path rule decides, since
   // a route cannot render on the server where its parent does not.
   ssr: !guarded,

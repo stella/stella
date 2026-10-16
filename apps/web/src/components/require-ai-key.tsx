@@ -54,7 +54,9 @@ import {
   aiConfigOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { useRequiredRouteProvider } from "@/lib/route-provider-scope";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
   ensureAIAvailable: () => Promise<boolean>;
@@ -173,15 +175,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   );
 };
 
-export const useAIKeyGate = () => {
-  const context = use(AIAvailabilityContext);
-
-  if (!context) {
-    panic("useAIKeyGate must be used within AIAvailabilityProvider");
-  }
-
-  return context;
-};
+export const useAIKeyGate = () =>
+  useRequiredRouteProvider({
+    context: AIAvailabilityContext,
+    scope: PROVIDER_SCOPE.ai,
+    missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
+  });
 
 const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
   useMountEffect(() => {
