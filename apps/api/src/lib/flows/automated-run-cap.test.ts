@@ -26,12 +26,12 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { aggregateExecutionRows } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";

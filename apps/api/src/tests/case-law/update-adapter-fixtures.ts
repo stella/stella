@@ -13,8 +13,8 @@ import { Temporal } from "@stll/time";
  * keep fixtures in sync with real API responses.
  *
  * Usage:
- *   bun run apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts
- *   bun run apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts --adapter sk-courts
+ *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts
+ *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts --adapter sk-courts
  */
 
 import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
@@ -31,7 +31,10 @@ import {
 export const hashAdapterFixtureBytes = (bytes: Uint8Array) =>
   hashSha256Hex(bytes);
 
-const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
+const FIXTURES_DIR = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
 
 const writeStdoutLine = (message = ""): void => {
   process.stdout.write(`${message}\n`);

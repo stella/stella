@@ -84,6 +84,8 @@ const mount = (items: ReturnType<typeof provision>[], resolveTitle = false) => {
     status: { type: "legacy" },
     generation: "0",
     publishedProjectionDigest: null,
+    capability: { type: "supported", languages: ["cs"] },
+    pendingSince: null,
   } satisfies ProvisionsPage;
   client.setQueryData(decisionProvisionsInfiniteOptions(decisionId).queryKey, {
     pageParams: [null],
