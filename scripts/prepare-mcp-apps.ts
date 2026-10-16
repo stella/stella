@@ -36,6 +36,11 @@ if (!hasPreparedGeneratedSources(root)) {
       "scripts/generated-files.ts",
       "packages/scripts/src/generated-output-cache.ts",
       "packages/scripts/src/generation-lock.ts",
+      // Concurrent package builds write these; the Turbo task excludes them too.
+      "!packages/**/dist/**",
+      "!packages/**/*.tsbuildinfo",
+      "!packages/**/.env*",
+      "!apps/api/src/**/.env*",
     ],
     outputs: owners.flatMap(({ outputs }) => outputs),
     generate: async () => {

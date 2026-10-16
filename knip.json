@@ -212,7 +212,10 @@
         "src/dev-postgres.ts",
         // Test fixture processes are spawned by path from the tests.
         "src/test-fixtures/*.ts"
-      ]
+      ],
+      // generated-artifact-format.ts runs the oxfmt binary as a process, which
+      // knip cannot see; filtered installs need it declared here.
+      "ignoreDependencies": ["oxfmt"]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries

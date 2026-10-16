@@ -49,14 +49,21 @@ export const withGeneratedOutputCache = async ({
       ),
     ].toSorted();
   const generated = outputs.map((pattern) => new Bun.Glob(pattern));
+  // A leading "!" excludes matches, as in Turbo inputs: files other tasks
+  // write while this generator runs (package builds) are not its sources.
+  const included = inputs.filter((pattern) => !pattern.startsWith("!"));
+  const excluded = inputs
+    .filter((pattern) => pattern.startsWith("!"))
+    .map((pattern) => new Bun.Glob(pattern.slice(1)));
   const inputHash = () => {
     const hash = createSha256();
     hash.update(
       JSON.stringify([Bun.version, environment, name, inputs, outputs]),
     );
-    for (const file of scan(inputs)) {
+    for (const file of scan(included)) {
       if (
         generated.some((glob) => glob.match(file)) ||
+        excluded.some((glob) => glob.match(file)) ||
         file.includes("/node_modules/") ||
         file.includes("/.cache/") ||
         file.includes("/.turbo/")

@@ -175,3 +175,47 @@ test("retains the current and most recently used successful identities", async (
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("excluded inputs may change during generation while sources may not", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
+  const run = (generate: () => Promise<void>) =>
+    withGeneratedOutputCache({
+      root,
+      name: "fixture",
+      environment: "test",
+      inputs: ["packages/**", "!packages/**/dist/**"],
+      outputs: ["generated/*.txt"],
+      generate,
+    });
+  const writeOutput = async () => {
+    await mkdir(path.join(root, "generated"), { recursive: true });
+    await writeFile(path.join(root, "generated/value.txt"), "value");
+  };
+  try {
+    await mkdir(path.join(root, "packages/a/src"), { recursive: true });
+    await mkdir(path.join(root, "packages/b/dist"), { recursive: true });
+    await writeFile(path.join(root, "packages/a/src/index.ts"), "source");
+    // Another package's build output appears mid-generation: not a source.
+    await run(async () => {
+      await writeFile(path.join(root, "packages/b/dist/index.js"), "built");
+      await writeOutput();
+    });
+    expect(
+      await readFile(path.join(root, "generated/value.txt"), "utf-8"),
+    ).toBe("value");
+    // A source changing mid-generation still refuses the result.
+    await writeFile(path.join(root, "packages/a/src/index.ts"), "changed");
+    const rejected = await rejectionOf(
+      run(async () => {
+        await writeFile(path.join(root, "packages/a/src/index.ts"), "again");
+        await writeOutput();
+      }),
+    );
+    expect(rejected).toMatchObject({ message: "Generation failed: fixture" });
+    expect(Bun.inspect(rejected)).toContain(
+      "Generator fixture changed its source inputs",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
