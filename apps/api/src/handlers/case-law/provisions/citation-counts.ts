@@ -39,6 +39,7 @@ export const readStatuteCitationCountsHandler = async (
   // spelling answered an empty set rather than the counts that exist.
   const countryRead = readPublicLawCountry(query.jurisdiction, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
     parameter: "jurisdiction",
   });
   if (countryRead.kind === "unavailable") {
