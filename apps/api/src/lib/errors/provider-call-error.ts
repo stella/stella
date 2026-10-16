@@ -54,6 +54,8 @@ type ProviderCallErrorOptions = {
   facts?: { status: number; isRetryable?: boolean } | undefined;
   requestId?: string | undefined;
   providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+  /** How long the provider asked to wait before a retry, when it said. */
+  retryAfterMs?: number | undefined;
 };
 
 const diagnostics = new WeakMap<
@@ -68,6 +70,7 @@ export class ProviderCallError extends HandlerError {
   readonly providerStatus: number | undefined;
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
+  readonly retryAfterMs: number | undefined;
 
   get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
     return diagnostics.get(this);
@@ -81,6 +84,7 @@ export class ProviderCallError extends HandlerError {
     facts,
     requestId,
     providerDiagnostic,
+    retryAfterMs,
   }: ProviderCallErrorOptions) {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
@@ -106,6 +110,7 @@ export class ProviderCallError extends HandlerError {
     this.providerStatus = facts?.status;
     this.requestId = requestId;
     this.kind = kind;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
