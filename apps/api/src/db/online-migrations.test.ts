@@ -113,9 +113,9 @@ const CLEANUP_STALL_CONSTRAINTS = [
 
 describe("online migrations", () => {
   /**
-   * The online phase runs inside the migrator's exclusive corpus schema lane,
-   * so a walk or a full-table scan there pauses every corpus writer for its
-   * whole length. The provision state backfill is a scheduler job instead.
+   * The online phase runs inside the release's migrate run, so a walk or a
+   * full-table scan there holds the release for its whole length. The
+   * provision state backfill is a scheduler job instead.
    */
   test("keeps the provision state backfill out of the online phase", () => {
     const repairNames = new Set(
@@ -183,8 +183,7 @@ describe("online migrations", () => {
   });
 
   /**
-   * The migrator runs this phase holding the exclusive corpus schema lane, so
-   * a gate that sleeps until health returns pauses every corpus writer for
+   * A gate that sleeps until health returns would hold the migrate run for
    * that long. A held build ends the phase instead, and nothing after it runs:
    * later steps may depend on the index it would have built.
    */

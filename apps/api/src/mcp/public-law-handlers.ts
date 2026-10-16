@@ -2,7 +2,10 @@ import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/de
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
@@ -36,6 +39,12 @@ export const defaultSearchDecisionsHandler: typeof searchDecisionsHandler =
       await import("@/api/handlers/case-law/decisions/search")
     ).searchDecisionsHandler(args);
 
+export const defaultListCaseLawProvisionDecisions: typeof listCaseLawProvisionDecisions =
+  async (args) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/search")
+    ).listCaseLawProvisionDecisions(args);
+
 export const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
   async (input) =>
     await (
@@ -61,22 +70,22 @@ export const defaultSearchLegislationHandler: typeof searchLegislationHandler =
     ).searchLegislationHandler(body, legislationDb, observer);
 
 export const defaultResolveStatuteExpression: typeof resolveStatuteExpression =
-  async (query, legislationDb) =>
+  async (query, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/by-eli")
-    ).resolveStatuteExpression(query, legislationDb);
+    ).resolveStatuteExpression(query, legislationDb, surface);
 
 export const defaultResolveStatuteWorkVersion: typeof resolveStatuteWorkVersion =
-  async (query, legislationDb) =>
+  async (query, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/by-eli")
-    ).resolveStatuteWorkVersion(query, legislationDb);
+    ).resolveStatuteWorkVersion(query, legislationDb, surface);
 
 export const defaultReadPublicLegislationHandler: typeof readPublicLegislationHandler =
-  async (documentId, legislationDb) =>
+  async (documentId, legislationDb, surface) =>
     await (
       await import("@/api/handlers/legislation/get")
-    ).readPublicLegislationHandler(documentId, legislationDb);
+    ).readPublicLegislationHandler(documentId, legislationDb, surface);
 
 export const defaultListStatuteVersionsHandler: typeof listStatuteVersionsHandler =
   async (options) =>

@@ -1284,6 +1284,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_TELEMETRY_LOCAL_DEBUG",
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
+  "STELLA_GENERATED_STORE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
@@ -1574,6 +1575,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_PR_HEAD",
@@ -1644,6 +1646,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.
   "CODE_QUALITY_PROCESS_GROUP",
+  // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
+  "CODE_CHECK_CONCURRENCY",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",

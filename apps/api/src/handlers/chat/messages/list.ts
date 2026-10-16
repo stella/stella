@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDbError } from "@/api/db/safe-db";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   estimateChatContextPromptTokens,
   estimateChatRevisionNoteTokens,
@@ -432,7 +433,7 @@ const getMessages = createSafeRootHandler(
       messages: windowedMessages.map((message) => ({
         id: message.id,
         role: message.role,
-        parts: message.content.data,
+        parts: chatMessageFromPersisted(message).parts,
       })),
       summary: checkpoint
         ? {
