@@ -674,13 +674,36 @@ const noMatterAccessContextEscape = {
           !stored &&
           (node.type === "CallExpression" || node.type === "NewExpression") &&
           node.arguments.some((argument) => isCapturingFunction(argument)) &&
-          !isAwaitedWithin(node)
+          (isScheduling(node) || !isAwaitedWithin(node))
         ) {
           context.report({ node, message });
         }
         for (const child of children(node)) {
           visit(child, nested || isFunction(child));
         }
+      };
+      // These never wait for the callback, so awaiting their result settles
+      // nothing (a timer handle, forEach's undefined).
+      const SCHEDULERS = new Set([
+        "setTimeout",
+        "setInterval",
+        "setImmediate",
+        "queueMicrotask",
+        "nextTick",
+        "forEach",
+        "addEventListener",
+        "on",
+        "once",
+      ]);
+      const isScheduling = (call) => {
+        const callee = call.callee;
+        const name =
+          callee.type === "Identifier"
+            ? callee.name
+            : callee.type === "MemberExpression" && !callee.computed
+              ? callee.property.name
+              : undefined;
+        return name !== undefined && SCHEDULERS.has(name);
       };
       const isCapturingFunction = (argument) =>
         ((argument.type === "ArrowFunctionExpression" ||

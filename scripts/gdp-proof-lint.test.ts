@@ -285,6 +285,8 @@ describe("GDP proof anti-forgery rules", () => {
       `async (context) => { setTimeout(() => checkedWrite(context), 0); return Result.ok(1); }`,
       `async ({ tx, proof }) => { const later = async () => await write({ tx, proof }); queueMicrotask(later); return Result.ok(1); }`,
       `async ({ tx, proof }) => { items.forEach(async (item) => await write({ tx, proof, item })); return Result.ok(1); }`,
+      `async (context) => { await setTimeout(() => checkedWrite(context), 0); return Result.ok(1); }`,
+      `async ({ tx, proof }) => { await items.forEach(async (item) => await write({ tx, proof, item })); return Result.ok(1); }`,
       `async ({ tx, proof }) => { await Promise.all(items.map(async (item) => { setTimeout(() => write({ tx, proof, item }), 0); })); return Result.ok(1); }`,
     ]) {
       expect(
