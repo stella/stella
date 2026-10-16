@@ -26,3 +26,20 @@ analytics.captureException((await client.items.get()).error);
     ),
   ).toEqual([4, 7, 15, 16]);
 });
+
+test("allows normalized Eden failures and unrelated telemetry errors", async () => {
+  expect(
+    await lintSingleRule(
+      "no-raw-eden-telemetry",
+      `import { api as client } from "@/lib/api";
+const response = await client.items.get();
+const { error: failure } = response;
+analytics.captureError(toAPIError(failure));
+analytics.captureException(unwrapEden(response));
+const unrelated = await otherClient.items.get();
+analytics.captureError(unrelated.error);
+function caught(error) { analytics.captureError(error); }
+`,
+    ),
+  ).toEqual([]);
+});
