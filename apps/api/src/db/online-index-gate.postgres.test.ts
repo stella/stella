@@ -333,7 +333,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           },
         });
       // The cancelled run returns instead of sleeping, so a migrator can
-      // release its schema lane before the retry.
+      // re-read its ledger before the retry.
       expect(await run()).toEqual({
         type: "deferred",
         index: fixture.name,

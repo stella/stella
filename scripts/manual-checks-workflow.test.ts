@@ -105,6 +105,20 @@ const workflowProblems = (text: string): string[] => {
   if (upload?.with?.["name"] !== "manual-check-result") {
     problems.push("artifact");
   }
+  for (const name of [
+    "Record typecheck parity report",
+    "Upload typecheck parity report",
+  ]) {
+    const reportStep = workflow.jobs.check.steps.find(
+      (step) => step.name === name,
+    );
+    if (
+      reportStep?.if !==
+      `\${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}`
+    ) {
+      problems.push("parity-report");
+    }
+  }
   return problems;
 };
 
@@ -149,6 +163,11 @@ test("workflow preserves the dispatch-only least-privilege contract", () => {
       "artifact",
       "name: manual-check-result\n          path:",
       "name: wrong-result\n          path:",
+    ],
+    [
+      "parity-report",
+      "inputs.check == 'typecheck-parity' && steps.run-check.outcome",
+      "inputs.check == 'lint' && steps.run-check.outcome",
     ],
   ];
   for (const [problem, before, after] of mutations) {

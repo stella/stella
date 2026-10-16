@@ -40,6 +40,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "reader-answers": {
+    load: async () => {
+      const { ReaderAnswersPlayground } =
+        await import("./-components/reader-answers-playground");
+      return { default: ReaderAnswersPlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =

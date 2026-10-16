@@ -173,6 +173,7 @@
       "heldDescription": "هذه المقتطفات <strong>غير مؤكدة المعنى بالفعل</strong>؛ فالمحتوى مؤقت أو غير مؤكد، وليس مجرد محتوى مكتوب بخط اليد. وتُستبعد من التقييم إلى أن يؤكدها المراجع أو يحررها أو يعيد كتابتها. ولا يُحال أي مصدر مقروء للمراجعة لمجرد وسيطه.",
       "heldForReview": "محجوزة للمراجعة",
       "holdOutOfScoring": "الاستبعاد من التقييم",
+      "inScoring": "ضمن التقييم",
       "includeInScoring": "الإدراج في التقييم",
       "interpretationNote": "ملاحظة تفسيرية",
       "interpretationNotePlaceholder": "إذا كان معنى هذا الدليل محل خلاف، فاذكر وجه الخلاف. واتركه فارغًا إن لم يكن كذلك.",
@@ -748,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
         "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
         "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
+        "retryAfter": "يمكنك المحاولة مرة أخرى بعد {time}.",
         "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
         "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
       },
@@ -1294,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
     },
+    "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
     "improvePromptDraftChanged": "تغيّرت المسودة، لذلك لم يُطبّق التحسين.",
     "improvePromptPlainTextOnly": "تحسين الطلب متاح للنص العادي فقط.",
@@ -1325,6 +1328,7 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "messageUnavailable": "لا يمكن عرض هذه الرسالة.",
     "mockModel": {
       "description": "ردود ثابتة من نموذج المحاكاة المحلي",
       "label": "ذكاء اصطناعي مُحاكى"
@@ -1502,6 +1506,7 @@
     },
     "tool": {
       "add_comment": "إضافة تعليق",
+      "add_matter_member": "إضافة عضو إلى ملف قانوني",
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",
       "ares_lookup_company": "البحث في سجلات الشركات",
       "ares_search_companies": "البحث في سجلات الشركات",
@@ -1558,7 +1563,6 @@
       "list_stories": "سرد أجزاء المستند",
       "list_templates": "سرد القوالب",
       "load-skill": "قراءة الإرشادات",
-      "manage_organization": "إدارة المؤسسة",
       "read-contact": "قراءة جهة الاتصال",
       "read-content-across-matters": "قراءة المحتوى عبر الملفات القانونية",
       "read-skill-resource": "قراءة الإرشادات",
@@ -1568,6 +1572,7 @@
       "read_section": "قراءة قسم",
       "read_story": "قراءة جزء من المستند",
       "remember": "الحفظ في الذاكرة",
+      "remove_matter_member": "إزالة عضو من ملف قانوني",
       "reply_comment": "الرد على التعليق",
       "request_secret": "طلب بيانات اعتماد خاصة",
       "resolve_comment": "حل التعليق",
@@ -1601,6 +1606,7 @@
       "suggest_template_fields": "اقتراح حقول القالب",
       "unknown": "استخدام أداة",
       "update-entity-fields": "تحديث البيانات الوصفية",
+      "update_organization_settings": "تحديث إعدادات الفريق",
       "update_reader_annotation": "تعديل التمييز أو التعليق",
       "use-browser": "استخدام متصفحك",
       "use_connector_secret": "استخدام بيانات اعتماد الموصل",
@@ -2086,6 +2092,7 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "website": "موقع الويب",
+    "whenToUse": "متى يُستخدَم",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -2565,6 +2572,10 @@
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
+      "validationInvalid": "يحتوي حقل على قيمة لا يمكن حفظها.",
+      "validationRequired": "حقل مطلوب فارغ.",
+      "validationTooLong": "طويل جدًا: استخدم {limit, number} حرفًا كحد أقصى.",
+      "validationTooShort": "قصير جدًا: استخدم {limit, number} حرفًا على الأقل.",
       "verificationActiveLimitReached": "وصلت مؤسستك إلى الحد الأقصى لعمليات التحقق المتزامنة. انتظر حتى تكتمل إحدى عمليات التحقق، ثم حاول مرة أخرى.",
       "verificationDailyLimitReached": "وصلت مؤسستك إلى الحد اليومي لعمليات التحقق. حاول مرة أخرى بعد منتصف الليل (Europe/Prague).",
       "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
@@ -3660,6 +3671,10 @@
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
       "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invocationAuto": "تلقائيًا",
+      "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
+      "invocationManual": "عند الاستدعاء فقط",
+      "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4521,6 +4536,25 @@
     },
     "tokenHelp": "كيفية الحصول على رمز وصول",
     "viewOnGithub": "العرض على GitHub"
+  },
+  "readerAnswers": {
+    "budgetError": "نفدت الميزانية المخصصة للإجابات.",
+    "citation": "¶{paragraph}",
+    "expand": "توسيع الإجابة",
+    "explain": "شرح",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "طرح سؤال متابعة",
+    "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
+    "loading": "جارٍ توليد الإجابة…",
+    "minimise": "طي الإجابة",
+    "modelError": "لم يتمكن النموذج من إكمال هذه الإجابة.",
+    "networkError": "انقطع الاتصال. حاول مرة أخرى.",
+    "regenerate": "إعادة توليد الإجابة",
+    "selectionError": "حدد نصًا ضمن فقرة واحدة (حتى 2000 حرف).",
+    "send": "إرسال سؤال المتابعة",
+    "share": "مشاركة مع الفريق",
+    "timeoutError": "انتهت مهلة توليد الإجابة. حاول مرة أخرى.",
+    "title": "إجابة عن النص المحدد"
   },
   "routeError": {
     "backToMatters": "العودة إلى الملفات القانونية",
@@ -5568,7 +5602,6 @@
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
-    "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
   "timesheets": {
