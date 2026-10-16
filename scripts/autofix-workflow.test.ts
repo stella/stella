@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
-import * as v from "valibot";
 
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
@@ -32,15 +31,26 @@ const RESOLUTION_SOURCE_URLS = RESOLUTION_SCRIPTS.map(
   (script) => new URL(script.replace("scripts/", ""), import.meta.url),
 );
 
-const autofixTriggerPaths = () =>
-  v.parse(
-    v.object({
-      on: v.looseObject({
-        pull_request: v.looseObject({ paths: v.array(v.string()) }),
-      }),
-    }),
-    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
-  ).on.pull_request.paths;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// This test runs before the dependency install, so it narrows the workflow by
+// hand instead of with a schema library.
+const autofixTriggerPaths = (): string[] => {
+  const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
+  const on = isRecord(workflow) ? workflow["on"] : undefined;
+  const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
+  const paths: unknown = isRecord(pullRequest)
+    ? pullRequest["paths"]
+    : undefined;
+  if (
+    !Array.isArray(paths) ||
+    !paths.every((path): path is string => typeof path === "string")
+  ) {
+    throw new TypeError("autofix must declare pull_request paths");
+  }
+  return paths;
+};
 
 // Workflow files are never format or lint targets, so only a workflow that a
 // generator or the Tauri alignment reads (or this workflow) can need autofix.
@@ -63,9 +73,6 @@ test("the PR trigger drops exactly the workflow files autofix never reads", () =
     ...workflows,
   ]);
 });
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const namedCiStep = (workflow: unknown, name: string) => {
   if (!isRecord(workflow)) {
