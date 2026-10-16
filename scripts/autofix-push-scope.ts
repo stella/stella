@@ -17,7 +17,10 @@
 //   baseline writer scans, or a prunable baseline itself.
 //
 // Without a settled commit the push scope is the whole pull request, which is
-// the behaviour this file narrows.
+// the behaviour this file narrows. A push that changes what the formatter or
+// linter reads (their config, rule plugins, type configs, dependencies or the
+// fixer scripts), for example through a base-branch merge, refixes every pull
+// request file: unchanged files can now format or lint differently.
 
 import { PRUNABLE_BASELINES } from "./autofix-baseline-prune";
 import {
@@ -35,6 +38,32 @@ const PRUNABLE_PATHS = new Set<string>(
   PRUNABLE_BASELINES.map(({ path }) => path),
 );
 
+// What the format and lint fixers read besides the files they fix. Generator
+// sources need no entry: each generator declares them as inputs.
+const FIXER_INPUTS = [
+  ".oxfmtrc.json",
+  "oxlint.config.ts",
+  ".oxlint-plugins/**",
+  "scripts/oxlint-presets/**",
+  "**/tsconfig*.json",
+  "**/package.json",
+  "bun.lock",
+  "bunfig.toml",
+  "patches/**",
+  "types/**",
+  ".github/workflows/autofix.yml",
+  "scripts/autofix-*.ts",
+  "scripts/ci-generated-sources.ts",
+  "scripts/typecheck-coverage.ts",
+  "scripts/check-format-environment.ts",
+] as const;
+
+/** Whether a change among `files` can alter what format or lint produce. */
+export const fixerInputChanged = (files: readonly string[]) =>
+  files.some((file) =>
+    FIXER_INPUTS.some((glob) => new Bun.Glob(glob).match(file)),
+  );
+
 /** Whether a stale-baseline writer can see a change among `files`. */
 const pruneInputChanged = (files: readonly string[]) =>
   files.some((file) => PRUNE_SOURCE.test(file) || PRUNABLE_PATHS.has(file));
@@ -43,6 +72,8 @@ export type AutofixPlan = {
   generators: Generator[];
   /** Pull request files that changed since the settled commit. */
   scoped: string[];
+  /** The push changed a fixer input, so every pull request file is refixed. */
+  refix: boolean;
   prune: boolean;
   /** False only when no fixer, generator or pruner has anything to do. */
   needed: boolean;
@@ -71,7 +102,8 @@ export const planAutofix = ({
       touched.has(id),
     );
   }
-  const pushed = push === null ? null : new Set(push);
+  const refix = push !== null && fixerInputChanged(push);
+  const pushed = push === null || refix ? null : new Set(push);
   const scoped =
     pushed === null
       ? [...pullRequestFiles]
@@ -79,6 +111,7 @@ export const planAutofix = ({
   return {
     generators: orderGenerators(generators),
     scoped,
+    refix,
     prune: pruneInputChanged(scoped),
     needed: generators.length > 0 || scoped.length > 0,
   };

@@ -622,6 +622,13 @@ describe("changed-file autofix boundary", () => {
     expect(changed).toContain(
       'cp "$RUNNER_TEMP/autofix-changed-paths" "$RUNNER_TEMP/autofix-fix-paths"',
     );
+    // A changed fixer input drops the push scope for the fixers.
+    expect(changed).toContain(
+      `SINCE_SHA: \${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}`,
+    );
+    expect(job.slice(0, derivedJob)).toContain(
+      `refix: \${{ steps.scope.outputs.refix }}`,
+    );
     expect(job.slice(tauriStep, fixStep)).toContain(
       'done < "$RUNNER_TEMP/autofix-fix-paths"',
     );

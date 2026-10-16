@@ -336,6 +336,7 @@ jobs:
       prune: ${{ steps.scope.outputs.prune }}
       needed: ${{ steps.scope.outputs.needed }}
       since: ${{ steps.settled.outputs.since }}
+      refix: ${{ steps.scope.outputs.refix }}
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -501,7 +502,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          SINCE_SHA: ${{ needs.regenerate-scope.outputs.since }}
+          # A push that changed a fixer input refixes every changed path.
+          SINCE_SHA: ${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}
         run: |
           set -euo pipefail
           if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then

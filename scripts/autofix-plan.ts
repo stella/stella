@@ -48,6 +48,7 @@ switch (mode) {
     console.log(`run=${selected.length > 0}`);
     console.log(`ids=${selected.map((generator) => generator.id).join(",")}`);
     console.log(`allowed=${allowedOutputs(selected).join("|")}`);
+    console.log(`refix=${plan.refix}`);
     console.log(`prune=${plan.prune}`);
     console.log(`needed=${plan.needed}`);
     break;

@@ -62,10 +62,30 @@ describe("push-scoped autofix plan", () => {
     expect(plan).toEqual({
       generators: [],
       scoped: [],
+      refix: false,
       prune: false,
       needed: false,
     });
   });
+
+  test.each([
+    "oxlint.config.ts",
+    ".oxfmtrc.json",
+    ".oxlint-plugins/rules/example.ts",
+    "apps/api/tsconfig.json",
+    "bun.lock",
+  ])(
+    "a base-branch merge that changes fixer input %s refixes every pull request file",
+    (input) => {
+      const files = [SCHEMA, DOC];
+      const plan = planAutofix({ pullRequestFiles: files, pushFiles: [input] });
+
+      expect(plan.refix).toBe(true);
+      expect(plan.scoped).toEqual(files);
+      expect(plan.prune).toBe(true);
+      expect(plan.needed).toBe(true);
+    },
+  );
 
   test("without a settled commit the whole pull request is in scope", () => {
     const files = [SCHEMA, DOC, "apps/web/src/main.tsx"];
