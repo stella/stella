@@ -632,6 +632,11 @@ const noMatterAccessContextEscape = {
         }
       };
       collectClosures(callback.body);
+      // A capturing function, declared or bound, carries the context wherever
+      // it goes (a return, an outer store), not only into a call.
+      for (const name of closureNames) {
+        names.add(name);
+      }
       const local = declaredWithin(callback.body);
       const isOuter = (target) => {
         const root = rootIdentifier(target);
