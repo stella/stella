@@ -15,7 +15,6 @@ import { useShallow } from "zustand/shallow";
 
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 
-import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { clearAnonymization } from "@/components/inspector/anonymize-pdf";
 import {
   ChatTabPanel,
@@ -124,19 +123,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const navigate = useNavigate();
   const setPdfViewerState = useWorkspaceStore((s) => s.setPdfViewerState);
   const panelQueryClient = useQueryClient();
-  const routeMatterMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId",
-    shouldThrow: false,
-  });
-  const routeChatMatterMatch = useMatch({
-    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
-    shouldThrow: false,
-  });
-  // Retained tabs keep their own matter; a new rail chat belongs to the route.
-  const newChatWorkspaceId = resolveSidebarWorkspaceId({
-    workspaceId: routeMatterMatch?.params.workspaceId,
-    chatWorkspaceId: routeChatMatterMatch?.params.workspaceId,
-  });
 
   // Originating matter — surfaced in every tab header as
   // "label · Matter" so users always know which matter the tab
@@ -503,7 +489,6 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             onOpenChat={openChat}
             onSetMinimized={setMinimized}
             tabs={tabs}
-            workspaceId={newChatWorkspaceId}
           />
         </div>
 
