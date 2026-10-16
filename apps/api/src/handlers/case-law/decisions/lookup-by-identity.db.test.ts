@@ -30,6 +30,7 @@ import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -433,7 +434,7 @@ test("a typed reference resolves only through identifiers of its own type", asyn
 
 test("EU ECLI resolution returns one decision with its stored language versions", async () => {
   const admitted = admitLawRead({
-    organizationId: createSafeId<"organization">(),
+    organizationId: mintAuthProviderId<"organization">(),
     publicLawEnabled: () => true,
   });
   if (Result.isError(admitted)) {
@@ -461,10 +462,11 @@ test("EU ECLI resolution returns one decision with its stored language versions"
   }
   expect(result.document.ecli).toBe(euEcli);
   expect(result.document.country).toBe("EU");
-  expect(euVersions).toContainEqual({
-    id: result.document.decisionId,
-    language: result.document.language,
-  });
+  const { decisionId } = result.document;
+  const selectedVersion =
+    euVersions.find(({ id }) => id === decisionId) ??
+    panic("EU resolution returned a decision outside its language group");
+  expect(result.document.language).toBe(selectedVersion.language);
   expect(result.document.languageAlternates).toEqual(
     euVersions.map(({ id, language }) => ({
       decisionId: String(id),
