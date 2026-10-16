@@ -67,7 +67,7 @@ on:
 # runs remain isolated. Main calls coalesce under a child group distinct from
 # the caller's group.
 concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled","enqueued"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.workflow || inputs.heavy_only == true && format('main-heavy-suites-{0}', inputs.sha) || github.workflow }}-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'ci-' || '' }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref || github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && format('pr-{0}-{1}-meta', github.event.pull_request.number, github.event.pull_request.head.sha) || github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref) || format('run-{0}', github.run_id) }}
   cancel-in-progress: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}
 
 permissions: {}
@@ -477,7 +477,8 @@ jobs:
             }
             const mergeGroup = context.eventName === "merge_group";
             const metadataAction = context.eventName === "pull_request"
-              && ["labeled", "unlabeled", "auto_merge_enabled", "enqueued"].includes(context.payload.action)
+              // enqueued keeps its queue-validation path and its ci-result.
+              && ["labeled", "unlabeled", "auto_merge_enabled"].includes(context.payload.action)
               // A draft runs no CI, so ready_for_review starts the first code
               // run, and prove-fix changes suite scope: both own ci-result.
               && context.payload.label?.name !== "prove-fix";
@@ -8191,7 +8192,7 @@ jobs:
     # A metadata run has a distinct check name. It can reuse a completed code
     # run or exercise a changed scope, but can never overwrite the required
     # ci-result while that code run is pending or failed.
-    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled","enqueued"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
+    name: ${{ github.event_name == 'pull_request' && (contains(fromJSON('["labeled","unlabeled","auto_merge_enabled"]'), github.event.action) && github.event.label.name != 'prove-fix') && 'ci-metadata-result' || 'ci-result' }}
     if: always()
     needs:
       [
