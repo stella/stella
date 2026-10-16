@@ -23,6 +23,7 @@ const SELLER_PROFILE_GET_COLUMNS = {
   legalName: true,
   registrationId: true,
   vatId: true,
+  vatPayer: true,
   addressLine1: true,
   addressLine2: true,
   city: true,

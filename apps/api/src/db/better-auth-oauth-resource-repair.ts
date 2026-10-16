@@ -22,9 +22,9 @@
  * reimplementing their semantics, which is what keeps a resource seeded by a
  * deploy identical to one seeded by the cutover: a missing resource is
  * inserted, and a matching one is left alone. Before seeding, a stored Stella
- * resource whose scopes an earlier release configured differently is brought
- * to this release's scopes (`reconcileStoredScopes`); every other conflicting
- * definition refuses the transaction. The identity half of the cutover
+ * resource whose scopes or name an earlier release configured differently is
+ * brought to this release's policy (`reconcileStoredResources`); every other
+ * conflicting definition refuses the transaction. The identity half of the cutover
  * (`backfillAccounts`) stays private to that command; it needs the manifest and
  * the freeze, and nothing about adding an audience touches identities.
  *
@@ -59,7 +59,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
 import { executedRows } from "../lib/db/executed-rows";
 import { isRecord } from "../lib/type-guards";
-import { buildBetterAuthOAuthResources } from "../mcp/resource-policy-contract";
+import {
+  buildBetterAuthOAuthResources,
+  releasedOAuthResourceNames,
+} from "../mcp/resource-policy-contract";
 import {
   backfillOAuthClients,
   seedOAuthResources,
@@ -201,17 +204,20 @@ const readStoredPolicies = async (
 };
 
 /**
- * Brings every stored Stella resource to the scopes this release configures.
+ * Brings every stored Stella resource to the scopes and name this release
+ * configures.
  *
  * The scope sets are code: a release that moves a tool between audiences, or
  * gives one audience a new scope, changes `buildBetterAuthOAuthResources()`,
  * and the boot census then accepts only the new set. So the deploy rewrites a
  * stored row whose scopes differ, in both directions, before the seeder checks
  * it. Trust stays narrow: the row must be one of this deployment's configured
- * identifiers with the configured name, enabled, and hold only scopes that
- * some configured resource still grants. Anything else (a foreign scope, a
- * renamed or disabled audience) is left untouched for the seeder to refuse,
- * because that is a policy this code never wrote.
+ * identifiers with the configured name or a name an earlier release
+ * configured for that same audience (`releasedOAuthResourceNames`), enabled,
+ * and hold only scopes that some configured resource still grants. A released
+ * name is rewritten to the configured one alongside the scopes. Anything else
+ * (a foreign scope, an unknown name, a disabled audience) is left untouched
+ * for the seeder to refuse, because that is a policy this code never wrote.
  *
  * A scope a resource loses but another configured resource still grants has
  * moved audiences. Consents that covered the narrowed resource and hold that
@@ -221,7 +227,7 @@ const readStoredPolicies = async (
  * the narrowed resource refreshes with the scopes that resource still allows,
  * and the moved scope is only ever served by the resource it moved to.
  */
-const reconcileStoredScopes = async (
+const reconcileStoredResources = async (
   transaction: BoundTransaction,
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
 ): Promise<void> => {
@@ -234,7 +240,8 @@ const reconcileStoredScopes = async (
     if (
       current === undefined ||
       current.disabled ||
-      current.name !== resource.name ||
+      (current.name !== resource.name &&
+        !releasedOAuthResourceNames(resource.name).includes(current.name)) ||
       current.allowedScopes === null ||
       !current.allowedScopes.every((scope) => vocabulary.has(scope))
     ) {
@@ -242,7 +249,10 @@ const reconcileStoredScopes = async (
     }
     const before = sortedScopes(current.allowedScopes);
     const after = sortedScopes(resource.allowedScopes);
-    if (JSON.stringify(before) === JSON.stringify(after)) {
+    if (
+      JSON.stringify(before) === JSON.stringify(after) &&
+      current.name === resource.name
+    ) {
       return [];
     }
     return [
@@ -250,6 +260,8 @@ const reconcileStoredScopes = async (
         added: after.filter((scope) => !before.includes(scope)),
         allowedScopes: after,
         identifier: resource.identifier,
+        name: resource.name,
+        previousName: current.name,
         removed: before.filter((scope) => !after.includes(scope)),
       },
     ];
@@ -261,22 +273,24 @@ const reconcileStoredScopes = async (
   await transaction.execute(sql`
     WITH expected AS (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(changes)}::text::jsonb)
-        AS policy(identifier text, "allowedScopes" jsonb)
+        AS policy(identifier text, name text, "allowedScopes" jsonb)
     )
     UPDATE oauth_resource actual
        SET allowed_scopes = ARRAY(
              SELECT jsonb_array_elements_text(expected."allowedScopes")
            ),
+           name = expected.name,
            updated_at = now()
       FROM expected
      WHERE actual.identifier = expected.identifier
   `);
-  for (const { added, identifier, removed } of changes) {
+  for (const { added, identifier, name, previousName, removed } of changes) {
     writeRepairEvent({
       added,
       event: "oauth_resource_scopes_reconciled",
       identifier,
       removed,
+      ...(name === previousName ? {} : { name, previousName }),
     });
   }
 
@@ -348,7 +362,7 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
     );
     const transaction = bindTo(connection);
 
-    await reconcileStoredScopes(transaction, expectedResources);
+    await reconcileStoredResources(transaction, expectedResources);
 
     const seeded = await seedOAuthResources(transaction, expectedResources);
     if (Result.isError(seeded)) {

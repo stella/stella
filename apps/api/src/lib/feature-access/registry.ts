@@ -1,4 +1,5 @@
 // parser-output-unchanged: registering desktop activity access leaves existing ingestion features and parsed records unchanged.
+// parser-output-unchanged: assigning the sample case handlers to list verification leaves parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -123,6 +124,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
+        "apps/api/src/handlers/lists/sample-case",
         "apps/api/src/handlers/lists/items/fact-details",
         "apps/api/src/handlers/lists/items/sources/verification",
       ],

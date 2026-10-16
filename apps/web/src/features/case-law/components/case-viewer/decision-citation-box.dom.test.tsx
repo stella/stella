@@ -89,7 +89,14 @@ const mount = () => {
     const options = decisionCitationsInfiniteOptions(decisionId, direction);
     client.setQueryData(options.queryKey, {
       pageParams: [null],
-      pages: [{ items: [], nextCursor: null, limit: 20 }],
+      pages: [
+        {
+          items: [],
+          nextCursor: null,
+          limit: 20,
+          doctrineAvailability: "unavailable",
+        },
+      ],
     });
   }
   const provisions = decisionProvisionsInfiniteOptions(decisionId);
@@ -148,6 +155,8 @@ const mount = () => {
         status: { type: "legacy" },
         generation: "0",
         publishedProjectionDigest: null,
+        capability: { type: "supported", languages: ["cs"] },
+        pendingSince: null,
       },
     ],
   });

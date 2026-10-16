@@ -62,7 +62,7 @@ export const SearchMatterPreview = ({
     {
       label: "workspaces.parties.client",
       value: data
-        ? (data.client?.displayName ?? t("workspaces.ownerType.personal"))
+        ? (data.client?.displayName ?? t("workspaces.parties.personalLabel"))
         : undefined,
     },
     {

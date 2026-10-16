@@ -16,6 +16,7 @@ import {
   analyzeModule,
   selectApiTestImpact,
 } from "./api-test-impact";
+import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const withRepository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
@@ -113,7 +114,7 @@ test("every full-suite rule widens a readable graph", () => {
       expect(selectApiTestImpact({ root, changed: [file] }), name).toEqual({
         mode: "all",
         files: [],
-        shards: 4,
+        shards: API_TEST_SHARD_IDS.length,
       });
     }
     for (const file of [
@@ -333,7 +334,7 @@ test("duration budgeting uses selected work only and never creates an empty shar
         changed: ["apps/api/src/handler.ts"],
         durationPath,
       }).shards,
-    ).toBe(4);
+    ).toBe(API_TEST_SHARD_IDS.length);
     write(
       "duration-cache.json",
       JSON.stringify({

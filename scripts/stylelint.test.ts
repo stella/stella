@@ -48,6 +48,8 @@ describe("CSS correctness guard", () => {
       "rule-selector-property-disallowed-list",
       "@keyframes grow { from { height: 0; } to { height: 100%; } }",
     ],
+    // conventions-ux: dynamic viewport units, never the largest viewport.
+    ["unit-disallowed-list", ".sample { max-height: calc(100vh - 3rem); }"],
     [
       "rule-selector-property-disallowed-list",
       "@keyframes shift { 0%, 40% { inset-inline-start: 0; } 100% { inset-inline-start: 1rem; } }",
@@ -71,6 +73,8 @@ describe("CSS correctness guard", () => {
         color: red;
         color: color-mix(in oklch, var(--color-brand), transparent 20%);
         padding-inline: 1rem;
+        max-height: calc(100dvh - 3rem);
+        min-height: 100svh;
         &:focus-visible { outline: 2px solid currentColor; }
       }
     `);
