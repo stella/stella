@@ -16,10 +16,9 @@ import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-s
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
 import {
-  MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
-  MANAGE_ORGANIZATION_SETTINGS_PROJECTION,
-  MANAGE_ORGANIZATION_PROJECTION,
+  ADD_MATTER_MEMBER_PROJECTION,
+  REMOVE_MATTER_MEMBER_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
@@ -59,12 +58,13 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
-import { selectOperationByValue } from "@/api/mcp/write-tool-authority";
 
 type ResearchAdminToolName =
   | "search_boe_legislation"
   | "list_audit_log"
-  | "manage_organization";
+  | "add_matter_member"
+  | "remove_matter_member"
+  | "update_organization_settings";
 
 /** Consolidated-law relation kinds accepted by search_boe_legislation `relation_type`. */
 const RELATION_TYPE_VALUES = [
@@ -84,13 +84,6 @@ const BOE_OFFSET_CURSOR = /^\d{1,5}$/u;
 
 const isBoeOffsetCursor = (value: string): boolean =>
   BOE_OFFSET_CURSOR.test(value);
-
-/** Discriminator for the manage_organization admin write tool. */
-export const MANAGE_ORG_ACTIONS = [
-  "add_member",
-  "remove_member",
-  "update_org_settings",
-] as const;
 
 const DATE_ONLY_BOUND = /^\d{4}-\d{2}-\d{2}$/u;
 const ISO_TIMESTAMP_BOUND =
@@ -695,55 +688,58 @@ const handleListAuditLogTool: McpToolHandler<
   );
 };
 
-// --- manage_organization ------------------------------------------------
+// --- Matter membership and organization settings -------------------------
 
-const manageOrganizationArgsSchema = nullAsAbsent(
+const addMatterMemberArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID"),
+    user_id: v.pipe(
+      v.string(),
+      v.nonEmpty(),
+      v.description("Existing organization member ID"),
+    ),
+  }),
+);
+
+const removeMatterMemberArgsSchema = nullAsAbsent(
+  v.strictObject({
+    matter_id: uuidInputSchema("Matter ID"),
+    user_id: v.pipe(
+      v.string(),
+      v.nonEmpty(),
+      v.description("Matter member ID"),
+    ),
+    reassign_to: v.optional(
+      v.pipe(
+        v.string(),
+        v.nonEmpty(),
+        v.description("Reassign work to this member; omit to unassign"),
+      ),
+    ),
+    confirm: v.optional(
+      v.pipe(v.boolean(), v.description("True after human approval")),
+    ),
+  }),
+);
+
+const updateOrganizationSettingsArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      action: v.pipe(
-        v.picklist(MANAGE_ORG_ACTIONS),
-        v.description(
-          "Administrative action; the settings fields apply only to update_org_settings",
-        ),
-      ),
-      matter_id: v.optional(
-        uuidInputSchema("Matter ID for add_member and remove_member."),
-      ),
-      user_id: v.optional(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.description("User id to add or remove for the member actions"),
-        ),
-      ),
-      reassign_to: v.optional(
-        v.pipe(
-          v.string(),
-          v.nonEmpty(),
-          v.description(
-            "Replacement matter member for remove_member; omit to leave tasks unassigned",
-          ),
-        ),
-      ),
       matter_number_pattern: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
-          v.maxLength(128),
-          v.description(
-            "Matter-number pattern; send with matter_number_padding",
-          ),
+          v.minLength(LIMITS.matterNumberPatternMinLength),
+          v.maxLength(LIMITS.matterNumberPatternMaxLength),
+          v.description("Number pattern; pair with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
         v.pipe(
           v.number(),
           v.integer(),
-          v.minValue(1),
-          v.maxValue(6),
-          v.description(
-            "Matter-number zero-padding width; send with matter_number_pattern",
-          ),
+          v.minValue(LIMITS.matterNumberPaddingMin),
+          v.maxValue(LIMITS.matterNumberPaddingMax),
+          v.description("Zero-padding width"),
         ),
       ),
       matter_numbering_enabled: v.optional(
@@ -760,39 +756,34 @@ const manageOrganizationArgsSchema = nullAsAbsent(
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
-          v.description("Set automatic PDF searchable-text extraction"),
+          v.description("Automatic PDF text extraction"),
         ),
       ),
       time_minimum_unit_minutes: v.optional(
         v.pipe(
           v.number(),
           v.integer(),
-          v.minValue(1),
-          v.maxValue(60),
-          v.description("Minimum time increment in minutes; must divide 60"),
+          v.minValue(LIMITS.timeMinimumUnitMinutesMin),
+          v.maxValue(LIMITS.timeMinimumUnitMinutesMax),
+          v.description("Minutes per increment; must divide 60"),
         ),
       ),
       time_edit_window_days: v.optional(
         v.pipe(
           v.number(),
           v.integer(),
-          v.minValue(0),
-          v.description("Days a timekeeper may edit an entry"),
+          v.minValue(LIMITS.timeEditWindowDaysMin),
+          v.description("Entry edit window in days"),
         ),
       ),
       time_locked_through_month: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.isoDate())),
-          v.description(
-            "Last day of the latest locked month, or null to unlock",
-          ),
+          v.description("Locked month-end date; null unlocks"),
         ),
       ),
       time_narrative_required: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description("Require a narrative on time entries"),
-        ),
+        v.pipe(v.boolean(), v.description("Require time-entry narrative")),
       ),
       time_zone: v.optional(
         v.pipe(
@@ -804,117 +795,15 @@ const manageOrganizationArgsSchema = nullAsAbsent(
             ),
           ),
           v.description(
-            "IANA time zone, e.g. Europe/Prague; null follows the primary " +
-              "practice jurisdiction",
-          ),
-        ),
-      ),
-      // The CLI's --yes flow injects `confirm: true` for the destructive
-      // remove_member subcommand; the strictObject would otherwise reject it.
-      // Other actions accept but ignore it.
-      confirm: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description(
-            "Required for the remove_member action: must be true to remove a " +
-              "member (an irreversible action). Set it only after a human user " +
-              "has approved the removal; ignored by the other actions.",
+            "IANA zone; null follows the primary practice jurisdiction",
           ),
         ),
       ),
     }),
-    v.partialCheck(
-      [["action"], ["reassign_to"]],
-      ({ action, reassign_to }) =>
-        action === "remove_member" || reassign_to === undefined,
-      "reassign_to is only supported for remove_member",
+    v.check(
+      (input) => Object.values(input).some((value) => value !== undefined),
+      "Provide at least one setting to change",
     ),
-    // Member actions need a matter and a user.
-    v.forward(
-      v.partialCheck(
-        [["action"], ["matter_id"]],
-        ({ action, matter_id }) =>
-          action === "update_org_settings" || matter_id !== undefined,
-        "matter_id is required for add_member and remove_member",
-      ),
-      ["matter_id"],
-    ),
-    v.forward(
-      v.partialCheck(
-        [["action"], ["user_id"]],
-        ({ action, user_id }) =>
-          action === "update_org_settings" || user_id !== undefined,
-        "user_id is required for add_member and remove_member",
-      ),
-      ["user_id"],
-    ),
-    // Org-settings fields belong only to update_org_settings.
-    v.partialCheck(
-      [
-        ["action"],
-        ["matter_number_pattern"],
-        ["matter_number_padding"],
-        ["matter_numbering_enabled"],
-        ["prompt_caching_enabled"],
-        ["document_processing_mode"],
-        ["time_minimum_unit_minutes"],
-        ["time_edit_window_days"],
-        ["time_locked_through_month"],
-        ["time_narrative_required"],
-        ["time_zone"],
-      ],
-      (i) =>
-        i.action === "update_org_settings" ||
-        (i.matter_number_pattern === undefined &&
-          i.matter_number_padding === undefined &&
-          i.matter_numbering_enabled === undefined &&
-          i.prompt_caching_enabled === undefined &&
-          i.document_processing_mode === undefined &&
-          i.time_minimum_unit_minutes === undefined &&
-          i.time_edit_window_days === undefined &&
-          i.time_locked_through_month === undefined &&
-          i.time_narrative_required === undefined &&
-          i.time_zone === undefined),
-      "Settings fields apply only to update_org_settings",
-    ),
-    // matter_id/user_id are meaningless for an org-settings update.
-    v.partialCheck(
-      [["action"], ["matter_id"], ["user_id"]],
-      (i) =>
-        i.action !== "update_org_settings" ||
-        (i.matter_id === undefined && i.user_id === undefined),
-      "matter_id and user_id do not apply to update_org_settings",
-    ),
-    // An org-settings update must change at least one field.
-    v.partialCheck(
-      [
-        ["action"],
-        ["matter_number_pattern"],
-        ["matter_number_padding"],
-        ["matter_numbering_enabled"],
-        ["prompt_caching_enabled"],
-        ["document_processing_mode"],
-        ["time_minimum_unit_minutes"],
-        ["time_edit_window_days"],
-        ["time_locked_through_month"],
-        ["time_narrative_required"],
-        ["time_zone"],
-      ],
-      (i) =>
-        i.action !== "update_org_settings" ||
-        i.matter_number_pattern !== undefined ||
-        i.matter_number_padding !== undefined ||
-        i.matter_numbering_enabled !== undefined ||
-        i.prompt_caching_enabled !== undefined ||
-        i.document_processing_mode !== undefined ||
-        i.time_minimum_unit_minutes !== undefined ||
-        i.time_edit_window_days !== undefined ||
-        i.time_locked_through_month !== undefined ||
-        i.time_narrative_required !== undefined ||
-        i.time_zone !== undefined,
-      "Provide at least one setting to change for update_org_settings",
-    ),
-    // The matter-number pattern and padding are a unit (mirrors the backing).
     v.partialCheck(
       [["matter_number_pattern"], ["matter_number_padding"]],
       ({ matter_number_pattern, matter_number_padding }) =>
@@ -925,51 +814,75 @@ const manageOrganizationArgsSchema = nullAsAbsent(
   ),
 );
 
-const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+const ADD_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
-  description:
-    "Manage organization members and non-secret settings. Member actions " +
-    "require matter_id and user_id; the other fields apply to " +
-    "update_org_settings. Manage provider secrets in the dashboard.",
-  inputSchema: manageOrganizationArgsSchema,
-  jsonSchemaProjectionWaiver: {
-    ignoreActions: ["partial_check"],
-    reason:
-      "The action-conditional field requirements (member vs. settings fields, matter_number_pattern/padding pairing) remain authoritative in the runtime schema.",
-  },
+  name: "add_matter_member",
+  description: "Grant an organization member matter access.",
+  inputSchema: addMatterMemberArgsSchema,
+  nonDestructiveReason:
+    "Only inserts a new matter membership and its audit event; existing membership returns a conflict without changing it.",
   annotations: {
-    title: "Manage organization",
+    title: "Add matter member",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  access: "write",
+  accountAccess: "standard",
+  permissions: { type: "all", permissions: { workspace: ["update"] } },
+  anonymized: { exposure: "excluded", reason: "write" },
+  scope: "stella:admin_write",
+});
+
+const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
+  name: "remove_matter_member",
+  description:
+    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+  inputSchema: removeMatterMemberArgsSchema,
+  annotations: {
+    title: "Remove matter member",
+    readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
+  },
+  access: "write",
+  accountAccess: "standard",
+  permissions: { type: "all", permissions: { workspace: ["update"] } },
+  anonymized: { exposure: "excluded", reason: "write" },
+  destructiveBehavior: { type: "always" },
+  scope: "stella:admin_write",
+});
+
+const UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
+  name: "update_organization_settings",
+  description:
+    "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+  inputSchema: updateOrganizationSettingsArgsSchema,
+  nonDestructiveReason:
+    "Updates reversible non-secret settings without deleting resources or revoking access.",
+  jsonSchemaProjectionWaiver: {
+    ignoreActions: ["check", "partial_check"],
+    reason:
+      "The runtime schema enforces a non-empty update and paired matter-number pattern and padding.",
+  },
+  annotations: {
+    title: "Update organization settings",
     readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
   },
   access: "write",
   accountAccess: "account-control",
-  permissions: selectOperationByValue<(typeof MANAGE_ORG_ACTIONS)[number]>(
-    "action",
-    {
-      add_member: {
-        operation: "add_member",
-        permissions: { workspace: ["update"] },
-      },
-      remove_member: {
-        operation: "remove_member",
-        permissions: { workspace: ["update"] },
-      },
-      update_org_settings: {
-        operation: "update_org_settings",
-        permissions: { organizationSettings: ["update"] },
-      },
-    },
-  ),
-  anonymized: { exposure: "excluded", reason: "write" },
-  destructiveBehavior: {
-    type: "input-discriminator",
-    property: "action",
-    destructiveValues: ["remove_member"],
+  permissions: {
+    type: "all",
+    permissions: { organizationSettings: ["update"] },
   },
-  name: "manage_organization",
+  anonymized: { exposure: "excluded", reason: "write" },
   scope: "stella:admin_write",
 });
 
@@ -982,9 +895,7 @@ const handleAddMember = async ({
   requestedWorkspaceId: string;
   userId: string;
 }): Promise<
-  TypedMcpToolResponse<
-    v.InferInput<typeof MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION>
-  >
+  TypedMcpToolResponse<v.InferInput<typeof ADD_MATTER_MEMBER_PROJECTION>>
 > => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
@@ -1009,7 +920,7 @@ const handleAddMember = async ({
     return internalFailureResult(added.error);
   }
   return toolDataResult(
-    projectionPayload(MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION, {
+    projectionPayload(ADD_MATTER_MEMBER_PROJECTION, {
       memberId: added.value.id,
     }),
   );
@@ -1026,9 +937,7 @@ const handleRemoveMember = async ({
   userId: string;
   reassignTo?: string | undefined;
 }): Promise<
-  TypedMcpToolResponse<
-    v.InferInput<typeof MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION>
-  >
+  TypedMcpToolResponse<v.InferInput<typeof REMOVE_MATTER_MEMBER_PROJECTION>>
 > => {
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
@@ -1055,42 +964,50 @@ const handleRemoveMember = async ({
     return internalFailureResult(removed.error);
   }
   return toolDataResult(
-    projectionPayload(MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION, {
+    projectionPayload(REMOVE_MATTER_MEMBER_PROJECTION, {
       removed: true,
       id: removed.value.id,
     }),
   );
 };
 
-const handleManageOrganizationTool: TypedMcpToolHandler<
-  v.InferInput<typeof MANAGE_ORGANIZATION_PROJECTION>
+const handleAddMatterMemberTool: TypedMcpToolHandler<
+  v.InferInput<typeof ADD_MATTER_MEMBER_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(manageOrganizationArgsSchema, args);
+  const parsed = v.safeParse(addMatterMemberArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  return await handleAddMember({
+    context,
+    requestedWorkspaceId: parsed.output.matter_id,
+    userId: parsed.output.user_id,
+  });
+};
+
+const handleRemoveMatterMemberTool: TypedMcpToolHandler<
+  v.InferInput<typeof REMOVE_MATTER_MEMBER_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(removeMatterMemberArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  return await handleRemoveMember({
+    context,
+    requestedWorkspaceId: parsed.output.matter_id,
+    userId: parsed.output.user_id,
+    reassignTo: parsed.output.reassign_to,
+  });
+};
+
+const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
+  v.InferInput<typeof UPDATE_ORGANIZATION_SETTINGS_PROJECTION>
+> = async ({ args, context }) => {
+  const parsed = v.safeParse(updateOrganizationSettingsArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
   const input = parsed.output;
-
-  if (input.action === "add_member") {
-    // matter_id and user_id are guaranteed present by the schema.
-    return await handleAddMember({
-      context,
-      requestedWorkspaceId: input.matter_id ?? "",
-      userId: input.user_id ?? "",
-    });
-  }
-
-  if (input.action === "remove_member") {
-    // matter_id and user_id are guaranteed present by the schema.
-    return await handleRemoveMember({
-      context,
-      requestedWorkspaceId: input.matter_id ?? "",
-      userId: input.user_id ?? "",
-      reassignTo: input.reassign_to,
-    });
-  }
-
-  // update_org_settings.
   if (!hasEffectiveAuthority(context, { organizationSettings: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1135,20 +1052,24 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
     return internalFailureResult(updated.error);
   }
   return toolDataResult(
-    projectionPayload(MANAGE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),
+    projectionPayload(UPDATE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),
   );
 };
 
 const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
   LIST_AUDIT_LOG_TOOL_DEFINITION,
-  MANAGE_ORGANIZATION_TOOL_DEFINITION,
+  ADD_MATTER_MEMBER_TOOL_DEFINITION,
+  REMOVE_MATTER_MEMBER_TOOL_DEFINITION,
+  UPDATE_ORGANIZATION_SETTINGS_TOOL_DEFINITION,
 ] as const satisfies readonly McpToolDefinition[];
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   search_boe_legislation: handleSearchBoeLegislationTool,
   list_audit_log: handleListAuditLogTool,
-  manage_organization: handleManageOrganizationTool,
+  add_matter_member: handleAddMatterMemberTool,
+  remove_matter_member: handleRemoveMatterMemberTool,
+  update_organization_settings: handleUpdateOrganizationSettingsTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;
 
 export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
@@ -1156,8 +1077,14 @@ export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
   RESEARCH_ADMIN_TOOL_HANDLERS,
   {
     list_audit_log: defineMcpToolOutput(LIST_AUDIT_LOG_OUTPUT_SCHEMA),
-    manage_organization: defineChatProjectionMcpToolOutput(
-      MANAGE_ORGANIZATION_PROJECTION,
+    add_matter_member: defineChatProjectionMcpToolOutput(
+      ADD_MATTER_MEMBER_PROJECTION,
+    ),
+    remove_matter_member: defineChatProjectionMcpToolOutput(
+      REMOVE_MATTER_MEMBER_PROJECTION,
+    ),
+    update_organization_settings: defineChatProjectionMcpToolOutput(
+      UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
     ),
     search_boe_legislation: defineChatProjectionMcpToolOutput(
       SEARCH_BOE_LEGISLATION_PROJECTION,

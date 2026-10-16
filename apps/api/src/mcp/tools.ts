@@ -34,6 +34,7 @@ import {
   resolveMcpToolOutputContract,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { modeAllowsGatewayTools } from "@/api/mcp/gateway/mode-policy";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import {
   agentInputValidationError,
@@ -209,7 +210,7 @@ export const getMcpToolRequiredScopesHint = (
     }
     return [staticTool.scope, ...staticTool.additionalScopes];
   }
-  if (mode !== "default") {
+  if (!modeAllowsGatewayTools(mode)) {
     return undefined;
   }
 

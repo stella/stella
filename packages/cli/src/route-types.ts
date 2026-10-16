@@ -202,11 +202,7 @@ export type CapabilityLeafSpec = {
    * command's `--help` brief; absent entries fall back to an id-derived line.
    */
   description?: string;
-  /**
-   * Read vs. write, from the catalog entry. The executor surfaces the server's
-   * request-id receipt on stderr only for a `write` (a mutation an operator may
-   * need to reference), never for a read.
-   */
+  /** Read vs. write, from the catalog entry. */
   access: "read" | "write";
   flags: readonly CapabilityFlagSpec[];
   /** Part-qualified property paths reachable only through `--input` (spec S3). */

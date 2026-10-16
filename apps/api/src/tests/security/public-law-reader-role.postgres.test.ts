@@ -232,6 +232,7 @@ if (!databaseUrl || !runPostgresTests) {
             resetPublicCaseLawConfigForTesting(readerDb);
             const decision = await withRedistributableSubject(
               readerDb,
+              "pages",
               { kind: "id", id: decisionId },
               async (subject) => await readDecisionHandler({ subject }),
             );

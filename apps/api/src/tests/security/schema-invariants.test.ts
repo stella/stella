@@ -25,12 +25,14 @@ import {
   POLARITY,
   REVIEWABLE_POLARITIES,
 } from "@/api/handlers/case-law/polarity/consts";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 import drizzleConfig from "../../../drizzle.config";
 
 const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
   caseLawDecisions,
@@ -641,6 +643,27 @@ describe("schema invariants", () => {
       [CITATION_REVIEW_ORIGIN.HUMAN_REVIEW],
       AI_CITATION_REVIEW_ORIGINS.toSorted(),
     ]);
+  });
+
+  test("doctrinal CHECK constraints match DOCTRINAL_TREATMENTS", () => {
+    expect(
+      extractCheckValues(
+        caseLawCitations,
+        "citations_doctrinal_treatment_values",
+      ).toSorted(),
+    ).toEqual(DOCTRINAL_TREATMENTS.toSorted());
+    expect(
+      extractCheckValues(
+        caseLawCitationDoctrineReviews,
+        "citation_doctrine_reviews_treatment_values",
+      ).toSorted(),
+    ).toEqual(DOCTRINAL_TREATMENTS.toSorted());
+    expect(
+      extractCheckValues(
+        caseLawCitationDoctrineReviews,
+        "citation_doctrine_reviews_origin_values",
+      ).toSorted(),
+    ).toEqual(CITATION_REVIEW_ORIGINS.toSorted());
   });
 
   test("corpus mirror CHECK constraint matches its domain type", () => {

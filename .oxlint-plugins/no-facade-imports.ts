@@ -32,6 +32,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/org-scope",
   "@/api/db/org-scope-registry",
   "@/api/db/system-scope-policies",
+  "@/api/db/online-migration-connection",
   "@/api/db/rls",
   "@/api/db/root",
   "@/api/db/registration-budget-schema",

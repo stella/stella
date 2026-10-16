@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, getColumns, isNull } from "drizzle-orm";
 
-import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
+import {
+  READER_ANSWER_DEADLINE_MS,
+  READER_ANSWER_MAX_MESSAGES,
+} from "@stll/api-contract/reader-answers";
 import type {
   CreateReaderAnswer,
   ReaderAnswerAnchor,
@@ -28,7 +31,6 @@ import type {
   UnbackedProjectionKeys,
 } from "@/api/lib/projection-totality";
 
-export const READER_ANSWER_DEADLINE_MS = 120_000;
 /** Streaming updatedAt is the claim time; it never renews during admission or generation. */
 export const readerAnswerDeadlineAt = (claimedAt: Date) =>
   claimedAt.getTime() + READER_ANSWER_DEADLINE_MS;
