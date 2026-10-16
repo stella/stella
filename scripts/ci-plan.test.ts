@@ -4135,6 +4135,7 @@ type RunChangedFilesOptions = {
   baseRef?: string;
   changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
   gitShim?: string;
+  eventName?: "pull_request" | "merge_group" | "workflow_dispatch";
 };
 
 const runChangedFilesStep = ({
@@ -4142,6 +4143,7 @@ const runChangedFilesStep = ({
   baseRef = "main",
   changedPath,
   gitShim,
+  eventName = "pull_request",
 }: RunChangedFilesOptions) => {
   const step = jobSteps(ciJobs["ci-plan"]).find(
     ({ name }) => name === "Check changed file scope",
@@ -4214,7 +4216,7 @@ const runChangedFilesStep = ({
 
     const env = {
       BASE_REF: baseRef,
-      EVENT_NAME: "pull_request",
+      EVENT_NAME: eventName,
       GITHUB_OUTPUT: output,
       RUNNER_TEMP: directory,
       PATH: gitShim
@@ -4274,6 +4276,22 @@ test("an unknown diff base plans malware and e2e scans", () => {
   expect(outputs.get("dependency_malware_required")).toBe("true");
   expect(outputs.get("e2e_core_required")).toBe("true");
   expect(outputs.get("service_suites_pr_required")).toBe("true");
+});
+
+test("wide scopes plan dependency checks only for events that run them", () => {
+  expect(
+    runChangedFilesStep({ eventName: "workflow_dispatch" }).get(
+      "dependency_changes_required",
+    ),
+  ).toBe("false");
+  for (const eventName of ["pull_request", "merge_group"] as const) {
+    expect(
+      runChangedFilesStep({ eventName, baseRef: "missing-base" }).get(
+        "dependency_changes_required",
+      ),
+      eventName,
+    ).toBe("true");
+  }
 });
 
 test("a changed-file diff failure plans malware and e2e scans", () => {

@@ -886,7 +886,12 @@ jobs:
               echo "legal_atlas_image_required=true"
               echo "legal_atlas_image_pr_required=true"
               echo "dependency_malware_required=true"
-              echo "dependency_changes_required=true"
+              # The dependency jobs run only for pull requests and merge groups.
+              if [[ "$EVENT_NAME" == pull_request || "$EVENT_NAME" == merge_group ]]; then
+                echo "dependency_changes_required=true"
+              else
+                echo "dependency_changes_required=false"
+              fi
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
