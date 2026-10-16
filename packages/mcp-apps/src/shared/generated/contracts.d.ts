@@ -115,6 +115,18 @@ export type ReaderPage = {
             cited_anchor?: string | undefined;
           };
         }>;
+        provisionStatus: {
+          type:
+            | "out_of_scope"
+            | "withheld"
+            | "unavailable"
+            | "unplaceable"
+            | "failed"
+            | "current"
+            | "stale"
+            | "legacy"
+            | "pending";
+        } | null;
         nextCursor: string | null;
         limit: 60000;
       }
