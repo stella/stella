@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -25,7 +25,7 @@ const rateLimited = (retryAfterMs: number | undefined) =>
   });
 
 // A call that fails with each queued failure in turn, then answers.
-const scripted = (failures: unknown[]) => {
+const scripted = (failures: Error[]) => {
   const calls: number[] = [];
   const run = async () => {
     calls.push(performance.now());
@@ -95,14 +95,11 @@ describe("withProviderRetryWait", () => {
     controller.abort(reason);
     const outcome = await pending;
     expect(call.calls).toHaveLength(1);
-    if (!Result.isError(outcome)) {
-      return panic("expected the cancelled wait to fail");
-    }
-    const error = outcome.error;
-    if (!(error instanceof HandlerError)) {
-      return panic("expected a HandlerError");
-    }
-    expect(error.cause).toBeInstanceOf(AIGenerationCancelledError);
+    const error = Result.isError(outcome) ? outcome.error : undefined;
+    expect(error).toBeInstanceOf(HandlerError);
+    expect(
+      error instanceof HandlerError ? error.cause : undefined,
+    ).toBeInstanceOf(AIGenerationCancelledError);
   });
 
   test("a deadline during the wait settles as the deadline", async () => {
