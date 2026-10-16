@@ -231,7 +231,7 @@ test("adding unrelated common-token entries preserves a previously found match",
     "adding unrelated common-token entries preserves a previously found match",
     fc.property(
       fc
-        .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz"), {
+        .array(fc.constantFrom(...Array.from("abcdefghijklmnopqrstuvwxyz")), {
           minLength: 5,
           maxLength: 9,
         })
@@ -240,7 +240,7 @@ test("adding unrelated common-token entries preserves a previously found match",
       fc.integer({ min: 65, max: 400 }),
       fc.boolean(),
       (stem, region, floodCount, targetFirst) => {
-        const typo = `${stem.slice(0, -2)}${stem.at(-1)}${stem.at(-2)}`;
+        const typo = `${stem.slice(0, -2)}${stem.slice(-1)}${stem.slice(-2, -1)}`;
         const target = namedEntry({
           base,
           sourceId: "target",
@@ -285,7 +285,7 @@ test("single-edit matches survive common vocabulary across Unicode spellings", a
   assertProperty(
     "single-edit matches survive common vocabulary across Unicode spellings",
     fc.property(
-      fc.array(fc.constantFrom(..."abcdefghilmnoprstu"), {
+      fc.array(fc.constantFrom(...Array.from("abcdefghilmnoprstu")), {
         minLength: 5,
         maxLength: 9,
       }),
