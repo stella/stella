@@ -19,7 +19,7 @@ describe("multipart upload sink", () => {
             starts += 1;
             return "upload";
           },
-          uploadPart: async ({ uploadId, partNumber, data }) => {
+          sendPart: async ({ uploadId, partNumber, data }) => {
             expect(uploadId).toBe("upload");
             expect(partNumber).toBe(uploaded.length + 1);
             expect(data.byteLength).toBeLessThanOrEqual(partBytes);
@@ -74,7 +74,7 @@ describe("multipart upload sink", () => {
     const sink = createMultipartSink({
       partBytes: 4,
       start: async () => "upload",
-      uploadPart: async ({ data, partNumber }) => {
+      sendPart: async ({ data, partNumber }) => {
         sizes.push(data.byteLength);
         active += 1;
         peak = Math.max(peak, active);
@@ -120,7 +120,7 @@ describe("multipart upload sink", () => {
       const sink = createMultipartSink({
         partBytes: 4,
         start: async () => "upload",
-        uploadPart: async ({ data }) => {
+        sendPart: async ({ data }) => {
           uploaded.push(data);
           return "etag";
         },
@@ -157,7 +157,7 @@ describe("multipart upload sink", () => {
     const sink = createMultipartSink({
       partBytes: 2,
       start: async () => await request("start"),
-      uploadPart: async ({ uploadId, partNumber }) => {
+      sendPart: async ({ uploadId, partNumber }) => {
         expect(uploadId).toBe("start");
         return await request(`part-${partNumber}`);
       },

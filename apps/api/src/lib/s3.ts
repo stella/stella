@@ -1314,7 +1314,7 @@ export const openS3StreamingUpload = ({
         }
         return response.UploadId;
       }),
-    uploadPart: async ({ uploadId, partNumber, data }) =>
+    sendPart: async ({ uploadId, partNumber, data }) =>
       await documentsCredentials.run(async () => {
         if (partNumber > MULTIPART_MAX_PARTS) {
           throw new S3MultipartResponseError({

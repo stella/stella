@@ -5,7 +5,7 @@ type CompletedPart = { PartNumber: number; ETag: string };
 type MultipartSinkOptions = {
   partBytes: number;
   start: () => Promise<string>;
-  uploadPart: (part: {
+  sendPart: (part: {
     uploadId: string;
     partNumber: number;
     data: Uint8Array;
@@ -21,7 +21,7 @@ type MultipartSinkOptions = {
 export const createMultipartSink = ({
   partBytes,
   start,
-  uploadPart,
+  sendPart,
   complete,
   putEmpty,
 }: MultipartSinkOptions) => {
@@ -37,7 +37,7 @@ export const createMultipartSink = ({
     const partNumber = parts.length + 1;
     uploadId ??= await start();
     const data = Buffer.concat(chunks, bufferedBytes);
-    const etag = await uploadPart({ uploadId, partNumber, data });
+    const etag = await sendPart({ uploadId, partNumber, data });
     parts.push({ PartNumber: partNumber, ETag: etag });
     chunks = [];
     bufferedBytes = 0;

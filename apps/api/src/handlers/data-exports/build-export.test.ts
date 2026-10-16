@@ -452,7 +452,7 @@ describe("organisation data export builder", () => {
                 ?.file(file.path)
                 ?.async("uint8array");
               expect(bytes).toBeDefined();
-              expect(file.sizeBytes).toBe(bytes?.byteLength);
+              expect(bytes?.byteLength).toBe(file.sizeBytes);
               checkedFiles += 1;
             }
           }

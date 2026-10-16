@@ -386,10 +386,7 @@ const csvCell = (value: unknown): string => {
     case "boolean":
     case "bigint":
       return String(value);
-    case "function":
-    case "object":
-    case "symbol":
-    case "undefined":
+    default:
       return panic("Unsupported CSV cell value");
   }
 };
