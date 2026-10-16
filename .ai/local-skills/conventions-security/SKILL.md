@@ -85,7 +85,12 @@ request before acquiring any part of that prefix. Revalidate after acquisition;
 retry the whole transaction if discovery grows. Never extend a prefix below an
 already locked matter or upgrade a shared reach hold into a writer.
 Database triggers validate the completed prefix and steward state without
-acquiring further locks. Completion proofs are root-owned; mutable session
+acquiring further locks. Removal triggers require proof only for losing a
+usable assigned-only steward, and still refuse that loss. Safe removals and
+non-private matter removals remain compatible with older API instances during
+rollout without a proof requirement. Clearing an already unusable legacy lead
+preserves its assigned-only state; deferred creation validation still prevents
+new orphaned matters. Completion proofs are root-owned; mutable session
 settings cannot authorize a mutation. Reach holds, creation, recovery, repair, membership
 changes and deletion use this same protocol. Creation uses
 `create-workspace-row.ts`: scoped creators call `createWorkspaceInTransaction`;

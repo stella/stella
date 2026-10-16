@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract/matter-visibility";
 import type { Verdict } from "@stll/db-load-gate/health";
 import { INTERNAL_MEMBER_ROLES, roles } from "@stll/permissions";
 
@@ -194,7 +195,44 @@ const assertUsableSteward = async (database: PGlite) => {
   expect(result.rows).toEqual([{ usable: true }]);
 };
 
+// These orders mirror the handlers deployed before the stewardship prefix.
+const legacyRemovalSql = ({
+  kind,
+  matter,
+  departing,
+}: {
+  kind: "matter" | "organization";
+  matter: string;
+  departing: string;
+}) => {
+  if (kind === "organization") {
+    return `
+      UPDATE workspaces SET lead_user_id = NULL
+        WHERE organization_id = '${ORG}' AND lead_user_id = '${departing}';
+      DELETE FROM workspace_members wm USING workspaces w
+        WHERE wm.workspace_id = w.id AND w.organization_id = '${ORG}'
+          AND wm.user_id = '${departing}';
+      DELETE FROM member WHERE organization_id = '${ORG}' AND user_id = '${departing}';
+    `;
+  }
+  return `
+    SELECT id FROM workspaces WHERE id = '${matter}' FOR UPDATE;
+    SELECT id FROM workspace_members WHERE workspace_id = '${matter}' FOR UPDATE;
+    DELETE FROM workspace_members WHERE workspace_id = '${matter}' AND user_id = '${departing}';
+    UPDATE workspaces SET lead_user_id = NULL
+      WHERE id = '${matter}' AND lead_user_id = '${departing}';
+  `;
+};
+
 const rejectedMutations = [
+  {
+    name: "legacy matter removal deletes the lead assignment before clearing the lead",
+    statement: legacyRemovalSql({
+      kind: "matter",
+      matter: MATTER.clientlessOfMember,
+      departing: MEMBER,
+    }),
+  },
   {
     name: "a matter without a lead narrows to assigned-only",
     statement: `UPDATE workspaces SET visibility = 'assigned_only' WHERE id = '${MATTER.clientMatter}'`,
@@ -558,6 +596,225 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
     });
   }
 
+  for (const visibility of [
+    MATTER_VISIBILITY.adminsAndAssigned,
+    MATTER_VISIBILITY.allMembers,
+  ]) {
+    test.each(["matter", "organization"] as const)(
+      `legacy %s removal preserves nonprivate ${visibility} access`,
+      async (kind) => {
+        await using database = new PGlite();
+        await seed(database);
+        await database.exec(`
+          UPDATE workspaces SET lead_user_id = '${ADMIN}' WHERE id = '${MATTER.clientMatter}';
+          INSERT INTO workspace_members VALUES ('legacy_admin', '${MATTER.clientMatter}', '${ADMIN}');
+        `);
+        await applyVisibility(database);
+        await database.exec("BEGIN");
+        await lockStewardship(database, [MATTER.clientMatter], [ADMIN]);
+        await database.query(
+          "UPDATE workspaces SET visibility = $1 WHERE id = $2",
+          [visibility, MATTER.clientMatter],
+        );
+        await database.exec("COMMIT; BEGIN");
+        await database.exec(
+          legacyRemovalSql({
+            kind,
+            matter: MATTER.clientMatter,
+            departing: ADMIN,
+          }),
+        );
+        await database.exec("COMMIT");
+        expect(
+          (
+            await database.query(
+              "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+              [MATTER.clientMatter],
+            )
+          ).rows,
+        ).toEqual([{ lead_user_id: null, visibility }]);
+        expect(
+          (
+            await database.query(
+              "SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+              [MATTER.clientMatter, ADMIN],
+            )
+          ).rows,
+        ).toEqual([]);
+        expect(
+          (
+            await database.query(
+              "SELECT id FROM member WHERE organization_id = $1 AND user_id = $2",
+              [ORG, ADMIN],
+            )
+          ).rows,
+        ).toEqual(kind === "organization" ? [] : [{ id: "m2" }]);
+        await assertUsableSteward(database);
+      },
+    );
+  }
+
+  test.each([
+    { kind: "matter", departing: EXTERNAL },
+    { kind: "organization", departing: EXTERNAL },
+    { kind: "matter", departing: OWNER },
+    { kind: "organization", departing: OWNER },
+  ] as const)(
+    "legacy $kind removal of private nonlead $departing preserves its usable steward",
+    async ({ kind, departing }) => {
+      await using database = await migrated();
+      await database.exec("BEGIN");
+      await database.exec(
+        legacyRemovalSql({
+          kind,
+          matter: MATTER.clientlessOfMember,
+          departing,
+        }),
+      );
+      await database.exec("COMMIT");
+      expect(
+        (
+          await database.query(
+            "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+            [MATTER.clientlessOfMember],
+          )
+        ).rows,
+      ).toEqual([
+        { lead_user_id: MEMBER, visibility: MATTER_VISIBILITY.assignedOnly },
+      ]);
+      expect(
+        (
+          await database.query(
+            "SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+            [MATTER.clientlessOfMember, departing],
+          )
+        ).rows,
+      ).toEqual([]);
+      await assertUsableSteward(database);
+    },
+  );
+
+  for (const orphan of ["external-only", "unassigned"] as const) {
+    test.each(["matter", "organization"] as const)(
+      `legacy %s removal unrelated to a migrated ${orphan} orphan remains possible`,
+      async (kind) => {
+        await using database = new PGlite();
+        await seed(database);
+        await database.exec(`
+          DELETE FROM workspace_members WHERE workspace_id = '${MATTER.clientlessOfMember}'
+            ${orphan === "external-only" ? `AND user_id IN ('${MEMBER}', '${OWNER}')` : ""};
+          UPDATE workspaces SET lead_user_id = NULL
+            WHERE id = '${MATTER.clientlessOfMember}';
+        `);
+        await applyVisibility(database);
+        const expected = [
+          { lead_user_id: null, visibility: MATTER_VISIBILITY.assignedOnly },
+        ];
+        expect(
+          (
+            await database.query(
+              "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+              [MATTER.clientlessOfMember],
+            )
+          ).rows,
+        ).toEqual(expected);
+        await database.exec("BEGIN");
+        await database.exec(
+          legacyRemovalSql({
+            kind,
+            matter: MATTER.clientlessOfMember,
+            departing: EXTERNAL,
+          }),
+        );
+        await database.exec("COMMIT");
+        expect(
+          (
+            await database.query(
+              "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+              [MATTER.clientlessOfMember],
+            )
+          ).rows,
+        ).toEqual(expected);
+        expect(
+          (
+            await database.query(
+              "SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+              [MATTER.clientlessOfMember, EXTERNAL],
+            )
+          ).rows,
+        ).toEqual([]);
+      },
+    );
+  }
+
+  test.each([
+    { kind: "matter", departing: EXTERNAL },
+    { kind: "organization", departing: EXTERNAL },
+    { kind: "matter", departing: MEMBER },
+    { kind: "organization", departing: MEMBER },
+  ] as const)(
+    "legacy $kind removal clears preserved unusable lead $departing without changing visibility",
+    async ({ kind, departing }) => {
+      await using database = new PGlite();
+      await seed(database);
+      await database.exec(`
+        DELETE FROM workspace_members WHERE workspace_id = '${MATTER.clientlessOfMember}'
+          AND user_id IN ('${MEMBER}', '${OWNER}');
+        UPDATE workspaces SET lead_user_id = '${departing}' WHERE id = '${MATTER.clientlessOfMember}';
+      `);
+      await applyVisibility(database);
+      expect(
+        (
+          await database.query(
+            "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+            [MATTER.clientlessOfMember],
+          )
+        ).rows,
+      ).toEqual([
+        { lead_user_id: departing, visibility: MATTER_VISIBILITY.assignedOnly },
+      ]);
+      await database.exec("BEGIN");
+      await database.exec(
+        legacyRemovalSql({
+          kind,
+          matter: MATTER.clientlessOfMember,
+          departing,
+        }),
+      );
+      await database.exec("COMMIT");
+      expect(
+        (
+          await database.query(
+            "SELECT lead_user_id, visibility FROM workspaces WHERE id = $1",
+            [MATTER.clientlessOfMember],
+          )
+        ).rows,
+      ).toEqual([
+        { lead_user_id: null, visibility: MATTER_VISIBILITY.assignedOnly },
+      ]);
+      expect(
+        (
+          await database.query(
+            "SELECT id FROM workspace_members WHERE workspace_id = $1 AND user_id = $2",
+            [MATTER.clientlessOfMember, departing],
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (
+          await database.query(
+            "SELECT id FROM member WHERE organization_id = $1 AND user_id = $2",
+            [ORG, departing],
+          )
+        ).rows,
+      ).toEqual(
+        kind === "organization"
+          ? []
+          : [{ id: departing === EXTERNAL ? "m6" : "m3" }],
+      );
+    },
+  );
+
   test("an assigned internal successor permits offboarding after the handoff", async () => {
     await using database = await migrated();
     await database.exec("BEGIN");
@@ -607,50 +864,94 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
   });
 
   test.each([
-    { label: "null", lead: null, assigned: false },
-    { label: "external", lead: EXTERNAL, assigned: true },
-    { label: "unassigned internal", lead: MEMBER, assigned: false },
-    { label: "assigned internal", lead: MEMBER, assigned: true },
-  ])("deferred INSERT validation: $label lead", async ({ lead, assigned }) => {
-    await using database = await migrated();
-    const id = "00000000-0000-4000-8000-0000000000a8";
-    await database.exec("BEGIN");
-    await withPgliteWorkspaceCreation({
-      database,
-      rows: [
-        {
-          id: brandPersistedWorkspaceId(id),
-          organizationId: brandPersistedOrganizationId(ORG),
-          name: "Deferred matter",
-          reference: id,
-          visibility: "assigned_only",
-          leadUserId: lead,
+    { label: "null", lead: null, assigned: false, transition: "retain" },
+    { label: "external", lead: EXTERNAL, assigned: true, transition: "retain" },
+    {
+      label: "unassigned internal",
+      lead: MEMBER,
+      assigned: false,
+      transition: "retain",
+    },
+    {
+      label: "assigned internal",
+      lead: MEMBER,
+      assigned: true,
+      transition: "retain",
+    },
+    {
+      label: "cleared before assignment",
+      lead: MEMBER,
+      assigned: true,
+      transition: "clear",
+    },
+  ])(
+    "deferred INSERT validation: $label lead",
+    async ({ lead, assigned, transition }) => {
+      await using database = await migrated();
+      const id = "00000000-0000-4000-8000-0000000000a8";
+      await database.exec("BEGIN");
+      await withPgliteWorkspaceCreation({
+        database,
+        rows: [
+          {
+            id: brandPersistedWorkspaceId(id),
+            organizationId: brandPersistedOrganizationId(ORG),
+            name: "Deferred matter",
+            reference: id,
+            visibility: "assigned_only",
+            leadUserId: lead,
+          },
+        ],
+        insert: async (normalized) => {
+          const row = normalized.at(0) ?? panic("Missing creation row");
+          await database.query(
+            "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,$4)",
+            [row.id, row.organizationId, row.leadUserId, row.visibility],
+          );
         },
-      ],
-      insert: async (normalized) => {
-        const row = normalized.at(0) ?? panic("Missing creation row");
+      });
+      if (transition === "clear") {
         await database.query(
-          "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,$4)",
-          [row.id, row.organizationId, row.leadUserId, row.visibility],
+          "UPDATE workspaces SET lead_user_id = NULL WHERE id = $1",
+          [id],
         );
-      },
-    });
-    if (assigned) {
-      await database.query(
-        "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('new_assignment',$1,$2)",
-        [id, lead],
+      }
+      if (assigned) {
+        await database.query(
+          "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('new_assignment',$1,$2)",
+          [id, lead],
+        );
+      }
+      const commit = await Result.tryPromise({
+        try: async () => await database.exec("COMMIT"),
+        catch: (error) => error,
+      });
+      expect(commit.isOk()).toBe(
+        lead === MEMBER && assigned && transition === "retain",
       );
-    }
-    const commit = await Result.tryPromise(
-      async () => await database.exec("COMMIT"),
-    );
-    expect(commit.isOk()).toBe(lead === MEMBER && assigned);
-    if (commit.isErr()) {
-      await database.exec("ROLLBACK");
-    }
-    expect(
-      (await database.query("SELECT id FROM workspaces WHERE id = $1", [id]))
-        .rows,
-    ).toHaveLength(commit.isOk() ? 1 : 0);
-  });
+      if (transition === "clear") {
+        expect(commit).toMatchObject({
+          status: "error",
+          error: { code: "23514" },
+        });
+      }
+      if (commit.isErr()) {
+        await database.exec("ROLLBACK");
+      }
+      expect(
+        (await database.query("SELECT id FROM workspaces WHERE id = $1", [id]))
+          .rows,
+      ).toHaveLength(commit.isOk() ? 1 : 0);
+      if (transition === "clear") {
+        expect(
+          (
+            await database.query(
+              "SELECT id FROM workspace_members WHERE workspace_id = $1",
+              [id],
+            )
+          ).rows,
+        ).toEqual([]);
+      }
+    },
+  );
 });

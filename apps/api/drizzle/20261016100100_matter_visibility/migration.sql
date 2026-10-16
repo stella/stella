@@ -241,9 +241,9 @@ $$;
 REVOKE ALL ON FUNCTION public.stella_has_stewardship_lock(text, text) FROM PUBLIC;
 --> statement-breakpoint
 
--- Membership loss validates after the caller has acquired the complete prefix.
--- Unsupported writers are refused before they can wait in an inverted order.
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the persisted member's organization and assignments, verifies the completed lock prefix, refuses stewardship loss, and writes nothing
+-- Safe removals remain compatible with API instances from before this migration.
+-- Only losing a usable assigned-only steward requires the prefix and is refused.
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the persisted member's organization and assignments, requires the completed lock prefix only for usable-steward loss, refuses that loss, and writes nothing
 CREATE FUNCTION "enforce_member_role_keeps_matter_leads"()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -265,16 +265,19 @@ BEGIN
     END IF;
   END IF;
 
-  IF NOT public.stella_has_stewardship_lock('members', OLD.id) THEN
-    RAISE EXCEPTION 'membership change requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
-  END IF;
-
-  IF EXISTS (
+  IF OLD.role IN ('owner', 'admin', 'member', 'intern') AND EXISTS (
     SELECT 1 FROM public.workspaces AS w
     WHERE w.organization_id = OLD.organization_id
       AND w.visibility = 'assigned_only'
       AND w.lead_user_id = OLD.user_id
+      AND EXISTS (
+        SELECT 1 FROM public.workspace_members AS wm
+        WHERE wm.workspace_id = w.id AND wm.user_id = OLD.user_id
+      )
   ) THEN
+    IF NOT public.stella_has_stewardship_lock('members', OLD.id) THEN
+      RAISE EXCEPTION 'membership change requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+    END IF;
     RAISE EXCEPTION 'member leads a matter visible to assigned members only'
       USING ERRCODE = 'check_violation',
             CONSTRAINT = 'member_role_keeps_matter_leads';
@@ -312,6 +315,20 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
+  -- Old offboarding clears a departing lead before removing memberships.
+  -- Clearing an already unusable legacy lead preserves its existing orphaned
+  -- state and access policy; it must not require the new caller protocol.
+  IF OLD.visibility = 'assigned_only' AND NEW.visibility = OLD.visibility
+    AND NEW.organization_id = OLD.organization_id AND NEW.lead_user_id IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM public.member AS m
+      JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
+      WHERE m.organization_id = OLD.organization_id AND m.user_id = OLD.lead_user_id
+        AND m.role IN ('owner', 'admin', 'member', 'intern')
+        AND wm.workspace_id = OLD.id
+    ) THEN
+    RETURN NEW;
+  END IF;
   IF NEW.visibility = 'assigned_only' AND NOT public.stella_has_stewardship_lock('workspaces', NEW.id::text) THEN
     RAISE EXCEPTION 'matter change requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
   END IF;
@@ -390,7 +407,7 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead();
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; verifies the completed lock prefix, reads only the old assignment's persisted steward rows, refuses losing a usable steward, and writes nothing
+-- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; reads only the old assignment's persisted steward rows, requires the completed lock prefix only for usable-steward loss, refuses that loss, and writes nothing
 CREATE FUNCTION public.enforce_assignment_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -405,15 +422,16 @@ BEGIN
   END IF;
 
   -- An absent parent means the whole matter or organization is being deleted.
-  IF EXISTS (SELECT 1 FROM public.workspaces w JOIN public.organization o ON o.id = w.organization_id WHERE w.id = OLD.workspace_id)
-    AND NOT public.stella_has_stewardship_lock('workspaces', OLD.workspace_id::text) THEN
-    RAISE EXCEPTION 'assignment removal requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
-  END IF;
-
   IF EXISTS (
     SELECT 1 FROM public.workspaces AS w
     JOIN public.organization AS o ON o.id = w.organization_id
     WHERE w.id = OLD.workspace_id AND w.visibility = 'assigned_only'
+      AND w.lead_user_id = OLD.user_id
+      AND EXISTS (
+        SELECT 1 FROM public.member AS m
+        WHERE m.organization_id = w.organization_id AND m.user_id = OLD.user_id
+          AND m.role IN ('owner', 'admin', 'member', 'intern')
+      )
       AND NOT EXISTS (
         SELECT 1 FROM public.member AS m
         JOIN public.workspace_members AS wm ON wm.user_id = m.user_id
@@ -424,6 +442,9 @@ BEGIN
           AND wm.id <> OLD.id
       )
   ) THEN
+    IF NOT public.stella_has_stewardship_lock('workspaces', OLD.workspace_id::text) THEN
+      RAISE EXCEPTION 'assignment removal requires the stewardship lock prefix' USING ERRCODE = 'lock_not_available';
+    END IF;
     RAISE EXCEPTION 'assignment removal would leave an assigned-only matter without a steward'
       USING ERRCODE = 'check_violation',
             CONSTRAINT = 'assignment_keeps_matter_lead';
