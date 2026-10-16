@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";

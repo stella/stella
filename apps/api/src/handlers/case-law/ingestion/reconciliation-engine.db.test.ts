@@ -130,32 +130,32 @@ const SETTLED_SLICES = Array.from({ length: WINDOW }, (_, index) =>
 
 const listed: ReconciliationSlicePageOptions[] = [];
 
-const DOCUMENT_KEYS = [
-  "2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
-  "6b1c4e57-2d38-4f19-9a02-71f5c8d3e004",
-].map(
-  (sourceDocumentId) =>
-    listingIdentityKey({ type: "document", sourceDocumentId }) ?? "",
-);
-
+// Synthetic identities and docket-shaped values; no publisher records are fetched.
 const LISTING_ITEMS = [
   {
-    jednaciCislo: "11 C 153/2025-38",
-    soud: "Krajský soud v Brně",
+    jednaciCislo: "999 C 1/2099-1",
+    soud: "Fixture court A",
     odkaz:
-      "https://rozhodnuti.justice.cz/api/finaldoc/2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
+      "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000001",
   },
   {
-    jednaciCislo: "31 Cm 8/2024-102",
-    soud: "Krajský soud v Ostravě",
+    jednaciCislo: "999 Cm 2/2099-1",
+    soud: "Fixture court B",
     odkaz:
-      "https://rozhodnuti.justice.cz/api/finaldoc/6b1c4e57-2d38-4f19-9a02-71f5c8d3e004",
+      "https://case-law.example.test/api/finaldoc/00000000-0000-4000-8000-000000000002",
   },
-] as const;
-
-/** Real dockets, so the fallback identity key is the shape the ledger keys. */
-const FIXTURE_CASE_NUMBERS = ["11 C 153/2025", "31 Cm 8/2024"] as const;
-const FIXTURE_COURT = "Krajský soud v Brně";
+] satisfies [unknown, unknown];
+const DOCUMENT_KEYS = LISTING_ITEMS.map(
+  ({ odkaz }) =>
+    listingIdentityKey({
+      type: "document",
+      sourceDocumentId:
+        odkaz.split("/").at(-1) ??
+        panic("Fixture URL needs a document identity"),
+    }) ?? panic("Fixture document identity must be keyable"),
+);
+const FIXTURE_CASE_NUMBERS = ["999 C 1/2099", "999 Cm 2/2099"] as const;
+const FIXTURE_COURT = "Fixture court A";
 const FIXTURE_LANGUAGE = "cs";
 
 /**
