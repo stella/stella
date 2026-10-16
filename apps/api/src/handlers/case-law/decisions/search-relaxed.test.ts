@@ -1,8 +1,9 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -10,7 +11,7 @@ import {
   rankByTermCoverage,
   relaxedFetchLimit,
   shouldRelaxCaseLawSearch,
-  termsCovered,
+  readTermCoverage,
 } from "./search-relaxed";
 
 const ELIGIBLE = {
@@ -66,59 +67,107 @@ const hit = (id: string, score: number): RankedHit => ({
   citationAuthority: 0,
 });
 
-const TOKENS = tokenizeCorpusFreeText("promlčení náhrada škody");
+const MEMBERSHIP = new Map([
+  ["term-a", ["four", "two"]],
+  ["term-b", ["four", "two"]],
+  ["term-c", ["four"]],
+  ["term-d", ["four"]],
+]);
 
-describe("coverage of the query's terms", () => {
-  test("counts each distinct term the excerpt carries, once", () => {
-    expect(
-      termsCovered({
-        snippet:
-          "<mark>promlčení</mark> práva na <mark>náhradu</mark> a promlčení",
-        tokens: TOKENS,
-        language: null,
-      }),
-    ).toBeGreaterThanOrEqual(1);
-    expect(
-      termsCovered({
-        snippet: "<mark>škody</mark> vznikla; <mark>náhrada</mark> škody",
-        tokens: TOKENS,
-        language: null,
-      }),
-    ).toBe(2);
-    expect(
-      termsCovered({ snippet: undefined, tokens: TOKENS, language: null }),
-    ).toBe(0);
-  });
-
-  test("a hit holding more terms leads, and the blend order breaks ties", () => {
-    const ranked = [hit("rare-one", 9), hit("two", 5), hit("three", 4)];
-    const snippetById = new Map([
-      ["rare-one", "<mark>promlčení</mark> jen"],
-      ["two", "<mark>škody</mark> a <mark>náhrada</mark>"],
-      [
-        "three",
-        "<mark>škody</mark> a <mark>náhrada</mark> a <mark>promlčení</mark>",
-      ],
+test.each(["complete", "truncated", "missing"] as const)(
+  "engine coverage ranks four terms above two with %s excerpts",
+  async (presentation) => {
+    // Presentation is deliberately misleading or absent; it never enters the
+    // coverage API. Membership in the index is the independent ranking oracle.
+    let fourSnippet: string | undefined;
+    switch (presentation) {
+      case "missing":
+        fourSnippet = undefined;
+        break;
+      case "truncated":
+        fourSnippet = "term-a";
+        break;
+      case "complete":
+        fourSnippet = "term-a term-b term-c term-d";
+        break;
+    }
+    const candidates = [
+      { ...hit("two", 9), snippet: "term-a term-b" },
+      { ...hit("four", 1), snippet: fourSnippet },
+    ];
+    const queries: string[] = [];
+    const coverageById = await readTermCoverage({
+      ids: candidates.map(({ id }) => id),
+      queries: [...MEMBERSHIP.keys()],
+      observer: "unobserved",
+      indexId: "fixture-index",
+      aggregate: async ({ query, aggs }) => {
+        queries.push(query);
+        expect(query).toContain('document_id: IN ["two" "four"]');
+        expect(aggs).toMatchObject({
+          term_coverage: {
+            terms: { size: 2, shard_size: 2, order: { _key: "asc" } },
+          },
+        });
+        const term = [...MEMBERSHIP.keys()].find((key) => query.includes(key));
+        const ids = term === undefined ? [] : (MEMBERSHIP.get(term) ?? []);
+        return Result.ok({
+          term_coverage: {
+            buckets: ids.map((key) => ({ key, doc_count: 20 })),
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        });
+      },
+    });
+    expect(queries).toHaveLength(4);
+    expect([...coverageById]).toEqual([
+      ["two", 2],
+      ["four", 4],
     ]);
     expect(
-      rankByTermCoverage({
-        ranked,
-        snippetById,
-        tokens: TOKENS,
-        language: null,
-      }).map(({ id }) => id),
-    ).toEqual(["three", "two", "rare-one"]);
-    // Equal coverage keeps the engine's blended order.
-    expect(
-      rankByTermCoverage({
-        ranked: [hit("a", 3), hit("b", 2)],
-        snippetById: new Map([
-          ["a", "<mark>škody</mark>"],
-          ["b", "<mark>náhrada</mark>"],
-        ]),
-        tokens: TOKENS,
-        language: null,
-      }).map(({ id }) => id),
-    ).toEqual(["a", "b"]);
-  });
+      rankByTermCoverage({ ranked: candidates, coverageById }).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["four", "two"]);
+  },
+);
+
+test("equal engine coverage keeps the blended order", () => {
+  expect(
+    rankByTermCoverage({
+      ranked: [hit("a", 3), hit("b", 2)],
+      coverageById: new Map([
+        ["a", 2],
+        ["b", 2],
+      ]),
+    }).map(({ id }) => id),
+  ).toEqual(["a", "b"]);
+});
+
+test.each([
+  { buckets: [], sum_other_doc_count: 1, doc_count_error_upper_bound: 0 },
+  { buckets: [], sum_other_doc_count: 0, doc_count_error_upper_bound: 1 },
+])(
+  "incomplete engine membership cannot silently supply coverage: %j",
+  async (term_coverage) => {
+    const failure = await rejectionOf(
+      readTermCoverage({
+        ids: ["a"],
+        queries: ["term"],
+        observer: "unobserved",
+        indexId: "fixture-index",
+        aggregate: async () => Result.ok({ term_coverage }),
+      }),
+    );
+    expect(failure).toMatchObject({
+      message: "Search term coverage is incomplete",
+    });
+  },
+);
+
+test("a candidate without measured coverage is an invariant failure", () => {
+  expect(() =>
+    rankByTermCoverage({ ranked: [hit("a", 1)], coverageById: new Map() }),
+  ).toThrow("Missing candidate term coverage");
 });

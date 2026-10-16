@@ -208,7 +208,10 @@ import {
   type CaseLawCorpusQueryFields,
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import {
+  corpusRevisionClause,
+  type CorpusProjectionRevision,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   type CorpusFacetQuery,
   type CorpusSearchFacetName,
@@ -216,6 +219,9 @@ import {
 } from "@/api/lib/legal-search/corpus-index-search-facets";
 import {
   caseLawCorpusQuery,
+  type CorpusQueryToken,
+  formatCorpusQueryTokens,
+  quoteCorpusValue,
   type CorpusTermExpander,
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
@@ -292,6 +298,7 @@ import {
 import {
   type RelaxedExclusions,
   rankByTermCoverage,
+  readTermCoverage,
   relaxedFetchLimit,
   shouldRelaxCaseLawSearch,
 } from "./search-relaxed";
@@ -1281,6 +1288,7 @@ type ResolvedCorpusIndexQuery = {
    * than the page it sits beside.
    */
   facetQueries: () => CorpusFacetQuery | null;
+  termQueries: (tokens: readonly CorpusQueryToken[]) => string[];
 };
 
 /** Mode, dictionary, and shadow accounting are the shared resolver's. */
@@ -1379,6 +1387,27 @@ const resolveCorpusIndexQuery = async ({
             type: resolved.type,
           },
     facetQueries,
+    termQueries: (tokens) => {
+      if (resolved.type === "empty" || !expanderByQuery.has(resolved.query)) {
+        return panic("Term coverage requires an executed corpus query");
+      }
+      const expand = expanderByQuery.get(resolved.query);
+      return [
+        ...new Map(tokens.map((token) => [token.value, token])).values(),
+      ].map(
+        (token) =>
+          buildCorpusIndexQuery({
+            body: { ...body, query: formatCorpusQueryTokens([token]) },
+            jurisdictionClause,
+            contract,
+            fields,
+            expand,
+            functionWords,
+            legalAlternatives,
+            queryVariant,
+          }) ?? panic("Required term built to an empty coverage query"),
+      );
+    },
   };
 };
 
@@ -2931,11 +2960,40 @@ export const searchCorpusIndexDecisions = async ({
         ),
       },
     );
+    const revisionField = requireCorpusIndexManifest("case_law", generation)
+      .projection.projectionRevisionField;
+    const candidates = relaxedPage.pageRanked.map(({ id }) => ({
+      id,
+      revision:
+        hydrated.get(id)?.appliedRevision ??
+        panic("Ranked candidate has no applied revision"),
+    }));
+    const candidateQuery = candidates
+      .map(({ id, revision }) =>
+        corpusRevisionClause({
+          clause: `document_id:${quoteCorpusValue(id)}`,
+          field: revisionField,
+          revision,
+        }),
+      )
+      .join(" OR ");
+    const coverageStartedAt = performance.now();
+    const queries = relaxedQuery.termQueries(requiredTerms);
+    const coverageById = await readTermCoverage({
+      aggregate: getCorpusIndexClient(serving.cluster).aggregate,
+      observer,
+      indexId,
+      ids: candidates.map(({ id }) => id),
+      queries: queries.map((query) => `(${query}) AND (${candidateQuery})`),
+    });
+    const coverageScan = {
+      ...emptyCorpusIndexScan(),
+      rounds: candidates.length === 0 ? 0 : queries.length,
+      indexMs: performance.now() - coverageStartedAt,
+    };
     const ranked = rankByTermCoverage({
       ranked: relaxedPage.pageRanked,
-      snippetById: relaxedPage.snippetById,
-      tokens: requiredTerms,
-      language: excerptFields.stemming?.language ?? null,
+      coverageById,
     }).slice(0, needed);
     const relaxedById = await readPageRows(ranked);
     const relaxedAlternates = await readPublicDecisionLanguageAlternatesByGroup(
@@ -2961,7 +3019,10 @@ export const searchCorpusIndexDecisions = async ({
     });
     // The relaxed scan is reported with the strict one, so a topped-up
     // request's rounds and index time count both reads.
-    return { hits: relaxedHitsPage.hits, scan: relaxedPage.scan };
+    return {
+      hits: relaxedHitsPage.hits,
+      scan: sumCorpusIndexScans(relaxedPage.scan, coverageScan),
+    };
   };
   const relaxed = shouldRelaxCaseLawSearch({
     body,

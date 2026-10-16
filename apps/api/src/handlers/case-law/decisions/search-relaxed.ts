@@ -1,11 +1,17 @@
+import { panic, Result } from "better-result";
+
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import type { SearchPageEnd } from "@stll/api-contract/search";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+import { mapWithConcurrency } from "@stll/concurrency";
 
-import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
-import type { CorpusQueryToken } from "@/api/lib/legal-search/corpus-query";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * The relaxed phase of a corpus-index case-law search.
@@ -76,88 +82,122 @@ const RELAXED_OVERFETCH = 3;
 export const relaxedFetchLimit = (needed: number): number =>
   Math.min(needed * RELAXED_OVERFETCH, LIMITS.caseLawSearchPageSizeMax);
 
-const HTML_ENTITIES: ReadonlyMap<string, string> = new Map([
-  ["&lt;", "<"],
-  ["&gt;", ">"],
-  ["&quot;", '"'],
-  ["&#39;", "'"],
-  ["&amp;", "&"],
-]);
+const TERM_COVERAGE_CONCURRENCY = 4;
 
-const plainSnippet = (snippet: string): string =>
-  snippet
-    .replaceAll(/<\/?mark>/gu, "")
-    .replaceAll(
-      /&(?:lt|gt|quot|#39|amp);/gu,
-      (entity) => HTML_ENTITIES.get(entity) ?? entity,
-    );
-
-type TermsCoveredOptions = {
-  /** The excerpt shown for the hit, escaped, as the search returns it. */
-  snippet: string | undefined;
-  tokens: readonly CorpusQueryToken[];
-  language: MorphologyLanguage | null;
+type ReadTermCoverageOptions = {
+  aggregate: CorpusIndexClient["aggregate"];
+  observer: RegistryRequestObservation;
+  indexId: string;
+  /** One query per distinct required term, using the executed expansion dictionary. */
+  queries: readonly string[];
+  ids: readonly string[];
 };
 
 /**
- * How many of the query's distinct terms the hit's excerpt carries, matched
- * the way the excerpt is highlighted (stemmed, so an inflected form counts).
- * The excerpt is the best passage of the decision, so this is a lower bound on
- * what the whole decision holds; it is cheap and needs no further read.
+ * Exact document membership per term, restricted to the bounded candidate set.
+ * Buckets collapse repeated passages. No snippet or stored presentation field
+ * participates; a missing excerpt cannot change the ranking.
  */
-export const termsCovered = ({
-  snippet,
-  tokens,
-  language,
-}: TermsCoveredOptions): number => {
-  if (snippet === undefined) {
-    return 0;
+export const readTermCoverage = async ({
+  aggregate,
+  observer,
+  indexId,
+  queries,
+  ids,
+}: ReadTermCoverageOptions): Promise<ReadonlyMap<string, number>> => {
+  if (ids.length === 0) {
+    return new Map();
   }
-  const text = plainSnippet(snippet);
-  const seen = new Set<string>();
-  let covered = 0;
-  for (const token of tokens) {
-    if (seen.has(token.value)) {
-      continue;
-    }
-    seen.add(token.value);
-    if (
-      markCorpusFragment({ text, tokens: [token], language }).includes("<mark>")
-    ) {
-      covered += 1;
-    }
-  }
-  return covered;
+  const coverage = new Map(ids.map((id) => [id, 0]));
+  const candidates = `document_id: IN [${ids.map(quoteCorpusValue).join(" ")}]`;
+  await mapWithConcurrency({
+    items: queries,
+    limit: TERM_COVERAGE_CONCURRENCY,
+    operation: async (query) => {
+      const answer = await aggregate({
+        observer,
+        indexId,
+        query: `(${query}) AND (${candidates})`,
+        aggs: {
+          term_coverage: {
+            terms: {
+              field: "document_id",
+              size: ids.length,
+              shard_size: ids.length,
+              order: { _key: "asc" },
+              show_term_doc_count_error: true,
+            },
+          },
+        },
+      });
+      if (Result.isError(answer)) {
+        throw new HandlerError({
+          status: 503,
+          message: "Search term coverage is temporarily unavailable",
+          cause: answer.error,
+        });
+      }
+      const buckets = answer.value["term_coverage"];
+      if (
+        !isRecord(buckets) ||
+        !Array.isArray(buckets["buckets"]) ||
+        buckets["sum_other_doc_count"] !== 0 ||
+        buckets["doc_count_error_upper_bound"] !== 0
+      ) {
+        throw new HandlerError({
+          status: 502,
+          message: "Search term coverage is incomplete",
+          cause: new CorpusIndexError({
+            message: "Expected exact candidate term buckets",
+          }),
+        });
+      }
+      const seen = new Set<string>();
+      for (const bucket of buckets["buckets"]) {
+        if (
+          !isRecord(bucket) ||
+          typeof bucket["key"] !== "string" ||
+          !coverage.has(bucket["key"]) ||
+          seen.has(bucket["key"]) ||
+          !Number.isSafeInteger(bucket["doc_count"]) ||
+          Number(bucket["doc_count"]) <= 0
+        ) {
+          throw new HandlerError({
+            status: 502,
+            message: "Search term coverage is invalid",
+            cause: new CorpusIndexError({
+              message: "Unexpected candidate term bucket",
+            }),
+          });
+        }
+        const id = bucket["key"];
+        seen.add(id);
+        coverage.set(
+          id,
+          (coverage.get(id) ?? panic("Missing candidate coverage")) + 1,
+        );
+      }
+    },
+  });
+  return coverage;
 };
 
-type RankByTermCoverageOptions = TermsCoveredOptionsWithoutSnippet & {
+type RankByTermCoverageOptions = {
   ranked: readonly RankedHit[];
-  snippetById: ReadonlyMap<string, string>;
+  coverageById: ReadonlyMap<string, number>;
 };
 
-type TermsCoveredOptionsWithoutSnippet = Omit<TermsCoveredOptions, "snippet">;
-
-/**
- * Relaxed hits, the ones holding more of the query's terms first. The engine's
- * OR query sums per-term scores, which lets one rare word outrank decisions
- * holding several, so the coverage count leads and the existing blend (the
- * order of `ranked`) breaks ties; the sort is stable.
- */
+/** Exact term membership leads; the existing blend breaks ties. */
 export const rankByTermCoverage = ({
   ranked,
-  snippetById,
-  tokens,
-  language,
+  coverageById,
 }: RankByTermCoverageOptions): RankedHit[] =>
   ranked
     .map((hit, index) => ({
       hit,
       index,
-      covered: termsCovered({
-        snippet: snippetById.get(hit.id),
-        tokens,
-        language,
-      }),
+      covered:
+        coverageById.get(hit.id) ?? panic("Missing candidate term coverage"),
     }))
     .toSorted(
       (left, right) => right.covered - left.covered || left.index - right.index,

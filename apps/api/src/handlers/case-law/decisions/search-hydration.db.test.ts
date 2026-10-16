@@ -773,7 +773,19 @@ test("a short strict page is topped up with new partial matches only, after the 
     },
   );
   const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
-    async ({ aggs }) => {
+    async ({ aggs, query }) => {
+      if ("term_coverage" in aggs) {
+        const ids = query.includes("promlčení")
+          ? [czechId, slovakId, projectedId].filter((id) => query.includes(id))
+          : [];
+        return Result.ok({
+          term_coverage: {
+            buckets: ids.toSorted().map((key) => ({ key, doc_count: 1 })),
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        });
+      }
       const answered: Record<string, unknown> = {};
       for (const name of Object.keys(aggs)) {
         answered[name] =
@@ -866,13 +878,39 @@ test("a short strict page is topped up with new partial matches only, after the 
 });
 
 test.each([
-  { strictHitCount: 0, configuredVariant: "off" as const },
-  { strictHitCount: 1, configuredVariant: "off" as const },
-  { strictHitCount: 0, configuredVariant: "core-stems-first" as const },
-  { strictHitCount: 1, configuredVariant: "core-stems-first" as const },
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 1,
+    configuredVariant: "off" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "core-stems-first" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 1,
+    configuredVariant: "core-stems-first" as const,
+    snippetMode: "full" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "missing" as const,
+  },
+  {
+    strictHitCount: 0,
+    configuredVariant: "off" as const,
+    snippetMode: "truncated" as const,
+  },
 ])(
-  "a six-word question with $strictHitCount full matches reports its matching mode ($configuredVariant)",
-  async ({ strictHitCount, configuredVariant }) => {
+  "a six-word question with $strictHitCount full matches reports its matching mode ($configuredVariant, $snippetMode snippets)",
+  async ({ strictHitCount, configuredVariant, snippetMode }) => {
     const db = drizzle({ client });
     const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
     const indexId = corpusIndexId(manifest.generation, "CZE");
@@ -942,15 +980,46 @@ test.each([
           Result.ok({
             numHits: ids.length,
             hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
-            snippets: ids.map((id) => ({
-              text: [snippets.get(id) ?? panic("Expected a fixture excerpt")],
-            })),
+            snippets:
+              snippetMode === "missing"
+                ? ids.map(() => ({}))
+                : ids.map((id) => ({
+                    text: [
+                      snippetMode === "truncated" && id === projectedId
+                        ? "promlčení"
+                        : (snippets.get(id) ??
+                          panic("Expected a fixture excerpt")),
+                    ],
+                  })),
           }),
         );
       },
     );
     const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
-      async ({ aggs }) => {
+      async ({ aggs, query: aggregateQuery }) => {
+        if ("term_coverage" in aggs) {
+          // Whole-document coverage is independent of the optional excerpt:
+          // the lower-scored decision matches four terms, the other only one.
+          const projectedTerms = query.split(" ").slice(0, 4);
+          let candidates: SafeId<"caseLawDecision">[] = [];
+          if (aggregateQuery.includes("promlčení")) {
+            candidates = [czechId, projectedId];
+          } else if (
+            projectedTerms.some((term) => aggregateQuery.includes(term))
+          ) {
+            candidates = [projectedId];
+          }
+          return Result.ok({
+            term_coverage: {
+              buckets: candidates
+                .filter((id) => aggregateQuery.includes(id))
+                .toSorted()
+                .map((key) => ({ key, doc_count: 1 })),
+              sum_other_doc_count: 0,
+              doc_count_error_upper_bound: 0,
+            },
+          });
+        }
         const answered: Record<string, unknown> = {};
         for (const name of Object.keys(aggs)) {
           answered[name] =
@@ -996,7 +1065,8 @@ test.each([
       expect(warningCodes).not.toContain("no_hits");
       expect(warningCodes).not.toContain("no_hits_filtered");
       // The strict engine deliberately returns no candidate in the zero case;
-      // the lower-scored partial hit covers four terms and must rank first.
+      // the lower-scored partial hit covers four terms and must rank first,
+      // even when its excerpt omits those terms or is absent.
       expect(scans).toBe(strictHitCount === 0 ? 2 : 1);
       expect(
         result.hits.map(({ decisionId, match }) => ({ decisionId, match })),
