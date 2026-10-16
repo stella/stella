@@ -309,7 +309,7 @@ const selectorCase = (
       : {};
   return {
     flags: ["-e"],
-    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); scope_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
@@ -2796,7 +2796,7 @@ const packageChecksPlan = (files: readonly string[]) => {
       "-e",
       "-c",
       `${PACKAGE_CHECKS_BUN_SHIM}
-changed_files=("$@"); desktop_rust_checks_required=false
+changed_files=("$@"); scope_files=("$@"); desktop_rust_checks_required=false
 ${packageScope}
 printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
