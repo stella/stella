@@ -253,7 +253,7 @@ test("entity-view and inbox readers register rename dependencies and preserve wo
     workspaceId: OTHER_WORKSPACE_ID,
     fieldId: FIELD_ID,
   });
-  const seed = ({ queryKey, meta }: FileReaderIdentity) =>
+  const seed = async ({ queryKey, meta }: FileReaderIdentity) =>
     queryClient.query(
       queryOptions({
         queryKey,

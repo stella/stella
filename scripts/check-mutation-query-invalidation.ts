@@ -848,8 +848,7 @@ const validateTaggedSpreadOverrides = ({
     }
     if (
       tagged &&
-      (!property.name ||
-        ts.isComputedPropertyName(property.name) ||
+      (ts.isComputedPropertyName(property.name) ||
         !allowedOverrides.has(propertyName(property.name) ?? ""))
     ) {
       return "invalid";
@@ -1011,7 +1010,7 @@ const inspectMutationExecution = ({
     helperCalls.add(selectedHelper);
   }
   if (helperCalls.size > 0 || selectedHelper !== undefined) {
-    if (!selectedHelper || helperCalls.size !== 1) {
+    if (!selectedHelper || !finalMutationFunction || helperCalls.size !== 1) {
       return {
         status: "invalid",
         reason:
