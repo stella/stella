@@ -952,6 +952,27 @@ test("the store cache save supervisor runs exactly once in the rest leg", () => 
   expect(owners).toEqual([{ leg: "ci-checks-rest", run: command }]);
 });
 
+test("the guard rollout scope suite is an independently receipted static check", () => {
+  const owners = partitionIds.flatMap((leg) => {
+    const { steps } = v.parse(v.looseObject({ steps: v.unknown() }), jobs[leg]);
+    return flattenWorkflowSteps(steps)
+      .filter((step) =>
+        stepFields(step).run?.includes("scripts/guard-rollouts.test.ts"),
+      )
+      .map((step) => ({ leg, step }));
+  });
+  expect(owners).toHaveLength(1);
+  expect(owners.at(0)?.leg).toBe("ci-checks-policy");
+  expect(owners.at(0)?.step).toMatchObject({
+    name: "Guard rollout scope tests",
+    env: {
+      CI_CHECK_KIND: "STATIC",
+      CI_CHECK_INPUTS: "tracked-tree+generated-inputs",
+    },
+  });
+  expect(owners.at(0)?.step["id"]).toMatch(/^static_check_/u);
+});
+
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
   expect(new Set(removedChecks.map(({ name }) => name)).size).toBe(

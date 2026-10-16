@@ -2568,7 +2568,15 @@ jobs:
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_005
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_005 != 'true') }}
-        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts scripts/guard-rollouts.test.ts
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
+
+      - name: Guard rollout scope tests
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_013
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
+        run: bun test scripts/guard-rollouts.test.ts
 
       - name: Dated waiver lifecycle guards
         env:
