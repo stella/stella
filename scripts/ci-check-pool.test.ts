@@ -216,7 +216,9 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
         const results = await runChecks({
           planned,
           concurrency,
-          report: (index) => reported.push(index),
+          report: (index) => {
+            reported.push(index);
+          },
           launch: async (index): Promise<Launched> => {
             running += 1;
             peak = Math.max(peak, running);

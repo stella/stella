@@ -280,7 +280,7 @@ export const runChecks = async ({
   return results.map((result, index) => {
     if (result === undefined) {
       throw new CheckPoolError(
-        `Check did not settle: ${planned[index]?.check.name}`,
+        `Check did not settle: ${planned[index]?.check.name ?? String(index)}`,
       );
     }
     return result;
@@ -346,7 +346,7 @@ export const processLauncher =
     return {
       exitCode,
       timedOut,
-      maxRssBytes: usage === undefined ? undefined : Number(usage.maxRSS),
+      maxRssBytes: usage?.maxRSS,
     };
   };
 
