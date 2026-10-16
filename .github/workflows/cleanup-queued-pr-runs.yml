@@ -62,6 +62,9 @@ jobs:
               // association is matched to pull requests by its commit; if that
               // lookup fails, protection is unknown and the run is left alone.
               if (associated.length === 0) {
+                // A target run's head_sha is the base commit, which does not
+                // identify the pull request that triggered it: leave it alone.
+                if (run.event !== "pull_request") return null;
                 let byCommit;
                 try {
                   ({ data: byCommit } = await github.rest.repos.listPullRequestsAssociatedWithCommit({

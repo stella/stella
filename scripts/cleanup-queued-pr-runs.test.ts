@@ -228,7 +228,7 @@ test("other metadata failures stop cleanup", async () => {
 
 test("the six-hour rule still applies without a resolvable PR", async () => {
   const run = {
-    ...queued(),
+    ...queued("pull_request"),
     pull_requests: [],
     created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
   };
@@ -275,6 +275,17 @@ test("an old run without an association is matched to its pull requests by commi
     expect(result.cancelled, JSON.stringify(commitPulls)).toEqual([]);
     expect(result.forced, JSON.stringify(commitPulls)).toEqual([]);
   }
+});
+
+test("an old target run without an association is left alone", async () => {
+  const run = {
+    ...queued("pull_request_target"),
+    pull_requests: [],
+    created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+  };
+  const result = await cleanup({ run, commitPulls: [] });
+  expect(result.cancelled).toEqual([]);
+  expect(result.forced).toEqual([]);
 });
 
 test("non-PR events and runs that already started are never cancelled", async () => {
