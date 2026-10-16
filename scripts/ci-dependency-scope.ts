@@ -293,6 +293,11 @@ export const dependencyScope = ({
   const rootDevOnly = changedDevDependencies(beforeRoot, afterRoot).every(
     (name) => DEV_TOOL.test(name),
   );
+  // A root manifest change reaches every workspace and has no source path a
+  // selector could match: only a tooling-only change may narrow it.
+  if (dependencyFiles.includes("package.json") && !rootDevOnly) {
+    return { type: "shared-base", files: allFiles(changed) };
+  }
   if (
     manifestsDev &&
     rootDevOnly &&

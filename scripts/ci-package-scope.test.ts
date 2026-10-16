@@ -222,8 +222,8 @@ test("dependency metadata selects tooling, runtime consumers, shared base, and u
         base: switched,
         head: rootDev,
         changed: ["package.json"],
-      }).type,
-    ).not.toBe("dev-tooling");
+      }),
+    ).toEqual({ type: "shared-base", files: ["package.json"] });
     expect(edgesBase).not.toBe(locked);
 
     // A runtime change to the root workspace closure has no source path a
