@@ -20,6 +20,7 @@ const workflowSchema = v.object({
     v.string(),
     v.looseObject({
       needs: v.optional(v.union([v.string(), v.array(v.string())])),
+      if: v.optional(v.string()),
       env: v.optional(v.record(v.string(), v.string())),
       outputs: v.optional(v.record(v.string(), v.string())),
       steps: v.array(stepSchema),
@@ -80,13 +81,19 @@ const producerSteps = [
   "Save generated sources",
 ];
 
-// The producer starts beside the plan rather than after it, so only its
-// consumers wait for generation. A failed producer skips its consumers and
-// fails the result gate, which requires it in every run.
+// Only the consumers wait for generation, and the producer runs exactly when
+// they do, so a reused, untrusted or package-free run never generates. A
+// failed producer skips its consumers and fails the result gate.
 const assertProducer = (source: Workflow) => {
   const producer = source.jobs["generated-sources"];
   expect(producer, "generated producer").toBeDefined();
-  expect(producer?.needs, "producer starts with the plan").toBeUndefined();
+  expect(producer?.needs, "producer follows the plan").toBe("ci-plan");
+  expect(producer?.if, "producer runs with its consumers").toBe(
+    source.jobs["ci-checks-generated"]?.if,
+  );
+  expect(producer?.steps.at(-1)?.name).toBe(
+    "Cancel merge group after failure in this job",
+  );
   expect(producer?.outputs?.["input_hash"]).toBe(producedHash);
   const steps = producer?.steps ?? [];
   const identity = steps.find(({ id }) => id === "identity");
@@ -117,8 +124,11 @@ const assertProducer = (source: Workflow) => {
   }
   expect(steps.at(indices[3] ?? -1)?.id).toBe("generate");
   expect(steps.at(indices[4] ?? -1)?.with).toEqual(restored?.with);
-  const upload = steps.find(({ name }) => name === "Upload generated sources");
-  expect(steps.indexOf(upload ?? steps[0]!)).toBeGreaterThan(indices[4] ?? 0);
+  const uploadIndex = steps.findIndex(
+    ({ name }) => name === "Upload generated sources",
+  );
+  const upload = steps.at(uploadIndex);
+  expect(uploadIndex, "upload after save").toBeGreaterThan(indices[4] ?? -1);
   expect(upload?.if, "both paths upload").toBeUndefined();
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/u);
   expect(
@@ -148,7 +158,9 @@ const assertHandoff = (source: Workflow) => {
     v.record(v.string(), v.nullable(v.string())),
     JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? "{}"),
   );
-  expect(scopes["generated-sources"], "producer always planned").toBeNull();
+  expect(scopes["generated-sources"], "producer planned with packages").toBe(
+    "package_checks_required",
+  );
   for (const id of consumerIds(source)) {
     const job = source.jobs[id];
     if (!job) {
@@ -463,8 +475,9 @@ test("generated-source production remains required in every result gate", () => 
     "ungated step",
     "order",
     "output",
-    "waits for plan",
-    "scoped",
+    "starts before plan",
+    "unscoped",
+    "reuse runs",
     "loose cache",
     "unproven reuse",
   ] as const) {
@@ -495,13 +508,21 @@ test("generated-source production remains required in every result gate", () => 
       case "needs":
         gate.needs = gate.needs.filter((id) => id !== "generated-sources");
         break;
-      case "waits for plan":
-        plan.needs = "ci-plan";
+      case "starts before plan":
+        delete plan.needs;
         break;
-      case "scoped":
-        outcome.env["JOB_SCOPES"] = outcome.env["JOB_SCOPES"]!.replace(
-          '"generated-sources": null',
+      case "unscoped":
+        outcome.env["JOB_SCOPES"] = (
+          outcome.env["JOB_SCOPES"] ?? panic("Missing JOB_SCOPES fixture")
+        ).replace(
           '"generated-sources": "package_checks_required"',
+          '"generated-sources": null',
+        );
+        break;
+      case "reuse runs":
+        plan.if = (plan.if ?? "").replace(
+          "needs.ci-plan.outputs.pr_depth_reused != 'true'",
+          "true",
         );
         break;
       case "loose cache":

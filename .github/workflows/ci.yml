@@ -443,10 +443,14 @@ jobs:
             .find { |candidate| candidate["name"] == "Evaluate CI outcome" }
           required = JSON.parse(outcome.fetch("env").fetch("FAST_REQUIRED"))
           # Mirrors prDepthJobs in scripts/main-heavy-plan.ts; a test runs this
-          # step and compares the two.
-          jobs = required.select do |job|
+          # step and compares the two. The checks' producers run with them.
+          checks = required.select do |job|
             job.start_with?("ci-checks-", "code-quality-")
           end
+          producers = checks.flat_map do |job|
+            Array(workflow.fetch("jobs").fetch(job)["needs"])
+          end
+          jobs = (checks + producers).uniq - ["ci-plan"]
           File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
             output.puts("pr_depth_jobs=#{JSON.generate(jobs)}")
           end
@@ -1288,9 +1292,9 @@ jobs:
           QUERY_PERF_CHANGED_PATHS="$CHANGED_PATHS" QUERY_PERF_SCOPE_UNKNOWN="$SCOPE_UNKNOWN" \
             bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
-      # One install serves every planner: the heavy and thin-queue job
-      # derivation needs it to succeed; the API test planners keep full
-      # coverage when it is unavailable.
+      # One install serves every planner. The API test planners keep full
+      # coverage when it is unavailable; heavy and thin-queue job derivation
+      # cannot, so the step after it fails the plan instead.
       - name: Install planner dependencies
         id: planner-deps
         if: >-
@@ -1305,14 +1309,19 @@ jobs:
           && steps.changed-files.outputs.api_scope_unknown != 'true'
           )
           )
-        continue-on-error: ${{ inputs.heavy_only != true && !(github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin') }}
-        timeout-minutes: 5
+        continue-on-error: true
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
           log-file: "${{ runner.temp }}/bun-install/planner.log"
         env:
           NPM_TOKEN: ""
+
+      - name: Require planner dependencies for job derivation
+        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'
+        run: |
+          echo "::error::Planner dependencies did not install; heavy and thin-queue job derivation needs them."
+          exit 1
 
       - name: Upload failed Bun install logs
         if: failure()
@@ -1327,7 +1336,7 @@ jobs:
       # older main commit that predates this planner.
       - name: Derive heavy jobs
         id: heavy-plan
-        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
+        if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome == 'success'
         env:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
@@ -1350,7 +1359,7 @@ jobs:
 
       - name: Select root check inputs
         id: root-checks
-        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -1362,7 +1371,7 @@ jobs:
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
-        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
         run: |
           changed_files=()
           while IFS= read -r -d '' file; do
@@ -1380,7 +1389,7 @@ jobs:
 
       - name: Select affected API test files
         id: api-test-selection
-        if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -1398,7 +1407,7 @@ jobs:
         id: postgres-test-plan
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
-          && steps.api-test-deps.outcome == 'success'
+          && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'
           && (github.event_name == 'merge_group' || github.event_name == 'pull_request')
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -1512,7 +1521,7 @@ jobs:
         if: >-
           steps.completed-depth.outputs.run_required != 'false'
           && github.event_name == 'pull_request'
-          && steps.api-test-deps.outcome == 'success'
+          && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -1651,21 +1660,29 @@ jobs:
               run_id: context.runId,
             });
 
-  # Package checks restore generated sources produced here. The producer
-  # starts beside the plan instead of after it: it needs no plan output, and
-  # only its consumers wait for it, so the plan and every other check start
-  # sooner. It holds read-only contents and no secrets, so it may run before
-  # the plan decides trust; consumers validate every restored byte against
-  # their own checkout and toolchain, and the result gate requires it.
+  # Package checks restore generated sources produced here. Only those
+  # consumers wait for this job; every other check starts when the lighter
+  # plan finishes. It runs exactly when its consumers do, so a reused or
+  # untrusted run never generates.
   generated-sources:
+    needs: ci-plan
     if: >-
-      (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft != true)
-      && github.event.action != 'enqueued'
-      && inputs.heavy_only != true
+      (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+      &&
+      needs.ci-plan.outputs.run_required != 'false'
+      && (
+      inputs.heavy_only != true
+      && (
+        needs.ci-plan.outputs.trusted == 'true'
+        || github.event_name == 'workflow_dispatch'
+      )
+      && needs.ci-plan.outputs.package_checks_required == 'true'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
+      actions: write
     outputs:
       input_hash: ${{ steps.generate.outputs.input_hash || steps.cached.outputs.input_hash }}
     steps:
@@ -1752,6 +1769,8 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           include-hidden-files: true
+
+      - *merge_group_cancel
 
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
@@ -8354,7 +8373,7 @@ jobs:
           JOB_SCOPES: >-
             {
             "ci-quick-checks": null,
-            "generated-sources": null,
+            "generated-sources": "package_checks_required",
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": "ci_browser_required",

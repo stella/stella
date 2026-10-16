@@ -718,7 +718,7 @@ const releaseJobs = workflowJobs(
   ),
 );
 // Every check waits for the plan, so it stays install-light: one planner
-// install, and generation runs beside it in its own job.
+// install, and generation runs in its own job for its consumers only.
 test("the plan installs dependencies once and never generates sources", () => {
   const steps = v.parse(
     v.object({
@@ -774,11 +774,7 @@ const resultJob = v.parse(
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
-// The generated-source producer starts before the plan's trust decision, so
-// it holds no write permission; its failure skips its consumers instead.
-const PRE_TRUST_JOBS = new Set(["generated-sources"]);
 const CANCELLATION_EXCEPTIONS = new Set([
-  ...PRE_TRUST_JOBS,
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
@@ -823,23 +819,6 @@ test("only the code quality jobs end a failed pull request run, just before the 
   }
   expect(owners.toSorted()).toEqual([...PR_CODE_QUALITY_JOBS]);
   expect(PR_CODE_QUALITY_CANCEL_STEP.with.script).not.toContain("merge group");
-});
-
-test("only read-only jobs start before the plan decides trust", () => {
-  const unplanned = Object.entries(ciJobs).flatMap(([id, value]) =>
-    v.parse(v.looseObject({ needs: v.optional(v.unknown()) }), value).needs ===
-    undefined
-      ? [id]
-      : [],
-  );
-  expect(unplanned.toSorted()).toEqual(
-    ["ci-plan", ...PRE_TRUST_JOBS].toSorted(),
-  );
-  for (const id of PRE_TRUST_JOBS) {
-    expect(v.parse(cancellationJobSchema, ciJobs[id]).permissions, id).toEqual({
-      contents: "read",
-    });
-  }
 });
 
 test("every eligible CI job cancels a failed merge group in its final step with job-scoped permission", () => {
@@ -5255,8 +5234,6 @@ const runsAtDepth = (
     evaluate(condition, {
       values: {
         "github.event_name": event,
-        "github.event.action":
-          event === EVENT.mergeGroup ? "checks_requested" : "synchronize",
         "github.event.pull_request.labels.*.name": proveFix
           ? ["prove-fix"]
           : [],
@@ -6020,9 +5997,6 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     ]);
     const values = {
       "github.event_name": event,
-      "github.event.action":
-        event === EVENT.mergeGroup ? "checks_requested" : "synchronize",
-      "github.event.pull_request.draft": false,
       "inputs.heavy_only": false,
       "inputs.pr_depth_only": false,
       "github.event.pull_request.labels.*.name": [],
@@ -6052,8 +6026,7 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     );
     // The quick checks carry the wall-clock expiry check, which runs on every
     // candidate, and the Markdown checks; the parser guard stays unplanned.
-    // The generated-source producer starts before the plan knows the scope.
-    expect(scheduled).toEqual(["generated-sources", "ci-quick-checks"]);
+    expect(scheduled).toEqual(["ci-quick-checks"]);
     expect(resultJob.needs).toContain("ci-quick-checks");
     expect(fastRequired).toContain("ci-quick-checks");
     const partSelected = (prefix: string) =>
@@ -6457,7 +6430,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
+    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.planner-deps.outcome == 'success' && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",
@@ -6550,6 +6523,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "github.event_name": event,
           "vars.CI_POSTGRES_PR_SELECTION": prSwitch,
           "steps.completed-depth.outputs.run_required": "true",
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "needs.ci-plan.outputs.run_required": "true",
           "needs.ci-plan.outputs.queue_depth": "full",
@@ -6864,6 +6838,7 @@ test("Legal Atlas scope deadlines conservatively select the image after timeout 
       evaluate(condition, {
         values: {
           "steps.completed-depth.outputs.run_required": runRequired,
+          "steps.planner-deps.outcome": "success",
           "steps.api-test-deps.outcome": "success",
           "steps.changed-files.outputs.legal_atlas_image_required": "true",
         },

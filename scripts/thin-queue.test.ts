@@ -191,7 +191,6 @@ const context = ({
     event_name: event,
     ref: refFor(event),
     event: {
-      action: event === "merge_group" ? "checks_requested" : "synchronize",
       head_commit: { message },
       pull_request: {
         draft: false,
@@ -848,7 +847,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
-  // Retired jobs: generated sources now come from a producer beside the plan.
+  // Retired jobs: generated sources now come from the generated-sources job.
   const retiredJobs = new Set([
     "merge-group-fail-fast",
     "ci-generated-sources",
@@ -1275,6 +1274,8 @@ test("the planner emits the canonical thin set only when derived planning is sel
             steps: {
               depth: { outputs: { queue_depth: queueDepth } },
               "completed-depth": { outputs: { run_required: "true" } },
+              // The derivation also waits for the planner install.
+              "planner-deps": { outcome: "success" },
             },
           }),
         ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));

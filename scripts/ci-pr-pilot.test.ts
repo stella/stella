@@ -192,8 +192,6 @@ test("nonexistent calendar dates cannot certify fast coverage", async () => {
 const conditionContext = (profile: string, event: string, depth: string) => {
   const values: Record<string, string | boolean | string[]> = {
     "github.event_name": event,
-    "github.event.action":
-      event === "merge_group" ? "checks_requested" : "synchronize",
     "github.event.pull_request.draft": false,
     "github.event.pull_request.labels.*.name": [],
     "inputs.heavy_only": false,
@@ -385,10 +383,7 @@ test("docs-only PRs retain Markdown checks in every pilot coverage profile", () 
       .filter(([name]) => !["ci-plan", "ci-result"].includes(name))
       .filter(([, job]) => evaluate(job.if ?? "true", context) === true)
       .map(([name]) => name);
-    // The generated-source producer starts before the plan knows the scope.
-    expect(scheduled.toSorted()).toEqual(
-      [...PILOT_ALWAYS, "generated-sources"].toSorted(),
-    );
+    expect(scheduled).toEqual([...PILOT_ALWAYS]);
     // The Markdown checks are a part of the always-run quick checks.
     const docs = (workflow.jobs["ci-quick-checks"]?.steps ?? []).filter(
       (step) => step.name.startsWith("ci-checks-docs: "),
