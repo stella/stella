@@ -562,6 +562,37 @@ describe("name screening", () => {
   });
 });
 
+test("a completed screening reports exactly the work it needed", () => {
+  const query = { name: "Vladimir Putin" } as const;
+  const usages: { spent: number; limit: number }[] = [];
+  screen(index, query, {
+    cutoff: DEFAULT_CUTOFF,
+    onWork: (usage) => {
+      usages.push(usage);
+    },
+  }).unwrap();
+  expect(usages).toHaveLength(1);
+  const [usage] = usages;
+  if (usage === undefined) {
+    throw new Error("Missing work usage");
+  }
+  expect(usage.limit).toBe(MAX_SCREENING_WORK);
+  expect(usage.spent).toBeGreaterThan(1);
+  const bounded = (maxWork: number) =>
+    screen(index, query, { cutoff: DEFAULT_CUTOFF, maxWork });
+  expect(bounded(usage.spent).isOk()).toBe(true);
+  expect(bounded(usage.spent - 1).isErr()).toBe(true);
+  const rejected: unknown[] = [];
+  screen(index, query, {
+    cutoff: DEFAULT_CUTOFF,
+    maxWork: usage.spent - 1,
+    onWork: (failed) => {
+      rejected.push(failed);
+    },
+  });
+  expect(rejected).toEqual([]);
+});
+
 describe("warm screening", () => {
   let commonLists: ParsedList[];
   let realistic: ReturnType<typeof buildScreeningIndex>;

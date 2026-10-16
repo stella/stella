@@ -654,6 +654,82 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
+  // The tracker finds an uploaded source map only through the chunk id the
+  // release build injected; without it, frames stay minified.
+  test("a sanitized frame keeps the injected chunk id and nothing shaped otherwise", () => {
+    const chunkId = "0199f2a4-5d1e-7c3a-9b2f-1e4d5c6b7a80";
+    expect(
+      sanitizeFrame({ filename: "app.js", lineno: 3, chunk_id: chunkId }),
+    ).toMatchObject({ chunk_id: chunkId });
+    expect(
+      sanitizeFrame({ filename: "app.js", chunk_id: "Smith v Example" }),
+    ).not.toHaveProperty("chunk_id");
+    expect(
+      sanitizeFrame({ filename: "app.js", chunk_id: 7 }),
+    ).not.toHaveProperty("chunk_id");
+  });
+
+  test("an exception carries its session and route template, never the resolved URL", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test/law/cze/cases/nss/a-1"),
+    });
+    analytics.capturePageViewed({ path: "/law/$country/cases/$court/$slug" });
+
+    const exception = (url: string) =>
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $current_url: url,
+          $session_id: "session-1",
+          $window_id: "window-1",
+          $exception_list: [{ type: "TypeError", value: "secret" }],
+        },
+      })?.properties;
+
+    expect(
+      exception("https://app.example.test/law/cze/cases/nss/a-1?q=secret"),
+    ).toMatchObject({
+      $session_id: "session-1",
+      $window_id: "window-1",
+      $current_url: "https://app.example.test/law/$country/cases/$court/$slug",
+      $pathname: "/law/$country/cases/$court/$slug",
+    });
+    const unknown = exception("https://app.example.test/workspaces/ws_1");
+    expect(unknown).toMatchObject({ $session_id: "session-1" });
+    expect(unknown).not.toHaveProperty("$current_url");
+    expect(unknown).not.toHaveProperty("$pathname");
+  });
+
+  test("placement gaps are a counted event, not an exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.captureProvisionPlacementGaps({
+      surface: "full-reader",
+      kind: "expected",
+      reason: "work-unresolved",
+      count: 3,
+    });
+
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.provisionPlacementGaps,
+      {
+        surface: "full-reader",
+        kind: "expected",
+        reason: "work-unresolved",
+        count: 3,
+      },
+    );
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
   test("captureError ignores null and undefined", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
