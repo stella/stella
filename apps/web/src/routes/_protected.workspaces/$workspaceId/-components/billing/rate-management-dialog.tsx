@@ -9,6 +9,7 @@ import {
   CURRENCY_CODE_LENGTH,
   currencyCodeSchema,
 } from "@stll/api-contract/currency-code";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { tryToMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -35,7 +36,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { apiFieldIssueMessage, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -186,6 +187,23 @@ const RateTablesView = ({
     },
   });
 
+  // The form awaits the outcome: undefined closes it, a message marks the name
+  // field. A named handler rather than an inline async callback, so the form
+  // owns the promise instead of the JSX dropping it.
+  const submitRateTable: Parameters<
+    typeof CreateRateTableForm
+  >[0]["onSubmit"] = async (values) =>
+    await createTable.mutateAsync({ workspaceId, ...values }).then(
+      () => {
+        setShowForm(false);
+        return undefined;
+      },
+      (error: unknown) => {
+        notifyUserError(error, t("common.somethingWentWrong"));
+        return apiFieldIssueMessage(error, "name");
+      },
+    );
+
   const handleSetDefault = (id: string) => {
     updateTable.mutate(
       { workspaceId, id, isDefault: true },
@@ -225,17 +243,7 @@ const RateTablesView = ({
       {showForm && (
         <CreateRateTableForm
           onCancel={() => setShowForm(false)}
-          onSubmit={(values) => {
-            createTable.mutate(
-              { workspaceId, ...values },
-              {
-                onSuccess: () => setShowForm(false),
-                onError: (error) => {
-                  notifyUserError(error, t("common.somethingWentWrong"));
-                },
-              },
-            );
-          }}
+          onSubmit={submitRateTable}
         />
       )}
 
@@ -307,15 +315,16 @@ const RateTablesView = ({
 
 // --- Create Rate Table Form ---
 
-const CreateRateTableForm = ({
+export const CreateRateTableForm = ({
   onSubmit,
   onCancel,
 }: {
+  /** Resolves with the server's message for the name when it rejected it. */
   onSubmit: (values: {
     name: string;
     currency: string;
     isDefault?: boolean;
-  }) => void;
+  }) => Promise<string | undefined>;
   onCancel: () => void;
 }) => {
   const t = useTranslations();
@@ -341,8 +350,13 @@ const CreateRateTableForm = ({
         currency: "USD",
         isDefault: false,
       },
-      onSubmit: ({ value }) => {
-        onSubmit(value);
+      onSubmit: async ({ value, formApi }) => {
+        const nameIssue = await onSubmit(value);
+        if (nameIssue !== undefined) {
+          formApi.setErrorMap({
+            onSubmit: { fields: { name: nameIssue } },
+          });
+        }
       },
     }),
   );
@@ -371,6 +385,7 @@ const CreateRateTableForm = ({
                 <FieldLabel>{t("common.name")}</FieldLabel>
                 <Input
                   autoFocus
+                  maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.currentTarget.value)}
                   placeholder={t("billing.rates.tableNamePlaceholder")}

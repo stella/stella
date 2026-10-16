@@ -154,6 +154,8 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export",
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "xlsx" },
@@ -342,6 +344,8 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export",
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "csv" },

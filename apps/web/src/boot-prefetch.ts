@@ -205,7 +205,7 @@ export const startBootPrefetch = ({
       },
       signal: requestSignal(),
     },
-  ).catch((error: unknown) => reportAndDrop(error, "/get-session"));
+  ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
   slots["/get-session"] = {
     controller,
     generation,
@@ -249,8 +249,9 @@ export const startBootPrefetch = ({
           signal: requestSignal(),
         });
       })
-      .catch((error: unknown) =>
-        reportAndDrop(error, "/organization/get-active-member-role"),
+      .catch(
+        async (error: unknown) =>
+          await reportAndDrop(error, "/organization/get-active-member-role"),
       ),
   };
 };

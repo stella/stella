@@ -175,8 +175,8 @@ describe("captureError issue grouping", () => {
       options,
     );
     expect(captured).toHaveLength(2);
-    expect(captured.at(0)?.properties.$exception_fingerprint).not.toBe(
-      captured.at(1)?.properties.$exception_fingerprint,
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
     );
   });
 

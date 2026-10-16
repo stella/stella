@@ -41,3 +41,30 @@ export const exceptionCauseChainIdentity = <TNode>({
   }
   return classes.length === 0 ? ["UnknownError"] : classes;
 };
+
+type ClassifiedCauseNode = {
+  type: string;
+  fields?: Readonly<Record<string, string>> | undefined;
+};
+
+/** Repeated classes keep each finite classification at its causal position. */
+export const exceptionCauseFieldsIdentity = (
+  nodes: readonly ClassifiedCauseNode[],
+): Record<string, string> => {
+  const fields = new Map<string, string>();
+  for (const [index, node] of nodes
+    .slice(0, MAX_EXCEPTION_CAUSE_DEPTH)
+    .entries()) {
+    for (const [field, value] of Object.entries(node.fields ?? {}).toSorted(
+      ([left], [right]) => {
+        if (left === right) {
+          return 0;
+        }
+        return left < right ? -1 : 1;
+      },
+    )) {
+      fields.set(`cause${index}.${classIdentity(node.type)}.${field}`, value);
+    }
+  }
+  return Object.fromEntries(fields);
+};

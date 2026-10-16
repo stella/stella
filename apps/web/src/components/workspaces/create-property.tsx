@@ -5,6 +5,7 @@ import type { Editor } from "@tiptap/react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { stableStringify } from "@stll/stable-stringify";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -808,6 +809,7 @@ const PropertyComposerBody = ({
           autoComplete="off"
           autoFocus
           className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {

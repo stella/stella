@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   exceptionCauseChainIdentity,
+  exceptionCauseFieldsIdentity,
   MAX_EXCEPTION_CAUSE_DEPTH,
 } from "./exception-cause-chain";
 
@@ -85,4 +86,41 @@ test("cause-chain identity excludes non-class text and handles absent errors", (
       readNode,
     }),
   ).toEqual(["UnknownError"]);
+});
+
+test("finite classifications distinguish every repeated-class cause ordering", () => {
+  for (let depth = 1; depth <= MAX_EXCEPTION_CAUSE_DEPTH; depth += 1) {
+    const fingerprints = new Set<string>();
+    const combinationCount = 2 ** depth;
+    for (
+      let combination = 0;
+      combination < combinationCount;
+      combination += 1
+    ) {
+      const nodes = Array.from({ length: depth }, (_, index) => ({
+        type: "ClassifiedError",
+        fields: {
+          reason:
+            Math.floor(combination / 2 ** index) % 2 === 0
+              ? "decode"
+              : "encode",
+          stage: "parse",
+        },
+      }));
+      const identity = exceptionCauseFieldsIdentity(nodes);
+      expect(Object.keys(identity)).toHaveLength(depth * 2);
+      fingerprints.add(JSON.stringify(identity));
+      expect(
+        exceptionCauseFieldsIdentity(
+          nodes.map((node) => ({
+            type: node.type,
+            fields: Object.fromEntries(
+              Object.entries(node.fields).toReversed(),
+            ),
+          })),
+        ),
+      ).toEqual(identity);
+    }
+    expect(fingerprints.size).toBe(combinationCount);
+  }
 });

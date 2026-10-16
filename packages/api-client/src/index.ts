@@ -29,10 +29,10 @@ export const createStellaEdenClient = <TApi extends AnyElysia>(
 ) => {
   const { fetch, onScopedResponse, ...config } = options;
   const defaultFetcher = Object.assign(
-    (
+    async (
       input: Parameters<typeof globalThis.fetch>[0],
       init: Parameters<typeof globalThis.fetch>[1],
-    ) => globalThis.fetch(input, init),
+    ) => await globalThis.fetch(input, init),
     { preconnect: globalThis.fetch.preconnect },
   );
   const scoped =

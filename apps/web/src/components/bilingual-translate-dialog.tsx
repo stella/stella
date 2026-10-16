@@ -150,10 +150,6 @@ export const BilingualTranslateDialog = ({
       reportFailure(error, {
         title: t("bilingualTranslate.error.prepareTitle"),
         fingerprintKey: "BilingualTranslateDialog:prepare",
-        scope: {
-          type: "handler",
-          handlerId: "BilingualTranslateDialog:prepare",
-        },
       });
     },
   });
@@ -180,7 +176,6 @@ export const BilingualTranslateDialog = ({
       reportFailure(error, {
         title: t("bilingualTranslate.error.startTitle"),
         fingerprintKey: "BilingualTranslateDialog:start",
-        scope: { type: "handler", handlerId: "BilingualTranslateDialog:start" },
       });
     },
   });

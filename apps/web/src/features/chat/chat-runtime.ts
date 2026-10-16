@@ -20,6 +20,7 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
+import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
@@ -336,6 +337,8 @@ export const createChatRuntime = ({
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
 }: CreateChatRuntimeProps): ChatRuntime => {
+  const observeTurnTimings = createChatTurnTimingObserver();
+  observeTurnTimings(initialMessages, performance.now());
   const listeners = new Set<() => void>();
   let subscriberCount = 0;
   let replayFloor = activeTurnId === null ? undefined : initialMessages;
@@ -407,6 +410,9 @@ export const createChatRuntime = ({
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
+    if (patch.messages !== undefined) {
+      observeTurnTimings(snapshot.messages, performance.now());
+    }
     emit();
   };
 
@@ -775,6 +781,7 @@ export const createChatRuntime = ({
             ? persisted
             : keepShownRejoinMessages(replayFloor, persisted),
       };
+      observeTurnTimings(snapshot.messages, performance.now());
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>

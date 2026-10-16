@@ -38,6 +38,10 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
+import {
+  readProvisionPendingCounts,
+  unavailableProvisionPendingCounts,
+} from "@/api/lib/case-law/provision-pending";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -54,7 +58,9 @@ import type {
   LegalSearchEngine,
 } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -178,6 +184,11 @@ type CaseLawCoverage = {
   };
   countries: readonly CaseLawCoverageCountry[];
 };
+
+const provisionStatusReadFailure = failureSink({
+  event: "case_law.coverage.provision_status_unavailable",
+  expected: [],
+});
 
 class CoverageError extends TaggedError("CoverageError")<{
   message: string;
@@ -559,7 +570,14 @@ export const loadCaseLawCoverage = async ({
 
 export const readCaseLawCoverageHandler = async (
   caseLawDb: CaseLawPublicReadDb,
-): Promise<CaseLawCoverage | { message: string }> => {
+): Promise<
+  | (CaseLawCoverage & {
+      provisionProcessing: Awaited<
+        ReturnType<typeof readProvisionPendingCounts>
+      >;
+    })
+  | { message: string }
+> => {
   // Read ahead of the cache: the source policy is an input to the answer, so a
   // revocation changes the key instead of keeping a withheld source's numbers
   // public for a whole window.
@@ -647,5 +665,22 @@ export const readCaseLawCoverageHandler = async (
     return { message: "Coverage is unavailable" };
   }
 
-  return result.value;
+  const provisionProcessing = await Result.tryPromise({
+    try: async () =>
+      await caseLawDb(readProvisionPendingCounts, {
+        isolation: "repeatable-read",
+      }),
+    catch: coverageError("reading provision status failed"),
+  });
+  if (Result.isError(provisionProcessing)) {
+    observeFailure(provisionProcessing.error, {
+      sink: provisionStatusReadFailure,
+    });
+  }
+  return {
+    ...result.value,
+    provisionProcessing: Result.isError(provisionProcessing)
+      ? unavailableProvisionPendingCounts()
+      : provisionProcessing.value,
+  };
 };

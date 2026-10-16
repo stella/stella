@@ -69,6 +69,7 @@ export const resolveStatutesHandler = async (
   const requests: WorkAtDateRequest[] = [];
   for (const [index, work] of body.works.entries()) {
     const countryRead = readPublicLawCountry(work.country, {
+      domain: "legislation",
       admitted: PUBLIC_LEGISLATION_COUNTRIES,
       surface: "search",
     });
@@ -112,6 +113,7 @@ export const resolveStatutesHandler = async (
   return projectResolveStatutesResponse({
     items: body.works.map((work, index) => {
       const countryRead = readPublicLawCountry(work.country, {
+        domain: "legislation",
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
         surface: "search",
       });

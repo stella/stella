@@ -95,6 +95,8 @@ describe("correspondence handling audit", () => {
               memberRole: sessionMemberRole("owner"),
               user: { id: ids.userA1 },
               request: new Request("https://api.example.test/correspondence"),
+              route:
+                "/v1/workspaces/:workspaceId/correspondence/:correspondenceId",
               session: { activeOrganizationId: ids.orgA },
               safeDb: asTestRaw<SafeDb>(
                 createSafeDb(

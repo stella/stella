@@ -1,11 +1,14 @@
 import { exceptionScopeIdentity, type ExceptionScope } from "@stll/errors";
-import { exceptionCauseChainIdentity } from "@stll/errors/exception-cause-chain";
+import {
+  exceptionCauseChainIdentity,
+  exceptionCauseFieldsIdentity,
+} from "@stll/errors/exception-cause-chain";
+import type { StableExceptionKey } from "@stll/errors/exception-context";
 
 import { identityFields } from "@/api/lib/observability/failure";
 import type { FailureEvidence } from "@/api/lib/observability/failure-evidence";
 
-/** A source-owned function/path label, never an entity ID or stack symbol. */
-export type StableExceptionKey = `${string}.${string}`;
+export type { StableExceptionKey } from "@stll/errors/exception-context";
 
 /**
  * Grouping and suppression share one identity. The explicit owner survives
@@ -37,12 +40,11 @@ export const exceptionFingerprint = (
     ].toSorted(),
     fields["error.code"] ?? "",
     fields["error.cause.pg_code"] ?? "",
-    evidence.nodes
-      .flatMap((node) =>
-        Object.entries(node.discriminators ?? {}).map(([field, value]) =>
-          JSON.stringify([node.tag, field, value]),
-        ),
-      )
-      .toSorted(),
+    exceptionCauseFieldsIdentity(
+      evidence.nodes.map((node) => ({
+        type: node.tag,
+        fields: node.discriminators,
+      })),
+    ),
   ]);
 };

@@ -146,13 +146,11 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
       }
       options.onSuccess?.(data, variables);
     },
-    ...(invalidatesOnSettle
-      ? {
-          onSettled: (_data, _error, variables) => {
-            invalidateInBackground(variables);
-          },
-        }
-      : {}),
+    onSettled: (_data, _error, variables) => {
+      if (invalidatesOnSettle) {
+        invalidateInBackground(variables);
+      }
+    },
     onError: (error, variables) => {
       analytics.captureError(error, {
         fingerprintKey: "useSettingsMutation:failure",

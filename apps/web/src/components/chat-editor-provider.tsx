@@ -34,6 +34,7 @@ import {
   isChatFileMimeType,
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
+import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -985,6 +986,7 @@ export const useChatEditor = ({
     Paragraph,
     Text,
     Bold,
+    ChatComposerLinks,
     // Shift+Enter inserts a hard break (newline) instead of
     // splitting the paragraph; matches expected chat-input
     // behaviour everywhere — Slack, Discord, ChatGPT, etc.

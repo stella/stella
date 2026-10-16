@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { exceptionScopeIdentity } from "@stll/errors";
+import { withExceptionScope as withSharedExceptionScope } from "@stll/errors/exception-scope-context";
 
 import { getExceptionScopes, withExceptionScope } from "./exception-scope";
 
@@ -8,13 +9,16 @@ test("concurrent captures retain additive scopes without leaking between executi
   const scope = { type: "handler", handlerId: "shared.reportFailure" } as const;
   const results = await Promise.all(
     ["first", "second"].map((jobId) =>
-      withExceptionScope({ type: "job", jobId, task: "repair" }, async () => {
-        await Promise.resolve();
-        return await withExceptionScope(scope, async () => {
+      withSharedExceptionScope(
+        { type: "job", jobId, task: "repair" },
+        async () => {
           await Promise.resolve();
-          return getExceptionScopes().map(exceptionScopeIdentity);
-        });
-      }),
+          return await withExceptionScope(scope, async () => {
+            await Promise.resolve();
+            return getExceptionScopes().map(exceptionScopeIdentity);
+          });
+        },
+      ),
     ),
   );
   expect(results).toEqual([

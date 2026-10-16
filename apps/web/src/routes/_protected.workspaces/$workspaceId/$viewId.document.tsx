@@ -973,7 +973,7 @@ function RouteComponentInner({
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
   return (
-    <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden">
+    <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle

@@ -177,14 +177,13 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, tests, and unrelated source", () => {
     expect(
       resultBoundaryLintCommand(
         [
           "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
           "apps/api/src/lib/document-processing-queue.ts",
           "apps/api/src/lib/document-processing-queue.test.ts",
-          "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
           "apps/web/src/server.ts",

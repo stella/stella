@@ -12,6 +12,7 @@ import {
   fingerprintExceptionScope,
   isExceptionFingerprintKey,
   routeExceptionFingerprintKey,
+  sanitizeFingerprintFields,
 } from "@/lib/analytics/exception-fingerprint";
 
 const fixture = {
@@ -359,4 +360,31 @@ test("captured causal class sequences terminate at repeated error objects", () =
     "TypeError",
     "ReferenceError",
   ]);
+});
+
+test("declared reasons remain distinct at every repeated causal class position", () => {
+  assertProperty(
+    "declared reasons remain distinct at every repeated causal class position",
+    fc.property(fc.boolean(), (changeOuter) => {
+      const identity = (
+        outerReason: "decode" | "encode",
+        innerReason: "decode" | "encode",
+      ) => {
+        const outer = new ClassifiedError(outerReason);
+        outer.cause = new ClassifiedError(innerReason);
+        const { types, fields } = capturedExceptionIdentity(outer);
+        return fingerprintExceptionEvent({
+          ...fixture,
+          entries: types.map((type) => ({ type })),
+          fields: sanitizeFingerprintFields(fields),
+        });
+      };
+      expect(identity("decode", "decode")).not.toBe(
+        identity(
+          changeOuter ? "encode" : "decode",
+          changeOuter ? "decode" : "encode",
+        ),
+      );
+    }),
+  );
 });

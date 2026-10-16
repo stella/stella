@@ -2,6 +2,7 @@ import type { ExceptionScope } from "@stll/errors";
 
 import {
   capturedExceptionIdentity,
+  capturedApiErrorIdentity,
   fingerprintExceptionEvent,
   fingerprintExceptionScope,
 } from "@/lib/analytics/exception-fingerprint";
@@ -26,5 +27,5 @@ export const fingerprintTelemetryError = (
   { key, scope }: FingerprintTelemetryErrorOptions,
 ): string => {
   const { types, fields } = capturedExceptionIdentity(error);
-  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: types.map((type) => ({ type })), key, scopeIdentity: fingerprintExceptionScope(scope), fields }))}`;
+  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: types.map((type) => ({ type })), key, scopeIdentity: fingerprintExceptionScope(scope), http: capturedApiErrorIdentity(error), fields }))}`;
 };

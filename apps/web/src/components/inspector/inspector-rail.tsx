@@ -46,6 +46,7 @@ import type {
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
@@ -67,7 +68,6 @@ export const InspectorRail = ({
   onOpenChat,
   onSetMinimized,
   tabs,
-  workspaceId,
 }: InspectorRailProps) => {
   const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
@@ -94,7 +94,13 @@ export const InspectorRail = ({
     activeTab,
     activeSkillCatalogueData?.entries,
   );
-  const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
+  // A new chat is about the matter in the URL, not the matter this rail
+  // displays (the active tab's, which the user may have left).
+  const routeWorkspaceId = useRouteWorkspaceId();
+  const railContextMenu = useRailContextMenu({
+    activeSkill,
+    workspaceId: routeWorkspaceId,
+  });
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
   const legalDocument = useMainLegalDocument();
@@ -126,7 +132,13 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(railChatOpenArgs({ activeSkill, legalDocument, workspaceId }));
+    onOpenChat(
+      railChatOpenArgs({
+        activeSkill,
+        legalDocument,
+        workspaceId: routeWorkspaceId,
+      }),
+    );
   };
 
   const toggleLabel = (() => {
@@ -239,7 +251,6 @@ type InspectorRailProps = {
   ) => void;
   onSetMinimized: (minimized: boolean) => void;
   tabs: InspectorTab[];
-  workspaceId?: string | undefined;
 };
 
 const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {

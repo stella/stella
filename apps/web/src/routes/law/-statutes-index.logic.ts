@@ -33,6 +33,7 @@ export const createStatuteListFilters = (
   ...createStatuteFilters(country, readStatuteIntent(country, search.q)),
   ...(search.type === undefined ? {} : { documentType: search.type }),
   ...(search.validity === undefined ? {} : { validity: search.validity }),
+  ...(search.year === undefined ? {} : { year: search.year }),
 });
 
 /**

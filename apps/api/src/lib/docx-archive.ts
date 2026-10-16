@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { DocxArchiveError, loadDocx } from "@stll/docx-utils";
 import type { ArchiveOptions } from "@stll/docx-utils";
-import { declareFingerprintFields } from "@stll/errors";
+import { declareFingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

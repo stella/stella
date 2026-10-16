@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import { isTaggedError, Result } from "better-result";
 
 import {
   exceptionCauseChainIdentity,
+  exceptionCauseFieldsIdentity,
   MAX_EXCEPTION_CAUSE_DEPTH,
 } from "@stll/errors/exception-cause-chain";
 import type { ExceptionScope } from "@stll/errors/exception-scope";
@@ -9,6 +10,7 @@ import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
 import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
+import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 
 // Capture owners declare these keys in source. Engine-inferred symbols can
 // contain computed user data and minified names, so they are never identity.
@@ -29,6 +31,56 @@ export type ApiErrorIdentity = {
   status: number;
   code?: string | undefined;
 };
+
+const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
+const HTTP_STATUS_MIN = 100;
+const HTTP_STATUS_MAX = 599;
+
+type ReadApiErrorIdentityOptions = { status: unknown; code: unknown };
+
+/** Only validated HTTP classifications participate in telemetry identity. */
+export const readApiErrorIdentity = ({
+  status,
+  code,
+}: ReadApiErrorIdentityOptions): ApiErrorIdentity | undefined => {
+  if (
+    typeof status !== "number" ||
+    !Number.isInteger(status) ||
+    status < HTTP_STATUS_MIN ||
+    status > HTTP_STATUS_MAX
+  ) {
+    return undefined;
+  }
+  return {
+    status,
+    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+  };
+};
+
+/** Wrappers preserve their API outcome; arbitrary response text is excluded. */
+export const capturedApiErrorIdentity = (
+  error: unknown,
+): ApiErrorIdentity | undefined =>
+  Result.try(() => {
+    const seen = new Set<object>();
+    let current = error;
+    while (
+      typeof current === "object" &&
+      current !== null &&
+      !seen.has(current) &&
+      seen.size < MAX_EXCEPTION_CAUSE_DEPTH
+    ) {
+      seen.add(current);
+      if (isTaggedError(current) && current._tag === API_ERROR_TAG) {
+        return readApiErrorIdentity({
+          status: Reflect.get(current, "status"),
+          code: Reflect.get(current, "code"),
+        });
+      }
+      current = Reflect.get(current, "cause");
+    }
+    return undefined;
+  }).unwrapOr(undefined);
 
 type ExceptionFingerprintInput = {
   entries: readonly FingerprintEntry[];
@@ -73,7 +125,8 @@ export const capturedExceptionIdentity = (error: unknown) =>
   Result.try(() => {
     let current = error;
     const seen = new Set<Error>();
-    const fields = new Map<string, string>();
+    const nodes: Parameters<typeof exceptionCauseFieldsIdentity>[0][number][] =
+      [];
     const reads = new WeakMap<object, Map<string, unknown>>();
     const read = (value: object, key: string): unknown => {
       let cached = reads.get(value);
@@ -112,14 +165,12 @@ export const capturedExceptionIdentity = (error: unknown) =>
         prototypes,
         read,
       });
-      for (const [field, value] of Object.entries(declared ?? {})) {
-        fields.set(`${type}.${field}`, value);
-      }
+      nodes.push({ type, fields: declared });
       current = current.cause;
     }
     return {
       types: types.length > 0 ? types : [telemetryErrorType(error)],
-      fields: Object.fromEntries(fields),
+      fields: exceptionCauseFieldsIdentity(nodes),
     };
   }).unwrapOr({ types: ["UnknownError"], fields: {} });
 

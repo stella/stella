@@ -47,6 +47,25 @@ const write = (root: string, file: string, contents: string) => {
   writeFileSync(absolute, contents);
 };
 
+const prepareRustFixture = async (root: string) => {
+  const env = { CARGO_TARGET_DIR: path.join(root, "target") };
+  // Cold compilation is fixture setup, not part of the discovery/execution
+  // deadline. Keep Cargo output local so concurrent fixtures cannot lock it.
+  const build = Bun.spawn(["cargo", "test", "--lib", "--no-run"], {
+    cwd: root,
+    env: { ...process.env, ...env },
+    stdout: "ignore",
+    stderr: "pipe",
+    timeout: 60_000,
+  });
+  const [status, stderr] = await Promise.all([
+    build.exited,
+    new Response(build.stderr).text(),
+  ]);
+  expect(status, stderr).toBe(0);
+  return env;
+};
+
 test.each([
   '#[tokio::test(flavor = "multi_thread")]',
   '#[sqlx::test(migrations = "./migrations")]',
@@ -402,14 +421,17 @@ test("a real Cargo module excludes failing substring siblings and unrelated bina
     if (!target) {
       throw new TypeError("Expected real Rust module target");
     }
-    expect(await runOnce({ target, seed: 1, timeoutMs: 20_000 })).toEqual({
+    const env = await prepareRustFixture(root);
+    expect(
+      await runOnce({ target: { ...target, env }, seed: 1, timeoutMs: 20_000 }),
+    ).toEqual({
       type: "executed",
       passed: true,
       status: 0,
       ranTests: true,
     });
   });
-}, 30_000);
+}, 90_000);
 
 test("real Cargo modules absent on this target and ignored-only modules are reported as typed skips", async () => {
   await withAsyncFixture(async (root) => {
@@ -424,12 +446,15 @@ test("real Cargo modules absent on this target and ignored-only modules are repo
       "src/ignored_feature.rs",
       '#[ignore] #[test] fn ignored() { panic!("must stay ignored"); }\n',
     );
+    const env = await prepareRustFixture(root);
+    const selected = selectTargets({
+      root,
+      changed: ["src/feature.rs", "src/ignored_feature.rs"],
+      hasDb: false,
+    });
     const report = await executeGate({
-      ...selectTargets({
-        root,
-        changed: ["src/feature.rs", "src/ignored_feature.rs"],
-        hasDb: false,
-      }),
+      ...selected,
+      targets: selected.targets.map((target) => ({ ...target, env })),
       budgetMs: 20_000,
     });
     expect(report.errors).toEqual([]);
@@ -445,7 +470,7 @@ test("real Cargo modules absent on this target and ignored-only modules are repo
       },
     ]);
   });
-}, 30_000);
+}, 90_000);
 
 const fakeCargoTarget = (root: string, source: string): Target => {
   const executable = path.join(root, "bin/cargo");
@@ -480,11 +505,15 @@ test("successful listing followed by zero exact executions fails rather than bec
 
 test("listing and exact execution consume one shared deadline", async () => {
   await withAsyncFixture(async (root) => {
+    // Leave room for process startup under load while keeping the two
+    // successful phases longer than their shared deadline.
+    const phaseDelayMs = 2000;
+    const timeoutMs = 3000;
     const target = fakeCargoTarget(
       root,
-      `await Bun.write(Bun.argv.includes("--list") ? "listed" : "executed", "yes"); await Bun.sleep(200); console.log(Bun.argv.includes("--list") ? "feature::works: test" : "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;");`,
+      `await Bun.write(Bun.argv.includes("--list") ? "listed" : "executed", "yes"); await Bun.sleep(${phaseDelayMs}); console.log(Bun.argv.includes("--list") ? "feature::works: test" : "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;");`,
     );
-    expect(await runOnce({ target, seed: 1, timeoutMs: 350 })).toEqual({
+    expect(await runOnce({ target, seed: 1, timeoutMs })).toEqual({
       type: "executed",
       passed: false,
       status: 124,

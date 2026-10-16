@@ -1310,7 +1310,7 @@ const CreateContactDialog = ({
               )}
             </DialogPanel>
           ) : (
-            <DialogPanel className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+            <DialogPanel className="flex max-h-[60dvh] flex-col gap-4 overflow-y-auto">
               <ProcuracaoReview extraction={extraction} />
             </DialogPanel>
           )}

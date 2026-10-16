@@ -204,11 +204,15 @@ export const SignalCard = ({
       successMessage: null,
     });
 
-  const snooze = (period: "tomorrow" | "next-week") =>
-    run(() => snoozeSignal({ ...mutationArgs, until: snoozeUntil(period) }), {
-      scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
-      successMessage: null,
-    });
+  const snooze = async (period: "tomorrow" | "next-week") =>
+    await run(
+      async () =>
+        await snoozeSignal({ ...mutationArgs, until: snoozeUntil(period) }),
+      {
+        scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
+        successMessage: null,
+      },
+    );
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
   const taskSuggestion = signal.suggestions.find(

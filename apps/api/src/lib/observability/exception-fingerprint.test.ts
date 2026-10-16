@@ -77,6 +77,34 @@ test("typed reasons distinguish failures at the same owner", () => {
   }
 });
 
+test("finite reasons retain their positions through repeated error classes", () => {
+  const reasons = ["runtime", "timeout", "transpile"] as const;
+  const fingerprints = new Set<string>();
+  for (const reason of reasons) {
+    for (const causeReason of reasons) {
+      fingerprints.add(
+        exceptionFingerprint(
+          readEvidence(
+            new SandboxError({
+              message: "failure",
+              reason,
+              cause: new SandboxError({
+                message: "failure",
+                reason: causeReason,
+              }),
+            }),
+          ),
+          {
+            fingerprintKey: "sandbox.execute",
+            scope: { type: "handler", handlerId: "sandbox.execute" },
+          },
+        ),
+      );
+    }
+  }
+  expect(fingerprints.size).toBe(reasons.length ** 2);
+});
+
 test("cause-chain shape distinguishes failures at the same declared path", () => {
   const error = new Error("failure");
   const wrapped = new Error("wrapper", { cause: error });

@@ -269,7 +269,7 @@ export const PersonalTimesheetDay = ({
                 narrative,
                 narrativeLanguage: null,
                 billable: false,
-              }).catch((error) =>
+              }).catch((error: unknown) =>
                 reportFailure(error, "PersonalTimesheetDay:accept-suggestion"),
               ),
               "personal-timesheet-day.accept-suggestion",
@@ -277,7 +277,7 @@ export const PersonalTimesheetDay = ({
           }}
           onDismiss={(suggestion) => {
             detached(
-              dismissSuggestion(suggestion).catch((error) =>
+              dismissSuggestion(suggestion).catch((error: unknown) =>
                 reportFailure(error, "PersonalTimesheetDay:dismiss-suggestion"),
               ),
               "personal-timesheet-day.dismiss-suggestion",

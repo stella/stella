@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { handlerErrorContext } from "@stll/errors/exception-context";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
@@ -17,7 +18,6 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   isCorpusS3Stale,
   isS3Stale,

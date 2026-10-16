@@ -21,6 +21,7 @@ import { eraseCorpusObjects } from "@/api/handlers/case-law/erasure";
 import type { CorpusObjectErasure } from "@/api/handlers/case-law/erasure";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   cancelCaseLawCorpusUploadIntents,
@@ -238,6 +239,7 @@ export const withdrawCaseLawDecisionDocument = async ({
         subject: { family: "case_law", entityId: decisionId },
       });
     }
+    await runDecisionWriteExtension(tx, decisionId);
     return { type: "written", cancelledIntents };
   });
 

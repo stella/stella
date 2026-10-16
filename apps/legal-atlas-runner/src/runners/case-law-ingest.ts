@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { handlerErrorContext } from "@stll/errors/exception-context";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -76,8 +78,6 @@ import {
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isCorpusS3Stale,

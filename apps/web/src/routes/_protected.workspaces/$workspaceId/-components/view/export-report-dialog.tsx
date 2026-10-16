@@ -104,14 +104,14 @@ const reportExportCaptureOptions = (request: ReportExportRequest) =>
       ...ERROR_CAPTURE.submit,
       scope: {
         type: "handler",
-        handlerId: `report-export.submit.${request.mode}.${request.format}`,
+        handlerId: `report-export.submit.${request.mode}.${request.format ?? "docx"}`,
       },
     },
     started: {
       ...ERROR_CAPTURE.submitted,
       scope: {
         type: "handler",
-        handlerId: `report-export.started.${request.mode}.${request.format}`,
+        handlerId: `report-export.started.${request.mode}.${request.format ?? "docx"}`,
       },
     },
   }) as const;
@@ -479,7 +479,7 @@ const ExportReportDialogBody = ({
           {t("workspaces.views.reportExport.description")}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
+      <DialogPanel className="flex max-h-[70dvh] flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium" id="report-template-label">
             {t("workspaces.views.reportExport.templateLabel")}

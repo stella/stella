@@ -26,6 +26,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
 import {
   groupProvisionsByWork,
+  provisionStatusMessage,
   summarizeProvisionVersions,
   type ProvisionGroup,
   type WorkGroup,
@@ -123,14 +124,18 @@ export const ProvisionsCited = ({
   const statuteByWork = statuteByCitedWork(resolved);
   const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
-  // Absent is the answer for a decision that applies no provisions. A failed
-  // read is not that answer, so it keeps the panel and says so instead of
-  // disappearing as though the decision cited nothing. Until hydrated the
-  // panel is absent either way: the non-blocking prefetch may be known on
-  // one side of hydration and not the other.
+  const firstPage = data?.pages.at(0);
+  const statusMessage =
+    firstPage === undefined
+      ? null
+      : provisionStatusMessage(
+          firstPage.status,
+          groups.length,
+          firstPage.capability,
+        );
   const environmentHydrated = useHydrated();
   const hydrated = isHydrated ?? environmentHydrated;
-  if (!hydrated || (groups.length === 0 && !isError)) {
+  if (!hydrated || (data === undefined && !isError)) {
     return null;
   }
 
@@ -141,6 +146,11 @@ export const ProvisionsCited = ({
         expanded === undefined && "px-3 pb-3",
       )}
     >
+      {!isError && statusMessage !== null && (
+        <p className="text-muted-foreground text-xs" role="status">
+          {t(statusMessage)}
+        </p>
+      )}
       {isError && (
         <div className="flex items-center gap-2">
           <p className="text-muted-foreground text-xs">

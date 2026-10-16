@@ -1,5 +1,5 @@
 import { CancelledError } from "@tanstack/react-query";
-import { isTaggedError, panic } from "better-result";
+import { panic } from "better-result";
 import { posthog } from "posthog-js";
 import type {
   CaptureResult,
@@ -24,9 +24,10 @@ import {
   automaticExceptionKey,
   isExceptionFingerprintKey,
   capturedExceptionIdentity,
+  capturedApiErrorIdentity,
+  readApiErrorIdentity,
   sanitizeFingerprintFields,
 } from "@/lib/analytics/exception-fingerprint";
-import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
@@ -36,7 +37,6 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -248,76 +248,16 @@ const telemetryAreaProperty = (
     : undefined;
 };
 
-// API error codes are stable server-declared slugs (`usage_limit_exceeded`).
-// Anything else is treated as free text and dropped, so a server that echoed
-// input into `code` could not smuggle it into telemetry.
-const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
-const HTTP_STATUS_MIN = 100;
-const HTTP_STATUS_MAX = 599;
-
-const isHttpStatus = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isInteger(value) &&
-  value >= HTTP_STATUS_MIN &&
-  value <= HTTP_STATUS_MAX;
-
-const isApiError = (error: unknown): error is Record<string, unknown> =>
-  isTaggedError(error) && error._tag === API_ERROR_TAG && isRecord(error);
-
-// Error boundaries wrap the failure they caught (`ClientTelemetryError` with
-// the `ApiError` as its cause), so the API error is found anywhere in the
-// cause chain. `cause` is writable, so the walk is bounded against cycles.
-const apiErrorInChain = (
-  error: unknown,
-): Record<string, unknown> | undefined => {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (isRecord(current) && !seen.has(current)) {
-    if (isApiError(current)) {
-      return current;
-    }
-    seen.add(current);
-    current = current["cause"];
-  }
-  return undefined;
-};
-
-// The status and code of an `ApiError` are the only parts of a failed API
-// response that identify the outcome without carrying its payload, so they
-// ride along as flat properties and feed the grouping identity below. The
-// class is recognized by its tag: importing it would close an import cycle
-// through the localized error module.
 const apiErrorTelemetryProperties = (
   error: unknown,
 ): Record<string, number | string> | undefined => {
-  const apiError = apiErrorInChain(error);
-  if (apiError === undefined) {
-    return undefined;
-  }
-  const status = apiError["status"];
-  const code = apiError["code"];
-  if (!isHttpStatus(status)) {
+  const identity = capturedApiErrorIdentity(error);
+  if (identity === undefined) {
     return undefined;
   }
   return {
-    error_status: status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code)
-      ? { error_code: code }
-      : {}),
-  };
-};
-
-const apiErrorIdentity = (
-  properties: Record<string, unknown>,
-): ApiErrorIdentity | undefined => {
-  const status = properties["error_status"];
-  if (!isHttpStatus(status)) {
-    return undefined;
-  }
-  const code = properties["error_code"];
-  return {
-    status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+    error_status: identity.status,
+    ...(identity.code === undefined ? {} : { error_code: identity.code }),
   };
 };
 
@@ -437,7 +377,10 @@ const sanitizeExceptionEvent = (
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
   const safeArea =
     typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
-  const http = apiErrorIdentity(properties);
+  const http = readApiErrorIdentity({
+    status: properties["error_status"],
+    code: properties["error_code"],
+  });
   const fields = sanitizeFingerprintFields(properties["exception_fields"]);
   const causalTypes = properties["exception_error_types"];
   const declaredKey = properties["exception_key"];
@@ -738,6 +681,13 @@ const devErrorContext = (
 export const signedInAnonymousId = (userId: string): string =>
   `signed-in:${userId}`;
 
+const registerBuildProperties = () => {
+  posthog.register({
+    app_commit: __APP_COMMIT_SHA__,
+    app_version: __APP_VERSION__,
+  });
+};
+
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
@@ -826,6 +776,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -839,12 +790,6 @@ export const createPostHogAnalytics = ({
   // event carries the exact deployed build. `reset` clears super-properties,
   // so every identity change goes through `resetIdentity`, which registers
   // them again.
-  const registerBuildProperties = () => {
-    posthog.register({
-      app_commit: __APP_COMMIT_SHA__,
-      app_version: __APP_VERSION__,
-    });
-  };
   registerBuildProperties();
 
   // Persistence is off, so every page load starts with a fresh anonymous
@@ -943,6 +888,12 @@ export const createPostHogAnalytics = ({
     },
     captureProvisionPlacementGaps: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureInspectorRestoreRecovered: (properties) => {
+      posthog.capture(
+        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
+        properties,
+      );
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
