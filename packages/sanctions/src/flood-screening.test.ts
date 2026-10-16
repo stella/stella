@@ -308,10 +308,9 @@ test("single-edit matches survive common vocabulary across Unicode spellings", a
           case "transposition":
             spelling = `${stem.slice(0, -2)}le`;
             break;
-          default: {
-            const exhaustive: never = edit;
-            return exhaustive;
-          }
+          default:
+            edit satisfies never;
+            panic(`Unknown edit ${String(edit)}`);
         }
         const target = namedEntry({
           base,
