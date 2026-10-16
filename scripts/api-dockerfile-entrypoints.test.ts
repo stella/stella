@@ -55,19 +55,19 @@ const outfileBundles = (body: string): string[] =>
 
 const builderCopies = () =>
   logicalInstructions(stage("runner")).flatMap((instruction) => {
-    const match = instruction.match(/^COPY .*--from=builder (\/\S+) (\/\S+)$/u);
+    const match = /^COPY .*--from=builder (\/\S+) (\/\S+)$/u.exec(instruction);
     const source = match?.at(1);
     const destination = match?.at(2);
     return source && destination ? [{ source, destination }] : [];
   });
 
 const buildOutput = (bundle: string): string => {
-  const outfile = bundle.match(/--outfile(?:=|\s+)(\S+)/u)?.at(1);
+  const outfile = /--outfile(?:=|\s+)(\S+)/u.exec(bundle)?.at(1);
   if (outfile) {
     return outfile;
   }
-  const outdir = bundle.match(/--outdir(?:=|\s+)(\S+)/u)?.at(1);
-  const entry = bundle.match(/--entry-naming(?:=|\s+)(\S+)/u)?.at(1);
+  const outdir = /--outdir(?:=|\s+)(\S+)/u.exec(bundle)?.at(1);
+  const entry = /--entry-naming(?:=|\s+)(\S+)/u.exec(bundle)?.at(1);
   if (!outdir || !entry) {
     throw new TypeError(`Bundle needs an explicit output path: ${bundle}`);
   }
