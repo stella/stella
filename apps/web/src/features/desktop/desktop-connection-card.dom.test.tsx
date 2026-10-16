@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
+import type { InferOk } from "better-result";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
@@ -105,9 +106,10 @@ test.each(
 )(
   "%s account presence without a pending approval still connects this computer",
   async (presence) => {
-    const started: Awaited<
-      ReturnType<typeof desktopBridge.linkDesktopAccount>
-    > = Result.ok({ status: "started" });
+    const outcome = { status: "started" } satisfies InferOk<
+      Awaited<ReturnType<typeof desktopBridge.linkDesktopAccount>>
+    >;
+    const started = Result.ok(outcome);
     const link = spyOn(desktopBridge, "linkDesktopAccount").mockResolvedValue(
       started,
     );
