@@ -62,12 +62,14 @@ const markerKeys = () =>
 
 type SetupOptions = {
   random?: () => number;
+  attachment?: "immediate" | "deferred";
   now?: () => number;
   browser?: Window & Partial<Pick<typeof globalThis, "PerformanceObserver">>;
 };
 
 const setup = ({
   random = () => 1,
+  attachment = "immediate",
   now = () => HANG_STALE_MS + 10,
   browser = window,
 }: SetupOptions = {}) => {
@@ -95,7 +97,9 @@ const setup = ({
       },
       routeTemplates: new Set(["/chat/$threadId"]),
     });
-  attach();
+  if (attachment === "immediate") {
+    attach();
+  }
   return { detector, hangs, frames, attach, markerKey };
 };
 test("a stale boot reports once and resets layout before restoration, with a visible recovery toast", async () => {
@@ -428,61 +432,79 @@ test("private-mode storage exceptions leave boot running without reports", () =>
     }
   }
 });
-test("only slow frames from sampled sessions are reported up to the session cap", () => {
-  const descriptor = Object.getOwnPropertyDescriptor(
-    window,
-    "PerformanceObserver",
-  );
-  let onFrames: PerformanceObserverCallback | undefined;
-  let observers = 0;
-  class FrameObserver {
-    static supportedEntryTypes = ["long-animation-frame"];
-    constructor(onEntries: PerformanceObserverCallback) {
-      onFrames = onEntries;
-      observers += 1;
-    }
-    observe() {}
-    disconnect() {}
-    takeRecords() {
-      return [];
-    }
-  }
-  Object.defineProperty(window, "PerformanceObserver", {
-    configurable: true,
-    value: FrameObserver,
-  });
-  try {
-    const excluded = setup({ random: () => 1 });
-    expect(observers).toBe(0);
-    excluded.detector.dispose();
-    const { frames } = setup({ random: () => 0 });
-    expect(observers).toBe(1);
-    const entries = [
-      999,
-      1000,
-      ...Array.from({ length: LOAF_SESSION_LIMIT + 2 }, () => 1001),
-    ].map((duration) => ({
-      duration,
-      entryType: "long-animation-frame",
-      name: "frame",
-      startTime: 1,
-      toJSON: () => ({}),
-    }));
-    onFrames?.(
-      {
-        getEntries: () => entries,
-        getEntriesByName: () => entries,
-        getEntriesByType: () => entries,
-      },
-      new PerformanceObserver(() => {}),
+test.each([{ attachment: "immediate" }, { attachment: "deferred" }] as const)(
+  "slow sampled frames respect the session cap with %j",
+  ({ attachment }) => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      window,
+      "PerformanceObserver",
     );
-    expect(frames).toHaveLength(LOAF_SESSION_LIMIT);
-    expect(frames.every(({ duration }) => duration > 1000)).toBe(true);
-  } finally {
-    if (descriptor) {
-      Object.defineProperty(window, "PerformanceObserver", descriptor);
-    } else {
-      Reflect.deleteProperty(window, "PerformanceObserver");
+    let onFrames: PerformanceObserverCallback | undefined;
+    let observers = 0;
+    class FrameObserver {
+      static supportedEntryTypes = ["long-animation-frame"];
+      constructor(onEntries: PerformanceObserverCallback) {
+        onFrames = onEntries;
+        observers += 1;
+      }
+      observe() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
     }
-  }
-});
+    Object.defineProperty(window, "PerformanceObserver", {
+      configurable: true,
+      value: FrameObserver,
+    });
+    try {
+      const excluded = setup({ random: () => 1 });
+      expect(observers).toBe(0);
+      excluded.detector.dispose();
+      const { frames, attach } = setup({ random: () => 0, attachment });
+      expect(observers).toBe(1);
+      const entries = [
+        999,
+        1000,
+        ...Array.from({ length: LOAF_SESSION_LIMIT + 2 }, () => 1001),
+      ].map((duration) => ({
+        duration,
+        entryType: "long-animation-frame",
+        name: "frame",
+        startTime: 1,
+        toJSON: () => ({}),
+      }));
+      onFrames?.(
+        {
+          getEntries: () => entries,
+          getEntriesByName: () => entries,
+          getEntriesByType: () => entries,
+        },
+        new PerformanceObserver(() => {}),
+      );
+      if (attachment === "deferred") {
+        expect(frames).toEqual([]);
+        attach();
+      }
+      expect(frames).toHaveLength(LOAF_SESSION_LIMIT);
+      attach();
+      expect(frames).toHaveLength(LOAF_SESSION_LIMIT);
+      onFrames?.(
+        {
+          getEntries: () => entries,
+          getEntriesByName: () => entries,
+          getEntriesByType: () => entries,
+        },
+        new PerformanceObserver(() => {}),
+      );
+      expect(frames).toHaveLength(LOAF_SESSION_LIMIT);
+      expect(frames.every(({ duration }) => duration > 1000)).toBe(true);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(window, "PerformanceObserver", descriptor);
+      } else {
+        Reflect.deleteProperty(window, "PerformanceObserver");
+      }
+    }
+  },
+);

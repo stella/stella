@@ -105,13 +105,13 @@ export type HangDetectorOptions = {
 type ObserveFramesOptions = {
   browser: HangDetectorOptions["window"];
   sampled: boolean;
-  readAnalytics: () => HangAnalytics | undefined;
+  captureFrame: HangAnalytics["captureLongAnimationFrame"];
 };
 
 const observeLongAnimationFrames = ({
   browser,
   sampled,
-  readAnalytics,
+  captureFrame,
 }: ObserveFramesOptions) => {
   let frames = 0;
   const Observer = browser.PerformanceObserver;
@@ -123,11 +123,7 @@ const observeLongAnimationFrames = ({
     const observed = Result.try(() => {
       const instance = new Observer((list) => {
         for (const entry of list.getEntries()) {
-          if (
-            entry.duration <= 1000 ||
-            frames >= LOAF_SESSION_LIMIT ||
-            !readAnalytics()
-          ) {
+          if (entry.duration <= 1000 || frames >= LOAF_SESSION_LIMIT) {
             continue;
           }
           const frame = v.safeParse(
@@ -143,7 +139,7 @@ const observeLongAnimationFrames = ({
             entry,
           );
           frames += 1;
-          readAnalytics()?.captureLongAnimationFrame({
+          captureFrame({
             duration: entry.duration,
             scripts: frame.success ? frame.output.scripts : [],
           });
@@ -207,6 +203,9 @@ export const createWebHangDetector = ({
   let reported = false;
   let notified = false;
   let analytics: HangAnalytics | undefined;
+  const pendingFrames: Parameters<
+    HangAnalytics["captureLongAnimationFrame"]
+  >[0][] = [];
   let bootCompletion: "waiting-for-route" | "ready" | "scheduled" =
     "waiting-for-route";
   const persist = () => {
@@ -273,7 +272,13 @@ export const createWebHangDetector = ({
   const observer = observeLongAnimationFrames({
     browser,
     sampled: random() < LOAF_SAMPLE_RATE,
-    readAnalytics: () => analytics,
+    captureFrame: (frame) => {
+      if (analytics === undefined) {
+        pendingFrames.push(frame);
+        return;
+      }
+      analytics.captureLongAnimationFrame(frame);
+    },
   });
   return {
     safeMode,
@@ -282,6 +287,9 @@ export const createWebHangDetector = ({
       routeTemplates: ReadonlySet<string>;
     }) => {
       analytics = options.analytics;
+      for (const frame of pendingFrames.splice(0)) {
+        analytics.captureLongAnimationFrame(frame);
+      }
       if (!suspected || reported) {
         return;
       }
@@ -320,6 +328,7 @@ export const createWebHangDetector = ({
       stopped = true;
       browser.clearInterval(timer);
       observer?.disconnect();
+      pendingFrames.length = 0;
       browser.document.removeEventListener("visibilitychange", onVisibility);
       browser.removeEventListener("pagehide", onHide);
       browser.removeEventListener("pageshow", onShow);
