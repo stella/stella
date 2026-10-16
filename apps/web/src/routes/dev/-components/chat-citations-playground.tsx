@@ -99,7 +99,7 @@ export function ChatCitationsPlayground() {
   useExternalSyncEffect(() => {
     // The replay's clock is the external system.
     if (!replaying || frameIndex >= LAST_FRAME) {
-      return;
+      return undefined;
     }
     const inText = (FRAMES[frameIndex + 1]?.messages[1]?.parts ?? []).some(
       (part) => part.type === "text",

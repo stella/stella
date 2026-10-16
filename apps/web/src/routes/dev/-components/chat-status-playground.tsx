@@ -174,7 +174,7 @@ export function ChatStatusPlayground() {
     // next, and a replay restarts it.
     const current = FRAMES[frameIndex];
     if (frameIndex >= LAST_FRAME || current === undefined) {
-      return;
+      return undefined;
     }
     const timeout = setTimeout(() => {
       setFrameIndex((index) => index + 1);

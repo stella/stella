@@ -23,18 +23,19 @@ const ELISION = /\[\s*(?:…|\.\.\.)\s*\]|\(\s*(?:…|\.\.\.)\s*\)|…/u;
 const WRAPPING_MARK = /[\s„“”"«»‚‘’']/u;
 
 // A character scan instead of `^[…]+|[…]+$`, whose trailing alternative
-// backtracks quadratically on a long run of marks.
+// backtracks quadratically on a long run of marks. Every mark and space the
+// pattern accepts is one UTF-16 unit, so a surrogate half never matches and
+// the scan stops at it.
 const trimWrappingMarks = (text: string): string => {
-  const characters = [...text];
   let start = 0;
-  let end = characters.length;
-  while (start < end && WRAPPING_MARK.test(characters[start] ?? "")) {
+  let end = text.length;
+  while (start < end && WRAPPING_MARK.test(text.charAt(start))) {
     start += 1;
   }
-  while (end > start && WRAPPING_MARK.test(characters[end - 1] ?? "")) {
+  while (end > start && WRAPPING_MARK.test(text.charAt(end - 1))) {
     end -= 1;
   }
-  return characters.slice(start, end).join("");
+  return text.slice(start, end);
 };
 
 /**

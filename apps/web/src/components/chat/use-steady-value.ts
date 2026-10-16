@@ -16,7 +16,7 @@ export const useSteadyValue = <T>(value: T, minDwellMs: number): T => {
   const [shown, setShown] = useState(() => ({ since: nowMs(), value }));
   useExternalSyncEffect(() => {
     if (Object.is(shown.value, value)) {
-      return;
+      return undefined;
     }
     // The clock is the external system: wait out the current value's dwell.
     const timeout = setTimeout(

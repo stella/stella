@@ -33,7 +33,7 @@ export const useLiveElapsedMs = (isRunning: boolean): number | undefined => {
       }),
     );
     if (!isRunning) {
-      return;
+      return undefined;
     }
     // The clock is the external system: one tick a second redraws the timer.
     const interval = setInterval(() => {
