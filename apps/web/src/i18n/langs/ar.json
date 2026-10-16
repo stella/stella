@@ -1555,6 +1555,18 @@
       "rejected": "مرفوض"
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
+    "tableChart": {
+      "bar": "أعمدة",
+      "kind": "نوع الرسم البياني",
+      "line": "خطي",
+      "loading": "جارٍ اختيار رسم بياني…",
+      "pie": "دائري",
+      "scatter": "مبعثر",
+      "showChart": "عرض كرسم بياني",
+      "summary": "عدد القيم المعروضة: {n, number}.",
+      "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "العمل مع السياق",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"

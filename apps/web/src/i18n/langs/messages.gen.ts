@@ -1558,6 +1558,18 @@ type Messages = {
       "rejected": "Rejected";
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
+    "tableChart": {
+      "bar": "Bar";
+      "kind": "Chart type";
+      "line": "Line";
+      "loading": "Choosing a chart…";
+      "pie": "Pie";
+      "scatter": "Scatter";
+      "showChart": "Show as chart";
+      "summary": "Values shown: {n, number}.";
+      "unavailable": "A chart could not be selected. The table is shown.";
+      "values": "{label}: {value, number}";
+    };
     "thinking": "Working with context";
     "threadFiles": {
       "title": "Files in this chat";

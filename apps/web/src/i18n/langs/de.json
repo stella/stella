@@ -1555,6 +1555,18 @@
       "rejected": "Abgelehnt"
     },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
+    "tableChart": {
+      "bar": "Balken",
+      "kind": "Diagrammtyp",
+      "line": "Linie",
+      "loading": "Diagramm wird ausgewählt…",
+      "pie": "Kreis",
+      "scatter": "Streuung",
+      "showChart": "Als Diagramm anzeigen",
+      "summary": "Angezeigte Werte: {n, number}.",
+      "unavailable": "Es konnte kein Diagramm ausgewählt werden. Die Tabelle wird angezeigt.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Arbeite mit Kontext",
     "threadFiles": {
       "title": "Dateien in diesem Chat"
