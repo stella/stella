@@ -239,6 +239,38 @@ export const DOC_SOURCE_EXCLUSIONS = exclusions;
     },
   ]);
 });
+test("documentation registry aliases ignore same-name constants in nested scopes", () => {
+  const entries = readDocumentationExclusions(`
+const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";
+const NO_LLMS_TXT_CHECKED_AT = "2026-09-01T00:00:00.000Z";
+const NO_LLMS_TXT_EXPIRES_AT = "2026-10-01T00:00:00.000Z";
+const exclusions = ["doc-package"];
+function helper() {
+  const exclusions = [];
+  return exclusions;
+}
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`);
+
+  expect(entries).toEqual([
+    {
+      ...doc,
+      checkedAt: "2026-09-01T00:00:00.000Z",
+      expiresAt: "2026-10-01T00:00:00.000Z",
+    },
+  ]);
+});
+test("documentation registry aliases reject duplicate module declarations", () => {
+  const source = `
+const exclusions = ["doc-package"];
+const exclusions = [];
+export const DOC_SOURCE_EXCLUSIONS = exclusions;
+`;
+
+  expect(() => readDocumentationExclusions(source)).toThrow(
+    DocumentationExclusionParseError,
+  );
+});
 test("documentation registry accepts its direct static array shorthand", () => {
   const source = `
 const NO_LLMS_TXT_EXPLANATION = "https://example.com/llms.txt returns 404";

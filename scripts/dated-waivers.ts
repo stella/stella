@@ -61,31 +61,24 @@ export const readDocumentationExclusions = (
     ts.ScriptTarget.Latest,
     true,
   );
-  const strings = new Map<string, string>();
-  const constants = new Map<string, ts.Expression>();
+  const moduleDeclarations = new Map<string, ts.VariableDeclaration[]>();
   let owner: ts.VariableDeclaration | undefined;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer
-    ) {
-      if (
-        ts.isVariableDeclarationList(node.parent) &&
-        node.parent.flags === ts.NodeFlags.Const
-      ) {
-        constants.set(node.name.text, node.initializer);
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) {
+        continue;
       }
-      if (ts.isStringLiteral(node.initializer)) {
-        strings.set(node.name.text, node.initializer.text);
-      }
-      if (node.name.text === "DOC_SOURCE_EXCLUSIONS") {
-        owner = node;
+      const declarations = moduleDeclarations.get(declaration.name.text) ?? [];
+      declarations.push(declaration);
+      moduleDeclarations.set(declaration.name.text, declarations);
+      if (declaration.name.text === "DOC_SOURCE_EXCLUSIONS") {
+        owner = declaration;
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  }
   if (!owner?.initializer) {
     return panic("Documentation waiver owner missing");
   }
@@ -104,6 +97,25 @@ export const readDocumentationExclusions = (
     }
     return expression;
   };
+  const moduleConstInitializer = (name: string): ts.Expression | undefined => {
+    const declarations = moduleDeclarations.get(name);
+    if (
+      declarations?.length !== 1 ||
+      !declarations[0]?.initializer ||
+      !ts.isVariableDeclarationList(declarations[0].parent) ||
+      declarations[0].parent.flags !== ts.NodeFlags.Const
+    ) {
+      return undefined;
+    }
+    return declarations[0].initializer;
+  };
+  const moduleString = (name: string): string | undefined => {
+    const initializer = moduleConstInitializer(name);
+    const unwrapped = initializer ? unwrap(initializer) : undefined;
+    return unwrapped && ts.isStringLiteral(unwrapped)
+      ? unwrapped.text
+      : undefined;
+  };
   const registryElements = (
     expression: ts.Expression,
     resolving = new Set<string>(),
@@ -118,7 +130,7 @@ export const readDocumentationExclusions = (
       });
     }
     if (ts.isIdentifier(unwrapped)) {
-      const initializer = constants.get(unwrapped.text);
+      const initializer = moduleConstInitializer(unwrapped.text);
       if (!initializer || resolving.has(unwrapped.text)) {
         return invalidRegistry(unwrapped);
       }
@@ -161,7 +173,7 @@ export const readDocumentationExclusions = (
       return unwrapped.text;
     }
     if (ts.isIdentifier(unwrapped)) {
-      const resolved = strings.get(unwrapped.text);
+      const resolved = moduleString(unwrapped.text);
       if (resolved !== undefined) {
         return resolved;
       }
@@ -169,9 +181,9 @@ export const readDocumentationExclusions = (
     return panic("Documentation waiver value must be a static string");
   };
   const defaults = {
-    checkedAt: strings.get("NO_LLMS_TXT_CHECKED_AT"),
-    explanation: strings.get("NO_LLMS_TXT_EXPLANATION"),
-    expiresAt: strings.get("NO_LLMS_TXT_EXPIRES_AT"),
+    checkedAt: moduleString("NO_LLMS_TXT_CHECKED_AT"),
+    explanation: moduleString("NO_LLMS_TXT_EXPLANATION"),
+    expiresAt: moduleString("NO_LLMS_TXT_EXPIRES_AT"),
     reason: "no-llms-txt",
   };
   const exclusions: unknown[] = [];
