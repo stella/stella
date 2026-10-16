@@ -24,6 +24,12 @@ export const OUTBOUND_ACTION_STATUSES = [
 ] as const;
 export type OutboundActionStatus = (typeof OUTBOUND_ACTION_STATUSES)[number];
 
+/**
+ * The provider call was interrupted after it started, so delivery is
+ * unknown; the action stays `sending` rather than `failed`.
+ */
+export const OUTBOUND_FAILURE_OUTCOME_UNKNOWN = "outcome_unknown";
+
 /** How long a prepared preview stays confirmable. */
 export const OUTBOUND_ACTION_TTL_MS = 30 * 60 * 1000;
 
@@ -39,13 +45,18 @@ const emailAddressSchema = v.pipe(
   v.email(),
 );
 
+// Names, the subject and the reply reference become header values; a line
+// break there could add headers (recipients) the preview card never showed.
+const headerSafe = v.regex(/^[^\r\n]*$/u, "Must not contain line breaks");
+
 export const outboundEmailRecipientSchema = v.strictObject({
   address: emailAddressSchema,
-  name: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(200))),
+  // Checked before trimming, so a line break is rejected, never stripped.
+  name: v.optional(v.pipe(v.string(), headerSafe, v.trim(), v.maxLength(200))),
 });
 
 export const outboundEmailAttachmentSchema = v.strictObject({
-  fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  fileName: v.pipe(v.string(), v.minLength(1), v.maxLength(255), headerSafe),
   byteLength: v.pipe(v.number(), v.integer(), v.minValue(0)),
   sha256: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
 });
@@ -58,14 +69,20 @@ export const outboundEmailPreviewSchema = v.pipe(
     to: v.pipe(v.array(outboundEmailRecipientSchema), v.minLength(1)),
     cc: v.array(outboundEmailRecipientSchema),
     bcc: v.array(outboundEmailRecipientSchema),
-    subject: v.pipe(v.string(), v.maxLength(OUTBOUND_EMAIL_SUBJECT_MAX_LENGTH)),
+    subject: v.pipe(
+      v.string(),
+      v.maxLength(OUTBOUND_EMAIL_SUBJECT_MAX_LENGTH),
+      headerSafe,
+    ),
     bodyText: v.pipe(v.string(), v.maxLength(OUTBOUND_EMAIL_BODY_MAX_LENGTH)),
     attachments: v.pipe(
       v.array(outboundEmailAttachmentSchema),
       v.maxLength(OUTBOUND_EMAIL_MAX_ATTACHMENTS),
     ),
     /** Provider message id this email replies to, when it is a reply. */
-    inReplyTo: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(998))),
+    inReplyTo: v.nullable(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(998), headerSafe),
+    ),
   }),
   v.check(
     (preview) =>

@@ -1,8 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { OUTBOUND_PREVIEW_HASH_PATTERN } from "@stll/api-contract/outbound-action";
+import {
+  OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
+  OUTBOUND_PREVIEW_HASH_PATTERN,
+} from "@stll/api-contract/outbound-action";
 
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import { outboundActions } from "@/api/db/schema";
@@ -43,6 +46,53 @@ const config = {
 
 const conflict = (message: string) =>
   abortTransaction(new HandlerError({ status: 409, message }));
+
+/**
+ * What the provider call established. A thrown call (timeout, dropped
+ * connection) may have delivered after all, so it is never reported as a
+ * failure the user could safely retry.
+ */
+type ExecutionOutcome =
+  | { type: "sent"; providerMessageId: string }
+  | { type: "refused"; failureCode: string }
+  | { type: "unknown" };
+
+const OUTCOME_UNKNOWN = { type: "unknown" } as const satisfies ExecutionOutcome;
+
+const settleExecution = (outcome: ExecutionOutcome) => {
+  switch (outcome.type) {
+    case "sent": {
+      return {
+        status: "sent" as const,
+        providerMessageId: outcome.providerMessageId,
+        failureCode: null,
+        completedAt: new Date(),
+      };
+    }
+    case "refused": {
+      return {
+        status: "failed" as const,
+        providerMessageId: null,
+        failureCode: outcome.failureCode,
+        completedAt: new Date(),
+      };
+    }
+    case "unknown": {
+      // Stays `sending`: the user checks their mailbox before preparing the
+      // email again.
+      return {
+        status: "sending" as const,
+        providerMessageId: null,
+        failureCode: OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
+        completedAt: null,
+      };
+    }
+    default: {
+      outcome satisfies never;
+      return panic(`Unhandled execution outcome: ${String(outcome)}`);
+    }
+  }
+};
 
 /**
  * Execute a pending outbound action after the user confirmed its preview.
@@ -161,34 +211,30 @@ export const createConfirmOutboundActionHandler = (
 
       // The provider call runs outside any transaction and exactly once.
       const executed = await Result.tryPromise({
-        try: async () =>
-          await executor({
+        try: async (): Promise<ExecutionOutcome> => {
+          const result = await executor({
             actionId,
             organizationId,
             preview,
             safeDb,
             userId: user.id,
-          }),
+          });
+          if (Result.isError(result)) {
+            return { type: "refused", failureCode: result.error.failureCode };
+          }
+          return {
+            type: "sent",
+            providerMessageId: result.value.providerMessageId,
+          };
+        },
         catch: (cause) => {
           observeFailure(cause, { sink: EXECUTION_FAILED_SINK });
-          return { failureCode: "provider_unreachable" };
+          return OUTCOME_UNKNOWN;
         },
       });
-      const outcome = Result.isError(executed) ? executed : executed.value;
-      const completedAt = new Date();
-      const settledValues = Result.isOk(outcome)
-        ? {
-            status: "sent" as const,
-            providerMessageId: outcome.value.providerMessageId,
-            failureCode: null,
-            completedAt,
-          }
-        : {
-            status: "failed" as const,
-            providerMessageId: null,
-            failureCode: outcome.error.failureCode,
-            completedAt,
-          };
+      const settledValues = settleExecution(
+        Result.isError(executed) ? executed.error : executed.value,
+      );
 
       yield* Result.await(
         safeDb(async (tx) => {

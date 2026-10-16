@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import * as v from "valibot";
 
+import { outboundActionPreviewSchema } from "@stll/api-contract/outbound-action";
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
+import { assertProperty } from "@stll/property-testing";
 
 import { outboundPreviewHash } from "@/api/lib/outbound-actions/preview";
 
@@ -54,5 +58,51 @@ describe("outboundPreviewHash", () => {
     for (const variant of variants) {
       expect(outboundPreviewHash(variant)).not.toBe(base);
     }
+  });
+});
+
+describe("outbound email header fields", () => {
+  // Every field an executor writes into a header value.
+  const withHeaderText = {
+    fromName: (text: string) => ({
+      ...preview,
+      from: { ...preview.from, name: text },
+    }),
+    toName: (text: string) => ({
+      ...preview,
+      to: [{ address: "client@example.test", name: text }],
+    }),
+    bccName: (text: string) => ({
+      ...preview,
+      bcc: [{ address: "hidden@example.test", name: text }],
+    }),
+    subject: (text: string) => ({ ...preview, subject: text }),
+    inReplyTo: (text: string) => ({ ...preview, inReplyTo: `<${text}>` }),
+    attachmentName: (text: string) => ({
+      ...preview,
+      attachments: [
+        { fileName: `${text}.docx`, byteLength: 1024, sha256: "a".repeat(64) },
+      ],
+    }),
+  } as const;
+  const parses = (value: unknown) =>
+    v.safeParse(outboundActionPreviewSchema, value).success;
+
+  test("a line break in any header field is rejected; the same text without one is kept", () => {
+    assertProperty(
+      "a line break in any header field is rejected; the same text without one is kept",
+      fc.property(
+        fc.constantFrom(...Object.values(withHeaderText)),
+        fc.stringMatching(/^[^\r\n]{1,40}$/u),
+        fc.constantFrom("\r\n", "\n", "\r"),
+        fc.nat({ max: 40 }),
+        (build, text, lineBreak, at) => {
+          const cut = Math.min(at, text.length);
+          const injected = `${text.slice(0, cut)}${lineBreak}Bcc: x@example.test${text.slice(cut)}`;
+          expect(parses(build(text))).toBe(true);
+          expect(parses(build(injected))).toBe(false);
+        },
+      ),
+    );
   });
 });

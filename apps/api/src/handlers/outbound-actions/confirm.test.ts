@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { OUTBOUND_FAILURE_OUTCOME_UNKNOWN } from "@stll/api-contract/outbound-action";
 import type { OutboundEmailPreview } from "@stll/api-contract/outbound-action";
 
 import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
@@ -143,6 +144,30 @@ test("a confirm of the exact preview sends it once with the stored content", asy
     expect.objectContaining({
       metadata: expect.objectContaining({ operation: "sent" }),
     }),
+  ]);
+});
+
+test("an interrupted provider call stays sending with an unknown outcome, never failed", async () => {
+  const fixture = setup({
+    action: await storedAction(),
+    executor: async () => {
+      throw new TypeError("connection reset after the request was sent");
+    },
+  });
+  expect(await fixture.handler.handler(fixture.context)).toEqual({
+    status: "sending",
+    providerMessageId: null,
+    failureCode: OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
+  });
+  expect(fixture.executed).toEqual([preview]);
+  expect(fixture.updates).toEqual([
+    expect.objectContaining({ status: "sending" }),
+    {
+      status: "sending",
+      providerMessageId: null,
+      failureCode: OUTBOUND_FAILURE_OUTCOME_UNKNOWN,
+      completedAt: null,
+    },
   ]);
 });
 
