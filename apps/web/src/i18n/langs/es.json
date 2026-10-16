@@ -1326,6 +1326,7 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "messageUnavailable": "Este mensaje no se puede mostrar.",
     "mockModel": {
       "description": "Respuestas predefinidas del modelo simulado local",
       "label": "IA simulada"
@@ -1491,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Añadiendo comentario",
+      "add_matter_member": "Añadir un miembro al expediente",
       "apply-active-docx-edits": "Preparando cambios del documento",
       "ares_lookup_company": "Buscando registros de empresa",
       "ares_search_companies": "Buscando registros de empresas",
@@ -1547,7 +1549,6 @@
       "list_stories": "Listando partes del documento",
       "list_templates": "Listando plantillas",
       "load-skill": "Leyendo instrucciones",
-      "manage_organization": "Gestionar organización",
       "read-contact": "Leyendo contacto",
       "read-content-across-matters": "Leyendo contenido entre asuntos",
       "read-skill-resource": "Leyendo instrucciones",
@@ -1557,6 +1558,7 @@
       "read_section": "Leyendo una sección",
       "read_story": "Leyendo una parte del documento",
       "remember": "Guardando en la memoria",
+      "remove_matter_member": "Quitar un miembro del expediente",
       "reply_comment": "Respondiendo al comentario",
       "request_secret": "Solicitando una credencial privada",
       "resolve_comment": "Resolviendo comentario",
@@ -1590,6 +1592,7 @@
       "suggest_template_fields": "Sugiriendo campos de la plantilla",
       "unknown": "Usando herramienta",
       "update-entity-fields": "Actualizando metadatos",
+      "update_organization_settings": "Actualizar la configuración del equipo",
       "update_reader_annotation": "Editar resaltado o comentario",
       "use-browser": "Usando tu navegador",
       "use_connector_secret": "Usando la credencial del conector",
