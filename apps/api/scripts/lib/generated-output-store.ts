@@ -146,10 +146,12 @@ export const restoreGeneratedOutput = async ({
   storeDir,
   root,
   context,
+  onUnrecordedAncestor,
 }: {
   storeDir: string;
   root: string;
   context: string;
+  onUnrecordedAncestor?: (ancestor: string) => void;
 }): Promise<
   { output: Buffer; stamp: CompilerInputStamp; outputHash: string } | undefined
 > => {
@@ -170,7 +172,11 @@ export const restoreGeneratedOutput = async ({
     ) {
       continue;
     }
-    const stamp = localizeStamp(parsed.value.inputs, root);
+    const stamp = localizeStamp(
+      parsed.value.inputs,
+      root,
+      onUnrecordedAncestor,
+    );
     if (
       stamp !== undefined &&
       (await isCompilerInputStampCurrent(stamp, context))

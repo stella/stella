@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,7 +63,9 @@ const recordProgram = (): CompilerInputStamp => {
 };
 
 beforeEach(() => {
-  directory = mkdtempSync(path.join(tmpdir(), "compiler-input-stamp-"));
+  directory = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "compiler-input-stamp-")),
+  );
   write(
     "tsconfig.json",
     JSON.stringify({
@@ -189,4 +192,52 @@ test("portable stamps preserve directory names and relative compiler globs", asy
     panic("portable fixture cannot be localized");
   }
   expect(await isCompilerInputStampCurrent(localized, CONTEXT)).toBe(true);
+});
+
+test("a portable stamp rejects an unrecorded destination ancestor dependency", () => {
+  const packageName = `stamp-ancestor-${process.pid}`;
+  write(
+    "src/a.ts",
+    `import type { Missing } from ${JSON.stringify(packageName)};\nexport type A = Missing;\n`,
+  );
+  const recorder = createCompilerInputRecorder();
+  const config = ts.getParsedCommandLineOfConfigFile(
+    path.join(directory, "tsconfig.json"),
+    {},
+    recorder.wrap({
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: () => panic("unreadable tsconfig"),
+    }),
+  );
+  if (config === undefined) {
+    panic("tsconfig not parsed");
+  }
+  ts.createProgram({
+    rootNames: config.fileNames,
+    options: config.options,
+    host: recorder.wrap(ts.createCompilerHost(config.options)),
+  });
+  const portable = recorder.portableStamp(CONTEXT, directory);
+  const destination = path.join(directory, "extra/depth/stella");
+  mkdirSync(destination, { recursive: true });
+
+  const tempRoot = realpathSync(tmpdir());
+  const ancestorNodeModules = path.join(tempRoot, "node_modules");
+  const nodeModulesExisted = statSync(ancestorNodeModules, {
+    throwIfNoEntry: false,
+  });
+  const dependency = path.join(ancestorNodeModules, packageName, "index.d.ts");
+  mkdirSync(path.dirname(dependency), { recursive: true });
+  writeFileSync(dependency, "export interface Missing {}\n");
+  try {
+    expect(localizeStamp(portable, destination)).toBeUndefined();
+  } finally {
+    rmSync(path.join(tempRoot, "node_modules", packageName), {
+      recursive: true,
+      force: true,
+    });
+    if (nodeModulesExisted === undefined) {
+      rmSync(ancestorNodeModules, { recursive: true, force: true });
+    }
+  }
 });

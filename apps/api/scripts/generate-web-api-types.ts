@@ -1442,11 +1442,15 @@ const STORE_DIR = generatedStoreDir("web-api-types");
  * Restores a printout another checkout on this host (or a CI cache) made from
  * inputs this checkout still has, and makes it this checkout's own cache.
  */
-const reuseStoredOutput = async (context: string): Promise<boolean> => {
+const reuseStoredOutput = async (
+  context: string,
+  onUnrecordedAncestor?: (ancestor: string) => void,
+): Promise<boolean> => {
   const stored = await restoreGeneratedOutput({
     storeDir: STORE_DIR,
     root: REPO_ROOT,
     context,
+    onUnrecordedAncestor,
   });
   if (stored === undefined) {
     return false;
@@ -1478,6 +1482,7 @@ const main = async () => {
   }
   const started = performance.now();
   const context = cacheContext();
+  let unrecordedAncestor: string | undefined;
   // --check always builds the program: it owns identity and determinism.
   if (!check && (await reuseCachedOutput(context))) {
     console.log(
@@ -1486,7 +1491,12 @@ const main = async () => {
     );
     return;
   }
-  if (!check && (await reuseStoredOutput(context))) {
+  if (
+    !check &&
+    (await reuseStoredOutput(context, (ancestor) => {
+      unrecordedAncestor ??= ancestor;
+    }))
+  ) {
     console.log(
       `generate-web-api-types: compiler inputs match a stored printout; restored ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
         `from ${STORE_DIR} in ${Math.round(performance.now() - started)} ms`,
@@ -1495,7 +1505,7 @@ const main = async () => {
   }
   if (requireCached) {
     panic(
-      `generate-web-api-types: no valid cache or generated store entry for base ${baseSha}; cold generation is disabled`,
+      `generate-web-api-types: no valid cache or generated store entry for base ${baseSha}; cold generation is disabled${unrecordedAncestor === undefined ? "" : ` because ${unrecordedAncestor} contains an unrecorded TypeScript module-resolution path`}`,
     );
   }
   const recorder = createCompilerInputRecorder();

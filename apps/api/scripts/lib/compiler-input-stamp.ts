@@ -216,7 +216,11 @@ const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
  * Absolute paths remain untouched, so the OCI payload validator can reject
  * every machine-specific path outside the repository.
  */
-export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
+export const localizeStamp = (
+  stamp: CompilerInputStamp,
+  root: string,
+  onUnrecordedAncestor?: (ancestor: string) => void,
+) => {
   const realRoot = realpathSync(root);
   const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
   if (
@@ -224,13 +228,62 @@ export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
   ) {
     return undefined;
   }
-  return relocateStamp(stamp, (value) =>
+  const localized = relocateStamp(stamp, (value) =>
     toLocalPath(
       toLocalPath(value, REAL_ROOT_TOKEN, realRoot),
       ROOT_TOKEN,
       root,
     ),
   );
+  if (tokens.length === 0) {
+    return localized;
+  }
+
+  const recorded = new Set<string>();
+  const record = (value: string) => {
+    if (path.isAbsolute(value)) {
+      recorded.add(path.resolve(value));
+    }
+  };
+  for (const value of [
+    ...Object.keys(localized.contents),
+    ...Object.keys(localized.installed),
+    ...localized.files.present,
+    ...localized.files.absent,
+    ...localized.directories.present,
+    ...localized.directories.absent,
+    ...Object.keys(localized.realpaths),
+    ...Object.keys(localized.subdirectories),
+    ...localized.listings.map(([[directory]]) => directory),
+  ]) {
+    record(value);
+  }
+
+  // A stamp made elsewhere cannot describe destination-only ancestors. An
+  // unrecorded package scope or dependency directory there could turn a
+  // formerly unresolved import into a different program.
+  for (
+    let ancestor = path.dirname(realRoot);
+    ;
+    ancestor = path.dirname(ancestor)
+  ) {
+    for (const candidate of [
+      path.join(ancestor, "node_modules"),
+      path.join(ancestor, "package.json"),
+    ]) {
+      if (
+        !recorded.has(candidate) &&
+        statSync(candidate, { throwIfNoEntry: false }) !== undefined
+      ) {
+        onUnrecordedAncestor?.(ancestor);
+        return undefined;
+      }
+    }
+    if (path.dirname(ancestor) === ancestor) {
+      break;
+    }
+  }
+  return localized;
 };
 
 // Paths and keys, not text: a stable code-unit order on every machine.
