@@ -3372,7 +3372,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from, and optionally external: the contact's source system and id there); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -3560,6 +3560,29 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "maxItems": 250,
           "description": "Nationality countries; pass [] to clear"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Lowercase key of the system the contact came from"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The contact's id in that system"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "When creating, the contact's identity in the system it came from, as read_contact returns it; a second contact with the same source and id is refused"
         }
       }
     }
@@ -9921,7 +9944,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from, and optionally external: the contact's source system and id there); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -10109,6 +10132,29 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "maxItems": 250,
           "description": "Nationality countries; pass [] to clear"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Lowercase key of the system the contact came from"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "The contact's id in that system"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "When creating, the contact's identity in the system it came from, as read_contact returns it; a second contact with the same source and id is refused"
         }
       }
     }

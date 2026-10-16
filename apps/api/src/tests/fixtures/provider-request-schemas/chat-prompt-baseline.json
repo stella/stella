@@ -40,6 +40,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32845
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 33105
       }
     ],
     "anthropic/extended": [
@@ -82,6 +86,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33336
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 33594
       }
     ],
     "bedrock/default": [
@@ -124,6 +132,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 33349
       }
     ],
     "bedrock/extended": [
@@ -166,6 +178,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 33837
       }
     ],
     "google/default": [
@@ -204,6 +220,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 32469
       }
     ],
     "google/extended": [
@@ -238,6 +258,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 32948
       }
     ],
     "mistral/default": [
@@ -280,6 +304,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 34625
       }
     ],
     "mistral/extended": [
@@ -322,6 +350,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 35151
       }
     ],
     "openai/default": [
@@ -364,6 +396,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 34217
       }
     ],
     "openai/extended": [
@@ -406,6 +442,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "Expose external references for contact read/write roundtrips and idempotent imports, with matter import metadata.",
+        "tokens": 34732
       }
     ],
     "openrouter-anthropic/default": [

@@ -52,6 +52,9 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
 };
 
 const UNPROJECTED_DETAIL_COLUMNS = [
+  "externalSource", // Reserved for the correspondence import contract.
+  "externalId", // Reserved for the correspondence import contract.
+  "importedAt", // Reserved for the correspondence import contract.
   "entityFeatureGate", // RLS state is internal to the gate.
   "organizationId", // Tenant scope comes from the authorized session.
   "workspaceId", // Matter scope comes from the authorized route.

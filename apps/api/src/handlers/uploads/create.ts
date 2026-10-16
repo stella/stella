@@ -41,6 +41,10 @@ import {
   validateEntityCreate,
 } from "@/api/lib/uploads/entity-create";
 import {
+  importDocumentSource,
+  tImportOrigin,
+} from "@/api/lib/uploads/import-origin";
+import {
   PRESIGN_URL_EXPIRY_SECONDS,
   tmpUploadKey,
 } from "@/api/lib/uploads/runtime";
@@ -75,6 +79,7 @@ const entityCreatePresignBodySchema = t.Object({
   purpose: t.Literal("entity_create"),
   propertyId: tSafeId("property"),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+  importOrigin: t.Optional(tImportOrigin),
   ...baseFileMetadataSchema,
 });
 
@@ -115,6 +120,9 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
+      ...(purposeBody.importOrigin === undefined
+        ? {}
+        : { importSource: importDocumentSource(purposeBody.importOrigin) }),
     };
     return purposeData;
   }
@@ -135,8 +143,9 @@ const config = {
     "into stella from an agent surface; the multipart endpoints cannot be " +
     "called with JSON. Pass purpose plus the file metadata: name, mimeType, " +
     "size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact " +
-    "bytes). purpose is entity_create (with propertyId, optional parentId) " +
-    "to add a new document, entity_version (with entityId) to add a version " +
+    "bytes). purpose is entity_create (with propertyId, optional parentId, " +
+    "and optional importOrigin to keep an imported file's source, id, " +
+    "original dates and author) to add a new document, entity_version (with entityId) to add a version " +
     "to an existing one, or agent_skill (with scope team or private) for a " +
     "skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT " +
     "the bytes to url with those headers verbatim -- the URL is signed " +

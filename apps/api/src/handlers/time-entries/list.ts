@@ -48,6 +48,10 @@ type TimeEntryRow = typeof timeEntries.$inferSelect;
 
 // Columns intentionally not sent to the client.
 const UNPROJECTED_TIME_ENTRY_LIST_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "importedAt",
   // Tenant scope, implied by the caller's active organization.
   "organizationId",
   // The route is already scoped to one workspace via params.workspaceId.

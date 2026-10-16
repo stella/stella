@@ -44,6 +44,9 @@ const UNPROJECTED_LIST_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
   "organizationId", // Tenant scope comes from the authorized session.
   "workspaceId", // Matter scope comes from the authorized route.
+  "externalSource", // Reserved for the correspondence import contract.
+  "externalId", // Reserved for the correspondence import contract.
+  "importedAt", // Reserved for the correspondence import contract.
   "contentHash", // Internal content fingerprint for ingestion.
   "dedupKey", // Internal replay identity.
   "direction", // The compact list uses the detail route for direction metadata.

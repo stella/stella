@@ -30,6 +30,8 @@ import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { nationalityCodesSchema } from "@/api/lib/business-registries/nationality-codes";
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { tExternalRef } from "@/api/lib/imports/external-ref";
+import { readExternalRefIds } from "@/api/lib/imports/upsert-by-external-id";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -65,6 +67,7 @@ export const createContactBodySchema = t.Object({
   paymentTermDays: t.Optional(t.Integer({ minimum: 0, maximum: 365 })),
   originatingAttorneyId: t.Optional(tUserId),
   responsibleAttorneyId: t.Optional(tUserId),
+  external: t.Optional(tExternalRef),
 });
 
 export type CreateContactBody = Static<typeof createContactBodySchema>;
@@ -154,6 +157,13 @@ export const insertContactRow = async ({
       paymentTermDays: body.paymentTermDays,
       originatingAttorneyId: body.originatingAttorneyId,
       responsibleAttorneyId: body.responsibleAttorneyId,
+      ...(body.external === undefined
+        ? {}
+        : {
+            externalSource: body.external.source,
+            externalId: body.external.id,
+            importedAt: new Date(),
+          }),
       createdBy: userId,
     })
     .returning();
@@ -183,6 +193,7 @@ export const insertContactRow = async ({
 type CreateContactOutcome =
   | { kind: "limit_reached" }
   | { kind: "invalid_attorney" }
+  | { kind: "external_ref_taken"; contactId: SafeId<"contact"> }
   | { kind: "created"; row: typeof contacts.$inferSelect | undefined };
 
 // Shared contact-creation logic reused by the HTTP handler and the
@@ -210,6 +221,21 @@ export const createContactHandler = async function* ({
       );
       if (wouldExceed) {
         return { kind: "limit_reached" };
+      }
+
+      // The capacity lock serializes contact creation in the organization,
+      // so this read cannot race another create of the same ref.
+      if (body.external !== undefined) {
+        const existing = await readExternalRefIds({
+          tx,
+          table: contacts,
+          organizationId,
+          refs: [body.external],
+        });
+        const [contactId] = existing.values();
+        if (contactId !== undefined) {
+          return { kind: "external_ref_taken", contactId };
+        }
       }
 
       const attorneyIds: string[] = [];
@@ -247,6 +273,15 @@ export const createContactHandler = async function* ({
     );
   }
 
+  if (outcome.kind === "external_ref_taken") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: `Contact ${outcome.contactId} already has this external source and id`,
+      }),
+    );
+  }
+
   if (outcome.kind === "invalid_attorney") {
     return Result.err(
       new HandlerError({
@@ -271,9 +306,11 @@ const createContact = createSafeRootHandler(
       "organization), displayName, and the contact id are supplied in the " +
       "body; names, emails, phones, addresses, tags, registration and tax " +
       "numbers, bank and billing details, default hourly rate, payment " +
-      "terms, and originating or responsible attorneys are optional. Refused " +
-      "once the organization holds its maximum number of contacts, or when " +
-      "an attorney id is not a member of the organization.",
+      "terms, originating or responsible attorneys, and external (the " +
+      "contact's source system and id there) are optional. Refused once the " +
+      "organization holds its maximum number of contacts, when an attorney " +
+      "id is not a member of the organization, or when another contact " +
+      "already carries the same external source and id.",
     permissions: { contact: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "save_contact" },

@@ -55,6 +55,8 @@ import api from "@/api/server";
  * rather than composes.
  */
 const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
+  "save_contact.external.source":
+    "stable source-system namespace key echoed on re-import; changing its spelling would change record identity",
   // A structured provision path from the citation resolver; the filter
   // canonicalises each value, so the bound limits size, not spelling.
   "POST /v1/case/decisions/search.body.provision.sectionSuffix":
