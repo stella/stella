@@ -142,12 +142,8 @@ export const locateQuoteInBlocks = (
     let match:
       | { block: Block | undefined; end: number; runIndex: number }
       | undefined;
-    for (
-      let candidateIndex = runIndex;
-      candidateIndex < runs.length;
-      candidateIndex += 1
-    ) {
-      const candidate = runs[candidateIndex];
+    for (const [offset, candidate] of runs.slice(runIndex).entries()) {
+      const candidateIndex = runIndex + offset;
       const candidateFrom = candidateIndex === runIndex ? from : 0;
       const span = locateQuote(candidate.text, piece, candidateFrom);
       // `locateQuote` only prefers an occurrence after `from` and falls back

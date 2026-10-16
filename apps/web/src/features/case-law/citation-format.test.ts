@@ -147,6 +147,7 @@ describe("Hungarian citation typography", () => {
     decisionType: "ítélet",
     ecli: null,
     name: null,
+    paragraph: null,
     pincite: null,
   } satisfies CitationInput;
 
