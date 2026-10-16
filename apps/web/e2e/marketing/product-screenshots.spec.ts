@@ -37,7 +37,6 @@ const SENT_INVOICE_NUMBER = "INV-2025-0003";
 // The seeded time entries span fixed dates (Dec 2024 - Feb 2025); naming the
 // day in the URL keeps the timesheet off the wall-clock "today".
 const TIME_TRACKING_DATE = "2024-12-13";
-const CASE_LAW_SEARCH_QUERY = "náhrada škody";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -191,8 +190,11 @@ const captures = [
     readyText: "Export Review - Project Atlas Data Room",
   },
   {
+    // The Czech results listing without a query: every seeded CZE decision,
+    // in the listing's own order. A keyword query depends on what the
+    // best-effort seed search index matched and returned no rows in CI.
     name: "case-law-search",
-    path: `/law/cases?country=cze&q=${encodeURIComponent(CASE_LAW_SEARCH_QUERY)}`,
+    path: "/law/cases?country=cze",
     prepare: "await-search-results",
     country: "CZE",
     readyText: "Case Law",
@@ -429,8 +431,8 @@ test("capture landing product screenshots", async ({
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "await-search-results") {
-        // Several result rows, not just the first, so the shot shows a ranked
-        // list rather than a single hit.
+        // Several result rows, not just the first, so the shot shows a list
+        // rather than a single hit.
         await expect(
           page.locator('main a[href*="/cases/"]').nth(1),
         ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
