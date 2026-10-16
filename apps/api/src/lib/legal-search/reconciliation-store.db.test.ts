@@ -23,7 +23,7 @@ import {
   countTerminalReconciliationItemsBySlice,
   listReconciliationItems,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
   refreshTrackedReconciliationItems,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
@@ -163,7 +163,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
     }),
   ).toEqual({ outcome: "superseded" });
   expect(
-    await pruneUnlistedTerminalItems(scopedDb, {
+    await pruneUnlistedReconciliationItems(scopedDb, {
       sourceId,
       leaseToken: LEASE_TOKEN,
       slice: SLICE,
@@ -197,6 +197,88 @@ const readRow = async (
       )
       .limit(1)
   ).at(0);
+
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "authoritative pruning removes unlisted %s items before the limit and preserves other scopes",
+  async (status) => {
+    const sourceId = await seedSource();
+    const otherSourceId = await seedSource();
+    const now = new Date("2026-08-11T09:00:00.000Z");
+    const common = {
+      payload: PAYLOAD,
+      status,
+      attempts: 6,
+      nextAttemptAt: status === RECONCILIATION_ITEM_STATUS.PARKED ? now : null,
+    };
+    await db.insert(caseLawReconciliationItems).values([
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:listed",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-1",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-2",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId,
+        slice: "2026-08-05",
+        identityKey: "document:other-slice",
+      },
+      {
+        ...common,
+        id: createSafeId<"caseLawReconciliationItem">(),
+        sourceId: otherSourceId,
+        slice: SLICE,
+        identityKey: "document:withdrawn-1",
+      },
+    ]);
+    const retained = await readRow(sourceId, "document:listed");
+    const otherSlice = await readRow(sourceId, "document:other-slice");
+    const otherSource = await readRow(otherSourceId, "document:withdrawn-1");
+    const input = {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      slice: SLICE,
+      listedIdentityKeys: ["document:listed"],
+      limit: 1,
+    };
+    for (const removed of [1, 1, 0]) {
+      expect(await pruneUnlistedReconciliationItems(scopedDb, input)).toEqual({
+        outcome: "pruned",
+        removed,
+      });
+    }
+    expect(await readRow(sourceId, "document:withdrawn-1")).toBeUndefined();
+    expect(await readRow(sourceId, "document:withdrawn-2")).toBeUndefined();
+    expect(await readRow(sourceId, "document:listed")).toEqual(retained);
+    expect(await readRow(sourceId, "document:other-slice")).toEqual(otherSlice);
+    expect(await readRow(otherSourceId, "document:withdrawn-1")).toEqual(
+      otherSource,
+    );
+    expect(
+      await pruneUnlistedReconciliationItems(scopedDb, {
+        ...input,
+        listedIdentityKeys: [],
+      }),
+    ).toEqual({ outcome: "pruned", removed: 1 });
+    expect(await readRow(sourceId, "document:listed")).toBeUndefined();
+  },
+);
 
 test("repeated parks advance one row along the widening schedule", async () => {
   const sourceId = await seedSource();

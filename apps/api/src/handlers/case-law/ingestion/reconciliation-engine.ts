@@ -117,7 +117,7 @@ import {
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
-  pruneUnlistedTerminalItems,
+  pruneUnlistedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
@@ -168,7 +168,7 @@ const LIST_DELAY_MS = 200;
  * avoid.
  */
 const LIST_TIMEOUT_MS = 5 * 60_000;
-/** Terminal rows examined when pruning a walked slice. */
+/** Tracked rows removed when pruning a completed listing walk. */
 const PRUNE_ROW_LIMIT = 1000;
 /**
  * One item's build; nothing in it should take longer. Sized like
@@ -1584,14 +1584,12 @@ const walkSlice = async ({
     });
   }
 
-  // This walk saw every page, so it is authoritative about what the slice
-  // lists. Retired rows naming anything else no longer describe this slice and
-  // must stop vouching for its shortfall: settledness weighs the terminal count
-  // against `reported`/`collected`, and those two describe the listing as it is
-  // now. Only reachable on a complete walk — a listing that failed part way
-  // through throws above and never gets here.
+  // Only a completed listing is authoritative about withdrawals. Remove
+  // unlisted parked rows before they can retry a withdrawn payload, and
+  // unlisted terminal rows before they can vouch for this slice's shortfall.
+  // A partial or failed listing never reaches this boundary.
   await lease.beforeDatabaseMark();
-  const prune = await pruneUnlistedTerminalItems(scopedDb, {
+  const prune = await pruneUnlistedReconciliationItems(scopedDb, {
     sourceId,
     leaseToken: lease.leaseToken,
     slice,

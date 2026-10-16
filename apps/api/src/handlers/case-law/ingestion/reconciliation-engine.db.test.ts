@@ -877,63 +877,125 @@ test("a walk leaves unchanged tracked payloads to the retry path", async () => {
   });
 });
 
-test("a completed walk drops retired rows the slice no longer lists", async () => {
-  // Settledness weighs the terminal count against `reported`/`collected`,
-  // which describe the listing as it is now. A retired row for an identity the
-  // publisher has since dropped would otherwise keep vouching for a shortfall
-  // it has nothing to do with, and could mark a slice settled while a
-  // genuinely missing decision sits behind the ingest budget.
-  const sourceId = await seedSource();
-  await seedFreshTip(sourceId);
-  await seedSlice({
-    sourceId,
-    slice: OWED_SLICE,
-    reported: 3,
-    collected: 0,
-    checkedAt: addUtcDays(NOW, -2),
-  });
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "a completed walk drops withdrawn %s rows before their payload can be retried",
+  async (status) => {
+    // Settledness weighs the terminal count against `reported`/`collected`,
+    // which describe the listing as it is now. A retired row for an identity the
+    // publisher has since dropped would otherwise keep vouching for a shortfall
+    // it has nothing to do with, and could mark a slice settled while a
+    // genuinely missing decision sits behind the ingest budget.
+    const sourceId = await seedSource();
+    await seedFreshTip(sourceId);
+    await seedSlice({
+      sourceId,
+      slice: OWED_SLICE,
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    });
 
-  const staleTerminalKey =
-    listingIdentityKey({
-      type: "document",
-      sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
-    }) ?? "";
-  // Retired under this slice, but nowhere in the listing it now returns.
-  await seedItem(sourceId, staleTerminalKey, {
-    status: RECONCILIATION_ITEM_STATUS.TERMINAL,
-    attempts: 6,
-    nextAttemptAt: null,
-  });
+    const staleTerminalKey =
+      listingIdentityKey({
+        type: "document",
+        sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
+      }) ?? "";
+    // The retained payload could still build, but the publisher withdrew it.
+    const withdrawnPayload = { withdrawn: true };
+    const originalDueAt = addUtcDays(NOW, 1);
+    await seedItem(sourceId, staleTerminalKey, {
+      status,
+      attempts: 6,
+      payload: withdrawnPayload,
+      nextAttemptAt:
+        status === RECONCILIATION_ITEM_STATUS.PARKED ? originalDueAt : null,
+    });
 
-  const outcome = await runUnit(sourceId);
+    const outcome = await runUnit(sourceId);
 
-  expect(outcome).toMatchObject({
-    type: "worked",
-    summary: { slice: OWED_SLICE, pruned: 1 },
-  });
-  expect(
-    await db
-      .select({ identityKey: caseLawReconciliationItems.identityKey })
-      .from(caseLawReconciliationItems)
-      .where(
-        and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.identityKey, staleTerminalKey),
-        ),
-      )
-      .limit(1),
-  ).toEqual([]);
+    expect(outcome).toMatchObject({
+      type: "worked",
+      summary: { slice: OWED_SLICE, pruned: 1 },
+    });
+    expect(
+      await db
+        .select({ identityKey: caseLawReconciliationItems.identityKey })
+        .from(caseLawReconciliationItems)
+        .where(
+          and(
+            eq(caseLawReconciliationItems.sourceId, sourceId),
+            eq(caseLawReconciliationItems.identityKey, staleTerminalKey),
+          ),
+        )
+        .limit(1),
+    ).toEqual([]);
 
-  // The two identities the slice does list were parked by this walk and are
-  // deliberately kept: they still describe the listing.
-  expect(
-    await db
-      .select({ identityKey: caseLawReconciliationItems.identityKey })
-      .from(caseLawReconciliationItems)
-      .where(eq(caseLawReconciliationItems.sourceId, sourceId))
-      .limit(10),
-  ).toHaveLength(2);
-});
+    // The two identities the slice does list were parked by this walk and are
+    // deliberately kept: they still describe the listing.
+    expect(
+      await db
+        .select({ identityKey: caseLawReconciliationItems.identityKey })
+        .from(caseLawReconciliationItems)
+        .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+        .limit(10),
+    ).toHaveLength(2);
+    builds.length = 0;
+    expect(
+      await runUnitWith({ sourceId, now: () => originalDueAt }),
+    ).toMatchObject({ type: "worked", summary: { unit: "parked-retries" } });
+    expect(builds).toEqual(LISTING_ITEMS);
+    expect(builds).not.toContainEqual(withdrawnPayload);
+  },
+);
+
+test.each(Object.values(RECONCILIATION_ITEM_STATUS))(
+  "a failed partial listing preserves tracked %s rows",
+  async (status) => {
+    const sourceId = await seedSource();
+    await seedFreshTip(sourceId);
+    await seedSlice({
+      sourceId,
+      slice: OWED_SLICE,
+      reported: 3,
+      collected: 0,
+      checkedAt: addUtcDays(NOW, -2),
+    });
+    const identityKey = "document:possibly-withdrawn";
+    await seedItem(sourceId, identityKey, {
+      status,
+      attempts: 6,
+      nextAttemptAt:
+        status === RECONCILIATION_ITEM_STATUS.PARKED
+          ? addUtcDays(NOW, 1)
+          : null,
+      payload: { retained: true },
+    });
+    const read = async () =>
+      await db
+        .select()
+        .from(caseLawReconciliationItems)
+        .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    const before = await read();
+    const reconciliation: SourceReconciliation = {
+      ...stubReconciliation,
+      listSlicePage: async ({ page }) => {
+        if (page > 0) {
+          throw new AdapterFetchError({
+            message: "listing interrupted",
+            adapterKey: "engine-fixture",
+            cursor: OWED_SLICE,
+          });
+        }
+        return { items: [], totalPages: 2 };
+      },
+    };
+    const rejected = await rejectionOf(runUnit(sourceId, reconciliation));
+    expect(rejected).toBeInstanceOf(AdapterFetchError);
+    expect(rejected).toMatchObject({ message: "listing interrupted" });
+    expect(await read()).toEqual(before);
+    expect(builds).toEqual([]);
+  },
+);
 
 test("a publisher claiming an absurd page count is refused, not walked", async () => {
   // `totalPages` is the publisher's own number and the response validators

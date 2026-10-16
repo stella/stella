@@ -356,13 +356,14 @@ export const retireReconciliationItem = async (
         id: caseLawReconciliationItems.id,
         attempts: caseLawReconciliationItems.attempts,
       });
-    if (written.length === 0) {
+    const recorded = written.at(0);
+    if (recorded === undefined) {
       return { outcome: "superseded" as const };
     }
 
     return {
       outcome: "recorded" as const,
-      attempts: written[0].attempts,
+      attempts: recorded.attempts,
       becameTerminal: true as const,
     };
   });
@@ -686,35 +687,27 @@ export const refreshTrackedReconciliationItems = async (
   return { outcome: "refreshed", trackedIdentityKeys, refreshedIdentityKeys };
 };
 
-export type PruneUnlistedTerminalItemsInput = ReconciliationLease & {
+export type PruneUnlistedReconciliationItemsInput = ReconciliationLease & {
   slice: string;
   /** Every identity the completed walk saw for the slice. */
   listedIdentityKeys: readonly string[];
-  /** Rows examined per prune; bounds the read on a pathological slice. */
+  /** Rows removed per prune; bounds the mutation on a pathological slice. */
   limit: number;
 };
 
 /**
- * Forget retired items the slice no longer lists.
+ * Forget tracked items an authoritative completed walk no longer lists.
  *
- * Settledness compares two populations: `reported`/`collected`, which describe
- * the listing as it is now, and the terminal count, which describes rows
- * written whenever they were written. A publisher that drops an identity and
- * lists another in its place leaves the old terminal row behind, and that row
- * then vouches for a shortfall it has nothing to do with — a genuinely missing
- * decision can be marked accounted for by an identity that is no longer even
- * listed. Pruning on a completed walk keeps the terminal term an intersection
- * with the listing it is compared against.
- *
- * Only terminal rows, because only they carry settledness. A parked row keeps
- * its slice short either way, so removing it would buy nothing and would throw
- * away an attempt history.
+ * A withdrawn parked item must not be fetched later from its retained payload.
+ * A withdrawn terminal item must stop vouching for a slice's shortfall. Both
+ * dispositions describe the current listing only while their identity remains
+ * listed. Filter before the bounded read so listed rows cannot hide removals.
  */
-type PruneUnlistedTerminalItemsResult =
+type PruneUnlistedReconciliationItemsResult =
   | { outcome: "superseded" }
   | { outcome: "pruned"; removed: number };
 
-export const pruneUnlistedTerminalItems = async (
+export const pruneUnlistedReconciliationItems = async (
   scopedDb: ScopedDb,
   {
     sourceId,
@@ -722,31 +715,25 @@ export const pruneUnlistedTerminalItems = async (
     slice,
     listedIdentityKeys,
     limit,
-  }: PruneUnlistedTerminalItemsInput,
-): Promise<PruneUnlistedTerminalItemsResult> =>
+  }: PruneUnlistedReconciliationItemsInput,
+): Promise<PruneUnlistedReconciliationItemsResult> =>
   await scopedDb(async (tx) => {
     if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
       return { outcome: "superseded" as const };
     }
-    const listed = new Set(listedIdentityKeys);
+    const unlistedInSlice = and(
+      eq(caseLawReconciliationItems.sourceId, sourceId),
+      eq(caseLawReconciliationItems.slice, slice),
+      sql`${caseLawReconciliationItems.identityKey} NOT IN (
+        SELECT jsonb_array_elements_text(${JSON.stringify(listedIdentityKeys)}::text::jsonb)
+      )`,
+    );
     const rows = await tx
       .select({ identityKey: caseLawReconciliationItems.identityKey })
       .from(caseLawReconciliationItems)
-      .where(
-        and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.slice, slice),
-          eq(
-            caseLawReconciliationItems.status,
-            RECONCILIATION_ITEM_STATUS.TERMINAL,
-          ),
-        ),
-      )
+      .where(unlistedInSlice)
       .limit(limit);
-    const unlisted = rows.flatMap(({ identityKey }) =>
-      listed.has(identityKey) ? [] : [identityKey],
-    );
-    if (unlisted.length === 0) {
+    if (rows.length === 0) {
       return { outcome: "pruned" as const, removed: 0 };
     }
     // audit: skip — ingestion bookkeeping for public source data
@@ -754,8 +741,11 @@ export const pruneUnlistedTerminalItems = async (
       .delete(caseLawReconciliationItems)
       .where(
         and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          inArray(caseLawReconciliationItems.identityKey, unlisted),
+          unlistedInSlice,
+          inArray(
+            caseLawReconciliationItems.identityKey,
+            rows.map(({ identityKey }) => identityKey),
+          ),
         ),
       )
       .returning({ id: caseLawReconciliationItems.id });
