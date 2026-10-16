@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { beforeAll, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
 
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const expectRejected = async (operation: Promise<unknown>, message: RegExp) => {
@@ -29,13 +31,19 @@ const buildDatabase = async () => {
       timer_started_at timestamptz, timer_stopped_at timestamptz,
       created_at timestamptz DEFAULT now()
     );
+  `);
+  await withLegacyWorkspaceFixture({
+    tx: drizzle({ client: db }),
+    insert: async () =>
+      await db.exec(`
     INSERT INTO organization VALUES ('org-a'), ('org-b');
     INSERT INTO "user" VALUES ('user-a'), ('user-b');
     INSERT INTO "member" VALUES ('org-a', 'user-a'), ('org-a', 'user-b'), ('org-b', 'user-a');
     INSERT INTO workspaces VALUES ('00000000-0000-4000-8000-000000000001', 'org-a');
     INSERT INTO time_entries (id, organization_id, user_id, workspace_id, narrative, status, source, timer_started_at)
       VALUES ('00000000-0000-4000-8000-000000000002', 'org-a', 'user-a', '00000000-0000-4000-8000-000000000001', 'Review', 'draft', 'timer', '2026-09-29T12:00:00Z');
-  `);
+  `),
+  });
   await db.exec(
     await Bun.file(
       new URL(

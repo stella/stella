@@ -13,6 +13,11 @@ export default {
     names: ["hasCurrentMemberPermission"],
     allowed: [
       {
+        path: "apps/api/src/lib/workspaces/visibility.ts",
+        reason:
+          "Revalidates the actor's locked membership and required operation permissions after matter mutation locks are acquired.",
+      },
+      {
         path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
         reason:
           "Revalidates the locked membership after desktop credential authorization.",

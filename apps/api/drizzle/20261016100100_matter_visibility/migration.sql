@@ -1,3 +1,4 @@
+-- requires: 20261015090000_matter_access_rule_function
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 

@@ -21,7 +21,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -187,25 +187,19 @@ describe("audit log compliance filter", () => {
     );
     const personalMatterId = toSafeId<"workspace">(Bun.randomUUIDv7());
     await testDb.transaction(async (tx) => {
-      await lockMatterStewardship({
-        tx: asTestRaw<Transaction>(tx),
-        requests: [
+      await insertWorkspaceRowsInTransaction({
+        tx,
+        rows: [
           {
+            id: personalMatterId,
             organizationId: ids.orgA,
-            workspaceIds: [personalMatterId],
-            userIds: [ids.userA1],
+            name: "Matter C",
+            reference: personalMatterId,
+            status: "active",
+            visibility: "assigned_only",
+            leadUserId: ids.userA1,
           },
         ],
-        mode: "update",
-      });
-      await tx.insert(workspaces).values({
-        id: personalMatterId,
-        organizationId: ids.orgA,
-        name: "Matter C",
-        reference: personalMatterId,
-        status: "active",
-        visibility: "assigned_only",
-        leadUserId: ids.userA1,
       });
       await tx.insert(workspaceMembers).values({
         id: createSafeId<"workspaceMember">(),

@@ -81,28 +81,33 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            limit: () => ({
-              for: async () =>
-                table === timeEntries ? [{ id: "timer_test" }] : [],
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () =>
+                  table === timeEntries ? [{ id: "timer_test" }] : [],
+              }),
+              for: async () => {
+                if (table === workspaces) {
+                  return [{ leadUserId: null }];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_timer", userId },
+                    { id: "wm_other", userId: "user_other_test" },
+                  ];
+                }
+                return [];
+              },
             }),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: null }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_timer", userId },
-                  { id: "wm_other", userId: "user_other_test" },
-                ];
-              }
-              return [];
-            },
           }),
-        }),
-      }),
+        };
+      },
       delete: () => {
         deleteCalled = true;
         return {};
@@ -140,45 +145,50 @@ describe("removeWorkspaceMember", () => {
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
       execute: async () => [],
-      select: () => ({
-        from: (table: unknown) => ({
-          innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
             innerJoin: () => ({
-              where: () => ({ as: () => ({}) }),
-            }),
-          }),
-          where: () => ({
-            orderBy: () => ({
-              limit: () => ({
-                for: async () =>
-                  table === workspaces ? [{ id: "ws_test123" }] : [],
+              ...createSelectQueryMock([]).from(),
+              innerJoin: () => ({
+                where: () => ({ as: () => ({}) }),
               }),
             }),
-            limit: () => ({
-              for: async () => [],
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () =>
+                    table === workspaces ? [{ id: "ws_test123" }] : [],
+                }),
+              }),
+              limit: () => ({
+                for: async () => [],
+              }),
+              for: async () => {
+                if (table === workspaces) {
+                  return [
+                    {
+                      id: "ws_test123",
+                      leadUserId: "user_lead",
+                      organizationId: "org_test123",
+                    },
+                  ];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_lead", userId: "user_lead" },
+                    { id: "wm_other", userId: "user_other" },
+                  ];
+                }
+                return [];
+              },
             }),
-            for: async () => {
-              if (table === workspaces) {
-                return [
-                  {
-                    id: "ws_test123",
-                    leadUserId: "user_lead",
-                    organizationId: "org_test123",
-                  },
-                ];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_lead", userId: "user_lead" },
-                  { id: "wm_other", userId: "user_other" },
-                ];
-              }
-              return [];
-            },
           }),
-        }),
-      }),
+        };
+      },
       delete: (table: unknown) => ({
         where: () => ({
           returning: async () => {

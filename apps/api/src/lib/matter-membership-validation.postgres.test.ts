@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { defaultMatterVisibilityFor } from "@stll/api-contract/matter-visibility";
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
@@ -52,7 +52,7 @@ describePostgres("matter membership validation (postgres)", () => {
           .simple();
         await session`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
           VALUES (${workspaceId}, 'validation-org', 'Matter', ${workspaceId},
-            ${defaultMatterVisibilityFor({ hasClient: false })}, 'retained-user')`;
+            ${MATTER_VISIBILITY.adminsAndAssigned}, 'retained-user')`;
         await session`INSERT INTO workspace_members (id, workspace_id, user_id)
           VALUES (${orphanId}, ${workspaceId}, 'departed-user'),
                  (${secondOrphanId}, ${workspaceId}, 'departed-user-2'),

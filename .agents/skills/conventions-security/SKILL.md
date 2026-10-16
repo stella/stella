@@ -87,7 +87,17 @@ already locked matter or upgrade a shared reach hold into a writer.
 Database triggers validate the completed prefix and steward state without
 acquiring further locks. Completion proofs are root-owned; mutable session
 settings cannot authorize a mutation. Reach holds, creation, recovery, repair, membership
-changes and deletion use this same protocol. Recovery cannot assign its acting
+changes and deletion use this same protocol. Creation uses
+`create-workspace-row.ts`: scoped creators call `createWorkspaceInTransaction`;
+system seeds and fixtures use `insertWorkspaceRowsInTransaction` or its
+`withWorkspaceCreation` boundary. That owner acquires the complete batch
+prefix before inserting, including generated IDs and future assignees.
+`no-unowned-workspace-insert` rejects private or unresolved inserts outside
+the owner; historical fixtures must prove their schema predates visibility.
+After a mutation acquires its prefix, re-read reach and current authority
+through `readMatterMutationAuthority` before acting on an earlier authorized
+matter ID. Refuse lost reach with the same not-found response as a missing
+matter. Recovery cannot assign its acting
 administrator; hidden healthy, missing and foreign-organization matters produce
 the same not-found response.
 

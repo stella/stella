@@ -223,6 +223,12 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "4b8183fa336a4825837a531571dc5b7a5dc1ef7424ca9cf6381bc06ab6f9be51",
+    "count": 1,
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "4ff3e52119cd6b645b9cc1cc7179c626f30d4f9cc62506da52ba4a60e8752f62",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -265,12 +271,6 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "7a7ae785a84d64f46929bd0b11a293db6c7638ec189b44b8da10a8895758af5c",
-    "count": 1,
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "82888682803f362eba58da0b33eaa8d9d55cbb8aed3015fb0945cb83bc910cee",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -289,15 +289,15 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "9c5e996731af49b00bc5d1b179b2681f8fd0d682648931efb06642345b182024",
-    "count": 2,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "fingerprint": "9933038ce8e93adb147ddc41191400e18a2810441a67e0039f694e07605b478a",
+    "count": 1,
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "9ea607fe410da304423d0417ed139b738a4822dbf239b3f8fd2e16addb0f21ec",
-    "count": 1,
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
+    "fingerprint": "9c5e996731af49b00bc5d1b179b2681f8fd0d682648931efb06642345b182024",
+    "count": 2,
+    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -367,6 +367,12 @@
   },
   {
     "file": "apps/api/scripts/seed-email-viewer-demo.ts",
+    "fingerprint": "3230f7f5dc1c53915141f7460530b7b5f2871dfccba3d7a57fc5df713587f9b6",
+    "count": 1,
+    "reason": "Existing email fixture transaction now creates the matter through the canonical creation owner before assigning its lead; the transaction boundary is unchanged."
+  },
+  {
+    "file": "apps/api/scripts/seed-email-viewer-demo.ts",
     "fingerprint": "4f63a4f82d06bf9e1e4e590f26718eeb7ce63b895133845ad2441707bbe50e8a",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-email-viewer-demo.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -376,12 +382,6 @@
     "fingerprint": "52c4eb8dfab299bbb9be208db4342c5b9cfc1da0e9e93e8e86f530bb0f45f89f",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-email-viewer-demo.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-email-viewer-demo.ts",
-    "fingerprint": "57ad693539cecb5b698a3d6c19ea95f6ef342a28b314af629e82b8f615ade5e2",
-    "count": 1,
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
   },
   {
     "file": "apps/api/scripts/seed-email-viewer-demo.ts",

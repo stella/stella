@@ -2,6 +2,7 @@ import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, getColumns } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
@@ -33,6 +34,7 @@ import {
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
+import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
@@ -173,7 +175,31 @@ describe.skipIf(!enabled)("list verification row security", () => {
         await client`INSERT INTO "user" VALUES (${userId}, 'member@example.test', true, null)`;
         await client`INSERT INTO member VALUES ('verification_member', ${userId}, ${organizationId}, 'owner')`;
         await client`INSERT INTO workspace_members VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
-        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId}, 'active', null, 'assigned_only')`;
+        await db.transaction(
+          async (tx) =>
+            await withWorkspaceCreation({
+              tx,
+              rows: [
+                {
+                  id: workspaceId,
+                  organizationId,
+                  name: "Verification fixture",
+                  reference: workspaceId,
+                  visibility: MATTER_VISIBILITY.assignedOnly,
+                  leadUserId: userId,
+                },
+              ],
+              insert: async (normalizedRows) => {
+                const row =
+                  normalizedRows.at(0) ??
+                  panic("Missing verification matter creation row");
+                await tx.execute(
+                  sql`INSERT INTO workspaces (id, organization_id, status, client_id, visibility)
+                    VALUES (${row.id}, ${row.organizationId}, 'active', null, ${row.visibility})`,
+                );
+              },
+            }),
+        );
         const runFixture = {
           id: runId,
           organizationId,

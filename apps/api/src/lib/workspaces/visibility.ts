@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
@@ -10,6 +10,7 @@ import {
   MATTER_VISIBILITY,
 } from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
+import type { PermissionInput } from "@stll/permissions";
 import {
   INTERNAL_MEMBER_ROLES,
   ORGANIZATION_MATTER_ADMIN_ROLES,
@@ -28,7 +29,10 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isMemberRole } from "@/api/lib/member-roles";
+import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 /** The visibilities owners and admins reach without an assignment. */
 const ADMIN_REACHABLE_VISIBILITIES = [
@@ -82,6 +86,58 @@ export const reachesMatterWithoutMembership = ({
       visibility satisfies never;
       return panic(`Unhandled matter visibility: ${String(visibility)}`);
   }
+};
+
+type MatterMutationAuthorityOptions = {
+  permissions: PermissionInput;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+};
+
+/**
+ * Read current reach and authority after the caller acquires the complete
+ * stewardship prefix. A matter pinned by earlier authorization can have been
+ * narrowed while the writer waited; that pin does not establish current reach.
+ */
+export const readMatterMutationAuthority = async (
+  tx: Transaction,
+  {
+    organizationId,
+    workspaceId,
+    userId,
+    permissions,
+  }: MatterMutationAuthorityOptions,
+): Promise<{ managesOrganizationMatters: boolean } | null> => {
+  const rows = await tx
+    .select({ role: member.role })
+    .from(workspaces)
+    .innerJoin(
+      member,
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    )
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+        ne(workspaces.status, "deleting"),
+        memberReachesMatterSql({ organizationId, userId }, workspaces.id),
+      ),
+    )
+    .limit(1);
+  const membership = rows.at(0);
+  if (
+    !membership ||
+    !isMemberRole(membership.role) ||
+    !hasCurrentMemberPermission(membership.role, permissions)
+  ) {
+    return null;
+  }
+  return {
+    managesOrganizationMatters: ORGANIZATION_MATTER_ADMIN_ROLES.some(
+      (role) => role === membership.role,
+    ),
+  };
 };
 
 /**

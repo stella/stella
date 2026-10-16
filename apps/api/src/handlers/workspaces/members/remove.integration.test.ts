@@ -34,6 +34,7 @@ import {
 } from "@/api/db/scoped";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
+import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
@@ -89,6 +90,106 @@ afterAll(async () => {
 });
 
 describe("removeWorkspaceMemberHandler RLS integration", () => {
+  test.each(["add", "remove"] as const)(
+    "a pinned handle cannot %s a member after its actor loses the matter",
+    async (operation) => {
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await testDb.transaction(async (tx) => {
+            await lockMatterStewardship({
+              tx: asTestRaw<Transaction>(tx),
+              requests: [
+                {
+                  organizationId: ids.orgA,
+                  workspaceIds: [ids.wsA2],
+                  userIds: [ids.userA1, ids.userA2, ids.userAdmin],
+                },
+              ],
+              mode: "update",
+            });
+            const safeDb = asTestRaw<SafeDb>(
+              createMembershipSafeDb(markRlsDatabase(tx), {
+                organizationId: ids.orgA,
+                userId: ids.userA1,
+                serverValidatedWorkspaceIds: [ids.wsA2],
+              }),
+            );
+            if (operation === "remove") {
+              await tx.insert(workspaceMembers).values({
+                id: createSafeId<"workspaceMember">(),
+                workspaceId: ids.wsA2,
+                userId: ids.userAdmin,
+              });
+            }
+            await tx
+              .delete(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, ids.wsA2),
+                  eq(workspaceMembers.userId, ids.userA1),
+                ),
+              );
+            const recordAuditEvent = createAuditRecorder({
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              userId: ids.userA1,
+              request: new Request(
+                "https://api.example.test/v1/workspaces/members",
+              ),
+              server: null,
+            });
+            const common = {
+              safeDb,
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA2,
+              actorUserId: ids.userA1,
+              recordAuditEvent,
+            };
+            const result =
+              operation === "add"
+                ? await Result.gen(() =>
+                    addWorkspaceMemberHandler({
+                      ...common,
+                      body: { userId: ids.userAdmin },
+                    }),
+                  )
+                : await Result.gen(() =>
+                    removeWorkspaceMemberHandler({
+                      ...common,
+                      userId: ids.userA2,
+                      managesOrganizationMatters: false,
+                    }),
+                  );
+            expect(result).toMatchObject({
+              status: "error",
+              error: { status: 404 },
+            });
+            await tx.execute(sql`RESET ROLE`);
+            const targetUserId =
+              operation === "add" ? ids.userAdmin : ids.userA2;
+            expect(
+              await tx.$count(
+                workspaceMembers,
+                and(
+                  eq(workspaceMembers.workspaceId, ids.wsA2),
+                  eq(workspaceMembers.userId, targetUserId),
+                ),
+              ),
+            ).toBe(operation === "add" ? 0 : 1);
+            expect(
+              await tx.$count(auditLogs, eq(auditLogs.resourceId, ids.wsA2)),
+            ).toBe(0);
+            tx.rollback();
+          }),
+        catch: (error) => error,
+      });
+      expect(outcome).toMatchObject({
+        status: "error",
+        error: expect.any(TransactionRollbackError),
+      });
+    },
+  );
+
   test("a global-chat pin preserves self-removal cleanup and audit scope", async () => {
     try {
       await testDb.transaction(async (outerTx) => {

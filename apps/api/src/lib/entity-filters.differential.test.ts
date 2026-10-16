@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
+import { defaultMatterVisibilityFor } from "@stll/api-contract/matter-visibility";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
@@ -13,6 +14,7 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { applyFilters, buildFilterConditions } from "@/api/lib/entity-filters";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
@@ -110,14 +112,23 @@ beforeAll(
       type: "person",
       displayName: "Diff Contact",
     });
-    await db.insert(schema.workspaces).values({
-      id: WS_ID,
-      organizationId: ORG_ID,
-      clientId: CONTACT_ID,
-      name: "Diff WS",
-      reference: "REF-DIFF",
-      status: "active",
-    });
+    await db.transaction(
+      async (tx) =>
+        await insertWorkspaceRowsInTransaction({
+          tx,
+          rows: [
+            {
+              id: WS_ID,
+              organizationId: ORG_ID,
+              clientId: CONTACT_ID,
+              name: "Diff WS",
+              reference: "REF-DIFF",
+              status: "active",
+              visibility: defaultMatterVisibilityFor({ hasClient: true }),
+            },
+          ],
+        }),
+    );
 
     await db.insert(properties).values(
       PROP_KEYS.map((key) => ({

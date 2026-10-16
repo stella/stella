@@ -614,7 +614,19 @@ if (!databaseUrl || !runPostgresTests) {
         const safeDb = safeDbFromScoped(
           async (fn) =>
             await grantDb.transaction(async (tx) => {
-              // Pause the real handler at its existing matter-lock prefix.
+              // Hold the complete creation-independent prefix before observing
+              // the handler's matter lock, preserving the production lock order.
+              await lockMatterStewardship({
+                tx: asTestRaw<Transaction>(tx),
+                requests: [
+                  {
+                    organizationId: seeded.organizationId,
+                    workspaceIds: [seeded.workspaceId],
+                    userIds: [seeded.userId, seeded.ownerId],
+                  },
+                ],
+                mode: "update",
+              });
               await tx
                 .select({ id: workspaces.id })
                 .from(workspaces)
@@ -631,6 +643,7 @@ if (!databaseUrl || !runPostgresTests) {
             safeDb,
             organizationId: seeded.organizationId,
             workspaceId: seeded.workspaceId,
+            actorUserId: seeded.userId,
             body: { userId: seeded.ownerId },
             recordAuditEvent: async () => await Promise.resolve(),
           }),

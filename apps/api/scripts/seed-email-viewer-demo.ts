@@ -31,6 +31,7 @@ import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
@@ -127,18 +128,20 @@ const resolveTarget = async () => {
   };
   if (!existingWorkspace) {
     await db.transaction(async (tx) => {
-      const insertedWorkspaces = await tx
-        .insert(workspaces)
-        .values({
-          visibility: defaultMatterVisibilityFor({ hasClient: false }),
-          leadUserId: activeSession.userId,
-          id: workspace.id,
-          organizationId: workspace.organizationId,
-          name: workspace.name,
-          reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
-        })
-        .onConflictDoNothing()
-        .returning({ id: workspaces.id });
+      const insertedWorkspaces = await insertWorkspaceRowsInTransaction({
+        tx,
+        rows: [
+          {
+            visibility: defaultMatterVisibilityFor({ hasClient: false }),
+            leadUserId: activeSession.userId,
+            id: workspace.id,
+            organizationId: workspace.organizationId,
+            name: workspace.name,
+            reference: `${EMAIL_QA_MATTER_REFERENCE}/${workspace.id}`,
+          },
+        ],
+        onConflict: "ignore",
+      });
       if (!insertedWorkspaces.at(0)) {
         panic(
           "The email QA matter already exists but is not an eligible target.",

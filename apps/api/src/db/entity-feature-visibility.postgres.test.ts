@@ -25,6 +25,7 @@ import {
   searchDocuments,
   timeEntries,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -35,6 +36,7 @@ import {
   WORK_OBLIGATION_CONTEXT_EXTRAS,
   WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
 } from "@/api/lib/work-obligations/read-context";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -78,11 +80,23 @@ describe.skipIf(!runPostgresTests)(
             VALUES (${userId}, 'Feature user', ${`${userId}@example.test`})`;
             await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${mintAuthProviderIdValue()}, ${organizationId}, ${userId}, 'owner', now())`;
-            await client.begin(async (tx) => {
-              await tx`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
-                VALUES (${workspaceId}, ${organizationId}, 'Feature matter', ${workspaceId}, ${defaultMatterVisibilityFor({ hasClient: false })}, ${userId})`;
-              await tx`INSERT INTO workspace_members (id, workspace_id, user_id)
-                VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
+            await db.transaction(async (tx) => {
+              await insertWorkspaceRowsInTransaction({
+                tx,
+                rows: [
+                  {
+                    id: workspaceId,
+                    organizationId,
+                    name: "Feature matter",
+                    reference: workspaceId,
+                    visibility: defaultMatterVisibilityFor({
+                      hasClient: false,
+                    }),
+                    leadUserId: userId,
+                  },
+                ],
+              });
+              await tx.insert(workspaceMembers).values({ workspaceId, userId });
             });
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             VALUES (${factId}, ${workspaceId}, 'task', 'fact', 'Reference fact')`;

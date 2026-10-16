@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/review-organization/reset-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -78,7 +79,11 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner}`);
         await client`INSERT INTO member VALUES (${organizationId}, ${reviewerId}, 'owner')`;
         for (const workspaceId of workspaceIds) {
-          await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
+          await withLegacyWorkspaceFixture({
+            tx: db,
+            insert: async () =>
+              await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`,
+          });
         }
         for (const name of REVIEW_RESET_CLEARED_TABLES) {
           const table = identifier(name);

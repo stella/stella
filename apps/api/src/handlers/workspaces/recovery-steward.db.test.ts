@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { recoverOrphanedMatterSteward } from "@/api/lib/workspaces/visibility";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -43,13 +44,19 @@ const createOrphan = async (tx: Transaction) => {
   // The deferred creation constraint permits naming and assigning a steward
   // in the same transaction; recovery must satisfy it before commit.
   const workspaceId = createSafeId<"workspace">();
-  await tx.insert(workspaces).values({
-    id: workspaceId,
-    organizationId: ids.orgA,
-    name: "Recovery matter",
-    reference: workspaceId,
-    visibility: "assigned_only",
-    leadUserId: null,
+  await insertWorkspaceRowsInTransaction({
+    tx,
+    rows: [
+      {
+        id: workspaceId,
+        organizationId: ids.orgA,
+        name: "Recovery matter",
+        reference: workspaceId,
+        visibility: "assigned_only",
+        leadUserId: null,
+      },
+    ],
+    candidateUserIds: [ids.userAdmin, ids.userA1, ids.userA2, ids.userB1],
   });
   return workspaceId;
 };
@@ -196,7 +203,6 @@ test.each(["actor", "steward", "external-steward"] as const)(
     const error = await rejectionOf(
       testDb.transaction(async (rawTx) => {
         const tx = asTestRaw<Transaction>(rawTx);
-        const workspaceId = await createOrphan(tx);
         if (invalid === "external-steward") {
           await tx.insert(member).values({
             id: mintAuthProviderIdValue(),
@@ -206,6 +212,7 @@ test.each(["actor", "steward", "external-steward"] as const)(
             createdAt: new Date(),
           });
         }
+        const workspaceId = await createOrphan(tx);
         await recoverOrphanedMatterSteward(tx, {
           organizationId: ids.orgA,
           workspaceId,

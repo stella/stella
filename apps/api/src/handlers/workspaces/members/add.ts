@@ -17,6 +17,7 @@ import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { readMatterMutationAuthority } from "@/api/lib/workspaces/visibility";
 
 const addWorkspaceMemberBodySchema = t.Object({
   userId: tUserId,
@@ -40,6 +41,7 @@ export type AddWorkspaceMemberProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  actorUserId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof addWorkspaceMemberBodySchema>;
 };
@@ -51,6 +53,7 @@ export const addWorkspaceMemberHandler = async function* ({
   safeDb,
   organizationId,
   workspaceId,
+  actorUserId,
   recordAuditEvent,
   body,
 }: AddWorkspaceMemberProps) {
@@ -62,11 +65,20 @@ export const addWorkspaceMemberHandler = async function* ({
           {
             organizationId,
             workspaceIds: [workspaceId],
-            userIds: [body.userId],
+            userIds: [actorUserId, body.userId],
           },
         ],
         mode: "update",
       });
+      const authority = await readMatterMutationAuthority(tx, {
+        permissions: config.permissions,
+        organizationId,
+        workspaceId,
+        userId: actorUserId,
+      });
+      if (authority === null) {
+        return { ok: false as const, reason: "not_found" as const };
+      }
       // Lock the workspace row first so concurrent workspace
       // deletion or promotion cannot race this membership insert.
       const workspaceRows = await tx
@@ -175,11 +187,19 @@ export const addWorkspaceMemberHandler = async function* ({
 
 const addWorkspaceMember = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* addWorkspaceMemberHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,
+      actorUserId: user.id,
       recordAuditEvent,
       body,
     });

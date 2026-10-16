@@ -233,195 +233,214 @@ const createContext = ({
 
 describe("duplicateWorkspace", () => {
   for (const featureStatus of ["hidden", "colleague", "enabled"] as const) {
-    test(`${featureStatus} copies a matter with permitted views and its lead`, async () => {
-      const createdWorkspaces: unknown[][] = [];
-      const insertedViews: unknown[] = [];
-      const insertedWorkspaceMembers: unknown[] = [];
-      const insertedAuditLogs: unknown[] = [];
+    for (const access of ["current", "revoked"] as const) {
+      test(`${featureStatus} ${access} source access determines whether a duplicate is created`, async () => {
+        const createdWorkspaces: unknown[][] = [];
+        const insertedViews: unknown[] = [];
+        const insertedWorkspaceMembers: unknown[] = [];
+        const insertedAuditLogs: unknown[] = [];
 
-      const { safeDb, scopedDb } = createScopedDbMock({
-        query: {
-          workspaces: {
-            findFirst: async () => ({
-              id: "ws_source123",
-              name: "Smith v Jones",
-              clientId: "contact_client123",
-              billingReference: "BILL-123",
-              color: "blue",
-              leadUserId: "user_lead123",
-              visibility: "assigned_only",
-            }),
-          },
-          properties: {
-            findMany: async () => [],
-          },
-          propertyDependencies: {
-            findMany: async () => [],
-          },
-          workspaceViews: {
-            findMany: async () => [
-              {
-                id: "019c0c90-0000-7000-8000-000000000103",
-                name: "Ordinary",
-                position: 0,
-                layout: {
-                  type: "filesystem",
-                  version: 1,
-                  filters: [],
-                  sorts: [],
-                  hiddenProperties: [],
-                  calculations: [],
-                },
-              },
-              {
-                id: "019c0c90-0000-7000-8000-000000000104",
-                name: "Verification",
-                position: 1,
-                layout: {
-                  type: "avt",
-                  version: 1,
-                  listId: null,
-                  filters: [],
-                  sorts: [],
-                  hiddenProperties: [],
-                  calculations: [],
-                },
-              },
-            ],
-          },
-          workspaceMembers: {
-            findMany: async () => [{ userId: "user_lead123" }],
-          },
-          workspaceContacts: {
-            findMany: async () => [],
-          },
-          organizationSettings: {
-            findFirst: async () => null,
-          },
-        },
-        select: (selectedFields: Record<string, unknown>) => {
-          if (
-            selectedFields["reference"] === documentReferenceCounters.reference
-          ) {
-            return createSelectQueryMock([]);
-          }
-          if ("total" in selectedFields) {
-            return {
-              from: () => ({
-                where: async () => [{ total: 0 }],
+        const { safeDb, scopedDb } = createScopedDbMock({
+          query: {
+            workspaces: {
+              findFirst: async () => ({
+                id: "ws_source123",
+                name: "Smith v Jones",
+                clientId: "contact_client123",
+                billingReference: "BILL-123",
+                color: "blue",
+                leadUserId: "user_lead123",
+                visibility: "assigned_only",
               }),
-            };
-          }
-
-          if ("name" in selectedFields) {
-            return {
-              from: () => ({
-                where: async () => [],
-              }),
-            };
-          }
-
-          if ("userId" in selectedFields) {
-            return {
-              from: (table: unknown) => {
-                expect(table).toBe(member);
-                return {
-                  where: () => ({
-                    orderBy: (column: unknown) => {
-                      expect(column).toBe(member.id);
-                      return {
-                        limit: async () => [{ userId: "user_lead123" }],
-                      };
-                    },
-                  }),
-                };
-              },
-            };
-          }
-
-          throw new Error("Unexpected select fields");
-        },
-        insert: (table: unknown) => ({
-          values: (value: unknown) => {
-            if (table === matterCounters) {
+            },
+            properties: {
+              findMany: async () => [],
+            },
+            propertyDependencies: {
+              findMany: async () => [],
+            },
+            workspaceViews: {
+              findMany: async () => [
+                {
+                  id: "019c0c90-0000-7000-8000-000000000103",
+                  name: "Ordinary",
+                  position: 0,
+                  layout: {
+                    type: "filesystem",
+                    version: 1,
+                    filters: [],
+                    sorts: [],
+                    hiddenProperties: [],
+                    calculations: [],
+                  },
+                },
+                {
+                  id: "019c0c90-0000-7000-8000-000000000104",
+                  name: "Verification",
+                  position: 1,
+                  layout: {
+                    type: "avt",
+                    version: 1,
+                    listId: null,
+                    filters: [],
+                    sorts: [],
+                    hiddenProperties: [],
+                    calculations: [],
+                  },
+                },
+              ],
+            },
+            workspaceMembers: {
+              findMany: async () => [{ userId: "user_lead123" }],
+            },
+            workspaceContacts: {
+              findMany: async () => [],
+            },
+            organizationSettings: {
+              findFirst: async () => null,
+            },
+          },
+          select: (selectedFields: Record<string, unknown>) => {
+            if ("role" in selectedFields) {
+              return createSelectQueryMock(
+                access === "current" ? [{ role: "owner" }] : [],
+              );
+            }
+            if (
+              selectedFields["reference"] ===
+              documentReferenceCounters.reference
+            ) {
+              return createSelectQueryMock([]);
+            }
+            if ("total" in selectedFields) {
               return {
-                onConflictDoUpdate: () => ({
-                  returning: async () => [
-                    {
-                      lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
-                    },
-                  ],
+                from: () => ({
+                  where: async () => [{ total: 0 }],
                 }),
               };
             }
 
-            if (table === workspaceViews) {
-              insertedViews.push(value);
-              return undefined;
-            }
-            if (table === workspaceMembers) {
-              insertedWorkspaceMembers.push(value);
-              return { onConflictDoNothing: async () => undefined };
-            }
-
-            if (table === auditLogs) {
-              insertedAuditLogs.push(value);
-              return undefined;
+            if ("name" in selectedFields) {
+              return {
+                from: () => ({
+                  where: async () => [],
+                }),
+              };
             }
 
-            throw new Error("Unexpected insert table");
+            if ("userId" in selectedFields) {
+              return {
+                from: (table: unknown) => {
+                  expect(table).toBe(member);
+                  return {
+                    where: () => ({
+                      orderBy: (column: unknown) => {
+                        expect(column).toBe(member.id);
+                        return {
+                          limit: async () => [{ userId: "user_lead123" }],
+                        };
+                      },
+                    }),
+                  };
+                },
+              };
+            }
+
+            throw new Error("Unexpected select fields");
           },
-        }),
-        update: (table: unknown) => {
-          expect(table).toBe(matterCounters);
-          return { set: () => ({ where: async () => undefined }) };
-        },
-        execute: async (query: SQL) => {
-          const statement = new PgDialect().sqlToQuery(query);
-          if (statement.sql.includes("stella_create_workspace")) {
-            createdWorkspaces.push(statement.params);
-          }
-          return [];
-        },
-      });
+          insert: (table: unknown) => ({
+            values: (value: unknown) => {
+              if (table === matterCounters) {
+                return {
+                  onConflictDoUpdate: () => ({
+                    returning: async () => [
+                      {
+                        lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+                      },
+                    ],
+                  }),
+                };
+              }
 
-      const result = await duplicateWorkspace.handler(
-        createContext({ safeDb, scopedDb, featureStatus }),
-      );
+              if (table === workspaceViews) {
+                insertedViews.push(value);
+                return undefined;
+              }
+              if (table === workspaceMembers) {
+                insertedWorkspaceMembers.push(value);
+                return { onConflictDoNothing: async () => undefined };
+              }
 
-      expect(result).toEqual({ workspaceId: expect.any(String) });
-      // The database creates the matter: id, client, name, reference,
-      // billing reference, color, lead and visibility.
-      expect(createdWorkspaces).toEqual([
-        [
-          expect.any(String),
-          "contact_client123",
-          "Smith v Jones",
-          expect.any(String),
-          "BILL-123",
-          "blue",
-          "user_lead123",
-          "assigned_only",
-        ],
-      ]);
-      expect(insertedWorkspaceMembers).toEqual([
-        [
-          expect.objectContaining({
-            userId: "user_lead123",
+              if (table === auditLogs) {
+                insertedAuditLogs.push(value);
+                return undefined;
+              }
+
+              throw new Error("Unexpected insert table");
+            },
           }),
-        ],
-      ]);
-      expect(insertedAuditLogs).toHaveLength(1);
-      expect(insertedViews).toHaveLength(1);
-      expect(insertedViews.at(0)).toEqual(
-        featureStatus === "enabled"
-          ? [
-              expect.objectContaining({ name: "Ordinary" }),
-              expect.objectContaining({ name: "Verification" }),
-            ]
-          : [expect.objectContaining({ name: "Ordinary" })],
-      );
-    });
+          update: (table: unknown) => {
+            expect(table).toBe(matterCounters);
+            return { set: () => ({ where: async () => undefined }) };
+          },
+          execute: async (query: SQL) => {
+            const statement = new PgDialect().sqlToQuery(query);
+            if (statement.sql.includes("stella_create_workspace")) {
+              createdWorkspaces.push(statement.params);
+            }
+            return [];
+          },
+        });
+
+        const result = await duplicateWorkspace.handler(
+          createContext({ safeDb, scopedDb, featureStatus }),
+        );
+
+        if (access === "revoked") {
+          expect(result).toMatchObject({
+            code: 404,
+            response: { message: "Workspace not found" },
+          });
+          expect(createdWorkspaces).toEqual([]);
+          expect(insertedWorkspaceMembers).toEqual([]);
+          expect(insertedAuditLogs).toEqual([]);
+          expect(insertedViews).toEqual([]);
+          return;
+        }
+        expect(result).toEqual({ workspaceId: expect.any(String) });
+        // The database creates the matter: id, client, name, reference,
+        // billing reference, color, lead and visibility.
+        expect(createdWorkspaces).toEqual([
+          [
+            expect.any(String),
+            "contact_client123",
+            "Smith v Jones",
+            expect.any(String),
+            "BILL-123",
+            "blue",
+            "user_lead123",
+            "assigned_only",
+          ],
+        ]);
+        expect(insertedWorkspaceMembers).toEqual([
+          [
+            expect.objectContaining({
+              userId: "user_lead123",
+            }),
+          ],
+        ]);
+        expect(insertedAuditLogs).toHaveLength(1);
+        expect(insertedViews).toHaveLength(1);
+        expect(insertedViews.at(0)).toEqual(
+          featureStatus === "enabled"
+            ? [
+                expect.objectContaining({ name: "Ordinary" }),
+                expect.objectContaining({ name: "Verification" }),
+              ]
+            : [expect.objectContaining({ name: "Ordinary" })],
+        );
+      });
+    }
   }
 
   test("preserves property roles when duplicating a matter", async () => {
@@ -482,6 +501,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -663,6 +685,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -916,6 +941,9 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
         if (
           selectedFields["reference"] === documentReferenceCounters.reference
         ) {
@@ -1074,14 +1102,19 @@ describe("duplicateWorkspace", () => {
           ],
         },
       },
-      select: (selectedFields: Record<string, unknown>) =>
-        "total" in selectedFields
-          ? {
-              from: () => ({
-                where: async () => [{ total: LIMITS.workspacesCount }],
-              }),
-            }
-          : { from: () => ({ where: async () => [] }) },
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        if ("total" in selectedFields) {
+          return {
+            from: () => ({
+              where: async () => [{ total: LIMITS.workspacesCount }],
+            }),
+          };
+        }
+        return { from: () => ({ where: async () => [] }) };
+      },
       insert: (table: unknown) => ({
         values: () => {
           insertedTables.push(table);

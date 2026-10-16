@@ -417,6 +417,7 @@ if (!databaseUrl || !runPostgresTests) {
                     safeDb,
                     organizationId,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
                     body: { userId: leaverUserId },
                   }),

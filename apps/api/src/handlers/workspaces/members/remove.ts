@@ -35,7 +35,10 @@ import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
-import { restoreMatterStewards } from "@/api/lib/workspaces/visibility";
+import {
+  readMatterMutationAuthority,
+  restoreMatterStewards,
+} from "@/api/lib/workspaces/visibility";
 
 const config = {
   contract: "patch",
@@ -287,6 +290,17 @@ export const removeWorkspaceMemberHandler = async function* ({
         ],
         mode: "update",
       });
+      const authority = await readMatterMutationAuthority(tx, {
+        permissions: config.permissions,
+        organizationId,
+        workspaceId,
+        userId: actorUserId,
+      });
+      if (authority === null) {
+        abortTransaction(
+          new HandlerError({ status: 404, message: "Member not found" }),
+        );
+      }
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.
@@ -311,7 +325,7 @@ export const removeWorkspaceMemberHandler = async function* ({
       if (
         workspace.leadUserId === userId &&
         actorUserId !== userId &&
-        !managesOrganizationMatters
+        !(managesOrganizationMatters && authority.managesOrganizationMatters)
       ) {
         abortTransaction(
           new HandlerError({

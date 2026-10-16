@@ -1,11 +1,22 @@
 import { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { toSafeId } from "@/api/lib/branded-types";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
+import {
+  withLegacyWorkspaceFixture,
+  withPgliteWorkspaceCreation,
+} from "@/api/tests/helpers/workspace-creation";
 
 import { createMatterVisibilityRepair } from "./matter-visibility-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -22,7 +33,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261014120000_matter_visibility/migration.sql",
+  "../../drizzle/20261016100100_matter_visibility/migration.sql",
 );
 
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8")
@@ -88,7 +99,10 @@ const seed = async (database: PGlite): Promise<void> => {
         .replaceAll("SET LOCAL", "SET"),
     );
   }
-  await database.exec(`
+  await withLegacyWorkspaceFixture({
+    tx: drizzle({ client: database }),
+    insert: async () =>
+      await database.exec(`
     INSERT INTO member VALUES
       ('m1', '${ORG}', '${OWNER}', 'owner'),
       ('m2', '${ORG}', '${ADMIN}', 'admin'),
@@ -106,7 +120,8 @@ const seed = async (database: PGlite): Promise<void> => {
       ('wm1', '${MATTER.clientlessOfMember}', '${MEMBER}'),
       ('wm2', '${MATTER.clientlessOfOther}', '${OTHER_MEMBER}'),
       ('wm3', '${MATTER.clientMatter}', '${MEMBER}');
-  `);
+  `),
+  });
 };
 
 const lockStewardship = async (
@@ -188,7 +203,10 @@ describe("matter visibility migration", () => {
   test("an interrupted backfill blocks deployment, preserves legacy access, and resumes to an idempotent cutover", async () => {
     await using database = new PGlite();
     await seed(database);
-    await database.exec(`
+    await withLegacyWorkspaceFixture({
+      tx: drizzle({ client: database }),
+      insert: async () =>
+        await database.exec(`
       INSERT INTO workspaces (id, organization_id, lead_user_id)
       SELECT ('00000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
         '${ORG}', '${MEMBER}' FROM generate_series(100, 209) i;
@@ -196,7 +214,8 @@ describe("matter visibility migration", () => {
       SELECT 'resume-' || i::text,
         ('00000000-0000-4000-8000-' || lpad(i::text, 12, '0'))::uuid,
         '${MEMBER}' FROM generate_series(100, 209) i;
-    `);
+    `),
+    });
     await database.exec(migrationSql);
     const connection = connectionOver(database);
     let now = Date.now();
@@ -276,7 +295,10 @@ describe("matter visibility migration", () => {
     const externalLead = "00000000-0000-4000-8000-000000000017";
     await using database = new PGlite();
     await seed(database);
-    await database.exec(`
+    await withLegacyWorkspaceFixture({
+      tx: drizzle({ client: database }),
+      insert: async () =>
+        await database.exec(`
       INSERT INTO workspaces (id, organization_id, client_id, lead_user_id) VALUES
         ('${leadless}', '${ORG}', NULL, NULL),
         ('${keptLead}', '${ORG}', NULL, '${OTHER_MEMBER}'),
@@ -297,7 +319,8 @@ describe("matter visibility migration", () => {
         ('wu1', '${unassignedLead}', '${INTERN}', '2026-01-01T00:00:00Z'),
         ('wx1', '${externalLead}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
         ('wx2', '${externalLead}', '${MEMBER}', '2026-01-02T00:00:00Z');
-    `);
+    `),
+    });
     await applyVisibility(database);
 
     const leads = Object.fromEntries(
@@ -395,19 +418,53 @@ describe("matter visibility migration", () => {
     const clientlessOrganizationMatter = "00000000-0000-4000-8000-000000000005";
     const privateClientMatter = "00000000-0000-4000-8000-000000000006";
     await database.exec("BEGIN");
-    await lockStewardship(
+    await withPgliteWorkspaceCreation({
       database,
-      [clientlessOrganizationMatter, privateClientMatter],
-      [OTHER_MEMBER],
-    );
-    await database.exec(`
-      INSERT INTO workspaces (id, organization_id, client_id, visibility,lead_user_id) VALUES
-        ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'admins_and_assigned',NULL),
-        ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'assigned_only','${OTHER_MEMBER}');
-      INSERT INTO workspace_members VALUES
-        ('wm4', '${privateClientMatter}', '${OTHER_MEMBER}');
-      COMMIT;
-    `);
+      rows: [
+        {
+          id: brandPersistedWorkspaceId(clientlessOrganizationMatter),
+          organizationId: brandPersistedOrganizationId(ORG),
+          name: "Organization matter",
+          reference: clientlessOrganizationMatter,
+          clientId: null,
+          visibility: "admins_and_assigned",
+          leadUserId: null,
+        },
+        {
+          id: brandPersistedWorkspaceId(privateClientMatter),
+          organizationId: brandPersistedOrganizationId(ORG),
+          name: "Private client matter",
+          reference: privateClientMatter,
+          clientId: toSafeId<"contact">(CLIENT),
+          visibility: "assigned_only",
+          leadUserId: OTHER_MEMBER,
+        },
+      ],
+      insert: async (normalized) => {
+        const first = normalized.at(0) ?? panic("Missing organization matter");
+        const second = normalized.at(1) ?? panic("Missing private matter");
+        await database.query(
+          "INSERT INTO workspaces (id,organization_id,client_id,visibility,lead_user_id) VALUES ($1,$2,$3,$4,$5),($6,$7,$8,$9,$10)",
+          [
+            first.id,
+            first.organizationId,
+            first.clientId,
+            first.visibility,
+            first.leadUserId,
+            second.id,
+            second.organizationId,
+            second.clientId,
+            second.visibility,
+            second.leadUserId,
+          ],
+        );
+        await database.query(
+          "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('wm4',$1,$2)",
+          [second.id, second.leadUserId],
+        );
+      },
+    });
+    await database.exec("COMMIT");
 
     for (const userId of [OWNER, ADMIN]) {
       const granted = await authorizedFor(database, {
@@ -473,52 +530,85 @@ describe("matter visibility migration", () => {
   test("a writer that omits visibility gets the visibility the old rule implied, with its creator as lead", async () => {
     await using database = await migrated();
     // Without a usable creator, clientless creation is refused.
-    const missingCreator = await Result.tryPromise(
-      async () =>
-        await database.exec(`
-      INSERT INTO workspaces (id, organization_id, client_id) VALUES
-        ('00000000-0000-4000-8000-0000000000a5', '${ORG}', NULL);
-    `),
+    const missingCreatorId = brandPersistedWorkspaceId(
+      "00000000-0000-4000-8000-0000000000a5",
     );
-    expect(missingCreator.isErr()).toBe(true);
+    const missingCreator = await Result.tryPromise({
+      try: async () => {
+        await database.exec("BEGIN");
+        await withPgliteWorkspaceCreation({
+          database,
+          rows: [
+            {
+              id: missingCreatorId,
+              organizationId: brandPersistedOrganizationId(ORG),
+              name: "Missing creator",
+              reference: missingCreatorId,
+              visibility: "assigned_only",
+              leadUserId: null,
+            },
+          ],
+          insert: async (normalized) => {
+            const row = normalized.at(0) ?? panic("Missing creation row");
+            await database.query(
+              "INSERT INTO workspaces (id,organization_id,client_id) VALUES ($1,$2,NULL)",
+              [row.id, row.organizationId],
+            );
+          },
+        });
+        await database.exec("COMMIT");
+      },
+      catch: (error) => error,
+    });
+    expect(missingCreator).toMatchObject({
+      status: "error",
+      error: { code: "23514" },
+    });
+    await database.exec("ROLLBACK");
     await database.query("SELECT set_config('app.user_id', $1, false)", [
       MEMBER,
     ]);
-    const unsupported = await Result.tryPromise({
-      try: async () =>
-        await database.exec(
-          `INSERT INTO workspaces (id, organization_id, client_id) VALUES ('00000000-0000-4000-8000-0000000000a6', '${ORG}', NULL)`,
-        ),
-      catch: (error) => error,
-    });
-    expect(unsupported).toMatchObject({
-      status: "error",
-      error: { code: "55P03" },
-    });
     await database.exec("BEGIN");
-    await lockStewardship(
+    const legacyIds = [
+      "00000000-0000-4000-8000-0000000000a1",
+      "00000000-0000-4000-8000-0000000000a2",
+      "00000000-0000-4000-8000-0000000000a3",
+      "00000000-0000-4000-8000-0000000000a4",
+    ].map(brandPersistedWorkspaceId);
+    await withPgliteWorkspaceCreation({
       database,
-      [
-        "00000000-0000-4000-8000-0000000000a1",
-        "00000000-0000-4000-8000-0000000000a2",
-        "00000000-0000-4000-8000-0000000000a3",
-        "00000000-0000-4000-8000-0000000000a4",
-      ],
-      [MEMBER],
-    );
-    await database.exec(`
-      INSERT INTO workspaces (id, organization_id, client_id) VALUES
-        ('00000000-0000-4000-8000-0000000000a1', '${ORG}', NULL),
-        ('00000000-0000-4000-8000-0000000000a2', '${ORG}', '${CLIENT}');
-      INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
-        ('00000000-0000-4000-8000-0000000000a3', '${ORG}', NULL, 'all_members'),
-        ('00000000-0000-4000-8000-0000000000a4', '${ORG}', '${CLIENT}', 'admins_and_assigned');
-      UPDATE workspaces SET lead_user_id = '${MEMBER}' WHERE id = '00000000-0000-4000-8000-0000000000a4';
-      INSERT INTO workspace_members (id,workspace_id,user_id) VALUES
-      ('legacy_created1','00000000-0000-4000-8000-0000000000a1','${MEMBER}'),
-      ('legacy_created4','00000000-0000-4000-8000-0000000000a4','${MEMBER}');
-      COMMIT;
-    `);
+      rows: legacyIds.map((id) => ({
+        id,
+        organizationId: brandPersistedOrganizationId(ORG),
+        name: "Legacy writer",
+        reference: id,
+        visibility: "assigned_only",
+        leadUserId: MEMBER,
+      })),
+      insert: async (normalized) => {
+        const first = normalized.at(0) ?? panic("Missing legacy matter");
+        const second = normalized.at(1) ?? panic("Missing legacy matter");
+        const third = normalized.at(2) ?? panic("Missing legacy matter");
+        const fourth = normalized.at(3) ?? panic("Missing legacy matter");
+        await database.query(
+          "INSERT INTO workspaces (id,organization_id,client_id) VALUES ($1,$2,NULL),($3,$2,$4)",
+          [first.id, first.organizationId, second.id, CLIENT],
+        );
+        await database.query(
+          "INSERT INTO workspaces (id,organization_id,client_id,visibility) VALUES ($1,$2,NULL,'all_members'),($3,$2,$4,'admins_and_assigned')",
+          [third.id, third.organizationId, fourth.id, CLIENT],
+        );
+        await database.query(
+          "UPDATE workspaces SET lead_user_id=$1 WHERE id=$2",
+          [fourth.leadUserId, fourth.id],
+        );
+        await database.query(
+          "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('legacy_created1',$1,$3),('legacy_created4',$2,$3)",
+          [first.id, fourth.id, first.leadUserId],
+        );
+      },
+    });
+    await database.exec("COMMIT");
     // Explicit narrowing is a new writer operation, distinct from legacy INSERT.
     await database.exec("BEGIN");
     await lockStewardship(
@@ -555,15 +645,35 @@ describe("matter visibility migration", () => {
   test("the column refuses any other value and has no default", async () => {
     await using database = await migrated();
 
+    await database.exec("BEGIN");
     expect(
-      String(
-        await rejectionOf(
-          database.exec(
-            `INSERT INTO workspaces (id, organization_id, visibility) VALUES ('00000000-0000-4000-8000-0000000000b1', '${ORG}', 'public')`,
-          ),
-        ),
+      await rejectionOf(
+        withPgliteWorkspaceCreation({
+          database,
+          rows: [
+            {
+              id: brandPersistedWorkspaceId(
+                "00000000-0000-4000-8000-0000000000b1",
+              ),
+              organizationId: brandPersistedOrganizationId(ORG),
+              name: "Invalid visibility",
+              reference: "invalid",
+              visibility: "assigned_only",
+              leadUserId: null,
+            },
+          ],
+          insert: async (normalized) => {
+            const row =
+              normalized.at(0) ?? panic("Missing invalid creation row");
+            await database.query(
+              "INSERT INTO workspaces (id,organization_id,visibility) VALUES ($1,$2,'public')",
+              [row.id, row.organizationId],
+            );
+          },
+        }),
       ),
-    ).toMatch(/workspaces_visibility_check/u);
+    ).toMatchObject({ constraint: "workspaces_visibility_check" });
+    await database.exec("ROLLBACK");
     expect(
       String(
         await rejectionOf(

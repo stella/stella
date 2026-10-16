@@ -56,18 +56,22 @@ const createContext = ({
 
 const selectRowsInOrder = (rowsByCall: unknown[][], isMember = true) => {
   let callIndex = 0;
-
-  return () => ({
-    from: (table: unknown) => {
-      let rows = rowsByCall.at(callIndex) ?? [];
-      if (table === member) {
-        rows = isMember ? [{ id: "member_existing" }] : [];
-      } else {
-        callIndex += 1;
-      }
-      return createSelectQueryMock(rows).from();
-    },
-  });
+  return (selectedFields: Record<string, unknown>) => {
+    if ("role" in selectedFields) {
+      return createSelectQueryMock([{ role: "owner" }]);
+    }
+    return {
+      from: (table: unknown) => {
+        let rows = rowsByCall.at(callIndex) ?? [];
+        if (table === member) {
+          rows = isMember ? [{ id: "member_existing" }] : [];
+        } else {
+          callIndex += 1;
+        }
+        return createSelectQueryMock(rows).from();
+      },
+    };
+  };
 };
 
 const isArrayWithLength = (

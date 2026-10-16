@@ -10,7 +10,11 @@ import {
   SETTING_WORKSPACE_ACCESS_MODE,
   WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { createSafeId } from "@/api/lib/branded-types";
+import {
+  withGatedTestClients,
+  withGatedWorkspaceCreation,
+} from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -31,7 +35,7 @@ describe.skipIf(!runPostgresTests)("workspace insert policy (postgres)", () => {
             const { sql: client } = openClient();
             const organizationId = mintAuthProviderId<"organization">();
             const userId = mintAuthProviderId<"user">();
-            const workspaceId = Bun.randomUUIDv7();
+            const workspaceId = createSafeId<"workspace">();
             const allowed =
               tenant === "same" &&
               (actor === "user" || mode === WORKSPACE_ACCESS_MODE.explicit);
@@ -43,21 +47,41 @@ describe.skipIf(!runPostgresTests)("workspace insert policy (postgres)", () => {
                 VALUES (${userId}, 'Policy user', ${`${userId}@example.test`})`;
               await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
                 VALUES (${mintAuthProviderIdValue()}, ${organizationId}, ${userId}, 'member', now())`;
-              const insert = client.begin(async (tx) => {
-                await tx`SELECT
+              const insert = client.begin(async (tx) =>
+                withGatedWorkspaceCreation({
+                  tx,
+                  rows: [
+                    {
+                      id: workspaceId,
+                      organizationId,
+                      name: "Policy matter",
+                      reference: workspaceId,
+                      visibility: defaultMatterVisibilityFor({
+                        hasClient: false,
+                      }),
+                      leadUserId: userId,
+                    },
+                  ],
+                  insert: async (normalizedRows) => {
+                    const row =
+                      normalizedRows.at(0) ??
+                      panic("Missing policy matter creation row");
+                    await tx`SELECT
                   set_config('role', 'stella', true),
                   set_config(${SETTING_ORGANIZATION_ID}, ${tenant === "same" ? organizationId : mintAuthProviderId<"organization">()}, true),
                   set_config(${SETTING_USER_ID}, ${actor === "user" ? userId : ""}, true),
                   set_config(${SETTING_WORKSPACE_ACCESS_MODE}, ${mode}, true)`;
-                await tx`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
-                  VALUES (${workspaceId}, ${organizationId}, 'Policy matter', ${workspaceId}, ${defaultMatterVisibilityFor({ hasClient: false })}, ${userId})`;
-                // The statement under test ran with the exact actor/mode above.
-                // Finish its steward fixture as the session owner before the
-                // deferred invariant is checked, without altering those inputs.
-                await tx`SELECT set_config('role', 'none', true)`;
-                await tx`INSERT INTO workspace_members (id, workspace_id, user_id)
+                    await tx`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
+                  VALUES (${row.id}, ${row.organizationId}, ${row.name}, ${row.reference}, ${row.visibility}, ${row.leadUserId})`;
+                    // The statement under test ran with the exact actor/mode above.
+                    // Finish its steward fixture as the session owner before the
+                    // deferred invariant is checked, without altering those inputs.
+                    await tx`SELECT set_config('role', 'none', true)`;
+                    await tx`INSERT INTO workspace_members (id, workspace_id, user_id)
                   VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
-              });
+                  },
+                }),
+              );
               if (allowed) {
                 await insert;
               } else {

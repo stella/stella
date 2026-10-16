@@ -4,7 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { defaultMatterVisibilityFor } from "@stll/api-contract/matter-visibility";
 
 import type { Transaction } from "@/api/db/root";
+import { workspaceMembers } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import { createMembershipFence } from "@/api/lib/review-organization/reset";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -13,8 +16,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 // Row locks need two real sessions; PGlite runs one connection, so this
-// suite needs a real server. Rows are written by column so the suite runs on
-// the migrated schema and on a bare user/organization/member/workspaces/workspace_members slice.
+// suite needs a real server with the committed migrations applied.
 if (!databaseUrl || !enabled) {
   describe.skip("review organization membership fence (postgres)", () => {
     test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {});
@@ -26,7 +28,7 @@ if (!databaseUrl || !enabled) {
         const reset = openClient();
         const joiner = openClient();
         const joiner2 = openClient();
-        const lateMatterId = Bun.randomUUIDv7();
+        const lateMatterId = createSafeId<"workspace">();
         const reviewUserId = mintAuthProviderId<"user">();
         const otherUserId = mintAuthProviderId<"user">();
         const organizationId = mintAuthProviderId<"organization">();
@@ -69,14 +71,23 @@ if (!databaseUrl || !enabled) {
           );
           // A matter insert checks its foreign key to the same row, so a
           // matter cannot appear while the sweep counts them either.
-          const matter = joiner2.sql.begin(async (tx) => {
-            await tx`
-              INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
-              VALUES (${lateMatterId}, ${organizationId}, 'Late matter', 'LATE-1',
-                ${defaultMatterVisibilityFor({ hasClient: false })}, ${reviewUserId})`;
-            await tx`
-              INSERT INTO workspace_members (id, workspace_id, user_id)
-              VALUES (${Bun.randomUUIDv7()}, ${lateMatterId}, ${reviewUserId})`;
+          const matter = joiner2.db.transaction(async (tx) => {
+            await insertWorkspaceRowsInTransaction({
+              tx,
+              rows: [
+                {
+                  id: lateMatterId,
+                  organizationId,
+                  name: "Late matter",
+                  reference: "LATE-1",
+                  visibility: defaultMatterVisibilityFor({ hasClient: false }),
+                  leadUserId: reviewUserId,
+                },
+              ],
+            });
+            await tx
+              .insert(workspaceMembers)
+              .values({ workspaceId: lateMatterId, userId: reviewUserId });
             return "created" as const;
           });
           const waited = await Promise.race([

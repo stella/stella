@@ -5,7 +5,8 @@ import { t } from "elysia";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member } from "@/api/db/auth-schema";
-import { resultTx } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
+import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   type fields,
   properties,
@@ -87,6 +88,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { readMatterMutationAuthority } from "@/api/lib/workspaces/visibility";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -445,6 +447,48 @@ const cleanupCopiedS3Keys = async ({
   }
 };
 
+type DuplicateSourceAccessOptions = {
+  organizationId: SafeId<"organization">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  targetWorkspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  candidateUserIds: readonly string[];
+};
+
+const assertDuplicateSourceAccess = async (
+  tx: Transaction,
+  {
+    organizationId,
+    sourceWorkspaceId,
+    targetWorkspaceId,
+    userId,
+    candidateUserIds,
+  }: DuplicateSourceAccessOptions,
+) => {
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId,
+        workspaceIds: [sourceWorkspaceId, targetWorkspaceId],
+        userIds: [userId, ...candidateUserIds],
+      },
+    ],
+    mode: "update",
+  });
+  const authority = await readMatterMutationAuthority(tx, {
+    permissions: config.permissions,
+    organizationId,
+    workspaceId: sourceWorkspaceId,
+    userId,
+  });
+  if (authority === null) {
+    abortTransaction(
+      new HandlerError({ status: 404, message: "Workspace not found" }),
+    );
+  }
+};
+
 export const createDuplicateWorkspace = (
   dependencies: DuplicateWorkspaceDependencies = defaultDuplicateWorkspaceDependencies,
 ) =>
@@ -624,24 +668,17 @@ export const createDuplicateWorkspace = (
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
       const txResult = await resultTx(safeDb, async (tx) => {
-        await lockMatterStewardship({
-          tx,
-          requests: [
-            {
-              organizationId,
-              workspaceIds: [targetWorkspaceId],
-              userIds: [
-                user.id,
-                ...snapshot.members.map((row) =>
-                  brandPersistedUserId(row.userId),
-                ),
-                ...[snapshot.workspace.leadUserId].filter(
-                  (leadUserId) => leadUserId !== null,
-                ),
-              ],
-            },
+        await assertDuplicateSourceAccess(tx, {
+          organizationId,
+          sourceWorkspaceId,
+          targetWorkspaceId,
+          userId: user.id,
+          candidateUserIds: [
+            ...snapshot.members.map((row) => brandPersistedUserId(row.userId)),
+            ...[snapshot.workspace.leadUserId].filter(
+              (leadUserId) => leadUserId !== null,
+            ),
           ],
-          mode: "update",
         });
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([

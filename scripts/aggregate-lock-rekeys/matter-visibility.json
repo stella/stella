@@ -2,20 +2,20 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "from": "0f0556ddff0a0353c8e9733fcd221854b54c55dc49a0fc05e42757c4b6ac48f3",
-    "to": "9ea607fe410da304423d0417ed139b738a4822dbf239b3f8fd2e16addb0f21ec",
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
+    "to": "9933038ce8e93adb147ddc41191400e18a2810441a67e0039f694e07605b478a",
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "from": "ce0491ea9028a00b6ea1b0cb2ef3680ec461521b191cae44fcef9ea43c6f3c27",
-    "to": "7a7ae785a84d64f46929bd0b11a293db6c7638ec189b44b8da10a8895758af5c",
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
+    "to": "4b8183fa336a4825837a531571dc5b7a5dc1ef7424ca9cf6381bc06ab6f9be51",
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
   },
   {
     "file": "apps/api/scripts/seed-email-viewer-demo.ts",
     "from": "f3a6b9f8efa089291a3fbb01903f9d4b61f1964203578969cbe5dbf12508b525",
-    "to": "57ad693539cecb5b698a3d6c19ea95f6ef342a28b314af629e82b8f615ade5e2",
-    "reason": "Existing transaction now applies matter visibility through its canonical owner; the transaction boundary is unchanged."
+    "to": "3230f7f5dc1c53915141f7460530b7b5f2871dfccba3d7a57fc5df713587f9b6",
+    "reason": "Existing email fixture transaction now creates the matter through the canonical creation owner before assigning its lead; the transaction boundary is unchanged."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",

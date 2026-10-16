@@ -20,7 +20,7 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
 );
 const MATTER_VISIBILITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261014120000_matter_visibility",
+  "20261016100100_matter_visibility",
   "migration.sql",
 );
 const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(

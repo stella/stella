@@ -25,7 +25,6 @@ import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
 import {
@@ -45,6 +44,7 @@ import {
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -162,26 +162,20 @@ beforeAll(async () => {
   tokenDb = testTokenDb();
 
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          id: personalMatter.workspaceId,
           organizationId: ids.orgA,
-          workspaceIds: [personalMatter.workspaceId],
-          userIds: [ids.userA2],
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA2,
+          name: "Personal matter",
+          reference: `REF-${personalMatter.workspaceId}`,
+          status: "active",
         },
       ],
-      mode: "update",
-    });
-    await tx.insert(workspaces).values({
-      id: personalMatter.workspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      leadUserId: ids.userA2,
-      name: "Personal matter",
-      reference: `REF-${personalMatter.workspaceId}`,
-      status: "active",
     });
     await tx.insert(workspaceMembers).values({
       id: createSafeId<"workspaceMember">(),

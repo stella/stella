@@ -28,6 +28,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -185,26 +186,20 @@ beforeAll(async () => {
     },
   ]);
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          id: personalMatter.workspaceId,
           organizationId: ids.orgA,
-          workspaceIds: [personalMatter.workspaceId],
-          userIds: [ids.userA2],
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA2,
+          name: "Personal matter",
+          reference: `REF-${personalMatter.workspaceId}`,
+          status: "active",
         },
       ],
-      mode: "update",
-    });
-    await tx.insert(workspaces).values({
-      id: personalMatter.workspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      leadUserId: ids.userA2,
-      name: "Personal matter",
-      reference: `REF-${personalMatter.workspaceId}`,
-      status: "active",
     });
     await tx.insert(workspaceMembers).values({
       id: createSafeId<"workspaceMember">(),

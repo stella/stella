@@ -19,6 +19,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -39,60 +40,47 @@ const setupRlsScopedDb = async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          id: ownerPersonalWorkspaceId,
+          leadUserId: ids.userAdmin,
           organizationId: ids.orgA,
-          workspaceIds: [
-            ownerPersonalWorkspaceId,
-            otherPersonalWorkspaceId,
-            scopedAuthorizationLifetimeWorkspaceId,
-            safeAuthorizationLifetimeWorkspaceId,
-          ],
-          userIds: [ids.userAdmin, ids.userA1, ids.userA2],
+          clientId: null,
+          visibility: "assigned_only",
+          name: "Owner personal workspace",
+          reference: `PERSONAL-${ownerPersonalWorkspaceId}`,
+        },
+        {
+          id: otherPersonalWorkspaceId,
+          leadUserId: ids.userA2,
+          organizationId: ids.orgA,
+          clientId: null,
+          visibility: "assigned_only",
+          name: "Other personal workspace",
+          reference: `PERSONAL-${otherPersonalWorkspaceId}`,
+        },
+        {
+          id: scopedAuthorizationLifetimeWorkspaceId,
+          organizationId: ids.orgA,
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA1,
+          name: "Scoped authorization lifetime workspace",
+          reference: `SCOPED-LIFETIME-${scopedAuthorizationLifetimeWorkspaceId}`,
+        },
+        {
+          id: safeAuthorizationLifetimeWorkspaceId,
+          organizationId: ids.orgA,
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA1,
+          name: "Safe authorization lifetime workspace",
+          reference: `SAFE-LIFETIME-${safeAuthorizationLifetimeWorkspaceId}`,
         },
       ],
-      mode: "update",
     });
-    await tx.insert(workspaces).values([
-      {
-        id: ownerPersonalWorkspaceId,
-        leadUserId: ids.userAdmin,
-        organizationId: ids.orgA,
-        clientId: null,
-        visibility: "assigned_only",
-        name: "Owner personal workspace",
-        reference: `PERSONAL-${ownerPersonalWorkspaceId}`,
-      },
-      {
-        id: otherPersonalWorkspaceId,
-        leadUserId: ids.userA2,
-        organizationId: ids.orgA,
-        clientId: null,
-        visibility: "assigned_only",
-        name: "Other personal workspace",
-        reference: `PERSONAL-${otherPersonalWorkspaceId}`,
-      },
-      {
-        id: scopedAuthorizationLifetimeWorkspaceId,
-        organizationId: ids.orgA,
-        clientId: null,
-        visibility: "assigned_only",
-        leadUserId: ids.userA1,
-        name: "Scoped authorization lifetime workspace",
-        reference: `SCOPED-LIFETIME-${scopedAuthorizationLifetimeWorkspaceId}`,
-      },
-      {
-        id: safeAuthorizationLifetimeWorkspaceId,
-        organizationId: ids.orgA,
-        clientId: null,
-        visibility: "assigned_only",
-        leadUserId: ids.userA1,
-        name: "Safe authorization lifetime workspace",
-        reference: `SAFE-LIFETIME-${safeAuthorizationLifetimeWorkspaceId}`,
-      },
-    ]);
     await tx.insert(workspaceMembers).values([
       {
         id: createSafeId<"workspaceMember">(),

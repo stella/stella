@@ -8,11 +8,12 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { MatterVisibility } from "@stll/api-contract";
 import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
@@ -24,6 +25,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import {
   leadsAssignedOnlyMatter,
   restoreMatterStewards,
@@ -74,25 +77,20 @@ const createMatter = async ({
 }): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          id: workspaceId,
           organizationId: ids.orgA,
-          workspaceIds: [workspaceId],
-          userIds: members,
+          clientId: null,
+          leadUserId: members.includes(ids.userA1) ? ids.userA1 : null,
+          name: `Visibility ${workspaceId}`,
+          reference: `VIS-${workspaceId}`,
+          visibility,
         },
       ],
-      mode: "update",
-    });
-    await tx.insert(workspaces).values({
-      id: workspaceId,
-      organizationId: ids.orgA,
-      clientId: null,
-      leadUserId: members.includes(ids.userA1) ? ids.userA1 : null,
-      name: `Visibility ${workspaceId}`,
-      reference: `VIS-${workspaceId}`,
-      visibility,
+      candidateUserIds: members,
     });
     if (members.length > 0) {
       await tx.insert(workspaceMembers).values(
@@ -115,6 +113,22 @@ const readVisibility = async (workspaceId: SafeId<"workspace">) =>
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
   ).at(0)?.visibility;
+
+const readReach = async (
+  workspaceId: SafeId<"workspace">,
+  userId: SafeId<"user">,
+) =>
+  (
+    await testDb
+      .select({
+        reaches: memberReachesMatterSql(
+          { organizationId: ids.orgA, userId },
+          workspaces.id,
+        ),
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+  ).at(0)?.reaches;
 
 const changeVisibility = async ({
   actor,
@@ -170,6 +184,93 @@ const ADMIN = () => ({
 });
 
 describe("changing a matter's visibility", () => {
+  test("a role change can revoke writes while the actor still reads the matter", async () => {
+    const workspaceId = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1, ids.userA2],
+    });
+    const setRole = async (role: "intern" | "member") => {
+      await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              organizationId: ids.orgA,
+              workspaceIds: [workspaceId],
+              userIds: [ids.userA2],
+            },
+          ],
+          mode: "update",
+        });
+        await tx
+          .update(member)
+          .set({ role })
+          .where(
+            and(
+              eq(member.organizationId, ids.orgA),
+              eq(member.userId, ids.userA2),
+            ),
+          );
+      });
+    };
+    await setRole("intern");
+    try {
+      const { result, events } = await changeVisibility({
+        actor: NON_LEAD_MEMBER(),
+        workspaceId,
+        body: { name: "Cannot write after role change" },
+      });
+      expect(statusOf(result)).toBe(404);
+      expect(events).toEqual([]);
+      expect(await readReach(workspaceId, ids.userA2)).toBe(true);
+    } finally {
+      await setRole("member");
+    }
+  });
+
+  test("current membership and credential authority both constrain stewardship", async () => {
+    const workspaceId = await createMatter({
+      visibility: "all_members",
+      members: [ids.userA1, ids.userA2],
+    });
+    for (const actor of [
+      { userId: ids.userA2, managesOrganizationMatters: true },
+      { userId: ids.userAdmin, managesOrganizationMatters: false },
+    ]) {
+      const { result, events } = await changeVisibility({
+        actor,
+        workspaceId,
+        body: { visibility: "admins_and_assigned" },
+      });
+      expect(statusOf(result)).toBe(403);
+      expect(events).toEqual([]);
+    }
+    expect(await readVisibility(workspaceId)).toBe("all_members");
+  });
+
+  test.each([
+    { name: "Cannot rename hidden matter" },
+    { visibility: "all_members" as const },
+  ])(
+    "an earlier matter pin does not retain an unassigned admin's reach: %j",
+    async (body) => {
+      const workspaceId = await createMatter({
+        visibility: "assigned_only",
+        members: [ids.userA1],
+      });
+      const { result, events } = await changeVisibility({
+        actor: ADMIN(),
+        workspaceId,
+        body,
+      });
+      expect(statusOf(result)).toBe(404);
+      expect(events).toEqual([]);
+      expect(await readVisibility(workspaceId)).toBe("assigned_only");
+      expect(await readLead(workspaceId)).toBe(ids.userA1);
+      expect(await readReach(workspaceId, ids.userAdmin)).toBe(false);
+    },
+  );
+
   test.each([
     ["assigned_only", "admins_and_assigned"],
     ["assigned_only", "all_members"],

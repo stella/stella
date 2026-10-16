@@ -35,6 +35,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
   hasUsableSteward,
+  readMatterMutationAuthority,
   tMatterVisibility,
 } from "@/api/lib/workspaces/visibility";
 
@@ -344,6 +345,55 @@ export type UpdateWorkspaceHandlerProps = {
   body: Static<typeof updateWorkspaceBodySchema>;
 };
 
+/** Lock the complete scope before deciding current reach and reading the row. */
+const readLockedWorkspace = async (
+  tx: Transaction,
+  {
+    actor,
+    organizationId,
+    workspaceId,
+    body,
+  }: Omit<UpdateWorkspaceHandlerProps, "safeDb" | "recordAuditEvent">,
+) => {
+  await lockMatterStewardship({
+    tx,
+    requests: [
+      {
+        organizationId,
+        workspaceIds: [workspaceId],
+        userIds: [actor.userId, ...(body.leadUserId ? [body.leadUserId] : [])],
+      },
+    ],
+    mode: "update",
+  });
+  const authority = await readMatterMutationAuthority(tx, {
+    permissions: config.permissions,
+    organizationId,
+    workspaceId,
+    userId: actor.userId,
+  });
+  if (!authority) {
+    return null;
+  }
+  const workspaceRows = await tx
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      clientId: workspaces.clientId,
+      reference: workspaces.reference,
+      billingReference: workspaces.billingReference,
+      color: workspaces.color,
+      leadUserId: workspaces.leadUserId,
+      visibility: workspaces.visibility,
+    })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .for("update");
+  const workspace = workspaceRows.at(0);
+
+  return workspace ? { workspace, authority } : null;
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -356,43 +406,20 @@ export const updateWorkspaceHandler = async function* ({
   body,
 }: UpdateWorkspaceHandlerProps) {
   const txResult = await safeDb(async (tx) => {
-    await lockMatterStewardship({
-      tx,
-      requests: [
-        {
-          organizationId,
-          workspaceIds: [workspaceId],
-          userIds: [
-            actor.userId,
-            ...(body.leadUserId ? [body.leadUserId] : []),
-          ],
-        },
-      ],
-      mode: "update",
+    const locked = await readLockedWorkspace(tx, {
+      actor,
+      organizationId,
+      workspaceId,
+      body,
     });
-    const workspaceRows = await tx
-      .select({
-        id: workspaces.id,
-        name: workspaces.name,
-        clientId: workspaces.clientId,
-        reference: workspaces.reference,
-        billingReference: workspaces.billingReference,
-        color: workspaces.color,
-        leadUserId: workspaces.leadUserId,
-        visibility: workspaces.visibility,
-      })
-      .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
-    const workspace = workspaceRows.at(0);
-
-    if (!workspace) {
+    if (!locked) {
       return {
         ok: false as const,
         status: 404 as const,
         message: "Workspace not found",
       };
     }
+    const { workspace, authority } = locked;
 
     const clientCheck = await checkClientExists(
       tx,
@@ -416,7 +443,12 @@ export const updateWorkspaceHandler = async function* ({
       body.visibility !== undefined && body.visibility !== workspace.visibility;
     const stewardshipCheck = await checkStewardshipChanges({
       tx,
-      actor,
+      actor: {
+        userId: actor.userId,
+        managesOrganizationMatters:
+          actor.managesOrganizationMatters &&
+          authority.managesOrganizationMatters,
+      },
       organizationId,
       workspaceId,
       workspace,

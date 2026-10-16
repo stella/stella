@@ -916,6 +916,7 @@ const handleAddMember = async ({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       workspaceId,
+      actorUserId: context.userId,
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       body: { userId: brandPersistedUserId(userId) },
     }),

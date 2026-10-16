@@ -3,7 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
-import type { rootDb, Transaction } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   desktopEditHandoffs,
   workspaceMembers,
@@ -11,7 +11,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import {
   consumeDesktopEditHandoff,
   readDesktopEditHandoffAccess,
@@ -22,6 +21,7 @@ import {
   createDesktopEditHandoffToken,
   hashDesktopEditHandoffToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -47,26 +47,20 @@ beforeAll(async () => {
   ids = fixture.ids;
   db = asTestRaw<Pick<typeof rootDb, "update" | "select">>(testDb);
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          id: personalMatterId,
           organizationId: ids.orgA,
-          workspaceIds: [personalMatterId],
-          userIds: [ids.userA2],
+          clientId: null,
+          visibility: "assigned_only",
+          leadUserId: ids.userA2,
+          name: "Personal matter",
+          reference: `REF-${personalMatterId}`,
+          status: "active",
         },
       ],
-      mode: "update",
-    });
-    await tx.insert(workspaces).values({
-      id: personalMatterId,
-      organizationId: ids.orgA,
-      clientId: null,
-      visibility: "assigned_only",
-      leadUserId: ids.userA2,
-      name: "Personal matter",
-      reference: `REF-${personalMatterId}`,
-      status: "active",
     });
     await tx.insert(workspaceMembers).values({
       id: createSafeId<"workspaceMember">(),

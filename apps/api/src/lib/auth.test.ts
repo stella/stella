@@ -14,7 +14,6 @@ import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   featureEnrolments,
@@ -45,12 +44,11 @@ import {
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
-import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -186,67 +184,53 @@ testState.beforeAll(async () => {
     displayName: "Client",
   });
   await testDb.transaction(async (tx) => {
-    await lockMatterStewardship({
-      tx: asTestRaw<Transaction>(tx),
-      requests: [
+    await insertWorkspaceRowsInTransaction({
+      tx,
+      rows: [
         {
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: clientWorkspaceId,
           organizationId: orgFull,
-          workspaceIds: [
-            clientWorkspaceId,
-            memberPersonalWorkspaceId,
-            clientlessOrganizationWorkspaceId,
-            privateClientWorkspaceId,
-            allMembersWorkspaceId,
-          ],
-          userIds: [memberInFull],
+          clientId: clientContactId,
+          name: "Client matter",
+          reference: "AUTH-CLIENT",
+        },
+        {
+          id: memberPersonalWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Member personal matter",
+          reference: "AUTH-PERSONAL",
+          visibility: "assigned_only",
+          leadUserId: memberInFull,
+        },
+        {
+          id: clientlessOrganizationWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Internal know-how",
+          reference: "AUTH-KNOW-HOW",
+          visibility: "admins_and_assigned",
+        },
+        {
+          id: privateClientWorkspaceId,
+          organizationId: orgFull,
+          clientId: clientContactId,
+          name: "Private client matter",
+          reference: "AUTH-PRIVATE-CLIENT",
+          visibility: "assigned_only",
+          leadUserId: memberInFull,
+        },
+        {
+          id: allMembersWorkspaceId,
+          organizationId: orgFull,
+          clientId: null,
+          name: "Engagement letter templates",
+          reference: "AUTH-ALL-MEMBERS",
+          visibility: "all_members",
         },
       ],
-      mode: "update",
     });
-    await tx.insert(workspaces).values([
-      {
-        visibility: MATTER_VISIBILITY.adminsAndAssigned,
-        id: clientWorkspaceId,
-        organizationId: orgFull,
-        clientId: clientContactId,
-        name: "Client matter",
-        reference: "AUTH-CLIENT",
-      },
-      {
-        id: memberPersonalWorkspaceId,
-        organizationId: orgFull,
-        clientId: null,
-        name: "Member personal matter",
-        reference: "AUTH-PERSONAL",
-        visibility: "assigned_only",
-        leadUserId: memberInFull,
-      },
-      {
-        id: clientlessOrganizationWorkspaceId,
-        organizationId: orgFull,
-        clientId: null,
-        name: "Internal know-how",
-        reference: "AUTH-KNOW-HOW",
-        visibility: "admins_and_assigned",
-      },
-      {
-        id: privateClientWorkspaceId,
-        organizationId: orgFull,
-        clientId: clientContactId,
-        name: "Private client matter",
-        reference: "AUTH-PRIVATE-CLIENT",
-        visibility: "assigned_only",
-        leadUserId: memberInFull,
-      },
-      {
-        id: allMembersWorkspaceId,
-        organizationId: orgFull,
-        clientId: null,
-        name: "Engagement letter templates",
-        reference: "AUTH-ALL-MEMBERS",
-        visibility: "all_members",
-      },
-    ]);
     await tx.insert(workspaceMembers).values([
       {
         id: toSafeId<"workspaceMember">(tid()),

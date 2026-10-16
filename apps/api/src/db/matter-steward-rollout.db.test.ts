@@ -1,11 +1,21 @@
 import { PGlite } from "@electric-sql/pglite";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import { INTERNAL_MEMBER_ROLES, roles } from "@stll/permissions";
+
+import {
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
+import {
+  withLegacyWorkspaceFixture,
+  withPgliteWorkspaceCreation,
+} from "@/api/tests/helpers/workspace-creation";
 
 import { createMatterVisibilityRepair } from "./matter-visibility-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -14,7 +24,7 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261014120000_matter_visibility/migration.sql",
+  "../../drizzle/20261016100100_matter_visibility/migration.sql",
 );
 
 const migrationSql = readFileSync(MIGRATION_PATH, "utf-8")
@@ -82,7 +92,10 @@ const seed = async (database: PGlite): Promise<void> => {
         .replaceAll("SET LOCAL", "SET"),
     );
   }
-  await database.exec(`
+  await withLegacyWorkspaceFixture({
+    tx: drizzle({ client: database }),
+    insert: async () =>
+      await database.exec(`
     INSERT INTO organization VALUES ('${ORG}'), ('${OTHER_ORG}');
     INSERT INTO "user" VALUES ('${OWNER}'), ('${ADMIN}'), ('${MEMBER}'),
       ('${OTHER_MEMBER}'), ('${EXTERNAL}'), ('${INTERN}'), ('foreign_user');
@@ -105,7 +118,8 @@ const seed = async (database: PGlite): Promise<void> => {
       ('wm3', '${MATTER.clientMatter}', '${MEMBER}'),
       ('wm4', '${MATTER.clientlessOfMember}', '${EXTERNAL}'),
       ('wm5', '${MATTER.clientlessOfMember}', '${OWNER}');
-  `);
+  `),
+  });
 };
 
 const lockStewardship = async (
@@ -550,11 +564,26 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
     await using database = await migrated();
     const id = "00000000-0000-4000-8000-0000000000a8";
     await database.exec("BEGIN");
-    await lockStewardship(database, [id], lead === null ? [] : [lead]);
-    await database.query(
-      "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,'assigned_only')",
-      [id, ORG, lead],
-    );
+    await withPgliteWorkspaceCreation({
+      database,
+      rows: [
+        {
+          id: brandPersistedWorkspaceId(id),
+          organizationId: brandPersistedOrganizationId(ORG),
+          name: "Deferred matter",
+          reference: id,
+          visibility: "assigned_only",
+          leadUserId: lead,
+        },
+      ],
+      insert: async (normalized) => {
+        const row = normalized.at(0) ?? panic("Missing creation row");
+        await database.query(
+          "INSERT INTO workspaces (id,organization_id,lead_user_id,visibility) VALUES ($1,$2,$3,$4)",
+          [row.id, row.organizationId, row.leadUserId, row.visibility],
+        );
+      },
+    });
     if (assigned) {
       await database.query(
         "INSERT INTO workspace_members (id,workspace_id,user_id) VALUES ('new_assignment',$1,$2)",

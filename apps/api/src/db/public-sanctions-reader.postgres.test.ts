@@ -12,9 +12,12 @@ import {
   sanctionsEditions,
   sanctionsEntryPayloads,
   sanctionsEditionEntries,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
+import { createSafeId } from "@/api/lib/branded-types";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -31,6 +34,7 @@ const corpusTables = [
   sanctionsEditions,
   sanctionsEntryPayloads,
   sanctionsEditionEntries,
+  workspaceMembers,
 ]
   .map(getTableName)
   .toSorted();
@@ -63,9 +67,15 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
         mintAuthProviderId<"user">(),
         mintAuthProviderId<"user">(),
       ];
-      const organizations = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+      const organizations = [
+        mintAuthProviderId<"organization">(),
+        mintAuthProviderId<"organization">(),
+      ];
       const contacts = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
-      const workspaces = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+      const workspaces = [
+        createSafeId<"workspace">(),
+        createSafeId<"workspace">(),
+      ];
       try {
         const password = Bun.randomUUIDv7();
         const applicationUrl = new URL(url);
@@ -93,11 +103,25 @@ describe.skipIf(!runPostgresTests)("migrated public sanctions reader", () => {
             owners.at(index) ?? panic("Missing tenant owner fixture");
           await admin`INSERT INTO "user" (id, name, email) VALUES (${ownerUserId}, 'Reader tenant owner', ${`${ownerUserId}@example.test`})`;
           await admin`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES (${mintAuthProviderIdValue()}, ${organization}, ${ownerUserId}, 'owner', now())`;
-          await admin.begin(async (tx) => {
-            await tx`INSERT INTO workspaces (id, organization_id, name, reference, visibility, lead_user_id)
-              VALUES (${workspaces.at(index)}, ${organization}, 'Private reader matter', ${organization}, ${defaultMatterVisibilityFor({ hasClient: false })}, ${ownerUserId})`;
-            await tx`INSERT INTO workspace_members (id, workspace_id, user_id)
-              VALUES (${Bun.randomUUIDv7()}, ${workspaces.at(index)}, ${ownerUserId})`;
+          const workspaceId =
+            workspaces.at(index) ?? panic("Missing tenant matter fixture");
+          await db.transaction(async (tx) => {
+            await insertWorkspaceRowsInTransaction({
+              tx,
+              rows: [
+                {
+                  id: workspaceId,
+                  organizationId: organization,
+                  name: "Private reader matter",
+                  reference: organization,
+                  visibility: defaultMatterVisibilityFor({ hasClient: false }),
+                  leadUserId: ownerUserId,
+                },
+              ],
+            });
+            await tx
+              .insert(workspaceMembers)
+              .values({ workspaceId, userId: ownerUserId });
           });
           await admin`INSERT INTO entities (id, workspace_id, kind, name) VALUES (${Bun.randomUUIDv7()}, ${workspaces.at(index)}, 'file', 'Private reader file')`;
         }
