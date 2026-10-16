@@ -48,6 +48,8 @@ export type DataExportProblemRecord =
 /** One finished part: the checkpoint a resumed run starts after. */
 export type DataExportPartRecord = {
   index: number;
+  /** The attempt whose upload holds this part's bytes. */
+  attempt: number;
   fileName: string;
   sizeBytes: number;
   sha256: string;

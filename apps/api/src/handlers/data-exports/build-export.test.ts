@@ -9,6 +9,8 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   buildDataExport,
+  DATA_EXPORT_RECORD_BYTES_CAP,
+  DataExportRecordsTooLargeError,
   planDataExport,
 } from "@/api/handlers/data-exports/build-export";
 import type {
@@ -16,6 +18,7 @@ import type {
   ExportFileRef,
   ExportSource,
   FileRead,
+  RecordBytes,
   SourceDocument,
   SourceMatter,
   SourceMatterSummary,
@@ -50,6 +53,7 @@ type FakeWorld = {
   files: Map<string, FakeFile | "missing" | "failed">;
   organization: SourceOrganizationRecords;
   templateFiles: Map<string, Uint8Array>;
+  recordBytes?: RecordBytes;
 };
 
 const documentWithVersions = ({
@@ -110,6 +114,8 @@ const fakeSource = (world: FakeWorld): ExportSource => ({
   loadMatter: async (matterId) =>
     world.matters.find((m) => m.summary.id === matterId)?.matter ?? null,
   loadOrganizationRecords: async () => world.organization,
+  measureRecords: async () =>
+    world.recordBytes ?? { organizationBytes: 0, matterBytes: new Map() },
   readFile: async (ref: ExportFileRef): Promise<FileRead> => {
     if (ref.type === "template") {
       const data = world.templateFiles.get(ref.templateVersionId);
@@ -226,11 +232,13 @@ const run = async (
   }: RunOptions = {},
 ) => {
   const memory = memorySink();
-  const plan = await planDataExport({
-    source,
-    partTargetBytes,
-    scope: { versions: "all" },
-  });
+  const plan = (
+    await planDataExport({
+      source,
+      partTargetBytes,
+      scope: { versions: "all" },
+    })
+  ).unwrap();
   const checkpoints: CompletedPart[] = [];
   let paced = 0;
   const manifest = await buildDataExport({
@@ -329,6 +337,66 @@ const basicWorld = (): FakeWorld => {
     templateFiles: new Map([["tplv-1", encoder.encode("docx")]]),
   };
 };
+
+describe("organisation data export admission", () => {
+  test("sizes parts by the records they carry, not only their files", async () => {
+    const world = basicWorld();
+    const filesOnly = (
+      await planDataExport({
+        source: fakeSource(world),
+        partTargetBytes: 2 * 1024 ** 3,
+        scope: { versions: "all" },
+      })
+    ).unwrap();
+    const matterId = world.matters.at(0)?.summary.id ?? "";
+    const withRecords = (
+      await planDataExport({
+        source: fakeSource({
+          ...world,
+          recordBytes: {
+            organizationBytes: 1000,
+            matterBytes: new Map([[matterId, 500]]),
+          },
+        }),
+        partTargetBytes: 2 * 1024 ** 3,
+        scope: { versions: "all" },
+      })
+    ).unwrap();
+    expect(withRecords.bytesTotal).toBe(filesOnly.bytesTotal + 1500);
+  });
+
+  test.each(["organization", "matter"] as const)(
+    "refuses an export whose %s records exceed the cap before loading any record",
+    async (unit) => {
+      const world = basicWorld();
+      const matterId = world.matters.at(0)?.summary.id ?? "";
+      const over = DATA_EXPORT_RECORD_BYTES_CAP + 1;
+      let loaded = false;
+      const source: ExportSource = {
+        ...fakeSource({
+          ...world,
+          recordBytes: {
+            organizationBytes: unit === "organization" ? over : 0,
+            matterBytes: new Map([[matterId, unit === "matter" ? over : 0]]),
+          },
+        }),
+        loadOrganizationRecords: async () => {
+          loaded = true;
+          return world.organization;
+        },
+      };
+      const planned = await planDataExport({
+        source,
+        partTargetBytes: 2 * 1024 ** 3,
+        scope: { versions: "all" },
+      });
+      const error = planned.isErr() ? planned.error : null;
+      expect(error).toBeInstanceOf(DataExportRecordsTooLargeError);
+      expect(error).toMatchObject({ unit, bytes: over });
+      expect(loaded).toBe(false);
+    },
+  );
+});
 
 describe("organisation data export builder", () => {
   test("carries every document version with its verified checksum and path", async () => {
@@ -527,11 +595,13 @@ describe("organisation data export builder", () => {
   test("stops between files when its signal aborts", async () => {
     const controller = new AbortController();
     const source = fakeSource(basicWorld());
-    const plan = await planDataExport({
-      source,
-      partTargetBytes: 10,
-      scope: { versions: "all" },
-    });
+    const plan = (
+      await planDataExport({
+        source,
+        partTargetBytes: 10,
+        scope: { versions: "all" },
+      })
+    ).unwrap();
     const checkpoints: CompletedPart[] = [];
     const rejection = await rejectionOf(
       buildDataExport({

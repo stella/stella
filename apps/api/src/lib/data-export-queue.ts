@@ -100,14 +100,25 @@ export const dataExportPrefix = ({
   exportId: SafeId<"dataExport">;
 }): string => `exports/${organizationId}/data-exports/${exportId}/`;
 
-export const dataExportPartKey = ({
-  organizationId,
-  exportId,
-  fileName,
-}: {
+type DataExportObjectKeyOptions = {
   organizationId: SafeId<"organization">;
   exportId: SafeId<"dataExport">;
+  /** The attempt whose upload holds the bytes. */
+  attempt: number;
   fileName: string;
-}): string => `${dataExportPrefix({ organizationId, exportId })}${fileName}`;
+};
+
+/**
+ * Each attempt writes under its own keys, so an upload a superseded attempt
+ * completes late never replaces an object a newer attempt published. The
+ * export row records which attempt holds each file.
+ */
+export const dataExportObjectKey = ({
+  organizationId,
+  exportId,
+  attempt,
+  fileName,
+}: DataExportObjectKeyOptions): string =>
+  `${dataExportPrefix({ organizationId, exportId })}attempt-${String(attempt)}/${fileName}`;
 
 export const DATA_EXPORT_MANIFEST_FILE_NAME = "export-manifest.json";

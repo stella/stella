@@ -18,7 +18,8 @@
 
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
-import type { AnyColumn } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -43,6 +44,7 @@ import type {
   ExportFileRef,
   ExportSource,
   FileRead,
+  RecordBytes,
   RecordTable,
   SourceDocument,
   SourceDocumentFile,
@@ -769,6 +771,85 @@ const readOrganizationChildren = async (
   };
 };
 
+// Stored size of the matched rows, as Postgres holds them.
+const storedBytes = (recordTable: PgTable) =>
+  sql<number>`COALESCE(SUM(pg_column_size(${recordTable}.*)), 0)::bigint`.mapWith(
+    Number,
+  );
+
+const measureRecords = async (
+  { db, organizationId, readForParents }: PagedReader,
+  matterIds: readonly string[],
+): Promise<RecordBytes> => {
+  // What `loadOrganizationRecords` reads, one aggregate per table.
+  const organizationTables: readonly (readonly [PgTable, SQL | undefined])[] = [
+    [contacts, eq(contacts.organizationId, organizationId)],
+    [
+      contactRelationships,
+      eq(contactRelationships.organizationId, organizationId),
+    ],
+    [clauses, eq(clauses.organizationId, organizationId)],
+    [clauseVersions, eq(clauseVersions.organizationId, organizationId)],
+    [clauseVariants, eq(clauseVariants.organizationId, organizationId)],
+    [templates, eq(templates.organizationId, organizationId)],
+    [templateVersions, eq(templateVersions.organizationId, organizationId)],
+    [
+      timeEntries,
+      and(
+        eq(timeEntries.organizationId, organizationId),
+        isNull(timeEntries.workspaceId),
+      ),
+    ],
+  ];
+  let organizationBytes = 0;
+  for (const [recordTable, where] of organizationTables) {
+    // One small aggregate per table, sequential to keep load low
+    const rows = await db(
+      async (tx) =>
+        await tx
+          .select({ bytes: storedBytes(recordTable) })
+          .from(recordTable)
+          .where(where),
+    );
+    organizationBytes += rows.at(0)?.bytes ?? 0;
+  }
+  // What `loadMatter` reads, grouped by matter.
+  const matterTables: readonly (readonly [PgTable, AnyColumn])[] = [
+    [entities, entities.workspaceId],
+    [entityVersions, entityVersions.workspaceId],
+    [fields, fields.workspaceId],
+    [taskAssignees, taskAssignees.workspaceId],
+    [workspaceContacts, workspaceContacts.workspaceId],
+    [timeEntries, timeEntries.workspaceId],
+    [invoices, invoices.workspaceId],
+    [invoiceLines, invoiceLines.workspaceId],
+  ];
+  const matterBytes = new Map<string, number>();
+  for (const [recordTable, workspaceColumn] of matterTables) {
+    // One grouped aggregate per table and page of matters, sequential to keep load low
+    const rows = await readForParents(
+      matterIds.map((id) => brandPersistedWorkspaceId(id)),
+      async (ids) =>
+        await db(
+          async (tx) =>
+            await tx
+              .select({
+                workspaceId: workspaceColumn,
+                bytes: storedBytes(recordTable),
+              })
+              .from(recordTable)
+              .where(inArray(workspaceColumn, ids))
+              .groupBy(workspaceColumn),
+        ),
+    );
+    for (const { workspaceId, bytes } of rows) {
+      const id = String(workspaceId);
+      matterBytes.set(id, (matterBytes.get(id) ?? 0) + bytes);
+    }
+  }
+  return { organizationBytes, matterBytes };
+};
+
 const loadOrganizationRecords = async (
   reader: PagedReader,
   templateKeys: Map<string, string>,
@@ -896,6 +977,8 @@ export const createExportSource = (
     listMatters: async (scope) => await listMatters(reader, scope),
     loadMatter: async (matterId, scope) =>
       await loadMatter(reader, matterId, scope),
+    measureRecords: async (matterIds) =>
+      await measureRecords(reader, matterIds),
     loadOrganizationRecords: async () => {
       organizationRecords ??= loadOrganizationRecords(reader, templateKeys);
       return await organizationRecords;

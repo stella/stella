@@ -221,6 +221,7 @@ const runFor = async (
   );
   const memory = memorySink();
   let manifest: Uint8Array | null = null;
+  const storageAttempts: number[] = [];
   const now = new Date("2026-10-14T10:00:00.000Z");
   const outcome = await runDataExport(
     { exportId, organizationId: ids.orgA, userId },
@@ -242,9 +243,14 @@ const runFor = async (
               };
         },
       }),
-      sink: memory.sink,
-      writeManifest: async (bytes) => {
-        manifest = bytes;
+      storage: (attempt) => {
+        storageAttempts.push(attempt);
+        return {
+          sink: memory.sink,
+          writeManifest: async (bytes) => {
+            manifest = bytes;
+          },
+        };
       },
       pace,
       signal,
@@ -252,7 +258,7 @@ const runFor = async (
       now: () => now,
     },
   );
-  return { outcome, memory, manifest, now };
+  return { outcome, memory, manifest, now, storageAttempts };
 };
 
 describe("data export permissions", () => {
@@ -294,6 +300,7 @@ describe("data export permissions", () => {
       parts: [
         {
           index: 1,
+          attempt: 1,
           fileName: "part.zip",
           sizeBytes: 1,
           sha256: "0".repeat(64),
@@ -341,7 +348,7 @@ describe("data export run", () => {
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
     });
-    const { outcome, memory, manifest, now } = await runFor(
+    const { outcome, memory, manifest, now, storageAttempts } = await runFor(
       ids.userAdmin,
       exportId,
     );
@@ -381,6 +388,10 @@ describe("data export run", () => {
     expect(row?.parts).toHaveLength(1);
     expect(row?.plan?.parts.map((part) => part.index)).toEqual([1]);
     expect(row?.attempt).toBe(1);
+    // Every stored file is addressed by the attempt that wrote it, so a
+    // superseded attempt's late upload cannot replace a published object.
+    expect(storageAttempts).toEqual([1]);
+    expect(row?.parts.map((part) => part.attempt)).toEqual([1]);
     expect(row?.expiresAt?.getTime()).toBe(
       now.getTime() + DATA_EXPORT_RETENTION_MS,
     );
@@ -472,6 +483,7 @@ describe("data export maintenance", () => {
     const now = new Date("2026-10-14T12:00:00.000Z");
     const part = {
       index: 1,
+      attempt: 1,
       fileName: "part.zip",
       sizeBytes: 1,
       sha256: "0".repeat(64),
@@ -765,7 +777,7 @@ describe("run ownership", () => {
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
     });
-    const { outcome } = await runFor(ids.userAdmin, exportId, {
+    const { outcome, memory } = await runFor(ids.userAdmin, exportId, {
       // While this attempt plans, the sweep hands the export to a newer
       // attempt, which claims it.
       wrapSource: (source) => ({
@@ -780,9 +792,55 @@ describe("run ownership", () => {
       }),
     });
     expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.SKIPPED);
+    // The plan write is the first fenced write: the stale attempt stops
+    // there, before it uploads anything.
+    expect(memory.parts.size).toBe(0);
     const row = await statusOf(exportId);
     expect(row?.status).toBe("running");
     expect(row?.attempt).toBe(2);
+    await testDb
+      .update(organizationDataExports)
+      .set({ status: "failed" })
+      .where(eq(organizationDataExports.id, exportId));
+  });
+
+  test("objects a superseded attempt uploads are never published", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+    });
+    const { outcome, memory, storageAttempts } = await runFor(
+      ids.userAdmin,
+      exportId,
+      {
+        // The takeover lands while the part is being packed: the stale
+        // attempt has opened its upload and stops at its next fenced write.
+        wrapSource: (source) => ({
+          ...source,
+          loadMatter: async (matterId, scope) => {
+            await testDb
+              .update(organizationDataExports)
+              .set({ attempt: 2 })
+              .where(eq(organizationDataExports.id, exportId));
+            return await source.loadMatter(matterId, scope);
+          },
+        }),
+      },
+    );
+    expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.SKIPPED);
+    expect(memory.parts.size).toBe(1);
+    // Whatever the stale attempt uploads lives under attempt 1's keys; the
+    // export, now owned by attempt 2, references none of them.
+    expect(storageAttempts).toEqual([1]);
+    const [row] = await testDb
+      .select({
+        attempt: organizationDataExports.attempt,
+        parts: organizationDataExports.parts,
+      })
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, exportId));
+    expect(row?.attempt).toBe(2);
+    expect(row?.parts).toEqual([]);
     await testDb
       .update(organizationDataExports)
       .set({ status: "failed" })

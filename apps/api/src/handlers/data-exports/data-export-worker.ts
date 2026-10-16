@@ -16,7 +16,7 @@
  * It never deletes what it wrote: objects under `exports/` are removed by
  * the bucket lifecycle (see `data-export-queue.ts`).
  */
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -55,7 +55,7 @@ import {
   DATA_EXPORT_PART_TARGET_BYTES,
   DATA_EXPORT_QUEUE_NAME,
   DATA_EXPORT_RETENTION_MS,
-  dataExportPartKey,
+  dataExportObjectKey,
   dataExportPrefix,
   getDataExportQueue,
 } from "@/api/lib/data-export-queue";
@@ -92,14 +92,21 @@ export const DATA_EXPORT_FAILURE_MESSAGE = {
   failed: "The export could not be completed. Please start a new export.",
   partTooLarge:
     "A matter is larger than one export part can hold. Contact support to export it.",
+  recordsTooLarge:
+    "The organization has more records than one export can hold. Contact support to export it.",
 } as const;
+
+/** Where one attempt writes its parts and the export manifest. */
+export type DataExportAttemptStorage = {
+  sink: ExportSink;
+  writeManifest: (bytes: Uint8Array) => Promise<void>;
+};
 
 export type DataExportRunDependencies = {
   db: ScopedDb;
   source: ExportSource;
-  sink: ExportSink;
-  /** Store the export manifest next to the parts. */
-  writeManifest: (bytes: Uint8Array) => Promise<void>;
+  /** Storage keyed by attempt, so attempts never write the same object. */
+  storage: (attempt: number) => DataExportAttemptStorage;
   pace: () => Promise<void>;
   /** Aborted on shutdown; the run stops and is resumed later. */
   signal: AbortSignal;
@@ -504,15 +511,28 @@ export const runDataExport = async (
     },
   });
 
+  const storage = deps.storage(run.attempt);
   try {
     const scope = { versions: run.versionScope };
-    const plan =
-      run.plan ??
-      (await planDataExport({
-        source: deps.source,
-        partTargetBytes: deps.partTargetBytes,
-        scope,
-      }));
+    const planned =
+      run.plan === null
+        ? await planDataExport({
+            source: deps.source,
+            partTargetBytes: deps.partTargetBytes,
+            scope,
+          })
+        : Result.ok(run.plan);
+    // Retrying cannot shrink the records, so the export fails at once.
+    if (planned.isErr()) {
+      await markFailed(
+        deps.db,
+        ids,
+        run.attempt,
+        DATA_EXPORT_FAILURE_MESSAGE.recordsTooLarge,
+      );
+      return DATA_EXPORT_RUN_OUTCOME.FAILED;
+    }
+    const plan = planned.value;
     if (run.plan === null) {
       await heartbeat({ plan });
     }
@@ -523,9 +543,10 @@ export const runDataExport = async (
       createdAt: run.createdAt,
       scope,
       plan,
-      completedParts: run.parts,
+      // The manifest lists parts without the attempt that stored them.
+      completedParts: run.parts.map(({ attempt: _attempt, ...part }) => part),
       source: deps.source,
-      sink: deps.sink,
+      sink: storage.sink,
       pace: deps.pace,
       signal: deps.signal,
       // Each part re-checks the permission, so a requester demoted mid-run
@@ -544,11 +565,11 @@ export const runDataExport = async (
         await heartbeat({ progress });
       },
       onPartComplete: async (part) => {
-        await heartbeat({ checkpoint: part });
+        await heartbeat({ checkpoint: { ...part, attempt: run.attempt } });
       },
       now: deps.now,
     });
-    await deps.writeManifest(
+    await storage.writeManifest(
       new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`),
     );
     const completedAt = deps.now();
@@ -589,6 +610,7 @@ export const runDataExport = async (
       await markFailed(deps.db, ids, run.attempt, error.message);
       return DATA_EXPORT_RUN_OUTCOME.FAILED;
     }
+
     if (deps.signal.aborted) {
       await markResumable(
         deps.db,
@@ -640,44 +662,50 @@ const createS3RunDependencies = ({
   return {
     db,
     source: createExportSource({ db, organizationId, signal, pace }),
-    sink: {
-      openPart: (fileName, estimatedBytes) => {
-        // A matter is never split, so one huge matter makes one huge part:
-        // size the upload parts for it, and stop with a clear message when
-        // even the largest parts cannot hold it.
-        const partBytes = multipartPartBytes(estimatedBytes);
-        if (partBytes === null) {
-          throw new DataExportPartTooLargeError({
-            message: DATA_EXPORT_FAILURE_MESSAGE.partTooLarge,
+    storage: (attempt) => ({
+      sink: {
+        openPart: (fileName, estimatedBytes) => {
+          // A matter is never split, so one huge matter makes one huge part:
+          // size the upload parts for it, and stop with a clear message when
+          // even the largest parts cannot hold it.
+          const partBytes = multipartPartBytes(estimatedBytes);
+          if (partBytes === null) {
+            throw new DataExportPartTooLargeError({
+              message: DATA_EXPORT_FAILURE_MESSAGE.partTooLarge,
+            });
+          }
+          // An unfinished multipart upload is aborted by the bucket lifecycle.
+          const upload = openS3StreamingUpload({
+            key: dataExportObjectKey({
+              organizationId,
+              exportId,
+              attempt,
+              fileName,
+            }),
+            contentType: ZIP_CONTENT_TYPE,
+            partBytes,
+            ownership: { type: "lifecycle-prefix", prefix },
           });
-        }
-        // Part keys are deterministic: a part rebuilt by a resumed attempt
-        // overwrites the earlier object, and an unfinished multipart upload
-        // is aborted by the bucket lifecycle.
-        const upload = openS3StreamingUpload({
-          key: dataExportPartKey({ organizationId, exportId, fileName }),
-          contentType: ZIP_CONTENT_TYPE,
-          partBytes,
-          ownership: { type: "lifecycle-prefix", prefix },
-        });
-        return { write: upload.write, close: upload.end };
-      },
-    },
-    writeManifest: async (bytes) => {
-      await writeS3ObjectWithRetry(
-        {
-          key: dataExportPartKey({
-            organizationId,
-            exportId,
-            fileName: DATA_EXPORT_MANIFEST_FILE_NAME,
-          }),
-          data: bytes,
-          contentType: JSON_CONTENT_TYPE,
-          signal,
+          return { write: upload.write, close: upload.end };
         },
-        { type: "lifecycle-prefix", prefix },
-      );
-    },
+      },
+      writeManifest: async (bytes) => {
+        await writeS3ObjectWithRetry(
+          {
+            key: dataExportObjectKey({
+              organizationId,
+              exportId,
+              attempt,
+              fileName: DATA_EXPORT_MANIFEST_FILE_NAME,
+            }),
+            data: bytes,
+            contentType: JSON_CONTENT_TYPE,
+            signal,
+          },
+          { type: "lifecycle-prefix", prefix },
+        );
+      },
+    }),
     pace,
     signal,
     partTargetBytes: DATA_EXPORT_PART_TARGET_BYTES,

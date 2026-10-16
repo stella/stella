@@ -12,7 +12,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import {
   DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS,
   DATA_EXPORT_MANIFEST_FILE_NAME,
-  dataExportPartKey,
+  dataExportObjectKey,
 } from "@/api/lib/data-export-queue";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -74,6 +74,7 @@ const downloadDataExport = createSafeRootHandler(
         const rows = await tx
           .select({
             status: organizationDataExports.status,
+            attempt: organizationDataExports.attempt,
             parts: organizationDataExports.parts,
             expiresAt: organizationDataExports.expiresAt,
           })
@@ -101,9 +102,13 @@ const downloadDataExport = createSafeRootHandler(
           return { type: "unavailable", status: row.status } as const;
         }
         const requested = body.file;
+        // The manifest is written by the attempt that marked the export
+        // ready, which is the row's attempt; each part by the attempt its
+        // checkpoint records.
         const file =
           requested.type === DOWNLOAD_FILE.MANIFEST
             ? {
+                attempt: row.attempt,
                 fileName: DATA_EXPORT_MANIFEST_FILE_NAME,
                 sizeBytes: null,
                 sha256: null,
@@ -123,9 +128,10 @@ const downloadDataExport = createSafeRootHandler(
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
           resourceId: params.exportId,
-          s3Key: dataExportPartKey({
+          s3Key: dataExportObjectKey({
             organizationId,
             exportId: params.exportId,
+            attempt: file.attempt,
             fileName,
           }),
           expiresInSeconds,

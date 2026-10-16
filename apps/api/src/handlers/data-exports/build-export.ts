@@ -15,7 +15,7 @@
 // `ExportSink`, so the archive layout, manifest and integrity rules are
 // tested without either.
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 import { createSha256 } from "@stll/sha256/bun";
@@ -166,8 +166,33 @@ export type ExportSource = {
     scope: DataExportVersionScope,
   ) => Promise<SourceMatter | null>;
   loadOrganizationRecords: () => Promise<SourceOrganizationRecords>;
+  /**
+   * Stored bytes of the records an export holds in memory at once: the
+   * organisation's records, and each listed matter's. Measured in the
+   * database, without reading the rows.
+   */
+  measureRecords: (matterIds: readonly string[]) => Promise<RecordBytes>;
   readFile: (ref: ExportFileRef) => Promise<FileRead>;
 };
+
+export type RecordBytes = {
+  organizationBytes: number;
+  matterBytes: ReadonlyMap<string, number>;
+};
+
+/**
+ * The most stored record bytes one unit the builder holds in memory at once
+ * (the organisation's records, or one matter's) may carry. Records are read
+ * whole and serialised to JSON and CSV in memory, several times their stored
+ * size; above this an export is refused before any record is loaded. The
+ * bound goes away once record serialisation streams.
+ */
+export const DATA_EXPORT_RECORD_BYTES_CAP = 64 * 1024 ** 2;
+
+/** The records of the organisation or of one matter exceed the cap. */
+export class DataExportRecordsTooLargeError extends TaggedError(
+  "DataExportRecordsTooLargeError",
+)<{ message: string; unit: "organization" | "matter"; bytes: number }> {}
 
 /** Receives one part's bytes, in order. */
 type PartSink = {
@@ -740,13 +765,45 @@ export const planDataExport = async ({
   source,
   partTargetBytes,
   scope,
-}: PlanDataExportArgs): Promise<ExportPlan> => {
-  const matters = (await source.listMatters(scope.versions)).toSorted(byName);
-  const organization = await source.loadOrganizationRecords();
-  const organizationBytes = organization.templateFiles.reduce(
-    (sum, file) => sum + file.sizeBytes,
-    0,
+}: PlanDataExportArgs): Promise<
+  Result<ExportPlan, DataExportRecordsTooLargeError>
+> => {
+  const listed = (await source.listMatters(scope.versions)).toSorted(byName);
+  // Admission comes first: an export whose records cannot be held in memory
+  // is refused before any of them is loaded.
+  const records = await source.measureRecords(listed.map((m) => m.id));
+  if (records.organizationBytes > DATA_EXPORT_RECORD_BYTES_CAP) {
+    return Result.err(
+      new DataExportRecordsTooLargeError({
+        message: "The organisation's records exceed the export record limit",
+        unit: "organization",
+        bytes: records.organizationBytes,
+      }),
+    );
+  }
+  const oversized = listed.find(
+    (matter) =>
+      (records.matterBytes.get(matter.id) ?? 0) > DATA_EXPORT_RECORD_BYTES_CAP,
   );
+  if (oversized !== undefined) {
+    return Result.err(
+      new DataExportRecordsTooLargeError({
+        message: "A matter's records exceed the export record limit",
+        unit: "matter",
+        bytes: records.matterBytes.get(oversized.id) ?? 0,
+      }),
+    );
+  }
+  // Parts are sized by everything they carry, records included.
+  const matters = listed.map((matter) => ({
+    id: matter.id,
+    estimatedBytes:
+      matter.estimatedBytes + (records.matterBytes.get(matter.id) ?? 0),
+  }));
+  const organization = await source.loadOrganizationRecords();
+  const organizationBytes =
+    records.organizationBytes +
+    organization.templateFiles.reduce((sum, file) => sum + file.sizeBytes, 0);
   const bytesById = new Map(matters.map((m) => [m.id, m.estimatedBytes]));
   const parts = planParts({
     matters: matters.map((matter) => ({
@@ -756,7 +813,7 @@ export const planDataExport = async ({
     targetBytes: partTargetBytes,
     organizationBytes,
   });
-  return {
+  return Result.ok({
     parts: parts.map((part) => ({
       index: part.index,
       matterIds: part.matterIds,
@@ -766,7 +823,7 @@ export const planDataExport = async ({
     bytesTotal:
       organizationBytes +
       [...bytesById.values()].reduce((sum, bytes) => sum + bytes, 0),
-  };
+  });
 };
 
 type BuildDataExportArgs = {
