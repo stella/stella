@@ -640,6 +640,17 @@ export default defineConfig(({ mode, command }) => {
     },
     resolve: {
       tsconfigPaths: true,
+      alias: [
+        {
+          // tldts' module build exports its public-suffix label table as a
+          // 67 KB string constant from a separate module. Rolldown inlines
+          // imported constants into conditions, so the table was copied into
+          // the chunk once per lookup site. The prebuilt single-module build
+          // keeps the table a local binding that is emitted once.
+          find: /^tldts$/u,
+          replacement: "tldts/dist/index.esm.min.js",
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",
