@@ -12,7 +12,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 const config = {
   contract: "patch",
   description:
-    "Recover an assigned-only matter without a usable lead by naming an internal organization member. Owners and admins only. Assigns that member and makes them lead atomically, preserves visibility, and returns no matter metadata. A healthy matter uses the normal lead update instead.",
+    "Recover an assigned-only matter without a usable lead by naming another internal organization member. Owners and admins only. Assigns that member and makes them lead atomically, preserves visibility, and returns no matter metadata. A healthy matter uses the normal lead update instead.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: {

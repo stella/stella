@@ -119,6 +119,75 @@ test("explicit recovery assigns only the named internal steward and preserves pr
   });
 });
 
+test("recovery cannot assign its actor to an unreadable matter", async () => {
+  const events: AuditEvent[] = [];
+  const recordAuditEvent: AuditRecorder = (_tx, event) => {
+    events.push(...(Array.isArray(event) ? event : [event]));
+  };
+  const workspaceId = await testDb.transaction(async (rawTx) => {
+    const tx = asTestRaw<Transaction>(rawTx);
+    const id = await createOrphan(tx);
+    const error = await rejectionOf(
+      tx.transaction(async (savepoint) => {
+        await recoverOrphanedMatterSteward(savepoint, {
+          organizationId: ids.orgA,
+          workspaceId: id,
+          actorUserId: ids.userAdmin,
+          stewardUserId: ids.userAdmin,
+          recordAuditEvent,
+        });
+      }),
+    );
+    expect(error).toMatchObject({ status: 404, message: "Matter not found" });
+    expect(HandlerError.is(error)).toBe(true);
+    expect(
+      await tx
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, id)),
+    ).toEqual([]);
+    expect(
+      await tx
+        .select({
+          leadUserId: workspaces.leadUserId,
+          canRead: memberReachesMatterSql(
+            { organizationId: ids.orgA, userId: ids.userAdmin },
+            id,
+          ),
+        })
+        .from(workspaces)
+        .where(eq(workspaces.id, id)),
+    ).toEqual([{ leadUserId: null, canRead: false }]);
+    expect(events).toEqual([]);
+    await recoverOrphanedMatterSteward(tx, {
+      organizationId: ids.orgA,
+      workspaceId: id,
+      actorUserId: ids.userAdmin,
+      stewardUserId: ids.userA2,
+      recordAuditEvent,
+    });
+    return id;
+  });
+  createdIds.push(workspaceId);
+  expect(
+    await testDb
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId)),
+  ).toEqual([{ userId: ids.userA2 }]);
+  expect(
+    await testDb
+      .select({
+        canRead: memberReachesMatterSql(
+          { organizationId: ids.orgA, userId: ids.userAdmin },
+          workspaceId,
+        ),
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId)),
+  ).toEqual([{ canRead: false }]);
+});
+
 test.each(["actor", "steward", "external-steward"] as const)(
   "recovery refuses an unauthorized %s before granting any access",
   async (invalid) => {

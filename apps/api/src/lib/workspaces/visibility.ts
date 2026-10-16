@@ -333,7 +333,7 @@ type RecoverOrphanedMatterStewardOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
-/** Explicit admin recovery grants only the named steward access; it never widens visibility. */
+/** Recovery hands an orphaned matter to another member without widening visibility. */
 export const recoverOrphanedMatterSteward = async (
   tx: Transaction,
   {
@@ -344,6 +344,12 @@ export const recoverOrphanedMatterSteward = async (
     recordAuditEvent,
   }: RecoverOrphanedMatterStewardOptions,
 ): Promise<void> => {
+  // Recovery cannot grant matter read access to its acting administrator.
+  if (stewardUserId === actorUserId) {
+    abortTransaction(
+      new HandlerError({ status: 404, message: "Matter not found" }),
+    );
+  }
   const memberships = await lockMemberAccessRows({
     tx,
     organizationId,
