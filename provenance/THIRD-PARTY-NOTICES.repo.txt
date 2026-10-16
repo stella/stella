@@ -46,7 +46,6 @@ Project: root
 - @mistralai/mistralai 2.7.0 — Apache-2.0
 - @modelcontextprotocol/client 2.3.1 — Apache-2.0
 - @modelcontextprotocol/ext-apps 2.0.3 — MIT
-- @modelcontextprotocol/sdk 1.31.0 — MIT
 - @modelcontextprotocol/server 2.3.1 — Apache-2.0
 - @myriaddreamin/typst-ts-web-compiler 0.7.0 — Apache-2.0
 - @neftaly/editcontext-polyfill 0.1.1 — MIT
@@ -604,7 +603,7 @@ Project: desktop-tauri
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
 - rustc_version 0.4.1 — Apache-2.0 OR MIT
 - rustix 1.1.4 — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
-- rustls 0.23.45 — Apache-2.0 OR ISC OR MIT
+- rustls 0.23.46 — Apache-2.0 OR ISC OR MIT
 - rustls-native-certs 0.8.4 — Apache-2.0 OR ISC OR MIT
 - rustls-pki-types 1.15.1 — Apache-2.0 OR MIT
 - rustls-platform-verifier 0.7.0 — Apache-2.0 OR MIT

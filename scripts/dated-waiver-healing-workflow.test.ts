@@ -170,9 +170,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   const ci = v.parse(
     v.object({
       jobs: v.object({
-        "dated-waiver-expiry": v.object({
+        "ci-quick-checks": v.object({
           if: v.string(),
-          needs: v.optional(v.array(v.string())),
+          needs: v.string(),
           steps: v.array(
             v.looseObject({
               name: v.string(),
@@ -202,10 +202,13 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
       ),
     ),
   );
-  const expiry = ci.jobs["dated-waiver-expiry"];
-  expect(expiry.needs).toBeUndefined();
+  // The guard is a part of the quick checks. The job waits for the plan but
+  // its condition never reads the plan, so a failed plan still runs it.
+  const expiry = ci.jobs["ci-quick-checks"];
+  expect(expiry.needs).toBe("ci-plan");
+  expect(expiry.if).not.toContain("needs.");
   const result = ci.jobs["ci-result"];
-  expect(result.needs).toContain("dated-waiver-expiry");
+  expect(result.needs).toContain("ci-quick-checks");
   const outcome = result.steps.find(
     ({ name }) => name === "Evaluate CI outcome",
   );
@@ -213,11 +216,15 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     throw new TypeError("Missing required CI outcome step");
   }
   expect(JSON.parse(outcome.env?.["JOB_SCOPES"] ?? "{}")).toMatchObject({
-    "dated-waiver-expiry": null,
+    "ci-quick-checks": null,
   });
   expect(JSON.parse(outcome.env?.["FAST_REQUIRED"] ?? "[]")).toContain(
-    "dated-waiver-expiry",
+    "ci-quick-checks",
   );
+  const guardSteps = expiry.steps.filter(({ name }) =>
+    name.startsWith("dated-waiver-expiry: "),
+  );
+  expect(guardSteps).toHaveLength(2);
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     const context = {
       values: {
@@ -233,6 +240,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
       status: { always: true, cancelled: false },
     };
     expect(evaluate(expiry.if, context), event).toBe(true);
+    for (const step of guardSteps) {
+      expect(evaluate(step.if ?? "true", context), step.name).toBe(true);
+    }
     // A heavy-only dispatch adds heavy suites to a tree whose merge group
     // already ran this thin job, so it is the one run that skips it.
     expect(
@@ -244,13 +254,16 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     ).toBe(false);
   }
   const install = expiry.steps.find(
-    ({ name }) => name === "Install dated waiver guard dependencies",
+    ({ name }) => name === "Install dependencies",
   );
   const check = expiry.steps.find(
-    ({ name }) => name === "Check dated waiver expiry on the current tree",
+    ({ name }) =>
+      name ===
+      "dated-waiver-expiry: Check dated waiver expiry on the current tree",
   );
   const trackedFiles = expiry.steps.find(
-    ({ name }) => name === "List tracked files for dated waiver guard",
+    ({ name }) =>
+      name === "dated-waiver-expiry: List tracked files for dated waiver guard",
   );
   if (!install) {
     throw new TypeError("Missing dated waiver install");

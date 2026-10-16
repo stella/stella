@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 export const PILOT_FAST_ROOTS = [
   "desktop-rust-lint",
   "scan-engine-wasm-drift",
-  "ci-checks-docs",
   "ci-checks-generated",
   "ci-checks-policy",
   "ci-checks-rest",
@@ -13,12 +12,10 @@ export const PILOT_FAST_ROOTS = [
   "query-perf",
 ] as const;
 /** Jobs every profile runs: wall-clock checks no plan scope can skip. */
-export const PILOT_ALWAYS = ["dated-waiver-expiry"] as const;
+export const PILOT_ALWAYS = ["ci-quick-checks"] as const;
 // Queue-only Docker checks remain deferred on PRs, including the pilot profile.
 export const PILOT_DEFERRED = [
   "docker-checks",
-  "parser-version-guard",
-  "ci-generated-sources",
   "ci-browser",
   "service-suites",
   "postgres-service-suites",
@@ -81,10 +78,7 @@ export const pilotFastJobs = (workflow: unknown) => {
     if (name === undefined || selected.has(name)) {
       continue;
     }
-    if (
-      name !== "ci-generated-sources" &&
-      !PILOT_FAST_ROOTS.some((root) => root === name)
-    ) {
+    if (!PILOT_FAST_ROOTS.some((root) => root === name)) {
       return invalid(`Pilot prerequisite is deferred: ${name}`);
     }
     const job = jobs[name];

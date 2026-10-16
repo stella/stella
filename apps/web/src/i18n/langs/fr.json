@@ -173,6 +173,7 @@
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
       "holdOutOfScoring": "Exclure de la notation",
+      "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
       "interpretationNote": "Note d’interprétation",
       "interpretationNotePlaceholder": "Si le sens de cette preuve est contesté, précisez comment. Laissez vide sinon.",
@@ -1325,6 +1326,7 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "messageUnavailable": "Ce message ne peut pas être affiché.",
     "mockModel": {
       "description": "Réponses prédéfinies du modèle simulé local",
       "label": "IA simulée"
@@ -1490,6 +1492,7 @@
     },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
+      "add_matter_member": "Ajouter un membre au dossier",
       "apply-active-docx-edits": "Préparation des modifications",
       "ares_lookup_company": "Recherche des données d’entreprise",
       "ares_search_companies": "Recherche des données d’entreprise",
@@ -1546,7 +1549,6 @@
       "list_stories": "Liste des parties du document",
       "list_templates": "Liste des modèles",
       "load-skill": "Lecture des consignes",
-      "manage_organization": "Gérer l’organisation",
       "read-contact": "Lecture du contact",
       "read-content-across-matters": "Lecture du contenu dans tous les dossiers",
       "read-skill-resource": "Lecture des consignes",
@@ -1556,6 +1558,7 @@
       "read_section": "Lecture d'une section",
       "read_story": "Lecture d'une partie du document",
       "remember": "Mémorisation",
+      "remove_matter_member": "Retirer un membre du dossier",
       "reply_comment": "Réponse au commentaire",
       "request_secret": "Demande d’identifiant privé",
       "resolve_comment": "Résolution du commentaire",
@@ -1589,6 +1592,7 @@
       "suggest_template_fields": "Suggestion des champs du modèle",
       "unknown": "Utilisation d’un outil",
       "update-entity-fields": "Mise à jour des métadonnées",
+      "update_organization_settings": "Modifier les paramètres de l’équipe",
       "update_reader_annotation": "Modifier le surlignage ou le commentaire",
       "use-browser": "Utilisation de votre navigateur",
       "use_connector_secret": "Utilisation de l’identifiant du connecteur",
@@ -2074,6 +2078,7 @@
     "versionLabel": "Version {version}",
     "viewSource": "Voir la source",
     "website": "Site web",
+    "whenToUse": "Quand utiliser",
     "workflow": "Flux de travail",
     "workflows": "Flux de travail",
     "zoomIn": "Zoom avant",
@@ -2553,6 +2558,10 @@
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte.",
+      "validationInvalid": "Un champ contient une valeur qui ne peut pas être enregistrée.",
+      "validationRequired": "Un champ obligatoire est vide.",
+      "validationTooLong": "Trop long : {limit, number} caractères au maximum.",
+      "validationTooShort": "Trop court : {limit, number} caractères au minimum.",
       "verificationActiveLimitReached": "Votre organisation a atteint la limite de vérifications simultanées. Attendez la fin d’une vérification, puis réessayez.",
       "verificationDailyLimitReached": "Votre organisation a atteint la limite quotidienne de vérifications. Réessayez après minuit (Europe/Prague).",
       "versionConflict": "Quelqu’un d’autre l’a modifié pendant votre édition. Rechargez pour obtenir la version actuelle."
@@ -3648,6 +3657,10 @@
       "importTitle": "Importer une compétence",
       "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées}}",
       "invalidPath": "Le chemin ne doit contenir que des lettres minuscules, des chiffres, des points, des traits d'union ou des tirets bas",
+      "invocationAuto": "Automatiquement",
+      "invocationAutoHelp": "L’IA peut utiliser cette compétence d’elle-même lorsqu’elle correspond à la demande.",
+      "invocationManual": "Uniquement sur demande",
+      "invocationManualHelp": "Utilisée uniquement lorsque vous l’appelez avec / ou l’ajoutez à votre message.",
       "license": "Licence : {license}",
       "newFile": "Nouveau fichier",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4351,8 @@
         "yearMonthSequential": "Année-Mois / Séquentiel (2026-02/001)",
         "yearSequential": "Année / Séquentiel (2026/001)"
       },
+      "showInTitle": "Afficher le numéro à côté du nom du dossier",
+      "showInTitleDescription": "Lorsque cette option est désactivée, le titre est exactement le nom saisi.",
       "title": "Numérotation des dossiers",
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
@@ -4507,6 +4522,25 @@
     },
     "tokenHelp": "Comment obtenir un jeton",
     "viewOnGithub": "Voir sur GitHub"
+  },
+  "readerAnswers": {
+    "budgetError": "Le budget consacré aux réponses est épuisé.",
+    "citation": "¶{paragraph}",
+    "expand": "Développer la réponse",
+    "explain": "Expliquer",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Poser une question complémentaire",
+    "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
+    "loading": "Génération de la réponse…",
+    "minimise": "Réduire la réponse",
+    "modelError": "Le modèle n’a pas pu terminer cette réponse.",
+    "networkError": "La connexion a été interrompue. Réessayez.",
+    "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
+    "send": "Envoyer la question complémentaire",
+    "share": "Partager avec l’équipe",
+    "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
+    "title": "Réponse sur le texte sélectionné"
   },
   "routeError": {
     "backToMatters": "Retourner aux dossiers",
@@ -5554,7 +5588,6 @@
     "viewVersion": "Voir",
     "whenNotToUse": "Quand ne pas utiliser",
     "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
-    "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
   },
   "timesheets": {
@@ -5675,7 +5708,7 @@
       "title": "Copier vers un dossier"
     },
     "create": {
-      "ownerTypeToggle": "Type de dossier",
+      "matterName": "Nom du dossier",
       "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
@@ -6127,15 +6160,12 @@
       "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
-    "ownerType": {
-      "client": "Client",
-      "personal": "Personnel"
-    },
     "parties": {
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
       "noClient": "Aucun client attribué",
+      "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
       "partyRoles": {
         "co_counsel": "Co-conseil",

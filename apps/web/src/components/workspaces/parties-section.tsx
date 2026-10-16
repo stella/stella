@@ -422,8 +422,8 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       {
         workspaceId,
         update: {
-          type: "promote",
-          value: { clientId: selectedContact.id },
+          type: "clientId",
+          value: selectedContact.id,
         },
       },
       {
