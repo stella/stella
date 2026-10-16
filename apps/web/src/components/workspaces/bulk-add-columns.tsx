@@ -10,6 +10,7 @@ import { Result } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -83,6 +84,7 @@ import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-q
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -492,6 +494,7 @@ const PropertyColumnsBody = ({
   const t = useTranslations();
   const submit = useColumnsSubmit(onClose);
   const batch = useCreatePropertiesBatch({ workspaceId });
+  const submitOnce = useSingleFlight();
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
@@ -629,7 +632,7 @@ const PropertyColumnsBody = ({
       isPending={batch.isPending}
       onAddDraft={addDraft}
       onSubmit={() => {
-        detached(handleSubmit(), "bulk-add-columns.submit");
+        detached(submitOnce.run(handleSubmit), "bulk-add-columns.submit");
       }}
     >
       {drafts.map((draft) => (
@@ -706,6 +709,7 @@ const QuestionColumnsBody = ({
       return settled;
     },
   });
+  const submitOnce = useSingleFlight();
   const canSubmit = validDrafts.length > 0 && !save.isPending;
 
   const inputs = validDrafts.map((draft) => ({
@@ -746,7 +750,7 @@ const QuestionColumnsBody = ({
       isPending={save.isPending}
       {...(mode.type === "add" ? { onAddDraft: addDraft } : {})}
       onSubmit={() => {
-        detached(handleSubmit(), "bulk-add-columns.submit");
+        detached(submitOnce.run(handleSubmit), "bulk-add-columns.submit");
       }}
     >
       {drafts.map((draft) => (
@@ -925,6 +929,9 @@ const DraftCard = ({
           autoComplete="off"
           autoFocus
           className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          // A workspace draft becomes a column name; a research draft is a
+          // question with its own bound.
+          maxLength={isWorkspace ? DEFAULT_VARCHAR_MAX_LENGTH : undefined}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={
             isWorkspace

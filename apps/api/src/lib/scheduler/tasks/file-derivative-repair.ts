@@ -88,6 +88,7 @@ const storedDerivativeStateSchema = v.union([
       v.picklist([
         DERIVATIVE_FAILURE_REASON.ENQUEUE,
         DERIVATIVE_FAILURE_REASON.PROCESSING,
+        DERIVATIVE_FAILURE_REASON.TOO_LARGE,
       ]),
     ),
   }),

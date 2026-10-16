@@ -52,14 +52,17 @@ import {
   fields,
   invoices,
   justifications,
+  numberSeries,
   organizationSettings,
   playbookDefinitions,
   properties,
   propertyDependencies,
   rateEntries,
   rateTables,
+  sellerProfiles,
   timeEntries,
   userFiles,
+  vatRates,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -6086,6 +6089,71 @@ export async function seed(organizationId?: string, userId?: string) {
     );
   }
   console.log(`  Expenses: ${expenseSeeds.length}`);
+
+  // 13b. Issuing setup: a default seller profile, the Czech VAT rates and a
+  // default invoice number series, so a new invoice prefills and issues.
+  await withAggregateTransaction(db, async (tx) => {
+    // These tables force row-level security, so the transaction takes the
+    // application role and names its organization the way a request does.
+    await tx.execute(
+      sql`SELECT set_config('role', 'stella', true), set_config('app.organization_id', ${ORG_ID}, true)`,
+    );
+    // audit: skip - dev seed inserts fixture issuing settings.
+    await tx
+      .insert(sellerProfiles)
+      .values({
+        id: seedId<"sellerProfile">("seller-profile-default"),
+        organizationId: ORG_ID,
+        legalName: "Stella Demo Legal s.r.o.",
+        registrationId: "12345678",
+        vatId: "CZ12345678",
+        vatPayer: true,
+        addressLine1: "Vodičkova 12",
+        city: "Praha",
+        postalCode: "110 00",
+        country: "CZ",
+        iban: "CZ6508000000192000145399",
+        defaultCurrency: "CZK",
+        isDefault: true,
+      })
+      .onConflictDoNothing();
+    // audit: skip - dev seed inserts fixture VAT rates.
+    await tx
+      .insert(vatRates)
+      .values([
+        {
+          id: seedId<"vatRate">("vat-rate-standard"),
+          organizationId: ORG_ID,
+          code: "standard",
+          name: "Standard rate",
+          rateBps: 2100,
+          validFrom: "2013-01-01",
+        },
+        {
+          id: seedId<"vatRate">("vat-rate-reduced"),
+          organizationId: ORG_ID,
+          code: "reduced",
+          name: "Reduced rate",
+          rateBps: 1200,
+          validFrom: "2024-01-01",
+        },
+      ])
+      .onConflictDoNothing();
+    // audit: skip - dev seed inserts a fixture number series.
+    await tx
+      .insert(numberSeries)
+      .values({
+        id: seedId<"numberSeries">("number-series-invoices"),
+        organizationId: ORG_ID,
+        documentType: "invoice",
+        name: "Invoices",
+        pattern: "{YYYY}-{SEQ}",
+        padding: 4,
+        isDefault: true,
+      })
+      .onConflictDoNothing();
+  });
+  console.log("  Issuing setup: seller profile, VAT rates, number series");
 
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds);

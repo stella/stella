@@ -14,6 +14,7 @@ import {
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -173,6 +174,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       tx,
       cursor: undefined,
       decisionId: subjectId,
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
   const firstIncoming = await withReader(async (tx) =>
@@ -180,6 +182,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       tx,
       cursor: undefined,
       decisionId: subjectId,
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
   if (!("items" in firstOutgoing) || !("items" in firstIncoming)) {
@@ -196,6 +199,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
         tx,
         cursor,
         decisionId: subjectId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
     if (!("items" in page)) {
@@ -210,6 +214,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
         tx,
         cursor,
         decisionId: subjectId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
     if (!("items" in page)) {
@@ -240,6 +245,7 @@ test("citation reads reject malformed cursors", async () => {
       tx,
       cursor: "not-a-cursor",
       decisionId: subjectId,
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
 
@@ -256,6 +262,7 @@ test("reader citation URLs use canonical public identities and unresolved refere
         tx,
         cursor: pageCursor,
         decisionId: subjectId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
     if (!("items" in page)) {

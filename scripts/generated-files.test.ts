@@ -959,7 +959,26 @@ test("route tree has one derived owner and a cache producer for every consumer",
   }
 });
 
-test("the fresh-export proof runs nightly and alone on dispatch", () => {
+test("long optional runs accept dispatch only", () => {
+  for (const file of [
+    "bundle-size-nightly.yml",
+    "nightly-property-test.yml",
+    "nightly-typecheck.yml",
+  ]) {
+    const workflow = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+          "utf-8",
+        ),
+      ),
+    );
+    expect(Object.keys(workflow.on), file).toEqual(["workflow_dispatch"]);
+  }
+});
+
+test("the fresh-export proof runs alone on dispatch", () => {
   const workflow = v.parse(
     v.object({ jobs: v.record(v.string(), v.looseObject({ if: v.string() })) }),
     Bun.YAML.parse(
@@ -970,7 +989,7 @@ test("the fresh-export proof runs nightly and alone on dispatch", () => {
     ),
   );
   expect(workflow.jobs["fresh-web-sources"]?.if).toBe(
-    `\${{ github.event_name == 'schedule' || inputs.fresh-web }}`,
+    `\${{ inputs.fresh-web }}`,
   );
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === "fresh-web-sources") {
