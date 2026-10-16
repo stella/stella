@@ -63,6 +63,7 @@ import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/languag
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
+import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -539,7 +540,21 @@ export const lookupDecisionsByIdentity = async ({
     const registry = await readCourtRegistry(
       async () => await loadPublicCourtWeightsWithin(tx),
     );
-    return decisions.map(
+    const groupById = new Map(
+      decisions.map(({ id, languageGroupKey }) => [
+        String(id),
+        languageGroupKey,
+      ]),
+    );
+    // Translations share one decision identity; distinct language groups still
+    // require the caller to choose between decisions.
+    const { representatives } = collapseByLanguageGroup(decisions, (id) => {
+      const group = groupById.get(id);
+      return group === undefined
+        ? panic("Lost an identity's language group")
+        : group;
+    });
+    return representatives.map(
       ({ languageGroupKey, courtId, ...decision }): DecisionIdentityRow =>
         Object.assign(decision, {
           courtAbbreviation: courtPresentation(registry, {
