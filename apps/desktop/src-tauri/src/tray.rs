@@ -567,7 +567,7 @@ mod tests {
   fn recording_icons_are_monochrome_with_alpha() {
     for recording in [false, true] {
       let icon = recording_icon(recording).unwrap();
-      let pixels: Vec<_> = icon.rgba().chunks_exact(4).collect();
+      let (pixels, _) = icon.rgba().as_chunks::<4>();
       assert!(pixels.iter().any(|pixel| pixel[3] == 0));
       assert!(pixels.iter().any(|pixel| pixel[3] == 255));
       assert!(
