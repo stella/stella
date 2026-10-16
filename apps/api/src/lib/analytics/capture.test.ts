@@ -1,3 +1,4 @@
+import { UnhandledException } from "better-result";
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import {
@@ -163,6 +164,22 @@ describe("captureError repeat suppression", () => {
 });
 
 describe("captureError issue grouping", () => {
+  test("UnhandledException preserves distinct cause classes before repeat suppression", () => {
+    const options = handlerErrorContext("analytics.captureWrappedFailure");
+    captureError(
+      new UnhandledException({ cause: new TypeError("failure") }),
+      options,
+    );
+    captureError(
+      new UnhandledException({ cause: new ReferenceError("failure") }),
+      options,
+    );
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties.$exception_fingerprint).not.toBe(
+      captured.at(1)?.properties.$exception_fingerprint,
+    );
+  });
+
   // PostHog groups issues from `$exception_list`; with the message and stack
   // redacted, every event of one class would collapse into a single issue and
   // first-seen automations would never fire again for that class. The

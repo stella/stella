@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { declareFingerprintFields } from "@stll/errors";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -74,13 +75,13 @@ describe("stable exception identity", () => {
     );
   });
 
-  test("reporter wrappers preserve the causal class", () => {
+  test("reporter wrappers preserve the full causal class sequence", () => {
     expect(
       fingerprintExceptionEvent({
         ...fixture,
         entries: [{ type: "ClientTelemetryError" }, ...fixture.entries],
       }),
-    ).toBe(fingerprintExceptionEvent(fixture));
+    ).not.toBe(fingerprintExceptionEvent(fixture));
   });
 
   test("distinct owners, paths and typed response outcomes remain distinct", () => {
@@ -151,19 +152,20 @@ test("registered finite reasons split identities through reporter wrappers", () 
   const decode = new ClassifiedError("decode");
   const encode = new ClassifiedError("encode");
   const wrapped = new Error("Private wrapper", { cause: decode });
-  expect(capturedExceptionIdentity(wrapped)).toEqual(
-    capturedExceptionIdentity(decode),
-  );
+  expect(capturedExceptionIdentity(wrapped).types).toEqual([
+    "Error",
+    "ClassifiedError",
+  ]);
   const identify = (error: unknown) => {
-    const { type, fields } = capturedExceptionIdentity(error);
+    const { types, fields } = capturedExceptionIdentity(error);
     return fingerprintExceptionEvent({
       ...fixture,
-      entries: [{ type }],
+      entries: types.map((type) => ({ type })),
       fields,
     });
   };
   expect(identify(decode)).not.toBe(identify(encode));
-  expect(identify(wrapped)).toBe(identify(decode));
+  expect(identify(wrapped)).not.toBe(identify(decode));
 });
 
 test("throwing error accessors cannot interrupt capture identity", () => {
@@ -174,7 +176,7 @@ test("throwing error accessors cannot interrupt capture identity", () => {
     },
   });
   expect(capturedExceptionIdentity(error)).toEqual({
-    type: "UnknownError",
+    types: ["UnknownError"],
     fields: {},
   });
 });
@@ -289,4 +291,72 @@ test("distinct declared scopes split the same cause and owner", () => {
       },
     ),
   );
+});
+
+test("every bounded causal class position participates in identity", () => {
+  const chain = Array.from(
+    { length: MAX_EXCEPTION_CAUSE_DEPTH },
+    () => "Error",
+  );
+  assertProperty(
+    "every bounded causal class position participates in identity",
+    fc.property(
+      fc.constantFrom(...chain.keys()),
+      fc.boolean(),
+      (position, changeScope) => {
+        const changed = chain.map((type, index) => ({
+          type: index === position && !changeScope ? "TypeError" : type,
+        }));
+        expect(
+          fingerprintExceptionEvent({
+            ...fixture,
+            entries: chain.map((type) => ({ type })),
+          }),
+        ).not.toBe(
+          fingerprintExceptionEvent({
+            ...fixture,
+            entries: changed,
+            scopeIdentity: changeScope
+              ? fingerprintExceptionScope({
+                  type: "handler",
+                  handlerId: "different.owner",
+                })
+              : fixture.scopeIdentity,
+          }),
+        );
+      },
+    ),
+  );
+});
+
+test("wrapped native cause classes remain distinct without messages or positions", () => {
+  const identify = (error: Error) => {
+    const { types, fields } = capturedExceptionIdentity(error);
+    return fingerprintExceptionEvent({
+      ...fixture,
+      entries: types.map((type) => ({ type })),
+      fields,
+    });
+  };
+  expect(
+    identify(
+      new Error("private wrapper", { cause: new TypeError("private detail") }),
+    ),
+  ).not.toBe(
+    identify(
+      new Error("private wrapper", {
+        cause: new ReferenceError("private detail"),
+      }),
+    ),
+  );
+});
+
+test("captured causal class sequences terminate at repeated error objects", () => {
+  const outer = new TypeError("private outer");
+  const inner = new ReferenceError("private inner", { cause: outer });
+  outer.cause = inner;
+  expect(capturedExceptionIdentity(outer).types).toEqual([
+    "TypeError",
+    "ReferenceError",
+  ]);
 });

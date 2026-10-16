@@ -1,4 +1,5 @@
 import { exceptionScopeIdentity, type ExceptionScope } from "@stll/errors";
+import { exceptionCauseChainIdentity } from "@stll/errors/exception-cause-chain";
 
 import { identityFields } from "@/api/lib/observability/failure";
 import type { FailureEvidence } from "@/api/lib/observability/failure-evidence";
@@ -23,7 +24,13 @@ export const exceptionFingerprint = (
 ): string => {
   const fields = identityFields(evidence);
   return JSON.stringify([
-    evidence.nodes.at(0)?.tag ?? "UnknownError",
+    exceptionCauseChainIdentity({
+      root: 0,
+      readNode: (index) => ({
+        type: evidence.nodes.at(index)?.tag ?? "UnknownError",
+        cause: index + 1 < evidence.nodes.length ? index + 1 : undefined,
+      }),
+    }),
     fingerprintKey,
     [
       ...new Set([scope, ...inheritedScopes].map(exceptionScopeIdentity)),

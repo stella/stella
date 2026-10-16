@@ -27,6 +27,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import type { FailureBrand } from "@stll/errors";
 import { readFailureBrand, readFingerprintFields } from "@stll/errors";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { errorClassNameFrom } from "@/api/lib/errors/error-tag";
@@ -35,7 +36,8 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 
-export const MAX_EVIDENCE_DEPTH = 6;
+// parser-output-unchanged: error snapshot depth derives from the shared exception identity bound.
+export const MAX_EVIDENCE_DEPTH = MAX_EXCEPTION_CAUSE_DEPTH;
 
 // A stack is read from where its frames start, so these bound only the frame
 // block: a 1 MB message costs a newline count, never a 1 MB split.
@@ -146,7 +148,7 @@ export type EvidenceNode = {
   readonly prototypes: readonly object[];
   readonly frame: FrameEvidence;
   readonly extraction: Readonly<Record<string, string>> | undefined;
-  readonly discriminators?: Readonly<Record<string, string>>;
+  readonly discriminators?: Readonly<Record<string, string>> | undefined;
 };
 
 export type FailureEvidence = {
@@ -579,10 +581,13 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
     state.views.set(
       value,
       new Proxy(value, {
-        get: (target, property) =>
-          typeof property === "string"
-            ? readKey(state, target, property)
-            : Reflect.get(target, property),
+        get: (target, property) => {
+          const result: unknown =
+            typeof property === "string"
+              ? readKey(state, target, property)
+              : Reflect.get(target, property);
+          return result;
+        },
       }),
     );
   }

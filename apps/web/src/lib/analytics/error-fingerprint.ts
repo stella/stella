@@ -25,6 +25,6 @@ export const fingerprintTelemetryError = (
   error: unknown,
   { key, scope }: FingerprintTelemetryErrorOptions,
 ): string => {
-  const { type, fields } = capturedExceptionIdentity(error);
-  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: [{ type }], key, scopeIdentity: fingerprintExceptionScope(scope), fields }))}`;
+  const { types, fields } = capturedExceptionIdentity(error);
+  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: types.map((type) => ({ type })), key, scopeIdentity: fingerprintExceptionScope(scope), fields }))}`;
 };

@@ -12,6 +12,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
 } from "@stll/api-contract";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
@@ -438,7 +439,7 @@ const sanitizeExceptionEvent = (
     typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
   const http = apiErrorIdentity(properties);
   const fields = sanitizeFingerprintFields(properties["exception_fields"]);
-  const causalType = properties["exception_error_type"];
+  const causalTypes = properties["exception_error_types"];
   const declaredKey = properties["exception_key"];
   const key = isExceptionFingerprintKey(declaredKey)
     ? declaredKey
@@ -473,8 +474,14 @@ const sanitizeExceptionEvent = (
         key,
         scopeIdentity,
         entries:
-          typeof causalType === "string"
-            ? [{ type: normalizeTelemetryErrorTypeName(causalType) }]
+          Array.isArray(causalTypes) && causalTypes.length > 0
+            ? causalTypes
+                .slice(0, MAX_EXCEPTION_CAUSE_DEPTH)
+                .map((causalType) => ({
+                  type: normalizeTelemetryErrorTypeName(
+                    typeof causalType === "string" ? causalType : "",
+                  ),
+                }))
             : sanitizedList,
         fields,
         http,
@@ -894,7 +901,7 @@ export const createPostHogAnalytics = ({
         posthog.captureException(redacted, {
           exception_key: fingerprintKey,
           exception_scope: fingerprintExceptionScope(scope),
-          exception_error_type: identity.type,
+          exception_error_types: identity.types,
           exception_fields: identity.fields,
           ...errorContextProperties(context),
           ...telemetryAreaProperty(error),

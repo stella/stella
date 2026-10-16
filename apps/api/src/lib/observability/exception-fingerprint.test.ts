@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 import { assertProperty } from "@stll/property-testing";
 
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
@@ -76,7 +77,7 @@ test("typed reasons distinguish failures at the same owner", () => {
   }
 });
 
-test("unclassified cause wrappers do not change a declared failure path", () => {
+test("cause-chain shape distinguishes failures at the same declared path", () => {
   const error = new Error("failure");
   const wrapped = new Error("wrapper", { cause: error });
   expect(
@@ -84,7 +85,7 @@ test("unclassified cause wrappers do not change a declared failure path", () => 
       fingerprintKey: "owner.execute",
       scope: { type: "handler", handlerId: "owner.execute" },
     }),
-  ).toBe(
+  ).not.toBe(
     exceptionFingerprint(readEvidence(wrapped), {
       fingerprintKey: "owner.execute",
       scope: { type: "handler", handlerId: "owner.execute" },
@@ -107,21 +108,74 @@ const scopeArbitrary = fc.oneof(
   fc.record({ type: fc.constant("ingestion" as const), adapterKey: fc.uuid() }),
 );
 
-test("distinct execution scopes stay distinct across line shifts and rebuilds", () => {
+const errorClasses = {
+  Error,
+  TypeError,
+  ReferenceError,
+  RangeError,
+  SyntaxError,
+};
+const errorClassArbitrary = fc.constantFrom(
+  "Error",
+  "TypeError",
+  "ReferenceError",
+  "RangeError",
+  "SyntaxError",
+);
+
+const locatedChain = (
+  classes: (keyof typeof errorClasses)[],
+  location: { line: number; chunk: string },
+) => {
+  let cause: Error | undefined;
+  for (const name of classes.toReversed()) {
+    const error = new errorClasses[name]("failure", { cause });
+    error.stack = `${name}: failure\n    at owner (/app/${location.chunk}.js:${location.line}:51)`;
+    cause = error;
+  }
+  return cause;
+};
+
+test("scope or cause-class differences survive line shifts and rebuilds", () => {
   assertProperty(
-    "distinct execution scopes stay distinct across line shifts and rebuilds",
+    "scope or cause-class differences survive line shifts and rebuilds",
     fc.property(
       scopeArbitrary,
       scopeArbitrary,
+      fc.array(errorClassArbitrary, {
+        minLength: 1,
+        maxLength: MAX_EXCEPTION_CAUSE_DEPTH,
+      }),
       fc.nat(),
+      errorClassArbitrary,
+      fc.constantFrom("scope", "cause", "both"),
+      fc.nat({ max: 1_000_000 }),
       fc.uuid(),
-      (left, right, shift, chunk) => {
+      (
+        left,
+        right,
+        classes,
+        position,
+        replacement,
+        difference,
+        shift,
+        chunk,
+      ) => {
         fc.pre(JSON.stringify(left) !== JSON.stringify(right));
+        const changedIndex = position % classes.length;
+        fc.pre(classes.at(changedIndex) !== replacement);
+        const otherClasses = classes.map((name, index) =>
+          difference !== "scope" && index === changedIndex ? replacement : name,
+        );
+        const otherScope = difference === "cause" ? left : right;
         const evidence = readEvidence(
-          Object.assign(locatedError(10, "before"), { code: "EIO" }),
+          locatedChain(classes, { line: 10, chunk: "before" }),
+        );
+        const other = readEvidence(
+          locatedChain(otherClasses, { line: 10, chunk: "before" }),
         );
         const moved = readEvidence(
-          Object.assign(locatedError(11 + shift, chunk), { code: "EIO" }),
+          locatedChain(classes, { line: 11 + shift, chunk }),
         );
         const fingerprintKey = "shared.reportFailure";
         const first = exceptionFingerprint(evidence, {
@@ -129,7 +183,7 @@ test("distinct execution scopes stay distinct across line shifts and rebuilds", 
           scope: left,
         });
         expect(first).not.toBe(
-          exceptionFingerprint(evidence, { fingerprintKey, scope: right }),
+          exceptionFingerprint(other, { fingerprintKey, scope: otherScope }),
         );
         expect(first).toBe(
           exceptionFingerprint(moved, { fingerprintKey, scope: left }),
@@ -145,10 +199,10 @@ test("distinct execution scopes stay distinct across line shifts and rebuilds", 
             inheritedScopes: [left],
           }),
         ).not.toBe(
-          exceptionFingerprint(evidence, {
+          exceptionFingerprint(other, {
             fingerprintKey,
             scope: helperScope,
-            inheritedScopes: [right],
+            inheritedScopes: [otherScope],
           }),
         );
       },

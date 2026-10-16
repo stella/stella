@@ -1,5 +1,9 @@
 import { Result } from "better-result";
 
+import {
+  exceptionCauseChainIdentity,
+  MAX_EXCEPTION_CAUSE_DEPTH,
+} from "@stll/errors/exception-cause-chain";
 import type { ExceptionScope } from "@stll/errors/exception-scope";
 import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
 import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
@@ -34,8 +38,7 @@ type ExceptionFingerprintInput = {
   fields?: Readonly<Record<string, string>> | undefined;
 };
 
-// The innermost cause survives wrappers added by reporting boundaries. The
-// explicit owner/path survives source moves, minification and code splitting.
+// Every causal class participates; source positions and messages do not.
 export const fingerprintExceptionEvent = ({
   entries,
   key,
@@ -44,7 +47,13 @@ export const fingerprintExceptionEvent = ({
   fields,
 }: ExceptionFingerprintInput): string =>
   JSON.stringify([
-    entries.at(-1)?.type ?? "UnknownError",
+    exceptionCauseChainIdentity({
+      root: 0,
+      readNode: (index) => ({
+        type: entries.at(index)?.type ?? "UnknownError",
+        cause: index + 1 < entries.length ? index + 1 : undefined,
+      }),
+    }),
     key,
     scopeIdentity,
     http?.status ?? null,
@@ -58,7 +67,6 @@ export const fingerprintExceptionEvent = ({
   ]);
 
 /** Read classifications before stack redaction removes error objects and causes. */
-const MAX_CAUSE_DEPTH = 6;
 const MAX_PROTOTYPE_DEPTH = 16;
 
 export const capturedExceptionIdentity = (error: unknown) =>
@@ -80,14 +88,15 @@ export const capturedExceptionIdentity = (error: unknown) =>
       cached.set(key, result);
       return result;
     };
-    let type = telemetryErrorType(current);
+    const types: string[] = [];
     while (
       current instanceof Error &&
       !seen.has(current) &&
-      seen.size < MAX_CAUSE_DEPTH
+      seen.size < MAX_EXCEPTION_CAUSE_DEPTH
     ) {
       seen.add(current);
-      type = telemetryErrorType(current);
+      const type = telemetryErrorType(current);
+      types.push(type);
       const prototypes: object[] = [];
       let prototype: unknown = Object.getPrototypeOf(current);
       while (
@@ -108,8 +117,11 @@ export const capturedExceptionIdentity = (error: unknown) =>
       }
       current = current.cause;
     }
-    return { type, fields: Object.fromEntries(fields) };
-  }).unwrapOr({ type: "UnknownError", fields: {} });
+    return {
+      types: types.length > 0 ? types : [telemetryErrorType(error)],
+      fields: Object.fromEntries(fields),
+    };
+  }).unwrapOr({ types: ["UnknownError"], fields: {} });
 
 export const sanitizeFingerprintFields = (
   value: unknown,
