@@ -173,6 +173,7 @@
       "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
+      "inScoring": "Pontozásban",
       "includeInScoring": "Bevonás a pontozásba",
       "interpretationNote": "Értelmezési megjegyzés",
       "interpretationNotePlaceholder": "Ha e bizonyíték jelentése vitatott, írja le, miben. Ha nem, hagyja üresen.",
@@ -748,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
+        "retryAfter": "{time} után újra megpróbálhatja.",
         "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}",
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
@@ -1301,6 +1303,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {és még #} other {és még #}}"
     },
+    "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
@@ -1332,6 +1335,7 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "messageUnavailable": "Ez az üzenet nem jeleníthető meg.",
     "mockModel": {
       "description": "Előre megírt válaszok a helyi szimulált modelltől",
       "label": "Szimulált AI"
@@ -1497,6 +1501,7 @@
     },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
+      "add_matter_member": "Ügytag hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
       "ares_lookup_company": "Cégadatok keresése",
       "ares_search_companies": "Cégadatok keresése",
@@ -1553,7 +1558,6 @@
       "list_stories": "Dokumentumrészek listázása",
       "list_templates": "Sablonok listázása",
       "load-skill": "Útmutató olvasása",
-      "manage_organization": "Szervezet kezelése",
       "read-contact": "Kapcsolat olvasása",
       "read-content-across-matters": "Tartalom olvasása az ügyek között",
       "read-skill-resource": "Útmutató olvasása",
@@ -1563,6 +1567,7 @@
       "read_section": "Szakasz olvasása",
       "read_story": "Dokumentumrész olvasása",
       "remember": "Mentés a memóriába",
+      "remove_matter_member": "Ügytag eltávolítása",
       "reply_comment": "Megjegyzés megválaszolása",
       "request_secret": "Privát hitelesítő adat kérése",
       "resolve_comment": "Megjegyzés megoldása",
@@ -1596,6 +1601,7 @@
       "suggest_template_fields": "Sablonmezők javaslása",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",
+      "update_organization_settings": "Csapatbeállítások frissítése",
       "update_reader_annotation": "Kiemelés vagy megjegyzés szerkesztése",
       "use-browser": "A böngésző használata",
       "use_connector_secret": "A csatlakozó hitelesítő adatának használata",
@@ -2561,6 +2567,10 @@
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot.",
+      "validationInvalid": "Egy mező olyan értéket tartalmaz, amely nem menthető.",
+      "validationRequired": "Egy kötelező mező üres.",
+      "validationTooLong": "Túl hosszú: legfeljebb {limit, number} karakter lehet.",
+      "validationTooShort": "Túl rövid: legalább {limit, number} karakter kell.",
       "verificationActiveLimitReached": "A szervezet elérte az egyidejű ellenőrzések számának korlátját. Várja meg egy ellenőrzés befejezését, majd próbálja újra.",
       "verificationDailyLimitReached": "A szervezet elérte az ellenőrzések napi korlátját. Próbálja újra éjfél után (Europe/Prague).",
       "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
@@ -4521,6 +4531,25 @@
     },
     "tokenHelp": "Token beszerzése",
     "viewOnGithub": "Megtekintés GitHubon"
+  },
+  "readerAnswers": {
+    "budgetError": "A válaszokra szánt keret kimerült.",
+    "citation": "¶{paragraph}",
+    "expand": "Válasz kibontása",
+    "explain": "Magyarázat",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Kiegészítő kérdés feltevése",
+    "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
+    "loading": "Válasz generálása…",
+    "minimise": "Válasz összecsukása",
+    "modelError": "A modell nem tudta befejezni ezt a választ.",
+    "networkError": "A kapcsolat megszakadt. Próbálja újra.",
+    "regenerate": "Válasz újragenerálása",
+    "selectionError": "Jelöljön ki szöveget egyetlen bekezdésen belül (legfeljebb 2000 karaktert).",
+    "send": "Kiegészítő kérdés küldése",
+    "share": "Megosztás a csapattal",
+    "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
+    "title": "Válasz a kijelölt szövegről"
   },
   "routeError": {
     "backToMatters": "Vissza az ügyekhez",

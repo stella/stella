@@ -20,6 +20,7 @@ import type {
   ScreeningQuery,
   ScreeningQueryError,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "@stll/sanctions";
 
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
@@ -40,7 +41,10 @@ import type {
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
-import { reportSanctionsScreeningFailure } from "./screening-failure";
+import {
+  reportSanctionsScreeningFailure,
+  reportSanctionsScreeningWork,
+} from "./screening-failure";
 import type { SanctionsScreeningFailureCause } from "./screening-failure";
 
 // One screening service for every surface that screens a name: the
@@ -354,6 +358,7 @@ type SanctionsListMatcher = (props: {
   edition: SanctionsActiveEdition;
   query: ScreeningQuery;
   limit: number;
+  onWork: (usage: ScreeningWorkUsage) => void;
 }) =>
   | Result<ScreeningResult, SanctionsListMatchFailure>
   | Promise<Result<ScreeningResult, SanctionsListMatchFailure>>;
@@ -392,6 +397,9 @@ const screenList = async ({
     resultMode === "complete"
       ? Math.max(1, edition.entryCount)
       : SANCTIONS_MATCH_LIMIT;
+  const onWork = (usage: ScreeningWorkUsage) => {
+    reportSanctionsScreeningWork({ source: freshness.source, ...usage });
+  };
   const matched = await Result.tryPromise(async () => {
     if (matcher !== undefined) {
       return await matcher({
@@ -400,6 +408,7 @@ const screenList = async ({
         edition,
         query,
         limit,
+        onWork,
       });
     }
     const index = await indexCache.get({
@@ -417,6 +426,7 @@ const screenList = async ({
     const screened = screen(index.value, query, {
       cutoff: DEFAULT_CUTOFF,
       limit,
+      onWork,
     });
     if (screened.isErr()) {
       if (screened.error.code === "work-limit") {

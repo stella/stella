@@ -27,8 +27,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -52,10 +50,10 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
-  COMPACTION_GENERATION_POLICY,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
+  compactionGenerationRequest,
   estimateTextTokens,
   renderTaggedValue,
   safeStringify,
@@ -164,7 +162,6 @@ type RunChatThreadCompactionOptions = {
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
-  reasoningEffort?: ReasoningEffort | undefined;
   safeDb: SafeDb;
   /** Test seam. Defaults to the real structured-summary model call. */
   summarize?: ChatCompactionSummarize | undefined;
@@ -693,14 +690,12 @@ const createModelSummarizer =
         role: "chat",
         scopeKey: null,
       }),
-      ...COMPACTION_GENERATION_POLICY,
+      ...compactionGenerationRequest(renderIncrementalCompactionPrompt(prompt)),
       modelId: options.modelId,
       organizationId: options.organizationId,
       admission: options.admission,
       orgAIConfig: options.orgAIConfig,
       managedAIResidency: options.managedAIResidency,
-      reasoningEffort: options.reasoningEffort,
-      prompt: renderIncrementalCompactionPrompt(prompt),
       role: "chat",
       serviceTier: "batch",
       system: CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
@@ -901,8 +896,12 @@ const estimateDeltaPartTokens = (part: unknown): number => {
   return estimateTextTokens(safeStringify(part));
 };
 
-const deltaMessageParts = (message: DeltaMessage): unknown[] =>
-  Array.isArray(message.content.data) ? message.content.data : [];
+const deltaMessageParts = (message: DeltaMessage): unknown[] => {
+  if (!Array.isArray(message.content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
+  return message.content.data;
+};
 
 /**
  * Render the summarized slice for the model. Deliberately the same envelope
@@ -961,8 +960,7 @@ const partTypeTag = (part: unknown): string => {
 };
 
 /**
- * Text of a persisted part, across both persisted content versions (`content`
- * in v2, `text` in the legacy v1 payload). Returns null for non-text parts.
+ * Text of a persisted v3 part. Returns null for non-text parts.
  */
 const persistedTextPartContent = (part: unknown): string | null => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
@@ -974,9 +972,6 @@ const persistedTextPartContent = (part: unknown): string | null => {
   if ("content" in part && typeof part.content === "string") {
     return part.content;
   }
-  if ("text" in part && typeof part.text === "string") {
-    return part.text;
-  }
   return null;
 };
 
@@ -984,7 +979,7 @@ const isPersistedAttachmentPart = (part: unknown): boolean => {
   if (typeof part !== "object" || part === null || !("type" in part)) {
     return false;
   }
-  return part.type === "file" || part.type === "image";
+  return part.type === "document" || part.type === "image";
 };
 
 /**

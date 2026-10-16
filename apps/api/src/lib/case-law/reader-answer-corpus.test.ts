@@ -78,6 +78,7 @@ describe("private reader answer corpus excerpts", () => {
           decisionId,
           audience: "model",
           phase: "blocks",
+          surface: "search",
         });
         return source({ decisionId, texts: ["Civil liability"] });
       },

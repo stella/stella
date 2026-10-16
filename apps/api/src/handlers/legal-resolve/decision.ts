@@ -147,6 +147,7 @@ const resolvedDecision = async (
     decisionId: row.id,
     phase: "blocks",
     audience: "model",
+    surface: "search",
   });
   const readerUrl = buildCaseLawDecisionUrl({
     caseNumber: row.caseNumber,

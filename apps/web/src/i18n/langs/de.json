@@ -173,6 +173,7 @@
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
       "heldForReview": "Zur Prüfung zurückgestellt",
       "holdOutOfScoring": "Aus der Bewertung ausschließen",
+      "inScoring": "In der Bewertung",
       "includeInScoring": "In die Bewertung einbeziehen",
       "interpretationNote": "Notiz zur Auslegung",
       "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",
@@ -748,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
+        "retryAfter": "Sie können es ab {time} erneut versuchen.",
         "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
         "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
@@ -1301,6 +1303,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
     },
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
@@ -1332,6 +1335,7 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "messageUnavailable": "Diese Nachricht kann nicht angezeigt werden.",
     "mockModel": {
       "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
       "label": "Simulierte KI"
@@ -1497,6 +1501,7 @@
     },
     "tool": {
       "add_comment": "Kommentar hinzufügen",
+      "add_matter_member": "Aktenmitglied hinzufügen",
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
       "ares_lookup_company": "Firmendaten suchen",
       "ares_search_companies": "Firmendaten suchen",
@@ -1553,7 +1558,6 @@
       "list_stories": "Dokumentteile auflisten",
       "list_templates": "Vorlagen auflisten",
       "load-skill": "Hinweise lesen",
-      "manage_organization": "Organisation verwalten",
       "read-contact": "Kontakt lesen",
       "read-content-across-matters": "Inhalte aktenübergreifend lesen",
       "read-skill-resource": "Hinweise lesen",
@@ -1563,6 +1567,7 @@
       "read_section": "Abschnitt lesen",
       "read_story": "Dokumentteil lesen",
       "remember": "Erinnerung speichern",
+      "remove_matter_member": "Aktenmitglied entfernen",
       "reply_comment": "Auf Kommentar antworten",
       "request_secret": "Private Zugangsdaten anfordern",
       "resolve_comment": "Kommentar erledigen",
@@ -1596,6 +1601,7 @@
       "suggest_template_fields": "Vorlagenfelder werden vorgeschlagen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",
+      "update_organization_settings": "Teameinstellungen aktualisieren",
       "update_reader_annotation": "Hervorhebung oder Kommentar bearbeiten",
       "use-browser": "Ihren Browser verwenden",
       "use_connector_secret": "Zugangsdaten des Connectors verwenden",
@@ -2561,6 +2567,10 @@
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "validationInvalid": "Ein Feld enthält einen Wert, der nicht gespeichert werden kann.",
+      "validationRequired": "Ein Pflichtfeld ist leer.",
+      "validationTooLong": "Zu lang: höchstens {limit, number} Zeichen.",
+      "validationTooShort": "Zu kurz: mindestens {limit, number} Zeichen.",
       "verificationActiveLimitReached": "Ihre Organisation hat das Limit für gleichzeitige Überprüfungen erreicht. Warten Sie, bis eine Überprüfung abgeschlossen ist, und versuchen Sie es erneut.",
       "verificationDailyLimitReached": "Ihre Organisation hat das Tageslimit für Überprüfungen erreicht. Versuchen Sie es nach Mitternacht (Europe/Prague) erneut.",
       "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
@@ -4521,6 +4531,25 @@
     },
     "tokenHelp": "So erhalten Sie ein Token",
     "viewOnGithub": "Auf GitHub ansehen"
+  },
+  "readerAnswers": {
+    "budgetError": "Das Budget für Antworten ist aufgebraucht.",
+    "citation": "¶{paragraph}",
+    "expand": "Antwort aufklappen",
+    "explain": "Erklären",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Rückfrage stellen",
+    "invalidCitations": "{count, plural, one {# Fundstelle konnte nicht überprüft werden.} other {# Fundstellen konnten nicht überprüft werden.}}",
+    "loading": "Antwort wird generiert…",
+    "minimise": "Antwort einklappen",
+    "modelError": "Das Modell konnte diese Antwort nicht fertigstellen.",
+    "networkError": "Die Verbindung wurde unterbrochen. Versuchen Sie es erneut.",
+    "regenerate": "Antwort neu generieren",
+    "selectionError": "Wählen Sie Text innerhalb eines einzelnen Absatzes aus (bis zu 2.000 Zeichen).",
+    "send": "Rückfrage senden",
+    "share": "Mit dem Team teilen",
+    "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
+    "title": "Antwort zum ausgewählten Text"
   },
   "routeError": {
     "backToMatters": "Zu den Akten zurückkehren",

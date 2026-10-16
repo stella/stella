@@ -114,6 +114,7 @@ const readableDecisionWith =
       decisionId: row().id,
       phase: "blocks",
       audience: "model",
+      surface: "search",
     });
     if (base?.status !== "read") {
       return panic("Fixture decision is not readable");
@@ -149,6 +150,7 @@ const licensedDecision: typeof readDecisionReaderSource = async () => {
     decisionId: row().id,
     phase: "blocks",
     audience: "model",
+    surface: "search",
   });
   if (readable?.status !== "read") {
     return panic("Fixture decision is not readable");
@@ -461,6 +463,7 @@ describe("decision legal resolution", () => {
         decisionId: row().id,
         phase: "blocks",
         audience: "model",
+        surface: "search",
       });
       if (readable?.status !== "read") {
         return panic("Fixture decision is not readable");

@@ -28,6 +28,7 @@ import { corpusYearRanges } from "@/api/lib/legal-search/corpus-index-search-fac
 import { foldCorpusTerm } from "@/api/lib/legal-search/corpus-passage-highlight";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
+import { LIMITS } from "@/api/lib/limits";
 
 // Opt-in like the existing engine suites; record build identity with every
 // contract and benchmark so measurements remain attributable to one engine.
@@ -736,6 +737,43 @@ describe.skipIf(!RUN_ENGINE)("query features on stock 0.9.0", () => {
       expect(result.timed_out).toBe(false);
       expect(result._shards.failed).toBe(0);
     }
+  });
+
+  test("a query-string term set on document_id narrows to quoted ids, at the id-set bound", async () => {
+    // The shape caseLawCorpusQuery emits for a provision's citing decisions:
+    // quoted ids inside `IN [...]`, ANDed onto the content clause.
+    const narrowed = await search({
+      query: {
+        query_string: {
+          query: `text:"alpha" AND document_id: IN [${[13, 20]
+            .map((key) => `"${documentId(key)}"`)
+            .join(" ")}]`,
+          default_operator: "AND",
+        },
+      },
+      sort: ["passage_key"],
+    });
+    expect(keys(narrowed)).toEqual([13, 20]);
+
+    // At the configured bound the query string stays under the stock
+    // one-MiB request limit and still narrows exactly.
+    const ids = [
+      documentId(17),
+      ...Array.from(
+        { length: LIMITS.caseLawProvisionIdSetMax - 1 },
+        (_, position) => documentId(200_000 + position),
+      ),
+    ];
+    const query = `text:"alpha" AND document_id: IN [${ids
+      .map((id) => `"${id}"`)
+      .join(" ")}]`;
+    expect(new TextEncoder().encode(query).length).toBeLessThan(1024 * 1024);
+    const bounded = await search({
+      query: { query_string: { query, default_operator: "AND" } },
+      sort: ["passage_key"],
+    });
+    expect(keys(bounded)).toEqual([17]);
+    expect(bounded.timed_out).toBe(false);
   });
 
   test("minimum_should_match counts distinct content groups and preserves required clauses", async () => {

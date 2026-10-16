@@ -99,6 +99,7 @@ if (!databaseUrl || !runPostgresTests) {
       const page = async (cursor?: string) =>
         (await withRedistributableSubject(
           readDb,
+          "pages",
           { kind: "id", id: decisionId },
           async (subject) =>
             await listDecisionProvisionsHandler({
