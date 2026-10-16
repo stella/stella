@@ -14,6 +14,11 @@ import {
   runSelfTest,
 } from "./suppression-waivers";
 
+const optionValue = (name: string): string | undefined => {
+  const index = process.argv.indexOf(name);
+  return index === -1 ? undefined : process.argv.at(index + 1);
+};
+
 const main = (): number => {
   if (process.argv.includes("--self-test")) {
     return runSelfTest();
@@ -22,7 +27,7 @@ const main = (): number => {
     return runSeed();
   }
   if (process.argv.includes("--check")) {
-    return runCheck(readExpiryCheckScope());
+    return runCheck(readExpiryCheckScope(), optionValue("--ledger"));
   }
   return runReport();
 };

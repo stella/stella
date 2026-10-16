@@ -21,11 +21,11 @@
 // document.
 //
 // Modes:
-//   bun scripts/suppression-waivers.ts            report the ledger vs the tree
-//   bun scripts/suppression-waivers.ts --check    CI gate (exit 1 on drift)
-//   bun scripts/suppression-waivers.ts --seed     draft entries for undeclared
+//   bun scripts/suppression-waivers-cli.ts            report the ledger vs the tree
+//   bun scripts/suppression-waivers-cli.ts --check    CI gate (exit 1 on drift)
+//   bun scripts/suppression-waivers-cli.ts --seed     draft entries for undeclared
 //                                                 directives, for hand review
-//   bun scripts/suppression-waivers.ts --self-test prove the guard still fires
+//   bun scripts/suppression-waivers-cli.ts --self-test prove the guard still fires
 //
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
 // alongside the ratchet guard.
@@ -56,7 +56,7 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const LEDGER_PATH = path.resolve(SCRIPTS_DIR, "suppression-waivers.json");
 const LEDGER_REL = "scripts/suppression-waivers.json";
-const SEED_HINT = "bun scripts/suppression-waivers.ts --seed";
+const SEED_HINT = "bun scripts/suppression-waivers-cli.ts --seed";
 
 // --- Ledger shape -----------------------------------------------------------
 
@@ -450,9 +450,9 @@ export const inspectLedger = ({
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-const readLedger = (): Ledger => {
+const readLedger = (ledgerPath = LEDGER_PATH): Ledger => {
   const parsed = Result.try((): unknown =>
-    JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
+    JSON.parse(readFileSync(ledgerPath, "utf-8")),
   );
   if (Result.isError(parsed)) {
     panic(`${LEDGER_REL} is not valid JSON`);
@@ -469,8 +469,11 @@ const observeRepo = (root: string): Observation =>
     readFileSync(path.join(root, file), "utf-8"),
   );
 
-export const runCheck = (expiryScope: ExpiryCheckScope): number => {
-  const ledger = readLedger();
+export const runCheck = (
+  expiryScope: ExpiryCheckScope,
+  ledgerPath = LEDGER_PATH,
+): number => {
+  const ledger = readLedger(ledgerPath);
   const errors = inspectLedger({
     ledger,
     observation: observeRepo(REPO_ROOT),
@@ -975,3 +978,10 @@ export const runSelfTest = (): number => {
   console.log("suppression-waivers --self-test: PASS");
   return 0;
 };
+
+if (import.meta.main) {
+  console.error(
+    "suppression-waivers.ts is an import-only module; run scripts/suppression-waivers-cli.ts instead.",
+  );
+  process.exit(1);
+}

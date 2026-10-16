@@ -59,6 +59,44 @@ test("new check invocations cannot bypass the offline preload in nested shell or
   expect(offlineCheckViolations(protectedChecks, [])).toEqual([]);
 });
 
+test("every suppression check exception rejects an invalid ledger through its declared CLI", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "suppression-probe-"));
+  const ledger = path.join(directory, "invalid.json");
+  writeFileSync(ledger, '{"waivers": "not-an-array"}\n');
+  try {
+    const commands = exceptions()
+      .map(({ command }) => command)
+      .filter((command) => command.includes("suppression-waivers"));
+    expect(commands.length).toBeGreaterThan(0);
+    for (const serialized of commands) {
+      const command: unknown = JSON.parse(serialized);
+      expect(Array.isArray(command)).toBe(true);
+      if (!Array.isArray(command)) {
+        panic("Suppression probe command is not an argument array");
+      }
+      const result = Bun.spawnSync([...command, "--ledger", ledger], {
+        cwd: root,
+      });
+      expect(result.exitCode, serialized).not.toBe(0);
+      expect(result.stderr.toString(), serialized).toContain(
+        'must be an object with a "waivers" array',
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the import-only suppression module refuses direct execution", () => {
+  const result = Bun.spawnSync(["bun", "scripts/suppression-waivers.ts"], {
+    cwd: root,
+  });
+  expect(result.exitCode).not.toBe(0);
+  expect(result.stderr.toString()).toContain(
+    "run scripts/suppression-waivers-cli.ts instead",
+  );
+});
+
 test("the preload must precede the Bun entry and package-script arguments", () => {
   for (const run of [
     "bun scripts/planted-check.ts --check --preload ./scripts/offline-network-preload.ts",
