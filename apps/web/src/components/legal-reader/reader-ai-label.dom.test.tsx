@@ -7,6 +7,7 @@ import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
@@ -25,7 +26,7 @@ afterEach(() => {
   cleanup();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const disclosure = messages.aiDisclosure.caseLaw;
