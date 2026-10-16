@@ -18,10 +18,10 @@ import {
   censusScope,
   currentCensusSourceScopes,
   readCompletenessCensusQuery,
-  recordCompletenessCensus,
 } from "@/api/lib/case-law/completeness-census";
 import { CENSUS_CAPABILITIES } from "@/api/lib/case-law/completeness-census-capabilities";
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {

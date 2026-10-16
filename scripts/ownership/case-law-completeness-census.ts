@@ -5,12 +5,14 @@ export default {
   capability: "Comparing stored case law with publisher slice observations",
   owner: [
     "apps/api/src/lib/case-law/completeness-census.ts",
+    "apps/api/src/lib/case-law/completeness-census-writer.ts",
     "apps/api/src/lib/case-law/completeness-census-contract.ts",
     "apps/api/src/lib/case-law/completeness-census-values.ts",
     "apps/api/src/lib/case-law/completeness-census-capabilities.ts",
   ],
   summary:
-    "Normal reconciliation walks feed one leased, idempotent observation store. " +
+    "Normal reconciliation walks feed one leased, idempotent observation store through the private writer. " +
+    "Public readers import only the bounded aggregate read owner. " +
     "The owner counts stored identities and text, aggregates bounded year and worst-slice summaries, " +
     "and derives source and country verdicts. Missing slices and partial publisher scope cannot certify completeness.",
   enforcement: {

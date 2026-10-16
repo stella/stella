@@ -86,10 +86,8 @@ import {
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  censusScope,
-  recordCompletenessCensus,
-} from "@/api/lib/case-law/completeness-census";
+import { censusScope } from "@/api/lib/case-law/completeness-census";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import {
   rowHoldsDocument,

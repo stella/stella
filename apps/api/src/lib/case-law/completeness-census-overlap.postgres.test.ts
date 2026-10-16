@@ -6,11 +6,9 @@ import * as v from "valibot";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  readCompletenessCensusQuery,
-  recordCompletenessCensus,
-} from "@/api/lib/case-law/completeness-census";
+import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
 import { sourceCensusProjection } from "@/api/lib/case-law/completeness-census-contract";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

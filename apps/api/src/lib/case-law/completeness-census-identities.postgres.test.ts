@@ -10,10 +10,8 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  readCompletenessCensusQuery,
-  recordCompletenessCensus,
-} from "@/api/lib/case-law/completeness-census";
+import { readCompletenessCensusQuery } from "@/api/lib/case-law/completeness-census";
+import { recordCompletenessCensus } from "@/api/lib/case-law/completeness-census-writer";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

@@ -57,3 +57,8 @@ CREATE POLICY "public_law_reader_access" ON "case_law_completeness_census"
 GRANT SELECT ("source_id", "slice", "year", "outcome", "scope_status", "publisher_count",
   "stored_count", "text_count", "observed_at", "expected_slices", "evidence_ref")
   ON TABLE "case_law_completeness_census" TO "stella_public_law_reader";
+
+--> statement-breakpoint
+GRANT SELECT ON TABLE "case_law_completeness_census" TO stella;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion;
