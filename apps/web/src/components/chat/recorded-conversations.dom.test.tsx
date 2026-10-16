@@ -768,11 +768,15 @@ const storedToolGrant = (
   const [namespace, connector] = toolName.split("__");
   const external = namespace === "mcp" && connector !== undefined;
   return {
-    id: `00000000-0000-7000-8000-${String((storedToolGrantCount += 1)).padStart(12, "0")}`,
+    id: toSafeId<"chatToolGrant">(
+      `00000000-0000-7000-8000-${String((storedToolGrantCount += 1)).padStart(12, "0")}`,
+    ),
     scope: "conversation",
-    chatThreadId: threadId,
+    chatThreadId: toSafeId<"chatThread">(threadId),
     toolName: external ? null : toolName,
-    mcpConnectorId: external ? EXTERNAL_CONNECTOR_ID : null,
+    mcpConnectorId: external
+      ? toSafeId<"mcpConnector">(EXTERNAL_CONNECTOR_ID)
+      : null,
     mcpConnectorToolNamespace: external ? connector : null,
   };
 };
