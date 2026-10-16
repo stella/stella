@@ -13,10 +13,8 @@ const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_SWEEP_MS = 60 * 1000;
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_DRAIN_BYTES = 8 * MAX_REQUEST_BYTES;
-// Closing a socket that still holds unread upload bytes sends a reset, and a
-// reset can discard the 413 from the client's receive buffer before it is read.
-// After the 413 the server half-closes and discards what is still in flight for
-// this long, then drops the connection.
+// How long an unbounded upload is discarded after its 413 before the
+// connection is dropped (see sendErrorAndLinger).
 const LINGER_CLOSE_MS = 2000;
 
 const portValue = process.env["STELLA_DOCS_PORT"] ?? String(DEFAULT_PORT);
@@ -55,17 +53,19 @@ const sendJson = (response: ServerResponse, status: number, body: unknown) => {
   response.end(JSON.stringify(body));
 };
 
+const rpcError = (message: string, code: number) => ({
+  jsonrpc: "2.0",
+  error: { code, message },
+  id: null,
+});
+
 const sendError = (
   response: ServerResponse,
   status: number,
   message: string,
   code = -32_000,
 ) => {
-  sendJson(response, status, {
-    jsonrpc: "2.0",
-    error: { code, message },
-    id: null,
-  });
+  sendJson(response, status, rpcError(message, code));
 };
 
 // A client-side body fault (oversized or not JSON): answered as 413/400, not logged as a server failure.
@@ -87,6 +87,42 @@ class RequestBodyError extends Error {
     this.closeConnection = closeConnection;
   }
 }
+
+// Node destroys a `Connection: close` socket as soon as its response finishes,
+// and destroying it with unread upload bytes sends a reset that can discard the
+// answer from the client's receive buffer. So the whole answer is written, the
+// rest of the upload is discarded, and the response is ended only when the
+// upload stops or the linger window expires.
+const sendErrorAndLinger = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  error: RequestBodyError,
+) => {
+  const payload = JSON.stringify(rpcError(error.message, error.rpcCode));
+  response.writeHead(error.status, {
+    "content-type": "application/json",
+    "content-length": Buffer.byteLength(payload),
+    connection: "close",
+  });
+  response.write(payload);
+  let ended = false;
+  const end = () => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    response.end();
+  };
+  const linger = setTimeout(end, LINGER_CLOSE_MS);
+  linger.unref();
+  const endEarly = () => {
+    clearTimeout(linger);
+    end();
+  };
+  request.once("end", endEarly);
+  request.once("close", endEarly);
+  request.resume();
+};
 
 // Event-based on purpose: leaving a `for await` loop early destroys the request
 // (and its socket) under Node before the 413 could be written.
@@ -237,22 +273,9 @@ const handleHttpRequest = async (
     await transport.handleRequest(request, response, body);
   } catch (error) {
     if (error instanceof RequestBodyError) {
-      if (error.closeConnection) {
-        // Stop reading an unbounded upload: answer, half-close, discard what is in
-        // flight for a bounded time, then drop the connection.
-        response.setHeader("connection", "close");
-        response.on("finish", () => {
-          const { socket } = request;
-          const linger = setTimeout(() => {
-            socket.destroy();
-          }, LINGER_CLOSE_MS);
-          linger.unref();
-          socket.once("close", () => {
-            clearTimeout(linger);
-          });
-          socket.end();
-          request.resume();
-        });
+      if (error.closeConnection && !response.headersSent) {
+        sendErrorAndLinger(request, response, error);
+        return;
       }
       if (!response.headersSent) {
         sendError(response, error.status, error.message, error.rpcCode);

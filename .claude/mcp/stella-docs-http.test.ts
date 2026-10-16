@@ -222,8 +222,16 @@ describe("shared documentation MCP HTTP server", () => {
       // Ten MiB of a declared hundred: past the drain bound, and the upload never completes.
       socket.write(Buffer.alloc(10 * 1024 * 1024, 120));
     });
+    // Upload bytes keep arriving after the answer, as from a client that does
+    // not read until it has sent everything.
+    const keepUploading = setInterval(() => {
+      if (socket.writable) {
+        socket.write(Buffer.alloc(256 * 1024, 120));
+      }
+    }, 20);
     const socketClosed = new Promise<void>((resolve) => {
       socket.once("close", () => {
+        clearInterval(keepUploading);
         resolve();
       });
     });
