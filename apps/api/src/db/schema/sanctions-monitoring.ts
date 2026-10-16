@@ -246,6 +246,10 @@ export const sanctionsContactScreenings = p.pgTable(
       "sanctions_contact_screenings_clear_edition_check",
       sql`${table.status} <> 'clear' OR ${table.editionId} IS NOT NULL`,
     ),
+    p.check(
+      "sanctions_contact_screenings_incomplete_edition_check",
+      sql`${table.status} <> 'incomplete' OR ${table.editionId} IS NOT NULL`,
+    ),
     ...monitoringPolicies("sanctions_contact_screenings"),
   ],
 );

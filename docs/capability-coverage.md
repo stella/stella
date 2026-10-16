@@ -234,6 +234,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.lines.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update` |
 | `invoices.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_invoices` |
 | `invoices.pdf.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices pdf-export` |
+| `invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices prefill` |
 | `invoices.transition` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition` |
 | `invoices.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update` |
 
@@ -683,7 +684,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-| assistant_chat | 16 |
+| assistant_chat | 17 |
 | auth_plumbing | 32 |
 | billing_ui | 1 |
 | chat_thread_ui | 11 |

@@ -633,6 +633,9 @@ export const sellerProfiles = p.pgTable(
     legalName: p.varchar("legal_name", { length: 512 }).notNull(),
     registrationId: p.varchar("registration_id", { length: 64 }),
     vatId: p.varchar("vat_id", { length: 64 }),
+    // Whether the issuer charges VAT. A VAT ID alone does not decide it: a
+    // registered person who is not a payer has one and must not charge VAT.
+    vatPayer: p.boolean("vat_payer").notNull().default(false),
     addressLine1: p.varchar("address_line_1", { length: 512 }),
     addressLine2: p.varchar("address_line_2", { length: 512 }),
     city: p.varchar({ length: 256 }),
@@ -664,6 +667,10 @@ export const sellerProfiles = p.pgTable(
     p.check(
       "seller_profiles_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    p.check(
+      "seller_profiles_vat_payer_check",
+      sql`NOT ${table.vatPayer} OR btrim(coalesce(${table.vatId}, '')) <> ''`,
     ),
     ...orgPolicies(),
   ],
