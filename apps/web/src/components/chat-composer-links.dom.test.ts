@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Editor as TipTapEditor } from "@tiptap/core";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { Editor, Node } = await import("@tiptap/core");
 const { default: Document } = await import("@tiptap/extension-document");
@@ -52,7 +54,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("composer links are live safe anchors without changing draft or send bytes", () => {

@@ -227,27 +227,47 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
       <ChatDecisionCitation {...decisionProps} decisionId={decisionId} />
     );
   }
-  // The sources tray keeps its chip shell and title truncation below.
-  if (citation.type === "external" && props.appearance !== "tray") {
-    return citation.url === null ? (
-      <span>{props.children}</span>
-    ) : (
-      <ChatLink
-        href={props.externalHref ?? citation.url}
-        newTabLabel={t("common.openInNewTab")}
-      >
-        {props.children}
-      </ChatLink>
-    );
+  switch (citation.type) {
+    case "external": {
+      const label =
+        props.appearance === "tray" ? (
+          <BidiText as="span" className="max-w-[20ch] truncate">
+            {props.children}
+          </BidiText>
+        ) : (
+          props.children
+        );
+      const link =
+        citation.url === null ? (
+          <span>{label}</span>
+        ) : (
+          <ChatLink
+            href={props.externalHref ?? citation.url}
+            newTabLabel={t("common.openInNewTab")}
+          >
+            {label}
+          </ChatLink>
+        );
+      return props.appearance === "tray" ? (
+        <span className="bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs">
+          {link}
+        </span>
+      ) : (
+        link
+      );
+    }
+    case "statute":
+      return props.interactive ? (
+        <InteractiveLegalCitation
+          {...props}
+          citation={citation}
+          appOrigins={appOrigins}
+        />
+      ) : (
+        <LegalCitationView {...props} citation={citation} />
+      );
+    default:
+      citation satisfies never;
+      return panic("Unhandled legal citation type");
   }
-  if (props.interactive) {
-    return (
-      <InteractiveLegalCitation
-        {...props}
-        citation={citation}
-        appOrigins={appOrigins}
-      />
-    );
-  }
-  return <LegalCitationView {...props} citation={citation} />;
 };

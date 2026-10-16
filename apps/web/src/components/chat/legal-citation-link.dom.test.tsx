@@ -691,8 +691,10 @@ test("a long external source title stays inside its truncated tray chip", async 
   await waitFor(() => {
     const chip = view.getByRole("link", { name: title });
     expect(chip.getAttribute("href")).toBe(href);
-    expect(chip.className).toContain("rounded-md");
-    expect(chip.className).toContain("border");
+    expect(chip.getAttribute("target")).toBe("_blank");
+    expect(chip.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(chip.parentElement?.className).toContain("rounded-md");
+    expect(chip.parentElement?.className).toContain("border");
     const label = chip.querySelector(".truncate");
     expect(label?.className).toContain("max-w-[20ch]");
     expect(label?.textContent).toBe(title);
