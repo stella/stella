@@ -169,10 +169,15 @@ export const readContactSanctions = async (
       screening.editionId === source.edition.id &&
       screening.contactFingerprint === fingerprint
       ? [
-          and(
-            eq(sanctionsContactMatches.sourceId, source.source),
-            eq(sanctionsContactMatches.editionId, source.edition.id),
-          ),
+          // An incomplete screening records coverage only: it neither diffs
+          // nor lapses stored matches, so the active ones stay those of the
+          // last complete screening, whichever edition that screened.
+          screening.status === "incomplete"
+            ? eq(sanctionsContactMatches.sourceId, source.source)
+            : and(
+                eq(sanctionsContactMatches.sourceId, source.source),
+                eq(sanctionsContactMatches.editionId, source.edition.id),
+              ),
         ]
       : [];
   });
