@@ -3,6 +3,7 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import {
+  CENSUS_AGGREGATE_UNIT,
   CENSUS_OUTCOMES,
   CENSUS_SCOPE_STATUSES,
 } from "@/api/lib/case-law/completeness-census-values";
@@ -36,6 +37,10 @@ export type CensusSlice = Static<typeof censusSliceSchema>;
 
 export const sourceCensusSchema = t.Object(
   {
+    aggregateUnit: t.Literal(CENSUS_AGGREGATE_UNIT, {
+      description:
+        "Source and year totals count entries across slices, not distinct decisions; one decision can belong to several slices.",
+    }),
     verdict: t.UnionEnum(CENSUS_VERDICTS),
     scopeStatus: t.UnionEnum(CENSUS_SCOPE_STATUSES),
     outcome: t.UnionEnum(CENSUS_OUTCOMES),
@@ -70,6 +75,7 @@ export type SourceCensus = Static<typeof sourceCensusSchema>;
 
 // Checked against the public contract at every producer and projection call site.
 export const sourceCensusProjection = v.strictObject({
+  aggregateUnit: v.literal(CENSUS_AGGREGATE_UNIT),
   verdict: v.picklist(CENSUS_VERDICTS),
   scopeStatus: v.picklist(CENSUS_SCOPE_STATUSES),
   outcome: v.picklist(CENSUS_OUTCOMES),

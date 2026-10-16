@@ -1109,7 +1109,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: year ranges, last sync, publisher census counts, per-year summaries, worst slices, pending texts, and court breakdowns. censusVerdict is complete only when every expected slice is measured, held at least to its publisher count, and at least 99.9% has text; unmeasured is not complete. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: year ranges, last sync, publisher census counts, per-year summaries, worst slices, pending texts, and court breakdowns. censusVerdict is complete only when every expected slice is measured, held at least to its publisher count, and at least 99.9% has text; unmeasured is not complete. Source and year counts measure slice memberships; a decision may appear more than once. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({

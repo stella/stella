@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds the shared current-supplement merge predicate; existing decision document predicates and parser output are unchanged.
 /**
  * One definition of "this decision holds a document", shared by
  * everything that has to decide whether a payload is safe to overwrite,
@@ -11,11 +12,12 @@
  */
 
 import { notInArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { Column, SQL } from "drizzle-orm";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import type { caseLawDecisionSupplements } from "@/api/db/schema";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -27,19 +29,23 @@ import {
  * `jsonb_array_length` raises on a non-array, and these columns hold
  * `{}` (the empty-AST placeholder) as often as they hold a document.
  */
-const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
+const jsonbArrayLength = (column: Column | SQL) =>
   sql`coalesce(jsonb_array_length(case when jsonb_typeof(${column}) = 'array' then ${column} else '[]'::jsonb end), 0)`;
 
-type DecisionPayloadColumns = Pick<
-  typeof caseLawDecisions,
-  | "fulltext"
-  | "documentAst"
-  | "sections"
-  | "contentHash"
-  | "textS3Key"
-  | "normalizedS3Key"
-  | "astS3Key"
->;
+type DecisionPayloadColumns = {
+  [
+    Key in keyof Pick<
+      typeof caseLawDecisions,
+      | "fulltext"
+      | "documentAst"
+      | "sections"
+      | "contentHash"
+      | "textS3Key"
+      | "normalizedS3Key"
+      | "astS3Key"
+    >
+  ]: Column | SQL;
+};
 
 /**
  * Whether the row's own Postgres columns hold a document.
@@ -76,6 +82,17 @@ export const rowHoldsDocumentFor = (
 )`;
 
 export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
+
+/** A supplement is placed only when its judgment includes the current source version. */
+export const supplementIsMergedFor = ({
+  decisionId,
+  sourceHash,
+  mergedSourceHash,
+}: Pick<
+  typeof caseLawDecisionSupplements,
+  "decisionId" | "sourceHash" | "mergedSourceHash"
+>): SQL<boolean> =>
+  sql<boolean>`coalesce(${decisionId} is not null and ${mergedSourceHash} = ${sourceHash}, false)`;
 
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable

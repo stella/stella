@@ -4,10 +4,7 @@ import { and, count, eq, gte, lte, or, sql } from "drizzle-orm";
 import { chunk } from "@stll/concurrency/chunk";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  caseLawCompletenessCensus as census,
-  caseLawDecisions,
-} from "@/api/db/schema";
+import { caseLawCompletenessCensus as census } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
@@ -17,7 +14,8 @@ import {
   censusVerdictFromSummary,
 } from "@/api/lib/case-law/completeness-census-contract";
 import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { CENSUS_AGGREGATE_UNIT } from "@/api/lib/case-law/completeness-census-values";
+import { readStoredListingIdentities } from "@/api/lib/case-law/stored-listing-identities";
 import { lockCaseLawSourceIngestionLease } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -159,31 +157,25 @@ export const recordCompletenessCensus = async (
     ) {
       return;
     }
+    const identitiesByKey = new Map<string, ListingIdentity>();
+    for (const identity of options.identities) {
+      const key = listingIdentityKey(identity);
+      if (key !== null) {
+        identitiesByKey.set(key, identity);
+      }
+    }
     let storedCount = 0;
     let textCount = 0;
-    for (const batch of chunk(options.identities, CENSUS_IDENTITY_BATCH_SIZE)) {
-      const incoming = batch.map((identity) => ({
-        key: listingIdentityKey(identity),
-        documentId:
-          identity.type === "document" ? identity.sourceDocumentId : null,
-        caseNumber:
-          identity.type === "case-number" ? identity.caseNumber : null,
-        language: identity.type === "case-number" ? identity.language : null,
-      }));
+    for (const batch of chunk(
+      [...identitiesByKey.values()],
+      CENSUS_IDENTITY_BATCH_SIZE,
+    )) {
       // db-await-in-loop: bounded identity batches in one short observation transaction
-      const rows = await tx
-        .select({
-          key: sql<string>`incoming.key`,
-          withText: sql<boolean>`bool_or(${rowHoldsDocument})`,
-        })
-        .from(caseLawDecisions)
-        .innerJoin(
-          sql`jsonb_to_recordset(${JSON.stringify(incoming)}::text::jsonb) AS incoming(key text, "documentId" text, "caseNumber" text, language text)`,
-          sql`(${caseLawDecisions.sourceDocumentId} = incoming."documentId" OR (${caseLawDecisions.sourceDocumentId} IS NULL AND ${caseLawDecisions.caseNumber} = incoming."caseNumber" AND ${caseLawDecisions.language} = incoming.language))`,
-        )
-        .where(eq(caseLawDecisions.sourceId, options.sourceId))
-        .groupBy(sql`incoming.key`)
-        .limit(batch.length);
+      const rows = await readStoredListingIdentities({
+        tx,
+        sourceId: options.sourceId,
+        identities: batch,
+      });
       storedCount += rows.length;
       textCount += rows.filter(({ withText }) => withText).length;
     }
@@ -218,6 +210,7 @@ export const recordCompletenessCensus = async (
 };
 
 export const unmeasuredSourceCensus = (adapterKey: string): SourceCensus => ({
+  aggregateUnit: CENSUS_AGGREGATE_UNIT,
   verdict: "unmeasured",
   scopeStatus: "partial-publisher",
   outcome: censusCapabilityFor(adapterKey)?.type ?? "none-exposed",
@@ -361,6 +354,7 @@ export const readCompletenessCensusQuery = async (
       return [
         String(row.sourceId),
         {
+          aggregateUnit: CENSUS_AGGREGATE_UNIT,
           verdict: censusVerdictFromSummary({
             measuredSlices: row.measured,
             expectedSlices,

@@ -731,7 +731,11 @@ const SourceCensus = ({
           {t("caseLaw.coverage.censusComparison", {
             stored: format.number(census.stored),
             publisher: format.number(census.publisher),
+            withText: format.number(census.withText),
           })}
+          <span className="block">
+            {t("caseLaw.coverage.censusSliceMemberships")}
+          </span>
         </span>
       )}
       {census.observedAt !== null && <ObservedOn asOf={census.observedAt} />}

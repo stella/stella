@@ -900,9 +900,10 @@ type Messages = {
       "supreme": "Supreme courts";
     };
     "coverage": {
-      "censusComparison": "{stored} held / {publisher} published";
+      "censusComparison": "{stored} held / {publisher} published · {withText} with text";
       "censusComplete": "Complete";
       "censusIncomplete": "Incomplete";
+      "censusSliceMemberships": "Counts across slices; a decision may appear more than once.";
       "completeness": "Completeness";
       "countedOn": "Counted {date}";
       "courtsHeading": "By court";

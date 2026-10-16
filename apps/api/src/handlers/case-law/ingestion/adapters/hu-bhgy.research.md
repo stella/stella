@@ -188,6 +188,10 @@ handled by its courts.
 - Count surface: Count on the existing anonymous Search JSON response.
 - Integration constraint: A saturated Count is a ceiling, not an exact count. Keep the refusal. Kollegium is multi-valued, so totals across slices can overlap; compare identities within each slice instead of summing them as distinct corpus size.
 
+The source and year summaries expose `aggregateUnit: "slice-memberships"`.
+Their counts sum slice entries and do not claim a distinct-decision corpus size;
+the completeness verdict still compares each individual slice.
+
 ### Publisher-index-first check
 
 GET [https://eakta.birosag.hu/anonimizalt-hatarozatok](https://eakta.birosag.hu/anonimizalt-hatarozatok); query: publisher index or minimal listing,

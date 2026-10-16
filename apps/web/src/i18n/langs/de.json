@@ -897,9 +897,10 @@
       "supreme": "Oberste Gerichte"
     },
     "coverage": {
-      "censusComparison": "{stored} gespeichert / {publisher} veröffentlicht",
+      "censusComparison": "{stored} gespeichert / {publisher} veröffentlicht · {withText} mit Text",
       "censusComplete": "Vollständig",
       "censusIncomplete": "Unvollständig",
+      "censusSliceMemberships": "Summen über Teilbereiche; eine Entscheidung kann mehrfach gezählt werden.",
       "completeness": "Vollständigkeit",
       "countedOn": "Gezählt am {date}",
       "courtsHeading": "Nach Gericht",

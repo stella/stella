@@ -8,6 +8,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCompletenessCensus,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
 } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
@@ -20,6 +21,8 @@ import {
   recordCompletenessCensus,
 } from "@/api/lib/case-law/completeness-census";
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import type {
   ListingIdentity,
   SourceSliceWalk,
@@ -276,6 +279,194 @@ describe.skipIf(!enabled)(
           await db
             .delete(caseLawSources)
             .where(eq(caseLawSources.id, sourceId));
+        }
+      });
+    }, 120_000);
+
+    test("folded publisher identities count once and require a current same-source judgment for their text", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ??
+        panic("Postgres census test requires DATABASE_URL");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        const sourceId = createSafeId<"caseLawSource">();
+        const otherSourceId = createSafeId<"caseLawSource">();
+        const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
+        const judgmentId = createSafeId<"caseLawDecision">();
+        const otherJudgmentId = createSafeId<"caseLawDecision">();
+        const observedAt = new Date("2026-10-16T12:00:00Z");
+        const hash = "1".repeat(64);
+        const currentHash = "2".repeat(64);
+        await db.insert(caseLawSources).values(
+          [sourceId, otherSourceId].map((id) => ({
+            id,
+            adapterKey: `census-supplement-${id}`,
+            name: "Supplement census fixture",
+            ingestionLeaseToken: leaseToken,
+            ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+          })),
+        );
+        try {
+          await db.insert(caseLawDecisions).values([
+            {
+              id: judgmentId,
+              sourceId,
+              sourceDocumentId: "judgment",
+              caseNumber: "judgment",
+              court: "Fixture",
+              country: "POL",
+              language: "pl",
+              fulltext: "Judgment and folded reasons",
+            },
+            {
+              sourceId,
+              sourceDocumentId: "overlap",
+              caseNumber: "overlap",
+              court: "Fixture",
+              country: "POL",
+              language: "pl",
+              fulltext: "Standalone reasons",
+            },
+            {
+              id: otherJudgmentId,
+              sourceId: otherSourceId,
+              sourceDocumentId: "other",
+              caseNumber: "other",
+              court: "Fixture",
+              country: "POL",
+              language: "pl",
+              fulltext: "Another publisher judgment",
+            },
+          ]);
+          await db.insert(caseLawDecisionSupplements).values(
+            [
+              {
+                sourceDocumentId: "folded",
+                decisionId: judgmentId,
+                sourceHash: hash,
+                mergedSourceHash: hash,
+              },
+              {
+                sourceDocumentId: "overlap",
+                decisionId: judgmentId,
+                sourceHash: hash,
+                mergedSourceHash: hash,
+              },
+              {
+                sourceDocumentId: "stale",
+                decisionId: judgmentId,
+                sourceHash: currentHash,
+                mergedSourceHash: hash,
+              },
+              {
+                sourceDocumentId: "parked",
+                decisionId: null,
+                sourceHash: hash,
+                mergedSourceHash: null,
+              },
+              {
+                sourceDocumentId: "foreign",
+                decisionId: otherJudgmentId,
+                sourceHash: hash,
+                mergedSourceHash: hash,
+              },
+            ].map((row) => ({
+              ...row,
+              sourceId,
+              kind: DECISION_SUPPLEMENT_KIND.REASONS,
+              caseNumber: "judgment",
+              court: "Fixture",
+              language: "pl",
+              judgmentDecisionTypes: ["rozsudek"],
+              fulltext: "Written reasons",
+              documentAst: EMPTY_AST,
+              metadata: {},
+              observedAt,
+            })),
+          );
+          const identities = [
+            "judgment",
+            "folded",
+            "overlap",
+            "stale",
+            "parked",
+            "foreign",
+          ].map((sourceDocumentId) => ({
+            type: "document" as const,
+            sourceDocumentId,
+          }));
+          const scope = { first: "2026", last: "2026", expectedSlices: 1 };
+          const scopedDb: ScopedDb = async (callback) =>
+            await db.transaction(callback);
+          const record = async (at: Date) => {
+            await recordCompletenessCensus(scopedDb, {
+              sourceId,
+              leaseToken,
+              adapterKey: "pl-ncourt",
+              slice: "2026",
+              scope,
+              identities: [
+                ...identities,
+                ...Array.from({ length: 501 }, () => ({
+                  type: "document" as const,
+                  sourceDocumentId: "folded",
+                })),
+              ],
+              listed: identities.length,
+              publisherCount: identities.length,
+              observedAt: at,
+            });
+            const rows = await readCompletenessCensusQuery(db, [
+              { id: sourceId, scope },
+            ]);
+            return (
+              rows.get(String(sourceId)) ?? panic("Supplement census is absent")
+            );
+          };
+          expect(await record(observedAt)).toMatchObject({
+            verdict: "incomplete",
+            stored: 3,
+            withText: 3,
+            publisher: 6,
+          });
+          await db
+            .update(caseLawDecisionSupplements)
+            .set({ mergedSourceHash: currentHash })
+            .where(
+              sql`${caseLawDecisionSupplements.sourceId} = ${sourceId} AND ${caseLawDecisionSupplements.sourceDocumentId} = 'stale'`,
+            );
+          await db
+            .update(caseLawDecisionSupplements)
+            .set({ decisionId: judgmentId, mergedSourceHash: hash })
+            .where(
+              sql`${caseLawDecisionSupplements.sourceId} = ${sourceId} AND ${caseLawDecisionSupplements.sourceDocumentId} IN ('parked', 'foreign')`,
+            );
+          expect(
+            await record(new Date(observedAt.getTime() + 1)),
+          ).toMatchObject({
+            verdict: "complete",
+            stored: 6,
+            withText: 6,
+            publisher: 6,
+          });
+          await db
+            .update(caseLawDecisions)
+            .set({ fulltext: "" })
+            .where(eq(caseLawDecisions.id, judgmentId));
+          expect(
+            await record(new Date(observedAt.getTime() + 2)),
+          ).toMatchObject({
+            verdict: "incomplete",
+            stored: 6,
+            withText: 1,
+            publisher: 6,
+          });
+        } finally {
+          await db
+            .delete(caseLawSources)
+            .where(
+              sql`${caseLawSources.id} IN (${sourceId}, ${otherSourceId})`,
+            );
         }
       });
     }, 120_000);

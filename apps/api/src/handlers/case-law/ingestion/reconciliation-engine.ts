@@ -91,7 +91,10 @@ import {
   recordCompletenessCensus,
 } from "@/api/lib/case-law/completeness-census";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
-import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import {
+  rowHoldsDocument,
+  supplementIsMergedFor,
+} from "@/api/lib/case-law/stored-payload";
 import {
   errorFingerprint,
   errorSystemFields,
@@ -642,9 +645,7 @@ const selectHeldDocumentIds = async (
     supplements: await tx
       .select({
         sourceDocumentId: caseLawDecisionSupplements.sourceDocumentId,
-        decisionId: caseLawDecisionSupplements.decisionId,
-        sourceHash: caseLawDecisionSupplements.sourceHash,
-        mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+        merged: supplementIsMergedFor(caseLawDecisionSupplements),
       })
       .from(caseLawDecisionSupplements)
       .where(
@@ -660,12 +661,7 @@ const selectHeldDocumentIds = async (
   const supplementStateById = new Map(
     supplements.map(
       (row) =>
-        [
-          row.sourceDocumentId,
-          row.decisionId !== null && row.mergedSourceHash === row.sourceHash
-            ? "merged"
-            : "unmerged",
-        ] as const,
+        [row.sourceDocumentId, row.merged ? "merged" : "unmerged"] as const,
     ),
   );
   const rowsById = new Map(

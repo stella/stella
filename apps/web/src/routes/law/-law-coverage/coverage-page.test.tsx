@@ -12,6 +12,7 @@ import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
+import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
 import type {
@@ -57,6 +58,7 @@ const COUNTED_AT = "2026-09-17T00:00:00.000Z";
  * boundary the displayed percentage must never round up through.
  */
 const UNMEASURED_CENSUS = {
+  aggregateUnit: "slice-memberships",
   verdict: "unmeasured",
   scopeStatus: "full-publisher",
   outcome: "publisher-count",
@@ -288,6 +290,51 @@ describe("the coverage page states what it counts", () => {
       `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
     );
     expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
+  });
+
+  test("a text deficit stays visible when held and publisher counts agree, in English and Arabic", () => {
+    const coverage = {
+      ...COVERAGE,
+      countries: [
+        {
+          ...CZECHIA,
+          censusVerdict: "incomplete",
+          sources: [
+            {
+              ...NEARLY_COMPLETE,
+              census: {
+                ...UNMEASURED_CENSUS,
+                verdict: "incomplete",
+                measuredSlices: 1,
+                shortSlices: 1,
+                publisher: 1000,
+                stored: 1000,
+                withText: 998,
+                observedAt: OBSERVED_AT,
+              },
+            },
+          ],
+        },
+      ],
+    } satisfies CaseLawCoverage;
+    const english = render(<CaseLawCoveragePage coverage={coverage} />);
+    expect(english).toContain("1,000 held / 1,000 published · 998 with text");
+    expect(english).toContain(
+      "Counts across slices; a decision may appear more than once.",
+    );
+    expect(english).toContain(messages.caseLaw.coverage.censusIncomplete);
+
+    const arabic = render(
+      <IntlProvider locale="ar" messages={arabicMessages} timeZone="UTC">
+        <CaseLawCoveragePage coverage={coverage} />
+      </IntlProvider>,
+      "ar-u-nu-arab",
+    );
+    expect(arabic).toContain("١٬٠٠٠ محفوظة / ١٬٠٠٠ منشورة · ٩٩٨ بنص متاح");
+    expect(arabic).toContain(
+      "الأعداد مجمّعة حسب الفترات والفئات؛ وقد يظهر القرار أكثر من مرة.",
+    );
+    expect(arabic).toContain(arabicMessages.caseLaw.coverage.censusIncomplete);
   });
 
   test("freshness is a word, with the dot only beside it", () => {
