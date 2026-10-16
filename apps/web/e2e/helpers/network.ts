@@ -366,12 +366,10 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// Measurement intervention: hold each tracked API request before sending it.
-// Start with 250 ms: the 125 ms clustering window allows response parsing,
-// query settling and mounting jitter without relying on response end times.
-// Local shard calibration is required before claiming this margin is measured.
+// Measurement intervention: hold each tracked API request before sending it,
+// so a request that waits for another one launches at least this long after
+// it. Provisional until calibrated on a local shard.
 export const WATERFALL_REQUEST_DELAY_MS = 250;
-const WATERFALL_LAUNCH_CLUSTER_MS = WATERFALL_REQUEST_DELAY_MS / 2;
 // Leave 750 ms for server/processing work beyond the injected delay before
 // treating a later launch as idle prefetch rather than another load wave.
 const REQUEST_SEQUENCE_GAP_MS = WATERFALL_REQUEST_DELAY_MS + 750;
@@ -399,12 +397,14 @@ export type WaterfallInterval = {
   key?: string;
 };
 
-// Under the request hold above, dependent launches are separated by at least
-// D; launches within D/2 of a wave's first launch share a level. Anchor each
-// cluster at its first launch so a train of jitter cannot merge later waves.
-// Response ends never affect levels or idle-prefetch splits. This measures
-// launch waves under the intervention, not causality in an unmodified trace.
-// Ties retain the earliest deepest sequence; depth and diagnostics share it.
+// Under the request hold above, a request that depends on another launches at
+// least D after it. A request's level is therefore one more than the deepest
+// request in its sequence that launched at least D earlier: the longest chain
+// of D-separated launches. Parallel branches whose responses finish at
+// different speeds still reach the same level, and response ends never affect
+// levels or idle-prefetch splits. This measures launch chains under the
+// intervention, not causality in an unmodified trace. Ties retain the earliest
+// deepest sequence; depth and diagnostics share it.
 export const deepestWaterfallSequence = (
   intervals: WaterfallInterval[],
 ): string[][] => {
@@ -415,32 +415,36 @@ export const deepestWaterfallSequence = (
   }
   const keysOf = ({ key }: WaterfallInterval): string[] =>
     key === undefined ? [] : [key];
-  let currentLevel = keysOf(first);
-  let levels = [currentLevel];
+  let sequence: { start: number; level: number }[] = [];
+  let levels: string[][] = [];
   let best = levels;
-  let bestDepth = 1;
   let previousStart = first.start;
-  let levelStart = first.start;
 
-  for (const interval of sorted.slice(1)) {
+  for (const interval of sorted) {
     if (interval.start - previousStart > REQUEST_SEQUENCE_GAP_MS) {
-      currentLevel = keysOf(interval);
-      levels = [currentLevel];
-      levelStart = interval.start;
-    } else if (interval.start - levelStart >= WATERFALL_LAUNCH_CLUSTER_MS) {
-      currentLevel = keysOf(interval);
-      levels.push(currentLevel);
-      levelStart = interval.start;
-      if (levels.length > bestDepth) {
-        best = levels;
-        bestDepth = levels.length;
-      }
-    } else {
-      currentLevel.push(...keysOf(interval));
+      sequence = [];
+      levels = [];
     }
     previousStart = interval.start;
+    let deepestEarlier = 0;
+    for (const launched of sequence) {
+      if (interval.start - launched.start >= WATERFALL_REQUEST_DELAY_MS) {
+        deepestEarlier = Math.max(deepestEarlier, launched.level);
+      }
+    }
+    const level = deepestEarlier + 1;
+    sequence.push({ start: interval.start, level });
+    const levelKeys = levels[level - 1];
+    if (levelKeys === undefined) {
+      levels.push(keysOf(interval));
+    } else {
+      levelKeys.push(...keysOf(interval));
+    }
+    if (levels.length > best.length) {
+      best = levels;
+    }
   }
-  return best.slice(0, bestDepth);
+  return best;
 };
 
 export const waterfallDepth = (intervals: WaterfallInterval[]): number =>

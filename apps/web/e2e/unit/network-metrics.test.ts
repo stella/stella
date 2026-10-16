@@ -180,18 +180,40 @@ describe("controlled launch waves", () => {
     );
   });
 
-  test("clusters anchor at the first launch instead of chaining adjacent jitter", () => {
+  test("launches closer than the request delay share a level", () => {
     expect(
       waterfallDepth([
         { start: 0, end: 1000 },
         { start: 100, end: 1100 },
         { start: 200, end: 1200 },
       ]),
-    ).toBe(2);
+    ).toBe(1);
   });
 
-  test("the launch threshold is half the injected request delay", () => {
-    const threshold = WATERFALL_REQUEST_DELAY_MS / 2;
+  test("independent branches answering at different speeds keep one level each", () => {
+    const parents = [
+      { start: 0, end: 260, key: "GET /a" },
+      { start: 0, end: 460, key: "GET /b" },
+    ];
+    for (const children of [
+      [260, 260],
+      [260, 460],
+    ]) {
+      expect(
+        deepestWaterfallSequence([
+          ...parents,
+          { start: children[0] ?? 0, end: 2000, key: "GET /a/child" },
+          { start: children[1] ?? 0, end: 2000, key: "GET /b/child" },
+        ]),
+      ).toEqual([
+        ["GET /a", "GET /b"],
+        ["GET /a/child", "GET /b/child"],
+      ]);
+    }
+  });
+
+  test("the launch threshold is the injected request delay", () => {
+    const threshold = WATERFALL_REQUEST_DELAY_MS;
     expect(
       deepestWaterfallSequence([
         { start: 0, end: 1000, key: "first" },
