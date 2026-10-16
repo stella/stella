@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status.ts";
 
@@ -14,7 +13,7 @@ const CONFLICTING = "size-[1em] w-[2em]";
 
 const probe = async () => {
   const started = performance.now();
-  const phase = (name) =>
+  const phase = (name: string) =>
     process.stderr.write(
       `design-system probe: ${name} (${Math.round(performance.now() - started)}ms)\n`,
     );
@@ -26,47 +25,45 @@ const probe = async () => {
     import("../oxlint.config.ts"),
     import("oxlint-tailwindcss"),
   ]);
-  const reports = [];
-  const visitor = plugin.rules[RULE].createOnce({
-    cwd: ROOT,
-    filename: path.join(ROOT, "packages/chat/src/link.tsx"),
-    settings: config.settings,
-    options: [{}],
-    report: (diagnostic) => reports.push(diagnostic),
-  });
-  const check = (value) => {
-    const literal = { type: "Literal", value, range: [0, value.length + 2] };
-    const attribute = {
-      type: "JSXAttribute",
-      name: { type: "JSXIdentifier", name: "className" },
-      value: literal,
-      parent: {
-        type: "JSXOpeningElement",
-        name: { type: "JSXIdentifier", name: "span" },
-      },
-    };
-    visitor.JSXAttribute(attribute);
-  };
+  const { RuleTester } = await import("oxlint/plugins-dev");
+  const rule = plugin.rules[RULE];
+  assert.ok(rule, "the declarations rule must exist");
+  const tester = new RuleTester({ cwd: ROOT });
+  const filename = path.join(ROOT, "packages/chat/src/link.tsx");
   phase("app.css declarations worker");
-  check(BENIGN);
-  assert.deepEqual(
-    reports,
-    [],
-    "benign arbitrary classes must load without a worker failure",
-  );
-  check(CONFLICTING);
-  assert.equal(reports.length, 1, "the declaration comparison must execute");
-  const diagnostic = reports.at(0);
-  assert.equal(diagnostic.messageId, "conflictUnordered");
-  assert.equal(diagnostic.data.properties, '\"width\"');
+  tester.run(RULE, rule, {
+    valid: [
+      {
+        code: `<span className="${BENIGN}" />`,
+        filename,
+        settings: { tailwindcss: config.settings.tailwindcss },
+      },
+    ],
+    invalid: [
+      {
+        code: `<span className="${CONFLICTING}" />`,
+        filename,
+        settings: { tailwindcss: config.settings.tailwindcss },
+        errors: [
+          {
+            messageId: "conflictUnordered",
+            data: {
+              classA: "size-[1em]",
+              classB: "w-[2em]",
+              properties: '"width"',
+            },
+          },
+        ],
+      },
+    ],
+  });
   process.stdout.write(
     `${JSON.stringify({
       rule: RULE,
       elapsedMs: Math.round(performance.now() - started),
       runtime: process.version,
-      bun: process.versions.bun ?? null,
-      conflict: diagnostic.messageId,
-      properties: diagnostic.data.properties,
+      conflict: "conflictUnordered",
+      properties: '"width"',
     })}\n`,
   );
 };
@@ -77,15 +74,15 @@ if (process.argv.at(2) === CHILD_MODE) {
   const started = performance.now();
   const result = spawnSync(
     process.execPath,
-    [fileURLToPath(import.meta.url), CHILD_MODE],
+    [import.meta.filename, CHILD_MODE],
     {
       cwd: ROOT,
-      encoding: "utf8",
+      encoding: "utf-8",
       timeout: DEADLINE_MS,
       killSignal: "SIGKILL",
     },
   );
-  process.stderr.write(result.stderr ?? "");
+  process.stderr.write(result.stderr);
   const status = childExitStatus(result);
   if (status !== 0) {
     process.stderr.write(
