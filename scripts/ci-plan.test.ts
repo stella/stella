@@ -2881,13 +2881,9 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
     `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
   expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
+  // A skipped fast-required job fails the result: the fast-depth test proves
+  // that for every fast-required job, this one included.
   expect(fastRequired).toContain("ci-checks-rest");
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-checks-rest": "skipped" },
-    }),
-  ).toBe(1);
 
   const generators = GENERATORS.filter(({ id }) =>
     ["cli-registry", "cli-runtime"].includes(id),
