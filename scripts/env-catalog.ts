@@ -1570,6 +1570,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
   "RELEASE_PR_HEAD",
