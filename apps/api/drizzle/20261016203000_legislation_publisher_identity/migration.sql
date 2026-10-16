@@ -41,7 +41,8 @@ FOR EACH ROW EXECUTE FUNCTION "derive_legislation_document_identity_mode"();--> 
 CREATE OR REPLACE FUNCTION "guard_legislation_publisher_writer"()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 BEGIN
-  IF NEW.identity_mode = 'publisher-expression'
+  IF (NEW.identity_mode = 'publisher-expression'
+      OR (TG_OP = 'UPDATE' AND OLD.identity_mode = 'publisher-expression'))
      AND current_setting('stella.legislation_writer_contract', true) IS DISTINCT FROM 'expression-v2' THEN
     RAISE EXCEPTION 'publisher-identity source requires the current legislation writer' USING ERRCODE = 'check_violation';
   END IF;
@@ -51,7 +52,7 @@ $$;--> statement-breakpoint
 -- Runs after identity derivation (Postgres orders same-kind triggers by name).
 -- stella-migration-safety: reviewed drop-object - Recreates only this migration's writer fence on retry.
 DROP TRIGGER IF EXISTS "legislation_documents_publisher_writer_guard" ON "legislation_documents";--> statement-breakpoint
-CREATE TRIGGER "legislation_documents_publisher_writer_guard" BEFORE INSERT OR UPDATE OF "source_hash" ON "legislation_documents"
+CREATE TRIGGER "legislation_documents_publisher_writer_guard" BEFORE INSERT OR UPDATE OF "source_hash", "source_id", "identity_mode", "publisher_expression_id" ON "legislation_documents"
 FOR EACH ROW EXECUTE FUNCTION "guard_legislation_publisher_writer"();--> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-constraint - Replaces only this migration's CHECK on retry.
