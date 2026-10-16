@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
 import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
@@ -62,10 +63,7 @@ import {
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
 import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 import { useFormatter } from "@/i18n/formatting-context";
-import {
-  statuteActLabel,
-  statuteDocumentIdentity,
-} from "@/lib/legal/statute-act-number";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
 
 /** The icon each statute column wears in its header menu and the chooser. */

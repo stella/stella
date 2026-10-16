@@ -8,6 +8,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { setLang } from "@/i18n/change-language";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
@@ -17,7 +18,6 @@ import { detached } from "@/lib/detached";
 
 export const LanguagePicker = () => {
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
 
   return (
     <Menu>

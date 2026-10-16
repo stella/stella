@@ -311,7 +311,6 @@ type State = {
 };
 
 type Actions = {
-  setLang: (lang: SupportedLanguage) => Promise<void>;
   loadMessages: (lang: SupportedLanguage) => Promise<void>;
   setCalendar: (calendar: CalendarPreference) => void;
   setNumberingSystem: (numberingSystem: NumberingPreference) => void;
@@ -474,28 +473,6 @@ const browserI18nStore = create<I18nState>()((set, get) => ({
       isLoaded: true,
       hasLoadedOnce: true,
     });
-  },
-
-  setLang: async (lang) => {
-    const { authClient } = await import("@/lib/auth-client");
-    const session = await authClient.getSession();
-    if (session.error) {
-      getAnalytics().captureError(session.error);
-      notifyUserError(session.error, getTranslator()("errors.actionFailed"));
-      return;
-    }
-    if (session.data) {
-      const result = await authClient.updateUser({ locale: lang });
-      if (result.error) {
-        getAnalytics().captureError(result.error);
-        notifyUserError(result.error, getTranslator()("errors.actionFailed"));
-        return;
-      }
-    }
-    await get().loadMessages(lang);
-    if (!session.data && get().loadedLang === lang) {
-      persistPresentationPrefs({ visitorLocale: lang });
-    }
   },
 
   setCalendar: (calendar) => {

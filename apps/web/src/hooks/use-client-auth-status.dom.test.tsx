@@ -195,7 +195,9 @@ test("a public server shell hydrates without exposing a preloaded browser identi
   document.body.append(container);
   const errors: unknown[] = [];
   const root = hydrateRoot(container, tree(browserClient), {
-    onRecoverableError: (error) => errors.push(error),
+    onRecoverableError: (error) => {
+      errors.push(error);
+    },
   });
   try {
     await waitFor(() => expect(container.textContent).toBe("authenticated"));

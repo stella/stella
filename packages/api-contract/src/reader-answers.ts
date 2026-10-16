@@ -24,6 +24,9 @@ export const READER_ANSWER_QUESTION_MAX_LENGTH = 10_000;
 export const READER_ANSWER_QUOTE_MAX_LENGTH = 2000;
 export const READER_ANSWER_MAX_MESSAGES = 40;
 
+/** Streaming message updatedAt is the non-renewing server claim timestamp. */
+export const READER_ANSWER_DEADLINE_MS = 120_000;
+
 export type ReaderAnswerKind = (typeof READER_ANSWER_KINDS)[number];
 export type ReaderAnswerMessageRole =
   (typeof READER_ANSWER_MESSAGE_ROLES)[number];

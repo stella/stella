@@ -1,3 +1,4 @@
+import "@tanstack/react-router";
 import type { Page } from "@playwright/test";
 import { panic } from "better-result";
 
@@ -13,7 +14,6 @@ import {
 
 import { E2E_API_ORIGIN } from "./api";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
-import { expect } from "./test";
 
 const {
   decision,
@@ -203,15 +203,17 @@ export const installDockedLegalFixtures = async (page: Page) => {
 /** Navigate after the public shell has hydrated, so browser fixtures can answer the read. */
 export const navigatePublicLawFixture = async (page: Page, path: string) => {
   await page.goto("/law", { waitUntil: "domcontentloaded" });
-  // The server disables Search while identity is unknown. It only becomes
-  // enabled after the shell commits; patched history alone precedes the
-  // router's asynchronous hydration and is unsafe to navigate with.
-  await expect(
-    page
-      .getByRole("button", { name: "Search", exact: true, includeHidden: true })
-      .first(),
-  ).toBeEnabled({ timeout: 30_000 });
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
+  // Matches are committed after the router's asynchronous hydration. Unlike
+  // sidebar controls, this signal also exists when the mobile sheet is closed.
+  await page.waitForFunction(() => {
+    const router = window.__TSR_ROUTER__;
+    return router !== undefined && router.state.matches.length > 0;
+  });
+  await page.evaluate(async (target) => {
+    const router = window.__TSR_ROUTER__;
+    if (router === undefined) {
+      throw new Error("The public shell must have a hydrated router");
+    }
+    await router.navigate({ href: target });
   }, path);
 };

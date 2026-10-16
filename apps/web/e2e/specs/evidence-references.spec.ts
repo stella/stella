@@ -158,11 +158,12 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
     });
 
-    test.afterEach(async ({ page }) => {
+    test.afterEach(async ({ page }, testInfo) => {
       try {
         if (workspace !== null) {
-          await page.goto("about:blank", { waitUntil: "commit" });
-          await deleteTestWorkspace(page.request, workspace.id);
+          await deleteTestWorkspace(page.request, workspace.id, {
+            leave: { page, testInfo },
+          });
           workspace = null;
         }
       } finally {

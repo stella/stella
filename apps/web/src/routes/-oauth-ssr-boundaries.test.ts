@@ -16,6 +16,10 @@ test("OAuth routes preserve server presentation and defer fragment-dependent wor
   ];
 
   for (const { path, ssr } of boundaries) {
+    expect(ssr).toBe(false);
+    if (ssr !== false) {
+      throw new TypeError("OAuth boundary must defer to the browser");
+    }
     const browserHash = "oauth_query=signed-request";
     const serverUrl = new URL(`http://localhost:3000${path}#${browserHash}`);
     const fragmentReads: string[] = [];

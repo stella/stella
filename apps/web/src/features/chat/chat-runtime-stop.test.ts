@@ -461,6 +461,50 @@ describe("the composer's Stop", () => {
     expect(await sent).toEqual(Result.ok(undefined));
   });
 
+  test("takes a refused continuation of a turn the server settled quietly", async () => {
+    const server = installServer([TURN_A], "client-call");
+    const page = openPage();
+    const sent = send(page, "018f0000-0000-7000-8000-000000000016");
+    await tick();
+    const messagesBeforeResult = page.runtime.getSnapshot().messages;
+    const continuation = Result.tryPromise(
+      async () =>
+        await page.runtime.addToolResult({
+          output: {
+            destination: "download",
+            fileName: "NDA.docx",
+            success: true,
+          },
+          tool: "create-document",
+          toolCallId: CLIENT_CALL_ID,
+        }),
+    );
+    await tick();
+    // The fixture must reach the fault: the continuation is in flight.
+    expect(server.held).toHaveLength(1);
+    // Nobody stopped the turn: the server ended it on its own, so it refuses
+    // the result.
+    server.held[0]?.resolve(
+      Response.json(
+        {
+          code: CHAT_TURN_NOT_OWNED_ERROR_CODE,
+          message: "Chat turn has no durable execution owner",
+        },
+        { status: 409 },
+      ),
+    );
+    await tick();
+
+    expect(page.errors).toEqual([]);
+    expect(page.runtime.getSnapshot().error).toBeUndefined();
+    expect(page.reloads).toBe(1);
+    // The refused result never became durable, so the page drops it.
+    expect(page.runtime.getSnapshot().messages).toEqual(messagesBeforeResult);
+    expect(server.cancels).toHaveLength(0);
+    expect(await continuation).toEqual(Result.ok(undefined));
+    expect(await sent).toEqual(Result.ok(undefined));
+  });
+
   test("leaving the thread closes the request and asks the server nothing", async () => {
     const server = installServer([TURN_A]);
     const page = openPage();

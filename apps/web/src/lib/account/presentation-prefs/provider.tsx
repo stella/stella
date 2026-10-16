@@ -1,5 +1,5 @@
 import { createContext, use, useState } from "react";
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, RefObject } from "react";
 
 import { getTranslator } from "@/i18n/translator";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
@@ -44,24 +44,32 @@ export const persistPresentationPrefs = (
 
 const PresentationPrefsContext = createContext({
   prefs: defaultPresentationPrefs,
+  readerScrollContainers: new Set<RefObject<HTMLElement | null>>(),
   setPrefs: (_patch: Partial<PresentationPrefs>): void => undefined,
 });
 
 type PresentationPrefsProviderProps = PropsWithChildren<{
   initialPrefs: PresentationPrefs;
+  persist?: typeof persistPresentationPrefs;
 }>;
 
 export const PresentationPrefsProvider = ({
   initialPrefs,
+  persist = persistPresentationPrefs,
   children,
 }: PresentationPrefsProviderProps) => {
   const [prefs, setState] = useState(initialPrefs);
+  const [readerScrollContainers] = useState(
+    () => new Set<RefObject<HTMLElement | null>>(),
+  );
   const setPrefs = (patch: Partial<PresentationPrefs>) => {
     setState((previous) => ({ ...previous, ...patch }));
-    persistPresentationPrefs(patch);
+    persist(patch);
   };
   return (
-    <PresentationPrefsContext value={{ prefs, setPrefs }}>
+    <PresentationPrefsContext
+      value={{ prefs, setPrefs, readerScrollContainers }}
+    >
       {children}
     </PresentationPrefsContext>
   );

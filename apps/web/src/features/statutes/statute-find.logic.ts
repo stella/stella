@@ -6,9 +6,9 @@
 
 import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
 import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
+import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/lib/legal/statute-act-number";
 
 type StatuteFindText = (statute: StatuteListItem) => string;
 
