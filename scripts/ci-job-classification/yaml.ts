@@ -20,6 +20,16 @@ const DOCUMENT = v.strictObject({
     v.string(),
     v.picklist(["action", "reusable-workflow"]),
   ),
+  relocatedActions: v.record(
+    v.string(),
+    v.array(
+      v.strictObject({
+        repository: v.nullable(v.string()),
+        ref: v.nullable(v.string()),
+        path: v.string(),
+      }),
+    ),
+  ),
 });
 
 // Validate duplicate keys and bound alias expansion before projecting classification metadata.
@@ -122,7 +132,7 @@ def steps(value)
     end
     ['uses','run'].each { |k| raise "#{k} must be string" if s.key?(k) && !s[k].is_a?(String) }
     raise 'step cannot have uses and run' if s.key?('uses') && s.key?('run')
-    {'uses'=>s['uses'],'run'=>s['run']}
+    {'uses'=>s['uses'],'run'=>s['run'],'with'=>s['with']}
   end
 end
 # Run bodies remain opaque, but their secret references are retained separately.
@@ -156,8 +166,33 @@ def job_shape(job)
   shape['steps'] = step_shapes(job['steps']) if job.key?('steps')
   shape
 end
-def add_action_dependencies(dependencies, steps)
-  steps.each { |step| dependencies[step['uses']] ||= 'action' if step['uses'] }
+def add_action_dependencies(dependencies, steps, relocated_actions)
+  checkouts = []
+  steps.each do |step|
+    uses = step['uses']
+    dependencies[uses] ||= 'action' if uses
+    if uses&.start_with?('./')
+      local_path = uses.delete_prefix('./')
+      checkout = checkouts
+        .select { |entry| local_path.start_with?(entry['path'] + '/') }
+        .max_by { |entry| entry['path'].length }
+      if checkout
+        source_path = local_path.delete_prefix(checkout['path'] + '/')
+        (relocated_actions[uses] ||= []) << {
+          'repository'=>checkout['repository'],
+          'ref'=>checkout['ref'],
+          'path'=>source_path,
+        }
+      end
+    end
+    if uses&.start_with?('actions/checkout@') && step['with'].is_a?(Hash) && step['with']['path'].is_a?(String)
+      checkouts << {
+        'repository'=>step['with']['repository'].is_a?(String) ? step['with']['repository'] : nil,
+        'ref'=>step['with']['ref'].is_a?(String) ? step['with']['ref'] : nil,
+        'path'=>step['with']['path'].delete_prefix('./').delete_suffix('/'),
+      }
+    end
+  end
 end
 def digest(value)
   Digest::SHA256.hexdigest(JSON.generate(canon(value)))
@@ -178,6 +213,7 @@ end
 context = shape.reject { |key,_| key == 'jobs' }
 jobs = {}
 dependencies = {}
+relocated_actions = {}
 if data.key?('jobs')
   raise 'jobs must be nonempty mapping' unless data['jobs'].is_a?(Hash) && !data['jobs'].empty?
   data['jobs'].each do |id,j|
@@ -187,7 +223,7 @@ if data.key?('jobs')
       raise 'job uses must be string' unless j['uses'].is_a?(String)
       dependencies[j['uses']] = 'reusable-workflow'
     end
-    add_action_dependencies(dependencies, ss)
+    add_action_dependencies(dependencies, ss, relocated_actions)
     jobs[id] = {'digest'=>digest({'document'=>context, 'job'=>job_shape(j)})}
   end
 end
@@ -202,9 +238,9 @@ if data.key?('runs')
     ss = [{'uses'=>nil,'run'=>JSON.generate(canon(r))}]
   end
 end
-add_action_dependencies(dependencies, ss)
+add_action_dependencies(dependencies, ss, relocated_actions)
 shape['jobs'] = jobs.transform_values { |j| j['digest'] } if data.key?('jobs')
-STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies}))
+STDOUT.write(JSON.generate({'digest'=>digest(shape),'jobs'=>jobs,'dependencies'=>dependencies,'relocatedActions'=>relocated_actions}))
 `;
 
 export const parseDocument = (text: string) =>

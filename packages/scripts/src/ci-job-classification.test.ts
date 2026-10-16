@@ -617,6 +617,103 @@ test("same-repository aliases cannot redirect source-relative action metadata", 
     "local metadata path, repository or origin mismatch",
   );
 });
+const relocatedActionFixture = ({
+  checkoutRepository,
+  targetPath = ".github/actions/local/action.yml",
+}: {
+  checkoutRepository?: string;
+  targetPath?: string;
+}) => {
+  const f = fixture();
+  const repository = checkoutRepository
+    ? `\n          repository: ${checkoutRepository}`
+    : "";
+  const workflow = `jobs:
+  caller:
+    steps:
+      - uses: actions/checkout@${"c".repeat(40)}
+        with:
+          path: .workflow-actions
+          ref: \${{ github.workflow_sha }}${repository}
+      - uses: ./.workflow-actions/.github/actions/local
+  reusable:
+    uses: vendor/shared/.github/workflows/reusable.yml@${"a".repeat(40)}
+`;
+  const parsed = parseDocument(workflow);
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  f.documents.set("candidate:.github/workflows/ci.yml", workflow);
+  const action = f.documents.get("candidate:.github/actions/local/action.yml");
+  if (action === undefined) {
+    throw new AdmissionError({ message: "action fixture missing" });
+  }
+  f.documents.set(`candidate:${targetPath}`, action);
+  return {
+    reader: f.reader,
+    manifest: {
+      ...f.manifest,
+      nodes: [
+        ...f.manifest.nodes.map((node) => {
+          if (node.type !== "metadata") {
+            return node;
+          }
+          if (node.id === "root") {
+            return {
+              ...node,
+              digest: parsed.value.digest,
+              jobs: node.jobs.map((job) => ({
+                ...job,
+                digest: parsed.value.jobs[job.id]?.digest ?? job.digest,
+              })),
+              edges: {
+                "./.workflow-actions/.github/actions/local": "action",
+                "actions/checkout@cccccccccccccccccccccccccccccccccccccccc":
+                  "checkout",
+                "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
+                  "callee",
+              },
+            };
+          }
+          if (node.id === "action") {
+            return {
+              ...node,
+              path: targetPath,
+              references: ["./.workflow-actions/.github/actions/local"],
+            };
+          }
+          return node;
+        }),
+        {
+          type: "supplier",
+          id: "checkout",
+          reference:
+            "actions/checkout@cccccccccccccccccccccccccccccccccccccccc",
+          binding: "immutable",
+        },
+      ],
+    } satisfies PublicMetadata,
+  };
+};
+test("checkout-relative action aliases bind to their source repository and path", () => {
+  const valid = relocatedActionFixture({});
+  expect(verifyPublicMetadata(valid).isOk()).toBe(true);
+
+  failure(
+    verifyPublicMetadata(
+      relocatedActionFixture({
+        targetPath: ".github/actions/different/action.yml",
+      }),
+    ),
+    "local metadata path, repository or origin mismatch",
+  );
+  failure(
+    verifyPublicMetadata(
+      relocatedActionFixture({ checkoutRepository: "other/repository" }),
+    ),
+    "local metadata path, repository or origin mismatch",
+  );
+});
 test("local metadata and parallel leaves must have explicit complete edges", () => {
   const f = fixture();
   failure(

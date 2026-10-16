@@ -80,12 +80,17 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
+const githubExpression = (value: string) => `\${{ ${value} }}`;
 type ReferenceOptions = {
   callerRepository: string;
   callerOrigin: MetadataOrigin;
   target: PublicMetadata["nodes"][number];
   reference: string;
   kind: MetadataReferenceKind;
+  relocatedActions: Record<
+    string,
+    { repository: string | null; ref: string | null; path: string }[]
+  >;
 };
 const verifyReference = ({
   callerRepository,
@@ -93,6 +98,7 @@ const verifyReference = ({
   target,
   reference,
   kind,
+  relocatedActions,
 }: ReferenceOptions) => {
   if (
     kind === "reusable-workflow" &&
@@ -111,16 +117,29 @@ const verifyReference = ({
       });
     } else {
       const localPath = reference.slice(2);
+      const relocations = relocatedActions[reference] ?? [];
       const exactPath =
         kind === "reusable-workflow"
           ? target.path === localPath
-          : !reference.startsWith("$/") ||
-            target.path === `${localPath}/action.yml` ||
-            target.path === `${localPath}/action.yaml`;
+          : target.path === `${localPath}/action.yml` ||
+            target.path === `${localPath}/action.yaml` ||
+            (reference.startsWith("./") && relocations.length === 0);
+      const relocatedPath = relocations.some(
+        (relocation) =>
+          (relocation.repository === null ||
+            relocation.repository === githubExpression("github.repository") ||
+            relocation.repository ===
+              githubExpression("job.workflow_repository")) &&
+          (relocation.ref === null ||
+            relocation.ref === githubExpression("github.workflow_sha") ||
+            relocation.ref === githubExpression("job.workflow_sha")) &&
+          (target.path === `${relocation.path}/action.yml` ||
+            target.path === `${relocation.path}/action.yaml`),
+      );
       if (
         target.repository !== callerRepository ||
         !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
-        !exactPath
+        (!exactPath && !relocatedPath)
       ) {
         reject("local metadata path, repository or origin mismatch");
       }
@@ -257,6 +276,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
               target,
               reference,
               kind,
+              relocatedActions: parsed.value.relocatedActions,
             });
             visit(targetId);
           }
