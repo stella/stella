@@ -1402,6 +1402,7 @@ const listReconciliationSlicePage = async (
         payload: item,
       })),
     totalPages,
+    publisherCount: source.excludeForeignCourts ? undefined : listing.total,
   };
 };
 

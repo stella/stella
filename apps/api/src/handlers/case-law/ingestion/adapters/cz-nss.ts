@@ -2547,7 +2547,7 @@ const listCzNssSlicePage = async ({
         cursor: slice,
       });
     }
-    return { items: [], totalPages: 0 };
+    return { items: [], totalPages: 0, publisherCount: 0 };
   }
 
   const { continuation } = search;
@@ -2599,6 +2599,7 @@ const listCzNssSlicePage = async ({
       payload: row,
     })),
     totalPages: czNssTotalPages(search.statedCount),
+    publisherCount: search.statedCount,
   };
 };
 

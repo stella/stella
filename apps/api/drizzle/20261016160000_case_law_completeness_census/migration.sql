@@ -1,0 +1,41 @@
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
+CREATE TABLE "case_law_completeness_census" (
+  "source_id" uuid NOT NULL REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
+  "slice" varchar(64) NOT NULL,
+  "year" integer,
+  "outcome" text NOT NULL,
+  "scope_status" text NOT NULL,
+  "publisher_count" integer,
+  "stored_count" integer NOT NULL,
+  "text_count" integer NOT NULL,
+  "observed_at" timestamptz NOT NULL,
+  "scope_first" varchar(64) NOT NULL,
+  "scope_last" varchar(64) NOT NULL,
+  "expected_slices" integer NOT NULL,
+  "evidence_ref" text NOT NULL,
+  PRIMARY KEY ("source_id", "slice"),
+  CONSTRAINT "case_law_completeness_census_counts" CHECK (
+    "stored_count" >= 0 AND "text_count" >= 0 AND "text_count" <= "stored_count" AND "expected_slices" > 0
+    AND "scope_status" IN ('full-publisher', 'partial-publisher')
+    AND (("outcome" IN ('publisher-count', 'listing-enumerated') AND "publisher_count" >= 0 AND "publisher_count" IS NOT NULL AND ("year" IS NOT NULL OR "slice" LIKE '0000%'))
+      OR ("outcome" = 'none-exposed' AND "publisher_count" IS NULL))
+  )
+);--> statement-breakpoint
+CREATE INDEX "case_law_completeness_census_source_year_idx" ON "case_law_completeness_census" ("source_id", "year");--> statement-breakpoint
+ALTER TABLE "case_law_completeness_census" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "case_law_global_access" ON "case_law_completeness_census" AS PERMISSIVE FOR SELECT TO "stella" USING (true);--> statement-breakpoint
+CREATE POLICY "case_law_ingestion_access" ON "case_law_completeness_census" AS PERMISSIVE FOR ALL TO "stella_ingestion" USING (true) WITH CHECK (true);
+--> statement-breakpoint
+CREATE POLICY "public_law_reader_access" ON "case_law_completeness_census"
+  AS PERMISSIVE FOR SELECT TO "stella_public_law_reader" USING (EXISTS (
+    SELECT 1 FROM "case_law_sources" AS census_source
+    WHERE census_source."id" = "case_law_completeness_census"."source_id"
+      AND (census_source."descriptor" IS NULL
+        OR (census_source."descriptor" ->> 'allowsRedistribution') = 'true')
+  ));--> statement-breakpoint
+-- Deployment cutover: drain the previous API release before applying these
+-- grants, then start this release. Previous releases reject undeclared grants.
+GRANT SELECT ("source_id", "slice", "year", "outcome", "scope_status", "publisher_count",
+  "stored_count", "text_count", "observed_at", "expected_slices", "evidence_ref")
+  ON TABLE "case_law_completeness_census" TO "stella_public_law_reader";

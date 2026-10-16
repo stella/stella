@@ -1,9 +1,39 @@
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
+import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
 
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
+const census = {
+  verdict: "incomplete",
+  scopeStatus: "full-publisher",
+  outcome: "publisher-count",
+  evidenceRef: "https://example.test/publisher-count",
+  measuredSlices: 1,
+  expectedSlices: 1,
+  shortSlices: 1,
+  publisher: 200,
+  stored: 150,
+  withText: 147,
+  observedAt: asOf,
+  years: [
+    { year: 2026, slices: 1, publisher: 200, stored: 150, withText: 147 },
+  ],
+  worstSlices: [
+    {
+      slice: "2026",
+      year: 2026,
+      outcome: "publisher-count",
+      publisher: 200,
+      stored: 150,
+      withText: 147,
+      observedAt: asOf,
+      evidenceRef: "https://example.test/publisher-count",
+    },
+  ],
+} satisfies SourceCensus;
 const base = {
   health: "current",
+  censusVerdict: "incomplete",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
   completeness: {
@@ -26,6 +56,7 @@ const base = {
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
+      census,
       knownGaps: { type: "unknown" },
       completeness: { state: "not-measured-yet" },
       addedLastWeek: 5,
@@ -90,6 +121,7 @@ const expectedSources = [
     decisionYearFrom: 1993,
     decisionYearTo: 2026,
     pendingTextCount: 3,
+    census,
     knownGaps: { type: "unknown" },
   },
 ] as const;
@@ -98,6 +130,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
   asOf,
   countries: [
     {
+      censusVerdict: "incomplete",
       country: "CZE",
       availability: "searchable",
       decisions: 100,
@@ -111,6 +144,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       ],
     },
     {
+      censusVerdict: "incomplete",
       country: "SVK",
       availability: "in-preparation",
       decisions: 150,
@@ -120,6 +154,7 @@ export const CASE_LAW_COVERAGE_EXPECTED = {
       courts: null,
     },
     {
+      censusVerdict: "incomplete",
       country: "EU",
       availability: "searchable",
       decisions: 0,

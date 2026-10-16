@@ -1862,6 +1862,7 @@ export type PlCourtsDayPage = {
   records: Record<string, unknown>[];
   /** 0 for a day the publisher lists no judgment for. */
   totalPages: number;
+  publisherCount: number;
 };
 
 /**
@@ -1966,7 +1967,7 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  return { records, totalPages };
+  return { records, totalPages, publisherCount: totalResults };
 };
 
 const listPlCourtsSlicePage = async ({
@@ -1974,7 +1975,7 @@ const listPlCourtsSlicePage = async ({
   page,
   signal,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const { records, totalPages } = await listPlCourtsDayPage({
+  const { records, totalPages, publisherCount } = await listPlCourtsDayPage({
     date: slice,
     page,
     ...(signal === undefined ? {} : { signal }),
@@ -1985,6 +1986,7 @@ const listPlCourtsSlicePage = async ({
       payload: record,
     })),
     totalPages,
+    publisherCount,
   };
 };
 

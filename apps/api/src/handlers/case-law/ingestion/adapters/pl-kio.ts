@@ -1749,6 +1749,7 @@ const listPlKioSlicePage = async ({
       payload: row,
     })),
     totalPages,
+    publisherCount: listed.value.total,
   };
 };
 

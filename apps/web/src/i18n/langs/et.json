@@ -897,6 +897,9 @@
       "supreme": "Riigikohtud"
     },
     "coverage": {
+      "censusComparison": "{stored} salvestatud / {publisher} avaldatud",
+      "censusComplete": "Täielik",
+      "censusIncomplete": "Mittetäielik",
       "completeness": "Täielikkus",
       "countedOn": "Loendatud {date} seisuga",
       "courtsHeading": "Kohtute kaupa",

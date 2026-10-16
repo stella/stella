@@ -897,6 +897,9 @@
       "supreme": "المحاكم العليا"
     },
     "coverage": {
+      "censusComparison": "{stored} محفوظة / {publisher} منشورة",
+      "censusComplete": "مكتمل",
+      "censusIncomplete": "غير مكتمل",
       "completeness": "الاكتمال",
       "countedOn": "أُحصي بتاريخ {date}",
       "courtsHeading": "حسب المحكمة",

@@ -897,6 +897,9 @@
       "supreme": "Augstākās tiesas"
     },
     "coverage": {
+      "censusComparison": "{stored} saglabāti / {publisher} publicēti",
+      "censusComplete": "Pilnīgs",
+      "censusIncomplete": "Nepilnīgs",
       "completeness": "Pilnīgums",
       "countedOn": "Saskaitīts {date}",
       "courtsHeading": "Pēc tiesas",

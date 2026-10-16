@@ -1203,6 +1203,8 @@ export type ReconciliationSlicePage = {
   items: ReconciliationListingItem[];
   /** 0 where the publisher lists nothing for the slice at all. */
   totalPages: number;
+  /** Exact count stated for this whole slice by the listing already fetched. */
+  publisherCount?: number | undefined;
 };
 
 export type ReconciliationSlicePageOptions = {

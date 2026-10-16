@@ -1812,6 +1812,7 @@ const listPlKisSlicePage = async ({
       payload: row,
     })),
     totalPages: Math.ceil(totalHits / RECONCILIATION_PAGE_SIZE),
+    publisherCount: totalHits,
   };
 };
 

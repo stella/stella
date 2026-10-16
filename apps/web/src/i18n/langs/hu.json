@@ -897,6 +897,9 @@
       "supreme": "Legfelsőbb bíróságok"
     },
     "coverage": {
+      "censusComparison": "{stored} tárolt / {publisher} közzétett",
+      "censusComplete": "Teljes",
+      "censusIncomplete": "Hiányos",
       "completeness": "Teljesség",
       "countedOn": "Megszámolva: {date}",
       "courtsHeading": "Bíróságonként",

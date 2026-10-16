@@ -657,7 +657,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {

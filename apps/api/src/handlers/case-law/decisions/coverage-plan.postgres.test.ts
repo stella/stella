@@ -1,12 +1,16 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { caseLawSources } from "@/api/db/schema";
-import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import {
+  loadCaseLawCoverage,
+  readCaseLawCoverageSourcesQuery,
+} from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -97,11 +101,14 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           },
         ]);
         await db.insert(caseLawSources).values(
-          Array.from({ length: SOURCES }, () => ({
-            id: createSafeId<"caseLawSource">(),
-            adapterKey: `coverage-plan-${createSafeId<"caseLawSource">()}`,
-            name: "Coverage plan fixture",
-          })),
+          Object.values(ADAPTER_KEYS)
+            .filter((key) => key.startsWith("cz-"))
+            .slice(0, SOURCES)
+            .map((adapterKey) => ({
+              id: createSafeId<"caseLawSource">(),
+              adapterKey,
+              name: "Coverage plan fixture",
+            })),
         );
         await db.execute(sql`INSERT INTO case_law_decisions
           (id, source_id, case_number, court, country, language, decision_date, fulltext)
@@ -123,6 +130,14 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           (decision_id, language, regconfig, searchable_text, tsv)
           SELECT id, 'cs', 'simple', fulltext, to_tsvector('simple', fulltext)
           FROM case_law_decisions WHERE case_number LIKE 'published/%'`);
+        // The external serving provider has no SQL projection table. These
+        // corpus endpoints must survive without search documents.
+        await db.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, decision_date, fulltext)
+          SELECT gen_random_uuid(), sources.id, 'unindexed/' || endpoint,
+            'Plan court', 'CZE', 'cs', endpoint, 'Published but unindexed text'
+          FROM case_law_sources sources
+          CROSS JOIN (VALUES (DATE '1950-01-01'), (DATE '2026-01-01')) endpoints(endpoint)`);
         await db.execute(sql`ANALYZE case_law_search_documents`);
         await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
         await db.execute(sql`ANALYZE case_law_sources`);
@@ -130,7 +145,6 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
-          "pg-fts",
         );
         expect(captured).toHaveLength(1);
         const statement =
@@ -148,9 +162,6 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         expect(probes).toHaveLength(2);
         for (const probe of probes) {
           expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
-          // The serving semi-join can discard unindexed dates, so its Limit
-          // bounds matched endpoints rather than every input index row. The
-          // endpoint limits and actual scan work are asserted below.
           expect(probe.indexCond).toContain("source_id");
           expect(probe.indexCond).toContain("decision_date IS NOT NULL");
         }
@@ -193,11 +204,38 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         expect(rows).toHaveLength(SOURCES);
         for (const row of rows) {
           expect(row).toMatchObject({
-            decisionYearFrom: 2000,
-            decisionYearTo: 2010,
+            decisionYearFrom: 1950,
+            decisionYearTo: 2026,
             pendingTextCount: 0,
           });
         }
+        const coverage = await loadCaseLawCoverage({
+          excludedSourceIds: [],
+          now: new Date("2026-10-16T00:00:00Z"),
+          readSources: async () => rows,
+          readCensus: async () => new Map(),
+          readArrivals: async () => new Map(),
+          readCourts: async () => [],
+          readFacets: async () =>
+            Result.ok({
+              country: [
+                { value: "CZE", count: SOURCES * DECISIONS_PER_SOURCE },
+              ],
+              court: [],
+              year: [],
+            }),
+        });
+        expect(coverage.isOk()).toBe(true);
+        if (coverage.isErr()) {
+          panic(coverage.error.message);
+        }
+        expect(coverage.value.countries).toHaveLength(1);
+        expect(coverage.value.countries.at(0)).toMatchObject({
+          country: "CZE",
+          availability: "searchable",
+          decisionYearFrom: 1950,
+          decisionYearTo: 2026,
+        });
       } finally {
         await db.execute(sql`SET search_path TO public`);
         await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);

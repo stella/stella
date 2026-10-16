@@ -1277,6 +1277,7 @@ const listCzNsSlicePage = async ({
       payload: row,
     })),
     totalPages: 1,
+    publisherCount: matched ?? shown,
   };
 };
 

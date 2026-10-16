@@ -1455,7 +1455,11 @@ const listHuBhgySlicePage = async ({
     identity: huBhgyListingIdentity(normalizeHuBhgyRow(row)),
     payload: row,
   }));
-  return { items, totalPages: Math.ceil(count / MAX_PAGE_SIZE) };
+  return {
+    items,
+    totalPages: Math.ceil(count / MAX_PAGE_SIZE),
+    publisherCount: count,
+  };
 };
 
 const buildHuBhgyFromPayload = async (

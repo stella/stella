@@ -86,6 +86,10 @@ import {
   MAX_SLICE_PAGES,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  censusScope,
+  recordCompletenessCensus,
+} from "@/api/lib/case-law/completeness-census";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import {
@@ -1445,6 +1449,7 @@ const ingestListedItem = async ({
 };
 
 type WalkSliceOptions = {
+  publisherScope: ReturnType<typeof censusScope>;
   adapterKey: string;
   fetchDelayMs: number;
   ingestBudget: number;
@@ -1469,6 +1474,7 @@ type WalkSliceOptions = {
  * slice whose misses exceeded the budget records short and is selected again.
  */
 const walkSlice = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   ingestBudget,
@@ -1609,6 +1615,18 @@ const walkSlice = async ({
       reported: summary.keyable,
       collected: summary.heldBefore + summary.written,
     },
+  });
+  await lease.beforeDatabaseMark();
+  await recordCompletenessCensus(scopedDb, {
+    adapterKey,
+    sourceId,
+    leaseToken: lease.leaseToken,
+    slice,
+    scope: publisherScope,
+    identities: items.map(({ identity }) => identity),
+    listed: listing.value.keyed.size + listing.value.unidentifiable,
+    publisherCount: listing.value.publisherCount,
+    observedAt: now(),
   });
   return summary;
 };
@@ -1897,6 +1915,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "sleep"
   | "sourceId"
 > & {
+  publisherScope: ReturnType<typeof censusScope>;
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
   sliceIngestBudget: number;
@@ -1905,6 +1924,7 @@ type ExecuteReconciliationUnitOptions = Pick<
 };
 
 const executeReconciliationUnit = async ({
+  publisherScope,
   adapterKey,
   fetchDelayMs,
   now,
@@ -1969,6 +1989,7 @@ const executeReconciliationUnit = async ({
         return {
           type: "worked",
           summary: await walkSlice({
+            publisherScope,
             adapterKey,
             fetchDelayMs,
             ingestBudget: sliceIngestBudget,
@@ -2213,6 +2234,7 @@ export const runReconciliationWorkUnit = async ({
   }
 
   return await executeReconciliationUnit({
+    publisherScope: censusScope(adapterReconciliation, startedAt),
     adapterKey,
     fetchDelayMs,
     now,

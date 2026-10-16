@@ -2806,6 +2806,7 @@ const listCzUsSlicePage = async ({
       payload: listed,
     })),
     totalPages: Math.ceil(listing.reported / LISTING_PAGE_SIZE),
+    publisherCount: listing.reported,
   };
 };
 

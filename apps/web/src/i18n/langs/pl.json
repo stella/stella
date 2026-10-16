@@ -897,6 +897,9 @@
       "supreme": "Sądy najwyższe"
     },
     "coverage": {
+      "censusComparison": "{stored} zapisanych / {publisher} opublikowanych",
+      "censusComplete": "Kompletne",
+      "censusIncomplete": "Niekompletne",
       "completeness": "Kompletność",
       "countedOn": "Policzono {date}",
       "courtsHeading": "Według sądu",

@@ -37,23 +37,29 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  readCompletenessCensusQuery,
+  unmeasuredSourceCensus,
+} from "@/api/lib/case-law/completeness-census";
+import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
+import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
 import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import {
   readProvisionPendingCounts,
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { servedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { publishedUnredactedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  CASE_LAW_SOURCE_ROWS_BOUND,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { storedObservationIsListingOnlySqlFor } from "@/api/lib/legal-search/partial-observation-sql";
 import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
-import type {
-  LegalBrowseFacets,
-  LegalSearchEngine,
-} from "@/api/lib/legal-search/types";
+import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -106,12 +112,12 @@ type CaseLawCoverageSource = {
   health: CaseLawCoverageHealth;
   /** ISO 8601; null before the first run. */
   lastSyncAt: string | null;
-  /** Exact searchable decision-year bounds for this source. */
+  /** Exact stored, published and unredacted decision-year bounds for this source. */
   decisionYearFrom: number | null;
   decisionYearTo: number | null;
   /** Publisher-listed decisions whose text has not arrived. */
   pendingTextCount: number;
-  /** Registry-reviewed gaps; unknown is never presented as no gaps. */
+  /** Census shortfalls; an unmeasured universe is never presented as no gaps. */
   knownGaps:
     | { type: "unknown" }
     | { type: "none-recorded" }
@@ -124,6 +130,7 @@ type CaseLawCoverageSource = {
           evidenceRef: string;
         }[];
       };
+  census: SourceCensus;
   completeness: CaseLawSourceCompleteness;
   /**
    * Decisions published for this source in the last seven days; null when
@@ -145,6 +152,7 @@ type CaseLawCoverageCountryBase = {
   stored: { decisions: number; asOf: string | null };
   /** The sources' week summed; null as soon as one of them is unknown. */
   addedLastWeek: number | null;
+  censusVerdict: SourceCensus["verdict"];
   completeness: CaseLawCountryCompleteness;
   sources: readonly CaseLawCoverageSource[];
 };
@@ -154,7 +162,7 @@ type CaseLawCoverageCountry =
       availability: typeof CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE;
       /** What a public search can find: the serving index's country bucket. */
       searchable: number;
-      /** Earliest and latest decision year the index holds; null when empty. */
+      /** Stored, published and unredacted decision-year bounds; null when undated or empty. */
       decisionYearFrom: number | null;
       decisionYearTo: number | null;
       /**
@@ -258,11 +266,12 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources,
   async (
     tx: CaseLawPublicReadTransaction,
-    engine: LegalSearchEngine = envBase.LEGAL_SEARCH_PROVIDER,
   ): Promise<CaseLawCoverageSourceRow[]> => {
-    const eligibility = servedCaseLawDecisionFor("coverage_decisions", engine);
-    // The external serving index cannot prove SQL membership: no endpoints means unknown.
-    const served = eligibility ?? sql`FALSE`;
+    // Dates describe the held corpus: external serving membership cannot be
+    // inferred in SQL, and must not erase dates already known to the corpus.
+    const published = sql.raw(
+      publishedUnredactedCaseLawDecisionSqlFor("coverage_decisions"),
+    );
     return await tx
       .select({
         id: caseLawSources.id,
@@ -278,7 +287,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
+            AND ${published}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date ASC
           LIMIT 1
@@ -287,7 +296,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM case_law_decisions AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
-            AND ${served}
+            AND ${published}
             AND coverage_decisions.decision_date IS NOT NULL
           ORDER BY coverage_decisions.decision_date DESC
           LIMIT 1
@@ -333,6 +342,9 @@ type CoverageLoad = {
   excludedSourceIds: readonly SafeId<"caseLawSource">[];
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
+  readCensus: (
+    sourceIds: readonly SafeId<"caseLawSource">[],
+  ) => Promise<ReadonlyMap<string, SourceCensus>>;
   /** Null when the read failed as a whole, so no source gets a number. */
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
@@ -354,6 +366,25 @@ const coverageError = (fallback: string) => (cause: unknown) =>
     cause,
   });
 
+const censusKnownGaps = (
+  census: SourceCensus,
+): CaseLawCoverageSource["knownGaps"] => {
+  if (census.shortSlices > 0) {
+    return {
+      type: "known",
+      gaps: census.worstSlices.map((slice) => ({
+        from: slice.slice,
+        to: slice.slice,
+        reason: `Stored ${slice.stored} of ${slice.publisher}; ${slice.withText} with text`,
+        evidenceRef: slice.evidenceRef,
+      })),
+    };
+  }
+  return census.verdict === "complete"
+    ? { type: "none-recorded" }
+    : { type: "unknown" };
+};
+
 /**
  * The whole page, assembled from the source catalogue outward.
  *
@@ -370,6 +401,7 @@ export const loadCaseLawCoverage = async ({
   readCourts,
   readFacets,
   readSources,
+  readCensus,
 }: CoverageLoad): Promise<Result<CaseLawCoverage, CoverageError>> => {
   const sources = await Result.tryPromise({
     try: readSources,
@@ -382,6 +414,13 @@ export const loadCaseLawCoverage = async ({
   const withheld = new Set<string>(excludedSourceIds.map(String));
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
   const arrivals = await readArrivals(admitted.map(({ id }) => id));
+  const censusRows = await Result.tryPromise({
+    try: async () => await readCensus(admitted.map(({ id }) => id)),
+    catch: coverageError("reading the completeness census failed"),
+  });
+  if (Result.isError(censusRows)) {
+    return censusRows;
+  }
 
   const reportUnrecognizedSource =
     createUnrecognizedSourceReporter("case_law.coverage");
@@ -413,6 +452,9 @@ export const loadCaseLawCoverage = async ({
       stored: 0,
       storedAsOf: null,
     };
+    const census =
+      censusRows.value.get(String(source.id)) ??
+      unmeasuredSourceCensus(source.adapterKey);
     entry.sources.push({
       adapterKey: source.adapterKey,
       name: manifest.publisher,
@@ -426,7 +468,8 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
-      knownGaps: manifest.knownGaps,
+      census,
+      knownGaps: censusKnownGaps(census),
       completeness: caseLawSourceCompleteness({
         reportedTotal: source.reportedTotal,
         reportedTotalAsOf: source.reportedTotalAsOf,
@@ -470,6 +513,15 @@ export const loadCaseLawCoverage = async ({
       addedLastWeek: sumOfKnown(
         entry.sources.map(({ addedLastWeek }) => addedLastWeek),
       ),
+      censusVerdict: countryCensusVerdict(
+        Object.values(ADAPTER_KEYS)
+          .filter((key) => ADAPTER_MANIFESTS[key].country === country)
+          .map(
+            (key) =>
+              entry.sources.find(({ adapterKey }) => adapterKey === key)
+                ?.census ?? unmeasuredSourceCensus(key),
+          ),
+      ),
       completeness: caseLawCountryCompleteness(
         entry.sources.map(({ completeness }) => completeness),
       ),
@@ -509,23 +561,23 @@ export const loadCaseLawCoverage = async ({
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
     searchableTotal += searchable;
-    const searchableSources = entry.sources.filter(
+    const datedSources = entry.sources.filter(
       ({ decisionYearFrom, decisionYearTo }) =>
         decisionYearFrom !== null && decisionYearTo !== null,
     );
     const from =
-      searchableSources.length === 0
+      datedSources.length === 0
         ? null
         : Math.min(
-            ...searchableSources.map(
+            ...datedSources.map(
               ({ decisionYearFrom }) => decisionYearFrom ?? Infinity,
             ),
           );
     const to =
-      searchableSources.length === 0
+      datedSources.length === 0
         ? null
         : Math.max(
-            ...searchableSources.map(
+            ...datedSources.map(
               ({ decisionYearTo }) => decisionYearTo ?? -Infinity,
             ),
           );
@@ -594,6 +646,10 @@ export const readCaseLawCoverageHandler = async (
     excludedSourceIds: excludedSourceIds.value,
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
+    readCensus: async (sourceIds) =>
+      await caseLawDb(
+        async (tx) => await readCompletenessCensusQuery(tx, sourceIds),
+      ),
     readArrivals: async (sourceIds) => {
       // One stored count per source, recounted by the scheduler: the week's
       // window is never walked on the request path. A failure leaves the

@@ -2332,6 +2332,7 @@ const listSkUsSlicePage = async ({
       }
     }),
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
+    publisherCount: numFound,
   };
 };
 

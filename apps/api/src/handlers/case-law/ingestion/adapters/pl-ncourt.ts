@@ -2482,6 +2482,7 @@ const listPlNcourtSlicePage = async ({
   const { items, total } = listed.value;
   return {
     items,
+    publisherCount: total,
     // A page every row of which was unservable states no total; it is still
     // a page, and the ones after it are listed.
     totalPages:

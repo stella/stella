@@ -41,6 +41,8 @@ import {
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
 import {
+  CASE_LAW_CENSUS_LABEL_KEYS,
+  CASE_LAW_CENSUS_TONES,
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
   CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS,
@@ -535,6 +537,11 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
             {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
           </ReviewStatusBadge>
           <HealthSignal health={country.health} />
+          <ReviewStatusBadge
+            tone={CASE_LAW_CENSUS_TONES[country.censusVerdict]}
+          >
+            {t(CASE_LAW_CENSUS_LABEL_KEYS[country.censusVerdict])}
+          </ReviewStatusBadge>
           <div className="w-full">
             <DetailsGrid>
               {country.availability === "searchable" && (
@@ -661,6 +668,7 @@ const SourcesTable = ({
               <Delta value={source.addedLastWeek} />
             </TableCell>
             <TableCell className={"whitespace-normal"}>
+              <SourceCensus census={source.census} />
               <SourceCompleteness completeness={source.completeness} />
             </TableCell>
           </TableRow>
@@ -703,6 +711,31 @@ const SourceCoverageDetails = ({
       {t("caseLaw.coverage.pendingTexts")}:{" "}
       {formatter.number(source.pendingTextCount)} · {gaps}
     </span>
+  );
+};
+
+const SourceCensus = ({
+  census,
+}: {
+  census: CaseLawCoverageSource["census"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <div className="mb-1 flex flex-col gap-0.5">
+      <ReviewStatusBadge tone={CASE_LAW_CENSUS_TONES[census.verdict]}>
+        {t(CASE_LAW_CENSUS_LABEL_KEYS[census.verdict])}
+      </ReviewStatusBadge>
+      {census.publisher !== null && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {t("caseLaw.coverage.censusComparison", {
+            stored: format.number(census.stored),
+            publisher: format.number(census.publisher),
+          })}
+        </span>
+      )}
+      {census.observedAt !== null && <ObservedOn asOf={census.observedAt} />}
+    </div>
   );
 };
 

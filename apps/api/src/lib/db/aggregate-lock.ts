@@ -28,6 +28,7 @@ import type {
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawSources,
   entities,
   entityVersions,
   fields,
@@ -2302,4 +2303,31 @@ export const lockTimerMatterAccessRows = async ({
     default:
       return panic("Invalid timer matter lock scope");
   }
+};
+
+type LockCaseLawSourceIngestionLeaseOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+};
+
+/** Fence source-lease takeover until a corpus bookkeeping transaction commits. */
+export const lockCaseLawSourceIngestionLease = async ({
+  tx,
+  sourceId,
+  leaseToken,
+}: LockCaseLawSourceIngestionLeaseOptions) => {
+  const owned = await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(
+      and(
+        eq(caseLawSources.id, sourceId),
+        eq(caseLawSources.ingestionLeaseToken, leaseToken),
+        sql`${caseLawSources.ingestionLeaseExpiresAt} > now()`,
+      ),
+    )
+    .for("update")
+    .limit(1);
+  return owned.length > 0;
 };

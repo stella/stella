@@ -897,6 +897,9 @@
       "supreme": "Nejvyšší soudy"
     },
     "coverage": {
+      "censusComparison": "{stored} uložených / {publisher} zveřejněných",
+      "censusComplete": "Úplné",
+      "censusIncomplete": "Neúplné",
       "completeness": "Úplnost",
       "countedOn": "Spočítáno k {date}",
       "courtsHeading": "Podle soudu",

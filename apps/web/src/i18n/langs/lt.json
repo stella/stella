@@ -897,6 +897,9 @@
       "supreme": "Aukščiausieji teismai"
     },
     "coverage": {
+      "censusComparison": "{stored} išsaugota / {publisher} paskelbta",
+      "censusComplete": "Visas",
+      "censusIncomplete": "Ne visas",
       "completeness": "Išsamumas",
       "countedOn": "Suskaičiuota {date}",
       "courtsHeading": "Pagal teismą",

@@ -9,6 +9,7 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
@@ -347,6 +348,19 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     source_id: "required",
     added_last_week: "required",
     counted_at: "required",
+  },
+  case_law_completeness_census: {
+    source_id: "required",
+    slice: "required",
+    year: "required",
+    outcome: "required",
+    scope_status: "required",
+    publisher_count: "required",
+    stored_count: "required",
+    text_count: "required",
+    observed_at: "required",
+    expected_slices: "required",
+    evidence_ref: "required",
   },
   legislation_facet_refreshes: {
     singleton: "required",

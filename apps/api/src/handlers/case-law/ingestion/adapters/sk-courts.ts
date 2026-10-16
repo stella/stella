@@ -1506,6 +1506,7 @@ const listSkCourtsSlicePage = async ({
       payload: item,
     })),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
+    publisherCount: total,
   };
 };
 

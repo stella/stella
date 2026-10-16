@@ -62,6 +62,11 @@ import type {
 } from "@/api/handlers/case-law/polarity/consts";
 import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
+  CENSUS_MEASURED_OUTCOMES,
+  CENSUS_OUTCOMES,
+  CENSUS_SCOPE_STATUSES,
+} from "@/api/lib/case-law/completeness-census-values";
+import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
@@ -1658,6 +1663,64 @@ export const caseLawCoverageSlices = p.pgTable(
       "case_law_coverage_slices_counted_or_failed",
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Observations from complete publisher walks; retries replace one source/slice. */
+export const caseLawCompletenessCensus = p.pgTable(
+  "case_law_completeness_census",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    slice: p.varchar({ length: 64 }).notNull(),
+    /** Publisher slice year; null for a source with no publisher enumeration. */
+    year: p.integer(),
+    outcome: p.text({ enum: CENSUS_OUTCOMES }).notNull(),
+    scopeStatus: p
+      .text("scope_status", { enum: CENSUS_SCOPE_STATUSES })
+      .notNull(),
+    publisherCount: p.integer("publisher_count"),
+    storedCount: p.integer("stored_count").notNull(),
+    textCount: p.integer("text_count").notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    scopeFirst: p.varchar("scope_first", { length: 64 }).notNull(),
+    scopeLast: p.varchar("scope_last", { length: 64 }).notNull(),
+    expectedSlices: p.integer("expected_slices").notNull(),
+    /** Research evidence for this benchmark and its counting unit. */
+    evidenceRef: p.text("evidence_ref").notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.slice] }),
+    p
+      .index("case_law_completeness_census_source_year_idx")
+      .on(t.sourceId, t.year),
+    p.check(
+      "case_law_completeness_census_counts",
+      sql`
+      ${t.storedCount} >= 0 AND ${t.textCount} >= 0 AND ${t.textCount} <= ${t.storedCount}
+      AND ${t.expectedSlices} > 0
+      AND ${t.scopeStatus} IN (${sql.join(
+        CENSUS_SCOPE_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})
+      AND ((${t.outcome} IN (${sql.join(
+        CENSUS_MEASURED_OUTCOMES.map((outcome) => sql`${outcome}`),
+        sql`, `,
+      )}) AND ${t.publisherCount} >= 0 AND ${t.publisherCount} IS NOT NULL AND (${t.year} IS NOT NULL OR ${t.slice} LIKE '0000%'))
+        OR (${t.outcome} = 'none-exposed' AND ${t.publisherCount} IS NULL))
+    `,
+    ),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS census_source
+        WHERE census_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`census_source.descriptor`)}
+      )`,
+    }),
     ...globalCaseLawPolicies(),
   ],
 );
