@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {لا إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
       "provisionsCited": "الأحكام المستشهد بها",
+      "provisionsFailed": "فشلت معالجة الاستشهادات",
+      "provisionsNoneFound": "لم يُعثر على أحكام مستشهد بها",
+      "provisionsProcessing": "جارٍ معالجة الاستشهادات",
+      "provisionsUnavailable": "الاستشهادات غير متاحة",
+      "provisionsUnplaceable": "لا يمكن تحديد مواضع الاستشهادات في نص القرار",
+      "provisionsUnsupported": "معالجة الاستشهادات غير مدعومة لهذا القرار",
+      "provisionsWithheld": "الاستشهادات محجوبة",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
