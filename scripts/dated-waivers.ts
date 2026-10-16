@@ -449,7 +449,7 @@ export const extensionProposalFailures = ({
         scope.changedFiles.has(file))
     ) {
       const bodyReason =
-        /^owner-reason:[ \t]*(.+)$/mu.exec(body)?.at(1)?.trim() ?? "";
+        /^owner-reason:(.*)$/mu.exec(body)?.at(1)?.trim() ?? "";
       if (bodyReason !== reason) {
         errors.push(
           `${file}: PR body owner-reason: must match the recorded owner reason`,
