@@ -259,8 +259,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
-  panic("expected a redistributable subject");
+  (await withRedistributableSubject(
+    caseLawDb,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a redistributable subject");
 
 const decisionProvisions = async (cursor?: string) => {
   const page = await withSubject(

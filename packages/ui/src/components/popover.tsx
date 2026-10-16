@@ -101,7 +101,7 @@ const PopoverPopup = ({
               ? "py-1 [--viewport-inline-padding:--spacing(2)]"
               : [
                   POPOVER_PADDING[padding],
-                  "not-data-transitioning:overflow-y-auto",
+                  "overscroll-contain not-data-transitioning:overflow-y-auto",
                 ],
           )}
           data-slot="popover-viewport"

@@ -1,4 +1,8 @@
-import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
+import {
+  CI_GENERATED_OUTPUTS,
+  MCP_APP_GENERATED_OUTPUTS,
+  CAPABILITY_RUNTIME_INPUTS,
+} from "../packages/scripts/src/generated-files";
 
 export {
   CI_GENERATED_OUTPUTS,
@@ -17,6 +21,7 @@ export type Generator = {
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  prepare?: readonly string[];
   /**
    * Whether the autofix workflow may run `write` and push its outputs. Only a
    * pure function of committed source qualifies: no network, secrets, clock,
@@ -183,11 +188,7 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-catalog",
     outputKind: "committed",
-    outputs: [
-      "packages/cli/capabilities/**",
-      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "docs/capability-coverage.md",
-    ],
+    outputs: ["packages/cli/capabilities/**", "docs/capability-coverage.md"],
     inputs: [
       "apps/api/src/**",
       "apps/api/src/handlers/**",
@@ -208,13 +209,11 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-runtime",
     outputKind: "derived",
-    outputs: CI_GENERATED_OUTPUTS.capabilityRuntime,
-    inputs: [
-      "packages/cli/capabilities/**",
+    outputs: [
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "apps/api/scripts/generate-capability-runtime.ts",
-      "packages/cli/src/capability-catalog-data.ts",
     ],
+    inputs: CAPABILITY_RUNTIME_INPUTS,
     write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
@@ -233,7 +232,6 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/resource-tree.ts",
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
-      "chatgpt-app-submission.json",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
     ],
     inputs: [
@@ -293,12 +291,8 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "mcp-app-contracts",
-    outputKind: "committed",
-    outputs: [
-      "packages/mcp-apps/src/shared/generated/schemas.json",
-      "packages/mcp-apps/src/shared/generated/contracts.js",
-      "packages/mcp-apps/src/shared/generated/contracts.d.ts",
-    ],
+    outputKind: "derived",
+    outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
       "scripts/generated-artifacts.ts",
@@ -318,8 +312,9 @@ const GENERATOR_DECLARATIONS = [
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "generate:mcp-app-contracts"],
-    check: null,
-    checkedBy: "MCP app package bundles and shared assets guard",
+    prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
+    checkedBy: "MCP app derived outputs guard",
     autofix: true,
     after: [],
   },
@@ -356,14 +351,10 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "mcp-app-bundles",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [
       "packages/mcp-apps/src/*/generated/app.html.txt",
-      "packages/mcp-apps/src/shared/generated/messages.json",
-      "packages/mcp-apps/src/shared/generated/reader-messages.json",
-      "packages/mcp-apps/src/shared/generated/reader-inputs.json",
-      "packages/mcp-apps/src/shared/generated/style.css",
-      "packages/mcp-apps/src/generated/bundles.ts",
+      ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
       "packages/mcp-apps/src/**",
@@ -387,9 +378,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/**",
       "bun.lock",
     ],
-    write: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
-    check: null,
-    checkedBy: "MCP app package bundles and shared assets guard",
+    write: ["bun", "packages/mcp-apps/scripts/build-mcp-apps.ts"],
+    prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
+    checkedBy: "MCP app derived outputs guard",
     autofix: true,
     after: ["mcp-app-contracts"],
   },

@@ -3225,6 +3225,8 @@ export const caseLawAnalysisFailures = p.pgTable.withRLS(
       .jsonb("provider_diagnostic")
       .$type<ProviderDiagnostic>(),
     recordedAt: timestamptz("recorded_at").notNull(),
+    /** Time the provider asked not to be called before; no run starts until then. */
+    retryAfter: timestamptz("retry_after"),
   },
   (t) => [
     p.primaryKey({

@@ -46,6 +46,7 @@ export const loadCourtParagraphNumbers = async ({
   }
   const rows = await withRedistributableDecisions(
     caseLawDb,
+    "search",
     ids,
     async (subjects) => {
       const [first] = subjects;

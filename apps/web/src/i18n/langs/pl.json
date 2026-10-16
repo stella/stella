@@ -173,6 +173,7 @@
       "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
+      "inScoring": "Uwzględnione w ocenie",
       "includeInScoring": "Uwzględnij w ocenie",
       "interpretationNote": "Uwaga do interpretacji",
       "interpretationNotePlaceholder": "Jeśli znaczenie tego dowodu jest sporne, opisz jak. Jeśli nie jest, zostaw pole puste.",
@@ -528,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
+    "invoiceComposer": {
+      "addSellerProfile": "Dodaj profil sprzedawcy w ustawieniach rozliczeń",
+      "billedHours": "Rozliczane godziny",
+      "buyer": "Klient (nabywca)",
+      "continueToDetails": "Przejdź do danych",
+      "continueToIssue": "Przejdź do wystawienia",
+      "datesAndPayment": "Daty i płatność",
+      "days": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+      "draftSavedTitle": "Szkic faktury zapisany",
+      "dueIn": "Termin płatności",
+      "dueOn": "płatna do {date}",
+      "flatFee": "Ta sprawa ma wynagrodzenie ryczałtowe: faktura obejmuje uzgodnione {amount}, a czas poniżej jest nim pokryty.",
+      "flatFeeLine": "Uzgodnione wynagrodzenie ryczałtowe",
+      "include": "Uwzględnij na tej fakturze",
+      "issueFailed": "Szkic został zapisany, ale nie udało się wystawić faktury.",
+      "issueInvoice": "Wystaw fakturę",
+      "issuedTitle": "Faktura {number} wystawiona",
+      "lines": "Pozycje faktury",
+      "loggedHours": "zapisano {hours} h",
+      "noCharge": "Bez opłaty",
+      "noClient": "Ta sprawa nie ma klienta, więc faktura nie ma jeszcze nabywcy.",
+      "noExpenses": "W tej sprawie nie ma zatwierdzonych, niezafakturowanych wydatków.",
+      "noTime": "W tej sprawie nie ma zatwierdzonego, niezafakturowanego czasu.",
+      "noVat": "Bez VAT",
+      "nothingToBill": "Na razie nie ma czego fakturować. Zatwierdź wpisy czasu lub wydatki w tej sprawie, aby je rozliczyć.",
+      "openInvoice": "Otwórz fakturę",
+      "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
+      "outsideScope": "Niepodlegające opodatkowaniu VAT w kraju, 0 %",
+      "rate": "Stawka",
+      "readyDescription": "Wystawienie nadaje fakturze kolejny numer z serii i blokuje ją. Szkic można dalej edytować.",
+      "readyTitle": "Gotowa do wystawienia",
+      "reverseCharge": "Odwrotne obciążenie, 0 %",
+      "saveDraft": "Zapisz jako szkic",
+      "seller": "Sprzedawca",
+      "sources": {
+        "client": "Skopiowano od klienta sprawy",
+        "clientTerm": "Termin płatności klienta",
+        "defaultSeller": "Twój domyślny profil sprzedawcy",
+        "defaultTerm": "Standardowy termin płatności",
+        "lastWorkDay": "Ostatni dzień uwzględnionej pracy"
+      },
+      "steps": {
+        "issue": "Sprawdź i wystaw",
+        "items": "Czas i wydatki"
+      },
+      "tax": "Podatek i waluta",
+      "taxableSupplyDate": "Data dostawy lub wykonania usługi",
+      "timeEntries": "Wpisy czasu",
+      "timeSummary": "{count, plural, one {# wpis} few {# wpisy} many {# wpisów} other {# wpisu}} · {hours} h",
+      "title": "Nowa faktura",
+      "totalsSummary": "Netto {net} · VAT {vat} · Razem {total}",
+      "vat": "Rozliczenie VAT",
+      "vatRate": "VAT {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Nie udało się potwierdzić kraju klienta: numer VAT i adres nie wskazują tego samego kraju, dlatego stosuje się stawkę podstawową",
+        "clientVatIdInvalid": "Numer VAT klienta nie ma formatu numeru VAT jego kraju, dlatego stosuje się stawkę podstawową",
+        "domesticRate": "Twoja najwyższa stawka VAT obowiązująca w dniu wykonania usługi",
+        "noSellerProfile": "Brak profilu sprzedawcy, więc VAT nie jest naliczany, dopóki nie ustawisz go na fakturze",
+        "noVatRate": "W ustawieniach rozliczeń nie skonfigurowano stawki VAT",
+        "outsideScope": "NIP klienta jest zarejestrowany poza UE, więc miejsce świadczenia jest za granicą",
+        "reverseCharge": "Numer VAT klienta jest zarejestrowany w innym kraju",
+        "sellerNotVatPayer": "Sprzedawca nie jest czynnym podatnikiem VAT"
+      }
+    },
     "invoiceNarrative": "Opis na fakturze",
     "invoiceNarrativePlaceholder": "Opis widoczny dla klienta (opcjonalnie)",
     "invoices": {
@@ -670,7 +735,10 @@
       "registrationId": "Numer rejestracyjny",
       "setDefault": "Ustaw jako domyślny",
       "title": "Profile sprzedawcy",
-      "vatId": "Numer VAT"
+      "vatId": "Numer VAT",
+      "vatPayer": "Czynny podatnik VAT",
+      "vatPayerHelp": "Faktury tego sprzedawcy naliczają VAT. Wyłącz dla osoby zarejestrowanej, która ma numer VAT, ale nie jest czynnym podatnikiem.",
+      "vatPayerRequiresVatId": "Podaj numer VAT, aby wystawiać faktury jako czynny podatnik VAT."
     },
     "settingsTitle": "Rozliczenia",
     "split": {
@@ -748,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
+        "retryAfter": "Możesz spróbować ponownie po {time}.",
         "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
         "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
       },
@@ -1044,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
       "provisionsCited": "Powołane przepisy",
+      "provisionsFailed": "Przetwarzanie cytowań nie powiodło się",
+      "provisionsNoneFound": "Nie znaleziono powołanych przepisów",
+      "provisionsProcessing": "Trwa przetwarzanie cytowań",
+      "provisionsUnavailable": "Cytowania są niedostępne",
+      "provisionsUnplaceable": "Nie można umiejscowić cytowań w tekście orzeczenia",
+      "provisionsUnsupported": "Przetwarzanie cytowań nie jest obsługiwane dla tego orzeczenia",
+      "provisionsWithheld": "Cytowania nie są udostępniane",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"
@@ -1294,6 +1370,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
     },
+    "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
@@ -1325,6 +1402,7 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "messageUnavailable": "Nie można wyświetlić tej wiadomości.",
     "mockModel": {
       "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
       "label": "Symulowane AI"
@@ -1484,12 +1562,25 @@
       "rejected": "Odrzucono"
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
+    "tableChart": {
+      "bar": "Słupkowy",
+      "kind": "Typ wykresu",
+      "line": "Liniowy",
+      "loading": "Wybieranie wykresu…",
+      "pie": "Kołowy",
+      "scatter": "Punktowy",
+      "showChart": "Pokaż jako wykres",
+      "summary": "Liczba wyświetlonych wartości: {n, number}.",
+      "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Pracuję z kontekstem",
     "threadFiles": {
       "title": "Pliki w tym czacie"
     },
     "tool": {
       "add_comment": "Dodawanie komentarza",
+      "add_matter_member": "Dodaj członka sprawy",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
       "ares_lookup_company": "Wyszukiwanie danych firmy",
       "ares_search_companies": "Wyszukiwanie danych firm",
@@ -1546,7 +1637,6 @@
       "list_stories": "Wyświetlanie części dokumentu",
       "list_templates": "Wyświetlanie szablonów",
       "load-skill": "Odczytywanie wskazówek",
-      "manage_organization": "Zarządzaj organizacją",
       "read-contact": "Odczyt kontaktu",
       "read-content-across-matters": "Odczyt treści w różnych sprawach",
       "read-skill-resource": "Odczytywanie wskazówek",
@@ -1556,6 +1646,7 @@
       "read_section": "Odczytywanie sekcji",
       "read_story": "Odczytywanie części dokumentu",
       "remember": "Zapamiętywanie",
+      "remove_matter_member": "Usuń członka sprawy",
       "reply_comment": "Odpowiadanie na komentarz",
       "request_secret": "Prośba o prywatne dane dostępowe",
       "resolve_comment": "Rozwiązywanie komentarza",
@@ -1589,6 +1680,7 @@
       "suggest_template_fields": "Proponowanie pól szablonu",
       "unknown": "Używanie narzędzia",
       "update-entity-fields": "Aktualizacja metadanych",
+      "update_organization_settings": "Zaktualizuj ustawienia zespołu",
       "update_reader_annotation": "Edytuj wyróżnienie lub komentarz",
       "use-browser": "Korzystanie z Twojej przeglądarki",
       "use_connector_secret": "Używanie danych dostępowych łącznika",
@@ -1629,7 +1721,8 @@
       "toggleLabel": "Wyszukiwanie w sieci",
       "toggleOff": "Wyłącz wyszukiwanie w sieci",
       "toggleOn": "Włącz wyszukiwanie w sieci"
-    }
+    },
+    "workedFor": "Czas pracy: {duration}"
   },
   "clauses": {
     "addVariant": "Dodaj wariant",
@@ -2554,6 +2647,10 @@
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "validationInvalid": "Pole zawiera wartość, której nie można zapisać.",
+      "validationRequired": "Wymagane pole jest puste.",
+      "validationTooLong": "Za długie: użyj najwyżej {limit, number} znaków.",
+      "validationTooShort": "Za krótkie: użyj co najmniej {limit, number} znaków.",
       "verificationActiveLimitReached": "Twoja organizacja osiągnęła limit jednoczesnych weryfikacji. Poczekaj na zakończenie jednej z nich i spróbuj ponownie.",
       "verificationDailyLimitReached": "Twoja organizacja osiągnęła dzienny limit weryfikacji. Spróbuj ponownie po północy (Europe/Prague).",
       "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
@@ -4515,6 +4612,25 @@
     "tokenHelp": "Jak uzyskać token",
     "viewOnGithub": "Zobacz na GitHubie"
   },
+  "readerAnswers": {
+    "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozwiń odpowiedź",
+    "explain": "Wyjaśnij",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Zadaj dodatkowe pytanie",
+    "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
+    "loading": "Generowanie odpowiedzi…",
+    "minimise": "Zwiń odpowiedź",
+    "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
+    "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
+    "regenerate": "Wygeneruj odpowiedź ponownie",
+    "selectionError": "Zaznacz tekst w obrębie jednego akapitu (do 2000 znaków).",
+    "send": "Wyślij dodatkowe pytanie",
+    "share": "Udostępnij zespołowi",
+    "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
+    "title": "Odpowiedź dotycząca zaznaczonego tekstu"
+  },
   "routeError": {
     "backToMatters": "Wróć do spraw",
     "copyReference": "Kopiuj identyfikator błędu",
@@ -4641,9 +4757,19 @@
       "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Ukończona historia obszarów roboczych pozostanie przypisana do usuniętego konta.",
       "desktop": "Aplikacja na komputer",
       "desktopAppDescription": "Wracaj do wszystkiego, co kopiujesz, i otwieraj dokumenty stella w używanych już aplikacjach komputerowych.",
+      "desktopCardApproveDetail": "Zatwierdź, aby połączyć ten komputer z <bdi>{identity}</bdi> na {host}.",
+      "desktopCardApproveTitle": "stella desktop prosi o połączenie",
+      "desktopCardConnectedDetail": "Połączono z <bdi>{identity}</bdi> na {host} · wersja {version}",
+      "desktopCardConnectedDetailNoVersion": "Połączono z <bdi>{identity}</bdi> na {host}",
+      "desktopCardConnectedTitle": "stella desktop jest powiązany",
+      "desktopCardMissingDetail": "Zainstaluj go lub połącz, jeśli jest już zainstalowany na tym komputerze.",
+      "desktopCardMissingTitle": "stella desktop nie jest jeszcze połączony",
+      "desktopCardOutdatedDetail": "Wersja {version} jest połączona z <bdi>{identity}</bdi>. Zainstaluj najnowszą wersję, aby dokumenty i aktywność nadal działały.",
+      "desktopCardOutdatedTitle": "stella desktop wymaga aktualizacji",
       "desktopClipboardDescription": "Otwieraj, przeszukuj, porządkuj i ponownie wykorzystuj tekst skopiowany z dowolnej aplikacji.",
       "desktopClipboardTitle": "Przeszukiwalna historia schowka",
       "desktopConnectFailed": "Nie udało się połączyć stella desktop.",
+      "desktopConnectInstalled": "Jest zainstalowany, połącz",
       "desktopConnectedAs": "Połączono jako <bdi>{email}</bdi>",
       "desktopDescription": "Historia schowka i narzędzia do dokumentów na komputerze",
       "desktopDocumentsDescription": "Otwieraj pliki stella w aplikacjach komputerowych; zmiany wrócą do właściwej sprawy.",

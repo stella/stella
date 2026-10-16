@@ -176,6 +176,39 @@ const readableColumnPairs = async () => {
   return result.rows;
 };
 
+const existingDeclaredColumns = async (
+  database: Pick<TestDatabaseTransaction, "execute"> = testDb,
+) => {
+  const result = await database.execute<{
+    relation: string;
+    column: string;
+  }>(sql`
+    SELECT tables.relname AS relation, columns.attname AS "column"
+    FROM pg_attribute AS columns
+    INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
+    INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+    WHERE schemas.nspname = 'public'
+      AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
+      AND columns.attnum > 0
+      AND NOT columns.attisdropped
+    ORDER BY relation, "column"
+  `);
+  const declared = new Set(expectedQualifiedColumns);
+  const existing = new Map<string, string[]>();
+  for (const { relation, column } of result.rows) {
+    if (!declared.has(`${relation}.${column}`)) {
+      continue;
+    }
+    const columns = existing.get(relation);
+    if (columns === undefined) {
+      existing.set(relation, [column]);
+      continue;
+    }
+    columns.push(column);
+  }
+  return existing;
+};
+
 let testDb: TestDatabase;
 
 const revokeOtherDatabaseConnectFromPublic = async (
@@ -346,6 +379,7 @@ describe("public-law reader role", () => {
       });
       const reads = await withRedistributableSubject(
         caseLawApplicationDb,
+        "pages",
         { kind: "id", id: decisionId },
         async ({ tx }) => {
           const published = await tx
@@ -521,16 +555,13 @@ describe("public-law reader role", () => {
   // over-privilege.
   test("startup attestation under an older map refuses a later release's grants", async () => {
     const accepted: string[] = [];
-    for (const [relation, declaredColumns] of Object.entries(
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-    )) {
+    for (const [relation, columns] of await existingDeclaredColumns()) {
       const olderMap = Object.fromEntries(
         Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
           ([name]) => name !== relation,
         ),
       );
       const permissions = await rolePermissionsAfter(async (tx) => {
-        const columns = Object.keys(declaredColumns);
         await tx.execute(
           sql.raw(
             `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO ${quoted(READER_ROLE)}`,
@@ -796,12 +827,10 @@ describe("public-law reader role", () => {
             `GRANT ${quoted(READER_ROLE)} TO reader_attestation_admin WITH ADMIN TRUE, INHERIT FALSE, SET FALSE`,
           ),
         );
-        for (const [relation, columns] of Object.entries(
-          PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-        )) {
+        for (const [relation, columns] of await existingDeclaredColumns(tx)) {
           await tx.execute(
             sql.raw(
-              `GRANT SELECT (${Object.keys(columns).map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
+              `GRANT SELECT (${columns.map(quoted).join(", ")}) ON TABLE ${quoted(relation)} TO reader_attestation_admin`,
             ),
           );
         }
@@ -896,10 +925,11 @@ describe("public-law reader role", () => {
 
   test("cannot write any relation it reads", async () => {
     const written: string[] = [];
-    for (const [relation, columns] of Object.entries(
-      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-    )) {
-      const column = quoted(Object.keys(columns).at(0) ?? "");
+    for (const [relation, columns] of await existingDeclaredColumns()) {
+      const column = quoted(
+        columns.at(0) ??
+          panic("An existing relation must have a declared column"),
+      );
       for (const statement of [
         `UPDATE ${quoted(relation)} SET ${column} = ${column}`,
         `DELETE FROM ${quoted(relation)}`,
@@ -1106,6 +1136,7 @@ describe("public-law reader role", () => {
     try {
       const decision = await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: decisionId },
         async (subject) =>
           await readDecisionHandler({ readCourtWeights, subject }),

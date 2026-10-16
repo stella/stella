@@ -15,7 +15,7 @@ import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
@@ -48,6 +48,7 @@ const resolveDecision = async (
 ): Promise<AnnotationTargetAccess> => {
   const row = await withRedistributableSubject(
     caseLawPublicReadDb,
+    "search",
     { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
     async ({ id, tx }) => {
       const [decisionRow] = await tx
@@ -111,7 +112,7 @@ const resolveStatute = async (
               legislationDocuments.id,
               brandPersistedLegislationDocumentId(documentId),
             ),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor("search"),
           ),
         )
         .limit(1),
@@ -126,6 +127,7 @@ const resolveStatute = async (
     status: "available",
     readBlocks: async () =>
       await readVersionBlocks({
+        surface: "search",
         row: version,
         legislationDb: legislationPublicReadDb,
         step: "readerAnnotations.statuteBlocks",

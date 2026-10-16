@@ -4,8 +4,8 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import {
-  publicCaseLawCountry,
-  PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawPageCountry,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -158,7 +158,7 @@ export const readSitemapDecisionAlternates = async (
       and(
         inArray(publishedCaseLawDecisions.languageGroupKey, languageGroupKeys),
         inArray(publishedCaseLawDecisions.country, [
-          ...PUBLIC_CASE_LAW_COUNTRIES,
+          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
         ]),
         redistributableCaseLawSource,
       ),
@@ -217,7 +217,9 @@ export const listSitemapShardsHandler = async (
         })
         .from(caseLawSitemapShards)
         .where(
-          inArray(caseLawSitemapShards.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+          inArray(caseLawSitemapShards.country, [
+            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+          ]),
         )
         .orderBy(
           asc(caseLawSitemapShards.country),
@@ -253,11 +255,11 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const unavailable = publicLawCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country, "pages");
   if (unavailable !== null) {
     return unavailable;
   }
-  const country = publicCaseLawCountry(query.country);
+  const country = publicCaseLawPageCountry(query.country);
   if (country === null) {
     return status(404, { message: "Not Found" });
   }

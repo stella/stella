@@ -90,8 +90,13 @@ const asRole = async (
   await withClient(url, async (database) => {
     try {
       await database.transaction(async (tx) => {
+        // PostgreSQL 16+ gives a role creator ADMIN membership without SET.
+        // Roll this fixture membership back with the rest of the transaction.
+        await tx.execute(
+          sql`GRANT ${sql.identifier(role)} TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`,
+        );
         await setup(tx);
-        await tx.execute(sql.raw(`SET LOCAL ROLE "${role}"`));
+        await tx.execute(sql`SET LOCAL ROLE ${sql.identifier(role)}`);
         await fn(tx);
         tx.rollback();
       });
@@ -282,6 +287,7 @@ if (!databaseUrl || !runPostgresTests) {
         );
         expect(failure).toBeInstanceOf(Error);
         expect(errorAndCauseMessages(failure)).toContain("permission denied");
+        expect(errorAndCauseMessages(failure)).toContain("case_law_decisions");
       }
       await asReader(
         databaseUrl,
@@ -313,6 +319,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
           const resolvedId = await withRedistributableSubject(
             requestDb,
+            "pages",
             { kind: "id", id: decisionId },
             async ({ id }) => id,
           );
@@ -373,6 +380,7 @@ if (!databaseUrl || !runPostgresTests) {
             resetPublicCaseLawConfigForTesting(readerDb);
             const decision = await withRedistributableSubject(
               readerDb,
+              "pages",
               { kind: "id", id: decisionId },
               async (subject) => await readDecisionHandler({ subject }),
             );

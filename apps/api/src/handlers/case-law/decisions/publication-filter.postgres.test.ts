@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
@@ -363,6 +363,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           await withRedistributableSubject(
             caseLawDb,
+            "pages",
             { kind: "id", id: redactedId },
             async (subject) => subject.id,
           ),
@@ -370,6 +371,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           await withRedistributableSubject(
             caseLawDb,
+            "pages",
             { kind: "id", id: listingOnlyId },
             async (subject) => subject.id,
           ),
@@ -456,25 +458,14 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         );
 
-        const published = pgFtsBrowseFacetPublishedQuery(tx).as("published");
-        const publishedIds = new Set(
-          (
-            await tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .innerJoin(
-                published,
-                eq(caseLawDecisions.sourceId, published.sourceId),
-              )
-          ).map(({ id }) => id),
+        const published = await pgFtsBrowseFacetPublishedQuery(tx);
+        expect(new Set(published.map(({ sourceId }) => sourceId))).toEqual(
+          new Set(
+            rows
+              .filter((_, index) => states[index]?.visibility === true)
+              .map(({ sourceId }) => sourceId),
+          ),
         );
-        for (const [index, state] of states.entries()) {
-          const row = rows[index];
-          if (row === undefined) {
-            panic("Expected a row for each publication state");
-          }
-          expect(publishedIds.has(row.id)).toBe(state.visibility);
-        }
       });
     });
   }, 120_000);

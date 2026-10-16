@@ -8,6 +8,7 @@ import { DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
@@ -39,7 +40,10 @@ const FIELD_LABELS = {
   accountNumber: "common.anonymizationLabels.bankAccountNumber",
   defaultCurrency: "billing.sellerProfiles.defaultCurrency",
   footerNotes: "billing.sellerProfiles.footerNotes",
-} as const satisfies Record<keyof SellerProfileInput, string>;
+} as const satisfies Record<
+  Exclude<keyof SellerProfileInput, "vatPayer">,
+  string
+>;
 
 type SellerProfileFormProps = {
   profile?: SellerProfile;
@@ -62,6 +66,7 @@ export const SellerProfileForm = ({
     invalidIban: t("billing.sellerProfiles.invalidIban"),
     invalidBic: t("billing.sellerProfiles.invalidBic"),
     invalidCurrency: t("billing.sellerProfiles.invalidCurrency"),
+    vatPayerRequiresVatId: t("billing.sellerProfiles.vatPayerRequiresVatId"),
   });
   const form = useForm(
     schemaFormOptions({
@@ -71,6 +76,7 @@ export const SellerProfileForm = ({
         legalName: profile?.legalName ?? "",
         registrationId: profile?.registrationId ?? "",
         vatId: profile?.vatId ?? "",
+        vatPayer: profile?.vatPayer ?? false,
         addressLine1: profile?.addressLine1 ?? "",
         addressLine2: profile?.addressLine2 ?? "",
         city: profile?.city ?? "",
@@ -164,6 +170,31 @@ export const SellerProfileForm = ({
               )}
             </form.Field>
           ))}
+          <form.Field name="vatPayer">
+            {(field) => (
+              <Field name={field.name} className="sm:col-span-2">
+                <div className="flex items-start gap-3">
+                  <Switch
+                    aria-describedby={`${id}-vatPayer-help`}
+                    checked={field.state.value}
+                    id={`${id}-vatPayer`}
+                    onCheckedChange={(checked) => field.handleChange(checked)}
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <FieldLabel htmlFor={`${id}-vatPayer`}>
+                      {t("billing.sellerProfiles.vatPayer")}
+                    </FieldLabel>
+                    <span
+                      className="text-muted-foreground text-xs"
+                      id={`${id}-vatPayer-help`}
+                    >
+                      {t("billing.sellerProfiles.vatPayerHelp")}
+                    </span>
+                  </div>
+                </div>
+              </Field>
+            )}
+          </form.Field>
         </fieldset>
       </DialogPanel>
       <DialogFooter>

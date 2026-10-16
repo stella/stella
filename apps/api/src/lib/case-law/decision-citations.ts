@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { status } from "elysia";
 
@@ -53,6 +53,8 @@ type CitationPageOptions = {
   tx: CaseLawPublicReadTransaction;
   cursor: string | undefined;
   decisionId: SafeId<"caseLawDecision">;
+  /** The subject's own country list; the far end answers to the same list. */
+  countries: readonly string[];
 };
 
 type ScannedCitation<T> = {
@@ -90,6 +92,7 @@ const readOutgoingDecisionCitationRows = async ({
   tx,
   cursor,
   decisionId,
+  countries,
 }: CitationPageOptions) => {
   const cursorId = decodeCitationCursor(cursor);
   if (cursorId === null) {
@@ -136,6 +139,7 @@ const readOutgoingDecisionCitationRows = async ({
         OR (
           ${citedSource.id} IS NOT NULL
           AND ${redistributableCaseLawSourceFor(citedSource.descriptor)}
+          AND ${inArray(citedDecision.country, [...countries])}
         )
       )`,
     })
@@ -197,6 +201,7 @@ export const listIncomingDecisionCitations = async ({
   tx,
   cursor,
   decisionId,
+  countries,
 }: CitationPageOptions) => {
   const cursorId = decodeCitationCursor(cursor);
   if (cursorId === null) {
@@ -232,6 +237,7 @@ export const listIncomingDecisionCitations = async ({
       visible: sql<boolean>`(
         ${citingSource.id} IS NOT NULL
         AND ${redistributableCaseLawSourceFor(citingSource.descriptor)}
+        AND ${inArray(citingDecision.country, [...countries])}
       )`,
     })
     .from(candidates)

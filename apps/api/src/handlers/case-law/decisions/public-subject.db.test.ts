@@ -34,6 +34,7 @@ import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -98,9 +99,13 @@ beforeAll(
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
 
     await db.insert(caseLawSources).values([
-      caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
       caseLawSourceRow({
-        adapterKey: "closed",
+        adapterKey: ADAPTER_KEYS.CZ_NS,
+        id: openSourceId,
+        name: "open",
+      }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         descriptor: {
           allowsDerivedAi: false,
           allowsRedistribution: false,
@@ -314,6 +319,7 @@ test(
     const read = async (id: SafeId<"caseLawDecision">) => {
       const result = await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id },
         async (subject) =>
           await readDecisionHandler({
@@ -366,6 +372,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: closedId },
         async (subject) => subject.id,
       ),
@@ -373,6 +380,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: openId },
         async (subject) => subject.id,
       ),
@@ -412,7 +420,7 @@ test(
     const decision = createSafeId<"caseLawDecision">();
     await db.insert(caseLawSources).values([
       caseLawSourceRow({
-        adapterKey: "revoked",
+        adapterKey: ADAPTER_KEYS.CZ_US,
         id: revoked,
         name: "revoked",
       }),
@@ -526,6 +534,7 @@ test(
     // The decision read answers with the judgment itself, and says why.
     const read = await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: absorbedId },
       async (subject) =>
         await readDecisionHandler({
@@ -594,6 +603,7 @@ test(
     const resolve = async (id: SafeId<"caseLawDecision">) =>
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id },
         async (subject) => subject.id,
       );

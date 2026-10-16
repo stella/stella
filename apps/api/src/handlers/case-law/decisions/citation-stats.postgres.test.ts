@@ -123,6 +123,8 @@ const compareFilteredSummary = async (client: SQL, ids: string[]) => {
           tx,
           decisionId: toSafeId<"caseLawDecision">(decisionId),
           currentYear,
+          // The oracle above reads the search list; so does this read.
+          countries: PUBLIC_CASE_LAW_COUNTRIES,
           limit,
         }),
     });

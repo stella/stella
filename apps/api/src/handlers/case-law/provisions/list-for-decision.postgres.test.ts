@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { caseLawProvisionExtractions } from "@/api/db/schema";
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -35,7 +36,10 @@ if (!databaseUrl || !runPostgresTests) {
       const decisionId = createSafeId<"caseLawDecision">();
       const listingOnlyId = createSafeId<"caseLawDecision">();
       const redactedId = createSafeId<"caseLawDecision">();
-      const language = `x${Bun.randomUUIDv7().replaceAll("-", "").slice(-7)}`;
+      const language = "cs";
+      const [initialScope] = await owner`
+        SELECT status FROM case_law_provision_extraction_scopes
+        WHERE country = 'CZE' AND language = ${language}`;
       const setStatusGrants = async (mode: "grant" | "revoke") => {
         const columnsByRelation = new Map<string, string[]>();
         for (const { relation, column } of publicLawColumnPairs(
@@ -97,6 +101,7 @@ if (!databaseUrl || !runPostgresTests) {
       const page = async (cursor?: string) =>
         (await withRedistributableSubject(
           readDb,
+          "pages",
           { kind: "id", id: decisionId },
           async (subject) =>
             await listDecisionProvisionsHandler({
@@ -110,7 +115,11 @@ if (!databaseUrl || !runPostgresTests) {
           VALUES (${sourceId}::uuid, ${`provision-read-${Bun.randomUUIDv7()}`}, 'Test source')`;
         await owner`INSERT INTO case_law_provision_extraction_scopes
           (country, language, status, generation)
-          VALUES ('CZE', ${language}, 'active', 1)`;
+          VALUES ('CZE', ${language}, 'active', 1)
+          ON CONFLICT (country, language) DO UPDATE
+          SET status = 'active',
+            generation = case_law_provision_extraction_scopes.generation + 1
+          WHERE case_law_provision_extraction_scopes.status <> 'active'`;
         await owner`INSERT INTO case_law_decisions
           (id, source_id, country, language, court, case_number, content_hash)
           VALUES (${decisionId}::uuid, ${sourceId}::uuid, 'CZE', ${language},
@@ -127,6 +136,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(
             await withRedistributableSubject(
               readDb,
+              "pages",
               { kind: "id", id },
               async (subject) => subject.id,
             ),
@@ -165,6 +175,8 @@ if (!databaseUrl || !runPostgresTests) {
               targetStatus: null,
             },
           ],
+          capability: { type: "supported", languages: ["cs"] },
+          pendingSince: null,
           status: { type: "pending" },
           generation: "0",
           publishedProjectionDigest: null,
@@ -179,9 +191,18 @@ if (!databaseUrl || !runPostgresTests) {
           canDelegatePublicLaw: false,
         });
 
+        const [queuedExtraction] = await ownerDb
+          .select({ pendingSince: caseLawProvisionExtractions.pendingSince })
+          .from(caseLawProvisionExtractions)
+          .where(eq(caseLawProvisionExtractions.decisionId, decisionId));
+        const pendingSince =
+          queuedExtraction?.pendingSince ??
+          panic("expected the decision insert to enqueue extraction");
         const first = await page();
         expect(first).toMatchObject({
           items: [{ spanStart: 10 }],
+          capability: { type: "supported", languages: ["cs"] },
+          pendingSince: pendingSince.toISOString(),
           status: { type: "legacy" },
           generation: "0",
           publishedProjectionDigest: null,
@@ -223,8 +244,14 @@ if (!databaseUrl || !runPostgresTests) {
         });
       } finally {
         await setStatusGrants(initialGrantMode);
-        await owner`DELETE FROM case_law_decisions WHERE id = ${decisionId}::uuid`;
+        await owner`DELETE FROM case_law_decisions
+          WHERE id IN (${decisionId}::uuid, ${listingOnlyId}::uuid, ${redactedId}::uuid)`;
         await owner`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`;
+        if (initialScope?.status === "retired") {
+          await owner`UPDATE case_law_provision_extraction_scopes
+            SET status = 'retired', generation = generation + 1
+            WHERE country = 'CZE' AND language = ${language}`;
+        }
       }
     });
   }, 20_000);

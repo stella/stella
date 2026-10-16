@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
-import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { isPublicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -100,7 +100,7 @@ export const readPublicDecisionBadges = async ({
         readCourtRegistry(readCourtWeights),
       ]);
       const publicRows = rows.filter((row) =>
-        isPublicCaseLawCountry(row.country),
+        isPublicCaseLawPageCountry(row.country),
       );
       const alternatesByGroupKey =
         await readPublicDecisionLanguageAlternatesByGroup({

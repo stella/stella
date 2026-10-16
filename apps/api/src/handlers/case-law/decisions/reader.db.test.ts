@@ -419,6 +419,7 @@ const read = async (
     decisionId,
     phase,
     audience: "model",
+    surface: "search",
   });
 const measuredRead = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -465,6 +466,7 @@ describe("public decision reader database boundary", () => {
         decisionId: withheldId,
         phase: "citations",
         audience: "app",
+        surface: "search",
         appReaderTextOf: () => APP_READER_TEXT.FULL,
       });
       return { result, statements: counter.count };
@@ -594,6 +596,7 @@ describe("public decision reader database boundary", () => {
         decisionId: provisionLargeId,
         phase: "provisions",
         audience: "model",
+        surface: "search",
         ...(referenceCursor === undefined ? {} : { referenceCursor }),
       });
       expect(result?.status).toBe("read");
@@ -647,6 +650,7 @@ describe("public decision reader database boundary", () => {
         decisionId: provisionLargeId,
         phase: "provisions",
         audience: "model",
+        surface: "search",
         referenceCursor: first.referenceNextCursor,
       }),
     ).toEqual({ status: "conflict" });

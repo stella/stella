@@ -260,6 +260,7 @@ test.each(fixtures)(
       userId,
     });
     const fallbackAst = await readStoredVersionAst({
+      surface: "search",
       legislationDb,
       id: fixture.statuteId,
       purpose: "derived-ai",

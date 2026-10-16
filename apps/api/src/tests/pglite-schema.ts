@@ -17,6 +17,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261015090000_matter_access_rule_function",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -91,6 +96,11 @@ const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
 const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260929180100_case_law_provision_scope_transition_keyset",
+  "migration.sql",
+);
+const PROVISION_PENDING_SINCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261010110000_case_law_provision_pending_since",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -269,6 +279,7 @@ export const installPgliteWorkspaceAccessObjects = async (
 ): Promise<void> => {
   const migrationPaths = [
     WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
+    MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH,
     CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH,
   ];
   for (const migrationPath of migrationPaths) {
@@ -670,6 +681,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_READ_STATUS_MIGRATION_PATH,
     PROVISION_READER_GRANTS_MIGRATION_PATH,
     PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
+    PROVISION_PENDING_SINCE_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
