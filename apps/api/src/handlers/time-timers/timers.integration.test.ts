@@ -23,6 +23,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
+  auditLogs,
   organizationSettings,
   rateTables,
   timeEntries,
@@ -161,6 +162,54 @@ const confirm = async (
   );
 
 describe("global timer lifecycle", () => {
+  test("starting in a foreign or missing matter has the same opaque refusal and preserves running timers", async () => {
+    const running = await start();
+    const missingMatterId = createSafeId<"workspace">();
+    expect(
+      await db.query.workspaces.findFirst({ where: { id: { eq: ids.wsB1 } } }),
+    ).toBeDefined();
+    expect(
+      await db.query.workspaces.findFirst({
+        where: { id: { eq: missingMatterId } },
+      }),
+    ).toBeUndefined();
+    const snapshot = async () => {
+      const [timers, entries, audits, matters, assignments] = await Promise.all(
+        [
+          db.select().from(timeTimers).orderBy(timeTimers.id),
+          db.select().from(timeEntries).orderBy(timeEntries.id),
+          db.select().from(auditLogs).orderBy(auditLogs.id),
+          db.select().from(workspaces).orderBy(workspaces.id),
+          db.select().from(workspaceMembers).orderBy(workspaceMembers.id),
+        ],
+      );
+      return { timers, entries, audits, matters, assignments };
+    };
+    const before = await snapshot();
+    const eventsBefore = [...auditEvents];
+    const refusals = [];
+    for (const matterId of [ids.wsB1, missingMatterId]) {
+      const result = await startTimer.handler(
+        createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+          ...context(),
+          body: checkedBody(startTimer.config.body, {
+            matterId,
+            description: "Research and drafting",
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        code: 404,
+        response: { message: "Matter not found or not accessible" },
+      });
+      refusals.push(result);
+      expect(await snapshot()).toEqual(before);
+      expect(auditEvents).toEqual(eventsBefore);
+    }
+    expect(refusals.at(0)).toEqual(refusals.at(1));
+    expect(await readTimer(running.id)).toMatchObject({ state: "running" });
+  });
+
   test("start and resume transfer the running state without counting paused time", async () => {
     const first = await start();
     setSystemTime(new Date("2026-09-02T00:01:00.000Z"));

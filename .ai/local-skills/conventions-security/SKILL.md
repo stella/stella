@@ -97,7 +97,10 @@ the owner; historical fixtures must prove their schema predates visibility.
 After a mutation acquires its prefix, re-read reach and current authority
 through `readMatterMutationAuthority` before acting on an earlier authorized
 matter ID. Refuse lost reach with the same not-found response as a missing
-matter. Recovery cannot assign its acting
+matter. Multi-phase copies re-read every copied matter-row field and its
+assignments under the prefix, using the same projection as the snapshot.
+Refuse changed snapshots before inserting a copy and clean up staged files.
+Recovery cannot assign its acting
 administrator; hidden healthy, missing and foreign-organization matters produce
 the same not-found response.
 

@@ -119,13 +119,6 @@ BEGIN
     RAISE EXCEPTION 'stewardship lock requires the transaction organization' USING ERRCODE = 'insufficient_privilege';
   END IF;
   IF current_setting('role', true) = 'stella' AND EXISTS (
-    SELECT 1 FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[])
-    JOIN public.workspaces w ON w.id = ANY(r.workspace_ids)
-    WHERE w.organization_id IS DISTINCT FROM r.organization_id
-  ) THEN
-    RAISE EXCEPTION 'stewardship lock requires the transaction organization' USING ERRCODE = 'insufficient_privilege';
-  END IF;
-  IF current_setting('role', true) = 'stella' AND EXISTS (
     SELECT 1 FROM jsonb_to_recordset(p_requests) AS r(membership_user_ids text[])
     WHERE cardinality(r.membership_user_ids) > 0
   ) THEN
@@ -133,12 +126,13 @@ BEGIN
   END IF;
   SELECT proof INTO held FROM public.matter_stewardship_locks
     WHERE transaction_id = txid_current();
+  -- Explicit IDs also reserve future creation identities. Echo them uniformly:
+  -- foreign and absent IDs must not differ in discovery or error behavior.
+  -- Matter rows and candidate memberships are discovered and locked only within the request tenant.
   SELECT COALESCE(array_agg(DISTINCT w.id ORDER BY w.id), '{}'::uuid[]) INTO targets
   FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], membership_user_ids text[])
   CROSS JOIN LATERAL (
     SELECT requested.id FROM unnest(r.workspace_ids) AS requested(id)
-    WHERE NOT EXISTS (SELECT 1 FROM public.workspaces existing
-      WHERE existing.id = requested.id AND existing.organization_id <> r.organization_id)
     UNION
     SELECT matter.id FROM public.workspaces matter
     WHERE matter.organization_id = r.organization_id AND (
@@ -187,8 +181,6 @@ BEGIN
   FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], membership_user_ids text[])
   CROSS JOIN LATERAL (
     SELECT requested.id FROM unnest(r.workspace_ids) AS requested(id)
-    WHERE NOT EXISTS (SELECT 1 FROM public.workspaces existing
-      WHERE existing.id = requested.id AND existing.organization_id <> r.organization_id)
     UNION
     SELECT matter.id FROM public.workspaces matter
     WHERE matter.organization_id = r.organization_id AND (

@@ -245,6 +245,7 @@ describe("duplicateWorkspace", () => {
             workspaces: {
               findFirst: async () => ({
                 id: "ws_source123",
+                status: "active",
                 name: "Smith v Jones",
                 clientId: "contact_client123",
                 billingReference: "BILL-123",
@@ -457,6 +458,7 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
@@ -612,6 +614,7 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
@@ -876,6 +879,7 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,
@@ -1032,134 +1036,188 @@ describe("duplicateWorkspace", () => {
     ]);
   });
 
-  test("returns every object copied for an aborted duplicate", async () => {
-    const sourceKey = seedSourceObject("source-file-id", "image/png");
-    enqueueEntitySearchRepairsMock.mockClear();
-    enqueueWorkspaceSearchRepairsMock.mockClear();
+  test.each([
+    { field: "unchanged", patch: {} },
+    { field: "name", patch: { name: "Changed matter" } },
+    { field: "client", patch: { clientId: "contact_changed" } },
+    { field: "billing reference", patch: { billingReference: "CHANGED" } },
+    { field: "color", patch: { color: "red" } },
+    { field: "lead", patch: { leadUserId: "user_changed" } },
+    { field: "visibility", patch: { visibility: "assigned_only" } },
+    { field: "status", patch: { status: "archived" } },
+    { field: "assignment removed", patch: {} },
+    { field: "assignment added", patch: {} },
+  ])(
+    "returns copied objects and writes nothing when source $field aborts duplication",
+    async (sourceChange) => {
+      const sourceKey = seedSourceObject("source-file-id", "image/png");
+      enqueueEntitySearchRepairsMock.mockClear();
+      enqueueWorkspaceSearchRepairsMock.mockClear();
 
-    const filePropertyId = toSafeId<"property">("prop_file");
-    const insertedTables: unknown[] = [];
+      const filePropertyId = toSafeId<"property">("prop_file");
+      const insertedTables: unknown[] = [];
+      const executedWrites: string[] = [];
+      let sourceReads = 0;
+      let memberReads = 0;
+      const sourceWorkspace = {
+        id: "ws_source123",
+        status: "active",
+        name: "Smith v Jones",
+        clientId: null,
+        billingReference: null,
+        color: null,
+        leadUserId: null,
+        visibility: "admins_and_assigned",
+      };
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      query: {
-        workspaces: {
-          findFirst: async () => ({
-            id: "ws_source123",
-            name: "Smith v Jones",
-            clientId: null,
-            billingReference: null,
-            color: null,
-            leadUserId: null,
-            visibility: "admins_and_assigned",
-          }),
-        },
-        properties: {
-          findMany: async () => [
-            {
-              id: filePropertyId,
-              workspaceId: "ws_source123",
-              name: "Document",
-              status: "active",
-              content: { type: "file", version: 1 },
-              tool: null,
-              system: false,
-              kinds: ["document"],
+      const { safeDb, scopedDb } = createScopedDbMock({
+        query: {
+          workspaces: {
+            findFirst: async () => {
+              sourceReads += 1;
+              return sourceReads === 1
+                ? sourceWorkspace
+                : { ...sourceWorkspace, ...sourceChange.patch };
             },
-          ],
-        },
-        propertyDependencies: { findMany: async () => [] },
-        workspaceViews: { findMany: async () => [] },
-        workspaceMembers: { findMany: async () => [] },
-        workspaceContacts: { findMany: async () => [] },
-        organizationSettings: { findFirst: async () => null },
-        entities: {
-          findMany: async () => [
-            {
-              id: "entity_document",
-              kind: "document",
-              name: "evidence.png",
-              parentId: null,
-              currentVersion: {
-                id: "version_document",
-                fields: [
-                  {
-                    propertyId: filePropertyId,
-                    content: {
-                      type: "file",
-                      version: 1,
-                      id: "source-file-id",
-                      fileName: "evidence.png",
-                      mimeType: "image/png",
-                      sizeBytes: 1024,
-                      encrypted: false,
-                      sha256Hex: "a".repeat(64),
-                      pdfFileId: null,
+          },
+          properties: {
+            findMany: async () => [
+              {
+                id: filePropertyId,
+                workspaceId: "ws_source123",
+                name: "Document",
+                status: "active",
+                content: { type: "file", version: 1 },
+                tool: null,
+                system: false,
+                kinds: ["document"],
+              },
+            ],
+          },
+          propertyDependencies: { findMany: async () => [] },
+          workspaceViews: { findMany: async () => [] },
+          workspaceMembers: {
+            findMany: async () => {
+              memberReads += 1;
+              if (
+                sourceChange.field === "assignment removed" &&
+                memberReads === 1
+              ) {
+                return [{ userId: "user_assigned123" }];
+              }
+              if (
+                sourceChange.field === "assignment added" &&
+                memberReads === 2
+              ) {
+                return [{ userId: "user_assigned123" }];
+              }
+              return [];
+            },
+          },
+          workspaceContacts: { findMany: async () => [] },
+          organizationSettings: { findFirst: async () => null },
+          entities: {
+            findMany: async () => [
+              {
+                id: "entity_document",
+                kind: "document",
+                name: "evidence.png",
+                parentId: null,
+                currentVersion: {
+                  id: "version_document",
+                  fields: [
+                    {
+                      propertyId: filePropertyId,
+                      content: {
+                        type: "file",
+                        version: 1,
+                        id: "source-file-id",
+                        fileName: "evidence.png",
+                        mimeType: "image/png",
+                        sizeBytes: 1024,
+                        encrypted: false,
+                        sha256Hex: "a".repeat(64),
+                        pdfFileId: null,
+                      },
                     },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        select: (selectedFields: Record<string, unknown>) => {
+          if ("role" in selectedFields) {
+            return createSelectQueryMock([{ role: "owner" }]);
+          }
+          if ("total" in selectedFields) {
+            return {
+              from: () => ({
+                where: async () => [{ total: LIMITS.workspacesCount }],
+              }),
+            };
+          }
+          return { from: () => ({ where: async () => [] }) };
+        },
+        insert: (table: unknown) => ({
+          values: () => {
+            insertedTables.push(table);
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [
+                  {
+                    lastValue:
+                      table === matterCounters
+                        ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
+                        : 1,
                   },
                 ],
-              },
-            },
-          ],
+              }),
+            };
+          },
+        }),
+        update: () => ({ set: () => ({ where: async () => undefined }) }),
+        execute: async (query: SQL) => {
+          const statement = new PgDialect().sqlToQuery(query);
+          if (statement.sql.includes("stella_create_workspace")) {
+            executedWrites.push(statement.sql);
+          }
+          return [];
         },
-      },
-      select: (selectedFields: Record<string, unknown>) => {
-        if ("role" in selectedFields) {
-          return createSelectQueryMock([{ role: "owner" }]);
-        }
-        if ("total" in selectedFields) {
-          return {
-            from: () => ({
-              where: async () => [{ total: LIMITS.workspacesCount }],
-            }),
-          };
-        }
-        return { from: () => ({ where: async () => [] }) };
-      },
-      insert: (table: unknown) => ({
-        values: () => {
-          insertedTables.push(table);
-          return {
-            onConflictDoUpdate: () => ({
-              returning: async () => [
-                {
-                  lastValue:
-                    table === matterCounters
-                      ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
-                      : 1,
-                },
-              ],
-            }),
-          };
-        },
-      }),
-      update: () => ({ set: () => ({ where: async () => undefined }) }),
-      execute: async () => [],
-    });
+      });
 
-    expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
-    const result = await duplicateWorkspace.handler(
-      createContext({ includeContent: true, safeDb, scopedDb }),
-    );
+      expect(env.FEATURE_FILE_USAGE_LIMITS).toBe(false);
+      const result = await duplicateWorkspace.handler(
+        createContext({ includeContent: true, safeDb, scopedDb }),
+      );
 
-    // The abort travels as the same rejection the caller always answered.
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspaces limit reached" },
-    });
-    expect(insertedTables).toEqual([]);
+      // The abort travels as the same rejection the caller always answered.
+      const expectedRefusal =
+        sourceChange.field === "unchanged"
+          ? { code: 400, response: { message: "Workspaces limit reached" } }
+          : {
+              code: 409,
+              response: { message: "Source matter changed; retry duplication" },
+            };
+      expect(result).toEqual(expectedRefusal);
+      expect(insertedTables).toEqual([]);
+      expect(executedWrites).toEqual([]);
+      expect(sourceReads).toBe(2);
+      expect(memberReads).toBe(2);
 
-    // No row survives the abort, so every object copied for it is an orphan
-    // and all of them go back.
-    const copiedKeys = requestKeys("COPY");
-    const deletedKeys = requestKeys("DELETE");
-    expect(copiedKeys).toHaveLength(1);
-    expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
-    // The store is back to the source object alone.
-    expect([...fake.objects.keys()]).toEqual([sourceKey]);
+      // No row survives the abort, so every object copied for it is an orphan
+      // and all of them go back.
+      const copiedKeys = requestKeys("COPY");
+      const deletedKeys = requestKeys("DELETE");
+      expect(copiedKeys).toHaveLength(1);
+      expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+      // The store is back to the source object alone.
+      expect([...fake.objects.keys()]).toEqual([sourceKey]);
 
-    expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
-    expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
-  });
+      expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
+      expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
+    },
+  );
 
   test("rejects an oversized source before the duplicate writes anything", async () => {
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -1167,6 +1225,7 @@ describe("duplicateWorkspace", () => {
         workspaces: {
           findFirst: async () => ({
             id: "ws_source123",
+            status: "active",
             name: "Smith v Jones",
             clientId: null,
             billingReference: null,

@@ -338,12 +338,6 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
       membershipUserIds: [],
     },
     {
-      name: "another organization's matter under the local organization",
-      organizationId: ORG,
-      workspaceIds: [MATTER.otherOrgClientMatter],
-      membershipUserIds: [],
-    },
-    {
       name: "membership-wide discovery",
       organizationId: ORG,
       workspaceIds: [],
@@ -382,6 +376,63 @@ describe("assigned-only matter stewardship across mutation entry points", () => 
       });
       await database.exec("ROLLBACK");
       expect(await matterSnapshot(database)).toEqual(before);
+    },
+  );
+
+  test.each(["restricted", "owner"] as const)(
+    "%s preflight treats foreign and absent matter IDs alike without locking foreign rows",
+    async (caller) => {
+      await using database = await migrated();
+      const foreignRows = async () => ({
+        matters: (
+          await database.query(
+            "SELECT id, xmax::text AS lock_version FROM workspaces WHERE organization_id = $1 ORDER BY id",
+            [OTHER_ORG],
+          )
+        ).rows,
+        members: (
+          await database.query(
+            "SELECT id, xmax::text AS lock_version FROM member WHERE organization_id = $1 ORDER BY id",
+            [OTHER_ORG],
+          )
+        ).rows,
+      });
+      for (const workspaceId of [
+        MATTER.otherOrgClientMatter,
+        "00000000-0000-4000-8000-000000000099",
+      ]) {
+        await database.exec("BEGIN");
+        const before = await foreignRows();
+        if (caller === "restricted") {
+          await database.exec("SET LOCAL ROLE stella");
+        }
+        await database.query(
+          "SELECT set_config('app.organization_id', $1, true)",
+          [ORG],
+        );
+        const result = await database.query(
+          "SELECT count(*)::integer AS requested_count FROM public.stella_lock_matter_stewardship($1::text::jsonb, 'update')",
+          [
+            JSON.stringify([
+              {
+                organization_id: ORG,
+                workspace_ids: [workspaceId],
+                user_ids: [OWNER],
+                membership_user_ids: [],
+              },
+            ]),
+          ],
+        );
+        expect(result.rows).toEqual([{ requested_count: 1 }]);
+        await database.exec("RESET ROLE");
+        // Heap xmax changes on a row-lock acquisition even when no values change.
+        expect(await foreignRows()).toEqual(before);
+        const proof = await database.query(
+          "SELECT proof->'members' AS members FROM public.matter_stewardship_locks WHERE transaction_id = txid_current()",
+        );
+        expect(proof.rows).toEqual([{ members: ["m1"] }]);
+        await database.exec("ROLLBACK");
+      }
     },
   );
 
