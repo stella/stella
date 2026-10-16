@@ -154,8 +154,8 @@ checks:
     # version everywhere, ignoring the ranges its dependents declare, and
     # bun applies it without erroring even when it pins the package BELOW a
     # dependent's floor. That is silent at install and only surfaces as a
-    # MISSING_EXPORT at build/runtime (how a stale folio-core/docx-core pin
-    # broke folio). This fails when a resolution holds a dependency below
+    # missing export at build or run time. This fails when a resolution
+    # holds a dependency below
     # any dependent's required floor; intentional overrides are allowlisted
     # in the guard.
     run: bun scripts/check-resolution-ranges.ts
@@ -819,8 +819,8 @@ checks:
     # Elysia builds an "exactMirror" serializer per route schema. Some
     # schemas (recursive ones: t.Recursive, or a Type.Unsafe wrapping a
     # self-referential TypeBox node) cannot be mirrored: Elysia logs the
-    # failure and falls back to slow per-request serialization, which has
-    # taken the API down at boot. Typecheck and lint do not catch it. The
+    # failure and falls back to slow per-request serialization, which can
+    # stall the API at boot. Typecheck and lint do not catch it. The
     # guard builds the real app and forces every route's mirror to compile,
     # failing if any cannot. The --self-test run first proves the detector
     # still catches a known recursive schema, so a broken guard cannot pass

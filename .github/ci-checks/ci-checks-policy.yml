@@ -206,9 +206,9 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_010 != 'true') }}
     # The CLI is small enough to enforce the `exports`/`types` issue
     # types today (the apps above are not; see the note in the step
-    # before). An exported helper that no runtime or test path calls is
-    # how "login never persists the default server" shipped: the
-    # persistence function existed, unused. Test files are entries in
+    # before). An exported helper that no runtime or test path calls
+    # usually means a code path that was meant to be wired up is not.
+    # Test files are entries in
     # knip.json so test-only exports count as used; anything else that
     # is exported but unreferenced fails here.
     run: |
