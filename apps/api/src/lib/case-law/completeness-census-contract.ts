@@ -1,4 +1,5 @@
 import { Type, type Static } from "@sinclair/typebox";
+import { panic } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
@@ -72,6 +73,35 @@ export const sourceCensusSchema = t.Object(
   { additionalProperties: false },
 );
 export type SourceCensus = Static<typeof sourceCensusSchema>;
+
+type MeasureCensusCountsOptions = {
+  listed: number;
+  publisherCount: number | undefined;
+};
+
+/** Preserve both observations and identify the count that sets the denominator. */
+export const measureCensusCounts = ({
+  listed,
+  publisherCount,
+}: MeasureCensusCountsOptions) => {
+  if (
+    !Number.isSafeInteger(listed) ||
+    listed < 0 ||
+    (publisherCount !== undefined &&
+      (!Number.isSafeInteger(publisherCount) || publisherCount < 0))
+  ) {
+    return panic("Census publisher count is invalid");
+  }
+  return {
+    outcome:
+      publisherCount === undefined || publisherCount < listed
+        ? "listing-enumerated"
+        : "publisher-count",
+    publisherCount: Math.max(publisherCount ?? listed, listed),
+    publisherStatedCount: publisherCount ?? null,
+    enumeratedCount: listed,
+  } as const;
+};
 
 // Checked against the public contract at every producer and projection call site.
 export const sourceCensusProjection = v.strictObject({

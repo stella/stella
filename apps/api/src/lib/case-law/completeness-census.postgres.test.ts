@@ -20,6 +20,7 @@ import {
   readCompletenessCensusQuery,
   recordCompletenessCensus,
 } from "@/api/lib/case-law/completeness-census";
+import { CENSUS_CAPABILITIES } from "@/api/lib/case-law/completeness-census-capabilities";
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
@@ -247,7 +248,18 @@ describe.skipIf(!enabled)(
             await db.transaction(callback);
           // The listing has two distinct identities; only one is held with text.
           // Counts below, equal to and above the listing must all retain the gap.
-          for (const publisherCount of [1, 0, 2, 3, undefined]) {
+          const evidenceRef = CENSUS_CAPABILITIES["cz-ns"].evidenceRef;
+          for (const { publisherCount, publisher, outcome } of [
+            { publisherCount: 1, publisher: 2, outcome: "listing-enumerated" },
+            { publisherCount: 0, publisher: 2, outcome: "listing-enumerated" },
+            { publisherCount: 2, publisher: 2, outcome: "publisher-count" },
+            { publisherCount: 3, publisher: 3, outcome: "publisher-count" },
+            {
+              publisherCount: undefined,
+              publisher: 2,
+              outcome: "listing-enumerated",
+            },
+          ] as const) {
             await recordCompletenessCensus(scopedDb, {
               sourceId,
               leaseToken,
@@ -267,12 +279,43 @@ describe.skipIf(!enabled)(
             ]);
             expect(rows.get(String(sourceId))).toMatchObject({
               verdict: "incomplete",
-              publisher: publisherCount === 3 ? 3 : 2,
+              publisher,
+              outcome,
+              evidenceRef,
               stored: 1,
               withText: 1,
               shortSlices: 1,
-              worstSlices: [{ slice: "2026", stored: 1, withText: 1 }],
+              worstSlices: [
+                {
+                  slice: "2026",
+                  publisher,
+                  outcome,
+                  evidenceRef,
+                  stored: 1,
+                  withText: 1,
+                },
+              ],
             });
+            const observations = await db
+              .select({
+                publisherStatedCount:
+                  caseLawCompletenessCensus.publisherStatedCount,
+                enumeratedCount: caseLawCompletenessCensus.enumeratedCount,
+                publisherCount: caseLawCompletenessCensus.publisherCount,
+                outcome: caseLawCompletenessCensus.outcome,
+                evidenceRef: caseLawCompletenessCensus.evidenceRef,
+              })
+              .from(caseLawCompletenessCensus)
+              .where(eq(caseLawCompletenessCensus.sourceId, sourceId));
+            expect(observations).toEqual([
+              {
+                publisherStatedCount: publisherCount ?? null,
+                enumeratedCount: 2,
+                publisherCount: publisher,
+                outcome,
+                evidenceRef,
+              },
+            ]);
             expect(countryCensusVerdict([...rows.values()])).toBe("incomplete");
           }
         } finally {
@@ -669,6 +712,8 @@ describe.skipIf(!enabled)(
               outcome: "publisher-count" as const,
               scopeStatus: "full-publisher" as const,
               publisherCount: 1,
+              publisherStatedCount: 1,
+              enumeratedCount: 1,
               storedCount: 1,
               textCount: 1,
               observedAt: new Date("2026-10-16T12:00:00Z"),

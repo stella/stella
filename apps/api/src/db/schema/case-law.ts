@@ -1681,7 +1681,12 @@ export const caseLawCompletenessCensus = p.pgTable(
     scopeStatus: p
       .text("scope_status", { enum: CENSUS_SCOPE_STATUSES })
       .notNull(),
+    /** Effective completeness denominator; outcome identifies its provenance. */
     publisherCount: p.integer("publisher_count"),
+    /** Unmodified stated total, retained privately even when enumeration is larger. */
+    publisherStatedCount: p.integer("publisher_stated_count"),
+    /** Distinct listing identities plus entries without a usable identity. */
+    enumeratedCount: p.integer("enumerated_count").notNull(),
     storedCount: p.integer("stored_count").notNull(),
     textCount: p.integer("text_count").notNull(),
     observedAt: timestamptz("observed_at").notNull(),
@@ -1700,6 +1705,8 @@ export const caseLawCompletenessCensus = p.pgTable(
       "case_law_completeness_census_counts",
       sql`
       ${t.storedCount} >= 0 AND ${t.textCount} >= 0 AND ${t.textCount} <= ${t.storedCount}
+      AND ${t.enumeratedCount} >= 0
+      AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} >= 0)
       AND ${t.expectedSlices} > 0
       AND ${t.scopeStatus} IN (${sql.join(
         CENSUS_SCOPE_STATUSES.map((status) => sql`${status}`),
@@ -1710,6 +1717,15 @@ export const caseLawCompletenessCensus = p.pgTable(
         sql`, `,
       )}) AND ${t.publisherCount} >= 0 AND ${t.publisherCount} IS NOT NULL AND (${t.year} IS NOT NULL OR ${t.slice} LIKE '0000%'))
         OR (${t.outcome} = 'none-exposed' AND ${t.publisherCount} IS NULL))
+      AND (${t.outcome} <> 'publisher-count' OR (
+        ${t.publisherStatedCount} IS NOT NULL
+        AND ${t.publisherCount} = ${t.publisherStatedCount}
+        AND ${t.publisherStatedCount} >= ${t.enumeratedCount}
+      ))
+      AND (${t.outcome} <> 'listing-enumerated' OR (
+        ${t.publisherCount} = ${t.enumeratedCount}
+        AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} < ${t.enumeratedCount})
+      ))
     `,
     ),
     p.pgPolicy("public_law_reader_access", {

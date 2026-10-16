@@ -12,6 +12,7 @@ import {
   CENSUS_WORST_SLICES_LIMIT,
   CENSUS_YEAR_SUMMARIES_LIMIT,
   censusVerdictFromSummary,
+  measureCensusCounts,
 } from "@/api/lib/case-law/completeness-census-contract";
 import type { SourceCensus } from "@/api/lib/case-law/completeness-census-contract";
 import { CENSUS_AGGREGATE_UNIT } from "@/api/lib/case-law/completeness-census-values";
@@ -123,30 +124,12 @@ export const recordCompletenessCensus = async (
   if (capability.type !== "none-exposed" && year === undefined) {
     panic(`Census slice lacks a year: ${options.adapterKey}/${options.slice}`);
   }
-  const measuredOutcome =
-    options.publisherCount === undefined
-      ? "listing-enumerated"
-      : "publisher-count";
+  const measured = measureCensusCounts(options);
   const outcome =
-    capability.type === "none-exposed" ? capability.type : measuredOutcome;
-  if (
-    options.publisherCount !== undefined &&
-    (!Number.isSafeInteger(options.publisherCount) ||
-      options.publisherCount < 0)
-  ) {
-    panic("Census publisher count is invalid");
-  }
+    capability.type === "none-exposed" ? capability.type : measured.outcome;
   // A stated total cannot erase identities already enumerated by the publisher.
   const publisherCount =
-    outcome === "none-exposed"
-      ? null
-      : Math.max(options.publisherCount ?? options.listed, options.listed);
-  if (
-    publisherCount !== null &&
-    (!Number.isSafeInteger(publisherCount) || publisherCount < 0)
-  ) {
-    panic("Census publisher count is invalid");
-  }
+    outcome === "none-exposed" ? null : measured.publisherCount;
   await scopedDb(async (tx) => {
     if (
       !(await lockCaseLawSourceIngestionLease({
@@ -189,6 +172,8 @@ export const recordCompletenessCensus = async (
           ? "partial-publisher"
           : capability.scopeStatus,
       publisherCount,
+      publisherStatedCount: measured.publisherStatedCount,
+      enumeratedCount: measured.enumeratedCount,
       storedCount,
       textCount,
       observedAt: options.observedAt,

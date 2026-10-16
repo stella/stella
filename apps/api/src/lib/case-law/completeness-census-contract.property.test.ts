@@ -7,6 +7,7 @@ import {
   censusSliceIsShort,
   censusVerdict,
   countryCensusVerdict,
+  measureCensusCounts,
   type CensusSlice,
 } from "./completeness-census-contract";
 
@@ -19,6 +20,64 @@ const slice = (
   observedAt: "2026-10-16T00:00:00Z",
   evidenceRef: "https://publisher.example/count",
   ...counts,
+});
+
+test("an enumeration above the publisher statement preserves both counts", () => {
+  expect(measureCensusCounts({ listed: 2, publisherCount: 1 })).toEqual({
+    publisherCount: 2,
+    publisherStatedCount: 1,
+    enumeratedCount: 2,
+    outcome: "listing-enumerated",
+  });
+});
+
+test("census-count-provenance-keeps-stated-and-enumerated-observations", () => {
+  assertProperty(
+    "census-count-provenance-keeps-stated-and-enumerated-observations",
+    fc.property(
+      fc.oneof(
+        fc.constantFrom(1, 2, 1000, Number.MAX_SAFE_INTEGER - 1),
+        fc.integer({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }),
+      ),
+      (listed) => {
+        const observations = [
+          {
+            publisherCount: listed - 1,
+            denominator: listed,
+            outcome: "listing-enumerated",
+          },
+          {
+            publisherCount: listed,
+            denominator: listed,
+            outcome: "publisher-count",
+          },
+          {
+            publisherCount: listed + 1,
+            denominator: listed + 1,
+            outcome: "publisher-count",
+          },
+          {
+            publisherCount: undefined,
+            denominator: listed,
+            outcome: "listing-enumerated",
+          },
+        ] as const;
+        for (const observation of observations) {
+          expect(
+            measureCensusCounts({
+              listed,
+              publisherCount: observation.publisherCount,
+            }),
+          ).toEqual({
+            publisherCount: observation.denominator,
+            publisherStatedCount: observation.publisherCount ?? null,
+            enumeratedCount: listed,
+            outcome: observation.outcome,
+          });
+        }
+      },
+    ),
+  );
 });
 
 test("a missing measurement or empty universe never authorizes launch", () => {

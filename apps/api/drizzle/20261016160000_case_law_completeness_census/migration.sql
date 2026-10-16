@@ -7,6 +7,8 @@ CREATE TABLE "case_law_completeness_census" (
   "outcome" text NOT NULL,
   "scope_status" text NOT NULL,
   "publisher_count" integer,
+  "publisher_stated_count" integer,
+  "enumerated_count" integer NOT NULL,
   "stored_count" integer NOT NULL,
   "text_count" integer NOT NULL,
   "observed_at" timestamptz NOT NULL,
@@ -17,9 +19,20 @@ CREATE TABLE "case_law_completeness_census" (
   PRIMARY KEY ("source_id", "slice"),
   CONSTRAINT "case_law_completeness_census_counts" CHECK (
     "stored_count" >= 0 AND "text_count" >= 0 AND "text_count" <= "stored_count" AND "expected_slices" > 0
+    AND "enumerated_count" >= 0
+    AND ("publisher_stated_count" IS NULL OR "publisher_stated_count" >= 0)
     AND "scope_status" IN ('full-publisher', 'partial-publisher')
     AND (("outcome" IN ('publisher-count', 'listing-enumerated') AND "publisher_count" >= 0 AND "publisher_count" IS NOT NULL AND ("year" IS NOT NULL OR "slice" LIKE '0000%'))
       OR ("outcome" = 'none-exposed' AND "publisher_count" IS NULL))
+    AND ("outcome" <> 'publisher-count' OR (
+      "publisher_stated_count" IS NOT NULL
+      AND "publisher_count" = "publisher_stated_count"
+      AND "publisher_stated_count" >= "enumerated_count"
+    ))
+    AND ("outcome" <> 'listing-enumerated' OR (
+      "publisher_count" = "enumerated_count"
+      AND ("publisher_stated_count" IS NULL OR "publisher_stated_count" < "enumerated_count")
+    ))
   )
 );--> statement-breakpoint
 CREATE INDEX "case_law_completeness_census_source_year_idx" ON "case_law_completeness_census" ("source_id", "year");--> statement-breakpoint
