@@ -14,6 +14,7 @@ import {
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { CAPTURE_DPR } from "./captures";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
@@ -154,6 +155,10 @@ const captures = [
     },
   },
 ] as const;
+
+// Stills share the recordings' device pixel ratio, so the PNGs are twice the
+// CSS clip size and stay sharp on retina screens. Clips stay in CSS pixels.
+test.use({ deviceScaleFactor: CAPTURE_DPR });
 
 test("capture landing product screenshots", async ({
   context,
@@ -400,7 +405,7 @@ test("capture landing product screenshots", async ({
           // a macOS-to-Linux font gap. Dispatch that workflow on the branch
           // when the UI change is intended.
           maxDiffPixelRatio: 0.005,
-          scale: "css",
+          scale: "device",
         });
       // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
       // Supplier Agreement. A full navigation never unmounts the editor, so
