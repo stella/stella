@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
       "provisionsCited": "Hivatkozott rendelkezések",
+      "provisionsFailed": "A hivatkozások feldolgozása sikertelen",
+      "provisionsNoneFound": "Nem találhatók hivatkozott rendelkezések",
+      "provisionsProcessing": "A hivatkozások feldolgozása folyamatban van",
+      "provisionsUnavailable": "A hivatkozások nem érhetők el",
+      "provisionsUnplaceable": "A hivatkozások nem helyezhetők el a határozat szövegében",
+      "provisionsUnsupported": "A hivatkozások feldolgozása ennél a határozatnál nem támogatott",
+      "provisionsWithheld": "A hivatkozások nem hozzáférhetők",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"

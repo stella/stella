@@ -1113,6 +1113,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# menção} other {# menções}}",
       "provisionsCited": "Dispositivos citados",
+      "provisionsFailed": "O processamento das citações falhou",
+      "provisionsNoneFound": "Nenhum dispositivo citado encontrado",
+      "provisionsProcessing": "As citações estão sendo processadas",
+      "provisionsUnavailable": "As citações não estão disponíveis",
+      "provisionsUnplaceable": "As citações não podem ser localizadas no texto da decisão",
+      "provisionsUnsupported": "O processamento de citações não é compatível com esta decisão",
+      "provisionsWithheld": "As citações não são divulgadas",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"

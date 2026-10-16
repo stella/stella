@@ -270,6 +270,7 @@ runtime validation, or integration tests.
 - [`no-crypto-random-uuid`](./no-crypto-random-uuid.ts) (`no-crypto-random-uuid`): requires each runtime's UUIDv7 owner instead of direct UUIDv4 generation.
 - [`no-eager-singleton`](./no-eager-singleton.ts) (`no-eager-singleton`): prevents side-effecting clients from being constructed at module evaluation time; use lazy getters.
 - [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects; rejects the removed API document-AST facades through aliases and relative paths, directing consumers to `@stll/legal-ast/document-ast`.
+- [`no-test-support-import`](./no-test-support-import.ts) (`no-test-support-import`): keeps production modules under `apps/api/src` from importing anything under `apps/api/src/tests/`, whose helpers include unchecked casts; type-only and dynamic imports count. Test files and the tests tree are out of scope.
 - [`no-nanoid`](./no-nanoid.ts) (`no-nanoid`): prevents the removed Nano ID dependency from returning; use UUIDv7 or Web Crypto for custom alphabets.
 - [`confine-server-reads`](./confine-server-reads.ts) (`confine-server-reads`): keeps Start request metadata access behind the approved server helper.
 - [`no-partial-record-satisfies`](./no-partial-record-satisfies.ts) (`no-partial-record-satisfies`): rejects `satisfies Partial<Record<Union, T>>`, which defeats exhaustive companion-map checking.

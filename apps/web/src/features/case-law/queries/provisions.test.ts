@@ -207,6 +207,8 @@ describe("provisions for inline linking", () => {
                   previews: [],
                   status: { type: "legacy" },
                   generation: "7",
+                  capability: { type: "supported", languages: ["cs"] },
+                  pendingSince: null,
                 }
               : {
                   items: [{ anchor: "par_70-odst_2", spanStart: 28_592 }],
@@ -215,6 +217,8 @@ describe("provisions for inline linking", () => {
                   previews: [],
                   status: { type: "legacy" },
                   generation: "7",
+                  capability: { type: "supported", languages: ["cs"] },
+                  pendingSince: null,
                 },
           ),
           { headers: { "Content-Type": "application/json" } },
