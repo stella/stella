@@ -157,6 +157,10 @@
       "anonymized": {"title": 25, "description": 274, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2058},
       "default": {"title": 25, "description": 336, "inputSchema": 608, "outputSchema": 940, "annotations": 102, "payloadUtf8Bytes": 2120}
     },
+    "mint_web_handoff": {
+      "advanced": {"title": 13, "description": 110, "inputSchema": 169, "outputSchema": 104, "annotations": 91, "payloadUtf8Bytes": 626},
+      "default": {"title": 13, "description": 110, "inputSchema": 169, "outputSchema": 104, "annotations": 91, "payloadUtf8Bytes": 626}
+    },
     "open_case_law_decision": {
       "advanced": {"title": 22, "description": 237, "inputSchema": 470, "outputSchema": 1521, "annotations": 100, "payloadUtf8Bytes": 2547},
       "anonymized": {"title": 22, "description": 237, "inputSchema": 470, "outputSchema": 1521, "annotations": 100, "payloadUtf8Bytes": 2547},
