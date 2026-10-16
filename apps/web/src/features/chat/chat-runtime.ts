@@ -359,11 +359,17 @@ export const createChatRuntime = ({
   let stopBeforeHeaders: "none" | "requested" = "none";
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
+  /** The server refused the latest request for a turn it had already
+   *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
+   *  a generic replay of the same failure stays quiet too; the next request
+   *  clears it. */
+  let settledTurnRefused = false;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
+    settledTurnRefused = false;
     stopBeforeHeaders = "none";
     if (snapshot.stop.status !== "idle") {
       setSnapshot({ stop: { status: "idle" } });
@@ -683,7 +689,13 @@ export const createChatRuntime = ({
         if (activeToolResultOperation !== undefined) {
           activeToolResultOperation.rejection = error;
         }
-        reloadThread();
+        if (!settledTurnRefused) {
+          settledTurnRefused = true;
+          reloadThread();
+        }
+        return;
+      }
+      if (settledTurnRefused) {
         return;
       }
       if (
@@ -702,6 +714,11 @@ export const createChatRuntime = ({
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
       // reporting its typed cause. A new request clears the error first.
+      if (error === undefined) {
+        settledTurnRefused = false;
+      } else if (settledTurnRefused) {
+        return;
+      }
       if (
         error !== undefined &&
         ((actionAdmissionOutcome(snapshot.error) &&
