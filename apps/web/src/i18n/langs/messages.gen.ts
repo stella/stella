@@ -532,6 +532,70 @@ type Messages = {
     };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
+    "invoiceComposer": {
+      "addSellerProfile": "Add a seller profile in billing settings";
+      "billedHours": "Billed hours";
+      "buyer": "Client (buyer)";
+      "continueToDetails": "Continue to details";
+      "continueToIssue": "Continue to issue";
+      "datesAndPayment": "Dates and payment";
+      "days": "{days, plural, one {# day} other {# days}}";
+      "draftSavedTitle": "Draft invoice saved";
+      "dueIn": "Due in";
+      "dueOn": "due {date}";
+      "flatFee": "This matter has a flat fee: the invoice bills the agreed {amount}, and the time below is covered by it.";
+      "flatFeeLine": "Agreed flat fee";
+      "include": "Include on this invoice";
+      "issueFailed": "The draft was saved but could not be issued.";
+      "issueInvoice": "Issue invoice";
+      "issuedTitle": "Invoice {number} issued";
+      "lines": "Invoice lines";
+      "loggedHours": "{hours} h logged";
+      "noCharge": "No charge";
+      "noClient": "This matter has no client, so the invoice has no buyer yet.";
+      "noExpenses": "No approved, unbilled expenses on this matter.";
+      "noTime": "No approved, unbilled time on this matter.";
+      "noVat": "No VAT";
+      "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.";
+      "openInvoice": "Open invoice";
+      "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.";
+      "outsideScope": "Outside the scope of VAT, 0 %";
+      "rate": "Rate";
+      "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.";
+      "readyTitle": "Ready to issue";
+      "reverseCharge": "Reverse charge, 0 %";
+      "saveDraft": "Save as draft";
+      "seller": "Seller";
+      "sources": {
+        "client": "Copied from the matter's client";
+        "clientTerm": "The client's payment term";
+        "defaultSeller": "Your default seller profile";
+        "defaultTerm": "Standard payment term";
+        "lastWorkDay": "Last day of included work";
+      };
+      "steps": {
+        "issue": "Review and issue";
+        "items": "Time and expenses";
+      };
+      "tax": "Tax and currency";
+      "taxableSupplyDate": "Taxable supply date";
+      "timeEntries": "Time entries";
+      "timeSummary": "{count, plural, one {# entry} other {# entries}} · {hours} h";
+      "title": "New invoice";
+      "totalsSummary": "Excl. VAT {net} · VAT {vat} · Total {total}";
+      "vat": "VAT treatment";
+      "vatRate": "{rate} % VAT";
+      "vatReasons": {
+        "clientCountryUnconfirmed": "Couldn't confirm the client's country: its VAT ID and address don't name the same country, so the standard rate applies";
+        "clientVatIdInvalid": "The client's VAT ID doesn't have the format of a VAT ID from its country, so the standard rate applies";
+        "domesticRate": "Your highest VAT rate in force on the supply date";
+        "noSellerProfile": "No seller profile, so no VAT is charged until you set it on the invoice";
+        "noVatRate": "No VAT rate is set up in billing settings";
+        "outsideScope": "The client's VAT ID is registered outside the EU, so the place of supply is abroad";
+        "reverseCharge": "The client's VAT ID is registered in another country";
+        "sellerNotVatPayer": "The seller is not a VAT payer";
+      };
+    };
     "invoiceNarrative": "Invoice narrative";
     "invoiceNarrativePlaceholder": "Client-facing description (optional)";
     "invoices": {
@@ -675,6 +739,9 @@ type Messages = {
       "setDefault": "Make default";
       "title": "Seller profiles";
       "vatId": "VAT ID";
+      "vatPayer": "VAT payer";
+      "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.";
+      "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer.";
     };
     "settingsTitle": "Billing";
     "split": {
@@ -1049,6 +1116,13 @@ type Messages = {
       "provisionMentions": "{count, number}×";
       "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";
+      "provisionsFailed": "Citation processing failed";
+      "provisionsNoneFound": "No cited provisions found";
+      "provisionsProcessing": "Citations are being processed";
+      "provisionsUnavailable": "Citations are unavailable";
+      "provisionsUnplaceable": "Citations cannot be placed in the decision text";
+      "provisionsUnsupported": "Citation processing is not supported for this decision";
+      "provisionsWithheld": "Citations are withheld";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";
@@ -1491,6 +1565,18 @@ type Messages = {
       "rejected": "Rejected";
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
+    "tableChart": {
+      "bar": "Bar";
+      "kind": "Chart type";
+      "line": "Line";
+      "loading": "Choosing a chart…";
+      "pie": "Pie";
+      "scatter": "Scatter";
+      "showChart": "Show as chart";
+      "summary": "Values shown: {n, number}.";
+      "unavailable": "A chart could not be selected. The table is shown.";
+      "values": "{label}: {value, number}";
+    };
     "thinking": "Working with context";
     "threadFiles": {
       "title": "Files in this chat";
@@ -4673,9 +4759,19 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
+      "desktopCardApproveDetail": "Approve to link this computer to <bdi>{identity}</bdi> on {host}.";
+      "desktopCardApproveTitle": "stella desktop is asking to connect";
+      "desktopCardConnectedDetail": "Linked to <bdi>{identity}</bdi> on {host} · version {version}";
+      "desktopCardConnectedDetailNoVersion": "Linked to <bdi>{identity}</bdi> on {host}";
+      "desktopCardConnectedTitle": "stella desktop is linked";
+      "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.";
+      "desktopCardMissingTitle": "stella desktop isn't linked yet";
+      "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.";
+      "desktopCardOutdatedTitle": "stella desktop needs an update";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";
+      "desktopConnectInstalled": "It's installed, connect";
       "desktopConnectedAs": "Connected as <bdi>{email}</bdi>";
       "desktopDescription": "Clipboard history and document tools on your computer";
       "desktopDocumentsDescription": "Open stella files in desktop apps; revisions return to the right matter.";

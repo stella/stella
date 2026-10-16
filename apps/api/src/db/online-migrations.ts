@@ -202,6 +202,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legal_lists_sample_workspace_uidx" ON public."legal_lists" USING btree ("workspace_id") WHERE "sample_case" IS NOT NULL',
+    definitionBody:
+      "ON public.legal_lists USING btree (workspace_id) WHERE (sample_case IS NOT NULL)",
+    isUnique: true,
+    name: "legal_lists_sample_workspace_uidx",
+    tableName: "legal_lists",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_provision_scope_cursor_idx" ON public."case_law_decisions" USING btree ("country", "language", "id")',
     definitionBody:
       "ON public.case_law_decisions USING btree (country, language, id)",
@@ -216,6 +225,24 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       "ON public.case_law_provision_extractions USING btree (jurisdiction, lane, due_at, decision_id) WHERE ((due_at IS NOT NULL) AND (work_status <> 'blocked'::text))",
     isUnique: false,
     name: "case_law_provision_extractions_jurisdiction_due_idx",
+    tableName: "case_law_provision_extractions",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_pending_idx" ON public."case_law_provision_extractions" USING btree ("jurisdiction", "pending_since", "decision_id") WHERE "pending_since" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_provision_extractions USING btree (jurisdiction, pending_since, decision_id) WHERE (pending_since IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_provision_extractions_pending_idx",
+    tableName: "case_law_provision_extractions",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_provision_extractions_clock_seed_idx" ON public."case_law_provision_extractions" USING btree ("decision_id") WHERE "due_at" IS NOT NULL AND "pending_since" IS NULL',
+    definitionBody:
+      "ON public.case_law_provision_extractions USING btree (decision_id) WHERE ((due_at IS NOT NULL) AND (pending_since IS NULL))",
+    isUnique: false,
+    name: "case_law_provision_extractions_clock_seed_idx",
     tableName: "case_law_provision_extractions",
   },
   DOCUMENT_OUTSTANDING_INDEX,

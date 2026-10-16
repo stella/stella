@@ -103,6 +103,7 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
   ast: decisionAst(),
   citationAnchors: [],
   provisionAnchors: [],
+  provisionStatus: null,
   referenceNextCursor: null,
 });
 

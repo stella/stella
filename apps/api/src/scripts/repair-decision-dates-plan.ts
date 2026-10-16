@@ -23,6 +23,7 @@ import {
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
@@ -434,6 +435,7 @@ const reopenWrittenAt = async (
       batch.cleared += 1;
     }
     const announced = await reopenAffectedCitations(tx, row, repaired);
+    await runDecisionWriteExtension(tx, row.id);
     if (!announced) {
       batch.unannounced.push(row);
     }

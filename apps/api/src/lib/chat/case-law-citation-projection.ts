@@ -9,7 +9,7 @@ import {
   CITATION_TREATMENTS,
 } from "../case-law/citation-vocabulary";
 import { caseNumberTypeProjection } from "./case-law-result-projections";
-import { passthroughId, publicUrl } from "./projection-fields";
+import { contentText, passthroughId, publicUrl } from "./projection-fields";
 
 /**
  * read_case_law_citations. Source of truth: `handleReadCaseLawCitationsTool`
@@ -45,7 +45,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           caseNumber: v.string(),
-          caseNumberType: v.optional(caseNumberTypeProjection),
+          caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
           court: v.string(),
           decisionDate: v.nullable(v.string()),
@@ -61,7 +61,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
       passage: v.nullable(
         v.strictObject({
           anchorId: passthroughId(),
-          text: v.string(),
+          text: contentText(),
           truncated: v.boolean(),
           mention: v.picklist(CITATION_PASSAGE_MENTIONS),
           evidenceQuote: v.optional(v.string()),
