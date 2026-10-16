@@ -99,7 +99,7 @@ const adapter = (entries: readonly SoftLawEntry[], content = "original") =>
       userAgent: "Stella/1.0 (+https://stella.example/contact)",
       window: { type: "any_time" },
     },
-    discover: async () => ({ entries, nextCursor: null }),
+    discover: async () => Result.ok({ entries, nextCursor: null }),
     fetchDocument: async (item) => Result.ok(document(item, content)),
     getTotalCount: async () => ({ type: "no-count-endpoint" }),
     sliceWalk: { type: "unsupported", reason: "Complete listing" },
@@ -299,14 +299,16 @@ if (!databaseUrl || !enabled) {
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
             cursors.push(cursor);
             if (cursor === null) {
-              return { entries: [first], nextCursor: "second" };
+              return Result.ok({ entries: [first], nextCursor: "second" });
             }
             if (fail) {
-              throw new SoftLawIngestionError({
-                message: "Injected interruption",
-              });
+              return Result.err(
+                new SoftLawIngestionError({
+                  message: "Injected interruption",
+                }),
+              );
             }
-            return { entries: [second], nextCursor: null };
+            return Result.ok({ entries: [second], nextCursor: null });
           },
         };
         expect((await run(pages)).status).toBe("failed");
@@ -337,7 +339,7 @@ if (!databaseUrl || !enabled) {
           discover: async () => {
             entered();
             await wait;
-            return { entries: [item], nextCursor: null };
+            return Result.ok({ entries: [item], nextCursor: null });
           },
         };
         const first = run(slow);
@@ -365,8 +367,11 @@ if (!databaseUrl || !enabled) {
             fetch,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
             requests++;
-            await fetch("https://uoou.gov.cz/a");
-            return { entries: [], nextCursor: null };
+            const response = await fetch("https://uoou.gov.cz/a");
+            if (Result.isError(response)) {
+              return Result.err(response.error);
+            }
+            return Result.ok({ entries: [], nextCursor: null });
           },
         };
         expect(
@@ -515,9 +520,11 @@ if (!databaseUrl || !enabled) {
           discover: async ({
             cursor,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) =>
-            cursor === null
-              ? { entries: [entry()], nextCursor: "next" }
-              : { entries: [], nextCursor: null },
+            Result.ok(
+              cursor === null
+                ? { entries: [entry()], nextCursor: "next" }
+                : { entries: [], nextCursor: null },
+            ),
         };
         expect((await run(pages, { scopedDb })).status).toBe("failed");
         expect(injected).toBe(true);
@@ -706,10 +713,11 @@ if (!databaseUrl || !enabled) {
         let poisonCalls = 0;
         const sourceAdapter = {
           ...adapter([]),
-          discover: async () => ({
-            entries: discovery++ === 0 ? [poison, later] : [later],
-            nextCursor: null,
-          }),
+          discover: async () =>
+            Result.ok({
+              entries: discovery++ === 0 ? [poison, later] : [later],
+              nextCursor: null,
+            }),
           fetchDocument: async (item: SoftLawEntry) => {
             if (item.url === poison.url) {
               poisonCalls++;
@@ -737,6 +745,77 @@ if (!databaseUrl || !enabled) {
           count: 3,
           entry: poison,
         });
+      }));
+
+    test("page capacity durably defers valid items without consuming their failure budget", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const entries = ["first", "second", "third"].map((slug) =>
+          entry(`https://uoou.gov.cz/${slug}`, slug, slug),
+        );
+        const bytes = new Uint8Array(40 * 1024 * 1024);
+        const calls = new Map<string, number>();
+        const sourceAdapter = {
+          ...adapter(entries),
+          fetchDocument: async (item: SoftLawEntry) => {
+            const call = (calls.get(item.url) ?? 0) + 1;
+            calls.set(item.url, call);
+            if (item.url.endsWith("/third") && (call === 2 || call === 3)) {
+              return Result.err(
+                new SoftLawAccessError({
+                  message: "Temporary publisher failure",
+                }),
+              );
+            }
+            return Result.ok({
+              ...document(item),
+              raw: [
+                { role: "document", bytes, contentType: "application/pdf" },
+              ],
+            });
+          },
+        } satisfies SoftLawSourceAdapter;
+        const receipts = async () =>
+          await db
+            .select()
+            .from(softLawIngestionAttempts)
+            .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+        expect(await run(sourceAdapter)).toEqual({ status: "paused" });
+        expect(calls.get("https://uoou.gov.cz/first")).toBe(1);
+        expect(calls.get("https://uoou.gov.cz/second")).toBe(1);
+        expect(calls.has("https://uoou.gov.cz/third")).toBe(false);
+        expect(
+          (await receipts())
+            .filter((receipt) => receipt.status === "retryable")
+            .map((receipt) => receipt.count),
+        ).toEqual([0, 0]);
+        expect(await run(sourceAdapter)).toEqual({ status: "paused" });
+        expect(calls.get("https://uoou.gov.cz/first")).toBe(1);
+        expect(calls.get("https://uoou.gov.cz/second")).toBe(2);
+        expect(calls.get("https://uoou.gov.cz/third")).toBe(1);
+        expect(
+          (await receipts()).find((receipt) => receipt.url.endsWith("/third")),
+        ).toMatchObject({ status: "retryable", count: 0 });
+        for (const count of [1, 2]) {
+          expect(await run(sourceAdapter)).toEqual({ status: "paused" });
+          expect(
+            (await receipts()).find((receipt) =>
+              receipt.url.endsWith("/third"),
+            ),
+          ).toMatchObject({ status: "retryable", count });
+        }
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        expect(
+          (await receipts()).find((receipt) => receipt.url.endsWith("/third")),
+        ).toMatchObject({ status: "applied", count: 3 });
+        const documents = await db
+          .select()
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(documents).toHaveLength(3);
+        expect(
+          (await receipts()).every((receipt) => receipt.status === "applied"),
+        ).toBe(true);
+        expect(calls.get("https://uoou.gov.cz/third")).toBe(4);
       }));
 
     test("oversized raw input is rejected before retaining or storing it, and later items land", async () =>
@@ -833,8 +912,11 @@ if (!databaseUrl || !enabled) {
                 discover: async ({
                   fetch,
                 }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
-                  await fetch("https://uoou.gov.cz/listing");
-                  return { entries: [], nextCursor: null };
+                  const response = await fetch("https://uoou.gov.cz/listing");
+                  if (Result.isError(response)) {
+                    return Result.err(response.error);
+                  }
+                  return Result.ok({ entries: [], nextCursor: null });
                 },
               },
               {
@@ -904,9 +986,11 @@ if (!databaseUrl || !enabled) {
               if (cursor === null) {
                 starts.push(cursor);
               }
-              return cursor === null
-                ? { entries: retained.slice(0, 4), nextCursor: "second" }
-                : { entries: retained.slice(4), nextCursor: null };
+              return Result.ok(
+                cursor === null
+                  ? { entries: retained.slice(0, 4), nextCursor: "second" }
+                  : { entries: retained.slice(4), nextCursor: null },
+              );
             },
           });
           expect(result).toMatchObject({
@@ -1215,8 +1299,11 @@ if (!databaseUrl || !enabled) {
           discover: async ({
             fetch,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
-            await fetch(entry().url);
-            return { entries: [], nextCursor: null };
+            const response = await fetch(entry().url);
+            if (Result.isError(response)) {
+              return Result.err(response.error);
+            }
+            return Result.ok({ entries: [], nextCursor: null });
           },
         } as const satisfies SoftLawSourceAdapter;
         expect(
@@ -1398,13 +1485,17 @@ if (!databaseUrl || !enabled) {
             const sourceAdapter = {
               ...adapter(listed),
               discover: async ({ cursor }) =>
-                separatePages
-                  ? {
-                      entries:
-                        cursor === null ? listed.slice(0, 1) : listed.slice(1),
-                      nextCursor: cursor === null ? "second" : null,
-                    }
-                  : { entries: listed, nextCursor: null },
+                Result.ok(
+                  separatePages
+                    ? {
+                        entries:
+                          cursor === null
+                            ? listed.slice(0, 1)
+                            : listed.slice(1),
+                        nextCursor: cursor === null ? "second" : null,
+                      }
+                    : { entries: listed, nextCursor: null },
+                ),
               fetchDocument: async (item) =>
                 Result.ok(
                   document(
@@ -1485,7 +1576,8 @@ if (!databaseUrl || !enabled) {
         let listed = [winner, loser, ...padding];
         const sourceAdapter = {
           ...adapter(listed),
-          discover: async () => ({ entries: listed, nextCursor: null }),
+          discover: async () =>
+            Result.ok({ entries: listed, nextCursor: null }),
           fetchDocument: async (item) => Result.ok(document(item, item.url)),
         } as const satisfies SoftLawSourceAdapter;
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });
@@ -1556,7 +1648,8 @@ if (!databaseUrl || !enabled) {
         let listed = [winner, loser];
         const sourceAdapter = {
           ...adapter(listed),
-          discover: async () => ({ entries: listed, nextCursor: null }),
+          discover: async () =>
+            Result.ok({ entries: listed, nextCursor: null }),
           fetchDocument: async (item) => Result.ok(document(item, item.url)),
         } as const satisfies SoftLawSourceAdapter;
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });

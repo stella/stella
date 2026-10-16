@@ -27,6 +27,7 @@ import type {
   SoftLawEntry,
   SoftLawDocumentInput,
   SoftLawSourceAdapter,
+  SoftLawRawObject,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
@@ -38,7 +39,7 @@ export type SoftLawObservation = {
   documentId: SafeId<"softLawDocument">;
   identityKey: string;
   contentHash: string;
-  rawObjects: { role: string; key: string; contentType: string }[];
+  rawObjects: SoftLawRawObject[];
 };
 type SoftLawIngestionStoreOptions = {
   sourceId: SafeId<"softLawSource">;
@@ -167,6 +168,8 @@ const renewSoftLawLease = async ({
 export type SoftLawAttempt = {
   entry: SoftLawEntry;
   count: number;
+  /** Exact discovery snapshots are retained even when the instrument's content is unchanged. */
+  rawObjects?: SoftLawObservation["rawObjects"];
 } & (
   | { status: "applied" | "unchanged" | "retryable"; tag: null }
   | { status: "rejected"; tag: "identity_collision"; identityKey: string }
@@ -412,20 +415,45 @@ const persistSoftLawVersions = async (
       .set({ observedTo: observedAt })
       .where(inArray(softLawDocumentVersions.id, closing));
   }
-  if (changes.length) {
-    await tx.insert(softLawDocumentVersions).values(
-      changes.map((item) => ({
-        documentId: item.documentId,
-        sequence: (byDocument.get(item.documentId)?.sequence ?? 0) + 1,
-        contentHash: item.contentHash,
-        metadata: item.input.metadata,
-        rawObjects: item.rawObjects,
-        extractedText: item.input.text,
-        extractionQuality: item.input.extractionQuality,
-        sourceDates: item.input.sourceDates,
-        observedFrom: observedAt,
-      })),
-    );
+  const currentObservations = [
+    ...new Map(items.map((item) => [item.documentId, item])).values(),
+  ];
+  if (currentObservations.length) {
+    await tx
+      .insert(softLawDocumentVersions)
+      .values(
+        currentObservations.map((item) => ({
+          documentId: item.documentId,
+          sequence:
+            byDocument.get(item.documentId)?.contentHash === item.contentHash
+              ? (byDocument.get(item.documentId)?.sequence ??
+                panic("Unchanged expression has no version"))
+              : (byDocument.get(item.documentId)?.sequence ?? 0) + 1,
+          contentHash: item.contentHash,
+          metadata: item.input.metadata,
+          rawObjects: item.rawObjects,
+          extractedText: item.input.text,
+          extractionFailure: item.input.extractionFailure ?? null,
+          extractionQuality: item.input.extractionQuality,
+          sourceDates: item.input.sourceDates,
+          observedFrom:
+            byDocument.get(item.documentId)?.contentHash === item.contentHash
+              ? (byDocument.get(item.documentId)?.observedFrom ??
+                panic("Unchanged expression has no observation date"))
+              : observedAt,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          softLawDocumentVersions.documentId,
+          softLawDocumentVersions.sequence,
+        ],
+        set: {
+          extractedText: sql`excluded.extracted_text`,
+          extractionQuality: sql`excluded.extraction_quality`,
+          extractionFailure: sql`excluded.extraction_failure`,
+        },
+      });
   }
 };
 type PersistRejectedSoftLawListingsOptions = {
@@ -588,20 +616,28 @@ const persistSoftLawPage = async (
         await tx
           .insert(softLawIngestionAttempts)
           .values(
-            attempts.map((attempt) => ({
-              sourceId,
-              runId,
-              url: attempt.entry.url,
-              entry: attempt.entry,
-              status: attempt.status,
-              tag: attempt.tag,
-              identityKey:
-                attempt.tag === "identity_collision"
-                  ? attempt.identityKey
-                  : null,
-              count: attempt.count,
-              observedAt,
-            })),
+            attempts.map((attempt) => {
+              const { sourceRaw: _sourceRaw, ...entryWithoutRaw } =
+                attempt.entry;
+              return {
+                sourceId,
+                runId,
+                url: attempt.entry.url,
+                entry:
+                  attempt.status === "applied" || attempt.status === "unchanged"
+                    ? entryWithoutRaw
+                    : attempt.entry,
+                rawObjects: attempt.rawObjects ?? [],
+                status: attempt.status,
+                tag: attempt.tag,
+                identityKey:
+                  attempt.tag === "identity_collision"
+                    ? attempt.identityKey
+                    : null,
+                count: attempt.count,
+                observedAt,
+              };
+            }),
           )
           .onConflictDoUpdate({
             target: [
@@ -612,6 +648,7 @@ const persistSoftLawPage = async (
             set: {
               status: sql`excluded.status`,
               entry: sql`excluded.entry`,
+              rawObjects: sql`excluded.raw_objects`,
               tag: sql`excluded.tag`,
               identityKey: sql`excluded.identity_key`,
               count: sql`excluded.count`,

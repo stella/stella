@@ -41,6 +41,16 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  */
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  "edpb-eu": {
+    publisher: "European Data Protection Board",
+    intervalMs: 1000,
+    hosts: ["www.edpb.europa.eu"],
+  },
+  "commission-eu": {
+    publisher: "European Commission archives",
+    intervalMs: 1000,
+    hosts: ["ec.europa.eu"],
+  },
   /**
    * nalus.usoud.cz. 4,800 requests a day against the 5,000 the court allows,
    * and it redirects a client past the ceiling to a limit page rather than
