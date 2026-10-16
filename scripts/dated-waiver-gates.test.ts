@@ -138,7 +138,12 @@ test("extension references stay bound to their proposal and owning source", () =
     changedFiles: new Set([proposalFile, entry.source]),
   } as const;
   expect(
-    extensionProposalFailures({ proposals, entries: [], scope: resolved }),
+    extensionProposalFailures({
+      proposals,
+      entries: [],
+      scope: resolved,
+      baseEntries: [entry],
+    }),
   ).toEqual([]);
   expect(
     extensionProposalFailures({
@@ -153,6 +158,49 @@ test("extension references stay bound to their proposal and owning source", () =
     extensionProposalFailures({ proposals, entries: renewed, scope }),
   ).not.toEqual([]);
   expect(
-    extensionProposalFailures({ proposals, entries: renewed, scope: resolved }),
+    extensionProposalFailures({
+      proposals,
+      entries: renewed,
+      scope: resolved,
+      baseEntries: [entry],
+    }),
   ).toEqual([]);
+});
+
+test("a new extension must reference the deadline the base inventory records", () => {
+  const reason = "The upstream correction is still under review.";
+  const original = JSON.parse(proposal(reason)[proposalFile] ?? "");
+  const forgedExpiry = "2026-10-20T12:00:00.000Z";
+  // The owner leaves the deadline unchanged, edits the owning source, and
+  // records a different deadline in the new proposal.
+  const forged = {
+    [proposalFile]: JSON.stringify({
+      ...original,
+      entries: [{ ...original.entries[0], expiresAt: forgedExpiry }],
+    }),
+  };
+  const sourceEdited = {
+    type: "changes",
+    changedFiles: new Set([proposalFile, entry.source]),
+  } as const;
+  expect(
+    extensionProposalFailures({
+      proposals: forged,
+      entries: [entry],
+      scope: sourceEdited,
+      baseEntries: [entry],
+    }),
+  ).toEqual([
+    `${proposalFile}: a new extension must reference its base inventory deadline`,
+  ]);
+  // Without the base inventory a new proposal cannot be verified at all.
+  expect(
+    extensionProposalFailures({
+      proposals: proposal(reason),
+      entries: [],
+      scope: sourceEdited,
+    }),
+  ).toEqual([
+    `${proposalFile}: a new extension must reference its base inventory deadline`,
+  ]);
 });

@@ -380,29 +380,49 @@ export const prematureExclusionRemovals = (
       );
   });
 
+const waiverReferenceSchema = v.object({
+  kind: v.picklist(
+    Object.keys(RECHECK_INSTRUCTIONS).filter((kind): kind is ProbeKind =>
+      Object.hasOwn(RECHECK_INSTRUCTIONS, kind),
+    ),
+  ),
+  source: v.string(),
+  id: v.string(),
+  expiresAt: v.string(),
+});
+type WaiverReference = v.InferOutput<typeof waiverReferenceSchema>;
 const proposalSchema = v.object({
   schemaVersion: v.literal(1),
   kind: v.literal("extension"),
-  entries: v.array(
-    v.object({
-      kind: v.picklist(
-        Object.keys(RECHECK_INSTRUCTIONS).filter((kind): kind is ProbeKind =>
-          Object.hasOwn(RECHECK_INSTRUCTIONS, kind),
-        ),
-      ),
-      source: v.string(),
-      id: v.string(),
-      expiresAt: v.string(),
-    }),
-  ),
+  entries: v.array(waiverReferenceSchema),
   ownerReason: v.string(),
 });
+const recordsDeadline = (
+  inventory: readonly WaiverReference[] | null,
+  reference: WaiverReference,
+): boolean =>
+  inventory?.some(
+    (entry) =>
+      entry.kind === reference.kind &&
+      entry.source === reference.source &&
+      entry.id === reference.id &&
+      expiryInstant(entry.expiresAt) === expiryInstant(reference.expiresAt),
+  ) ?? false;
+// A new proposal in a change must name a deadline the base inventory records.
+const changesNewProposal = (
+  scope: ExpiryCheckScope | undefined,
+  inventory: readonly WaiverReference[] | null,
+  reference: WaiverReference,
+): boolean =>
+  scope?.type === "changes" && !recordsDeadline(inventory, reference);
 type ExtensionProposalOptions = {
   proposals: Readonly<Record<string, string>>;
   entries: readonly DatedWaiver[];
   body?: string | undefined;
   scope?: ExpiryCheckScope;
   baseProposals?: Readonly<Record<string, string>>;
+  /** The base inventory, when the change adds a proposal. */
+  baseEntries?: readonly WaiverReference[] | null;
 };
 export const extensionProposalFailures = ({
   proposals,
@@ -410,6 +430,7 @@ export const extensionProposalFailures = ({
   body,
   scope,
   baseProposals = {},
+  baseEntries = null,
 }: ExtensionProposalOptions): string[] =>
   Object.entries(proposals).flatMap(([file, contents]) => {
     const proposal = v.parse(proposalSchema, JSON.parse(contents));
@@ -457,6 +478,17 @@ export const extensionProposalFailures = ({
       }
     }
     for (const reference of proposal.entries) {
+      // Without a base proposal, the reference must be the deadline the base
+      // inventory records; otherwise an unchanged deadline could pass as an
+      // explicit change.
+      if (
+        base === undefined &&
+        changesNewProposal(scope, baseEntries, reference)
+      ) {
+        errors.push(
+          `${file}: a new extension must reference its base inventory deadline`,
+        );
+      }
       const current = entries.find(
         (entry) =>
           entry.kind === reference.kind &&
@@ -641,10 +673,13 @@ export const readTrackedPolicyFiles = (file: string): string[] => {
   return files;
 };
 
-export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
-  const root = path.resolve(import.meta.dir, "..");
-  const read = (file: string): string =>
-    readFileSync(path.join(root, file), "utf-8");
+const readWorkingTree = (file: string): string =>
+  readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
+
+export const loadWaivers = (
+  tracked: readonly string[],
+  read: (file: string) => string = readWorkingTree,
+): DatedWaiver[] => {
   const files = quarantineBunfigFiles(tracked);
   const policyFiles = tracked.filter(
     (file) =>
@@ -719,6 +754,7 @@ const contextSchema = v.object({
   baseBunfigs: v.record(v.string(), v.string()),
   basePackageManifests: v.record(v.string(), v.string()),
   baseProposals: v.record(v.string(), v.string()),
+  baseEntries: v.nullable(v.array(waiverReferenceSchema)),
 });
 const prepareCheck = (file: string): void => {
   const tracked = trackedPolicyFiles();
@@ -727,6 +763,7 @@ const prepareCheck = (file: string): void => {
   const baseBunfigs = new Map<string, string>();
   const basePackageManifests = new Map<string, string>();
   const baseProposals = new Map<string, string>();
+  let baseEntries: WaiverReference[] | null = null;
   if (scope.type === "changes") {
     if (!scope.baseSha) {
       panic("Expiry scope base is required");
@@ -767,6 +804,17 @@ const prepareCheck = (file: string): void => {
         basePackageManifests.set(source, contents.stdout.toString());
       }
     }
+    // A new proposal's reference is checked against the base inventory, so
+    // its recorded deadline cannot be chosen by the proposal itself.
+    if (
+      tracked.some(
+        (candidate) =>
+          candidate.startsWith(".github/dated-exception-proposals/") &&
+          !baseFiles.includes(candidate),
+      )
+    ) {
+      baseEntries = baseWaiverReferences(scope.baseSha, baseFiles);
+    }
   }
   writeFileSync(
     `${file}.context.json`,
@@ -778,8 +826,54 @@ const prepareCheck = (file: string): void => {
       baseBunfigs: Object.fromEntries(baseBunfigs),
       basePackageManifests: Object.fromEntries(basePackageManifests),
       baseProposals: Object.fromEntries(baseProposals),
+      baseEntries,
     }),
   );
+};
+
+export const baseWaiverReferences = (
+  baseSha: string,
+  baseFiles: readonly string[],
+): WaiverReference[] => {
+  const read = (file: string): string => {
+    const contents = Bun.spawnSync(["git", "show", `${baseSha}:${file}`]);
+    if (contents.exitCode !== 0) {
+      panic(`Cannot read expiry base owner ${file}`);
+    }
+    return contents.stdout.toString();
+  };
+  // Reading every base test file one process at a time is slow; only files
+  // carrying the quarantine marker can contribute entries.
+  const marked = Bun.spawnSync([
+    "git",
+    "grep",
+    "-l",
+    "-z",
+    "test-quarantine-expires:",
+    baseSha,
+  ]);
+  if (marked.exitCode !== 0 && marked.exitCode !== 1) {
+    panic("Cannot search expiry base quarantines");
+  }
+  const quarantined = new Set(
+    marked.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((match) => match.slice(baseSha.length + 1)),
+  );
+  return loadWaivers(
+    baseFiles.filter(
+      (file) =>
+        !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file) || quarantined.has(file),
+    ),
+    read,
+  ).map(({ kind, source, id, expiresAt }) => ({
+    kind,
+    source,
+    id,
+    expiresAt,
+  }));
 };
 
 if (import.meta.main) {
@@ -818,6 +912,7 @@ if (import.meta.main) {
           baseBunfigs: {},
           basePackageManifests: {},
           baseProposals: {},
+          baseEntries: null,
         };
     const read = (file: string) =>
       readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
@@ -877,6 +972,7 @@ if (import.meta.main) {
         entries,
         scope: expiryContext.scope,
         baseProposals: context.baseProposals,
+        baseEntries: context.baseEntries,
         body: event?.pull_request ? (event.pull_request.body ?? "") : undefined,
       }),
     ];

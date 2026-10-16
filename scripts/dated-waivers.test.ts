@@ -7,7 +7,9 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import { waiverKey } from "./dated-waiver-fix-task";
+import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
+  baseWaiverReferences,
   collectWaivers,
   DAY_MS,
   DOC_SOURCE_FILE,
@@ -16,6 +18,7 @@ import {
   expiredWaiverFailures,
   expiryInstant,
   exceptionInventory as inventoryJson,
+  loadWaivers,
   withinHours,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
@@ -348,6 +351,7 @@ test("check consumes validated tracked files without spawning under the offline 
         baseBunfigs: {},
         basePackageManifests: {},
         baseProposals: {},
+        baseEntries: null,
       }),
     );
 
@@ -482,4 +486,28 @@ test("inventory rejects duplicate package exclusions regardless of deadline and 
     ".claude/mcp/bunfig.toml",
     "bunfig.toml",
   ]);
+});
+
+test("the base inventory read from git equals the inventory of the same tree", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: root });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString();
+  };
+  // Committed state only: the working tree may carry local edits.
+  if (git("status", "--porcelain", "--untracked-files=no").trim() !== "") {
+    return;
+  }
+  const head = git("rev-parse", "HEAD").trim();
+  const files = git("ls-tree", "-r", "--name-only", "-z", head)
+    .split("\0")
+    .filter(Boolean);
+  const references = baseWaiverReferences(head, files);
+  expect(references.length).toBeGreaterThan(0);
+  expect(references).toEqual(
+    loadWaivers(trackedPolicyFiles()).map(
+      ({ kind, source, id, expiresAt }) => ({ kind, source, id, expiresAt }),
+    ),
+  );
 });
