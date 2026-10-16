@@ -16,6 +16,7 @@ import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 import { API_ALL_RULES } from "./api-test-impact";
 import {
   assertPostgresDiscovery,
+  plannerSourceFiles,
   planPostgresTests,
   POSTGRES_NO_IMPACT_PATHS,
 } from "./ci-postgres-test-plan";
@@ -183,6 +184,30 @@ test("named non-runtime paths select no Postgres suites alone or preserve source
         ).toEqual({ mode: "selected", files: ["src/feature/db.test.ts"] });
       }
     }
+  });
+});
+
+test("changes to the planner's own sources widen to all", async () => {
+  const plannerFiles = plannerSourceFiles();
+  // A helper reached only through the planner, and one reached through a
+  // workspace package import.
+  for (const file of [
+    "scripts/ci-package-scope.ts",
+    "packages/scripts/src/child-exit-status.ts",
+  ]) {
+    expect(plannerFiles.has(file), file).toBe(true);
+  }
+  await withRepository(async (root, write) => {
+    write("apps/api/src/feature/db.test.ts", gateSource('import "./entry";'));
+    write("apps/api/src/feature/entry.ts", "export const value = true;");
+    expect(
+      await planPostgresTests({
+        event: "pull_request",
+        scopeUnknown: false,
+        changed: ["scripts/ci-package-scope.ts"],
+        root,
+      }),
+    ).toEqual({ mode: "all" });
   });
 });
 

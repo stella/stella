@@ -1,7 +1,9 @@
 import { Result, panic } from "better-result";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
@@ -10,6 +12,51 @@ import { API_ALL_RULES, selectApiTestImpact } from "./api-test-impact";
 import { hasDeclaredMarkdownReader } from "./ci-package-scope";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
+const PLANNER_ENTRY = "scripts/ci-postgres-test-plan.ts";
+const CODE_FILE = /\.[cm]?[jt]sx?$/u;
+
+/**
+ * Repository files this planner loads, followed through relative and
+ * workspace imports. A change to any of them changes the planner itself, so
+ * it must not be judged by its own (changed) verdict, and no allow-list has
+ * to remember the planner's helpers.
+ */
+export const plannerSourceFiles = (root = repositoryRoot) => {
+  const realRoot = realpathSync(root);
+  const files = new Set<string>();
+  const pending = [PLANNER_ENTRY];
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    if (files.has(file)) {
+      continue;
+    }
+    files.add(file);
+    if (!CODE_FILE.test(file)) {
+      continue;
+    }
+    const absolute = path.join(realRoot, file);
+    const transpiler = new Bun.Transpiler({
+      loader: /x$/u.test(file) ? "tsx" : "ts",
+    });
+    const source = readFileSync(absolute, "utf-8").replace(/^#!.*/u, "");
+    for (const { path: specifier } of transpiler.scanImports(source)) {
+      const resolved = Bun.resolveSync(specifier, path.dirname(absolute));
+      // Built-in modules resolve to their own specifier.
+      if (!path.isAbsolute(resolved)) {
+        continue;
+      }
+      const real = realpathSync(resolved);
+      if (!isPathInside(realRoot, real)) {
+        continue;
+      }
+      const relative = repoRelativePath(realRoot, real);
+      if (relative.split("/").includes("node_modules")) {
+        continue;
+      }
+      pending.push(relative);
+    }
+  }
+  return files;
+};
 
 export const POSTGRES_NO_IMPACT_PATHS = {
   changesets: {
@@ -99,6 +146,11 @@ export const planPostgresTests = async ({
   }
 
   const planned = await Result.tryPromise(async () => {
+    const plannerFiles = plannerSourceFiles();
+    if (changed.some((file) => plannerFiles.has(file))) {
+      return { mode: "all" } as const;
+    }
+
     // Only named, non-runtime paths may bypass the conservative outside-graph
     // guard. Markdown ownership remains authoritative for documentation read
     // by code, and selector tooling retains its explicit widening rules.
