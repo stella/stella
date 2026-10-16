@@ -14,8 +14,8 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
@@ -48,8 +48,7 @@ globalThis.fetch = Object.assign(
 );
 
 const testing = await import("@testing-library/react");
-const { getToolApprovalGrant, isApprovalToolName } =
-  await import("@/components/chat/chat-ui-tools");
+const { isApprovalToolName } = await import("@/components/chat/chat-ui-tools");
 const { CHAT_USER_ACTIONS } =
   await import("@/components/chat/chat-user-actions");
 const { isThreadPageSuspended, openChatThreadDomPage } =
@@ -192,8 +191,13 @@ type Posted = { body: Record<string, unknown>; exchange: RecordedExchange };
  * response recorded as cut off streams what the page read before the cut and
  * then stays open until the page stops it or `dropConnection` drops it.
  */
-const createRecordedServer = (recording: RecordedConversation) => {
+const createRecordedServer = (
+  recording: RecordedConversation,
+  initialGrants: StoredToolGrant[],
+) => {
   const exchanges = recording.steps.flatMap((step) => step.exchanges);
+  /** The approvals the API holds for this conversation. */
+  const grants = [...initialGrants];
   const posted: Posted[] = [];
   const unexpected: string[] = [];
   let page = recording.initialPage;
@@ -371,6 +375,42 @@ const createRecordedServer = (recording: RecordedConversation) => {
     ) {
       return threadPage();
     }
+    if (
+      url.origin === API_ORIGIN &&
+      url.pathname === "/v1/chat/tool-grants/coverage"
+    ) {
+      const toolName = url.searchParams.get("toolName") ?? "";
+      const asked = storedToolGrant(recording.threadId, toolName);
+      return Response.json({
+        covered: grants.some((grant) =>
+          asked.mcpConnectorId === null
+            ? grant.toolName === toolName
+            : grant.mcpConnectorToolNamespace ===
+              asked.mcpConnectorToolNamespace,
+        ),
+      });
+    }
+    if (url.origin === API_ORIGIN && url.pathname === "/v1/chat/tool-grants") {
+      if (method === "GET") {
+        return Response.json({ grants });
+      }
+      const text =
+        typeof init?.body === "string" ? init.body : await request?.text();
+      const body: unknown = JSON.parse(text ?? "null");
+      const toolName = isJsonObject(body) ? body["toolName"] : undefined;
+      if (typeof toolName !== "string") {
+        unexpected.push("POST /chat/tool-grants without a tool");
+        return Response.json({}, { status: 400 });
+      }
+      const grant = storedToolGrant(recording.threadId, toolName);
+      grants.push(grant);
+      return Response.json({
+        created: true,
+        mcpConnectorId: grant.mcpConnectorId,
+        scope: grant.scope,
+        toolName: grant.toolName,
+      });
+    }
     const turnRoute =
       /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<action>resume|join|cancel)$/u.exec(
         url.pathname,
@@ -409,6 +449,8 @@ const createRecordedServer = (recording: RecordedConversation) => {
   };
 
   return {
+    /** The approvals the API holds now; a page opens with them loaded. */
+    grants,
     dropConnection: () => {
       (drop ?? expect.unreachable("No response is streaming"))();
     },
@@ -427,6 +469,9 @@ const createRecordedServer = (recording: RecordedConversation) => {
 // --- The page ------------------------------------------------------------
 
 /** A tab on the recorded thread, loaded the way the page loads it. */
+/** The grants of the conversation on screen, as the API holds them. */
+let openGrants: StoredToolGrant[] = [];
+
 const openPage = async (
   recording: RecordedConversation,
   { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
@@ -434,6 +479,7 @@ const openPage = async (
   await openChatThreadDomPage({
     organizationId,
     threadId: recording.threadId,
+    toolGrants: [...openGrants],
   });
 
 afterEach(() => {
@@ -707,9 +753,33 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
 // --- Replaying a recording -----------------------------------------------------
 
 const RELOAD_ORGANIZATION_ID = "00000000-0000-7000-8000-00000000fffd";
-/** Where the page keeps a conversation's grants for the tab's lifetime
- *  (`use-chat-session.ts`). */
-const CONVERSATION_GRANTS_KEY = "stella.chat.conversationApprovedTools:";
+/** A conversation grant as the API lists it. */
+type StoredToolGrant = ChatToolGrantsResponse["grants"][number];
+
+const EXTERNAL_CONNECTOR_ID = "00000000-0000-7000-8000-00000000c0de";
+let storedToolGrantCount = 0;
+
+/** What the API stores for a grant on `toolName`: a connector tool is
+ *  covered through its connector, any other tool by name. */
+const storedToolGrant = (
+  threadId: string,
+  toolName: string,
+): StoredToolGrant => {
+  const [namespace, connector] = toolName.split("__");
+  const external = namespace === "mcp" && connector !== undefined;
+  return {
+    id: toSafeId<"chatToolGrant">(
+      `00000000-0000-7000-8000-${String((storedToolGrantCount += 1)).padStart(12, "0")}`,
+    ),
+    scope: "conversation",
+    chatThreadId: toSafeId<"chatThread">(threadId),
+    toolName: external ? null : toolName,
+    mcpConnectorId: external
+      ? toSafeId<"mcpConnector">(EXTERNAL_CONNECTOR_ID)
+      : null,
+    mcpConnectorToolNamespace: external ? connector : null,
+  };
+};
 
 /** Opens a second tab on the thread as it is stored now and reads it. */
 const readReload = async (
@@ -746,11 +816,13 @@ const storedToolCalls = (recording: RecordedConversation) =>
     });
 
 /**
- * The grants the tab holds before the conversation starts: the tools whose
+ * The grants the API holds before the conversation starts: the tools whose
  * approvals the recording answers without a click, allowed for this
- * conversation earlier in the tab.
+ * conversation earlier.
  */
-const grantConversationTools = (recording: RecordedConversation) => {
+const grantConversationTools = (
+  recording: RecordedConversation,
+): StoredToolGrant[] => {
   const calls = storedToolCalls(recording);
   const toolOf = (toolCallId: string) =>
     (
@@ -773,18 +845,10 @@ const grantConversationTools = (recording: RecordedConversation) => {
         : [],
     ),
   );
-  if (granted.size === 0) {
-    return;
-  }
-  sessionArea().setItem(
-    userStorageKey(`${CONVERSATION_GRANTS_KEY}${recording.threadId}`),
-    JSON.stringify(
-      [...granted].map((name) =>
-        isApprovalToolName(name)
-          ? getToolApprovalGrant(name)
-          : expect.unreachable(`${name} is not an approval tool`),
-      ),
-    ),
+  return [...granted].map((name) =>
+    isApprovalToolName(name)
+      ? storedToolGrant(recording.threadId, name)
+      : expect.unreachable(`${name} is not an approval tool`),
   );
 };
 
@@ -926,9 +990,12 @@ const finding = (
  */
 const replay = async (scenario: string) => {
   const recording = readRecording(scenario);
-  const server = createRecordedServer(recording);
+  const server = createRecordedServer(
+    recording,
+    grantConversationTools(recording),
+  );
   routeRequest = server.fetch;
-  grantConversationTools(recording);
+  openGrants = server.grants;
   let live = await openPage(recording);
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
@@ -1052,6 +1119,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "check-stored-grant": OUTSIDE_THE_CONVERSATION,
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),

@@ -496,6 +496,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":

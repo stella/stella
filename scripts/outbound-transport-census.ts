@@ -1399,6 +1399,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for connector creation probes.",
   },
   {
+    path: "apps/api/src/handlers/mcp-connectors/delete-connection.ts",
+    reason:
+      "Issues request authority for token revocation after a user disconnect.",
+  },
+  {
     path: "apps/api/src/handlers/mcp-connectors/oauth-callback.ts",
     reason: "Issues request authority for the validated OAuth callback.",
   },

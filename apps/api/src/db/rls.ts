@@ -1130,6 +1130,47 @@ export const sharepointOAuthStatePolicies = () => [
   }),
 ];
 
+// Stored chat tool approval grants are per user+org: only the owning user in
+// the active org reads, adds or removes them. A grant is never edited in
+// place; changing one is a delete and a new insert.
+const chatToolGrantCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+// Row security is forced on this table, so the owner role used by member
+// offboarding needs its own policy to reach other users' rows.
+const chatToolGrantOwnerCheck = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_tool_grants'::regclass)`;
+
+export const chatToolGrantPolicies = () => [
+  p.pgPolicy("chat_tool_grant_owner", {
+    for: "all",
+    to: "public",
+    using: chatToolGrantOwnerCheck,
+    withCheck: chatToolGrantOwnerCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_select", {
+    for: "select",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_delete", {
+    for: "delete",
+    to: stella,
+    using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;

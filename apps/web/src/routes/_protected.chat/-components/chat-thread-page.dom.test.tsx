@@ -149,6 +149,9 @@ const serveSavedBuilder = () => {
         requests.push(request);
         return Response.json(savedThread);
       }
+      if (pathname.endsWith("/chat/tool-grants")) {
+        return Response.json({ grants: [] });
+      }
       if (pathname.endsWith("/chat") && request.method === "POST") {
         const body: unknown = await request.json();
         sends.push(body);

@@ -427,18 +427,21 @@ const saveOAuthConnection = async ({
         },
       })
       .returning({ id: mcpUserConnections.id });
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: pending.connectorId,
-      workspaceId: null,
-      metadata: {
-        connectorId: pending.connectorId,
-        connectorSlug,
-        connectionUserId: userId,
-        operation: "mcp_oauth_connect",
-      },
-    });
+    const row = rows.at(0);
+    if (row) {
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+        resourceId: row.id,
+        workspaceId: null,
+        metadata: {
+          connectorId: pending.connectorId,
+          connectorSlug,
+          connectionUserId: userId,
+          credential: "oauth",
+        },
+      });
+    }
     return rows;
   });
 };

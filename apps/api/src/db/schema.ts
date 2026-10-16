@@ -38,6 +38,7 @@ export * from "./schema/office-evidence";
 export * from "./schema/pdf-signing";
 export * from "./schema/flows";
 export * from "./schema/mcp";
+export * from "./schema/chat-tool-grants";
 export * from "./schema/sharepoint";
 export * from "./schema/files-views";
 export * from "./schema/entity-views";
