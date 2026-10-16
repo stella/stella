@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;
@@ -416,7 +417,7 @@ test("dismissal hides only the same connection break", async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = async (authType: "oauth2" | "bearer") => {
