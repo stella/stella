@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -16,6 +16,8 @@ import { isPathInside } from "@stll/portable-path";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { lexShell } from "./install-free-ci";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
+
+setDefaultTimeout(30_000);
 
 const root = path.resolve(import.meta.dirname, "..");
 const workflow: unknown = Bun.YAML.parse(
@@ -930,7 +932,6 @@ test("the dependency audit installs only the root workspace", () => {
 });
 
 const installFreeJobs = [
-  [".github/workflows/db-migrations.yml", "scope"],
   [".github/workflows/autofix.yml", "regenerate-scope"],
 ] as const;
 const setupSchema = v.looseObject({

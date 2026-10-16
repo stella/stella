@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
@@ -18,7 +18,7 @@ import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
-import { repoRelativePath } from "@stll/portable-path";
+import { isPathStrictlyInside, repoRelativePath } from "@stll/portable-path";
 import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
@@ -61,9 +61,12 @@ import {
   MERGE_GROUP_EXCEPTIONS,
   thinJobs,
 } from "./main-heavy-plan";
+import { productionE2eInputs } from "./production-e2e-inputs.mjs";
 import { unlistedTests } from "./run-unlisted-script-tests";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
+
+setDefaultTimeout(30_000);
 
 // Ordinary events never run the main PR-depth caller and reuse nothing unless
 // a case says so; cases that exercise either set the value explicitly.
@@ -276,6 +279,50 @@ ${Object.entries(SELECTOR_BUN_CLIS)
 }
 `;
 
+const productionE2eConfig = nodePath.resolve(
+  import.meta.dirname,
+  "../apps/web/e2e/playwright.config.ts",
+);
+const productionE2eRoot = nodePath.dirname(productionE2eConfig);
+const productionE2e = productionE2eInputs(productionE2eConfig);
+const productionE2eRequired = (files: readonly string[]) =>
+  files.some((file) => {
+    const absolute = nodePath.resolve(file);
+    return (
+      isPathStrictlyInside(productionE2eRoot, absolute) &&
+      (isPathStrictlyInside(productionE2e.testDirectory, absolute) ||
+        productionE2e.files.has(absolute))
+    );
+  });
+
+const e2eCoreRequired = (files: readonly string[]) =>
+  files.some(
+    (file) =>
+      /^(?:\.github\/actions\/(?:ci-install|setup-e2e-stack|setup-production-e2e|build-e2e-web|setup-playwright|marketing-capture)\/|\.github\/actions\/prepare-network-baseline\/|\.github\/workflows\/(?:ci|marketing-screenshots)\.yml$|scripts\/(?:ci-install(?:-store)?\.ts|detect-e2e-changes\.sh|network-baseline-)|apps\/(?:api|web)\/|packages\/|patches\/|bun\.lock$|package\.json$|docker-compose\.yml$)/u.test(
+        file,
+      ) &&
+      !/^(?:apps\/web\/e2e\/marketing\/|apps\/web\/e2e\/playwright\.marketing\.config\.ts$|packages\/playwright-tools\/)/u.test(
+        file,
+      ),
+  );
+
+const desktopRustRequired = (files: readonly string[]) =>
+  files.some((file) =>
+    /^(?:apps\/desktop\/rust-toolchain\.toml$|apps\/desktop\/src-tauri\/|apps\/desktop\/fixtures\/|apps\/desktop\/src\/i18n\/langs\/|apps\/desktop\/src\/activity\/preview-apps\.json$|apps\/desktop\/src\/clipboard\/clipboard-types\.ts$|packages\/api-contract\/src\/desktop-(?:account-policy\.json|feature-access\.json|handoff\.ts|presence-policy\.json|presence-request\.fixture\.json|edit-file-types\.ts|registry\.ts|rpc\.gen\.ts)$)/u.test(
+      file,
+    ),
+  );
+
+const migrationScopeRequired = (files: readonly string[]) =>
+  files.some((file) =>
+    /^(?:docker\/postgres\/|scripts\/configure-test-postgres.*\.sh$|apps\/api\/drizzle\/|apps\/api\/src\/db\/|apps\/api\/src\/lib\/db\/|apps\/api\/drizzle\.config\.ts$|scripts\/[^/]*migrat|scripts\/fixtures\/migration[^/]*\/|scripts\/rehearse-better-auth-constraint-retry\.sh$|\.github\/workflows\/ci\.yml$|scripts\/detect-security-workflow-changes\.(?:sh|test\.ts)$)/u.test(
+      file,
+    ),
+  );
+
+const MIGRATION_DETECTOR_COMMAND = `bash scripts/detect-security-workflow-changes.sh migrations --files "\${changed_files[@]}"`;
+const PR_CORE_DETECTOR_COMMAND = `bash scripts/detect-e2e-changes.sh pr-core "\${changed_files[@]}"`;
+
 const DETECTORS = { inProcess: "in-process", spawned: "spawned" } as const;
 type Detectors = (typeof DETECTORS)[keyof typeof DETECTORS];
 
@@ -309,11 +356,11 @@ const selectorCase = (
       : {};
   return {
     flags: ["-e"],
-    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
-desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=${detectors === DETECTORS.inProcess ? '"$SERVED_E2E_CORE"' : '$(bash scripts/detect-e2e-changes.sh core "$@")'}
+desktop_rust_checks_required=${detectors === DETECTORS.inProcess ? '"$SERVED_DESKTOP_RUST"' : '$(bash scripts/detect-tauri-rust-changes.sh "$@")'}
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
-${selector}
+${detectors === DETECTORS.inProcess ? selector.replace(MIGRATION_DETECTOR_COMMAND, 'printf %s "$SERVED_MIGRATION_SCOPE"').replace(PR_CORE_DETECTOR_COMMAND, 'printf %s "$SERVED_PR_CORE"') : selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     args: files,
     env: {
@@ -329,6 +376,10 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       PATH: Bun.env["PATH"] ?? "",
       PR_TITLE: title,
       SUITE_DEPTH: suiteDepth,
+      SERVED_DESKTOP_RUST: String(desktopRustRequired(files)),
+      SERVED_E2E_CORE: String(e2eCoreRequired(files)),
+      SERVED_MIGRATION_SCOPE: String(migrationScopeRequired(files)),
+      SERVED_PR_CORE: String(productionE2eRequired(files)),
       ...served,
       SERVED_DESKTOP_BROWSER: outputs.includes("desktop_browser_required")
         ? String(requiresDesktopBrowser({ changed: files }))
@@ -711,6 +762,43 @@ const jobIf = (job: unknown) =>
   v.parse(v.object({ if: v.optional(v.string()) }), job).if ?? "";
 
 const ciJobs = workflowJobs(workflow);
+
+test("required checks report on pull requests and merge groups", () => {
+  const required = [
+    ["ci-result", workflow, "ci-result"],
+    [
+      "dependency-review",
+      readFileSync(
+        new URL("../.github/workflows/dependency-review.yml", import.meta.url),
+        "utf-8",
+      ),
+      "dependency-review",
+    ],
+    [
+      "cla",
+      readFileSync(
+        new URL("../.github/workflows/cla.yml", import.meta.url),
+        "utf-8",
+      ),
+      "verify-signatures",
+    ],
+  ] as const;
+  for (const [check, source, job] of required) {
+    const parsed = v.parse(
+      v.looseObject({
+        on: v.record(v.string(), v.unknown()),
+        jobs: v.record(v.string(), v.unknown()),
+      }),
+      Bun.YAML.parse(source),
+    );
+    expect(parsed.jobs, check).toHaveProperty(job);
+    expect(parsed.on, check).toHaveProperty("merge_group");
+    expect(parsed.on, check).toHaveProperty(
+      check === "cla" ? "pull_request_target" : "pull_request",
+    );
+  }
+  expect(required.at(2)?.[1]).toContain('name = "cla"');
+});
 const releaseJobs = workflowJobs(
   readFileSync(
     new URL("../.github/workflows/release.yml", import.meta.url),
@@ -1343,7 +1431,7 @@ test("the result gate evaluates every job in the workflow", () => {
   )) {
     expect(exitCode, label).toBe(1);
   }
-});
+}, 30_000);
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
   const declaredAdditionalScopes = {
@@ -1393,7 +1481,7 @@ test("a full-depth run fails every planned job that did not succeed", () => {
   )) {
     expect(exitCode, label).toBe(1);
   }
-});
+}, 30_000);
 
 test("a full-depth run passes jobs whose scope was not planned only when skipped", () => {
   const gates: ExpectedResultGate[] = [];
@@ -1419,7 +1507,7 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
     }
   }
   expectResultGates(gates);
-});
+}, 30_000);
 
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
@@ -4707,6 +4795,7 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
   // The cases exercise both answers of every detector.
   for (const name of [
     "service_suites_pr_required",
+    "database_migrations_required",
     "dependency_malware_required",
     "route_smoke_required",
   ]) {

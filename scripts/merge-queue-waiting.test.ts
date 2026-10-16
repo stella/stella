@@ -86,16 +86,12 @@ test("the PR CI yield and the steward inline the shared predicate", () => {
 
 test("the side workflows call the shared gate and never fail on it", () => {
   for (const [workflow, job, name] of [
-    ["db-migrations.yml", "scope", "Wait for the merge queue"],
     ["autofix.yml", "regenerate-scope", "Yield to the merge queue"],
   ] as const) {
     const step = jobSteps(workflow, job).find((entry) => entry.name === name);
     expect(step?.["continue-on-error"], workflow).toBe(true);
     expect(step?.with?.script, workflow).toContain("mergeQueueGate(");
   }
-  expect(
-    stepScript("db-migrations.yml", "scope", "Wait for the merge queue"),
-  ).toContain("polls: 20,");
   expect(
     stepScript("autofix.yml", "regenerate-scope", "Yield to the merge queue"),
   ).toContain("polls: 0,");
