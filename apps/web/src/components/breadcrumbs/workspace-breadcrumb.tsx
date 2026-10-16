@@ -6,6 +6,7 @@ import type { ResolveParams } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
@@ -23,6 +24,7 @@ import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-c
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
@@ -53,6 +55,7 @@ export const WorkspaceBreadcrumb = ({
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
+  const showMatterNumber = useMatterNumberingEnabled();
   const referenceConflictMessage = useReferenceConflictMessage();
   const [referenceConfirmation, setReferenceConfirmation] =
     useState<ReferenceConfirmation>({ status: "closed" });
@@ -259,7 +262,7 @@ export const WorkspaceBreadcrumb = ({
         />
       );
     }
-    if (workspace.reference) {
+    if (showMatterNumber && workspace.reference) {
       return (
         <button
           className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
@@ -316,6 +319,7 @@ export const WorkspaceBreadcrumb = ({
                   <InlineRenameInput
                     className="text-sm font-semibold"
                     disabled={updateWorkspace.isPending}
+                    maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                     onCommit={() => {
                       detached(
                         nameRename.commit(),
@@ -365,7 +369,7 @@ export const WorkspaceBreadcrumb = ({
                   >
                     {displayName}
                   </BidiText>
-                  {workspace.reference && !isEditingRef ? (
+                  {showMatterNumber && workspace.reference && !isEditingRef ? (
                     <span
                       className="text-foreground-muted shrink-0 text-sm whitespace-pre"
                       onContextMenu={(e) => {
@@ -399,6 +403,7 @@ export const WorkspaceBreadcrumb = ({
           <InlineRenameInput
             className="text-sm font-semibold"
             disabled={updateWorkspace.isPending}
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onCommit={() => {
               detached(nameRename.commit(), "workspace-breadcrumb.commit");
             }}

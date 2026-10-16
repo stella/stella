@@ -5,7 +5,7 @@ import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -49,6 +49,7 @@ import {
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RunToolsProps = Parameters<typeof getChatTools>[0];
@@ -110,15 +111,15 @@ const activeDocxFile = {
 } as const;
 
 const SKILL_CATALOGS = {
-  empty: [],
-  installed: [
+  empty: offeredSkillCatalog([]),
+  installed: offeredSkillCatalog([
     {
       description: "Installed workflow.",
       name: "installed-workflow",
       version: "1.0",
     },
-  ],
-} as const;
+  ]),
+};
 
 const DOCX_SURFACES = {
   none: {
@@ -437,7 +438,7 @@ test("pending feature-bound write approvals use current caller access for valida
       message: { id: messageId, role: "assistant", parts: [resumedCall] },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       resume: [
         {

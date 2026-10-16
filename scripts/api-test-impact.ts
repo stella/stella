@@ -13,9 +13,10 @@ import {
   API_TEST_DURATIONS_FILE_ENV,
   loadTestDurationWeights,
 } from "../apps/api/scripts/test-timings";
+import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
-const MAX_SHARDS = 4;
+const MAX_SHARDS = API_TEST_SHARD_IDS.length;
 export const API_SHARD_SECONDS = 600;
 const MODULE_PATTERN = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 

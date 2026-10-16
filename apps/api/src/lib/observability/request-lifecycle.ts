@@ -19,9 +19,9 @@ import {
 } from "@/api/lib/db-query-counter";
 import {
   elysiaErrorAnswer,
+  elysiaErrorBody,
   elysiaFailureReason,
 } from "@/api/lib/errors/elysia-error";
-import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -138,10 +138,11 @@ export const answerRequestError = ({
 
   const path = getRequestPath(request);
   const reqCtx = getRequestContext(request);
-  const { status: statusCode, message: errorMessage } = elysiaErrorAnswer(
-    code,
-    error,
-  );
+  const {
+    status: statusCode,
+    message: errorMessage,
+    issues,
+  } = elysiaErrorAnswer(code, error);
   const logged = shouldLogRequest(path);
   const captured = statusCode >= 500;
   const loggedSeverity = captured ? "ERROR" : "WARN";
@@ -222,7 +223,7 @@ export const answerRequestError = ({
   // Elysia's default would serialize error.message, which
   // may contain DB internals, file names, or document content.
   set.status = statusCode;
-  return httpError(errorMessage);
+  return elysiaErrorBody({ status: statusCode, message: errorMessage, issues });
 };
 
 type RequestCompletionContext = {

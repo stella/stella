@@ -204,6 +204,38 @@ describe.serial("BullMQ worker ownership", () => {
   });
 });
 
+describe.serial("parallel dynamic import ownership", () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "bullmq-worker");
+  const options = {
+    ruleOptions: { entries: [entry] },
+    sourcePath: "apps/api/src/lib/example-worker.ts",
+  };
+
+  test("tracks named bindings through each Promise.all slot", async () => {
+    const sources = [
+      'const [{ Queue }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Queue: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [{ Worker }] = await Promise.all([import("bullmq")]);',
+      'const [{ other }, { Worker: alias }] = await Promise.all([import("other"), import("bullmq")]);',
+      'const [namespace] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue, ...rest }] = await Promise.all([import("bullmq")]);',
+      'const [{ [key]: selected }] = await Promise.all([import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([...others, import("bullmq")]);',
+      'const [{ Queue }] = await Promise.all([import("bullmq"), ...others]);',
+      'const [{ Queue }] = await Promise.allSettled([import("bullmq")]);',
+      'const read = async (Promise) => { const [{ Queue }] = await Promise.all([import("bullmq")]); };',
+      'const [slot] = Promise.all([import("bullmq")]);',
+    ];
+    expect(
+      await lintSingleRule(
+        "confine-owner",
+        sources.map((source) => `{ ${source} }`).join("\n"),
+        options,
+      ),
+    ).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+});
+
 describe.serial("confine-owner literal patterns", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "citation-graph-transaction");
   const source = [
