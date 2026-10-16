@@ -133,7 +133,10 @@ import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
-import { loadRequestedSkillsPrompt } from "@/api/handlers/chat/requested-skills-prompt";
+import {
+  loadRequestedSkillsPrompt,
+  requestedSkillNames,
+} from "@/api/handlers/chat/requested-skills-prompt";
 import {
   compactMessagesForContext,
   markChatCompactionDue,
@@ -223,6 +226,7 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -2088,7 +2092,7 @@ const loadTurnPromptSources = async ({
       connectableConnectors: readonly ConnectableMcpConnector[];
       requestedSkillsPrompt: string;
     },
-    SafeDbError
+    SafeDbError | HandlerError<503>
   >
 > => {
   const requestedSkillsPrompt =
@@ -3548,7 +3552,7 @@ type PrepareChatContextResult = Result<
      * `systemSafe`.
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
-    skillMetadata: readonly SkillMetadata[];
+    skillMetadata: ModelOfferedSkills<SkillMetadata>;
     activeSkillContext: ActiveChatSkillContext | null;
     /** Court numbers the turn stamps onto the answer's passage citations. */
     decisionPassageNumbers: DecisionPassageNumbers;
@@ -3614,6 +3618,7 @@ const prepareChatContext = async ({
         refRegistry,
         safeDb,
         messages: messageWindow,
+        requestedSkillNames: requestedSkillNames(messageWindow),
         threadId,
         toolAvailability,
         userContext,

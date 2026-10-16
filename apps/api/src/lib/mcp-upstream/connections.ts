@@ -23,6 +23,7 @@ import type {
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -408,7 +409,7 @@ export const loadMcpConnectionById = async ({
 };
 
 /** At most this many connectors are offered to the model as connectable. */
-export const CONNECTABLE_MCP_CONNECTORS_MAX = 20;
+const CONNECTABLE_MCP_CONNECTORS_MAX = 20;
 
 export type ConnectableMcpConnector = {
   slug: string;
@@ -430,54 +431,70 @@ export const loadConnectableMcpConnectorsForUser = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<Result<ConnectableMcpConnector[], SafeDbError>> =>
-  await safeDb((tx) =>
-    tx
-      .selectDistinctOn([mcpConnectors.slug], {
-        slug: mcpConnectors.slug,
-        displayName: mcpConnectors.displayName,
-      })
-      .from(mcpConnectors)
-      .leftJoin(
-        mcpConnectorAuthorizationReviews,
-        and(
-          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
-          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
-        ),
-      )
-      .leftJoin(
-        mcpUserConnections,
-        and(
-          eq(mcpUserConnections.connectorId, mcpConnectors.id),
-          eq(mcpUserConnections.organizationId, organizationId),
-          eq(mcpUserConnections.userId, userId),
-        ),
-      )
-      .where(
-        and(
-          or(
-            isNull(mcpConnectors.organizationId),
-            eq(mcpConnectors.organizationId, organizationId),
+}): Promise<
+  Result<ConnectableMcpConnector[], SafeDbError | HandlerError<503>>
+> => {
+  const result = await safeDb((tx) =>
+    readBounded(
+      tx
+        .selectDistinctOn([mcpConnectors.slug], {
+          slug: mcpConnectors.slug,
+          displayName: mcpConnectors.displayName,
+        })
+        .from(mcpConnectors)
+        .leftJoin(
+          mcpConnectorAuthorizationReviews,
+          and(
+            eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+            eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
           ),
-          approvedMcpAuthorizationReview,
-          or(
-            isNull(mcpUserConnections.id),
-            and(
-              eq(mcpUserConnections.enabled, true),
-              or(
-                ne(mcpUserConnections.status, "connected"),
-                ne(
-                  mcpUserConnections.responseDisposition,
-                  MCP_RESPONSE_DISPOSITION.normal,
+        )
+        .leftJoin(
+          mcpUserConnections,
+          and(
+            eq(mcpUserConnections.connectorId, mcpConnectors.id),
+            eq(mcpUserConnections.organizationId, organizationId),
+            eq(mcpUserConnections.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            or(
+              isNull(mcpConnectors.organizationId),
+              eq(mcpConnectors.organizationId, organizationId),
+            ),
+            approvedMcpAuthorizationReview,
+            or(
+              isNull(mcpUserConnections.id),
+              and(
+                eq(mcpUserConnections.enabled, true),
+                or(
+                  ne(mcpUserConnections.status, "connected"),
+                  ne(
+                    mcpUserConnections.responseDisposition,
+                    MCP_RESPONSE_DISPOSITION.normal,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      )
-      .orderBy(asc(mcpConnectors.slug))
-      .limit(CONNECTABLE_MCP_CONNECTORS_MAX),
+        )
+        .orderBy(asc(mcpConnectors.slug)),
+      CONNECTABLE_MCP_CONNECTORS_MAX,
+    ),
   );
+  return result.andThen((read) => {
+    if (read.type === "overflow") {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          message: "Connectable connector catalog exceeds its supported size",
+        }),
+      );
+    }
+    return Result.ok(read.rows);
+  });
+};
 
 /**
  * The credential columns a disconnect deletes and returns in one statement,

@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   CONNECT_CONNECTOR_TOOL_NAME,
+  CONNECT_CONNECTOR_NOT_CONNECTED_CODE,
   connectConnectorInputSchema,
   connectConnectorSubmissionSchema,
 } from "@stll/api-contract/chat-connector";
@@ -266,7 +267,7 @@ const submitConnector = createSafeRootHandler(
           return abortTransaction(
             new HandlerError({
               status: 409,
-              code: "CHAT_CONNECTOR_NOT_CONNECTED",
+              code: CONNECT_CONNECTOR_NOT_CONNECTED_CODE,
               message: "Connector is not connected yet",
             }),
           );

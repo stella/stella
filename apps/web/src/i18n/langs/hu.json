@@ -1221,12 +1221,9 @@
     },
     "connectConnector": {
       "checkAction": "Kapcsolat ellenőrzése",
-      "connected": "Csatlakoztatva",
-      "declined": "Nincs csatlakoztatva",
       "description": "Az asszisztens a(z) {connector} csatlakoztatását kéri, hogy ebben a beszélgetésben használhassa az eszközeit.",
       "error": "Nem sikerült elindítani a csatlakoztatást. Próbáld újra.",
       "notConnected": "Még nincs csatlakoztatva. Fejezd be a bejelentkezést, majd ellenőrizd újra.",
-      "notNow": "Most nem",
       "openTools": "Eszközök megnyitása",
       "scopes": "Kért hozzáférés: {scopes}",
       "title": "Csatlakozó csatlakoztatása",
@@ -1815,6 +1812,7 @@
     "confirm": "Megerősítés",
     "confirmAction": "Biztosan folytatja?",
     "connect": "Csatlakozás",
+    "connected": "Csatlakoztatva",
     "connectionLost": "Kapcsolat megszakadt",
     "connectionLostDescription": "Megszakadt a kapcsolat a szerverrel. Automatikus újrapróbálkozás.",
     "convertTo": "Konvertálás",
@@ -1983,6 +1981,8 @@
     "noResults": "Nincs találat",
     "noVersions": "Nincs verzióelőzmény",
     "none": "Nincs",
+    "notConnected": "Nincs csatlakoztatva",
+    "notNow": "Most nem",
     "notStated": "Nincs megadva",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
@@ -2089,6 +2089,7 @@
     "versionLabel": "{version}. verzió",
     "viewSource": "Forrás megtekintése",
     "website": "Webhely",
+    "whenToUse": "Mikor használja",
     "workflow": "Munkafolyamat",
     "workflows": "Munkafolyamatok",
     "zoomIn": "Nagyítás",
@@ -3663,6 +3664,10 @@
       "importTitle": "Készség importálása",
       "importedSkills": "{count, plural, one {# készség importálva} other {# készség importálva}}",
       "invalidPath": "Az útvonal csak kisbetűket, számjegyeket, pontokat, kötőjeleket vagy alulvonásokat tartalmazhat",
+      "invocationAuto": "Automatikusan",
+      "invocationAutoHelp": "Az AI magától is használhatja ezt a készséget, ha illik a kéréshez.",
+      "invocationManual": "Csak kérésre",
+      "invocationManualHelp": "Csak akkor kerül használatra, ha a / jellel meghívja, vagy hozzáadja az üzenetéhez.",
       "license": "Licenc: {license}",
       "newFile": "Új fájl",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4353,6 +4358,8 @@
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
         "yearSequential": "Év / Sorszámos (2026/001)"
       },
+      "showInTitle": "Szám megjelenítése az ügy neve mellett",
+      "showInTitleDescription": "Ha ki van kapcsolva, a cím pontosan a megadott név.",
       "title": "Ügyszámozás",
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
@@ -4723,7 +4730,6 @@
       "cliInstallLabel": "Telepítés",
       "cliLoginLabel": "Bejelentkezés",
       "cliTitle": "Parancssori felület",
-      "connected": "Csatlakoztatva",
       "connectedAgo": "Csatlakoztatva: {time}",
       "connectedAppsDescription": "Alkalmazások, amelyekbe stella-fiókkal jelentkeztél be. Válaszd le azokat, amelyeket már nem használsz.",
       "connectedAppsEmpty": "Még semmi. Állítsd be fent a Claude-ot vagy a ChatGPT-t, és itt megjelenik.",
@@ -4746,7 +4752,6 @@
       "mcpTitle": "MCP-szerver",
       "mcpUrlLabel": "Szerver URL-je",
       "noMatches": "Egy kapcsolat sem felel meg ennek: „{query}”",
-      "notConnected": "Nincs csatlakoztatva",
       "permissionCount": "{count, plural, one {# jogosultság} other {# jogosultság}}",
       "privateCredentialOnly": "Csak privát hitelesítő adat",
       "searchPlaceholder": "Kapcsolatok keresése",
@@ -4861,7 +4866,6 @@
       "usageLimitDescriptionNoEntitlement": "Az AI-funkciókhoz aktív használati jogosultság szükséges ennél a szervezetnél.",
       "usageLimitDescriptionUsageLimitExceeded": "Ez a művelet nem futtatható a szervezet jelenlegi használati állapotával.",
       "usageLimitNeeded": "Szükséges",
-      "usageLimitNotNow": "Most nem",
       "usageLimitTitleEntitlementInactive": "A használati jogosultság nem aktív",
       "usageLimitTitleNoEntitlement": "Használati jogosultság szükséges",
       "usageLimitTitleUsageLimitExceeded": "Elérte az AI-használati korlátot",
@@ -4986,17 +4990,22 @@
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
     "provisionDetailsFor": "{provision} részletei",
+    "provisionEffectiveFrom": "{date} óta hatályos",
     "provisionHistoryEarliest": "A legkorábbi ismert szövegváltozat.",
     "provisionHistoryEmpty": "Ehhez a rendelkezéshez nincs nyilvántartott szövegváltozat.",
     "provisionHistoryLoadOlder": "Töltsön be korábbi változatokat az összehasonlításhoz.",
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
+    "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
+    "showCitedPartOnly": "Csak az idézett rész megjelenítése",
+    "showFullProvision": "A teljes rendelkezés megjelenítése",
     "showInText": "Megjelenítés a szövegben",
     "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {
@@ -5012,7 +5021,6 @@
     "title": "Jogszabályok",
     "validity": "Hatályos {from} és {to} között",
     "versionAppliedInDecision": "A(z) <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> határozatban alkalmazott változat (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "A szöveg {date} óta hatályos",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },
   "styleSets": {
@@ -5565,7 +5573,6 @@
     "viewVersion": "Megtekintés",
     "whenNotToUse": "Mikor ne használja",
     "whenNotToUsePlaceholder": "Mikor kerülendő ez a sablon?",
-    "whenToUse": "Mikor használja",
     "whenToUsePlaceholder": "Mikor használandó ez a sablon? (segíti az AI sablonválasztását)"
   },
   "timesheets": {
@@ -5686,7 +5693,7 @@
       "title": "Másolás ügyiratba"
     },
     "create": {
-      "ownerTypeToggle": "Ügy típusa",
+      "matterName": "Ügy neve",
       "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
     },
     "createNewWorkspace": "Új ügy létrehozása",
@@ -6138,15 +6145,12 @@
       "upcomingTasks": "Közelgő agenda",
       "uploaded": "feltöltötte"
     },
-    "ownerType": {
-      "client": "Ügyfél",
-      "personal": "Személyes"
-    },
     "parties": {
       "addParty": "Fél hozzáadása",
       "changeClient": "Ügyfél módosítása",
       "client": "Ügyfél",
       "noClient": "Nincs ügyfél hozzárendelve",
+      "noClientOptional": "Nincs ügyfél (nem kötelező)",
       "noParties": "Ehhez az ügyhöz nincsenek felek hozzáadva.",
       "partyRoles": {
         "co_counsel": "Társügyvéd",

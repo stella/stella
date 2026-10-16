@@ -79,14 +79,20 @@ export const storeChatToolGrant = async ({
     }),
   );
 
-/** Splits stored grants by scope into the approval-card grant sets. */
+/**
+ * Splits stored grants by scope into the approval-card grant sets. Until the
+ * grants load (`undefined`), no call is pre-approved.
+ */
 export const projectChatToolGrants = (
-  grants: ChatToolGrantsResponse["grants"],
+  grants: ChatToolGrantsResponse["grants"] | undefined,
 ): Record<ChatToolGrantScope, ReadonlySet<ToolApprovalGrant>> => {
   const projected = {
     always: new Set<ToolApprovalGrant>(),
     conversation: new Set<ToolApprovalGrant>(),
   };
+  if (grants === undefined) {
+    return projected;
+  }
   for (const grant of grants) {
     const approvalGrant = toApprovalGrant(grant);
     if (approvalGrant !== null) {

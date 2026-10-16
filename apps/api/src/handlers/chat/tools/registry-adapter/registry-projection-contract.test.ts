@@ -505,6 +505,18 @@ const CONTRACT_CORPUS = {
               assignedToDeletedAt: null,
             },
           ],
+          // The web agenda stays out of the matter detail projection.
+          upcomingAgenda: [
+            {
+              entityId: toSafeId<"entity">(uid(43)),
+              name: "File the response",
+              status: null,
+              dueDate: "2026-01-10",
+              assignedTo: "Petr",
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({
@@ -1695,6 +1707,7 @@ const CONTRACT_CORPUS = {
           unclassified: 0,
         };
         readGatedDecisionCitationDigestMock.mockResolvedValue({
+          doctrineSummary: { status: "unavailable" },
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
@@ -1714,6 +1727,7 @@ const CONTRACT_CORPUS = {
               citationText: "21 Cdo 500/2019",
               textWithheldReason: null,
               sectionIndex: 0,
+              doctrine: "unread",
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
             },
@@ -1722,6 +1736,7 @@ const CONTRACT_CORPUS = {
               citationText: "sp. zn. 20 Cdo 1/2001",
               textWithheldReason: null,
               sectionIndex: 1,
+              doctrine: "unread",
               treatment: "neutral",
               decision: null,
             },
@@ -1742,12 +1757,14 @@ const CONTRACT_CORPUS = {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
           page: {
+            doctrineAvailability: "available",
             items: [
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
                 textWithheldReason: null,
                 sectionIndex: 1,
+                doctrine: "unread",
                 treatment: "positive",
                 decision: {
                   id: toSafeId<"caseLawDecision">(uid(58)),
@@ -2465,6 +2482,7 @@ describe("decision text in chat projection", () => {
       unclassified: 0,
     };
     readGatedDecisionCitationDigestMock.mockResolvedValue({
+      doctrineSummary: { status: "unavailable" },
       summary: {
         incoming: noCitations,
         outgoing: noCitations,

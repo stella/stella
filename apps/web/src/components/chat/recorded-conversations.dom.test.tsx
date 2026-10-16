@@ -14,6 +14,7 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -448,6 +449,8 @@ const createRecordedServer = (
   };
 
   return {
+    /** The approvals the API holds now; a page opens with them loaded. */
+    grants,
     dropConnection: () => {
       (drop ?? expect.unreachable("No response is streaming"))();
     },
@@ -466,6 +469,9 @@ const createRecordedServer = (
 // --- The page ------------------------------------------------------------
 
 /** A tab on the recorded thread, loaded the way the page loads it. */
+/** The grants of the conversation on screen, as the API holds them. */
+let openGrants: StoredToolGrant[] = [];
+
 const openPage = async (
   recording: RecordedConversation,
   { organizationId = ORGANIZATION_ID }: { organizationId?: string } = {},
@@ -473,6 +479,7 @@ const openPage = async (
   await openChatThreadDomPage({
     organizationId,
     threadId: recording.threadId,
+    toolGrants: [...openGrants],
   });
 
 afterEach(() => {
@@ -747,14 +754,7 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
 
 const RELOAD_ORGANIZATION_ID = "00000000-0000-7000-8000-00000000fffd";
 /** A conversation grant as the API lists it. */
-type StoredToolGrant = {
-  id: string;
-  scope: "conversation";
-  chatThreadId: string;
-  toolName: string | null;
-  mcpConnectorId: string | null;
-  mcpConnectorToolNamespace: string | null;
-};
+type StoredToolGrant = ChatToolGrantsResponse["grants"][number];
 
 const EXTERNAL_CONNECTOR_ID = "00000000-0000-7000-8000-00000000c0de";
 let storedToolGrantCount = 0;
@@ -991,6 +991,7 @@ const replay = async (scenario: string) => {
     grantConversationTools(recording),
   );
   routeRequest = server.fetch;
+  openGrants = server.grants;
   let live = await openPage(recording);
   /** Cards answered since the last request, held by the page alone. */
   const answeredLocally: string[] = [];
@@ -1114,6 +1115,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
     "The recorder posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": OUTSIDE_THE_CONVERSATION,
+  "check-stored-grant": OUTSIDE_THE_CONVERSATION,
   "continue-private-input": notRecorded(
     "The recorder posts text messages only; private input cards submit through their own endpoint.",
   ),

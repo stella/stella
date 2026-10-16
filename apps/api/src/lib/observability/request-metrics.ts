@@ -22,7 +22,8 @@ import type { PublicCorpusClass } from "@/api/public-corpus-policy";
  * synchronous AI endpoint (template field suggestions, chat, summaries)
  * or search read cannot trip an SLO meant for CRUD. Looser alarms watch
  * `class=ai` and `class=search`; `class=batch` (crawler reads) stays out of
- * every latency SLO and is logged without an extracted metric. Keeping
+ * every latency SLO and is logged without an extracted metric. Stream setup
+ * is also log-only: its timing cannot measure CRUD work. Keeping
  * `class` the only dimension caps this at one extracted metric per extracted
  * class regardless of route cardinality; `http.route` and
  * `http.status_code` ride along as queryable properties, not dimensions.
@@ -144,6 +145,25 @@ const EVENT_LOOP_DELAY_METRIC = {
   p99: "EventLoopDelayP99",
 } as const;
 
+const PROCESS_MEMORY_METRIC = {
+  rss: "ProcessRssBytes",
+  heapUsed: "ProcessHeapUsedBytes",
+  arrayBuffers: "ProcessArrayBuffersBytes",
+  uploadFinalizeInFlight: "UploadFinalizeInFlightBytes",
+} as const;
+
+/**
+ * The process's memory at the end of a reporting window. File work holds its
+ * bytes in array buffers outside the JS heap, so those are reported apart
+ * from the heap, beside the bytes upload finalization has admitted.
+ */
+export type ProcessMemoryReport = {
+  rssBytes: number;
+  heapUsedBytes: number;
+  arrayBuffersBytes: number;
+  uploadFinalizeInFlightBytes: number;
+};
+
 /**
  * One reporting window of the process's event-loop delay. Undimensioned: the
  * process is the unit, and a task or route id would only multiply series.
@@ -152,10 +172,12 @@ export const emitEventLoopDelayMetric = ({
   maxMs,
   p99Ms,
   rootPool,
+  memory,
 }: {
   maxMs: number;
   p99Ms: number;
   rootPool?: RootPoolReport;
+  memory?: ProcessMemoryReport;
 }): void => {
   writeMetricLine({
     _aws: {
@@ -167,6 +189,12 @@ export const emitEventLoopDelayMetric = ({
           Metrics: [
             { Name: EVENT_LOOP_DELAY_METRIC.max, Unit: "Milliseconds" },
             { Name: EVENT_LOOP_DELAY_METRIC.p99, Unit: "Milliseconds" },
+            ...(memory === undefined
+              ? []
+              : Object.values(PROCESS_MEMORY_METRIC).map((Name) => ({
+                  Name,
+                  Unit: "Bytes",
+                }))),
           ],
         },
       ],
@@ -175,6 +203,15 @@ export const emitEventLoopDelayMetric = ({
     ...(rootPool === undefined ? {} : { rootPool }),
     [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
     [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
+    ...(memory === undefined
+      ? {}
+      : {
+          [PROCESS_MEMORY_METRIC.rss]: memory.rssBytes,
+          [PROCESS_MEMORY_METRIC.heapUsed]: memory.heapUsedBytes,
+          [PROCESS_MEMORY_METRIC.arrayBuffers]: memory.arrayBuffersBytes,
+          [PROCESS_MEMORY_METRIC.uploadFinalizeInFlight]:
+            memory.uploadFinalizeInFlightBytes,
+        }),
   });
 };
 
@@ -208,7 +245,13 @@ const writeMetricLine = (record: object): void => {
   process.stdout.write(`${line}\n`);
 };
 
-export const REQUEST_CLASSES = ["ai", "crud", "search", "batch"] as const;
+export const REQUEST_CLASSES = [
+  "ai",
+  "crud",
+  "search",
+  "batch",
+  "stream",
+] as const;
 export type RequestClass = (typeof REQUEST_CLASSES)[number];
 
 type EmitRequestDurationMetricInput = {
@@ -218,13 +261,14 @@ type EmitRequestDurationMetricInput = {
   route: string;
 };
 
-// No alarm reads `class=batch`, so its records stay queryable log lines
-// without paying for an extracted metric series.
+// Crawler reads and stream setup stay queryable
+// without extracting a metric series for an unrelated latency SLO.
 const REQUEST_CLASS_METRIC = {
   ai: "extracted",
   crud: "extracted",
   search: "extracted",
   batch: "log_only",
+  stream: "log_only",
 } as const satisfies Record<RequestClass, "extracted" | "log_only">;
 
 /**

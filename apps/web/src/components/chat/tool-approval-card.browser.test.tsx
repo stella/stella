@@ -37,6 +37,8 @@ const renderCard = (
             activeOrganizationId: "org-1",
             alwaysApprovedTools: grants,
             conversationApprovedTools: grants,
+            confirmStoredApprovalGrant: async () =>
+              await Promise.resolve(grants.size > 0),
             handleAllowInConversation: noop,
             handleAlwaysAllow: noop,
             handleApprove: noop,

@@ -19,6 +19,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const toolCallId = "connector-request";
 const input = {
@@ -88,10 +89,7 @@ const scriptedDb = ({
   };
   const tx = { execute: async () => [{ id: "locked" }], select };
   const safeDb: SafeDb = async (operation) =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- scripted handle answers only the calls this handler makes
-    Result.ok(
-      await operation(tx as unknown as Parameters<typeof operation>[0]),
-    );
+    Result.ok(await operation(asTestRaw<Parameters<typeof operation>[0]>(tx)));
   return { reads, safeDb };
 };
 

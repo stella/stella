@@ -1221,12 +1221,9 @@
     },
     "connectConnector": {
       "checkAction": "التحقق من الاتصال",
-      "connected": "متصل",
-      "declined": "غير متصل",
       "description": "يطلب المساعد ربط {connector} لاستخدام أدواته في هذه المحادثة.",
       "error": "تعذر بدء الربط. حاول مرة أخرى.",
       "notConnected": "لم يتم الربط بعد. أكمل تسجيل الدخول، ثم تحقق مرة أخرى.",
-      "notNow": "ليس الآن",
       "openTools": "فتح الأدوات",
       "scopes": "الصلاحيات المطلوبة: {scopes}",
       "title": "ربط موصل",
@@ -1815,6 +1812,7 @@
     "confirm": "تأكيد",
     "confirmAction": "هل أنت متأكد؟",
     "connect": "ربط",
+    "connected": "متصل",
     "connectionLost": "انقطع الاتصال",
     "connectionLostDescription": "فقدنا الاتصال بالخادم. جارٍ إعادة المحاولة تلقائيًا.",
     "convertTo": "تحويل إلى",
@@ -1983,6 +1981,8 @@
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
     "none": "لا شيء",
+    "notConnected": "غير متصل",
+    "notNow": "ليس الآن",
     "notStated": "غير مذكور",
     "notes": "الملاحظات",
     "open": "فتح",
@@ -2089,6 +2089,7 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "website": "موقع الويب",
+    "whenToUse": "متى يُستخدَم",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -3663,6 +3664,10 @@
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
       "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invocationAuto": "تلقائيًا",
+      "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
+      "invocationManual": "عند الاستدعاء فقط",
+      "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4353,6 +4358,8 @@
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
       },
+      "showInTitle": "إظهار الرقم بجانب اسم الملف القانوني",
+      "showInTitleDescription": "عند إيقاف هذا الخيار، يكون العنوان هو الاسم الذي أدخلته بالضبط.",
       "title": "ترقيم الملفات القانونية",
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
@@ -4723,7 +4730,6 @@
       "cliInstallLabel": "التثبيت",
       "cliLoginLabel": "تسجيل الدخول",
       "cliTitle": "واجهة سطر الأوامر",
-      "connected": "متصل",
       "connectedAgo": "متصل {time}",
       "connectedAppsDescription": "تطبيقات سجّلت الدخول إليها بحساب stella. افصل ما لم تعد تستخدمه.",
       "connectedAppsEmpty": "لا شيء بعد. أعدّ Claude أو ChatGPT أعلاه وسيظهر هنا.",
@@ -4746,7 +4752,6 @@
       "mcpTitle": "خادم MCP",
       "mcpUrlLabel": "عنوان URL للخادم",
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
-      "notConnected": "غير متصل",
       "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
       "privateCredentialOnly": "بيانات اعتماد خاصة فقط",
       "searchPlaceholder": "ابحث في الاتصالات",
@@ -4861,7 +4866,6 @@
       "usageLimitDescriptionNoEntitlement": "تتطلب ميزات الذكاء الاصطناعي استحقاق استخدام نشطًا لهذه المؤسسة.",
       "usageLimitDescriptionUsageLimitExceeded": "لا يمكن تشغيل هذا الإجراء مع حالة الاستخدام الحالية للمؤسسة.",
       "usageLimitNeeded": "مطلوب",
-      "usageLimitNotNow": "ليس الآن",
       "usageLimitTitleEntitlementInactive": "استحقاق الاستخدام غير نشط",
       "usageLimitTitleNoEntitlement": "استحقاق الاستخدام مطلوب",
       "usageLimitTitleUsageLimitExceeded": "تم بلوغ حد استخدام الذكاء الاصطناعي",
@@ -4986,17 +4990,22 @@
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
+    "provisionEffectiveFrom": "نافذ منذ {date}",
     "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
+    "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
+    "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
+    "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
@@ -5012,7 +5021,6 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -5565,7 +5573,6 @@
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
-    "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
   "timesheets": {
@@ -5686,7 +5693,7 @@
       "title": "نسخ إلى ملف قانوني"
     },
     "create": {
-      "ownerTypeToggle": "نوع الملف القانوني",
+      "matterName": "اسم الملف القانوني",
       "personalDescription": "الملفات القانونية الشخصية خاصة بك ولا تحتاج إلى عميل. يمكنك ترقيتها لاحقًا لمشاركتها مع الفريق."
     },
     "createNewWorkspace": "إنشاء ملف قانوني جديد",
@@ -6138,15 +6145,12 @@
       "upcomingTasks": "جدول الأعمال القادم",
       "uploaded": "تم الرفع"
     },
-    "ownerType": {
-      "client": "عميل",
-      "personal": "شخصية"
-    },
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
       "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
+      "noClientOptional": "بلا عميل (اختياري)",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف القانوني.",
       "partyRoles": {
         "co_counsel": "محامٍ مشارك",

@@ -111,45 +111,51 @@ export const revokeMcpConnectionTokens = async ({
     return { type: "skipped", reason: "no_revocation_endpoint" };
   }
 
-  const clientSecret =
-    connection.oauthClientSecretEncrypted && connection.oauthClientSecretIv
-      ? await dependencies.decryptMcpSecret({
-          ciphertext: connection.oauthClientSecretEncrypted,
-          connectorId: connection.connectorId,
-          iv: connection.oauthClientSecretIv,
-          organizationId,
-          purpose: "mcp_client_secret",
-        })
-      : null;
-
   const revoked: RevokedTokenType[] = [];
   const failed: { tokenType: RevokedTokenType; error: unknown }[] = [];
   const revoke = async (
-    revocable: Parameters<typeof revokeOAuthToken>[0]["revocable"],
+    tokenTypeHint: RevokedTokenType,
+    loadRevocable: () => Promise<
+      Parameters<typeof revokeOAuthToken>[0]["revocable"]
+    >,
   ) => {
-    const result = await Result.tryPromise(
-      async () =>
-        await dependencies.revokeOAuthToken({
-          clientId: connection.oauthClientId,
-          clientSecret,
-          dependencies: outbound,
-          endpoint,
-          permit,
-          revocable,
-        }),
-    );
-    if (Result.isOk(result) && Result.isOk(result.value)) {
-      revoked.push(revocable.tokenTypeHint);
+    const result = await Result.tryPromise(async () => {
+      const clientSecret =
+        connection.oauthClientSecretEncrypted && connection.oauthClientSecretIv
+          ? await dependencies.decryptMcpSecret({
+              ciphertext: connection.oauthClientSecretEncrypted,
+              connectorId: connection.connectorId,
+              iv: connection.oauthClientSecretIv,
+              organizationId,
+              purpose: "mcp_client_secret",
+            })
+          : null;
+
+      return await dependencies.revokeOAuthToken({
+        clientId: connection.oauthClientId,
+        clientSecret,
+        dependencies: outbound,
+        endpoint,
+        permit,
+        revocable: await loadRevocable(),
+      });
+    });
+    if (Result.isError(result)) {
+      failed.push({ tokenType: tokenTypeHint, error: result.error });
       return;
     }
-    failed.push({
-      tokenType: revocable.tokenTypeHint,
-      error: Result.isError(result) ? result.error : result.value.error,
-    });
+    if (Result.isError(result.value)) {
+      failed.push({
+        tokenType: tokenTypeHint,
+        error: result.value.error,
+      });
+      return;
+    }
+    revoked.push(tokenTypeHint);
   };
 
   if (connection.refreshTokenEncrypted && connection.refreshTokenIv) {
-    await revoke({
+    await revoke("refresh_token", async () => ({
       token: await dependencies.decryptMcpSecret({
         ciphertext: connection.refreshTokenEncrypted,
         connectorId: connection.connectorId,
@@ -159,9 +165,9 @@ export const revokeMcpConnectionTokens = async ({
         userId,
       }),
       tokenTypeHint: "refresh_token",
-    });
+    }));
   }
-  await revoke({
+  await revoke("access_token", async () => ({
     token: await dependencies.decryptMcpSecret({
       ciphertext: connection.accessTokenEncrypted,
       connectorId: connection.connectorId,
@@ -171,7 +177,7 @@ export const revokeMcpConnectionTokens = async ({
       userId,
     }),
     tokenTypeHint: "access_token",
-  });
+  }));
 
   return { type: "attempted", revoked, failed };
 };

@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { CONNECT_CONNECTOR_NOT_CONNECTED_CODE } from "@stll/api-contract/chat-connector";
 import type {
   ConnectConnectorDecision,
   ConnectConnectorInput,
@@ -19,9 +20,10 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import {
   openMcpOAuthWindow,
@@ -56,7 +58,10 @@ const FAILURE_MESSAGE_KEYS = {
   start: "chat.connectConnector.error",
   "not-connected": "chat.connectConnector.notConnected",
   submit: "common.somethingWentWrong",
-} as const;
+} as const satisfies Record<
+  Extract<ConnectPhase, { type: "failed" }>["reason"],
+  TranslationKey
+>;
 
 type ConnectorSummary = {
   name: string;
@@ -218,7 +223,7 @@ const ConnectActions = ({
         type="button"
         variant="ghost"
       >
-        {t("chat.connectConnector.notNow")}
+        {t("common.notNow")}
       </Button>
       {phase.type === "token-required" ? (
         <Button
@@ -298,13 +303,18 @@ export const ConnectConnectorCard = ({
       return;
     }
     setPhase({ type: "confirming" });
-    const result = await Result.tryPromise(
-      async () => await handleConnectConnector(part.id, decision),
-    );
+    const result = await Result.tryPromise({
+      try: async () => await handleConnectConnector(part.id, decision),
+      catch: (error: unknown) => error,
+    });
     if (Result.isError(result)) {
       setPhase({
         type: "failed",
-        reason: decision === "connected" ? "not-connected" : "submit",
+        reason:
+          APIError.is(result.error) &&
+          result.error.code === CONNECT_CONNECTOR_NOT_CONNECTED_CODE
+            ? "not-connected"
+            : "submit",
       });
       return;
     }
@@ -396,8 +406,8 @@ export const ConnectConnectorCard = ({
       {shownOutput ? (
         <p className="text-muted-foreground mt-3 text-sm">
           {shownOutput.status === "connected"
-            ? t("chat.connectConnector.connected")
-            : t("chat.connectConnector.declined")}
+            ? t("common.connected")
+            : t("common.notConnected")}
         </p>
       ) : null}
       {heldReceipt !== undefined && hasContinuationError ? (

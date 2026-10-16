@@ -1,6 +1,8 @@
 import * as v from "valibot";
 
 export const CONNECT_CONNECTOR_TOOL_NAME = "connect_connector";
+export const CONNECT_CONNECTOR_NOT_CONNECTED_CODE =
+  "CHAT_CONNECTOR_NOT_CONNECTED";
 
 const connectorSlugSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(80));
 

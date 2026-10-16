@@ -1131,7 +1131,8 @@ export const sharepointOAuthStatePolicies = () => [
 ];
 
 // Stored chat tool approval grants are per user+org: only the owning user in
-// the active org reads, adds or removes them.
+// the active org reads, adds or removes them. A grant is never edited in
+// place; changing one is a delete and a new insert.
 const chatToolGrantCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;
@@ -1161,6 +1162,12 @@ export const chatToolGrantPolicies = () => [
     for: "delete",
     to: stella,
     using: chatToolGrantCheck,
+  }),
+  p.pgPolicy("chat_tool_grant_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
   }),
 ];
 

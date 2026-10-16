@@ -12,6 +12,7 @@ import {
   p,
   pUuid,
   safeOrganizationId,
+  safeUuid,
   timestamptz,
   user,
 } from "./common";
@@ -44,14 +45,14 @@ export const chatToolGrants = p.pgTable(
       .notNull()
       .$type<ChatToolGrantScope>(),
     /** Conversation a `conversation` grant applies to; null for `always`. */
-    chatThreadId: pUuid<"chatThread">("chat_thread_id").references(
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id").references(
       () => chatThreads.id,
       { onDelete: "cascade" },
     ),
     /** Built-in or skill tool the grant covers; null for a connector grant. */
     toolName: p.varchar("tool_name", { length: 128 }),
     /** External MCP connector whose tools the grant covers. */
-    mcpConnectorId: pUuid<"mcpConnector">("mcp_connector_id").references(
+    mcpConnectorId: safeUuid<"mcpConnector">("mcp_connector_id").references(
       () => mcpConnectors.id,
       { onDelete: "cascade" },
     ),

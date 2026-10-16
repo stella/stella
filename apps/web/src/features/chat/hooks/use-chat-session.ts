@@ -329,7 +329,7 @@ export const useChatSession = ({
     always: alwaysApprovedTools,
     conversation: conversationApprovedTools,
   } = useMemo(
-    () => projectChatToolGrants(storedChatToolGrants ?? []),
+    () => projectChatToolGrants(storedChatToolGrants),
     [storedChatToolGrants],
   );
 

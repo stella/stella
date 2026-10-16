@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { CONNECT_CONNECTOR_NOT_CONNECTED_CODE } from "@stll/api-contract/chat-connector";
 import type {
   ConnectConnectorDecision,
   ConnectConnectorInput,
@@ -77,6 +78,7 @@ const { testChatApprovalContextValue } =
 const { ConnectConnectorCard } =
   await import("@/components/chat/connect-connector-card");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
+const { APIError } = await import("@/lib/errors/api");
 const { broadcastMcpOAuthOutcome } = await import("@/lib/mcp-oauth-channel");
 
 type ConnectConnectorPart = Parameters<typeof ConnectConnectorCard>[0]["part"];
@@ -185,7 +187,7 @@ describe("connect connector card", () => {
     ).not.toBeNull();
     expect(
       screen.getByRole("button", {
-        name: messages.chat.connectConnector.notNow,
+        name: messages.common.notNow,
       }),
     ).not.toBeNull();
     queryClient.clear();
@@ -209,7 +211,7 @@ describe("connect connector card", () => {
     await act(async () =>
       fireEvent.click(
         screen.getByRole("button", {
-          name: messages.chat.connectConnector.notNow,
+          name: messages.common.notNow,
         }),
       ),
     );
@@ -222,9 +224,7 @@ describe("connect connector card", () => {
         renderCard({ ...pendingPart(), output: declined, state: "complete" }),
       ),
     );
-    expect(
-      screen.getByText(messages.chat.connectConnector.declined),
-    ).not.toBeNull();
+    expect(screen.getByText(messages.common.notConnected)).not.toBeNull();
     queryClient.clear();
   });
 
@@ -262,35 +262,51 @@ describe("connect connector card", () => {
     queryClient.clear();
   });
 
-  test("a refused confirmation keeps the card answerable", async () => {
-    const decisions: ConnectConnectorDecision[] = [];
-    const { queryClient } = mountCard({
-      handleConnectConnector: async (_toolCallId, decision) => {
-        decisions.push(decision);
-        return await Promise.reject(new Error("not connected yet"));
-      },
-    });
-
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole("button", { name: messages.common.connect }),
-      ),
-    );
-    await screen.findByText(messages.chat.connectConnector.waiting);
-    await act(async () =>
-      fireEvent.click(
-        screen.getByRole("button", {
-          name: messages.chat.connectConnector.checkAction,
-        }),
-      ),
-    );
-    await screen.findByText(messages.chat.connectConnector.notConnected);
-    expect(decisions).toEqual(["connected"]);
-    expect(
-      screen.getByRole("button", {
-        name: messages.chat.connectConnector.notNow,
+  test.each([
+    {
+      error: new APIError({
+        status: 409,
+        code: CONNECT_CONNECTOR_NOT_CONNECTED_CODE,
+        message: "Not connected",
       }),
-    ).not.toBeNull();
-    queryClient.clear();
-  });
+      message: messages.chat.connectConnector.notConnected,
+    },
+    {
+      error: new APIError({ status: 503, message: "Unavailable" }),
+      message: messages.common.somethingWentWrong,
+    },
+  ])(
+    "a failed confirmation keeps the card answerable: $error.status",
+    async ({ error, message }) => {
+      const decisions: ConnectConnectorDecision[] = [];
+      const { queryClient } = mountCard({
+        handleConnectConnector: async (_toolCallId, decision) => {
+          decisions.push(decision);
+          return await Promise.reject(error);
+        },
+      });
+
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", { name: messages.common.connect }),
+        ),
+      );
+      await screen.findByText(messages.chat.connectConnector.waiting);
+      await act(async () =>
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: messages.chat.connectConnector.checkAction,
+          }),
+        ),
+      );
+      await screen.findByText(message);
+      expect(decisions).toEqual(["connected"]);
+      expect(
+        screen.getByRole("button", {
+          name: messages.common.notNow,
+        }),
+      ).not.toBeNull();
+      queryClient.clear();
+    },
+  );
 });

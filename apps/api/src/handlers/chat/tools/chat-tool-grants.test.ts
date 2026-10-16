@@ -17,11 +17,11 @@ import {
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const inputSchema = toTanStackToolSchema(v.strictObject({}));
 
-const policyTool = (name: string, kind: ChatToolPolicyKind) =>
+const policyTool = (name: string, kind: ChatToolPolicyKind): ChatTool =>
   applyChatToolPolicy(
     toolDefinition({ name, description: name, inputSchema }).server(
       async () => ({}),

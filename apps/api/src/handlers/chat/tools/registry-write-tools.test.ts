@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
@@ -18,6 +18,7 @@ import {
   WRITE_TOOL_SCOPES,
 } from "@/api/mcp/matter-requirement";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = toSafeId<"organization">(
   "11111111-1111-4111-8111-111111111111",
@@ -31,9 +32,9 @@ const threadId = toSafeId<"chatThread">("55555555-5555-4555-8555-555555555555");
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("This test never reaches the database.");
 };
-const unusedSafeDb: SafeDb = async () => {
-  throw new Error("This test never reaches the database.");
-};
+// Only the execution audit row reaches the database, and its recorder below
+// discards it, so the transaction is never read.
+const { safeDb: auditOnlySafeDb } = createScopedDbMock({});
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
@@ -56,7 +57,7 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     registryDispatch: BUSINESS_REGISTRY_DISPATCH,
     requestWorkspaceId: null,
     resolveCurrentMembership: async () => ({ role: "owner" }),
-    safeDb: unusedSafeDb,
+    safeDb: auditOnlySafeDb,
     scopedDb: unusedScopedDb,
     thirdPartyBoundary: { type: "raw" },
     threadId,

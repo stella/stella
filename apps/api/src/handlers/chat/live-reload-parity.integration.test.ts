@@ -1127,6 +1127,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "The harness posts text messages only; attachments need stored files.",
   ),
   "check-saved-private-input": READS_ONLY,
+  "check-stored-grant": READS_ONLY,
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),

@@ -5,16 +5,26 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  raiseChatToolError,
+  reraiseChatToolFailure,
+} from "@/api/handlers/chat/tools/tool-failure";
+import {
   copyChatToolPolicy,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatToolPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const EXECUTION_AUDIT_FAILED = failureSink({
+  event: "chat.tool_execution_audit_failed",
+  expected: [],
+});
 
 export type ChatToolExecutionAuditContext = {
   recordAuditEvent: AuditRecorder;
@@ -136,9 +146,9 @@ const recordExecution = async ({
     });
   });
   if (Result.isError(result)) {
-    captureError(result.error, {
-      source: "chat-tool-execution-audit",
-      policyKind,
+    observeFailure(result.error, {
+      sink: EXECUTION_AUDIT_FAILED,
+      ctx: { source: "chat-tool-execution-audit", operation: policyKind },
     });
   }
   return result;
@@ -179,20 +189,24 @@ const auditedTool = ({
     // Without a durable record of the dispatch the call does not run.
     const dispatched = await record("dispatched");
     if (Result.isError(dispatched)) {
-      throw new ChatToolError({
-        kind: "transient",
-        message: "The tool call could not be recorded; it was not run.",
-        cause: dispatched.error,
-      });
+      return raiseChatToolError(
+        new ChatToolError({
+          kind: "transient",
+          message: "The tool call could not be recorded; it was not run.",
+          cause: dispatched.error,
+        }),
+      );
     }
-    try {
-      const result: unknown = await execute(...args);
-      await record("success");
-      return result;
-    } catch (error) {
+    const settled = await Result.tryPromise({
+      try: async (): Promise<unknown> => await execute(...args),
+      catch: (error: unknown) => error,
+    });
+    if (Result.isError(settled)) {
       await record("error");
-      throw error;
+      return reraiseChatToolFailure(settled.error);
     }
+    await record("success");
+    return settled.value;
   };
   auditedExecutes.add(auditedExecute);
   audited.execute = auditedExecute;
