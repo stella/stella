@@ -1,6 +1,13 @@
 import { panic, Result } from "better-result";
-import { appendFileSync, readFileSync } from "node:fs";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { OxlintConfig } from "oxlint";
@@ -313,9 +320,11 @@ export const runSingleRule = async (
     cwd = "repository",
   }: LintSingleRuleOptions = {},
 ) => {
+  // Prepare each fixture before yielding so concurrent callers reach the shared
+  // queue in the same turn. Async filesystem work can split one cohort's run.
   // Override globs must use the real cwd when the temporary root is a symlink.
-  const directory = await realpath(
-    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
+  const directory = realpathSync(
+    mkdtempSync(path.join(tmpdir(), `stella-${ruleName}-`)),
   );
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
@@ -337,9 +346,10 @@ export const runSingleRule = async (
       },
     })}\n`;
     const configPath = path.join(directory, "oxlint.json");
-    await Bun.write(configPath, config);
+    writeFileSync(configPath, config);
     const sourceFile = path.join(directory, sourcePath);
-    await Bun.write(sourceFile, source);
+    mkdirSync(path.dirname(sourceFile), { recursive: true });
+    writeFileSync(sourceFile, source);
     const lintCase: LintCase = {
       configPath,
       sourceFile,
