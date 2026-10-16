@@ -266,6 +266,8 @@ export const ChatThreadPage = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -610,6 +612,8 @@ export const ChatThreadPage = ({
             handleDeny,
             handleRequestSecret,
             continueRequestSecret,
+            handleConnectConnector,
+            continueConnectConnector,
             resolveSecretTarget,
             secretAvailabilityKey,
           }}

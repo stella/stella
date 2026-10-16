@@ -33,6 +33,7 @@ export type SuggestedPromptsTurnOwner =
   | "approval"
   | "ask-user"
   | "secret"
+  | "connector"
   | "composer";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
@@ -45,6 +46,16 @@ const ASK_USER_STATE_OWNS_TURN = {
   "input-complete": true,
   "input-streaming": true,
 } as const satisfies Record<ToolCallState, boolean>;
+
+type UserInputTurnOwner = Extract<
+  SuggestedPromptsTurnOwner,
+  "ask-user" | "secret" | "connector"
+>;
+const USER_INPUT_TURN_OWNERS: Partial<Record<string, UserInputTurnOwner>> = {
+  "ask-user": "ask-user",
+  connect_connector: "connector",
+  request_secret: "secret",
+};
 
 type ResolveSuggestedPromptsTurnOwnerOptions = {
   approvalPendingMessageId: string | null;
@@ -63,25 +74,24 @@ export const resolveSuggestedPromptsTurnOwner = ({
   if (hasReopenedAskUser) {
     return "ask-user";
   }
-  if (
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        (part.name === "ask-user" || part.name === "request_secret") &&
-        ASK_USER_STATE_OWNS_TURN[part.state],
-    )
-  ) {
-    return lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        part.name === "request_secret" &&
-        ASK_USER_STATE_OWNS_TURN[part.state],
-    )
-      ? "secret"
-      : "ask-user";
+  if (lastMessage?.role !== "assistant") {
+    return "composer";
   }
-  return "composer";
+  const owners = new Set(
+    lastMessage.parts.flatMap((part) =>
+      part.type === "tool-call" && ASK_USER_STATE_OWNS_TURN[part.state]
+        ? (USER_INPUT_TURN_OWNERS[part.name] ?? [])
+        : [],
+    ),
+  );
+  // A private input card outranks a connector card, which outranks a question.
+  if (owners.has("secret")) {
+    return "secret";
+  }
+  if (owners.has("connector")) {
+    return "connector";
+  }
+  return owners.has("ask-user") ? "ask-user" : "composer";
 };
 
 export const resolveSuggestedPromptsAvailability = ({

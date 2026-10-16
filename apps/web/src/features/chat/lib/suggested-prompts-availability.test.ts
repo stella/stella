@@ -214,4 +214,40 @@ describe("resolveSuggestedPromptsTurnOwner", () => {
       }),
     ).toBe("secret");
   });
+
+  test("keeps a pending connector request user-owned until it is answered", () => {
+    const connectorCall = {
+      type: "tool-call" as const,
+      id: "connector-1",
+      name: "connect_connector" as const,
+      arguments: "{}",
+      input: { connectorSlug: "sample", purpose: "Search the sample source" },
+    };
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: {
+          ...assistantMessage,
+          parts: [{ ...connectorCall, state: "input-complete" as const }],
+        },
+      }),
+    ).toBe("connector");
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: {
+          ...assistantMessage,
+          parts: [
+            {
+              ...connectorCall,
+              state: "complete" as const,
+              output: { status: "declined" as const, connectorSlug: "sample" },
+            },
+          ],
+        },
+      }),
+    ).toBe("composer");
+  });
 });

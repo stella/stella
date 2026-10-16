@@ -1222,6 +1222,17 @@ type Messages = {
         "webSearch": "Turn on web search to use this skill";
       };
     };
+    "connectConnector": {
+      "checkAction": "Check connection";
+      "description": "The assistant asks to connect {connector} to use its tools in this conversation.";
+      "error": "Could not start connecting. Try again.";
+      "notConnected": "Not connected yet. Finish signing in, then check again.";
+      "openTools": "Open tools";
+      "scopes": "Requested access: {scopes}";
+      "title": "Connect a connector";
+      "tokenRequired": "{connector} needs an access token. Add it on the tools page, then check the connection.";
+      "waiting": "Finish signing in in the window that opened.";
+    };
     "contextMeter": {
       "attachments": "Attached documents";
       "autoCompact": "At 100% stella automatically summarizes older messages to free space.";
@@ -1506,6 +1517,7 @@ type Messages = {
       "business_registry_lookup": "Searching business registry";
       "compare_versions": "Comparing versions";
       "configure_template_fields": "Configure template fields";
+      "connect_connector": "Asking to connect a connector";
       "counterparty_check": "Checking counterparty";
       "create-document": "Preparing document";
       "create_matter_document": "Creating document";
@@ -1803,6 +1815,7 @@ type Messages = {
     "confirm": "Confirm";
     "confirmAction": "Are you sure?";
     "connect": "Connect";
+    "connected": "Connected";
     "connectionLost": "Connection lost";
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
@@ -1971,6 +1984,8 @@ type Messages = {
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
+    "notConnected": "Not connected";
+    "notNow": "Not now";
     "notStated": "Not stated";
     "notes": "Notes";
     "open": "Open";
@@ -4718,7 +4733,6 @@ type Messages = {
       "cliInstallLabel": "Install";
       "cliLoginLabel": "Log in";
       "cliTitle": "Command-line interface";
-      "connected": "Connected";
       "connectedAgo": "Connected {time}";
       "connectedAppsDescription": "Apps you have signed in to stella with. Disconnect any you no longer use.";
       "connectedAppsEmpty": "Nothing yet. Set up Claude or ChatGPT above and it will appear here.";
@@ -4741,7 +4755,6 @@ type Messages = {
       "mcpTitle": "MCP server";
       "mcpUrlLabel": "Server URL";
       "noMatches": "No connections match “{query}”";
-      "notConnected": "Not connected";
       "permissionCount": "{count, plural, one {# permission} other {# permissions}}";
       "privateCredentialOnly": "Private credential only";
       "searchPlaceholder": "Search connections";
@@ -4856,7 +4869,6 @@ type Messages = {
       "usageLimitDescriptionNoEntitlement": "AI features need an active usage entitlement for this organisation.";
       "usageLimitDescriptionUsageLimitExceeded": "This action cannot run with the organisation's current usage state.";
       "usageLimitNeeded": "Needed";
-      "usageLimitNotNow": "Not now";
       "usageLimitTitleEntitlementInactive": "Usage entitlement is not active";
       "usageLimitTitleNoEntitlement": "Usage entitlement required";
       "usageLimitTitleUsageLimitExceeded": "AI usage limit reached";

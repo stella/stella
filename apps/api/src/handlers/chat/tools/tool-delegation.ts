@@ -46,6 +46,11 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     reason:
       "The client submits private input through a dedicated authenticated endpoint.",
   },
+  connect_connector: {
+    type: "waiver",
+    reason:
+      "The client runs the ordinary connect flow; the receipt is confirmed through a dedicated authenticated endpoint.",
+  },
   show_visual: {
     type: "waiver",
     reason:
