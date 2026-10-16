@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-const lint = (source: string) =>
+const lint = async (source: string) =>
   lintSingleRule("no-unsafe-controller-editor-access", source, {
     cwd: "scratch",
     sourcePath: "apps/web/src/components/example.tsx",
