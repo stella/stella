@@ -74,7 +74,7 @@ test("profile language and collapsed sidebar render in the first HTML response",
     expect(rawResponse.ok()).toBe(true);
     const html = await rawResponse.text();
     expect(html).toMatch(/<html[^>]*\blang="cs"/u);
-    expect(html).toMatch(/<span[^>]*>Právní databáze<\/span>/u);
+    expect(html).toMatch(/<span[^>]*>Judikatura<\/span>/u);
     expect(html).toMatch(
       /(?=[^>]*data-slot="sidebar")(?=[^>]*data-state="collapsed")[^>]*/u,
     );
@@ -101,7 +101,7 @@ test("profile language and collapsed sidebar render in the first HTML response",
       await expect(
         serverPage
           .locator('[data-slot="sidebar"]')
-          .getByText("Právní databáze", { exact: true }),
+          .getByRole("link", { name: "Judikatura", exact: true }),
       ).toHaveCount(1);
       const serverWidth = await serverPage
         .locator('[data-slot="sidebar-gap"]')
@@ -191,6 +191,7 @@ test("a fresh visitor renders the preferred browser catalogue and explicit prefe
   const webBaseURL = baseURL ?? "http://localhost:3000";
   const context = await browser.newContext({
     baseURL: webBaseURL,
+    storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { "Accept-Language": "en;q=0.2,cs-CZ;q=0.9" },
   });
   try {

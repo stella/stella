@@ -62,6 +62,7 @@ export const createProfileTestSession = async ({
   const email = `${label}-${token}@stella.dev`;
   const slug = `${label}-${token}`.toLowerCase();
   const api = await playwrightRequest.newContext({
+    storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { origin: new URL(webUrl).origin },
   });
   let organizationId: string | undefined;
@@ -84,6 +85,12 @@ export const createProfileTestSession = async ({
     expect(organization.ok(), await organization.text()).toBe(true);
     organizationId = stringField(objectValue(await organization.json()), "id");
 
+    const activated = await api.post(
+      `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
+      { data: { organizationId } },
+    );
+    expect(activated.ok(), await activated.text()).toBe(true);
+
     if (locale !== undefined) {
       const updated = await api.post(`${E2E_API_ORIGIN}/api/auth/update-user`, {
         data: { locale },
@@ -99,6 +106,16 @@ export const createProfileTestSession = async ({
       sessionStorage.clear();
     });
     await page.context().addCookies(storageState.cookies);
+
+    const importedSession = await page.request.get(
+      `${E2E_API_ORIGIN}/api/auth/get-session`,
+    );
+    expect(importedSession.ok(), await importedSession.text()).toBe(true);
+    const imported = objectValue(await importedSession.json());
+    expect(stringField(objectValue(imported.user), "email")).toBe(email);
+    expect(
+      stringField(objectValue(imported.session), "activeOrganizationId"),
+    ).toBe(organizationId);
 
     return {
       cleanup: async () => {

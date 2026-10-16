@@ -49,7 +49,9 @@ test("OAuth routes preserve server presentation and defer fragment-dependent wor
         isServer,
       });
       await router.load();
-      expect(router.state.matches.at(-1)?.context.renderedLocale).toBe("cs");
+      expect(router.state.matches.at(-1)?.context).toMatchObject({
+        renderedLocale: "cs",
+      });
       expect(fragmentReads).toEqual(isServer ? [] : [browserHash]);
     }
   }

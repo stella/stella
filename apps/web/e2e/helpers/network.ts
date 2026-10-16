@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { Result } from "better-result";
 import {
   existsSync,
   readFileSync,
@@ -209,18 +210,50 @@ const isStreamedResponse = (response: Response): boolean =>
     .toLowerCase()
     .includes(STREAMED_RESPONSE_CONTENT_TYPE);
 
-// Playwright's body() rejects for a response that never finishes (aborted or
-// redirected mid-navigation); that is a legitimate outcome here, not a bug in
-// the collector, so it is caught and recorded rather than left to reject the
-// whole route walk.
+// Body buffers can disappear after completion or navigation. Retain protocol
+// transfer sizes only when they conservatively bound the decoded body; every
+// other unreadable response remains a measurement failure.
 export const readResponseBytes = async (
-  response: Pick<Response, "body" | "status">,
+  response: Pick<
+    Response,
+    "body" | "status" | "headers" | "fromServiceWorker"
+  > & {
+    request: () => Pick<Request, "failure" | "sizes">;
+  },
   record: Pick<NetworkRecord, "responseBytes" | "responseBodyReadFailure">,
 ): Promise<void> => {
   try {
     const body = await response.body();
     record.responseBytes = body.length;
   } catch (error) {
+    const request = response.request();
+    const headers = response.headers();
+    const transferEncoding = headers["transfer-encoding"]?.trim().toLowerCase();
+    if (
+      !response.fromServiceWorker() &&
+      (transferEncoding === undefined ||
+        transferEncoding === "chunked" ||
+        transferEncoding === "identity") &&
+      headers["content-encoding"] === undefined &&
+      request.failure() === null
+    ) {
+      // Chromium can discard a completed response's body buffer. For an
+      // unencoded response, the observed transfer body size is at least its
+      // decoded size (chunk framing can only add bytes), so budgets stay
+      // conservative without depending on that buffer's lifetime.
+      const sizes = await Result.tryPromise({
+        try: async () => await request.sizes(),
+        catch: (cause) => cause,
+      });
+      if (
+        sizes.isOk() &&
+        Number.isSafeInteger(sizes.value.responseBodySize) &&
+        sizes.value.responseBodySize > 0
+      ) {
+        record.responseBytes = sizes.value.responseBodySize;
+        return;
+      }
+    }
     const message =
       error instanceof Error ? error.message : "Non-Error body-read rejection";
     record.responseBodyReadFailure = {

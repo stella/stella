@@ -904,6 +904,132 @@ describe("diffNetworkBaseline", () => {
     );
   });
 
+  test.each([
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: undefined,
+      failure: null,
+      bytes: 2048,
+      expected: 2048,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: "gzip",
+      failure: null,
+      bytes: 100,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: "br",
+      failure: null,
+      bytes: 100,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: undefined,
+      failure: { errorText: "aborted" },
+      bytes: 100,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: undefined,
+      failure: null,
+      bytes: 0,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: undefined,
+      failure: null,
+      bytes: -1,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: undefined,
+      encoding: undefined,
+      failure: null,
+      bytes: Number.NaN,
+      expected: null,
+    },
+    {
+      worker: true,
+      transfer: undefined,
+      encoding: undefined,
+      failure: null,
+      bytes: 100,
+      expected: null,
+    },
+    {
+      worker: false,
+      transfer: "gzip",
+      encoding: undefined,
+      failure: null,
+      bytes: 100,
+      expected: null,
+    },
+  ])(
+    "uses completed unencoded transport bytes without weakening decoded-size budgets: %j",
+    async ({ worker, transfer, encoding, failure, bytes, expected }) => {
+      const record = {
+        method: "GET",
+        pathname: "/v1/contacts",
+        dbQueries: null,
+        dbQueryHeaderMissing: false,
+        responseBytes: null,
+        responseBodyReadFailure: null,
+      };
+      await readResponseBytes(
+        {
+          status: () => 200,
+          fromServiceWorker: () => worker,
+          headers: () => ({
+            ...(encoding === undefined ? {} : { "content-encoding": encoding }),
+            ...(transfer === undefined
+              ? {}
+              : { "transfer-encoding": transfer }),
+          }),
+          request: () => ({
+            failure: () => failure,
+            sizes: async () => ({
+              requestBodySize: 0,
+              requestHeadersSize: 0,
+              responseBodySize: bytes,
+              responseHeadersSize: 0,
+            }),
+          }),
+          body: async () => {
+            throw new Error("Response body buffer unavailable");
+          },
+        },
+        record,
+      );
+      expect(record.responseBytes).toBe(expected);
+      const { problems } = diffNetworkBaseline(
+        sizeBaseline,
+        new Map([
+          [
+            "/contacts",
+            summarizeCapture({ requests: [record], intervals: [] }),
+          ],
+        ]),
+      );
+      expect(problems).toHaveLength(1);
+      expect(problems.at(0)).toContain(
+        expected === null ? "Response size missing" : "Response payload grew",
+      );
+    },
+  );
+
   test("a failed response body reports its HTTP status and driver error without request URLs", async () => {
     const record = {
       method: "GET",
@@ -918,6 +1044,17 @@ describe("diffNetworkBaseline", () => {
     await readResponseBytes(
       {
         status: () => 200,
+        fromServiceWorker: () => false,
+        headers: () => ({}),
+        request: () => ({
+          failure: () => null,
+          sizes: async () => ({
+            requestBodySize: 0,
+            requestHeadersSize: 0,
+            responseBodySize: 0,
+            responseHeadersSize: 0,
+          }),
+        }),
         body: async () => {
           throw new Error(
             `${reason}: https://api.example.test/v1/contacts?token=private`,
