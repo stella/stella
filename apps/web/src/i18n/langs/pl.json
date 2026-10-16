@@ -897,6 +897,10 @@
       "supreme": "Sądy najwyższe"
     },
     "coverage": {
+      "censusComparison": "{stored} zapisanych / {publisher} opublikowanych · {withText} z tekstem",
+      "censusComplete": "Kompletne",
+      "censusIncomplete": "Niekompletne",
+      "censusSliceMemberships": "Liczby z poszczególnych części są sumowane; jedno orzeczenie może być liczone więcej niż raz.",
       "completeness": "Kompletność",
       "countedOn": "Policzono {date}",
       "courtsHeading": "Według sądu",

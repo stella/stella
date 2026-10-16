@@ -897,6 +897,10 @@
       "supreme": "المحاكم العليا"
     },
     "coverage": {
+      "censusComparison": "{stored} محفوظة / {publisher} منشورة · {withText} بنص متاح",
+      "censusComplete": "مكتمل",
+      "censusIncomplete": "غير مكتمل",
+      "censusSliceMemberships": "الأعداد مجمّعة حسب الفترات والفئات؛ وقد يظهر القرار أكثر من مرة.",
       "completeness": "الاكتمال",
       "countedOn": "أُحصي بتاريخ {date}",
       "courtsHeading": "حسب المحكمة",

@@ -172,3 +172,34 @@ Placeholders are inline tokens: `név1`, `cím1`, `cég1`, `dátum1`, `Terhelt1`
 `alperes neve`, `felperes neve`, `címe`, `város neve`,
 `terhelt születési helye`. Judges, counsel and law firms are named;
 Bszi. 166. § (2) keeps them.
+
+## Completeness census
+
+Research date: 2026-10-16; pass A.
+
+Registration authority: `adapter-registry.ts` / `ADAPTER_KEYS`; see
+[the census scope and method](census.research.md). The registered source key is
+`hu-bhgy`. This describes the registered publication corpus, not every case
+handled by its courts.
+
+- Recommended observation: `publisher-count`.
+- Natural reconciliation axis: decision year × kollégium; retain decision year separately when the
+  publisher axis uses publication time or dataset position.
+- Count surface: Count on the existing anonymous Search JSON response.
+- Integration constraint: A saturated Count is a ceiling, not an exact count. Keep the refusal. Kollegium is multi-valued, so totals across slices can overlap; compare identities within each slice instead of summing them as distinct corpus size.
+
+The source and year summaries expose `aggregateUnit: "slice-memberships"`.
+Their counts sum slice entries and do not claim a distinct-decision corpus size;
+the completeness verdict still compares each individual slice.
+
+### Publisher-index-first check
+
+GET [https://eakta.birosag.hu/anonimizalt-hatarozatok](https://eakta.birosag.hu/anonimizalt-hatarozatok); query: publisher index or minimal listing,
+no text term; retrieval date 2026-10-16; result: HTTP 200.
+Evidence status: **unverified: response exceeds research cap**. The count-field identification above is based on
+existing adapter readers and fixtures except where explicitly live verified.
+No extra bulk query or corpus sweep was performed for this research.
+
+The private research archive retains the response and request log. A blocked
+request is `unverified`, never `none-found`; no count absence is inferred from
+a landing page. Pass-B reconciliation is tracked in the census scope note.

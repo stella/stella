@@ -897,6 +897,10 @@
       "supreme": "Aukščiausieji teismai"
     },
     "coverage": {
+      "censusComparison": "{stored} išsaugota / {publisher} paskelbta · {withText} su tekstu",
+      "censusComplete": "Visas",
+      "censusIncomplete": "Ne visas",
+      "censusSliceMemberships": "Sumuojami atskirų dalių skaičiai; vienas sprendimas gali būti įskaičiuotas kelis kartus.",
       "completeness": "Išsamumas",
       "countedOn": "Suskaičiuota {date}",
       "courtsHeading": "Pagal teismą",

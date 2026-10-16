@@ -9,6 +9,7 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCompletenessCensus: "case_law_completeness_census",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
@@ -348,6 +349,11 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     added_last_week: "required",
     counted_at: "required",
   },
+  case_law_completeness_census: Object.fromEntries(
+    Object.keys(
+      CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+    ).map((column) => [column, "required"] as const),
+  ),
   legislation_facet_refreshes: {
     singleton: "required",
     refreshed_at: "required",

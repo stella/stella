@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1506,6 +1507,7 @@ const listSkCourtsSlicePage = async ({
       payload: item,
     })),
     totalPages: Math.ceil(total / LISTING_PAGE_SIZE),
+    publisherCount: total,
   };
 };
 

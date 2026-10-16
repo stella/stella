@@ -76,6 +76,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
+  "case_law_completeness_census",
   // Listed decisions the reconciliation could not ingest. Same shape as the
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.

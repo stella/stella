@@ -897,6 +897,10 @@
       "supreme": "Tribunales supremos"
     },
     "coverage": {
+      "censusComparison": "{stored} almacenadas / {publisher} publicadas · {withText} con texto",
+      "censusComplete": "Completo",
+      "censusIncomplete": "Incompleto",
+      "censusSliceMemberships": "Recuentos por segmentos; una resolución puede contarse más de una vez.",
       "completeness": "Exhaustividad",
       "countedOn": "Contado el {date}",
       "courtsHeading": "Por tribunal",

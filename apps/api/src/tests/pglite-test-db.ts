@@ -10,7 +10,6 @@ import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
-  CENSUS_COLUMN_GRANTS_BY_RELATION,
   DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -293,9 +292,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set([
     "case_law_decisions.docket_family_key",
-    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
-      .flatMap(publicLawColumnPairs)
-      .map(({ relation, column }) => `${relation}.${column}`),
+    ...publicLawColumnPairs(DOCTRINE_COLUMN_GRANTS_BY_RELATION).map(
+      ({ relation, column }) => `${relation}.${column}`,
+    ),
   ]);
 
 const grantedPublicLawColumns = (
@@ -320,6 +319,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella

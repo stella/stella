@@ -47,6 +47,10 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import {
+  CENSUS_VERDICTS,
+  sourceCensusProjection,
+} from "@/api/lib/case-law/completeness-census-contract";
+import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
@@ -1429,6 +1433,7 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
         country: v.string(),
         availability: v.picklist(["searchable", "in-preparation"]),
         decisions: v.number(),
+        censusVerdict: v.picklist(CENSUS_VERDICTS),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),
         sources: v.array(
@@ -1439,6 +1444,7 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),
             pendingTextCount: v.number(),
+            census: sourceCensusProjection,
             knownGaps: v.variant("type", [
               projectionBranch(v.strictObject({ type: v.literal("unknown") })),
               projectionBranch(

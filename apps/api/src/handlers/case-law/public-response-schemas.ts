@@ -36,6 +36,10 @@ import type {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_VERDICTS,
+  sourceCensusSchema,
+} from "@/api/lib/case-law/completeness-census-contract";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -383,6 +387,7 @@ const sourceCompleteness = t.Union([
   ),
 ]);
 const countryCoverage = {
+  censusVerdict: t.UnionEnum(CENSUS_VERDICTS),
   // An enum record keeps the literal union; a mapped array would widen it.
   country: t.Enum(
     Object.fromEntries(
@@ -404,6 +409,7 @@ const countryCoverage = {
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
         pendingTextCount: t.Number(),
+        census: sourceCensusSchema,
         knownGaps: t.Union([
           t.Object(
             { type: t.Literal("unknown") },

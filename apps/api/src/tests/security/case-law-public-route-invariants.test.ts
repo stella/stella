@@ -171,6 +171,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "publishedUnredactedCaseLawDecision",
   "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",

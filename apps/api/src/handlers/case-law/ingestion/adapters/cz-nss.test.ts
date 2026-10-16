@@ -1048,7 +1048,7 @@ describe("cz-nss listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "2026-08-09", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a failed search throws rather than reporting an empty day", async () => {

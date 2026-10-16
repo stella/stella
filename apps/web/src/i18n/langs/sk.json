@@ -897,6 +897,10 @@
       "supreme": "Najvyššie súdy"
     },
     "coverage": {
+      "censusComparison": "{stored} uložených / {publisher} zverejnených · {withText} s textom",
+      "censusComplete": "Úplné",
+      "censusIncomplete": "Neúplné",
+      "censusSliceMemberships": "Súčty za jednotlivé časti; jedno rozhodnutie môže byť započítané viackrát.",
       "completeness": "Úplnosť",
       "countedOn": "Spočítané k {date}",
       "courtsHeading": "Podľa súdu",

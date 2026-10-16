@@ -1,3 +1,4 @@
+// parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1862,6 +1863,7 @@ export type PlCourtsDayPage = {
   records: Record<string, unknown>[];
   /** 0 for a day the publisher lists no judgment for. */
   totalPages: number;
+  publisherCount: number;
 };
 
 /**
@@ -1966,7 +1968,7 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  return { records, totalPages };
+  return { records, totalPages, publisherCount: totalResults };
 };
 
 const listPlCourtsSlicePage = async ({
@@ -1974,7 +1976,7 @@ const listPlCourtsSlicePage = async ({
   page,
   signal,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const { records, totalPages } = await listPlCourtsDayPage({
+  const { records, totalPages, publisherCount } = await listPlCourtsDayPage({
     date: slice,
     page,
     ...(signal === undefined ? {} : { signal }),
@@ -1985,6 +1987,7 @@ const listPlCourtsSlicePage = async ({
       payload: record,
     })),
     totalPages,
+    publisherCount,
   };
 };
 

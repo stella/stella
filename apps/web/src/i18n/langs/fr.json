@@ -897,6 +897,10 @@
       "supreme": "Juridictions suprêmes"
     },
     "coverage": {
+      "censusComparison": "{stored} conservées / {publisher} publiées · {withText} avec texte",
+      "censusComplete": "Complet",
+      "censusIncomplete": "Incomplet",
+      "censusSliceMemberships": "Comptages par tranche ; une décision peut être comptée plusieurs fois.",
       "completeness": "Exhaustivité",
       "countedOn": "Décompté le {date}",
       "courtsHeading": "Par juridiction",

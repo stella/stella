@@ -342,6 +342,7 @@ const loadCoverage = async (
 ) =>
   await loadCaseLawCoverage({
     excludedSourceIds: [],
+    readCensus: async () => new Map(),
     now: NOW,
     readSources: async () =>
       await readAsReader(readCaseLawCoverageSourcesQuery),
@@ -364,7 +365,7 @@ const loadCoverage = async (
   });
 
 test(
-  "unindexed, withdrawn and listing-only decisions cannot widen either served year bound",
+  "stored dates include unindexed decisions and exclude withdrawn and listing-only decisions",
   async () => {
     const db = drizzle({ client });
     const sourceId = createSafeId<"caseLawSource">();
@@ -489,19 +490,10 @@ test(
           }),
         ),
       );
-      const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "pg-fts"),
-      );
-      const unknown = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx, "corpus-index"),
-      );
-      expect(unknown.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: null,
-        decisionYearTo: null,
-      });
+      const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
       expect(sources.find(({ id }) => id === sourceId)).toMatchObject({
-        decisionYearFrom: 2000,
-        decisionYearTo: 2010,
+        decisionYearFrom: 1800,
+        decisionYearTo: 2020,
         pendingTextCount: 0,
       });
       expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({

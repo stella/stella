@@ -62,6 +62,11 @@ import type {
 } from "@/api/handlers/case-law/polarity/consts";
 import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
+  CENSUS_MEASURED_OUTCOMES,
+  CENSUS_OUTCOMES,
+  CENSUS_SCOPE_STATUSES,
+} from "@/api/lib/case-law/completeness-census-values";
+import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
@@ -1658,6 +1663,87 @@ export const caseLawCoverageSlices = p.pgTable(
       "case_law_coverage_slices_counted_or_failed",
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Observations from complete publisher walks; retries replace one source/slice. */
+export const caseLawCompletenessCensus = p.pgTable(
+  "case_law_completeness_census",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    slice: p.varchar({ length: 64 }).notNull(),
+    /** Publisher slice year; null for a source with no publisher enumeration. */
+    year: p.integer(),
+    outcome: p.text({ enum: CENSUS_OUTCOMES }).notNull(),
+    /** Extent of the publisher corpus represented by this observation, not a lifecycle. */
+    scopeExtent: p
+      .text("scope_status", { enum: CENSUS_SCOPE_STATUSES })
+      .notNull(),
+    /** Effective completeness denominator; outcome identifies its provenance. */
+    publisherCount: p.integer("publisher_count"),
+    /** Unmodified stated total, retained privately even when enumeration is larger. */
+    publisherStatedCount: p.integer("publisher_stated_count"),
+    /** Distinct listing identities plus entries without a usable identity. */
+    enumeratedCount: p.integer("enumerated_count").notNull(),
+    storedCount: p.integer("stored_count").notNull(),
+    textCount: p.integer("text_count").notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    scopeFirst: p.varchar("scope_first", { length: 64 }).notNull(),
+    scopeLast: p.varchar("scope_last", { length: 64 }).notNull(),
+    expectedSlices: p.integer("expected_slices").notNull(),
+    /** Research evidence for this benchmark and its counting unit. */
+    evidenceRef: p.text("evidence_ref").notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.slice] }),
+    p
+      .index("case_law_completeness_census_source_year_idx")
+      .on(t.sourceId, t.year),
+    p.check(
+      "case_law_completeness_census_counts",
+      sql`
+      ${t.storedCount} >= 0 AND ${t.textCount} >= 0 AND ${t.textCount} <= ${t.storedCount}
+      AND ${t.enumeratedCount} >= 0
+      AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} >= 0)
+      AND ${t.expectedSlices} > 0
+      AND ${t.scopeExtent} IN (${sql.join(
+        CENSUS_SCOPE_STATUSES.map((status) => sql`${status}`),
+        sql`, `,
+      )})
+      AND ((${t.outcome} IN (${sql.join(
+        CENSUS_MEASURED_OUTCOMES.map((outcome) => sql`${outcome}`),
+        sql`, `,
+      )}) AND ${t.publisherCount} >= 0 AND ${t.publisherCount} IS NOT NULL AND (${t.year} IS NOT NULL OR ${t.slice} LIKE '0000%'))
+        OR (${t.outcome} = 'none-exposed' AND ${t.publisherCount} IS NULL))
+      AND (${t.outcome} <> 'publisher-count' OR (
+        ${t.publisherStatedCount} IS NOT NULL
+        AND ${t.publisherCount} = ${t.publisherStatedCount}
+        AND ${t.publisherStatedCount} >= ${t.enumeratedCount}
+      ))
+      AND (${t.outcome} <> 'listing-enumerated' OR (
+        ${t.publisherCount} = ${t.enumeratedCount}
+        AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} < ${t.enumeratedCount})
+      ))
+    `,
+    ),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS census_source
+        WHERE census_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`census_source.descriptor`)}
+      )`,
+    }),
+    p.pgPolicy("census_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_completeness_census'::regclass)`,
+    }),
     ...globalCaseLawPolicies(),
   ],
 );
