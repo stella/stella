@@ -65,7 +65,11 @@ describe("rich chat message parts", () => {
       "interactive resource",
     );
 
-    boundary.state = ChatRenderErrorBoundary.getDerivedStateFromError();
+    // React merges derived state into the current state.
+    boundary.state = {
+      ...boundary.state,
+      ...ChatRenderErrorBoundary.getDerivedStateFromError(),
+    };
 
     expect(renderToStaticMarkup(boundary.render())).toContain(
       "rich content unavailable",

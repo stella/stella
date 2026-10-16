@@ -52,7 +52,10 @@ export class ChatRenderErrorBoundary extends Component<
       : { hasError: false, resetOn: props.resetOn };
   }
 
-  static getDerivedStateFromError(): Partial<ChatRenderErrorBoundaryState> {
+  static getDerivedStateFromError(): Pick<
+    ChatRenderErrorBoundaryState,
+    "hasError"
+  > {
     return { hasError: true };
   }
 
