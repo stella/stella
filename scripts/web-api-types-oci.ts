@@ -140,14 +140,20 @@ export const auditPayload = async (
     readFile(path.join(directory, "stamp.json")),
     readFile(path.join(directory, "output")),
   ]);
-  for (const bytes of [stampBytes, output]) {
-    const text = bytes.toString("utf-8");
-    if (
-      /(?:["'](?:\/|[A-Za-z]:[\\/])|(?:^|\s)\/(?:Users|home|tmp|private|workspace|runner|root|opt)\/)/u.test(
-        text,
-      ) ||
-      forbidden.some((value) => value !== "" && text.includes(value))
-    ) {
+  // The stamp is fully tokenized, so any absolute path in it is machine data.
+  // The generated types may legitimately contain slash-prefixed string
+  // literals (routes, URLs), so they are checked against the concrete
+  // machine values instead.
+  const stampText = stampBytes.toString("utf-8");
+  if (
+    /(?:["'](?:\/|[A-Za-z]:[\\/])|(?:^|\s)\/(?:Users|home|tmp|private|workspace|runner|root|opt)\/)/u.test(
+      stampText,
+    )
+  ) {
+    panic("OCI payload stamp contains an absolute path");
+  }
+  for (const text of [stampText, output.toString("utf-8")]) {
+    if (forbidden.some((value) => value !== "" && text.includes(value))) {
       panic("OCI payload contains machine-specific data");
     }
   }

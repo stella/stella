@@ -203,6 +203,16 @@ describe("web API types OCI payload", () => {
     );
   });
 
+  test("accepts slash-prefixed string literals in generated types", async () => {
+    const root = await directory();
+    const text = `${output}export type Redirects = { home: "/home"; settings: "/settings/account" };\n`;
+    await fixture(root, { ...stamp(), outputHash: sha256Hex(text) }, text);
+    expect(await auditPayload(root, ["SECRET_SENTINEL"])).toEqual([
+      "output",
+      "stamp.json",
+    ]);
+  });
+
   test("rejects environment values in otherwise valid generated output", async () => {
     const root = await directory();
     const text = `${output}// SECRET_SENTINEL\n`;
