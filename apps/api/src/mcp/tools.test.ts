@@ -5371,7 +5371,6 @@ describe("OpenAI-compatible MCP tools", () => {
     test.each([
       ["Constitutional Court", "Ústavní soud"],
       ["Ústavní soud České republiky", "Ústavní soud"],
-      ["NS", "Nejvyšší soud"],
       ["nejvyssi spravni soud", "Nejvyšší správní soud"],
       ["Supreme Administrative Court", "Nejvyšší správní soud"],
     ])("court %p is read as the stored %p", async (court, stored) => {
@@ -5385,6 +5384,41 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(searchWarnings(result)).toContainEqual(
         expect.objectContaining({ code: "filter_read" }),
       );
+    });
+
+    test("documented court abbreviations are accepted without warnings", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["spravedlivý proces"],
+          country: "CZE",
+          courts: ["NS", "NSS", "ÚS"],
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(searchedBody()["courts"]).toEqual([
+        "Nejvyšší soud",
+        "Nejvyšší správní soud",
+        "Ústavní soud",
+      ]);
+      expect(searchWarnings(result)).toEqual([]);
+    });
+
+    test("an ambiguous court value warns once per call", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["smluvní pokuta", "náhrada škody"],
+          country: "CZE",
+          courts: ["Krajský soud", "Krajský soud"],
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(
+        searchWarnings(result).filter(({ code }) => code === "filter_dropped"),
+      ).toHaveLength(1);
     });
 
     test("a court stored under two spellings filters by both", async () => {
@@ -5412,7 +5446,7 @@ describe("OpenAI-compatible MCP tools", () => {
         "Nejvyšší soud České republiky",
       ]);
       const warnings = searchWarnings(result);
-      expect(warnings).toContainEqual(
+      expect(warnings).not.toContainEqual(
         expect.objectContaining({ code: "filter_read" }),
       );
       expect(warnings).not.toContainEqual(
@@ -5426,7 +5460,7 @@ describe("OpenAI-compatible MCP tools", () => {
         args: {
           queries: ["náhrada škody"],
           country: "CZE",
-          court: "NS",
+          court: "Supreme Court",
           courts: ["Ústavní soud"],
         },
         context: {
@@ -5451,7 +5485,7 @@ describe("OpenAI-compatible MCP tools", () => {
         searchWarnings(result).filter(({ code }) => code === "filter_read"),
       ).toEqual([
         expect.objectContaining({
-          message: 'Read court "NS" as "Nejvyšší soud".',
+          message: 'Read court "Supreme Court" as "Nejvyšší soud".',
         }),
       ]);
     });
