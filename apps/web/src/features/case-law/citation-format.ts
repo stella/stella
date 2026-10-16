@@ -1,12 +1,16 @@
-import type { createFormatter } from "use-intl/core";
+import { createFormatter } from "use-intl/core";
 
+import type { CaseLawBrowserCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
 import type { UsAbbreviatedCourtId } from "@stll/api-contract/us-court-abbreviations";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import {
+  fromCaseLawCountryParam,
+  isCaseLawBrowserCountry,
+} from "@/features/case-law/case-law-jurisdiction";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 type IntlFormatter = ReturnType<typeof createFormatter>;
@@ -16,9 +20,9 @@ type IntlFormatter = ReturnType<typeof createFormatter>;
  * legal copy modes. The convention follows the COURT's jurisdiction, never
  * the UI language: a Czech decision is cited in Czech form everywhere.
  *
- * v1 limits, deliberate: pincites are emitted only where the convention
- * uses reporter pages (USA); paragraph-number pincites (EU, CZ "bod N")
- * need the block's ¶ number threaded through and come later. Czech and
+ * Pincites are emitted for USA reporter pages and Hungarian bracketed
+ * locators. Court paragraph numbers still need to be threaded from the
+ * selected block; Czech, Slovak and EU paragraph pincites are not emitted. Czech and
  * Slovak court names are inflected to the genitive by a suffix rule that
  * covers the standing court names; an unrecognized name passes through
  * unchanged rather than guessing.
@@ -35,7 +39,7 @@ export type CitationInput = {
   ecli: string | null;
   /** Citable case name where the tradition uses one (USA, EU). */
   name: string | null;
-  /** Reporter page the quotation starts on (USA convention only). */
+  /** Supplied pinpoint locator, formatted by the cited jurisdiction. */
   pincite: string | null;
 };
 
@@ -213,6 +217,45 @@ const polishCitation = (input: CitationInput): string => {
   return `${type} ${polishGenitiveCourt(input.court)}${dated}, sygn. akt ${input.caseNumber}`;
 };
 
+// Citation conventions belong to the court, independently of the UI locale.
+const HUNGARIAN_FORMATTER = createFormatter({
+  locale: "hu-HU",
+  timeZone: "UTC",
+});
+
+const hungarianCitation = (input: CitationInput): string => {
+  const locator = input.pincite === null ? "" : ` [${input.pincite}]`;
+  const date = parseDecisionDate(input.decisionDate);
+  if (date === null) {
+    return `${input.court}, ${input.caseNumber}${locator}`;
+  }
+  const dated = HUNGARIAN_FORMATTER.dateTime(
+    date.toZonedDateTime("UTC").epochMilliseconds,
+    { year: "numeric", month: "long", day: "numeric" },
+  );
+  return `${input.court}, ${input.caseNumber}, ${dated}${locator}`;
+};
+
+/** Quotation typography follows the cited jurisdiction, like the citation. */
+const QUOTATION_MARKS = {
+  CZE: ["„", "“"],
+  EU: ["“", "”"],
+  HUN: ["„", "”"],
+  POL: ["„", "”"],
+  SVK: ["„", "“"],
+} as const satisfies Record<CaseLawBrowserCountry, readonly [string, string]>;
+
+export const formatDecisionQuotation = (
+  text: string,
+  country: string,
+): string => {
+  const normalizedCountry = fromCaseLawCountryParam(country);
+  const marks = isCaseLawBrowserCountry(normalizedCountry)
+    ? QUOTATION_MARKS[normalizedCountry]
+    : ["“", "”"];
+  return `${marks[0]}${text}${marks[1]}`;
+};
+
 const austrianCitation = (input: CitationInput): string => {
   const date = parseDecisionDate(input.decisionDate);
   const dated =
@@ -314,17 +357,29 @@ const genericCitation = (input: CitationInput): string => {
   return `${named}${input.court}, ${input.caseNumber}${dated}`;
 };
 
-const CITATION_FORMATTERS: Record<string, (input: CitationInput) => string> = {
+const CITATION_FORMATTERS = {
   AUT: austrianCitation,
   CZE: czechCitation,
   EU: euCitation,
+  HUN: hungarianCitation,
   POL: polishCitation,
   SVK: slovakCitation,
   USA: usCitation,
-};
+} as const satisfies Record<
+  CaseLawBrowserCountry | "AUT" | "USA",
+  (input: CitationInput) => string
+>;
 
-export const formatDecisionCitation = (input: CitationInput): string =>
-  (
-    CITATION_FORMATTERS[fromCaseLawCountryParam(input.country)] ??
-    genericCitation
+const hasCitationFormatter = (
+  country: string,
+): country is keyof typeof CITATION_FORMATTERS =>
+  Object.hasOwn(CITATION_FORMATTERS, country);
+
+export const formatDecisionCitation = (input: CitationInput): string => {
+  const country = fromCaseLawCountryParam(input.country);
+  return (
+    hasCitationFormatter(country)
+      ? CITATION_FORMATTERS[country]
+      : genericCitation
   )(input);
+};
