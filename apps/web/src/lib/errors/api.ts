@@ -229,6 +229,24 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
   }
 };
 
+/**
+ * The message for a rejected request's issue on one body field, or
+ * `undefined` when the error is not a validation answer naming that field.
+ * Forms show it under the matching input instead of only in a toast.
+ */
+export const apiFieldIssueMessage = (
+  error: unknown,
+  field: string,
+): string | undefined => {
+  if (!APIError.is(error) || error.code !== API_VALIDATION_ERROR_CODE) {
+    return undefined;
+  }
+  const issue = parseApiValidationIssues(error.details).find(
+    (candidate) => candidate.field === field,
+  );
+  return issue === undefined ? undefined : validationIssueMessage(issue);
+};
+
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
