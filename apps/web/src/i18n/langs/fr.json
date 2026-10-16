@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {La clé {provider} de votre organisation a renvoyé une réponse incomplète.} other {Le modèle d’IA a renvoyé une réponse incomplète.}}",
         "providerRefused": "{source, select, organization {{provider} a refusé la requête faite avec la clé de votre organisation. Vérifiez la clé, son quota et la facturation dans les paramètres de l’organisation.} other {Le fournisseur d’IA a refusé la requête.}}",
         "providerUnavailable": "{source, select, organization {{provider} est indisponible pour la clé de votre organisation pour le moment.} other {Le fournisseur d’IA est indisponible pour le moment.}}",
+        "retryAfter": "Vous pourrez réessayer à partir du {time}.",
         "timedOut": "{source, select, organization {{provider} n’a pas répondu à temps avec la clé de votre organisation.} other {Le modèle d’IA n’a pas répondu à temps.}}",
         "unavailable": "L’analyse par IA n’est pas disponible pour cette décision."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
     },
+    "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "improvePrompt": "Améliorer le prompt",
     "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
     "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",

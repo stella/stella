@@ -28,6 +28,7 @@ import type {
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { sleep } from "@stll/concurrency/sleep";
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -60,11 +61,13 @@ import {
   getManagedOpenRouterCredentialProvider,
   type ManagedOpenRouterCredential,
 } from "@/api/lib/chat/openrouter-credential";
+import { OUTPUT_CEILING_OPTION } from "@/api/lib/chat/output-ceiling";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   checkManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
 import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
@@ -74,6 +77,7 @@ import {
   streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type {
+  PublicRunFinishedChunk,
   PublicStreamChunk,
   StreamChatChunksOptions,
   TanStackTextFinishReason,
@@ -82,14 +86,21 @@ import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
+  ModelOutputModeratedError,
   ModelRunError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import type { ModelRunFinish } from "@/api/lib/errors/provider-call-error";
 import {
   createProviderCallError,
   providerRequestIdFrom,
 } from "@/api/lib/errors/provider-call-failure";
+import {
+  PROVIDER_RETRY_WAIT_CAP_MS,
+  providerRetryDelayMs,
+} from "@/api/lib/errors/provider-retry-delay";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -337,8 +348,64 @@ const isAbortRejection = ({
 // lifecycle regression); `finished` carries the provider's reason, which the
 // event leaves optional, so `null` there means the provider reported none.
 type TextRunFinish =
-  | { kind: "finished"; reason: TanStackTextFinishReason }
+  | {
+      kind: "finished";
+      reason: TanStackTextFinishReason;
+      /** The provider's own stop reason, where its table lists it. */
+      providerStopReason?: string | undefined;
+    }
   | { kind: "unfinished" };
+
+const finishedRunOf = (chunk: PublicRunFinishedChunk): TextRunFinish => {
+  const providerStopReason = recordedStopReasonOf(chunk);
+  return {
+    kind: "finished",
+    reason: finishReasonOf(chunk),
+    ...(providerStopReason === undefined ? {} : { providerStopReason }),
+  };
+};
+
+/** How a refused run ended, as its failure records it. */
+const modelRunFinishOf = (finish: TextRunFinish): ModelRunFinish => {
+  if (finish.kind === "unfinished") {
+    return { finish: "unfinished" };
+  }
+  return {
+    finish: finish.reason ?? "none",
+    ...(finish.providerStopReason === undefined
+      ? {}
+      : { providerStopReason: finish.providerStopReason }),
+  };
+};
+
+/**
+ * The typed failure of a run its finish policy refused: an answer cut at its
+ * output ceiling, one the provider filtered, or a run that ended without an
+ * answer. Each carries the finish it ended with, so a sink records why.
+ */
+const refusedFinishError = (
+  model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">,
+  finish: TextRunFinish,
+): ModelRunError => {
+  const options = { model, finish: modelRunFinishOf(finish) };
+  if (finish.kind === "unfinished") {
+    return new ModelRunUnfinishedError(options);
+  }
+  switch (finish.reason) {
+    case "length":
+      return new ModelOutputIncompleteError(options);
+    case "content_filter":
+      return new ModelOutputModeratedError(options);
+    case "tool_calls":
+    case null:
+      return new ModelRunUnfinishedError(options);
+    case "stop":
+      return panic("A refused finish cannot be a clean stop");
+    default:
+      finish.reason satisfies never;
+      return panic(`Unhandled finish reason: ${String(finish.reason)}`);
+  }
+};
 
 const finishAccepted = (
   finishPolicy: TanStackTextFinishPolicy,
@@ -360,13 +427,72 @@ const finishAccepted = (
   }
 };
 
+/**
+ * The provider's retry delay when a call failed for a rate limit or quota,
+ * whether the failure is already a `ProviderCallError` or still the SDK's.
+ */
+const rateLimitRetryDelayMs = (error: unknown): number | undefined => {
+  if (error instanceof ProviderCallError) {
+    return error.kind === "quota_exhausted" ? error.retryAfterMs : undefined;
+  }
+  return classifyAIError(error) === "quota_exhausted"
+    ? providerRetryDelayMs(error)
+    : undefined;
+};
+
+/**
+ * Wait out a short provider retry delay and try once more. A call refused
+ * for a rate limit whose stated delay fits `PROVIDER_RETRY_WAIT_CAP_MS` runs
+ * again after that delay; a longer delay, no stated delay, any other failure
+ * and a second refusal all reach the caller unchanged, the delay still on the
+ * error so the caller can say when to retry. The wait honours the deadline
+ * signal, so it never outlives the call's own budget.
+ */
+export const withProviderRetryWait = async <T>(
+  abortSignal: AbortSignal | undefined,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const first = await Result.tryPromise({
+    try: run,
+    catch: (error: unknown) => error,
+  });
+  if (Result.isOk(first)) {
+    return first.value;
+  }
+  const delay = rateLimitRetryDelayMs(first.error);
+  if (delay === undefined || delay > PROVIDER_RETRY_WAIT_CAP_MS) {
+    throw first.error;
+  }
+  const waited = await Result.tryPromise({
+    try: async () =>
+      await sleep(
+        delay,
+        abortSignal === undefined ? {} : { signal: abortSignal },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(waited)) {
+    // A cancellation during the wait ends the run as one during the call
+    // would; a deadline settles in `withGenerationDeadline` either way.
+    if (isAbortRejection({ error: waited.error, signal: abortSignal })) {
+      throw cancelledGenerationError();
+    }
+    throw waited.error;
+  }
+  return await run();
+};
+
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> =>
   await withGenerationDeadline(
     options,
     async (abortSignal) =>
-      await generateTanStackTextWithin({ ...options, abortSignal }),
+      await withProviderRetryWait(
+        abortSignal,
+        async () =>
+          await generateTanStackTextWithin({ ...options, abortSignal }),
+      ),
   );
 
 const generateTanStackTextWithin = async (
@@ -397,8 +523,8 @@ const generateTanStackTextWithin = async (
       serviceTier: options.serviceTier,
       system: guardedSystemPrompt(options),
       temperature: options.temperature,
-      onFinishReason: (reason) => {
-        run.finish = { kind: "finished", reason };
+      onFinish: (finish) => {
+        run.finish = finish;
       },
     })) {
       output += delta;
@@ -422,16 +548,7 @@ const generateTanStackTextWithin = async (
   }
 
   if (!finishAccepted(options.finishPolicy, run.finish)) {
-    // A run that spent its output budget is an incomplete answer and is named
-    // as one; the other refused finishes (moderated, tool-bearing, unfinished)
-    // keep the generic refusal.
-    if (run.finish.kind === "finished" && run.finish.reason === "length") {
-      throw new ModelOutputIncompleteError({ model });
-    }
-    throw new HandlerError({
-      status: 502,
-      message: "AI generation did not complete",
-    });
+    throw refusedFinishError(model, run.finish);
   }
 
   return output;
@@ -576,7 +693,7 @@ export const collectTanStackTextRun = async (
         run.finish =
           runFinishedOutcomeOf(chunk) === "cancelled"
             ? { kind: "unfinished" }
-            : { kind: "finished", reason: finishReasonOf(chunk) };
+            : finishedRunOf(chunk);
         continue;
       }
       if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
@@ -606,7 +723,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier,
   system,
   temperature,
-  onFinishReason,
+  onFinish,
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
@@ -617,7 +734,7 @@ const streamTanStackTextDeltas = async function* ({
   serviceTier: AIRequestServiceTier;
   system: GuardedSystemPrompt | undefined;
   temperature: number | undefined;
-  onFinishReason?: ((reason: TanStackTextFinishReason) => void) | undefined;
+  onFinish?: ((finish: TextRunFinish) => void) | undefined;
 }): AsyncIterable<string> {
   yield* iterateWithStandardServiceTierFallback({
     abortSignal: abortController?.signal,
@@ -640,7 +757,7 @@ const streamTanStackTextDeltas = async function* ({
       }),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
-        onFinishReason?.(finishReasonOf(chunk));
+        onFinish?.(finishedRunOf(chunk));
         return undefined;
       }
       if (
@@ -806,6 +923,7 @@ const PROVIDER_OWNED_ERROR_KIND = {
   // Named by this service from the run's own outcome, not by the provider.
   output_incomplete: false,
   output_invalid: false,
+  output_moderated: false,
   deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
@@ -1318,7 +1436,11 @@ export const generateTanStackObjectForRole = async <
   await withGenerationDeadline(
     options,
     async (abortSignal) =>
-      await generateTanStackObjectWithin({ ...options, abortSignal }),
+      await withProviderRetryWait(
+        abortSignal,
+        async () =>
+          await generateTanStackObjectWithin({ ...options, abortSignal }),
+      ),
   );
 
 const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
@@ -2054,7 +2176,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              maxOutputTokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.google]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...googleServiceTierOptions(serviceTier),
@@ -2065,7 +2190,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              max_tokens:
+              [OUTPUT_CEILING_OPTION.anthropic]:
                 maxOutputTokens +
                 anthropicThinkingReservation(model.modelOptions.thinking),
             }),
@@ -2083,7 +2208,7 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { max_completion_tokens: maxOutputTokens }),
+          : { [OUTPUT_CEILING_OPTION.bedrock]: maxOutputTokens }),
         ...temperatureOverride,
       };
     case "mistral":
@@ -2091,7 +2216,7 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
           ? {}
-          : { max_tokens: maxOutputTokens }),
+          : { [OUTPUT_CEILING_OPTION.mistral]: maxOutputTokens }),
         ...temperatureOverride,
       };
     case "openai":
@@ -2100,7 +2225,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              max_output_tokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.openai]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...openAICacheOptions(caching),
@@ -2112,7 +2240,10 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : {
-              maxCompletionTokens: reasoningCeiling(model, maxOutputTokens),
+              [OUTPUT_CEILING_OPTION.openrouter]: reasoningCeiling(
+                model,
+                maxOutputTokens,
+              ),
             }),
         ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),

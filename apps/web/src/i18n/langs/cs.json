@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Klíč vaší organizace pro {provider} vrátil neúplnou odpověď.} other {AI model vrátil neúplnou odpověď.}}",
         "providerRefused": "{source, select, organization {{provider} odmítl požadavek s klíčem vaší organizace. Zkontrolujte klíč, jeho kvótu a fakturaci v nastavení organizace.} other {Poskytovatel AI požadavek odmítl.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pro klíč vaší organizace momentálně nedostupný.} other {Poskytovatel AI je momentálně nedostupný.}}",
+        "retryAfter": "Znovu to můžete zkusit po {time}.",
         "timedOut": "{source, select, organization {{provider} s klíčem vaší organizace neodpověděl včas.} other {AI model neodpověděl včas.}}",
         "unavailable": "AI analýza není pro toto rozhodnutí k dispozici."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
     },
+    "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",

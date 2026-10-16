@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
+        "retryAfter": "Sie können es ab {time} erneut versuchen.",
         "timedOut": "{source, select, organization {{provider} hat mit dem Schlüssel Ihrer Organisation nicht rechtzeitig geantwortet.} other {Das KI-Modell hat nicht rechtzeitig geantwortet.}}",
         "unavailable": "Für diese Entscheidung ist keine KI-Analyse verfügbar."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
     },
+    "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",

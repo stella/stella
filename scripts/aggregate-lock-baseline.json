@@ -2532,24 +2532,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/db/maintenance-db.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "fingerprint": "4d0ff3a1232e8708641540aea532d71a6edc4bfd90eee22ab25e7987991cbcb5",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "fingerprint": "854e3be7f649cd9bf2b939d828bc3afe157358bf51f9c2c7dc36ad10d49d9813",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "fingerprint": "9ad0805ba65355cbec6f574e9137e9de0453d7e6cecd9587105cdd849757dc4d",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/db/operator-registrations/read.ts",
     "fingerprint": "c7059ffdbfff30c3175869f78836e9887c26bb03f9a8b88d6cf96dc1afbf07d1",
     "count": 1,
@@ -4110,18 +4092,6 @@
     "reason": "builder-for in apps/api/src/lib/time-entry-offboarding.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/time-entry-timer-access.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
-    "count": 2,
-    "reason": "for share in apps/api/src/lib/time-entry-timer-access.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/uploads/entity-create.ts",
     "fingerprint": "431afa08ef3d6ec723efeb608e4379b13346004b7070c300eda5fd19e194f53d",
     "count": 1,
@@ -4222,36 +4192,6 @@
     "fingerprint": "122efa602d9ec233a6b6e358ee5e0673eb3120117c4f5028bcf171193aae10d6",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/workspace-deletion.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "1efb11363bdf032a97a9e241774f1f0a7747c9b7bc983054b7702a91c64d6d98",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/workspace-deletion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "3d35b9dcd2b0dd8061430f61acd47d83489f70152c08afe5c33528ec045931db",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/workspace-deletion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/workspace-deletion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "64b6b45709f00dc3273f623d0137839de1f9c554deec5440a0ecd28ccad822b9",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/workspace-deletion.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "837ee1e4a66f80b891712a0f16ea36fbe738bbe24d8b7276962d66bf45b862cb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/workspace-deletion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/scripts/adapter-health-query.ts",

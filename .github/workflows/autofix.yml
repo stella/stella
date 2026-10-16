@@ -349,6 +349,8 @@ jobs:
         id: merge-queue
         continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CI_YIELD_TO_MERGE_QUEUE: ${{ vars.CI_YIELD_TO_MERGE_QUEUE }}
         with:
           retries: 0
           result-encoding: string
@@ -360,6 +362,7 @@ jobs:
             return mergeQueueGate({
               github,
               context,
+              enabled: process.env.CI_YIELD_TO_MERGE_QUEUE === "on",
               attempt: Number(process.env.GITHUB_RUN_ATTEMPT ?? "1"),
               polls: 0,
               intervalMs: 0,

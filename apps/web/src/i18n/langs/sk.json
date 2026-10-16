@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
+        "retryAfter": "Znova to môžete skúsiť po {time}.",
         "timedOut": "{source, select, organization {{provider} s kľúčom vašej organizácie neodpovedal včas.} other {AI model neodpovedal včas.}}",
         "unavailable": "AI analýza nie je pre toto rozhodnutie k dispozícii."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
     },
+    "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",

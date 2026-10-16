@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
+        "retryAfter": "{time} után újra megpróbálhatja.",
         "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}",
         "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {és még #} other {és még #}}"
     },
+    "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",

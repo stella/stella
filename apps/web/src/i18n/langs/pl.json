@@ -749,6 +749,7 @@
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
+        "retryAfter": "Możesz spróbować ponownie po {time}.",
         "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}",
         "unavailable": "Analiza AI nie jest dostępna dla tego orzeczenia."
       },
@@ -1295,6 +1296,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
     },
+    "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",

@@ -95,6 +95,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
 } from "@/components/chat/chat-user-actions";
+import { ContextNotice } from "@/components/chat/context-notice";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -417,7 +418,6 @@ export const ChatThreadMessages = ({
                           threadRef={threadRef}
                         />
                         <SourceChips
-                          activeOrganizationId={activeOrganizationId}
                           messageId={message.id}
                           parts={message.parts}
                           sourceDocuments={message.metadata?.sourceDocuments}
@@ -1063,6 +1063,7 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   // reads as its nearest chat outcome.
   output_incomplete: "chat.sendErrorStreamIncomplete",
   output_invalid: "chat.sendError",
+  output_moderated: "chat.sendError",
   deadline_exceeded: "chat.sendErrorProviderUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
@@ -2064,6 +2065,7 @@ const AssistantMessageParts = ({
   };
   return (
     <>
+      <ContextNotice metadata={message.metadata} />
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
           return renderEntry(group.entry, group.index);
