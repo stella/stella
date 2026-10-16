@@ -2179,7 +2179,8 @@ const resolveSearchProvision = (
   text: string,
   country: string,
 ): SearchProvisionRead => {
-  const euCitations = locateEuProvisionCitations(text);
+  const citedOn = Temporal.Now.plainDateISO("UTC").toString();
+  const euCitations = locateEuProvisionCitations(text, { citedOn });
   if (euCitations.length > 1) {
     return provisionRefusal(
       "The provision names several provisions or a range",
@@ -2225,7 +2226,7 @@ const resolveSearchProvision = (
   const read = resolveProvisionCitation({
     text,
     profile,
-    citedOn: Temporal.Now.plainDateISO("UTC").toString(),
+    citedOn,
   });
   switch (read.status) {
     case "resolved":

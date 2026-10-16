@@ -991,6 +991,7 @@
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",
       },

@@ -200,3 +200,105 @@ describe("EU primary-law work identity", () => {
     expect(locateEuProvisionCitations("Article 0 TFEU")).toEqual([]);
   });
 });
+
+const legacyRegulationSpellings = {
+  en: "Article 5 of Regulation (EC) {number}/{year}",
+  cs: "čl. 5 nařízení (ES) {number}/{year}",
+  sk: "čl. 5 nariadenia (ES) {number}/{year}",
+  pl: "art. 5 rozporządzenia (WE) {number}/{year}",
+  hu: "5. cikk {number}/{year}/EK rendelet",
+  de: "Artikel 5 der Verordnung (EG) {number}/{year}",
+  fr: "Article 5 du règlement (CE) {number}/{year}",
+} as const;
+
+describe("EU act numbering with a citing date", () => {
+  for (const [language, spelling] of Object.entries(
+    legacyRegulationSpellings,
+  )) {
+    test(`unmarked pre-2015 regulations keep number/year order in ${language}`, () => {
+      for (const [number, year, celex] of [
+        [44, 2001, "32001R0044"],
+        [1, 2003, "32003R0001"],
+        [2201, 2003, "32003R2201"],
+      ] as const) {
+        const printed = spelling
+          .replace("{number}", () => String(number))
+          .replace("{year}", () => String(year));
+        expect(
+          locateEuProvisionCitations(printed, { citedOn: "2020-01-01" }).map(
+            ({ act }) => act.celex,
+          ),
+        ).toEqual([celex]);
+      }
+    });
+
+    test(`eu-secondary-law-year-never-follows-citing-date-${language}`, () => {
+      assertProperty(
+        `eu-secondary-law-year-never-follows-citing-date-${language}`,
+        fc.property(
+          fc.integer({ min: 1, max: 999 }),
+          fc.integer({ min: 1950, max: 2020 }),
+          fc.integer({ min: 1950, max: 2020 }),
+          (number, year, citingYear) => {
+            const printed = spelling
+              .replace("{number}", () => String(year < 2015 ? number : year))
+              .replace("{year}", () => String(year < 2015 ? year : number));
+            const citations = locateEuProvisionCitations(printed, {
+              citedOn: `${citingYear}-12-31`,
+            });
+            for (const { act } of citations) {
+              expect(Number(act.celex.slice(1, 5))).toBeLessThanOrEqual(
+                citingYear,
+              );
+              expect(act).toMatchObject({ year, number });
+            }
+            if (year > citingYear) {
+              expect(citations).toEqual([]);
+            }
+            if (year <= citingYear) {
+              expect(citations).toHaveLength(1);
+            }
+          },
+        ),
+      );
+    });
+  }
+
+  test("future and implausible identities are refused instead of reinterpreted", () => {
+    for (const printed of [
+      "Article 5 of Regulation (EU) 2021/44",
+      "Article 5 of Regulation (EC) 44/2021",
+      "Article 5 of Regulation (EC) 0/2001",
+      "Article 5 of Regulation (EC) 44/1800",
+      "Article 5 GDPR",
+    ]) {
+      expect(
+        locateEuProvisionCitations(printed, { citedOn: "2010-01-01" }),
+      ).toEqual([]);
+    }
+    expect(
+      locateEuProvisionCitations("Article 5 of Regulation 2016/2001", {
+        citedOn: "2020-01-01",
+      }),
+    ).toEqual([]);
+    expect(
+      locateEuProvisionCitations("Article 5 of Regulation (EC) No 2016/2001", {
+        citedOn: "2020-01-01",
+      }).at(0)?.act.celex,
+    ).toBe("32001R2016");
+  });
+
+  test("two-digit years use the act kind and explicit number marker", () => {
+    const cases = [
+      ["Article 5 of Regulation (EC) 44/01", "32001R0044"],
+      ["Article 5 of Directive 95/46/EC", "31995L0046"],
+      ["Article 5 of Directive No 46/95/EC", "31995L0046"],
+    ] as const;
+    for (const [printed, celex] of cases) {
+      expect(
+        locateEuProvisionCitations(printed, { citedOn: "2020-01-01" }).at(0)
+          ?.act.celex,
+      ).toBe(celex);
+    }
+  });
+});

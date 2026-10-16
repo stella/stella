@@ -1,5 +1,6 @@
 import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+import { Temporal } from "@stll/time";
 
 const EU_ACT_KINDS = {
   directive: { celexLetter: "L", eliKind: "dir" },
@@ -69,6 +70,7 @@ export const parseEuWorkIdentifier = (raw: string): EuActIdentity | null => {
     year === undefined ||
     number === undefined ||
     Number(year) < 1950 ||
+    Number(year) > Temporal.Now.plainDateISO("UTC").year ||
     Number(number) === 0
   ) {
     return null;
@@ -143,7 +145,7 @@ const ACT_KIND = {
   directive: String.raw`(?:Directive|směrnic(?:e|i)|smernic(?:a|e|i)|dyrektyw(?:a|y)|irányelv|Richtlinie|directive)`,
   regulation: String.raw`(?:Regulation|nařízen(?:í|i)|nariaden(?:ie|ia)|rozporządzeni(?:e|a)|rendelet|Verordnung|règlement)`,
 } as const satisfies Record<EuActKind, string>;
-const EU_MARKER = String.raw`(?:\((?:EU|EÚ|UE|EG|EC|EHS|EWG)\)\s*)?`;
+const EU_MARKER = String.raw`(?:\((?:EU|EÚ|UE|EG|EC|ES|CE|WE|EK|EEC|EHS|EWG|EGK)\)\s*)?`;
 
 const compileActPattern = (kind: EuActKind): RegExp =>
   new RegExp(
@@ -157,7 +159,7 @@ const ACT_PATTERNS = {
 } as const satisfies Record<EuActKind, RegExp>;
 
 const HUNGARIAN_REGULATION_PATTERN = new RegExp(
-  String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?\s*${YEAR_NUMBER}\s*\/(?:EU|EÚ)\s*${ACT_KIND.regulation}`,
+  String.raw`(?<article>\d+[a-zA-Z]?)\.\s*cikk(?:\s*\((?<parenParagraph>\d+)\)\s*bekezd(?:és)?)?(?:\s*(?<point>[a-z])\)\s*pont)?\s*${YEAR_NUMBER}\s*\/(?:EU|EÚ|EK|EGK)\s*${ACT_KIND.regulation}`,
   "giu",
 );
 
@@ -214,26 +216,54 @@ const normalizeYear = (raw: string): number => {
   return year >= 50 ? 1900 + year : 2000 + year;
 };
 
-const numberedActIdentity = (
-  kind: EuActKind,
-  groups: Record<string, string | undefined>,
-): EuActIdentity | null => {
+type NumberedActIdentityOptions = {
+  kind: EuActKind;
+  groups: Record<string, string | undefined>;
+  maxYear: number;
+};
+
+const numberedActIdentity = ({
+  kind,
+  groups,
+  maxYear,
+}: NumberedActIdentityOptions): EuActIdentity | null => {
   const first = groups["first"];
   const second = groups["second"];
   if (first === undefined || second === undefined) {
     return null;
   }
   const explicitlyNumberFirst = groups["hasNumberFirst"] !== undefined;
-  const firstNumber = Number(first);
-  const secondNumber = Number(second);
-  const apparentYear = normalizeYear(first);
-  const era = apparentYear >= 2015 ? "from2015" : "before2015";
-  const order = explicitlyNumberFirst
-    ? "number-year"
-    : ACT_NUMBER_ORDERS[kind][era];
-  const year = order === "year-number" ? apparentYear : normalizeYear(second);
-  const number = order === "year-number" ? secondNumber : firstNumber;
-  return actIdentity(kind, year, number);
+  const candidates: EuActIdentity[] = [];
+  for (const order of ["year-number", "number-year"] as const) {
+    const rawYear = order === "year-number" ? first : second;
+    const rawNumber = order === "year-number" ? second : first;
+    // A sole four-digit component is the year, even when it is invalid.
+    // Do not rescue a future year by treating it as an older act's number.
+    if (
+      (first.length === 4) !== (second.length === 4) &&
+      rawYear.length !== 4
+    ) {
+      continue;
+    }
+    if (rawYear.length !== 2 && rawYear.length !== 4) {
+      continue;
+    }
+    const year = normalizeYear(rawYear);
+    const number = Number(rawNumber);
+    if (year < 1950 || year > maxYear || number < 1 || number > 9999) {
+      continue;
+    }
+    const era = year >= 2015 ? "from2015" : "before2015";
+    const expectedOrder = explicitlyNumberFirst
+      ? "number-year"
+      : ACT_NUMBER_ORDERS[kind][era];
+    if (order !== expectedOrder) {
+      continue;
+    }
+    candidates.push(actIdentity(kind, year, number));
+  }
+  // Two plausible year/number readings are ambiguous, never a guessed identity.
+  return candidates.length === 1 ? (candidates.at(0) ?? null) : null;
 };
 
 const referenceFrom = (groups: Record<string, string | undefined>) => {
@@ -266,76 +296,11 @@ const aliasMatchers = Object.values(EU_ACT_ALIASES).map((alias) => ({
   pattern: new RegExp(`^(?:${alias.patterns.join("|")})$`, "iu"),
 }));
 
-/** Locate EU provision references without requiring hosted act text. */
-export const locateEuProvisionCitations = (
+const locatePrimaryEuProvisionCitations = (
   text: string,
+  maxYear: number,
 ): LocatedEuProvisionCitation[] => {
   const citations: LocatedEuProvisionCitation[] = [];
-  for (const kind of ["directive", "regulation"] as const) {
-    const pattern = ACT_PATTERNS[kind];
-    pattern.lastIndex = 0;
-    for (const match of text.matchAll(pattern)) {
-      const act = numberedActIdentity(kind, match.groups ?? {});
-      const reference = referenceFrom(match.groups ?? {});
-      if (act === null || reference === null) {
-        continue;
-      }
-      citations.push({
-        act,
-        source: "number",
-        appliedVersion: { type: "not_stated" },
-        end: match.index + match[0].length,
-        jurisdiction: "EU",
-        reference,
-        start: match.index,
-      });
-    }
-  }
-  HUNGARIAN_REGULATION_PATTERN.lastIndex = 0;
-  for (const match of text.matchAll(HUNGARIAN_REGULATION_PATTERN)) {
-    const act = numberedActIdentity("regulation", match.groups ?? {});
-    const reference = referenceFrom(match.groups ?? {});
-    if (act === null || reference === null) {
-      continue;
-    }
-    citations.push({
-      act,
-      source: "number",
-      appliedVersion: { type: "not_stated" },
-      end: match.index + match[0].length,
-      jurisdiction: "EU",
-      reference,
-      start: match.index,
-    });
-  }
-  ALIAS_PATTERN.lastIndex = 0;
-  for (const match of text.matchAll(ALIAS_PATTERN)) {
-    const printed = match.groups?.["alias"];
-    const matches =
-      printed === undefined
-        ? []
-        : aliasMatchers.filter(({ pattern }) => pattern.test(printed));
-    const alias = matches.length === 1 ? matches.at(0)?.alias : undefined;
-    const reference = referenceFrom(match.groups ?? {});
-    if (alias === undefined || reference === null) {
-      continue;
-    }
-    citations.push({
-      source: "alias",
-      appliedVersion: { type: "not_stated" },
-      act: {
-        celex: alias.celex,
-        eli: alias.eli,
-        kind: alias.kind,
-        number: alias.number,
-        year: alias.year,
-      },
-      end: match.index + match[0].length,
-      jurisdiction: "EU",
-      reference,
-      start: match.index,
-    });
-  }
   for (const [kind, pattern] of PRIMARY_PATTERNS) {
     for (const match of text.matchAll(pattern)) {
       const reference = referenceFrom(match.groups ?? {});
@@ -343,6 +308,9 @@ export const locateEuProvisionCitations = (
         continue;
       }
       const edition = match.groups?.["edition"];
+      if (edition !== undefined && Number(edition) > maxYear) {
+        continue;
+      }
       const letter = { teu: "M", tfeu: "E", charter: "P" } as const;
       citations.push({
         act: EU_PRIMARY_WORKS[kind],
@@ -366,6 +334,102 @@ export const locateEuProvisionCitations = (
       });
     }
   }
+  return citations;
+};
+
+type LocateEuProvisionCitationsOptions = {
+  /** ISO decision date; an unknown date admits no future secondary-law year. */
+  citedOn?: string | null;
+};
+
+/** Locate EU provision references without requiring hosted act text. */
+export const locateEuProvisionCitations = (
+  text: string,
+  { citedOn }: LocateEuProvisionCitationsOptions = {},
+): LocatedEuProvisionCitation[] => {
+  const currentYear = Temporal.Now.plainDateISO("UTC").year;
+  const maxYear =
+    citedOn === null || citedOn === undefined
+      ? currentYear
+      : Math.min(currentYear, Number(citedOn.slice(0, 4)));
+  if (!Number.isInteger(maxYear) || maxYear < 1950) {
+    return [];
+  }
+  const citations: LocatedEuProvisionCitation[] = [];
+  for (const kind of ["directive", "regulation"] as const) {
+    const pattern = ACT_PATTERNS[kind];
+    pattern.lastIndex = 0;
+    for (const match of text.matchAll(pattern)) {
+      const act = numberedActIdentity({
+        kind,
+        groups: match.groups ?? {},
+        maxYear,
+      });
+      const reference = referenceFrom(match.groups ?? {});
+      if (act === null || reference === null) {
+        continue;
+      }
+      citations.push({
+        act,
+        source: "number",
+        appliedVersion: { type: "not_stated" },
+        end: match.index + match[0].length,
+        jurisdiction: "EU",
+        reference,
+        start: match.index,
+      });
+    }
+  }
+  HUNGARIAN_REGULATION_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(HUNGARIAN_REGULATION_PATTERN)) {
+    const act = numberedActIdentity({
+      kind: "regulation",
+      groups: match.groups ?? {},
+      maxYear,
+    });
+    const reference = referenceFrom(match.groups ?? {});
+    if (act === null || reference === null) {
+      continue;
+    }
+    citations.push({
+      act,
+      source: "number",
+      appliedVersion: { type: "not_stated" },
+      end: match.index + match[0].length,
+      jurisdiction: "EU",
+      reference,
+      start: match.index,
+    });
+  }
+  ALIAS_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(ALIAS_PATTERN)) {
+    const printed = match.groups?.["alias"];
+    const matches =
+      printed === undefined
+        ? []
+        : aliasMatchers.filter(({ pattern }) => pattern.test(printed));
+    const alias = matches.length === 1 ? matches.at(0)?.alias : undefined;
+    const reference = referenceFrom(match.groups ?? {});
+    if (alias === undefined || alias.year > maxYear || reference === null) {
+      continue;
+    }
+    citations.push({
+      source: "alias",
+      appliedVersion: { type: "not_stated" },
+      act: {
+        celex: alias.celex,
+        eli: alias.eli,
+        kind: alias.kind,
+        number: alias.number,
+        year: alias.year,
+      },
+      end: match.index + match[0].length,
+      jurisdiction: "EU",
+      reference,
+      start: match.index,
+    });
+  }
+  citations.push(...locatePrimaryEuProvisionCitations(text, maxYear));
   return citations.toSorted((left, right) => left.start - right.start);
 };
 
