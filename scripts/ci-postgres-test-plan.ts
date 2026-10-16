@@ -7,8 +7,50 @@ import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
 import { discoverGatedTestFiles } from "../apps/api/scripts/run-gated-tests";
 import { API_ALL_RULES, selectApiTestImpact } from "./api-test-impact";
+import { hasDeclaredMarkdownReader } from "./ci-package-scope";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
+
+export const POSTGRES_NO_IMPACT_PATHS = {
+  changesets: {
+    pattern: /^\.changeset\/.*\.md$/u,
+    reason: "Release metadata is not read by Postgres suites.",
+  },
+  agentInstructions: {
+    pattern: /^(?:\.agents|\.claude)\//u,
+    reason: "Agent and skill instructions are not runtime inputs.",
+  },
+  cloudReport: {
+    pattern: /^CLOUD_REPORT\.md$/u,
+    reason: "Cloud handoff evidence is not a runtime input.",
+  },
+  repositoryTooling: {
+    pattern: /^scripts\/.*\.(?:[cm]?[jt]s|[jt]sx)$/u,
+    reason:
+      "Repository tooling outside the selector allow-list is not imported by API suites.",
+  },
+  documentation: {
+    pattern: /^docs\/.*\.mdx?$/u,
+    reason:
+      "Documentation not owned by a declared Markdown reader is not a runtime input.",
+  },
+} as const;
+
+const hasApiWideningRule = (file: string) =>
+  Object.values(API_ALL_RULES).some((rule) => rule.test(file));
+
+const isPostgresNoImpactPath = (file: string, root: string) => {
+  if (hasApiWideningRule(file)) {
+    return false;
+  }
+  for (const [name, { pattern }] of Object.entries(POSTGRES_NO_IMPACT_PATHS)) {
+    if (!pattern.test(file)) {
+      continue;
+    }
+    return name !== "documentation" || !hasDeclaredMarkdownReader(file, root);
+  }
+  return false;
+};
 
 type AssertPostgresDiscoveryOptions = {
   discovered: readonly string[];
@@ -56,18 +98,21 @@ export const planPostgresTests = async ({
     return { mode: "all" };
   }
 
-  // Paths outside the import graph and its widening rules cannot prove absence.
-  if (
-    changed.some(
-      (file) =>
-        !Object.values(API_ALL_RULES).some((rule) => rule.test(file)) &&
-        !/^(?:apps|packages)\/[^/]+\/.+\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file),
-    )
-  ) {
-    return { mode: "all" };
-  }
-
   const planned = await Result.tryPromise(async () => {
+    // Only named, non-runtime paths may bypass the conservative outside-graph
+    // guard. Markdown ownership remains authoritative for documentation read
+    // by code, and selector tooling retains its explicit widening rules.
+    if (
+      changed.some(
+        (file) =>
+          !isPostgresNoImpactPath(file, root) &&
+          !hasApiWideningRule(file) &&
+          !/^(?:apps|packages)\/[^/]+\/.+\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file),
+      )
+    ) {
+      return { mode: "all" } as const;
+    }
+
     const apiRoot = path.join(root, "apps/api");
     const metadata = v.parse(
       v.object({
