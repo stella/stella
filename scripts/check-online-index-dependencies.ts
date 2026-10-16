@@ -165,7 +165,7 @@ export const checkOnlineIndexDependencySource = ({
           }
           const target = property.initializer;
           const columns = ts.isArrayLiteralExpression(target)
-            ? target.elements
+            ? [...target.elements]
             : [target];
           if (columns.every(ts.isPropertyAccessExpression)) {
             const owner = columns.at(0)?.expression;

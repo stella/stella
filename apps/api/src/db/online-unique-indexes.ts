@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getTableColumns, getTableName } from "drizzle-orm";
+import { getColumns, getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { REWRITTEN_MIGRATION_INDEXES } from "../lib/db/migration-history";
@@ -310,7 +310,7 @@ export const onlineUniqueIndexTarget = (
       `Online unique index ${name} does not belong to ${getTableName(table)}`,
     );
   }
-  const columns = Object.values(getTableColumns(table));
+  const columns = Object.values(getColumns(table));
   return onlineIndexColumnTarget(index.definitionBody)
     .split(",")
     .map((targetName) => {
