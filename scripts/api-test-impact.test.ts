@@ -171,7 +171,7 @@ test("every local action used by API-running jobs is an API suite reader", () =>
         (uses.startsWith("./.github/actions/") ||
           uses.startsWith("$/.github/actions/")),
     )
-    .map((uses) => uses.replace(/^\$\//u, ""));
+    .map((uses) => uses.replace(/^(?:\$|\.)\//u, ""));
 
   expect(localActions.length).toBeGreaterThan(0);
   expect(
