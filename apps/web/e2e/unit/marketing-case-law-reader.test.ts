@@ -121,12 +121,44 @@ describe("marketing readers resolve from publicly available thread badges", () =
     ).toThrow("badges are unavailable");
   });
 
-  test("rejects ambiguous scenario badges", () => {
+  test("resolves when several threads reference the same decision", () => {
     const payload = response();
+    const paths = getMarketingDecisionPaths({
+      ...payload,
+      global: [
+        ...payload.global,
+        ...payload.global.map((thread) => ({
+          ...thread,
+          id: `${thread.id}-2`,
+        })),
+      ],
+    });
+    expect(paths).toEqual(getMarketingDecisionPaths(payload));
+  });
+
+  test("rejects different decisions matching one scenario", () => {
+    const payload = response();
+    const [first] = payload.global;
+    if (first === undefined) {
+      throw new Error("missing fixture thread");
+    }
     expect(() =>
       getMarketingDecisionPaths({
         ...payload,
-        global: [...payload.global, ...payload.global],
+        global: [
+          ...payload.global,
+          {
+            ...first,
+            id: "other-thread",
+            decision: {
+              ...first.decision,
+              badge: {
+                ...first.decision.badge,
+                id: "12345678-1234-4234-8234-999999999999",
+              },
+            },
+          },
+        ],
       }),
     ).toThrow("received 2");
   });

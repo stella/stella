@@ -60,12 +60,20 @@ export const getMarketingDecisionPaths = (payload: unknown) => {
   });
   return new Map(
     scenarios.map((scenario) => {
-      const matches = badges.filter(
-        (badge) =>
-          badge.caseNumber === scenario.caseNumber &&
-          badge.country === scenario.country &&
-          badge.language === scenario.language,
-      );
+      // Several conversations may reference one decision; only different
+      // decisions make a scenario ambiguous.
+      const matches = [
+        ...new Map(
+          badges
+            .filter(
+              (badge) =>
+                badge.caseNumber === scenario.caseNumber &&
+                badge.country === scenario.country &&
+                badge.language === scenario.language,
+            )
+            .map((badge) => [badge.id, badge] as const),
+        ).values(),
+      ];
       if (matches.length !== 1) {
         throw new MarketingDecisionPathError({
           message: `${scenario.caseNumber}: expected one marketing decision badge, received ${String(matches.length)}`,
