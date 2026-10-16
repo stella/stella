@@ -164,27 +164,29 @@ describe("isSearchUnavailableError", () => {
     },
   );
 
-  test("a refusal without its domain is an invalid response", () => {
-    expect(() =>
-      unwrapPublicLawEden(
-        {
-          data: null,
-          error: {
-            status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-            value: {
-              code: "public_country_unavailable",
-              status: "unavailable",
-              country: "EU",
-              reason: "pending_public",
-              message: "Unavailable",
-              hint: "Choose another country.",
-            },
-          },
-        },
-        "searchPublicCaseLawDecisions",
-      ),
-    ).toThrow(ClientOperationError);
-  });
+  test.each([undefined, { provider: "invalid" }])(
+    "a refusal without its domain is invalid before provider diagnostic %j",
+    (providerDiagnostic) => {
+      const error = thrownBy(PUBLIC_COUNTRY_UNAVAILABLE_STATUS, {
+        code: "public_country_unavailable",
+        status: "unavailable",
+        country: "EU",
+        reason: "pending_public",
+        message: "Unavailable",
+        hint: "Choose another country.",
+        ...(providerDiagnostic === undefined ? {} : { providerDiagnostic }),
+      });
+      expect(ClientOperationError.is(error)).toBe(true);
+      if (!ClientOperationError.is(error)) {
+        throw new TypeError("Expected ClientOperationError");
+      }
+      expect(error.action).toBe("parse-public-country-unavailable");
+      expect(error.message).toBe(
+        "Invalid public country unavailability response",
+      );
+      expect(shouldRetryAPIRequest(0, error)).toBe(false);
+    },
+  );
 
   test("recognizes the engine outage the search endpoint reports", () => {
     expect(

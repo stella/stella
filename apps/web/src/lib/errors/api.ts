@@ -115,22 +115,26 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     code === PUBLIC_COUNTRY_UNAVAILABLE_CODE
       ? v.safeParse(publicCountryUnavailableSchema, value)
       : undefined;
-  if (countryRefusal !== undefined && !countryRefusal.success) {
-    throw new ClientOperationError({
-      action: "parse-public-country-unavailable",
-      message: "Invalid public country unavailability response",
-    });
-  }
   const diagnosticValue = details?.["providerDiagnostic"];
   const diagnostic =
     diagnosticValue === undefined
       ? undefined
       : v.safeParse(providerDiagnosticSchema, diagnosticValue);
-  if (diagnostic !== undefined && !diagnostic.success) {
-    throw new ClientOperationError({
+  let malformedResponse =
+    countryRefusal?.success === false
+      ? {
+          action: "parse-public-country-unavailable",
+          message: "Invalid public country unavailability response",
+        }
+      : null;
+  if (malformedResponse === null && diagnostic?.success === false) {
+    malformedResponse = {
       action: "parse-provider-diagnostic",
       message: "Invalid provider diagnostic response",
-    });
+    };
+  }
+  if (malformedResponse !== null) {
+    throw new ClientOperationError(malformedResponse);
   }
   return new APIError({
     ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
