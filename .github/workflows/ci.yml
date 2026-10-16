@@ -840,7 +840,7 @@ jobs:
             printf '%s\0' "${changed_files[@]}" > "$RUNNER_TEMP/api-test-changed-paths"
           fi
           echo "api_scope_unknown=$scope_unknown" >> "$GITHUB_OUTPUT"
-          printf '%s\0' "${changed_files[@]}" | jq -Rs 'split("\u0000") | map(select(length > 0))' \
+          printf '%s\0' "${changed_files[@]}" | jq -Rsc 'split("\u0000") | map(select(length > 0))' \
             | sed 's/^/changed_files=/' >> "$GITHUB_OUTPUT"
 
           # An unreadable diff must widen every scope rather than skip checks.

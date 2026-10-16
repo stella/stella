@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -710,3 +716,42 @@ test("the CLI emits a JSON error report and report/blocking exit codes on an unr
     }
   });
 }, 30_000);
+
+test("the CI changed-files output round-trips a path list as one compact JSON line", () => {
+  const source = readFileSync(
+    path.join(import.meta.dir, "../.github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const start = source.indexOf(
+    `printf '%s\\0' "\${changed_files[@]}" | jq -Rsc`,
+  );
+  expect(start).toBeGreaterThan(-1);
+  const end = source.indexOf('>> "$GITHUB_OUTPUT"', start);
+  const command = `${source.slice(start, end)}>> "$GITHUB_OUTPUT"`;
+  const directory = mkdtempSync(
+    path.join(os.tmpdir(), "changed-files-output-"),
+  );
+  try {
+    const output = path.join(directory, "github-output");
+    writeFileSync(output, "");
+    const files = ["apps/web/src/a b.test.ts", "scripts/x.test.ts"];
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-c",
+        `set -euo pipefail; changed_files=("$@"); ${command}`,
+        "bash",
+        ...files,
+      ],
+      { env: { ...process.env, GITHUB_OUTPUT: output } },
+    );
+    expect(result.exitCode).toBe(0);
+    const lines = readFileSync(output, "utf-8").split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]?.replace(/^changed_files=/u, "") ?? "")).toEqual(
+      files,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
