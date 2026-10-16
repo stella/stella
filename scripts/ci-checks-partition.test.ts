@@ -953,9 +953,11 @@ test("the store cache save supervisor runs exactly once in the rest leg", () => 
 });
 
 test("the guard rollout scope suite is an independently receipted static check", () => {
+  const namedStep = v.looseObject({ name: v.string() });
   const owners = partitionIds.flatMap((leg) => {
     const { steps } = v.parse(v.looseObject({ steps: v.unknown() }), jobs[leg]);
     return flattenWorkflowSteps(steps)
+      .filter((step) => v.is(namedStep, step))
       .filter((step) =>
         stepFields(step).run?.includes("scripts/guard-rollouts.test.ts"),
       )
