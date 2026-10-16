@@ -323,7 +323,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         },
         {
           type: "admitted",
-          module: "apps/api/src/lib/auth.ts",
+          module: "apps/api/src/lib/flows/workspace-event-authorizer.ts",
           admission: "deliverFlowRunWorkspaceEvent",
           specifier: "@/api/lib/flows/flow-run-events",
         },
