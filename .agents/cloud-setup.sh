@@ -55,22 +55,33 @@ case "$(uname -m)" in
 esac
 
 
+release_log_holders() {
+  # Processes left by package scripts may still hold a step log after the command exits.
+  # Setup starts its own services later, so end them rather than let them write into a
+  # deleted log for their whole lifetime.
+  # One find over all descriptor links; no process per descriptor.
+  local log="$1" root="${CLOUD_PROC_ROOT:-/proc}" fd pid
+  while IFS= read -r fd; do
+    pid="${fd%/fd/*}"
+    pid="${pid##*/}"
+    [[ "$pid" =~ ^[0-9]+$ && "$pid" != "$$" ]] || continue
+    kill -TERM "$pid" 2>/dev/null || true
+  done < <(find "$root" -mindepth 3 -maxdepth 3 -path "$root/[0-9]*/fd/*" -lname "$log" 2>/dev/null)
+}
 network_run() (
   local host="$1" seconds="$2" status=0
   shift 2
-  set -o pipefail
   network_log="$(mktemp)" || return "$?"
   trap 'rm -f -- "$network_log"' EXIT
   trap 'exit 129' HUP
   trap 'exit 130' INT
   trap 'exit 143' TERM
-  if timeout --signal=TERM --kill-after=5s "$seconds"s "$@" 2>&1 | tee "$network_log"; then
-    return 0
-  else
-    # Scalar Bash array expansion reads PIPESTATUS[0] before assignment resets it.
-    status="$PIPESTATUS"
-  fi
-  [[ "$status" != 0 ]] || fail 'Cannot capture network command output'
+  # Output goes to a file, never a pipe: package scripts may leave processes that keep
+  # inherited descriptors open, and a pipe reader would wait for them past the command.
+  timeout --signal=TERM --kill-after=5s "$seconds"s "$@" > "$network_log" 2>&1 || status=$?
+  release_log_holders "$network_log"
+  cat -- "$network_log" || fail 'Cannot capture network command output'
+  [[ "$status" != 0 ]] || return 0
   if [[ "$status" == 124 || "$status" == 137 || "$status" == 28 ]] || grep -Eiq 'timed[[:space:]-]+out|time[[:space:]-]+out|timeout[[:space:]]+(was[[:space:]]+)?(reached|expired)|(connection|operation|socket)[[:space:]-]+timeout' "$network_log"; then
     fail "download timed out: $host"
   fi
