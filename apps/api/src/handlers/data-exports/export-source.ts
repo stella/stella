@@ -771,9 +771,10 @@ const readOrganizationChildren = async (
   };
 };
 
-// Stored size of the matched rows, as Postgres holds them.
-const storedBytes = (recordTable: PgTable) =>
-  sql<number>`COALESCE(SUM(pg_column_size(${recordTable}.*)), 0)::bigint`.mapWith(
+// Expanded text size of the matched rows. Unlike the stored size, which is
+// compressed, it tracks what loading and serialising the rows costs.
+const expandedTextBytes = (recordTable: PgTable) =>
+  sql<number>`COALESCE(SUM(octet_length(${recordTable}.*::text)), 0)::bigint`.mapWith(
     Number,
   );
 
@@ -807,7 +808,7 @@ const measureRecords = async (
     const rows = await db(
       async (tx) =>
         await tx
-          .select({ bytes: storedBytes(recordTable) })
+          .select({ bytes: expandedTextBytes(recordTable) })
           .from(recordTable)
           .where(where),
     );
@@ -835,7 +836,7 @@ const measureRecords = async (
             await tx
               .select({
                 workspaceId: workspaceColumn,
-                bytes: storedBytes(recordTable),
+                bytes: expandedTextBytes(recordTable),
               })
               .from(recordTable)
               .where(inArray(workspaceColumn, ids))

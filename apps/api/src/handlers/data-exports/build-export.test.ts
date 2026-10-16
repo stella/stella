@@ -366,7 +366,7 @@ describe("organisation data export admission", () => {
   });
 
   test.each(["organization", "matter"] as const)(
-    "refuses an export whose %s records exceed the cap before loading any record",
+    "refuses an export whose records exceed the cap, here through its %s records, before loading any",
     async (unit) => {
       const world = basicWorld();
       const matterId = world.matters.at(0)?.summary.id ?? "";
@@ -392,7 +392,7 @@ describe("organisation data export admission", () => {
       });
       const error = planned.isErr() ? planned.error : null;
       expect(error).toBeInstanceOf(DataExportRecordsTooLargeError);
-      expect(error).toMatchObject({ unit, bytes: over });
+      expect(error).toMatchObject({ bytes: over });
       expect(loaded).toBe(false);
     },
   );

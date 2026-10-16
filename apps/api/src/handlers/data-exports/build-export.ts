@@ -167,7 +167,7 @@ export type ExportSource = {
   ) => Promise<SourceMatter | null>;
   loadOrganizationRecords: () => Promise<SourceOrganizationRecords>;
   /**
-   * Stored bytes of the records an export holds in memory at once: the
+   * Expanded text size of the records an export reads into memory: the
    * organisation's records, and each listed matter's. Measured in the
    * database, without reading the rows.
    */
@@ -181,18 +181,18 @@ export type RecordBytes = {
 };
 
 /**
- * The most stored record bytes one unit the builder holds in memory at once
- * (the organisation's records, or one matter's) may carry. Records are read
- * whole and serialised to JSON and CSV in memory, several times their stored
- * size; above this an export is refused before any record is loaded. The
- * bound goes away once record serialisation streams.
+ * The most record text, expanded (uncompressed), one export may carry.
+ * Records are read whole and serialised to JSON and CSV in memory, and a
+ * part keeps its matters' metadata until it is written; bounding the
+ * export's total bounds both. Above this an export is refused before any
+ * record is loaded.
  */
-export const DATA_EXPORT_RECORD_BYTES_CAP = 64 * 1024 ** 2;
+export const DATA_EXPORT_RECORD_BYTES_CAP = 256 * 1024 ** 2;
 
-/** The records of the organisation or of one matter exceed the cap. */
+/** The export's records exceed the cap. */
 export class DataExportRecordsTooLargeError extends TaggedError(
   "DataExportRecordsTooLargeError",
-)<{ message: string; unit: "organization" | "matter"; bytes: number }> {}
+)<{ message: string; bytes: number }> {}
 
 /** Receives one part's bytes, in order. */
 type PartSink = {
@@ -772,25 +772,15 @@ export const planDataExport = async ({
   // Admission comes first: an export whose records cannot be held in memory
   // is refused before any of them is loaded.
   const records = await source.measureRecords(listed.map((m) => m.id));
-  if (records.organizationBytes > DATA_EXPORT_RECORD_BYTES_CAP) {
-    return Result.err(
-      new DataExportRecordsTooLargeError({
-        message: "The organisation's records exceed the export record limit",
-        unit: "organization",
-        bytes: records.organizationBytes,
-      }),
-    );
-  }
-  const oversized = listed.find(
-    (matter) =>
-      (records.matterBytes.get(matter.id) ?? 0) > DATA_EXPORT_RECORD_BYTES_CAP,
+  const recordBytes = [...records.matterBytes.values()].reduce(
+    (sum, bytes) => sum + bytes,
+    records.organizationBytes,
   );
-  if (oversized !== undefined) {
+  if (recordBytes > DATA_EXPORT_RECORD_BYTES_CAP) {
     return Result.err(
       new DataExportRecordsTooLargeError({
-        message: "A matter's records exceed the export record limit",
-        unit: "matter",
-        bytes: records.matterBytes.get(oversized.id) ?? 0,
+        message: "The export's records exceed the export record limit",
+        bytes: recordBytes,
       }),
     );
   }

@@ -18,6 +18,7 @@ import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   ACTIVE_DATA_EXPORT_PREDICATE,
+  contacts,
   DATA_EXPORT_MAX_FAILURES,
   entities,
   entityVersions,
@@ -772,6 +773,40 @@ describe("starting an export", () => {
 });
 
 describe("run ownership", () => {
+  test("measures records by their expanded size, not their compressed storage", async () => {
+    // Repetitive text compresses to a sliver of its size on disk; the export
+    // still loads and serialises all of it.
+    const notes = "Kancelář ".repeat(512 * 1024);
+    const [contact] = await testDb
+      .insert(contacts)
+      .values({
+        organizationId: ids.orgA,
+        type: "person",
+        displayName: "Measured contact",
+        notes,
+      })
+      .returning({ id: contacts.id });
+    try {
+      const source = createExportSource({
+        db: createRootMembershipScopedDb(
+          { organizationId: ids.orgA, userId: ids.userAdmin },
+          database,
+        ),
+        organizationId: ids.orgA,
+        signal: new AbortController().signal,
+        pace: async () => {},
+      });
+      const measured = await source.measureRecords([]);
+      expect(measured.organizationBytes).toBeGreaterThanOrEqual(
+        new TextEncoder().encode(notes).byteLength,
+      );
+    } finally {
+      if (contact !== undefined) {
+        await testDb.delete(contacts).where(eq(contacts.id, contact.id));
+      }
+    }
+  });
+
   test("a run superseded by a newer attempt cannot finish the export", async () => {
     const exportId = await insertExport({
       organizationId: ids.orgA,
