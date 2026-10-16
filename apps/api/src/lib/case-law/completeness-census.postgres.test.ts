@@ -2,19 +2,27 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCompletenessCensus,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  censusScope,
+  currentCensusSourceScopes,
   readCompletenessCensusQuery,
   recordCompletenessCensus,
 } from "@/api/lib/case-law/completeness-census";
 import { countryCensusVerdict } from "@/api/lib/case-law/completeness-census-contract";
-import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  ListingIdentity,
+  SourceSliceWalk,
+} from "@/api/lib/legal-search/ingestion-types";
 import { publicLawDatabaseRolePermissionsSql } from "@/api/lib/public-law-read-db";
 import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -105,7 +113,9 @@ describe.skipIf(!enabled)(
           });
           await recordCompletenessCensus(scopedDb, options);
           const read = async () => {
-            const rows = await readCompletenessCensusQuery(db, [sourceId]);
+            const rows = await readCompletenessCensusQuery(db, [
+              { id: sourceId, scope },
+            ]);
             return (
               rows.get(String(sourceId)) ?? panic("Threshold census is absent")
             );
@@ -168,7 +178,7 @@ describe.skipIf(!enabled)(
           };
           await recordCompletenessCensus(scopedDb, partialOptions);
           const partialRows = await readCompletenessCensusQuery(db, [
-            partialSourceId,
+            { id: partialSourceId, scope: partialOptions.scope },
           ]);
           expect(partialRows.get(String(partialSourceId))).toMatchObject({
             verdict: "unmeasured",
@@ -185,7 +195,7 @@ describe.skipIf(!enabled)(
             observedAt: new Date(observedAt.getTime() + 1),
           });
           const enumeratedRows = await readCompletenessCensusQuery(db, [
-            partialSourceId,
+            { id: partialSourceId, scope: partialOptions.scope },
           ]);
           expect(enumeratedRows.get(String(partialSourceId))).toMatchObject({
             verdict: "unmeasured",
@@ -202,6 +212,160 @@ describe.skipIf(!enabled)(
         }
       });
     }, 120_000);
+
+    test("the registered adapter scope advances at the current publisher year boundary without observing it", async () => {
+      const id = createSafeId<"caseLawSource">();
+      const sources = [{ id, adapterKey: "cz-us" }];
+      const initial = (
+        await currentCensusSourceScopes(
+          sources,
+          new Date("2026-12-31T23:59:59Z"),
+        )
+      ).at(0);
+      const current = (
+        await currentCensusSourceScopes(
+          sources,
+          new Date("2027-01-01T00:00:00Z"),
+        )
+      ).at(0);
+      if (
+        initial?.scope === null ||
+        initial?.scope === undefined ||
+        current?.scope === null ||
+        current?.scope === undefined
+      ) {
+        panic("Registered publisher walk must expose its current census scope");
+      }
+      expect(initial.id).toBe(id);
+      expect(current.id).toBe(id);
+      expect(initial.scope.last).toBe("2026");
+      expect(current.scope.last).toBe("2027");
+      expect(current.scope.first).toBe(initial.scope.first);
+      expect(current.scope.expectedSlices).toBe(
+        initial.scope.expectedSlices + 1,
+      );
+    });
+
+    test.each(["day", "month", "year"] as const)(
+      "a new %s slice invalidates a complete census before another observation is written",
+      async (unit) => {
+        const databaseUrl =
+          process.env["DATABASE_URL"] ??
+          panic("Postgres census test requires DATABASE_URL");
+        const observedAt = new Date("2026-12-31T23:59:59Z");
+        const nextInstant = new Date("2027-01-01T00:00:00Z");
+        const walk = (() => {
+          switch (unit) {
+            case "day":
+              return {
+                firstSlice: "2026-12-30",
+                tipWindowDays: 1,
+                ...createCalendarDaySliceWalk({
+                  firstSlice: "2026-12-30",
+                  source: "cz-ns",
+                }).walk,
+              };
+            case "month":
+              return {
+                firstSlice: "2026-11",
+                tipWindowDays: 1,
+                sliceOf: (now: Date) => now.toISOString().slice(0, 7),
+                nextSlice: (slice: string) =>
+                  Temporal.PlainYearMonth.from(slice)
+                    .add({ months: 1 })
+                    .toString(),
+                previousSlice: (slice: string) =>
+                  slice === "2026-11"
+                    ? null
+                    : Temporal.PlainYearMonth.from(slice)
+                        .subtract({ months: 1 })
+                        .toString(),
+              };
+            case "year":
+              return {
+                firstSlice: "2025",
+                tipWindowDays: 1,
+                sliceOf: (now: Date) => String(now.getUTCFullYear()),
+                nextSlice: (slice: string) => String(Number(slice) + 1),
+                previousSlice: (slice: string) =>
+                  slice === "2025" ? null : String(Number(slice) - 1),
+              };
+            default: {
+              const exhaustive: never = unit;
+              return exhaustive;
+            }
+          }
+        })() satisfies SourceSliceWalk;
+        const initialScope = censusScope(walk, observedAt);
+        expect(initialScope.expectedSlices).toBe(2);
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db } = openClient({ max: 1 });
+          const sourceId = createSafeId<"caseLawSource">();
+          const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
+          await db.insert(caseLawSources).values({
+            id: sourceId,
+            adapterKey: `census-boundary-${sourceId}`,
+            name: "Calendar scope boundary fixture",
+            ingestionLeaseToken: leaseToken,
+            ingestionLeaseExpiresAt: new Date(Date.now() + 3_600_000),
+          });
+          try {
+            const scopedDb: ScopedDb = async (callback) =>
+              await db.transaction(callback);
+            for (const slice of [initialScope.first, initialScope.last]) {
+              await recordCompletenessCensus(scopedDb, {
+                sourceId,
+                leaseToken,
+                adapterKey: "cz-ns",
+                slice,
+                scope: initialScope,
+                identities: [],
+                listed: 0,
+                publisherCount: 0,
+                observedAt,
+              });
+            }
+            const initial = await readCompletenessCensusQuery(db, [
+              { id: sourceId, scope: censusScope(walk, observedAt) },
+            ]);
+            expect(initial.get(String(sourceId))).toMatchObject({
+              verdict: "complete",
+              measuredSlices: 2,
+              expectedSlices: 2,
+            });
+            const currentScope = censusScope(walk, nextInstant);
+            expect(currentScope.last).not.toBe(initialScope.last);
+            expect(currentScope.expectedSlices).toBe(3);
+            const current = await readCompletenessCensusQuery(db, [
+              { id: sourceId, scope: currentScope },
+            ]);
+            expect(current.get(String(sourceId))).toMatchObject({
+              verdict: "unmeasured",
+              measuredSlices: 2,
+              expectedSlices: 3,
+            });
+            expect(countryCensusVerdict([...current.values()])).toBe(
+              "unmeasured",
+            );
+            const persisted = await db
+              .select()
+              .from(caseLawCompletenessCensus)
+              .where(eq(caseLawCompletenessCensus.sourceId, sourceId));
+            expect(persisted).toHaveLength(2);
+            expect(
+              persisted.every(
+                (row) => row.observedAt.getTime() === observedAt.getTime(),
+              ),
+            ).toBe(true);
+          } finally {
+            await db
+              .delete(caseLawSources)
+              .where(eq(caseLawSources.id, sourceId));
+          }
+        });
+      },
+      120_000,
+    );
 
     test("the migrated public reader sees allowed census observations and rejects the previous grant map", async () => {
       const databaseUrl =
@@ -250,8 +414,14 @@ describe.skipIf(!enabled)(
           await db.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL ROLE stella_public_law_reader`);
             const rows = await readCompletenessCensusQuery(tx, [
-              visible,
-              withheld,
+              {
+                id: visible,
+                scope: { first: "2026", last: "2026", expectedSlices: 1 },
+              },
+              {
+                id: withheld,
+                scope: { first: "2026", last: "2026", expectedSlices: 1 },
+              },
             ]);
             expect(rows.get(String(visible))).toMatchObject({
               verdict: "complete",
@@ -360,10 +530,11 @@ describe.skipIf(!enabled)(
             publisherCount: 3,
             observedAt,
           };
+          let currentScope = options.scope;
           const read = async () => {
             const observations = await readCompletenessCensusQuery(db, [
-              sourceId,
-              unknownSourceId,
+              { id: sourceId, scope: currentScope },
+              { id: unknownSourceId, scope: null },
             ]);
             return (
               observations.get(String(sourceId)) ??
@@ -414,6 +585,7 @@ describe.skipIf(!enabled)(
           });
 
           const scope = { first: "2025", last: "2026", expectedSlices: 2 };
+          currentScope = scope;
           await recordCompletenessCensus(scopedDb, {
             ...complete,
             scope,
@@ -472,8 +644,8 @@ describe.skipIf(!enabled)(
             publisherCount: undefined,
           });
           const countrySources = await readCompletenessCensusQuery(db, [
-            sourceId,
-            unknownSourceId,
+            { id: sourceId, scope: currentScope },
+            { id: unknownSourceId, scope: null },
           ]);
           expect(countrySources.get(String(unknownSourceId))).toMatchObject({
             verdict: "unmeasured",

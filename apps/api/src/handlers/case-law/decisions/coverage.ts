@@ -38,6 +38,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import {
+  currentCensusSourceScopes,
   readCompletenessCensusQuery,
   unmeasuredSourceCensus,
 } from "@/api/lib/case-law/completeness-census";
@@ -343,7 +344,7 @@ type CoverageLoad = {
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
   readCensus: (
-    sourceIds: readonly SafeId<"caseLawSource">[],
+    sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
   ) => Promise<ReadonlyMap<string, SourceCensus>>;
   /** Null when the read failed as a whole, so no source gets a number. */
   readArrivals: (
@@ -415,7 +416,7 @@ export const loadCaseLawCoverage = async ({
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
   const arrivals = await readArrivals(admitted.map(({ id }) => id));
   const censusRows = await Result.tryPromise({
-    try: async () => await readCensus(admitted.map(({ id }) => id)),
+    try: async () => await readCensus(admitted),
     catch: coverageError("reading the completeness census failed"),
   });
   if (Result.isError(censusRows)) {
@@ -646,10 +647,12 @@ export const readCaseLawCoverageHandler = async (
     excludedSourceIds: excludedSourceIds.value,
     now,
     readSources: async () => await caseLawDb(readCaseLawCoverageSourcesQuery),
-    readCensus: async (sourceIds) =>
-      await caseLawDb(
-        async (tx) => await readCompletenessCensusQuery(tx, sourceIds),
-      ),
+    readCensus: async (sources) => {
+      const scopes = await currentCensusSourceScopes(sources, now);
+      return await caseLawDb(
+        async (tx) => await readCompletenessCensusQuery(tx, scopes),
+      );
+    },
     readArrivals: async (sourceIds) => {
       // One stored count per source, recounted by the scheduler: the week's
       // window is never walked on the request path. A failure leaves the

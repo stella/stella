@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, gte, lte, or, sql } from "drizzle-orm";
 
 import { chunk } from "@stll/concurrency/chunk";
 
@@ -8,6 +8,7 @@ import {
   caseLawCompletenessCensus as census,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
@@ -61,6 +62,30 @@ export const censusScope = (walk: SourceSliceWalk, now: Date) => {
   }
   return panic("Census slice walk does not reach its first slice");
 };
+
+type CensusSource = { id: SafeId<"caseLawSource">; adapterKey: string };
+export type CurrentCensusSourceScope = {
+  id: SafeId<"caseLawSource">;
+  scope: CensusScope | null;
+};
+
+/** Resolve the current publisher universe before opening the read transaction; no publisher calls. */
+export const currentCensusSourceScopes = async (
+  sources: readonly CensusSource[],
+  now: Date,
+): Promise<CurrentCensusSourceScope[]> =>
+  await Promise.all(
+    sources.map(async ({ id, adapterKey }) => {
+      const adapter = await loadAdapterByKey(adapterKey);
+      return {
+        id,
+        scope:
+          adapter === undefined
+            ? null
+            : censusScope(adapter.reconciliation, now),
+      };
+    }),
+  );
 
 type RecordCensusOptions = {
   sourceId: SafeId<"caseLawSource">;
@@ -213,17 +238,27 @@ const censusOutcomeFromSummary = ({
 /** Three indexed aggregates, bounded by the registry and response summary limits. */
 export const readCompletenessCensusQuery = async (
   tx: CaseLawPublicReadTransaction,
-  sourceIds: readonly SafeId<"caseLawSource">[],
+  sources: readonly CurrentCensusSourceScope[],
 ): Promise<ReadonlyMap<string, SourceCensus>> => {
-  if (sourceIds.length === 0) {
+  if (sources.length === 0) {
     return new Map();
   }
-  const where = inArray(census.sourceId, [...sourceIds]);
+  const scopes = new Map(sources.map(({ id, scope }) => [String(id), scope]));
+  const where = or(
+    ...sources.map(({ id, scope }) =>
+      scope === null
+        ? eq(census.sourceId, id)
+        : and(
+            eq(census.sourceId, id),
+            gte(census.slice, scope.first),
+            lte(census.slice, scope.last),
+          ),
+    ),
+  );
   const totals = await tx
     .select({
       sourceId: census.sourceId,
       measured: count(),
-      expected: sql<number>`max(${census.expectedSlices})::int`,
       unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeStatus} = 'partial-publisher')::int`,
       noneExposed: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed')::int`,
       partial: sql<number>`count(*) FILTER (WHERE ${census.scopeStatus} = 'partial-publisher')::int`,
@@ -284,40 +319,48 @@ export const readCompletenessCensusQuery = async (
     .where(sql`${ranked.rank} <= ${CENSUS_WORST_SLICES_LIMIT}`)
     .limit(CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_WORST_SLICES_LIMIT);
   return new Map(
-    totals.map((row) => [
-      String(row.sourceId),
-      {
-        verdict: censusVerdictFromSummary({
+    totals.map((row) => {
+      const scope = scopes.get(String(row.sourceId));
+      if (scope === undefined) {
+        return panic("Census aggregate has no current source scope");
+      }
+      const expectedSlices = scope?.expectedSlices ?? null;
+      return [
+        String(row.sourceId),
+        {
+          verdict: censusVerdictFromSummary({
+            measuredSlices: row.measured,
+            expectedSlices,
+            unmeasuredSlices: row.unknown,
+            shortSlices: row.short,
+          }),
+          scopeStatus: row.partial > 0 ? "partial-publisher" : "full-publisher",
+          outcome: censusOutcomeFromSummary(row),
+          evidenceRef: row.evidenceRef,
           measuredSlices: row.measured,
-          expectedSlices: row.expected,
-          unmeasuredSlices: row.unknown,
+          expectedSlices,
           shortSlices: row.short,
-        }),
-        scopeStatus: row.partial > 0 ? "partial-publisher" : "full-publisher",
-        outcome: censusOutcomeFromSummary(row),
-        evidenceRef: row.evidenceRef,
-        measuredSlices: row.measured,
-        expectedSlices: row.expected,
-        shortSlices: row.short,
-        publisher: row.noneExposed > 0 ? null : row.publisher,
-        stored: row.stored,
-        withText: row.withText,
-        observedAt: new Date(row.observedAt).toISOString(),
-        years: years
-          .filter(
-            ({ sourceId, year }) => sourceId === row.sourceId && year !== null,
-          )
-          .flatMap(({ year, sourceId: _, ...rest }) =>
-            year === null ? [] : [{ year, ...rest }],
-          )
-          .slice(0, CENSUS_YEAR_SUMMARIES_LIMIT),
-        worstSlices: worst
-          .filter(({ sourceId }) => sourceId === row.sourceId)
-          .map(({ sourceId: _, rank: __, observedAt, ...slice }) => ({
-            ...slice,
-            observedAt: observedAt.toISOString(),
-          })),
-      } satisfies SourceCensus,
-    ]),
+          publisher: row.noneExposed > 0 ? null : row.publisher,
+          stored: row.stored,
+          withText: row.withText,
+          observedAt: new Date(row.observedAt).toISOString(),
+          years: years
+            .filter(
+              ({ sourceId, year }) =>
+                sourceId === row.sourceId && year !== null,
+            )
+            .flatMap(({ year, sourceId: _, ...rest }) =>
+              year === null ? [] : [{ year, ...rest }],
+            )
+            .slice(0, CENSUS_YEAR_SUMMARIES_LIMIT),
+          worstSlices: worst
+            .filter(({ sourceId }) => sourceId === row.sourceId)
+            .map(({ sourceId: _, rank: __, observedAt, ...slice }) => ({
+              ...slice,
+              observedAt: observedAt.toISOString(),
+            })),
+        } satisfies SourceCensus,
+      ] as const;
+    }),
   );
 };
