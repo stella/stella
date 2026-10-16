@@ -327,6 +327,7 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
+        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",

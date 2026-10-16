@@ -55,7 +55,10 @@ class ChatTurnDeliveryOverflow extends TaggedError("ChatTurnDeliveryOverflow")<{
 /** Bound queued bytes and wait for consumer demand before writing more.
  *  A stalled connection detaches after a bounded wait; draining then continues
  *  so delivery cannot indefinitely prevent the owned turn from settling. */
-const eagerlyDeliverTurn = (response: Response): Response => {
+const eagerlyDeliverTurn = (
+  response: Response,
+  onDeliveryStalled: (() => void) | undefined,
+): Response => {
   const upstream = response.body;
   if (upstream === null) {
     return panic("A chat turn response has no stream");
@@ -120,6 +123,7 @@ const eagerlyDeliverTurn = (response: Response): Response => {
                         );
                       }
                       delivery = "overflowed";
+                      onDeliveryStalled?.();
                       controller.error(
                         new ChatTurnDeliveryOverflow({
                           message:
@@ -308,6 +312,7 @@ type ChatTurnRunOptions = {
   heartbeat?: ChatTurnRunHeartbeat | undefined;
   /** The boundary mode the run's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  onDeliveryStalled?: (() => void) | undefined;
   owner: ChatTurnRunOwner;
   /** Who tracks the run; the process by default. */
   ownership?: ChatTurnOwnership | undefined;
@@ -621,6 +626,7 @@ export class ChatTurnRun {
           },
         ),
       ),
+      this.options.onDeliveryStalled,
     );
     if (this.pendingAbort !== undefined) {
       this.abort(this.pendingAbort);

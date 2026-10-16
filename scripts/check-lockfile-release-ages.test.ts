@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { deferred } from "@stll/test-kit";
+
 import {
   checkLockfileReleaseAges,
   createRegistryLookup,
@@ -392,13 +394,18 @@ describe("registry lookup", () => {
     const requested: string[] = [];
     let inFlight = 0;
     let peak = 0;
+    const twoStarted = deferred();
+    const release = deferred();
     const lookup = createRegistryLookup({
       concurrency: 2,
       fetch: async (url) => {
         requested.push(url);
         inFlight += 1;
         peak = Math.max(peak, inFlight);
-        await Bun.sleep(5);
+        if (inFlight === 2) {
+          twoStarted.resolve();
+        }
+        await release.promise;
         inFlight -= 1;
         return Response.json({
           time: { "1.0.0": daysBefore(9), "2.0.0": daysBefore(8) },
@@ -407,12 +414,16 @@ describe("registry lookup", () => {
     });
 
     const names = ["@scope/a", "b", "c", "d", "e"];
-    await Promise.all(
+    const lookups = Promise.all(
       names.flatMap((name) => [
         lookup({ name, version: "1.0.0" }),
         lookup({ name, version: "2.0.0" }),
       ]),
     );
+    await twoStarted.promise;
+    expect(peak).toBe(2);
+    release.resolve();
+    await lookups;
 
     expect(requested.toSorted()).toEqual([
       "https://registry.npmjs.org/@scope%2Fa",
