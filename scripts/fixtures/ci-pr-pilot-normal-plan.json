@@ -9,9 +9,6 @@
     "parser-version-guard": {
       "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'parser-version-guard')) && ( needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && ( needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' ) ) && needs.ci-plan.outputs.package_checks_required == 'true' )"
     },
-    "ci-generated-sources": {
-      "if": "(needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-generated-sources')) && ( needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && needs.ci-plan.outputs.package_checks_required == 'true' ) )"
-    },
     "ci-checks-docs": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( inputs.heavy_only != true && needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.docs_checks_required == 'true' )"
     },

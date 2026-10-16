@@ -87,32 +87,32 @@ const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
   test("preserves deployment ownership on every discriminator leaf", () => {
-    const organization =
-      TOOL_ANNOTATIONS["manage_organization"] ??
-      expect.unreachable("Missing organization CLI metadata");
+    const template =
+      TOOL_ANNOTATIONS["save_filled_template"] ??
+      expect.unreachable("Missing template CLI metadata");
     const annotated = {
       ...TOOL_ANNOTATIONS,
-      manage_organization: {
-        ...organization,
+      save_filled_template: {
+        ...template,
         feature: "FEATURE_EXAMPLE",
       },
     };
     const generated = generateRouteMap(snapshotListings, annotated);
     const leaves = leafEntries(generated).filter(
-      ({ spec }) => spec.toolName === "manage_organization",
+      ({ spec }) => spec.toolName === "save_filled_template",
     );
     const discriminator =
-      organization.discriminator ??
-      expect.unreachable("Missing organization CLI discriminator");
+      template.discriminator ??
+      expect.unreachable("Missing template CLI discriminator");
     const expectedPaths = Object.values(discriminator.subcommands).map(
-      ({ command }) => [...organization.command, command].join(" "),
+      ({ command }) => [...template.command, command].join(" "),
     );
     expect(expectedPaths.length).toBeGreaterThan(0);
     expect(leaves.map(({ path }) => path.join(" ")).toSorted()).toEqual(
       expectedPaths.toSorted(),
     );
     for (const { spec } of leaves) {
-      expect(spec.feature).toBe(annotated.manage_organization.feature);
+      expect(spec.feature).toBe(annotated.save_filled_template.feature);
     }
   });
 
@@ -202,23 +202,21 @@ describe("generateRouteMap: structure", () => {
 });
 
 describe("generateRouteMap: discriminator split (S2)", () => {
-  const add = findLeaf(tree, ["organization", "add-member"]);
-  const remove = findLeaf(tree, ["organization", "remove-member"]);
+  const add = findLeaf(tree, ["matter", "add-member"]);
+  const remove = findLeaf(tree, ["matter", "remove-member"]);
   const settings = findLeaf(tree, ["organization", "update-settings"]);
 
-  test("manage_organization splits into three subcommands", () => {
-    expect(add?.toolName).toBe("manage_organization");
-    expect(remove?.toolName).toBe("manage_organization");
-    expect(settings?.toolName).toBe("manage_organization");
+  test("each membership and settings command calls its own tool", () => {
+    expect(add?.toolName).toBe("add_matter_member");
+    expect(remove?.toolName).toBe("remove_matter_member");
+    expect(settings?.toolName).toBe("update_organization_settings");
   });
 
-  test("the discriminator value is injected, not exposed as a flag", () => {
-    expect(add?.discriminatorInject).toEqual({ action: "add_member" });
-    expect(remove?.discriminatorInject).toEqual({ action: "remove_member" });
-    expect(settings?.discriminatorInject).toEqual({
-      action: "update_org_settings",
-    });
-    expect(flagFor(add ?? errorSpec(), "--action")).toBeUndefined();
+  test("separate tools need no injected action discriminator", () => {
+    for (const leaf of [add, remove, settings]) {
+      expect(leaf?.discriminatorInject).toBeUndefined();
+      expect(flagFor(leaf ?? errorSpec(), "--action")).toBeUndefined();
+    }
   });
 
   test("per-subcommand flag sets and required sets match the table", () => {
@@ -231,6 +229,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
       "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",
+      "--matter-numbering-enabled",
       "--prompt-caching-enabled",
       "--time-edit-window-days",
       "--time-locked-through-month",
@@ -256,14 +255,12 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(read?.confirmPassthrough).toBeUndefined();
   });
 
-  test("no manage_organization subcommand emits a --confirm flag", () => {
-    // The tool's schema declares a `confirm` gate for remove_member, but the
-    // reserved --yes flow owns it, so it is hidden from EVERY leaf's flags
-    // (destructive or not) and reachable only via --input.
+  test("membership and settings commands hide the reserved confirmation flag", () => {
+    // The reserved --yes flow owns the member-removal confirmation.
     for (const leaf of [add, remove, settings]) {
       expect(flagFor(leaf ?? errorSpec(), "--confirm")).toBeUndefined();
     }
-    // It still lives in the shared input schema all three subcommands carry.
+    // Member removal still accepts confirmation in its input schema.
     const properties = remove?.inputSchema["properties"];
     expect(
       typeof properties === "object" &&

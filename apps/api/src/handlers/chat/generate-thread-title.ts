@@ -32,6 +32,16 @@ import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
+/**
+ * A title runs on the standard tier: the reader sees it the moment the first
+ * turn ends, and a deferred tier bounds no latency at all, so a title queued
+ * there outlives its deadline and is never written. Read by the
+ * structured-output request settings test.
+ *
+ * @public
+ */
+export const TITLE_SERVICE_TIER = "standard";
+
 const SEND_MODE_READ_FAILED_SINK = failureSink({
   event: "chat.thread_title.send_mode_read_failed",
   expected: [],
@@ -86,7 +96,7 @@ const generateAdmittedThreadTitle = async ({
       actionType: "background",
       organizationId,
       safeDb,
-      serviceTier: "batch",
+      serviceTier: TITLE_SERVICE_TIER,
       userId,
       workspaceId: threadWorkspaceId,
     },
@@ -122,7 +132,7 @@ const generateAdmittedThreadTitle = async ({
         finishPolicy: TITLE_FINISH_POLICY,
         maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
         role: "fast",
-        serviceTier: "batch",
+        serviceTier: TITLE_SERVICE_TIER,
         orgAIConfig,
         managedAIResidency,
         organizationId,
