@@ -355,6 +355,7 @@ describe.skipIf(!enabled)(
                 }),
                 repairs: [
                   {
+                    introducedBy: cutover.introducedBy,
                     name: "later-repair",
                     readCompletion: async () => {
                       repairs += 1;

@@ -38,6 +38,17 @@ const canonical = (columns: readonly string[]) =>
     .toSorted()
     .join(",");
 
+const isIndexDeclaration = (node: ts.Node) => {
+  const parent = node.parent;
+  if (!ts.isCallExpression(parent)) {
+    return false;
+  }
+  return (
+    ts.isIdentifier(parent.expression) &&
+    parent.expression.text === "uniqueIndex"
+  );
+};
+
 export const checkOnlineIndexDependencySource = ({
   file,
   source,
@@ -126,7 +137,7 @@ export const checkOnlineIndexDependencySource = ({
     }
     if (ts.isStringLiteralLike(node)) {
       const index = byName.get(node.text);
-      if (index !== undefined && !file.includes("/db/schema/")) {
+      if (index !== undefined && !isIndexDeclaration(node)) {
         add(node, index, "raw index name; use the exported index constant");
       }
     }

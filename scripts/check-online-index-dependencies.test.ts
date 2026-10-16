@@ -124,3 +124,14 @@ test("keeps the full nested expression target", () => {
     "organization_id, ((origin ->> 'packId'::text)), ((origin ->> 'slug'::text))",
   );
 });
+
+test("schema index declarations do not consume index readiness", () => {
+  expect(
+    check(
+      'uniqueIndex("chat_turns_org_run_id_uidx").on(chatTurns.organizationId, chatTurns.runId)',
+    ),
+  ).toEqual([]);
+  expect(
+    check('error.constraint_name === "chat_turns_org_run_id_uidx"').at(0)?.name,
+  ).toBe(index.name);
+});

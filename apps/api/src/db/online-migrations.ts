@@ -909,9 +909,6 @@ const processOnlineRepairAt = async ({
     }
   } else {
     assertRepairDeployable(repair, completion);
-    if (completion.type === "pending") {
-      log({ event: "online_repair_pending", repair: repair.name, completion });
-    }
   }
   await processOnlineRepairAt({
     connection,
