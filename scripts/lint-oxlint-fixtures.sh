@@ -27,6 +27,7 @@ bun scripts/fill-diagnostics-ledger.ts --self-test
 
 bash scripts/check-oxlint-node-loader.test.sh
 bash scripts/check-oxlint-node-loader.sh
+bash scripts/check-oxlint-node-loader.sh oxlint.design.config.ts
 
 # The rule sources sit outside every Turbo workspace, so no workspace `lint`
 # reaches them. The fixtures are excluded: they violate rules on purpose and
