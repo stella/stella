@@ -475,7 +475,35 @@ test("local reusable workflows cannot use workspace aliases to change path or re
           target: "callee",
         }),
       ),
-      "local reusable workflow metadata path or repository mismatch",
+      "local metadata path, repository or origin mismatch",
+    );
+  }
+});
+test("relative actions bind metadata to the caller repository, origin and path", () => {
+  for (const route of [
+    { repository: "other", targetPath: ".github/actions/local/action.yml" },
+    { repository: "candidate", targetPath: ".github/actions/other/action.yml" },
+    {
+      repository: "candidate",
+      targetPath: ".github/actions/local/action.yml",
+      origin: {
+        type: "git",
+        owner: "vendor",
+        repo: "shared",
+        sha: "a".repeat(40),
+      } satisfies MetadataOrigin,
+    },
+  ]) {
+    failure(
+      verifyPublicMetadata(
+        reboundReference({
+          original: "$/.github/actions/local",
+          replacement: "./.github/actions/local",
+          target: "action",
+          ...route,
+        }),
+      ),
+      "local metadata path, repository or origin mismatch",
     );
   }
 });
@@ -567,7 +595,7 @@ test("same-repository aliases cannot redirect source-relative action metadata", 
   f.documents.set("candidate:.github/actions/different/action.yml", original);
   failure(
     verifyPublicMetadata({ manifest, reader: f.reader }),
-    "source-relative metadata path mismatch",
+    "local metadata path, repository or origin mismatch",
   );
 });
 test("local metadata and parallel leaves must have explicit complete edges", () => {
@@ -786,6 +814,58 @@ test("classification generation reaches a fixed point and preserves human decisi
   }
   expect(JSON.stringify(second.value)).toBe(JSON.stringify(first.value));
   expect(fixtureDecisions(second.value)).toEqual(decisions);
+});
+
+test("classification generation scopes relative action identity to the caller repository", () => {
+  const f = fixture();
+  const root = f.manifest.nodes.find((node) => node.id === "root");
+  const action = f.manifest.nodes.find((node) => node.id === "action");
+  if (root?.type !== "metadata" || action?.type !== "metadata") {
+    throw new AdmissionError({ message: "source fixture missing" });
+  }
+  const reference = "./.github/actions/local";
+  const workflow = f.reader
+    .read("candidate", root.path)
+    .replace("$/.github/actions/local", () => reference);
+  f.documents.set(`candidate:${root.path}`, workflow);
+  f.documents.set(
+    "other:.github/actions/local/action.yml",
+    f.reader.read("candidate", action.path),
+  );
+  const foreign = {
+    ...action,
+    id: "foreign-action",
+    repository: "other",
+    references: [reference],
+  } satisfies PublicMetadata["nodes"][number];
+  const manifest: PublicMetadata = {
+    ...f.manifest,
+    nodes: [
+      foreign,
+      ...f.manifest.nodes.map((node) =>
+        node.id === "action" ? { ...node, references: [reference] } : node,
+      ),
+    ],
+  };
+  const generated = generateClassification({
+    manifest,
+    decisions: fixtureDecisions(manifest),
+    reader: f.reader,
+    localActionPath: (directory) => `${directory}/action.yml`,
+  });
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  const generatedRoot = generated.value.nodes.find(
+    (node) => node.id === "root",
+  );
+  expect(generatedRoot?.type).toBe("metadata");
+  if (generatedRoot?.type === "metadata") {
+    expect(generatedRoot.edges[reference]).toBe("action");
+  }
+  expect(generated.value.nodes.some((node) => node.id === foreign.id)).toBe(
+    false,
+  );
 });
 
 test("real ci.yml classification is stable across comments, timeouts and step names", () => {

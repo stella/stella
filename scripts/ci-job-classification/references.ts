@@ -47,6 +47,14 @@ export const METADATA_ORIGIN = v.variant("type", [
 export type MetadataOrigin = v.InferOutput<typeof METADATA_ORIGIN>;
 export type MetadataReferenceKind = "reusable-workflow" | "action";
 
+export const metadataReferenceIdentity = (
+  reference: string,
+  repository: string,
+) =>
+  reference.startsWith("./") || reference.startsWith("$/")
+    ? `${repository}:${reference}`
+    : reference;
+
 export const parseRemoteReference = (reference: string) => {
   const revision = reference.lastIndexOf("@");
   const parts = reference.slice(0, revision).split("/");

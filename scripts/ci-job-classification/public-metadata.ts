@@ -10,6 +10,7 @@ import {
 } from "./git-provider";
 import {
   METADATA_ORIGIN,
+  metadataReferenceIdentity,
   parseRemoteReference,
   sameMetadataOrigin,
   verifyRemoteReference,
@@ -100,41 +101,35 @@ const verifyReference = ({
     reject("reusable workflow requires callee job metadata");
   }
   if (target.type === "metadata") {
-    if (
-      kind === "reusable-workflow" &&
-      (reference.startsWith("./") || reference.startsWith("$/")) &&
-      (target.repository !== callerRepository ||
-        !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
-        target.path !== reference.slice(2))
-    ) {
-      reject("local reusable workflow metadata path or repository mismatch");
-    }
-    if (!reference.startsWith("./") && !reference.startsWith("$/")) {
+    const local = reference.startsWith("./") || reference.startsWith("$/");
+    if (!local) {
       verifyRemoteReference({
         reference,
         origin: target.origin,
         path: target.path,
         kind,
       });
-    }
-
-    if (reference.startsWith("$/")) {
-      const local = reference.slice(2);
-      const exactPath = /\.ya?ml$/u.test(local)
-        ? target.path === local
-        : target.path === `${local}/action.yml` ||
-          target.path === `${local}/action.yaml`;
+    } else {
+      const localPath = reference.slice(2);
+      const exactPath =
+        kind === "reusable-workflow"
+          ? target.path === localPath
+          : target.path === `${localPath}/action.yml` ||
+            target.path === `${localPath}/action.yaml`;
       if (
         target.repository !== callerRepository ||
         !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
         !exactPath
       ) {
-        reject("source-relative metadata path mismatch");
+        reject("local metadata path, repository or origin mismatch");
       }
     }
     if (
-      (reference.startsWith("./") || reference.startsWith("$/")) &&
-      !target.references.includes(reference)
+      !target.references.some(
+        (declared) =>
+          metadataReferenceIdentity(declared, target.repository) ===
+          metadataReferenceIdentity(reference, callerRepository),
+      )
     ) {
       reject("callee metadata reference mismatch");
     }

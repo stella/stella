@@ -11,7 +11,7 @@ import {
   verifyPublicMetadata,
 } from "./public-metadata";
 import type { PublicMetadata, MetadataReader } from "./public-metadata";
-import { GIT_ORIGIN } from "./references";
+import { GIT_ORIGIN, metadataReferenceIdentity } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
 const DECISIONS = v.record(
@@ -139,11 +139,20 @@ export const generateClassification = ({
         for (const [reference, kind] of Object.entries(
           parsed.value.dependencies,
         ).toSorted(([left], [right]) => compareCodeUnit(left, right))) {
-          let target = manifest.nodes.find((entry) =>
-            entry.type === "supplier"
-              ? entry.reference === reference
-              : entry.references.includes(reference),
+          const identity = metadataReferenceIdentity(
+            reference,
+            node.repository,
           );
+          let target = manifest.nodes.find((entry) => {
+            if (entry.type === "supplier") {
+              return entry.reference === identity;
+            }
+            return entry.references.some(
+              (declared) =>
+                metadataReferenceIdentity(declared, entry.repository) ===
+                identity,
+            );
+          });
           if (
             reference.startsWith("$/") ||
             (reference.startsWith("./") && !target)
