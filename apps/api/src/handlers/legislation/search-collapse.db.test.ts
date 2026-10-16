@@ -724,7 +724,7 @@ describe("the Postgres search path", () => {
       searchDependencies,
     );
     if (!("items" in result)) {
-      return panic("default historical search was refused");
+      panic("default historical search was refused");
     }
     expect(result.items.map(({ documentId }) => documentId)).toContain(
       String(old1990.id),
@@ -753,7 +753,7 @@ describe("the Postgres search path", () => {
       searchDependencies,
     );
     if (!("items" in current) || !("items" in future)) {
-      return panic("future consolidation search was refused");
+      panic("future consolidation search was refused");
     }
     expect(current.items).toEqual([]);
     expect(future.items).toHaveLength(1);
