@@ -18,7 +18,9 @@ test("cache failures never authorize outbound work and a later request reconnect
       connections++;
       return {
         connect: async () => undefined,
-        send: () => Promise.reject(new Error("offline")),
+        send: async () => {
+          throw new Error("offline");
+        },
         close: () => undefined,
       };
     },
@@ -84,7 +86,7 @@ test("cold requests share their connection and send only after it is ready", asy
         sends++;
         const token = args.at(7);
         expect(typeof token).toBe("string");
-        return `A${token}`;
+        return `A${String(token)}`;
       },
       close: () => undefined,
     }),

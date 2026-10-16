@@ -713,7 +713,7 @@ export const safeOutboundFetchBytes = async ({
   | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
 )): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
   assertThirdPartyOutboundPermit(permit);
-  const durationMs = timeout?.ms ?? timeoutMs;
+  const durationMs = timeout === undefined ? timeoutMs : timeout.ms;
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, {
     signal,

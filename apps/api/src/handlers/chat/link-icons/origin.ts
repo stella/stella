@@ -140,7 +140,7 @@ export const createLinkIconOrigin = ({
         if (!isValidLinkIconImage(bytes, mime)) {
           return noIcon("image");
         }
-        if (now() >= deadline || signal.aborted) {
+        if (now() >= deadline) {
           return noIcon("deadline");
         }
         return {

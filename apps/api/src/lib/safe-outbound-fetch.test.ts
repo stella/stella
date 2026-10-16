@@ -142,7 +142,9 @@ describe("fetchWithResolvedAddress", () => {
       (_request, response) => {
         response.writeHead(200);
         response.write("partial");
-        setTimeout(() => response.end("complete"), 150);
+        setTimeout(() => {
+          response.end("complete");
+        }, 150);
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
