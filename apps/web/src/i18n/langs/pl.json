@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
       "provisionsCited": "Powołane przepisy",
+      "provisionsFailed": "Przetwarzanie cytowań nie powiodło się",
+      "provisionsNoneFound": "Nie znaleziono powołanych przepisów",
+      "provisionsProcessing": "Trwa przetwarzanie cytowań",
+      "provisionsUnavailable": "Cytowania są niedostępne",
+      "provisionsUnplaceable": "Nie można umiejscowić cytowań w tekście orzeczenia",
+      "provisionsUnsupported": "Przetwarzanie cytowań nie jest obsługiwane dla tego orzeczenia",
+      "provisionsWithheld": "Cytowania nie są udostępniane",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
         "publishedOnWeb": "Opublikowano w sieci"

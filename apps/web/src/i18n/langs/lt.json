@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# paminėjimas} few {# paminėjimai} many {# paminėjimo} other {# paminėjimų}}",
       "provisionsCited": "Cituojamos nuostatos",
+      "provisionsFailed": "Citatų apdorojimas nepavyko",
+      "provisionsNoneFound": "Cituojamų nuostatų nerasta",
+      "provisionsProcessing": "Citatos apdorojamos",
+      "provisionsUnavailable": "Citatos neprieinamos",
+      "provisionsUnplaceable": "Citatų negalima susieti su sprendimo tekstu",
+      "provisionsUnsupported": "Šio sprendimo citatų apdorojimas nepalaikomas",
+      "provisionsWithheld": "Citatos neatskleidžiamos",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
         "publishedOnWeb": "Paskelbta internete"

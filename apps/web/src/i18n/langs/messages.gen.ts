@@ -1141,6 +1141,13 @@ type Messages = {
       "provisionMentions": "{count, number}×";
       "provisionMentionsLabel": "{count, plural, one {# mention} other {# mentions}}";
       "provisionsCited": "Provisions cited";
+      "provisionsFailed": "Citation processing failed";
+      "provisionsNoneFound": "No cited provisions found";
+      "provisionsProcessing": "Citations are being processed";
+      "provisionsUnavailable": "Citations are unavailable";
+      "provisionsUnplaceable": "Citations cannot be placed in the decision text";
+      "provisionsUnsupported": "Citation processing is not supported for this decision";
+      "provisionsWithheld": "Citations are withheld";
       "sourceFields": {
         "decisionCategory": "Decision category";
         "publishedOnWeb": "Published on web";

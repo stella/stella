@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
       "provisionsCited": "Viidatud sätted",
+      "provisionsFailed": "Viidete töötlemine ebaõnnestus",
+      "provisionsNoneFound": "Viidatud sätteid ei leitud",
+      "provisionsProcessing": "Viiteid töödeldakse",
+      "provisionsUnavailable": "Viited pole saadaval",
+      "provisionsUnplaceable": "Viiteid ei saa lahendi tekstis paigutada",
+      "provisionsUnsupported": "Selle lahendi viidete töötlemist ei toetata",
+      "provisionsWithheld": "Viiteid ei avaldata",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"

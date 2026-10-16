@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# occurrence} other {# occurrences}}",
       "provisionsCited": "Dispositions citées",
+      "provisionsFailed": "Le traitement des citations a échoué",
+      "provisionsNoneFound": "Aucune disposition citée trouvée",
+      "provisionsProcessing": "Les citations sont en cours de traitement",
+      "provisionsUnavailable": "Les citations ne sont pas disponibles",
+      "provisionsUnplaceable": "Les citations ne peuvent pas être situées dans le texte de la décision",
+      "provisionsUnsupported": "Le traitement des citations n’est pas pris en charge pour cette décision",
+      "provisionsWithheld": "Les citations ne sont pas communiquées",
       "sourceFields": {
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"

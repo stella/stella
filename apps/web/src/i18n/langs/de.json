@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# Erwähnung} other {# Erwähnungen}}",
       "provisionsCited": "Angeführte Vorschriften",
+      "provisionsFailed": "Verarbeitung der Zitate fehlgeschlagen",
+      "provisionsNoneFound": "Keine zitierten Vorschriften gefunden",
+      "provisionsProcessing": "Zitate werden verarbeitet",
+      "provisionsUnavailable": "Zitate sind nicht verfügbar",
+      "provisionsUnplaceable": "Zitate können im Entscheidungstext nicht zugeordnet werden",
+      "provisionsUnsupported": "Die Verarbeitung von Zitaten wird für diese Entscheidung nicht unterstützt",
+      "provisionsWithheld": "Zitate werden nicht bereitgestellt",
       "sourceFields": {
         "decisionCategory": "Entscheidungskategorie",
         "publishedOnWeb": "Im Web veröffentlicht"

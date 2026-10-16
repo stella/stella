@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok}}",
       "provisionsCited": "Dotknuté ustanovenia",
+      "provisionsFailed": "Spracovanie citácií zlyhalo",
+      "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
+      "provisionsProcessing": "Citácie sa spracúvajú",
+      "provisionsUnavailable": "Citácie nie sú dostupné",
+      "provisionsUnplaceable": "Citácie nemožno umiestniť do textu rozhodnutia",
+      "provisionsUnsupported": "Spracovanie citácií nie je pre toto rozhodnutie podporované",
+      "provisionsWithheld": "Citácie nie sú sprístupnené",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
         "publishedOnWeb": "Zverejnené na webe"

@@ -23,6 +23,7 @@ import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
+import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isSearchIndexUnavailable,
@@ -521,10 +522,10 @@ const successStructuredContent = (
     projected,
   );
   if (Result.isError(parsed)) {
-    // Paths only: an issue's `input` is the tool's output, which carries
-    // matter content.
-    const paths = parsed.error.issues.map(
-      (issue) => v.getDotPath(issue) ?? "(root)",
+    // Paths only, ids masked: an issue's `input` is the tool's output, which
+    // carries matter content, and a dynamic key can be an id.
+    const paths = parsed.error.issues.map((issue) =>
+      maskUuids(v.getDotPath(issue) ?? "(root)"),
     );
     return panic(
       "MCP tool output violated its advertised contract",

@@ -1138,6 +1138,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, zero {# pieminējumu} one {# pieminējums} other {# pieminējumi}}",
       "provisionsCited": "Citētās normas",
+      "provisionsFailed": "Citātu apstrāde neizdevās",
+      "provisionsNoneFound": "Citētas normas nav atrastas",
+      "provisionsProcessing": "Citāti tiek apstrādāti",
+      "provisionsUnavailable": "Citāti nav pieejami",
+      "provisionsUnplaceable": "Citātus nevar atrast nolēmuma tekstā",
+      "provisionsUnsupported": "Šī nolēmuma citātu apstrāde netiek atbalstīta",
+      "provisionsWithheld": "Citāti netiek izpausti",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
