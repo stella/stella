@@ -475,7 +475,7 @@ test("main and queue ignore the pilot switch", async () => {
 });
 
 test("the prerequisite census rejects every undecided new job and every deferred dependency", () => {
-  expect(fastJobs(workflow)).toContain("ci-generated-sources");
+  expect(fastJobs(workflow)).toContain("ci-checks-generated");
   expect(
     pilotFastJobs({ jobs: { ...workflow.jobs, future: {} } }),
   ).toMatchObject({

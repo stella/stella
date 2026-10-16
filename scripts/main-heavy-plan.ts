@@ -101,9 +101,7 @@ export const prDepthJobs = (workflow: unknown) => {
   return fastRequired.filter(
     (job) =>
       job !== "ci-checks-docs" &&
-      (job === "ci-generated-sources" ||
-        job.startsWith("ci-checks-") ||
-        job.startsWith("code-quality-")),
+      (job.startsWith("ci-checks-") || job.startsWith("code-quality-")),
   );
 };
 
