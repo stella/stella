@@ -6,6 +6,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { connect, createServer } from "node:net";
 
 const children = new Set<ReturnType<typeof Bun.spawn>>();
+const UNBOUNDED_UPLOAD_ITERATIONS = 200;
+const DECLARED_UPLOAD_BYTES = 100 * 1024 * 1024;
+const SENT_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const getFreePort = async () =>
   await new Promise<number>((resolve, reject) => {
@@ -90,6 +93,47 @@ const listStdioTools = async () => {
     await client.close();
   }
 };
+
+const readEarlyUploadResponse = async (port: string) =>
+  await new Promise<string>((resolve, reject) => {
+    let received = "";
+    let settled = false;
+    const socket = connect(Number(port), "127.0.0.1", () => {
+      socket.write(
+        `POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\ncontent-type: application/json\r\ncontent-length: ${DECLARED_UPLOAD_BYTES}\r\n\r\n`,
+      );
+      // Ten MiB of a declared hundred: past the drain bound, while the upload
+      // remains incomplete. Receiving a response proves the server stopped reading.
+      socket.write(Buffer.alloc(SENT_UPLOAD_BYTES, 120));
+    });
+    const settleFromResponse = () => {
+      const lineEnd = received.indexOf("\r\n");
+      if (lineEnd === -1) {
+        return false;
+      }
+      settled = true;
+      resolve(received.slice(0, lineEnd));
+      socket.destroy();
+      return true;
+    };
+    socket.on("data", (data) => {
+      received += data.toString();
+      settleFromResponse();
+    });
+    socket.on("error", (error) => {
+      if (settled || settleFromResponse()) {
+        return;
+      }
+      reject(error);
+    });
+    socket.on("close", () => {
+      if (!settled && !settleFromResponse()) {
+        reject(
+          new Error("Connection closed before an HTTP status line arrived"),
+        );
+      }
+    });
+  });
 
 afterEach(async () => {
   for (const child of children) {
@@ -262,6 +306,21 @@ describe("shared documentation MCP HTTP server", () => {
     // drops the connection after its linger window, well within this bound.
     await socketClosed;
     expect(performance.now() - answeredAt).toBeLessThan(10_000);
+  });
+
+  test("answers every repeated unbounded upload with a 413 status line first", async () => {
+    const { baseUrl } = await startHttpServer();
+    const { port } = new URL(baseUrl);
+    expect(SENT_UPLOAD_BYTES).toBeLessThan(DECLARED_UPLOAD_BYTES);
+    for (
+      let iteration = 0;
+      iteration < UNBOUNDED_UPLOAD_ITERATIONS;
+      iteration += 1
+    ) {
+      expect(await readEarlyUploadResponse(port)).toBe(
+        "HTTP/1.1 413 Payload Too Large",
+      );
+    }
   });
 
   test("applies the body limit to requests of an established session", async () => {
