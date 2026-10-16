@@ -51,6 +51,19 @@ describe("EU provision citations", () => {
     }
   });
 
+  test("applies the numbering order for each act kind and era", () => {
+    const cases = [
+      ["Article 7 of Directive 95/46/EC", "31995L0046"],
+      ["Article 5 of Regulation (EC) No 1/2003", "32003R0001"],
+      ["Artikel 5 der Verordnung (EHS) Nr. 17/1962", "31962R0017"],
+      ["Article 6 of Regulation (EU) 2016/679", "32016R0679"],
+      ["Article 2 of Directive (EU) 2019/1937", "32019L1937"],
+    ] as const;
+    for (const [printed, celex] of cases) {
+      expect(locateEuProvisionCitations(printed).at(0)?.act.celex).toBe(celex);
+    }
+  });
+
   test("located spans resolve to exactly one CELEX", () => {
     assertProperty(
       "eu-citation-spans-resolve-one-celex",
