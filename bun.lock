@@ -15,6 +15,7 @@
         "@stll/portable-path": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/sha256": "workspace:^",
+        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
@@ -327,7 +328,6 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
-        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
@@ -825,6 +825,7 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
+        "@stll/test-kit": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
