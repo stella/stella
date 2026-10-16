@@ -386,6 +386,14 @@ test("web sources generate once across compiler tasks and restore until source i
       "console.log('CLI runtime generated');",
     );
     write("apps/web/scripts/typegen.ts", "console.log('messages generated');");
+    write(
+      "scripts/prepare-mcp-apps.ts",
+      [
+        "import path from 'node:path';",
+        "const build = Bun.spawnSync([process.execPath, 'run', 'build'], { cwd: path.resolve(import.meta.dir, '../packages/mcp-apps'), stdout: 'inherit', stderr: 'inherit' });",
+        "process.exit(build.exitCode);",
+      ].join("\n"),
+    );
     const bin = path.join(directory, "bin");
     mkdirSync(bin);
     symlinkSync(process.execPath, path.join(bin, "bun"));
