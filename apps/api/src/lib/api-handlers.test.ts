@@ -600,8 +600,10 @@ test("safe handlers group plain errors by declared route across source-line move
     }
     const original = analytics.exceptions();
     expect(original).toHaveLength(2);
-    const firstFingerprint = original.at(0)?.properties.$exception_fingerprint;
-    const secondFingerprint = original.at(1)?.properties.$exception_fingerprint;
+    const firstFingerprint =
+      original.at(0)?.properties["$exception_fingerprint"];
+    const secondFingerprint =
+      original.at(1)?.properties["$exception_fingerprint"];
     expect(firstFingerprint).toContain("/first/:entityId");
     expect(secondFingerprint).toContain("/second/:entityId");
     expect(firstFingerprint).not.toBe(secondFingerprint);
@@ -615,7 +617,7 @@ test("safe handlers group plain errors by declared route across source-line move
     expect(shifted.status).toBe(500);
     const captures = analytics.exceptions();
     expect(captures).toHaveLength(3);
-    expect(captures.at(2)?.properties.$exception_fingerprint).toBe(
+    expect(captures.at(2)?.properties["$exception_fingerprint"]).toBe(
       firstFingerprint,
     );
     expect(captures.at(2)?.properties["error.cause.frame"]).not.toBe(
@@ -667,7 +669,7 @@ test("safe handlers preserve request scope through shared helpers and detached r
     }
     const fingerprints = analytics
       .exceptions()
-      .map(({ properties }) => properties.$exception_fingerprint);
+      .map(({ properties }) => properties["$exception_fingerprint"]);
     expect(fingerprints).toHaveLength(4);
     expect(new Set(fingerprints).size).toBe(4);
     expect(
