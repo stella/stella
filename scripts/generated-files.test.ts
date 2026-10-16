@@ -927,9 +927,7 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       "scripts/check-mcp-generated-tracking.ts",
     ]);
   }
-  const bundle = ciGeneratedStepRun(
-    "MCP app package bundles and shared assets guard",
-  );
+  const bundle = ciGeneratedStepRun("MCP app derived outputs guard");
   // Derived outputs are untracked, so a diff would pass on anything: the
   // guard instead requires every declared output to exist after the build
   // and runs the tracking check.
