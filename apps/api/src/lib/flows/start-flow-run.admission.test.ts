@@ -76,7 +76,7 @@ const selectManualFixtureRows = (projection: Record<string, unknown>) => {
     for: resolveRows,
     limit: resolveRows,
   });
-  return { from: async () => query };
+  return { from: () => query };
 };
 
 // Savepoints share rows and counters, but each transaction level needs its own
