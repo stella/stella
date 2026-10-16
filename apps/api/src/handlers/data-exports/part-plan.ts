@@ -2,7 +2,7 @@
 
 import { panic } from "better-result";
 
-export type PlannedMatter = {
+type PlannedMatter = {
   matterId: string;
   /** Sum of the stored sizes of every document version in the matter. */
   estimatedBytes: number;

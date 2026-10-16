@@ -88,7 +88,7 @@ export type SourceDocumentFile = {
   sha256: string;
 };
 
-export type SourceDocumentVersion = {
+type SourceDocumentVersion = {
   id: string;
   versionNumber: number;
   stamp: string | null;
@@ -108,7 +108,7 @@ export type SourceDocument = Omit<
   versions: readonly SourceDocumentVersion[];
 };
 
-export type SourceFolder = {
+type SourceFolder = {
   id: string;
   parentId: string | null;
   name: string;
@@ -170,7 +170,7 @@ export type ExportSource = {
 };
 
 /** Receives one part's bytes, in order. */
-export type PartSink = {
+type PartSink = {
   write: (chunk: Uint8Array) => Promise<void>;
   /** Commit the part; called once after the last write. */
   close: () => Promise<void>;
@@ -204,7 +204,7 @@ export type ExportProgress = {
  * Compressible files up to this size are read whole and deflated; anything
  * larger, or already compressed, streams through STORED.
  */
-export const DEFLATE_IN_MEMORY_MAX_BYTES = 8 * 1024 * 1024;
+const DEFLATE_IN_MEMORY_MAX_BYTES = 8 * 1024 * 1024;
 
 const MANIFEST_NAME = "manifest.json";
 const README_NAME = "README.txt";
@@ -237,7 +237,7 @@ const versionedFileName = (fileName: string, versionNumber: number): string =>
     SEGMENT_SUFFIX_RESERVE.open,
   );
 
-export const partFileName = ({
+const partFileName = ({
   exportId,
   index,
   count,

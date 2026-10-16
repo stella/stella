@@ -11,6 +11,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { enqueueDataExport } from "@/api/lib/data-export-queue";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -93,5 +94,11 @@ const createDataExport = createSafeRootHandler(
     });
   },
 );
+
+declareAggregateMutation(createDataExport.handler, {
+  type: "independent",
+  reason:
+    "Creates an organization export job and audit event; it changes no matter or domain aggregate rows.",
+});
 
 export default createDataExport;

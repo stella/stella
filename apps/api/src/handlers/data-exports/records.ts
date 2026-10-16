@@ -379,16 +379,17 @@ const csvCell = (value: unknown): string => {
   if (typeof value === "object") {
     return JSON.stringify(value);
   }
-  switch (typeof value) {
-    case "string":
-      return value;
-    case "number":
-    case "boolean":
-    case "bigint":
-      return String(value);
-    default:
-      return panic("Unsupported CSV cell value");
+  if (typeof value === "string") {
+    return value;
   }
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+  return panic("Unsupported CSV cell value");
 };
 
 /**

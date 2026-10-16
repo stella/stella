@@ -78,7 +78,7 @@ import { openS3ObjectStream } from "@/api/lib/s3";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows per query: small enough that each transaction is brief. */
-export const DATA_EXPORT_PAGE_SIZE = 500;
+const DATA_EXPORT_PAGE_SIZE = 500;
 
 const FOLDER_KIND = "folder";
 const TASK_KIND = "task";

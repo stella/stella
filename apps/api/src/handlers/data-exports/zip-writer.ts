@@ -29,7 +29,7 @@ export const ZIP_COMPRESSION = {
 export type ZipCompression =
   (typeof ZIP_COMPRESSION)[keyof typeof ZIP_COMPRESSION];
 
-export type ZipEntrySource =
+type ZipEntrySource =
   | { type: "bytes"; data: Uint8Array; compression: ZipCompression }
   | {
       type: "stream";
@@ -93,10 +93,10 @@ const EXTENDED_TIMESTAMP_SIZE = 9;
 const textEncoder = new TextEncoder();
 
 /** A size or offset no longer fits a 32-bit field; ZIP64 must carry it. */
-export const overflows32 = (value: number): boolean => value >= UINT32_MAX;
+const overflows32 = (value: number): boolean => value >= UINT32_MAX;
 
 /** The entry count no longer fits the 16-bit EOCD field. */
-export const overflows16 = (value: number): boolean => value >= UINT16_MAX;
+const overflows16 = (value: number): boolean => value >= UINT16_MAX;
 
 const writeUint64 = (view: DataView, offset: number, value: number): void => {
   view.setBigUint64(offset, BigInt(value), true);
@@ -134,7 +134,7 @@ const extendedTimestampExtra = (modifiedAt: Date): Uint8Array => {
 };
 
 /** ZIP64 extended information: only the overflowing fields, in spec order. */
-export const zip64Extra = (fields: readonly number[]): Uint8Array => {
+const zip64Extra = (fields: readonly number[]): Uint8Array => {
   if (fields.length === 0) {
     return new Uint8Array(0);
   }

@@ -143,12 +143,12 @@ const ownRun = (ids: RunIds, attempt: number) =>
   );
 
 /** The requester lost the export permission while the run was going. */
-export class DataExportNotAuthorizedError extends TaggedError(
+class DataExportNotAuthorizedError extends TaggedError(
   "DataExportNotAuthorizedError",
 )<{ message: string }> {}
 
 /** One part would exceed the largest object multipart upload can write. */
-export class DataExportPartTooLargeError extends TaggedError(
+class DataExportPartTooLargeError extends TaggedError(
   "DataExportPartTooLargeError",
 )<{ message: string }> {}
 
@@ -606,7 +606,7 @@ type S3DependenciesArgs = RunIds & {
 };
 
 /** Production wiring: membership-scoped paged reads, multipart uploads. */
-export const createS3RunDependencies = ({
+const createS3RunDependencies = ({
   exportId,
   organizationId,
   db,

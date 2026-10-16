@@ -14,6 +14,7 @@ import {
   DATA_EXPORT_MANIFEST_FILE_NAME,
   dataExportPartKey,
 } from "@/api/lib/data-export-queue";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -173,5 +174,11 @@ const downloadDataExport = createSafeRootHandler(
     }
   },
 );
+
+declareAggregateMutation(downloadDataExport.handler, {
+  type: "independent",
+  reason:
+    "Creates a temporary download link and records its audit event; it changes no matter or export source rows.",
+});
 
 export default downloadDataExport;

@@ -18,10 +18,10 @@ export type DataExportVersionScope =
 
 /** Entity kinds the manifest lists as documents: both carry files. Matter
  *  tasks are exported as records; `link` entities are not exported. */
-export const EXPORTED_DOCUMENT_KINDS = ["document", "message"] as const;
+const EXPORTED_DOCUMENT_KINDS = ["document", "message"] as const;
 
 /** Why a stored file could not be put in the archive. */
-export const ABSENT_FILE_REASONS = ["missing", "fetch_failed"] as const;
+const ABSENT_FILE_REASONS = ["missing", "fetch_failed"] as const;
 
 const idSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(255));
 const timestampSchema = v.pipe(
@@ -196,7 +196,7 @@ export const partManifestSchema = v.strictObject({
   problems: v.array(problemSchema),
 });
 
-export const exportManifestSchema = v.strictObject({
+const exportManifestSchema = v.strictObject({
   ...commonFields,
   kind: v.literal("export"),
   completedAt: timestampSchema,
