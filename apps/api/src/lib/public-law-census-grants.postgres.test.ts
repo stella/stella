@@ -43,6 +43,10 @@ describe.skipIf(!enabled)("staged public-law census grants (postgres)", () => {
       try {
         await db.transaction(async (tx) => {
           await tx.execute(sql`CREATE ROLE ${role} NOLOGIN`);
+          // CREATEROLE grants ADMIN without SET on PostgreSQL 16 and later.
+          await tx.execute(
+            sql`GRANT ${role} TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`,
+          );
           await tx.execute(sql`GRANT USAGE ON SCHEMA public TO ${role}`);
           await tx.execute(
             sql`GRANT SELECT (id) ON public.case_law_sources TO ${role}`,

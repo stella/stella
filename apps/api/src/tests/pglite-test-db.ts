@@ -13,6 +13,7 @@ import {
   CENSUS_COLUMN_GRANTS_BY_RELATION,
   DOCTRINE_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -292,14 +293,9 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
   new Set([
     "case_law_decisions.docket_family_key",
-    ...[
-      DOCTRINE_COLUMN_GRANTS_BY_RELATION,
-      CENSUS_COLUMN_GRANTS_BY_RELATION,
-    ].flatMap((grants) =>
-      Object.entries(grants).flatMap(([relation, columns]) =>
-        Object.keys(columns).map((column) => `${relation}.${column}`),
-      ),
-    ),
+    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
   ]);
 
 const grantedPublicLawColumns = (
