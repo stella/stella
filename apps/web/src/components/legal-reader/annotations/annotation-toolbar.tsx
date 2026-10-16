@@ -51,6 +51,7 @@ import type { ReaderAnnotationController } from "@/components/legal-reader/annot
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
+import { formatDecisionQuotation } from "@/features/case-law/citation-format";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
@@ -142,12 +143,16 @@ const copyTextFor = (
     locator: selected.locator,
     target,
   });
+  const quoted =
+    target.type === "decision"
+      ? formatDecisionQuotation(quote, target.country)
+      : `“${quote}”`;
   switch (mode) {
     case "quoteWithCitation": {
-      return `“${quote}” ${citation}.`;
+      return `${quoted} ${citation}.`;
     }
     case "citationWithQuote": {
-      return `${citation} (“${quote}”).`;
+      return `${citation} (${quoted}).`;
     }
     case "blockQuoteWithCitation": {
       return `${quote}\n\n${citation}.`;

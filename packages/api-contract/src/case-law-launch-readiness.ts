@@ -12,6 +12,7 @@ import {
 export const CASE_LAW_BROWSER_COUNTRIES = [
   "CZE",
   "EU",
+  "HUN",
   "POL",
   "SVK",
 ] as const satisfies readonly CaseLawJurisdiction[];
@@ -22,6 +23,7 @@ export type CaseLawBrowserCountry = (typeof CASE_LAW_BROWSER_COUNTRIES)[number];
 export const CASE_LAW_REGION_BY_COUNTRY = {
   CZE: "CZ",
   EU: "EU",
+  HUN: "HU",
   POL: "PL",
   SVK: "SK",
 } as const satisfies Record<CaseLawBrowserCountry, string>;
