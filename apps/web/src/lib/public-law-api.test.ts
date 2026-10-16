@@ -3,9 +3,13 @@ import { describe, expect, test } from "bun:test";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   publicCountryUnavailable,
+  publicCountryUnavailableIn,
+  publicCountryUnavailableSchema,
+  PUBLIC_COUNTRY_CAPABILITIES,
 } from "@stll/api-contract/public-country-capability";
 
 import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawMiss,
   isSearchUnavailableError,
@@ -98,8 +102,87 @@ describe("isSearchUnavailableError", () => {
     }
     expect(error.code).toBe("public_country_unavailable");
     expect(error.message).toBe(
-      "Public law for this country is not available. Choose another country.",
+      "Case law for this country is not available. Choose another country.",
     );
+  });
+
+  test.each([
+    {
+      domain: "caseLaw",
+      other: "legislation",
+      unavailable:
+        "Case law for this country is not available. Choose another country.",
+      search:
+        "Case-law search is not available for this country. You can still read its public decisions.",
+    },
+    {
+      domain: "legislation",
+      other: "caseLaw",
+      unavailable:
+        "Legislation for this country is not available. Choose another country.",
+      search:
+        "Legislation search is not available for this country. You can still read its public legislation.",
+    },
+  ] as const)(
+    "$domain refusal preserves the other admitted domain",
+    ({ domain, other, unavailable, search }) => {
+      for (const reason of publicCountryUnavailableSchema.entries.reason
+        .options) {
+        const capabilities = {
+          ...PUBLIC_COUNTRY_CAPABILITIES,
+          EU:
+            domain === "caseLaw"
+              ? { caseLaw: reason, legislation: "admitted" }
+              : { caseLaw: "admitted", legislation: reason },
+        } as const;
+        expect(
+          publicCountryUnavailableIn({
+            capabilities,
+            domain: other,
+            input: "EU",
+            surface: "search",
+          }),
+        ).toBeNull();
+        const refusal = publicCountryUnavailableIn({
+          capabilities,
+          domain,
+          input: "EU",
+          surface: "search",
+        });
+        expect(refusal).toMatchObject({ domain, reason });
+        const error = thrownBy(PUBLIC_COUNTRY_UNAVAILABLE_STATUS, refusal);
+        expect(APIError.is(error)).toBe(true);
+        if (!APIError.is(error)) {
+          throw new TypeError("Expected APIError");
+        }
+        expect(error.details).toMatchObject({ domain, reason, country: "EU" });
+        expect(error.message).toBe(
+          reason === "pages_public" ? search : unavailable,
+        );
+      }
+    },
+  );
+
+  test("a refusal without its domain is an invalid response", () => {
+    expect(() =>
+      unwrapPublicLawEden(
+        {
+          data: null,
+          error: {
+            status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+            value: {
+              code: "public_country_unavailable",
+              status: "unavailable",
+              country: "EU",
+              reason: "pending_public",
+              message: "Unavailable",
+              hint: "Choose another country.",
+            },
+          },
+        },
+        "searchPublicCaseLawDecisions",
+      ),
+    ).toThrow(ClientOperationError);
   });
 
   test("recognizes the engine outage the search endpoint reports", () => {

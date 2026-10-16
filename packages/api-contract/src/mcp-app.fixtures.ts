@@ -104,6 +104,7 @@ export const APP_RESOLVE_STATUS_FIXTURES = [
 
 export const APP_UNAVAILABLE_FIXTURE = {
   code: "public_country_unavailable" as const,
+  domain: "caseLaw" as const,
   status: "unavailable" as const,
   country: "CZE" as const,
   reason: "pending_public" as const,

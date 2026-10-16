@@ -159,6 +159,7 @@ describe("public case-law routes", () => {
         country: "SVK",
         reason: "pending_public",
         code: "public_country_unavailable",
+        domain: "caseLaw",
       });
     }
   });

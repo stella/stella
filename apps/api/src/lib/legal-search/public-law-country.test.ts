@@ -40,6 +40,7 @@ const pendingCountry = PUBLIC_COUNTRIES.find(
 // lifecycle is proven even once every advertised country is admitted.
 const constructedRefusal: PublicCountryUnavailable = {
   code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  domain: "caseLaw",
   status: "unavailable",
   country: PUBLIC_COUNTRIES.at(0) ?? panic("No advertised public country"),
   reason: "withdrawn",

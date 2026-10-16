@@ -43,7 +43,13 @@ export const PUBLIC_COUNTRY_SURFACE_OPEN = {
 >;
 
 // parser-output-unchanged: per-domain publication capabilities only gate public reads; ingestion identities and parsed document output remain unchanged.
-export type PublicLawDomain = "caseLaw" | "legislation";
+export const PUBLIC_LAW_DOMAIN = {
+  caseLaw: "caseLaw",
+  legislation: "legislation",
+} as const;
+export const PUBLIC_LAW_DOMAINS = Object.values(PUBLIC_LAW_DOMAIN);
+export type PublicLawDomain =
+  (typeof PUBLIC_LAW_DOMAIN)[keyof typeof PUBLIC_LAW_DOMAIN];
 
 /** Public admission, independent of whether ingestion holds rows for a country. */
 export const PUBLIC_COUNTRY_CAPABILITIES = {
@@ -105,9 +111,11 @@ export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
  */
 export const PUBLIC_COUNTRY_UNAVAILABLE_STATUS = 404;
 
+// parser-output-unchanged: refusal domains and copy affect API answers, not ingestion parsing.
 export const publicCountryUnavailableSchema = v.strictObject({
   code: v.literal(PUBLIC_COUNTRY_UNAVAILABLE_CODE),
   status: v.literal("unavailable"),
+  domain: v.picklist(PUBLIC_LAW_DOMAINS),
   country: v.picklist(PUBLIC_COUNTRIES),
   reason: v.picklist(["pages_public", "pending_public", "withdrawn"]),
   message: v.string(),
@@ -126,11 +134,24 @@ type ClosedCapability = Exclude<PublicCountryCapability, "admitted">;
  * that public law is unavailable.
  */
 const PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE = {
-  pages_public:
-    "Public-law search is not available for this country; its public pages are.",
-  pending_public: "Public law for this country is not available.",
-  withdrawn: "Public law for this country is not available.",
-} as const satisfies Record<ClosedCapability, string>;
+  caseLaw: {
+    pages_public:
+      "Case-law search is not available for this country; its decision pages are.",
+    pending_public: "Case law for this country is not available.",
+    withdrawn: "Case law for this country is not available.",
+  },
+  legislation: {
+    pages_public:
+      "Legislation search is not available for this country; its legislation pages are.",
+    pending_public: "Legislation for this country is not available.",
+    withdrawn: "Legislation for this country is not available.",
+  },
+} as const satisfies Record<PublicLawDomain, Record<ClosedCapability, string>>;
+
+const PUBLIC_COUNTRY_UNAVAILABLE_HINT = {
+  caseLaw: "Choose a country with available case law:",
+  legislation: "Choose a country with available legislation:",
+} as const satisfies Record<PublicLawDomain, string>;
 
 /**
  * Why a capability is closed on a surface, or null when it is open. The table
@@ -196,10 +217,11 @@ export const publicCountryUnavailableIn = ({
   return {
     code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
     status: "unavailable",
+    domain,
     country,
     reason,
-    message: PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE[reason],
-    hint: `Choose an available country: ${available.join(", ")}.`,
+    message: PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE[domain][reason],
+    hint: `${PUBLIC_COUNTRY_UNAVAILABLE_HINT[domain]} ${available.join(", ")}.`,
   };
 };
 

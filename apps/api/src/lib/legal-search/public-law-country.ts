@@ -26,6 +26,7 @@ import {
 } from "@stll/agent-input";
 import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  PUBLIC_LAW_DOMAIN,
   PUBLIC_COUNTRY_CAPABILITIES,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
@@ -43,6 +44,7 @@ export const tPublicCountryUnavailable = t.Object(
   {
     code: t.Literal(unavailableFields.code.literal),
     status: t.Literal(unavailableFields.status.literal),
+    domain: t.Enum(PUBLIC_LAW_DOMAIN),
     country: t.Enum(
       Object.fromEntries(
         unavailableFields.country.options.map(

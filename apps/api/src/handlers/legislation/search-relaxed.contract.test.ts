@@ -895,6 +895,7 @@ describe.skipIf(!runEngineTests)(
         code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+          domain: "legislation",
           country: "SVK",
           reason: "pending_public",
         },

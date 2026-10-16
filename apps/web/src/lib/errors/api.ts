@@ -22,7 +22,12 @@ import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
-import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  publicCountryUnavailableSchema,
+  type PublicCountryUnavailable,
+  type PublicLawDomain,
+} from "@stll/api-contract/public-country-capability";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -106,6 +111,16 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     value: parseApiErrorValue(value),
   });
   const { code, details, rawMessage } = normalized;
+  const countryRefusal =
+    code === PUBLIC_COUNTRY_UNAVAILABLE_CODE
+      ? v.safeParse(publicCountryUnavailableSchema, value)
+      : undefined;
+  if (countryRefusal !== undefined && !countryRefusal.success) {
+    throw new ClientOperationError({
+      action: "parse-public-country-unavailable",
+      message: "Invalid public country unavailability response",
+    });
+  }
   const diagnosticValue = details?.["providerDiagnostic"];
   const diagnostic =
     diagnosticValue === undefined
@@ -123,9 +138,31 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
     ...(details === undefined ? {} : { details }),
     ...(rawMessage === undefined ? {} : { rawMessage }),
     status: normalized.status,
-    message: localizeAPIError({ code, details, status: normalized.status }),
+    message: countryRefusal?.success
+      ? translateError(
+          PUBLIC_COUNTRY_ERROR_KEYS[countryRefusal.output.domain][
+            countryRefusal.output.reason
+          ],
+        )
+      : localizeAPIError({ code, details, status: normalized.status }),
   });
 };
+
+const PUBLIC_COUNTRY_ERROR_KEYS = {
+  caseLaw: {
+    pending_public: "errors.api.caseLawCountryUnavailable",
+    withdrawn: "errors.api.caseLawCountryUnavailable",
+    pages_public: "errors.api.caseLawSearchUnavailable",
+  },
+  legislation: {
+    pending_public: "errors.api.legislationCountryUnavailable",
+    withdrawn: "errors.api.legislationCountryUnavailable",
+    pages_public: "errors.api.legislationSearchUnavailable",
+  },
+} as const satisfies Record<
+  PublicLawDomain,
+  Record<PublicCountryUnavailable["reason"], TranslationKey>
+>;
 
 const RAW_INTERNAL_TOOL_ERROR_CODE = {
   legalSourceStructuralRepairRequired:
@@ -149,7 +186,6 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityExceeded",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
-  [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",

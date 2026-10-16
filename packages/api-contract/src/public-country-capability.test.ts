@@ -18,6 +18,7 @@ import {
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
+  PUBLIC_LAW_DOMAINS,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
@@ -48,6 +49,7 @@ describe("public country availability contract", () => {
           v.parse(publicCountryUnavailableSchema, unavailable),
         ).toMatchObject({
           status: "unavailable",
+          domain: "caseLaw",
           country,
           reason: PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw,
         });
@@ -70,7 +72,7 @@ describe("public country availability contract", () => {
             ...PUBLIC_COUNTRY_CAPABILITIES,
             [country]: { caseLaw, legislation },
           };
-          for (const domain of ["caseLaw", "legislation"] as const) {
+          for (const domain of PUBLIC_LAW_DOMAINS) {
             for (const surface of ["pages", "search"] as const) {
               const expected = capabilities[country][domain];
               const response = publicCountryUnavailableIn({
@@ -82,13 +84,48 @@ describe("public country availability contract", () => {
               if (PUBLIC_COUNTRY_SURFACE_OPEN[surface][expected]) {
                 expect(response).toBeNull();
               } else {
-                expect(response).toMatchObject({ country, reason: expected });
+                expect(response).toMatchObject({
+                  country,
+                  domain,
+                  reason: expected,
+                });
+                expect(
+                  v.parse(publicCountryUnavailableSchema, response),
+                ).toEqual(response);
               }
             }
           }
         }
       }
     }
+  });
+
+  test("an admitted case-law domain does not make a legislation refusal describe case law", () => {
+    const capabilities = {
+      ...PUBLIC_COUNTRY_CAPABILITIES,
+      EU: { caseLaw: "admitted", legislation: "pending_public" },
+    } as const;
+    expect(
+      publicCountryUnavailableIn({
+        capabilities,
+        domain: "caseLaw",
+        input: "EU",
+        surface: "search",
+      }),
+    ).toBeNull();
+    expect(
+      publicCountryUnavailableIn({
+        capabilities,
+        domain: "legislation",
+        input: "EU",
+        surface: "search",
+      }),
+    ).toMatchObject({
+      domain: "legislation",
+      country: "EU",
+      message: "Legislation for this country is not available.",
+      hint: "Choose a country with available legislation: CZE.",
+    });
   });
 
   test("public-country-capability.canonical-spelling", () => {
@@ -189,11 +226,12 @@ describe("public country availability contract", () => {
     });
     expect(v.parse(publicCountryUnavailableSchema, refusal)).toMatchObject({
       status: "unavailable",
+      domain: "caseLaw",
       country: "SVK",
       reason: "pages_public",
     });
     expect(refusal?.message).toBe(
-      "Public-law search is not available for this country; its public pages are.",
+      "Case-law search is not available for this country; its decision pages are.",
     );
     expect(refusal?.hint).toContain("CZE");
     expect(refusal?.hint).not.toContain("SVK");
@@ -209,7 +247,7 @@ describe("public country availability contract", () => {
       }),
     ).toMatchObject({
       reason: "pending_public",
-      message: "Public law for this country is not available.",
+      message: "Case law for this country is not available.",
     });
   });
 });
