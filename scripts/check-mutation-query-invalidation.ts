@@ -661,13 +661,21 @@ const mutationContractError = ({
     .getText()
     .replace(/\s+/gu, " ")
     .trim();
+  const unresolved = entry.unresolved.filter(
+    ({ reason, file, expression }) =>
+      !(
+        reason === "dynamic-options-spread" &&
+        file === CONTRACT_MODULE &&
+        expression === "options"
+      ),
+  );
   const unresolvedIsOnlyHelperReturn =
-    entry.unresolved.length === 1 &&
-    entry.unresolved[0]?.reason === "dynamic-operation-function" &&
+    unresolved.length === 1 &&
+    unresolved[0]?.reason === "dynamic-operation-function" &&
     [normalizedHelperCall, normalizedMutationFn].includes(
-      entry.unresolved[0].expression.replace(/\s+/gu, " ").trim(),
+      unresolved[0].expression.replace(/\s+/gu, " ").trim(),
     );
-  if (entry.unresolved.length > 0 && !unresolvedIsOnlyHelperReturn) {
+  if (unresolved.length > 0 && !unresolvedIsOnlyHelperReturn) {
     return "resourceMutation write analysis has unresolved operations.";
   }
   const observedWrites = entry.writes
@@ -736,13 +744,29 @@ const hasBindingPropertyMutation = (module: ModuleIndex, binding: Binding) => {
   };
   let mutated = false;
   const visit = (node: ts.Node) => {
+    const assignedExpression = ts.isBinaryExpression(node)
+      ? node.left
+      : undefined;
     if (
       ts.isBinaryExpression(node) &&
       node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-      (ts.isPropertyAccessExpression(node.left) ||
-        ts.isElementAccessExpression(node.left)) &&
-      refersToAlias(node.left.expression, node.left)
+      assignedExpression !== undefined &&
+      ((ts.isIdentifier(assignedExpression) &&
+        refersToAlias(assignedExpression, assignedExpression)) ||
+        ((ts.isPropertyAccessExpression(assignedExpression) ||
+          ts.isElementAccessExpression(assignedExpression)) &&
+          refersToAlias(assignedExpression.expression, assignedExpression)))
+    ) {
+      mutated = true;
+      return;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
+        node.operator,
+      ) &&
+      refersToAlias(node.operand, node)
     ) {
       mutated = true;
       return;
@@ -1414,10 +1438,12 @@ const forwardsReaderOptions = ({
 }: ForwardedReaderOptionsArgs): boolean => {
   const value = unwrap(expression);
   if (ts.isIdentifier(value)) {
+    const parameterBinding = localBinding(module, value.text, reference);
     if (
       ts.isIdentifier(parameter.name) &&
       value.text === parameter.name.text &&
-      localBinding(module, value.text, reference)?.scope === parameter.parent
+      parameterBinding?.scope === parameter.parent &&
+      !hasBindingPropertyMutation(module, parameterBinding)
     ) {
       return true;
     }
@@ -1530,8 +1556,8 @@ const wrapperForwardsReaderOptions = ({
           modules,
           seen: new Set(seen).add(key),
         });
-        if (nestedForwards) {
-          readerForwards.push(
+        readerForwards.push(
+          nestedForwards &&
             forwardsReaderOptions({
               module,
               expression: argument,
@@ -1539,9 +1565,8 @@ const wrapperForwardsReaderOptions = ({
               parameter,
               seen: new Set(),
             }),
-          );
-          return;
-        }
+        );
+        return;
       }
     }
     ts.forEachChild(node, visit);

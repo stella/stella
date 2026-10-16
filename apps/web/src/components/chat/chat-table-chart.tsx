@@ -8,6 +8,7 @@ import { defaultComponents } from "streamdown";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import {
   isTableChartPlanUsable,
   TABLE_CHART_KINDS,
@@ -30,6 +31,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
   node?: Element | undefined;
@@ -98,13 +100,21 @@ const ChartableTable = ({
       const hash = await sha256Hex(JSON.stringify(table));
       // The loader is bound to the complete source whose digest owns the cache entry.
       const loadPlan = async () => await requestPlan(table);
-      return await queryClient.query({
-        queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
-        queryFn: loadPlan,
-        staleTime: Infinity,
-        gcTime: Infinity,
-        retry: false,
-      });
+      return await queryClient.query(
+        resourceQueryOptions(
+          {
+            queryKey: ["table-chart", cacheScope[0], cacheScope[1], hash],
+            queryFn: loadPlan,
+            staleTime: Infinity,
+            gcTime: Infinity,
+            retry: false,
+          },
+          {
+            resources: [RESOURCE_TYPE.CHAT_MESSAGE],
+            scope: { type: "organization" },
+          },
+        ),
+      );
     });
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);

@@ -84,6 +84,29 @@ export const resourceQueryOptions = <
 });
 
 export const RESOURCE_MUTATION_CONTRACTS = {
+  createInvoice: {
+    writes: [
+      { method: "PUT", route: "/invoices/:workspaceId" },
+      {
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/transition",
+      },
+    ],
+    resources: [
+      RESOURCE_TYPE.INVOICE,
+      RESOURCE_TYPE.TIME_ENTRY,
+      RESOURCE_TYPE.EXPENSE,
+    ],
+  },
+  transitionInvoice: {
+    writes: [
+      {
+        method: "POST",
+        route: "/invoices/:workspaceId/:invoiceId/transition",
+      },
+    ],
+    resources: [RESOURCE_TYPE.INVOICE],
+  },
   renameEntity: {
     writes: [{ method: "PATCH", route: "/entities/:workspaceId/rename" }],
     resources: [RESOURCE_TYPE.ENTITY],

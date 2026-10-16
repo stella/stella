@@ -269,6 +269,68 @@ export const wrappedRead = () => useWrappedQuery(tagged);
   ]);
 });
 
+test("query wrappers lose coverage when their options parameter or aliases are mutated", () => {
+  const fixture = (mutation: string) => [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const useWrappedQuery = (options: unknown) => {
+  const alias = options;
+  ${mutation}
+  return useQuery(options);
+};
+const tagged = resourceQueryOptions(
+  { queryKey: ["tagged"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const wrappedRead = () => useWrappedQuery(tagged);
+`,
+    },
+  ];
+  for (const mutation of [
+    'options = { queryKey: ["other"], queryFn: async () => [] };',
+    "options.meta = {};",
+    "alias.meta.resourceReads = undefined;",
+  ]) {
+    const findings = violations(fixture(mutation)).map(({ id }) => id);
+    expect(findings).toContain(
+      "apps/web/src/features.ts:wrappedRead:useWrappedQuery:reader",
+    );
+  }
+});
+
+test("query wrappers require every nested wrapper to forward tagged options", () => {
+  const sources = [
+    ...validSources.slice(0, 2),
+    {
+      file: "apps/web/src/features.ts",
+      text: `
+import { useQuery } from "@tanstack/react-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+const useForwardingQuery = (options: unknown) => useQuery(options);
+const useIgnoringQuery = (_options: unknown) => useQuery({ queryKey: ["plain"], queryFn: async () => [] });
+const useBothQueries = (options: unknown) => {
+  useForwardingQuery(options);
+  return useIgnoringQuery(options);
+};
+const tagged = resourceQueryOptions(
+  { queryKey: ["tagged"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+);
+export const wrappedRead = () => useBothQueries(tagged);
+`,
+    },
+  ];
+  expect(violations(sources).map(({ id }) => id)).toContain(
+    "apps/web/src/features.ts:wrappedRead:useBothQueries:reader",
+  );
+});
+
 test("invalid resource reader metadata cannot be seeded into the baseline", () => {
   const wrongFixture = [
     ...validSources.slice(0, 2),
