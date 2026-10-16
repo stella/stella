@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   FLOW_TASK_FEATURE_ACCESS,
   readEntityTransferEligibility,
@@ -53,5 +54,11 @@ const readTransferEligibility = createSafeHandler(
     });
   },
 );
+
+declareAggregateMutation(readTransferEligibility.handler, {
+  type: "independent",
+  reason:
+    "Reads entity transfer eligibility without changing entity, flow, or admission rows; submitted transfers revalidate current admission.",
+});
 
 export default readTransferEligibility;
