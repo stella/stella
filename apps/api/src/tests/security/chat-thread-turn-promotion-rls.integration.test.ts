@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -56,7 +57,9 @@ const seedTurnBackedThread = async ({
   });
   await testDb.insert(chatMessages).values([
     {
-      content: { data: [{ text: "Draft", type: "text" }], version: 1 },
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Draft", type: "text" }],
+      }),
       id: userMessageId,
       role: "user",
       threadId,
@@ -64,10 +67,9 @@ const seedTurnBackedThread = async ({
       workspaceId,
     },
     {
-      content: {
-        data: [{ text: "Which jurisdiction?", type: "text" }],
-        version: 1,
-      },
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Which jurisdiction?", type: "text" }],
+      }),
       id: assistantMessageId,
       role: "assistant",
       threadId,

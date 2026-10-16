@@ -31,7 +31,7 @@ import { decisionCitationPresentationsById } from "@/components/references/decis
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import {
@@ -297,7 +297,9 @@ export const ChatAnswerDecisionProvider = ({
         break;
       case "route": {
         const key = createCaseLawDecisionPath(target.params);
-        const country = publicCaseLawCountryFromParam(target.params.country);
+        const country = publicCaseLawPageCountryFromParam(
+          target.params.country,
+        );
         if (!routes.has(key) && country !== null) {
           requests.push({
             key,
@@ -413,7 +415,7 @@ export const ChatRouteDecisionCitation = ({
   params,
   ...props
 }: ChatRouteDecisionCitationProps): ReactNode => {
-  const country = publicCaseLawCountryFromParam(params.country);
+  const country = publicCaseLawPageCountryFromParam(params.country);
   if (!props.interactive || country === null) {
     return props.renderPassage !== false && props.passage;
   }

@@ -567,7 +567,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
-  const unavailable = publicCountryUnavailable(country);
+  const unavailable = publicCountryUnavailable(country, "search");
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -699,6 +699,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       ...(asOf === undefined ? {} : { asOf }),
     },
     legislationPublicReadDb,
+    "search",
   );
   if (resolved.type !== "expression") {
     return statuteResolutionError(resolved, {
@@ -711,7 +712,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
   const document = await (
     context.testDependencies?.readPublicLegislationHandler ??
     defaultReadPublicLegislationHandler
-  )(resolved.id, legislationPublicReadDb);
+  )(resolved.id, legislationPublicReadDb, "search");
   if (!isStatuteDocument(document)) {
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
@@ -729,6 +730,7 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       ),
     },
     legislationDb: legislationPublicReadDb,
+    surface: "search",
   });
   if (!isStatuteVersionsPage(versionsPage)) {
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
@@ -1068,6 +1070,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
           ...(request.as_of === undefined ? {} : { asOf: request.as_of }),
         },
         legislationPublicReadDb,
+        "search",
       );
     },
   });
@@ -1091,7 +1094,11 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
       : await (
           context.testDependencies?.readLegislationProvisionVersions ??
           defaultReadLegislationProvisionVersions
-        )({ documentIds, legislationDb: legislationPublicReadDb });
+        )({
+          documentIds,
+          legislationDb: legislationPublicReadDb,
+          surface: "search",
+        });
   const versionsByDocumentId = new Map(
     versions.map((version) => [String(version.id), version]),
   );
@@ -1125,6 +1132,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
         [
           String(version.id),
           await readBlocks({
+            surface: "search",
             row: version,
             legislationDb: legislationPublicReadDb,
             step: PROVISION_READ_STEP,
@@ -1211,6 +1219,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   )(
     { eli, ...(language === undefined ? {} : { language }) },
     legislationPublicReadDb,
+    "search",
   );
   if (resolved.type !== "expression") {
     return statuteResolutionError(resolved, {
@@ -1228,6 +1237,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     anchor,
     query: { limit, ...(cursor === undefined ? {} : { cursor }) },
     legislationDb: legislationPublicReadDb,
+    surface: "search",
   });
   if (!isProvisionHistoryPage(page)) {
     const failure = handlerStatusOf(page);

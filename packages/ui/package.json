@@ -118,6 +118,7 @@
     "./stella-mark": "./src/components/stella-mark.tsx",
     "./stella-wordmark": "./src/components/stella-wordmark.tsx",
     "./table": "./src/components/table.tsx",
+    "./table-chart": "./src/components/table-chart.tsx",
     "./tabs": "./src/components/tabs.tsx",
     "./textarea": "./src/components/textarea.tsx",
     "./toast": "./src/components/toast.tsx",

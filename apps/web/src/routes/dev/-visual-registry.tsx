@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "table-chart": {
+    load: async () => {
+      const { TableChartPlayground } =
+        await import("./-components/table-chart-playground");
+      return { default: TableChartPlayground };
+    },
+  },
   "oauth-consent": {
     load: async () => {
       const { OAuthConsentPlayground } =
@@ -45,6 +52,13 @@ const visualLoaders = {
       const { ChatCitationsPlayground } =
         await import("./-components/chat-citations-playground");
       return { default: ChatCitationsPlayground };
+    },
+  },
+  "reader-answers": {
+    load: async () => {
+      const { ReaderAnswersPlayground } =
+        await import("./-components/reader-answers-playground");
+      return { default: ReaderAnswersPlayground };
     },
   },
   "chat-history-decision": {

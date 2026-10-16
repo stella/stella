@@ -29,6 +29,7 @@ import {
 import type { ChatProjectionSchema } from "./projection-fields";
 
 export {
+  contentText,
   passthroughId,
   publicUrl,
   projectionBranch,
@@ -164,6 +165,7 @@ const annotationSchema = v.variant("role", [
   }),
   v.strictObject({ role: v.literal("passthroughId") }),
   v.strictObject({ role: v.literal("publicUrl") }),
+  v.strictObject({ role: v.literal("contentText") }),
   v.strictObject({ role: v.literal("strip") }),
   v.strictObject({ role: v.literal("json") }),
 ]);
@@ -468,7 +470,8 @@ const buildMediationLists = (
         stripPaths.add(path);
         return;
       }
-      case "json": {
+      case "json":
+      case "contentText": {
         return;
       }
       default: {
@@ -596,6 +599,11 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const UUID_ANYWHERE_REGEX =
   /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu;
+const UUID_GLOBAL_REGEX =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
+
+/** Replaces each UUID-shaped substring of a `contentText` leaf. */
+export const MASKED_CONTENT_ID = "[id]";
 
 const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
@@ -950,6 +958,13 @@ const projectField = ({
         // A publisher-owned URL: forwarded verbatim, its embedded id (if any)
         // never a Stella tenant id.
         return value;
+      }
+      case "contentText": {
+        // Document or record text: a UUID inside it is content, not a handle,
+        // so it is masked in place and the rest of the text is kept.
+        return typeof value === "string"
+          ? value.replace(UUID_GLOBAL_REGEX, () => MASKED_CONTENT_ID)
+          : value;
       }
       case "json": {
         const segment = Array.isArray(value) ? `${key}[]` : key;
