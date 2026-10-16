@@ -4,6 +4,8 @@ import type { ReactNode, RefObject } from "react";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
@@ -36,11 +38,14 @@ import {
   askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
-  readerTargetCitation,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import {
+  copyTextFor,
+  readerTargetCitation,
+} from "@/components/legal-reader/annotations/reader-copy-text.logic";
 import {
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
@@ -51,7 +56,6 @@ import type { ReaderAnnotationController } from "@/components/legal-reader/annot
 import { SelectionToolbar } from "@/components/selection-toolbar";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
-import { formatDecisionQuotation } from "@/features/case-law/citation-format";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
@@ -124,52 +128,6 @@ const cleanSelectionText = (range: Range): string => {
   return holder.textContent.replaceAll(/\s+/gu, " ").trim();
 };
 
-const COPY_MODES = [
-  "quoteWithCitation",
-  "citationWithQuote",
-  "blockQuoteWithCitation",
-  "textOnly",
-  "citationOnly",
-] as const;
-type CopyMode = (typeof COPY_MODES)[number];
-
-const copyTextFor = (
-  mode: CopyMode,
-  selected: Pick<Selected, "cleanText" | "locator">,
-  target: ReaderAnnotationTarget,
-): string => {
-  const quote = selected.cleanText;
-  const citation = readerTargetCitation({
-    locator: selected.locator,
-    target,
-  });
-  const quoted =
-    target.type === "decision"
-      ? formatDecisionQuotation(quote, target.country)
-      : `“${quote}”`;
-  switch (mode) {
-    case "quoteWithCitation": {
-      return `${quoted} ${citation}.`;
-    }
-    case "citationWithQuote": {
-      return `${citation} (${quoted}).`;
-    }
-    case "blockQuoteWithCitation": {
-      return `${quote}\n\n${citation}.`;
-    }
-    case "textOnly": {
-      return quote;
-    }
-    case "citationOnly": {
-      return `${citation}.`;
-    }
-    default: {
-      mode satisfies never;
-      return panic(`Unhandled mode: ${String(mode)}`);
-    }
-  }
-};
-
 const STYLE_ICONS = {
   highlight: HighlighterIcon,
   underline: UnderlineIcon,
@@ -212,7 +170,9 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const [copyPreviewMode, setCopyPreviewMode] = useState<CopyMode | null>(null);
+  const [copyPreviewMode, setCopyPreviewMode] = useState<ReaderCopyMode | null>(
+    null,
+  );
   // The dropdown is hand-rolled (a portal menu would collapse the text
   // selection), so it does its own collision handling: open upward when
   // the space below the trigger cannot fit the menu.
@@ -526,7 +486,7 @@ export const AnnotationToolbar = ({
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
       prompt: t("legalReader.annotations.askPassagePrompt", {
-        citation: readerTargetCitation({ locator, target }),
+        citation: readerTargetCitation({ locator, target }).inline,
         quote,
       }),
       quote,
@@ -760,9 +720,9 @@ export const AnnotationToolbar = ({
                   <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
                     {copyPreviewMode !== null && (
                       <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
-                        {copyTextFor(
-                          copyPreviewMode,
-                          {
+                        {copyTextFor({
+                          mode: copyPreviewMode,
+                          selected: {
                             cleanText:
                               selected.cleanText.length > 220
                                 ? `${selected.cleanText.slice(0, 220)}…`
@@ -770,18 +730,22 @@ export const AnnotationToolbar = ({
                             locator: selected.locator,
                           },
                           target,
-                        )}
+                        })}
                       </p>
                     )}
                   </PreviewPane>
                 }
               >
-                {COPY_MODES.map((copyMode) => (
+                {READER_COPY_MODES.map((copyMode) => (
                   <button
                     className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
                     key={copyMode}
                     onClick={() => {
-                      const text = copyTextFor(copyMode, selected, target);
+                      const text = copyTextFor({
+                        mode: copyMode,
+                        selected,
+                        target,
+                      });
                       detached(
                         (async () => {
                           const copied = await copyToClipboard(text);

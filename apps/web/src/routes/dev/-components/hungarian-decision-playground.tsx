@@ -9,6 +9,33 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { WebDecisionReader } from "@/components/legal-reader/web-decision-reader";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 
+export const HungarianDecisionPlayground = () => (
+  <section
+    className="mx-auto w-full max-w-3xl p-4"
+    data-playground-section="hungarian-decision"
+    lang="hu"
+    dir="ltr"
+  >
+    <h1 className="mb-8 text-xl font-medium">
+      <bdi>
+        {formatDecisionCitation({
+          ...HUNGARIAN_DECISION_FIXTURE,
+          decisionDate: ast.metadata.decisionDate,
+          decisionType: ast.metadata.decisionType,
+          ecli: null,
+          name: null,
+          pincite: null,
+        })}
+      </bdi>
+    </h1>
+    <WebDecisionReader
+      decision={HUNGARIAN_DECISION_FIXTURE}
+      decisionId={HUNGARIAN_DECISION_FIXTURE.id}
+      surface="development"
+    />
+  </section>
+);
+
 const absent = {
   reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
   type: TEXT_FIELD_TYPE.ABSENT,
@@ -70,30 +97,3 @@ const HUNGARIAN_DECISION_FIXTURE = {
     summary: absent,
   },
 } satisfies ReaderDecision;
-
-export const HungarianDecisionPlayground = () => (
-  <section
-    className="mx-auto w-full max-w-3xl p-4"
-    data-playground-section="hungarian-decision"
-    lang="hu"
-    dir="ltr"
-  >
-    <h1 className="mb-8 text-xl font-medium">
-      <bdi>
-        {formatDecisionCitation({
-          ...HUNGARIAN_DECISION_FIXTURE,
-          decisionDate: ast.metadata.decisionDate,
-          decisionType: ast.metadata.decisionType,
-          ecli: null,
-          name: null,
-          pincite: null,
-        })}
-      </bdi>
-    </h1>
-    <WebDecisionReader
-      decision={HUNGARIAN_DECISION_FIXTURE}
-      decisionId={HUNGARIAN_DECISION_FIXTURE.id}
-      surface="development"
-    />
-  </section>
-);
