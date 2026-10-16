@@ -27,6 +27,11 @@ const legalResolveDecisionTextSchema = v.variant("status", [
   v.strictObject({ status: v.literal("unavailable") }),
 ]);
 
+const legalResolveDecisionAlternateSchema = v.strictObject({
+  decisionId: v.string(),
+  language: v.string(),
+});
+
 const legalResolveDocumentSchema = v.variant("kind", [
   v.strictObject({
     kind: v.literal("decision"),
@@ -37,6 +42,8 @@ const legalResolveDocumentSchema = v.variant("kind", [
     ecli: v.nullable(v.string()),
     court: v.string(),
     decisionDate: v.nullable(v.string()),
+    language: v.string(),
+    languageAlternates: v.array(legalResolveDecisionAlternateSchema),
     readerUrl: v.string(),
     text: legalResolveDecisionTextSchema,
   }),

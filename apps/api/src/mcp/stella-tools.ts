@@ -3418,7 +3418,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       // interest counts as demand.
       caller: "attributed",
       documentHydration,
-      surface: "search",
+      surface: "identity",
     });
 
   // The deployment's half of every document-state answer, resolved once for

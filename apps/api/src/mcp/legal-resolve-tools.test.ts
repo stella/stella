@@ -61,6 +61,8 @@ const identity = {
   ecli: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
   court: "Nejvyšší soud",
   decisionDate: "2026-01-01",
+  language: "cs",
+  languageAlternates: [],
   readerUrl:
     "https://app.stella.law/case-law/00000000-0000-4000-8000-0000000d0041",
 } as const;
