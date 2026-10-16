@@ -75,6 +75,10 @@
       "types": "./src/document-stage-observer.ts",
       "import": "./src/document-stage-observer.ts"
     },
+    "./eu-provision-citations": {
+      "types": "./src/eu-provision-citations.ts",
+      "import": "./src/eu-provision-citations.ts"
+    },
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
