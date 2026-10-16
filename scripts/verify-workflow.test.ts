@@ -24,6 +24,25 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value;
 };
 
+test("external contract base resolution stays offline and self-contained", () => {
+  const workflow = readFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "utf-8",
+  );
+  const step = readVerifyWorkflow({ root, mode: "verify" }).find(
+    ({ name }) => name === "External service contracts",
+  );
+  if (step === undefined) {
+    throw new Error("External service contracts step is missing");
+  }
+
+  expect(step.run).toContain("git -c protocol.allow=never merge-base");
+  expect(step.run).not.toMatch(
+    /git fetch|gh-retry|prepare-external-contract-base/u,
+  );
+  expect(workflow).toContain("fetch-depth: 0");
+});
+
 for (const { mode, file, marker } of [
   { mode: "verify", file: "ci.yml", marker: "STELLA_VERIFY" },
   { mode: "autofix", file: "autofix.yml", marker: "STELLA_LOCAL_AUTOFIX" },

@@ -3497,7 +3497,12 @@ jobs:
           CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
-          base="$(bash scripts/prepare-external-contract-base.sh)"
+          # Full history is present, so resolving the base needs no promisor remote.
+          # Keep this command offline: the contract guard must not acquire GitHub access.
+          base="$(git -c protocol.allow=never merge-base --end-of-options HEAD "$CHECK_BASE_REF")" || {
+            echo "::error::ExternalContractBaselineUnavailable: cannot resolve merge-base with $CHECK_BASE_REF"
+            exit 1
+          }
           echo "External contract merge-base: $base"
           baseline_path=packages/external-contracts/src/registry.ts
           if [ -n "$(git ls-tree --name-only "$base" -- "$baseline_path")" ]; then
