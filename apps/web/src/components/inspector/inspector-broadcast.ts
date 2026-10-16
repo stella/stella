@@ -179,17 +179,31 @@ const writeRestorePending = (
     .unwrapOr(undefined);
 };
 
-/** Clears the flag once the page has stayed responsive for a moment: a busy
- *  main thread runs neither the timer nor the idle callback. */
-const clearRestorePendingWhenSettled = (
-  scope: InspectorBroadcastScope,
-): void => {
-  if (typeof window === "undefined") {
+// Viewers the restore mounted that have not loaded their document yet. The
+// flag stays until every one has loaded and the page then stays responsive:
+// a document that arrives after the delay could still stall the page.
+let restoreHolds = 0;
+let settlingScope: InspectorBroadcastScope | null = null;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Clears the flag once nothing restored is still loading and the page has
+ *  stayed responsive for a moment: a busy main thread runs neither the timer
+ *  nor the idle callback. */
+const scheduleRestoreSettle = (): void => {
+  const scope = settlingScope;
+  if (scope === null || restoreHolds > 0) {
     return;
   }
-  setTimeout(() => {
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+  }
+  settleTimer = setTimeout(() => {
+    settleTimer = null;
     const clear = () => {
-      writeRestorePending(scope, false);
+      if (restoreHolds === 0 && settlingScope === scope) {
+        writeRestorePending(scope, false);
+        settlingScope = null;
+      }
     };
     if (typeof globalThis.requestIdleCallback === "function") {
       globalThis.requestIdleCallback(clear);
@@ -197,6 +211,35 @@ const clearRestorePendingWhenSettled = (
       clear();
     }
   }, RESTORE_SETTLE_DELAY_MS);
+};
+
+const clearRestorePendingWhenSettled = (
+  scope: InspectorBroadcastScope,
+): void => {
+  settlingScope = scope;
+  scheduleRestoreSettle();
+};
+
+/**
+ * Held by a restored viewer from mount until its document has loaded (or
+ * failed), so the restore counts as settled only after the viewer is ready.
+ * The returned release is idempotent.
+ */
+export const holdInspectorRestoreSettle = (): (() => void) => {
+  restoreHolds += 1;
+  if (settleTimer !== null) {
+    clearTimeout(settleTimer);
+    settleTimer = null;
+  }
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    restoreHolds -= 1;
+    scheduleRestoreSettle();
+  };
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;

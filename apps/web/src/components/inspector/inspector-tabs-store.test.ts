@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { isFileFacet } from "@/components/inspector/inspector-broadcast";
+import {
+  holdInspectorRestoreSettle,
+  isFileFacet,
+} from "@/components/inspector/inspector-broadcast";
 import {
   buildSkillResourceTabId,
   closeInspectorTabsForEntities,
@@ -1426,6 +1429,35 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
     expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
     expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+  });
+
+  test("a viewer still loading past the settle delay keeps the flag", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The restored viewer mounts and its document is still downloading.
+    const release = holdInspectorRestoreSettle();
+    await Bun.sleep(2200);
+
+    // It stalled after the delay: the next start must still recover.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(recovered).toHaveBeenCalledTimes(1);
+    release();
     recovered.mockRestore();
   });
 
