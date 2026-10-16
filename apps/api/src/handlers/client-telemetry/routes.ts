@@ -44,6 +44,7 @@ export const createClientTelemetryRoute = (
           WEB_HANG_REPORT_MAX_BYTES,
         );
       }
+      return undefined;
     })
     .use(rateLimit(createStandardApiRateLimitOptions()))
     .use(rateLimit(options))

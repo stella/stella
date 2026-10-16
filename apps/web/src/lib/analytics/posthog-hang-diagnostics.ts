@@ -40,7 +40,11 @@ const staticScriptUrl = (
   return `${parsed.origin}${parsed.pathname}`;
 };
 
-const sanitizeScripts = (value: unknown, origin: string) => {
+const sanitizeScripts = (value: unknown, appUrl: string) => {
+  const origin = Result.try(() => new URL(appUrl).origin).unwrapOr(undefined);
+  if (origin === undefined) {
+    return [];
+  }
   const scripts: unknown[] = Array.isArray(value) ? value : [];
   return scripts.slice(0, MAX_SCRIPTS).flatMap((script) => {
     if (!isRecord(script)) {
@@ -67,7 +71,7 @@ const sanitizeScripts = (value: unknown, origin: string) => {
 
 export const sanitizeHangDiagnosticEvent = (
   event: CaptureResult,
-  origin: string,
+  appUrl: string,
 ): CaptureResult | null => {
   const properties: Record<string, unknown> = event.properties;
   if (event.event === WEB_ANALYTICS_EVENTS.longAnimationFrame) {
@@ -85,7 +89,7 @@ export const sanitizeHangDiagnosticEvent = (
       properties: {
         ...pickIngestionRequired(properties),
         duration,
-        scripts: sanitizeScripts(properties["scripts"], origin),
+        scripts: sanitizeScripts(properties["scripts"], appUrl),
       },
     };
   }

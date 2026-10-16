@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/env";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
@@ -271,6 +272,44 @@ describe("PostHog browser analytics adapter", () => {
         },
       })?.properties?.["scripts"],
     ).toHaveLength(10);
+  });
+
+  test("retains first-party frame attribution when the configured app URL includes a slash or path", () => {
+    for (const appUrl of [
+      "https://staging.stll.app/",
+      "https://staging.stll.app/app/",
+    ]) {
+      const result = sanitizeHangDiagnosticEvent(
+        {
+          event: WEB_ANALYTICS_EVENTS.longAnimationFrame,
+          uuid: "normalized-origin-frame",
+          properties: {
+            duration: 1200,
+            scripts: [
+              {
+                invoker: "Window.requestAnimationFrame",
+                sourceURL:
+                  "https://staging.stll.app/assets/index-Abc123.js?secret=value",
+                sourceFunctionName: "private",
+              },
+              {
+                invoker: "Window.setTimeout",
+                sourceURL: "https://external.test/assets/index-Abc123.js",
+                sourceFunctionName: "private",
+              },
+            ],
+          },
+        },
+        appUrl,
+      );
+      expect(result?.properties["scripts"]).toEqual([
+        {
+          invoker: "Window.requestAnimationFrame",
+          sourceURL: "https://staging.stll.app/assets/index-Abc123.js",
+          sourceFunctionName: "?",
+        },
+      ]);
+    }
   });
 
   test("structurally disables interaction tracking features", () => {
