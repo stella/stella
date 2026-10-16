@@ -959,6 +959,78 @@ test("route tree has one derived owner and a cache producer for every consumer",
   }
 });
 
+test("web messages have one derived owner and are generated wherever the route tree is", () => {
+  const owner = generator("i18n-messages-web");
+  expect(owner.outputKind).toBe("derived");
+  const output = "apps/web/src/i18n/langs/messages.gen.ts";
+  expect(owner.outputs).toEqual([output]);
+  expect(
+    GENERATORS.filter(({ outputs }) =>
+      outputs.some((file) => file === output),
+    ).map(({ id }) => id),
+  ).toEqual([owner.id]);
+  const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
+  expect(ignored.exitCode).toBe(0);
+  const config = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({
+          dependsOn: v.optional(v.array(v.string())),
+          outputs: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(config.tasks["@stll/web#generate:messages"]?.outputs).toEqual([
+    "src/i18n/langs/messages.gen.ts",
+  ]);
+  expect(
+    generationInputs("generate:messages")
+      .map((input) =>
+        input.startsWith("$TURBO_ROOT$/")
+          ? input.replace("$TURBO_ROOT$/", "")
+          : `apps/web/${input}`,
+      )
+      .toSorted(),
+  ).toEqual([...owner.inputs].toSorted());
+  // Every task that needs the derived route tree reads the web sources, and
+  // those import the message declarations too.
+  for (const [name, task] of Object.entries(config.tasks)) {
+    const dependsOn = task.dependsOn ?? [];
+    if (dependsOn.includes("generate:route-tree")) {
+      expect(dependsOn, name).toContain("generate:messages");
+    }
+    if (dependsOn.includes("@stll/web#generate:route-tree")) {
+      expect(dependsOn, name).toContain("@stll/web#generate:messages");
+    }
+  }
+  const manifests = v.parse(
+    v.object({ scripts: v.record(v.string(), v.string()) }),
+    JSON.parse(
+      readFileSync(
+        new URL("../apps/web/package.json", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  for (const [name, script] of Object.entries(manifests.scripts)) {
+    if (script.includes("bun run generate:route-tree")) {
+      expect(script, name).toContain("bun run generate:messages");
+    }
+  }
+  const root = v.parse(
+    v.object({ scripts: v.object({ generate: v.string() }) }),
+    JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+    ),
+  );
+  expect(root.scripts.generate).toContain("generate:messages");
+});
+
 test("long optional runs accept dispatch only", () => {
   for (const file of [
     "bundle-size-nightly.yml",

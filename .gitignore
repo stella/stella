@@ -93,3 +93,4 @@ packages/cli/src/generated/tool-annotations.ts
 
 # Derived TanStack route tree, restored by the web generation task.
 apps/web/src/routeTree.gen.ts
+apps/web/src/i18n/langs/messages.gen.ts

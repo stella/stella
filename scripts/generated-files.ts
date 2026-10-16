@@ -591,17 +591,14 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "i18n-messages-web",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.webMessages,
     inputs: [
       "apps/web/src/i18n/langs/*.json",
       "packages/scripts/src/i18n-typegen.ts",
+      "apps/web/package.json",
     ],
-    write: [
-      "bun",
-      "packages/scripts/src/i18n-typegen.ts",
-      "apps/web/src/i18n/langs",
-    ],
+    write: ["bun", "--filter", "@stll/web", "generate:messages"],
     check: [
       "bun",
       "packages/scripts/src/i18n-typegen.ts",
