@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
+import ts from "typescript";
 
 /**
  * Every consumer of the public country lists names the surface it serves.
@@ -185,6 +186,93 @@ const helperCalls = (source: string): string[] => {
   return calls;
 };
 
+/** Null marks a helper reference whose domain cannot be statically verified. */
+const countryReadDomains = (source: string): (string | null)[] => {
+  const parsed = ts.createSourceFile(
+    "country-reader.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const helperNames = new Set([
+    "readPublicLawCountry",
+    "publicLawCountryUnavailable",
+  ]);
+  const names = new Set(helperNames);
+  const domains: (string | null)[] = [];
+  for (const statement of parsed.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.endsWith("/public-law-country")
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      domains.push(null);
+      continue;
+    }
+    for (const binding of bindings.elements) {
+      if (helperNames.has(binding.propertyName?.text ?? binding.name.text)) {
+        names.add(binding.name.text);
+      }
+    }
+  }
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node)) {
+      return;
+    }
+    if (ts.isIdentifier(node) && names.has(node.text)) {
+      if (ts.isTypeQueryNode(node.parent)) {
+        return;
+      }
+      let expression: ts.Node = node;
+      let parent = expression.parent;
+      while (
+        ts.isParenthesizedExpression(parent) ||
+        (ts.isBinaryExpression(parent) &&
+          parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+      ) {
+        expression = parent;
+        parent = expression.parent;
+      }
+      if (!ts.isCallExpression(parent) || parent.expression !== expression) {
+        domains.push(null);
+        return;
+      }
+      const options = parent.arguments.at(1);
+      if (
+        options === undefined ||
+        !ts.isObjectLiteralExpression(options) ||
+        options.properties.some(ts.isSpreadAssignment)
+      ) {
+        domains.push(null);
+        return;
+      }
+      const domain = options.properties.filter(
+        (property) =>
+          property.name !== undefined &&
+          (ts.isIdentifier(property.name) ||
+            ts.isStringLiteral(property.name)) &&
+          property.name.text === "domain",
+      );
+      const property = domain.at(0);
+      domains.push(
+        domain.length === 1 &&
+          property !== undefined &&
+          ts.isPropertyAssignment(property) &&
+          ts.isStringLiteral(property.initializer)
+          ? property.initializer.text
+          : null,
+      );
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  return domains;
+};
+
 const repoRoot = nodePath.resolve(import.meta.dir, "..");
 const readSource = async (path: string) =>
   await Bun.file(nodePath.resolve(repoRoot, path)).text();
@@ -215,6 +303,46 @@ describe("public law surface consumers", () => {
     }
   });
 
+  test("country-read detection includes nested inputs and imported aliases", () => {
+    const source = `
+      import { readPublicLawCountry as read, publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
+      read(
+        normalize(input, { locale: choose("en", "cs") }),
+        { domain: 'legislation', surface: "search" }
+      );
+      publicLawCountryUnavailable
+        (choose(input, "fallback"),
+        { surface: "pages", domain: "caseLaw" });
+    `;
+    expect(countryReadDomains(source)).toEqual(["legislation", "caseLaw"]);
+    expect(
+      countryReadDomains(
+        `(injected ?? publicLawCountryUnavailable)(input, { domain: "legislation" }); type Reader = typeof publicLawCountryUnavailable;`,
+      ),
+    ).toEqual(["legislation"]);
+    expect(
+      countryReadDomains(
+        source.replace("domain: 'legislation'", "domain: 'caseLaw'"),
+      ),
+    ).toEqual(["caseLaw", "caseLaw"]);
+  });
+
+  test("unverifiable country-read references fail closed", () => {
+    expect(
+      countryReadDomains(`
+      const indirect = readPublicLawCountry;
+      indirect(input, options);
+      publicLawCountryUnavailable(input, { ...options, domain: "caseLaw" });
+      readPublicLawCountry(input, { domain: selectedDomain });
+    `),
+    ).toEqual([null, null, null]);
+    expect(
+      countryReadDomains(
+        'import * as country from "@/api/lib/legal-search/public-law-country";',
+      ),
+    ).toEqual([null]);
+  });
+
   test("every HTTP country read chooses its owning domain", async () => {
     const glob = new Bun.Glob(
       "apps/api/src/handlers/{case-law,legislation}/**/*.ts",
@@ -225,17 +353,8 @@ describe("public law surface consumers", () => {
       }
       const source = await readSource(path);
       const domain = path.includes("/legislation/") ? "legislation" : "caseLaw";
-      const calls = [
-        ...source.matchAll(/readPublicLawCountry\([^,]+, \{([^}]+)\}/gu),
-      ];
-      for (const call of calls) {
-        expect(call[1]).toContain(`domain: "${domain}"`);
-      }
-      const direct = [
-        ...source.matchAll(/publicLawCountryUnavailable\([^,]+, \{([^}]+)\}/gu),
-      ];
-      for (const call of direct) {
-        expect(call[1]).toContain(`domain: "${domain}"`);
+      for (const detected of countryReadDomains(source)) {
+        expect({ path, domain: detected }).toEqual({ path, domain });
       }
     }
   });
