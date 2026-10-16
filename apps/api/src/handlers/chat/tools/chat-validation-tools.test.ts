@@ -297,7 +297,7 @@ test("generated views follow general availability and explain deployment withhol
       continue;
     }
     const execute =
-      tools.execute_typescript?.execute ??
+      tools["execute_typescript"]?.execute ??
       expect.unreachable("Script tool is absent");
     const output = await execute({ typescriptCode: "await show_visual({});" });
     expect(JSON.stringify(output)).toContain(

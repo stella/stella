@@ -84,7 +84,12 @@ describe("legal analysis showcase", () => {
   test("prepares source data and renders every analysis section before ready", () => {
     const { page, element, ready } = render(fixture.data);
     expect(page.data).toEqual(fixture.data);
-    expect(page.links).toEqual(fixture.links);
+    expect(
+      page.links.map(({ id, decisionId }) => ({
+        id,
+        decisionId: String(decisionId),
+      })),
+    ).toEqual(fixture.links);
     expect(element("summary").children.map(({ text }) => text)).toEqual(
       fixture.data.summary.map(
         ({ label, value, detail }) => label + value + detail,
