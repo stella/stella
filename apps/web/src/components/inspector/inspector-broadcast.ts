@@ -218,6 +218,20 @@ const clearRestorePendingWhenSettled = (
 ): void => {
   settlingScope = scope;
   scheduleRestoreSettle();
+  // A page that can run its pagehide handler is not stuck, so leaving it
+  // (a reload, a navigation) settles the restore even inside the delay.
+  if (typeof globalThis.addEventListener === "function") {
+    globalThis.addEventListener(
+      "pagehide",
+      () => {
+        if (settlingScope === scope) {
+          writeRestorePending(scope, false);
+          settlingScope = null;
+        }
+      },
+      { once: true },
+    );
+  }
 };
 
 /**
