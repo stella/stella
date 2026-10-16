@@ -15,7 +15,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseDataBoxMessage } from "@/api/lib/data-box/zfo";
 import { zfoFile } from "@/api/lib/data-box/zfo.test-fixture";
 import {
@@ -922,7 +922,8 @@ test.each(sourceTransitions)(
             attachmentId,
           });
     expect(initial.type).toBe("ok");
-    const oldId = "id" in initial ? initial.id : null;
+    const oldId =
+      "id" in initial ? toSafeId<"correspondence">(initial.id) : null;
     if (oldCopies === "retained" && initialParsed !== null) {
       expect(
         (
@@ -979,7 +980,8 @@ test.each(sourceTransitions)(
           });
     const replacement = await applyReplacement();
     expect(replacement.type).toBe("ok");
-    const replacementId = "id" in replacement ? replacement.id : null;
+    const replacementId =
+      "id" in replacement ? toSafeId<"correspondence">(replacement.id) : null;
     const association = () =>
       testDb
         .select({ correspondenceId: correspondenceSources.correspondenceId })
@@ -1085,7 +1087,8 @@ test.each(sourceTransitions)(
             attachmentId,
           });
     expect(roundtrip.type).toBe("ok");
-    const roundtripId = "id" in roundtrip ? roundtrip.id : null;
+    const roundtripId =
+      "id" in roundtrip ? toSafeId<"correspondence">(roundtrip.id) : null;
     expect(await association()).toEqual(
       roundtripId === null ? [] : [{ correspondenceId: roundtripId }],
     );
