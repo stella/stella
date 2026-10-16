@@ -717,6 +717,34 @@ const releaseJobs = workflowJobs(
     "utf-8",
   ),
 );
+// Every check waits for the plan, so it stays install-light: one planner
+// install, and generation runs beside it in its own job.
+test("the plan installs dependencies once and never generates sources", () => {
+  const steps = v.parse(
+    v.object({
+      steps: v.array(
+        v.looseObject({
+          name: v.optional(v.string()),
+          uses: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  ).steps;
+  const installs = steps.filter(
+    ({ uses, run }) =>
+      uses === "$/.github/actions/ci-install" ||
+      /\bbun (?:ci|install)\b/u.test(run ?? ""),
+  );
+  expect(installs.map(({ name }) => name)).toEqual([
+    "Install planner dependencies",
+  ]);
+  expect(
+    steps.filter(({ run }) => run?.includes("ci-generated-sources.ts")),
+  ).toEqual([]);
+});
+
 // An undeclared output becomes an empty string, overriding even an environment
 // value established by an earlier step.
 test("CI planner output references name declared outputs", () => {
@@ -746,7 +774,11 @@ const resultJob = v.parse(
 
 const CANCEL_REUSABLE_JOB = "marketing-screenshots-cancel";
 const MAIN_ONLY_JOBS = new Set(["api-test-durations"]);
+// The generated-source producer starts before the plan's trust decision, so
+// it holds no write permission; its failure skips its consumers instead.
+const PRE_TRUST_JOBS = new Set(["generated-sources"]);
 const CANCELLATION_EXCEPTIONS = new Set([
+  ...PRE_TRUST_JOBS,
   "query-perf",
   "fix-tests-on-base",
   "heavy-web-build",
@@ -791,6 +823,23 @@ test("only the code quality jobs end a failed pull request run, just before the 
   }
   expect(owners.toSorted()).toEqual([...PR_CODE_QUALITY_JOBS]);
   expect(PR_CODE_QUALITY_CANCEL_STEP.with.script).not.toContain("merge group");
+});
+
+test("only read-only jobs start before the plan decides trust", () => {
+  const unplanned = Object.entries(ciJobs).flatMap(([id, value]) =>
+    v.parse(v.looseObject({ needs: v.optional(v.unknown()) }), value).needs ===
+    undefined
+      ? [id]
+      : [],
+  );
+  expect(unplanned.toSorted()).toEqual(
+    ["ci-plan", ...PRE_TRUST_JOBS].toSorted(),
+  );
+  for (const id of PRE_TRUST_JOBS) {
+    expect(v.parse(cancellationJobSchema, ciJobs[id]).permissions, id).toEqual({
+      contents: "read",
+    });
+  }
 });
 
 test("every eligible CI job cancels a failed merge group in its final step with job-scoped permission", () => {
@@ -5206,6 +5255,8 @@ const runsAtDepth = (
     evaluate(condition, {
       values: {
         "github.event_name": event,
+        "github.event.action":
+          event === EVENT.mergeGroup ? "checks_requested" : "synchronize",
         "github.event.pull_request.labels.*.name": proveFix
           ? ["prove-fix"]
           : [],
@@ -5969,6 +6020,9 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     ]);
     const values = {
       "github.event_name": event,
+      "github.event.action":
+        event === EVENT.mergeGroup ? "checks_requested" : "synchronize",
+      "github.event.pull_request.draft": false,
       "inputs.heavy_only": false,
       "inputs.pr_depth_only": false,
       "github.event.pull_request.labels.*.name": [],
@@ -5998,7 +6052,8 @@ test("the exact docs-only README change plans only Markdown checks in PRs and me
     );
     // The quick checks carry the wall-clock expiry check, which runs on every
     // candidate, and the Markdown checks; the parser guard stays unplanned.
-    expect(scheduled).toEqual(["ci-quick-checks"]);
+    // The generated-source producer starts before the plan knows the scope.
+    expect(scheduled).toEqual(["generated-sources", "ci-quick-checks"]);
     expect(resultJob.needs).toContain("ci-quick-checks");
     expect(fastRequired).toContain("ci-quick-checks");
     const partSelected = (prefix: string) =>
