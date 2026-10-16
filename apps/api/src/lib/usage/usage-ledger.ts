@@ -33,6 +33,10 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import {
+  USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
@@ -431,7 +435,10 @@ export const recordUsageEvent = async ({
     .insert(usageEvents)
     .values(values)
     .onConflictDoNothing({
-      target: [usageEvents.organizationId, usageEvents.idempotencyKey],
+      target: onlineUniqueIndexTarget(
+        USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+        usageEvents,
+      ),
       where: sql`idempotency_key IS NOT NULL`,
     })
     .returning({ id: usageEvents.id });

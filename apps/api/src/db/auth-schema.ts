@@ -14,6 +14,11 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
+  ACCOUNT_CREDENTIAL_SINGLETON_UIDX,
+  ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX,
+  SESSION_PRIOR_TOKEN_HASH_IDX,
+} from "@/api/db/online-unique-indexes";
+import {
   authMemberPolicies,
   authOrganizationPolicies,
   authUserPolicies,
@@ -128,7 +133,7 @@ export const session = pgTable(
       table.userId,
       table.activeOrganizationId,
     ),
-    uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
+    uniqueIndex(SESSION_PRIOR_TOKEN_HASH_IDX).on(table.priorTokenHash),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -163,11 +168,11 @@ export const account = pgTable(
     // One account row per external identity. This is the pair Better Auth
     // links accounts by, so it holds the guarantee the retracted
     // (issuer, account_id) index used to.
-    uniqueIndex("account_provider_account_id_uidx").on(
+    uniqueIndex(ACCOUNT_PROVIDER_ACCOUNT_ID_UIDX).on(
       table.providerId,
       table.accountId,
     ),
-    uniqueIndex("account_credential_singleton_uidx")
+    uniqueIndex(ACCOUNT_CREDENTIAL_SINGLETON_UIDX)
       .on(table.providerId)
       .where(sql`${table.providerId} = 'credential'`),
     ...denyStellaAccessPolicies(),

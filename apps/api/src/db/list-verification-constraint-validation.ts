@@ -4,6 +4,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 const CONSTRAINT_NAME = "legal_list_verification_runs_error_code_check";
 
 export const LIST_VERIFICATION_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261005120300_list_verification_access_revoked",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

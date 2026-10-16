@@ -171,6 +171,7 @@ type RepairRuntimeOptions = {
 export const createCorpusProjectionDeleteReceiptRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
+  introducedBy: "20260908140000_corpus_projection_delete_task_instant",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
