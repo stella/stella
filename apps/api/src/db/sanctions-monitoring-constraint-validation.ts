@@ -22,6 +22,14 @@ const CONSTRAINTS = [
     tableName: "sanctions_screening_events",
     constraintName: "sanctions_screening_events_type_check",
   },
+  {
+    tableName: "sanctions_contact_screenings",
+    constraintName: "sanctions_contact_screenings_status_check",
+  },
+  {
+    tableName: "sanctions_contact_screenings",
+    constraintName: "sanctions_contact_screenings_incomplete_edition_check",
+  },
 ] as const;
 
 // Defaults and widened value sets satisfy these checks; validate outside the schema transaction so the

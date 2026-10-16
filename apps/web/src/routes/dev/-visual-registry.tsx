@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "table-chart": {
+    load: async () => {
+      const { TableChartPlayground } =
+        await import("./-components/table-chart-playground");
+      return { default: TableChartPlayground };
+    },
+  },
   "oauth-consent": {
     load: async () => {
       const { OAuthConsentPlayground } =

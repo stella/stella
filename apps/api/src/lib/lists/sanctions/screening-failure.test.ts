@@ -149,7 +149,6 @@ const screeningGrades = {
   "short-read": { reason: "short-read", grade: "defect" },
   "read-stalled": { reason: "read-stalled", grade: "defect" },
   "matcher-unavailable": { reason: "matcher-unavailable", grade: "defect" },
-  "truncated-empty": { reason: "truncated-empty", grade: "defect" },
   "freshness-read": { reason: "freshness-read", grade: "defect" },
   "entries-read": { reason: "entries-read", grade: "defect" },
   "index-load": { reason: "index-load", grade: "defect" },

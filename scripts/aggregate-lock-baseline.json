@@ -1723,7 +1723,7 @@
   },
   {
     "file": "apps/api/src/handlers/seller-profiles/update.ts",
-    "fingerprint": "9c71c0fc30854c01b61a0ab77558b49cd1da62a9cd3554a2671dbc48784099e8",
+    "fingerprint": "5ffac904ba623fc6e5e375de08bef306b4e9c27b22c0de3934b7a0fd55d78c55",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/seller-profiles/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
