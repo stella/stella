@@ -7,7 +7,6 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-const githubExpression = (body: string) => `\${{ ${body} }}`;
 const workflow = v.parse(
   v.looseObject({
     name: v.string(),
@@ -230,15 +229,13 @@ describe("required dependency review workflow boundary", () => {
     expect(workflow.on["pull_request"]).toBeDefined();
     expect(workflow.on["merge_group"]).toEqual({ types: ["checks_requested"] });
     expect(job.if).toBe(
-      githubExpression(
-        "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
-      ),
+      "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
     );
     expect(job.needs).toBe("ci-plan");
     expect(job["name"] ?? "dependency-review").toBe("dependency-review");
     expect(job.permissions).toEqual({
       contents: "read",
-      "pull-requests": "write",
+      "pull-requests": "read",
     });
     expect(selectorStep.if).toBeUndefined();
   });

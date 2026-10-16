@@ -73,9 +73,7 @@ test("pull request and merge-group audits are plan-gated in CI", () => {
   expect(auditWorkflow.on.pull_request).toBeUndefined();
   const audit = ciWorkflow.jobs["dependency-audit"];
   expect(audit?.if).toBe(
-    githubExpression(
-      "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
-    ),
+    "(github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true'",
   );
   expect(audit?.permissions).toEqual({ contents: "read" });
   const pullRequestAudit = step(

@@ -8041,7 +8041,9 @@ jobs:
   dependency-audit:
     name: bun audit (high/critical)
     needs: ci-plan
-    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.dependency_changes_required == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -8076,12 +8078,14 @@ jobs:
 
   dependency-review:
     needs: ci-plan
-    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.dependency_changes_required == 'true' }}
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      && needs.ci-plan.outputs.dependency_changes_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
 
     steps:
       # Keep the required check present even for drafts and source-only changes.
@@ -8299,7 +8303,9 @@ jobs:
             pkg:cargo/mac-notification-sys,
             pkg:cargo/webpki-root-certs
           # A merge group has no pull request to comment on.
-          comment-summary-in-pr: ${{ github.event_name == 'merge_group' && 'never' || 'always' }}
+          # The verdict is the required check and its job summary; no PR comment,
+          # so callers of this workflow need not grant pull request writes.
+          comment-summary-in-pr: never
 
   dependency-malware:
     needs: ci-plan

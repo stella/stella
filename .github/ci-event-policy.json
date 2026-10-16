@@ -155,6 +155,7 @@
     "ci.yml/ci-result": "pr-fast",
     "flake-gate.yml/report": "pr-opt-in",
     "security-txt-guard.yml/check": "pr-fast",
+    "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
     "scorecard.yml/scorecard": "main",
