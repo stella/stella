@@ -52,7 +52,9 @@ const clientOptions = {
     await observeActionAdmissionResponse(response, {
       notifyRefusal: notifyActionAdmissionRefusal,
       captureError: (error) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "onResponse:failure",
+        });
       },
     });
   },

@@ -116,7 +116,10 @@ export const receiveHostedUsageWebhook = async (
   try {
     parsedJson = JSON.parse(rawBody);
   } catch (error) {
-    captureError(error, { source: "usage_provider.webhook.json_parse" });
+    captureError(error, {
+      fingerprintKey: "usageWebhook.parseBody",
+      context: { source: "usage_provider.webhook.json_parse" },
+    });
     return respond(400, "Malformed JSON body");
   }
 
@@ -268,9 +271,12 @@ export const receiveHostedUsageWebhook = async (
     // the "dedupe committed without dispatch" hole this refactor
     // closed.
     captureError(error, {
-      source: "usage_provider.webhook.dispatch",
-      eventId,
-      eventType: envelope.type,
+      fingerprintKey: "usageWebhook.dispatch",
+      context: {
+        source: "usage_provider.webhook.dispatch",
+        eventId,
+        eventType: envelope.type,
+      },
     });
     return respond(500, "Dispatch failed");
   }
@@ -349,9 +355,12 @@ const persistUnknownEventType = async ({
       return UNKNOWN_EVENT_RECORD.rejected;
     }
     captureError(error, {
-      source: "usage_provider.webhook.unknown_event_persist",
-      eventId,
-      eventType,
+      fingerprintKey: "hostedusagewebhook.persistUnknownEventType",
+      context: {
+        source: "usage_provider.webhook.unknown_event_persist",
+        eventId,
+        eventType,
+      },
     });
     return UNKNOWN_EVENT_RECORD.retry;
   }

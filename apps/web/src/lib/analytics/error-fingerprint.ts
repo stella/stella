@@ -1,8 +1,8 @@
-import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
-
-const ASSET_PATH_PREFIX = "/assets/";
-const FIRST_PARTY_ASSET_FRAME =
-  /\/assets\/[A-Za-z0-9._-]{1,160}\.(?:js|mjs):\d{1,7}:\d{1,7}/u;
+import {
+  capturedExceptionIdentity,
+  fingerprintExceptionEvent,
+} from "@/lib/analytics/exception-fingerprint";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 
 const stableHash = (value: string): string => {
   let hash = 0;
@@ -12,12 +12,11 @@ const stableHash = (value: string): string => {
   return hash.toString(16).padStart(8, "0").toUpperCase();
 };
 
-/** Only an error type and compiled first-party asset position influence this hash. */
-export const fingerprintTelemetryError = (error: unknown): string => {
-  const stack = error instanceof Error ? error.stack : undefined;
-  const frame = stack?.slice(0, 20_000).match(FIRST_PARTY_ASSET_FRAME);
-  const safeFrame = frame
-    ? frame[0].slice(ASSET_PATH_PREFIX.length)
-    : "no-first-party-frame";
-  return `ERRFP-${stableHash(`${telemetryErrorType(error)}|${safeFrame}`)}`;
+/** A compact presentation of the same identity used for issue grouping. */
+export const fingerprintTelemetryError = (
+  error: unknown,
+  key: ExceptionFingerprintKey,
+): string => {
+  const { type, fields } = capturedExceptionIdentity(error);
+  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: [{ type }], key, fields }))}`;
 };

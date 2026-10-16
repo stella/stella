@@ -110,7 +110,9 @@ export const useExternalFileDrop = ({
             return undefined;
           })
           .catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "useExternalFileDrop.onDrop:failure",
+            });
             const normalized =
               error instanceof Error
                 ? error

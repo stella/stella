@@ -27,7 +27,7 @@ export const UsageFallbackNotice = () => {
     refetchInterval: 60_000,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "UsageFallbackNotice:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const budgets = data?.budgets;

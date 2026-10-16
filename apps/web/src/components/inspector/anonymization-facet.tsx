@@ -206,7 +206,7 @@ export const AnonymizationFacet = ({
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = useQueryView(termsQuery);
-  useQueryViewError(termsQueryView);
+  useQueryViewError(termsQueryView, "AnonymizationFacet:query");
   const createMutation = useMutation({
     mutationFn: async (vars: {
       workspaceId: string;
@@ -254,7 +254,9 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure",
+      });
     },
   });
 
@@ -386,7 +388,9 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet.addTerm:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };
@@ -402,7 +406,7 @@ export const AnonymizationFacet = ({
     enabled: activeFieldId !== null,
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(allowlistQueryView, "AnonymizationFacet:query-2");
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =
     pipelineStatus === "ready" &&
@@ -429,7 +433,9 @@ export const AnonymizationFacet = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-2",
+      });
     },
   });
   const deleteAllowlistMutation = useMutation({
@@ -445,7 +451,9 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-3",
+      });
     },
   });
   // Restrict the visible workspace vocabulary to entries whose
@@ -491,7 +499,9 @@ export const AnonymizationFacet = ({
     }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
-      analytics.captureError(download.error);
+      analytics.captureError(download.error, {
+        fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+      });
       notifyUserError(
         download.error,
         UnsupportedAnonymizedExportError.is(download.error)

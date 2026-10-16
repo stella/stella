@@ -175,7 +175,11 @@ export const createDocumentTranslationRunHandler = ({
               })
             ).andThen((inspected) => inspected);
         if (Result.isError(inspection)) {
-          captureError(inspection.error, { entityId: body.entityId });
+          captureError(inspection.error, {
+            fingerprintKey:
+              "runs.createDocumentTranslationRunHandler.inspection_error",
+            context: { entityId: body.entityId },
+          });
           return Result.err(
             new HandlerError({
               status: 422,

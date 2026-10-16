@@ -383,8 +383,11 @@ const storeSourceRaw = async ({
       eli: input.eli,
     });
     captureError(written.error, {
-      sourceId: input.sourceId,
-      step: "processLegislationDocument.sourceRawWrite",
+      fingerprintKey: "legislation.storeSourceRaw.written_error",
+      context: {
+        sourceId: input.sourceId,
+        step: "processLegislationDocument.sourceRawWrite",
+      },
     });
     return null;
   }
@@ -972,9 +975,12 @@ export const processLegislationDocument = async (
     } catch (error) {
       corpusWriteFailed = true;
       captureError(error, {
-        documentId: id,
-        sourceId: input.sourceId,
-        step: "processLegislationDocument.corpusWrite",
+        fingerprintKey: "legislation.processLegislationDocument",
+        context: {
+          documentId: id,
+          sourceId: input.sourceId,
+          step: "processLegislationDocument.corpusWrite",
+        },
       });
       await preserveLegislationCorpusWriteRetry({
         documentId: id,

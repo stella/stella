@@ -1,3 +1,11 @@
+import {
+  PdfArray,
+  PdfDict,
+  PdfName,
+  PdfNumber,
+  PdfRef,
+  PdfStream,
+} from "@libpdf/core";
 /**
  * The visible part of a signature: a stamp on one page that names the
  * signer and the signing time.
@@ -14,19 +22,11 @@
  * produce identical bytes, which is why nothing here reads the clock or
  * draws randomness.
  */
-
-import {
-  PdfArray,
-  PdfDict,
-  PdfName,
-  PdfNumber,
-  PdfRef,
-  PdfStream,
-} from "@libpdf/core";
 import type { PDF, PdfObject } from "@libpdf/core";
 import { panic, Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
@@ -52,7 +52,11 @@ export class PdfSigningStampError extends TaggedError("PdfSigningStampError")<{
   message: string;
   /** `unrenderable`: text it cannot draw; `overflow`: text that does not fit. */
   reason: "unrenderable" | "overflow" | "placement";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Names the stamp's signature field gets, numbered past existing ones. */
 const STAMP_FIELD_PREFIX = "StellaSignature";

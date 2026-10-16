@@ -382,7 +382,10 @@ const checkpointFolioCollabRoom = createSafeHandler(
         }),
       );
       if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { roomId, storageKey: checkpointKey });
+        captureError(cleanup.error, {
+          fingerprintKey: "entities.discardCheckpoint.cleanup_error",
+          context: { roomId, storageKey: checkpointKey },
+        });
       }
       const settlement = await settleObjectCleanupIntentsAfterWriter({
         intentIds: [cleanupIntentId],
@@ -394,8 +397,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
       });
       if (Result.isError(settlement)) {
         captureError(settlement.error, {
-          roomId,
-          storageKey: checkpointKey,
+          fingerprintKey: "entities.discardCheckpoint.settlement_error",
+          context: {
+            roomId,
+            storageKey: checkpointKey,
+          },
         });
       }
     };

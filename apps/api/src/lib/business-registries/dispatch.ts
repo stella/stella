@@ -475,9 +475,12 @@ const ARES_HANDLER: RegistryHandler = {
       observer: options.observer,
       onVrError: (error) =>
         captureError(error, {
-          operation: "vr-enrichment",
-          registry: "ares",
-          source: "business-registry",
+          fingerprintKey: "businessregistries.company",
+          context: {
+            operation: "vr-enrichment",
+            registry: "ares",
+            source: "business-registry",
+          },
         }),
     });
     return company ? aresCompanyToHit(company) : null;

@@ -326,7 +326,11 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
+  flushWorkspaceSearchRepairs([txResult.id]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "createWorkspaceHandler.flushWorkspaceSearchRepairs",
+    }),
+  );
 
   return Result.ok({ id: txResult.id });
 };

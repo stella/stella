@@ -70,8 +70,12 @@ export const selectMessagesForContextInput = async ({
   });
   if (Result.isError(checkpointResult)) {
     captureError(checkpointResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_read",
+      fingerprintKey:
+        "chat.selectMessagesForContextInput.checkpointResult_error",
+      context: {
+        threadId,
+        feature: "chat.compaction_checkpoint_read",
+      },
     });
     return messages;
   }
@@ -145,8 +149,11 @@ export const compactMessagesForContext = async ({
     tenantWorkspaceIds,
     onSummaryError: (error) => {
       captureError(error, {
-        threadId,
-        feature: "chat.compaction",
+        fingerprintKey: "chat.compactMessagesForContext",
+        context: {
+          threadId,
+          feature: "chat.compaction",
+        },
       });
     },
     organizationId,
@@ -207,8 +214,11 @@ export const markChatCompactionDue = async ({
   );
   if (Result.isError(marked)) {
     captureError(marked.error, {
-      threadId,
-      feature: "chat.compaction_enqueue",
+      fingerprintKey: "chat.markChatCompactionDue.marked_error",
+      context: {
+        threadId,
+        feature: "chat.compaction_enqueue",
+      },
     });
   }
 };

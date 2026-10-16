@@ -47,3 +47,8 @@ export {
   isQueryErrorOutputKey,
   QUERY_ERROR_OUTPUT_FIELDS,
 } from "./query-field-policy";
+
+export {
+  declareFingerprintFields,
+  readFingerprintFields,
+} from "./fingerprint-fields";

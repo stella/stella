@@ -1185,7 +1185,11 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "pauseAtReviewGate.flushSearchRepairs",
+    }),
+  );
 };
 
 const readRunProgress = async (

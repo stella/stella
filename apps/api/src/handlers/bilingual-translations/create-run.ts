@@ -85,7 +85,11 @@ const createBilingualRun = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {
-      captureError(manifest.error, { source: "bilingual-create-run" });
+      captureError(manifest.error, {
+        fingerprintKey:
+          "bilingualtranslations.createBilingualRun.manifest_error",
+        context: { source: "bilingual-create-run" },
+      });
       return Result.err(
         new HandlerError({
           status: 422,

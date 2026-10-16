@@ -49,7 +49,9 @@ export const useCreateTask = () => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateTask:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -106,7 +108,9 @@ export const useAddTaskAssignee = (workspaceId: string) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddTaskAssignee:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -132,7 +136,9 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRemoveTaskAssignee:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -174,7 +180,9 @@ export const useMoveTaskAssignee = (workspaceId: string) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMoveTaskAssignee:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

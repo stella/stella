@@ -1137,9 +1137,12 @@ export const projectForChat = <TPayload>({
       message: PROJECTION_SCHEMA_FAILURE_MESSAGE,
     });
     captureError(error, {
-      paths: parsed.error.issuePaths.join(", "),
-      source,
-      toolName,
+      fingerprintKey: `chat.projection.${source}.${toolName}.validateSchema`,
+      context: {
+        paths: parsed.error.issuePaths.join(", "),
+        source,
+        toolName,
+      },
     });
     return Result.err(error);
   }
@@ -1168,9 +1171,12 @@ export const projectForChat = <TPayload>({
       message: REF_PROJECTION_FAILURE_MESSAGE,
     });
     captureError(error, {
-      path: ctx.uuidViolations.at(0) ?? "(root)",
-      source,
-      toolName,
+      fingerprintKey: `chat.projection.${source}.${toolName}.resolveRefs`,
+      context: {
+        path: ctx.uuidViolations.at(0) ?? "(root)",
+        source,
+        toolName,
+      },
     });
     return Result.err(error);
   }

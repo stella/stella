@@ -155,6 +155,8 @@ const contactRateUpdates = async ({
 // Shared contact-update logic reused by the HTTP handler and the
 // `save_contact` MCP tool, so both emit identical audit events and
 // search-index writes.
+const CONTACT_REPAIR_KEY = "updateContactHandler.flushContactSearchRepairs";
+
 export const updateContactHandler = async function* ({
   safeDb,
   organizationId,
@@ -358,7 +360,9 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch(captureError);
+  flushContactSearchRepairs([contactId]).catch((error: unknown) =>
+    captureError(error, { fingerprintKey: CONTACT_REPAIR_KEY }),
+  );
 
   return Result.ok(outcome.row);
 };

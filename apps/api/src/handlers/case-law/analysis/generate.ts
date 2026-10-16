@@ -424,8 +424,11 @@ const handleGenerationFailure = async ({
   // an unanticipated shape is an exception worth capturing.
   if (isUnanticipatedAIFailure(error)) {
     captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
+      fingerprintKey: "analysis.handleGenerationFailure",
+      context: {
+        source: "case-law-analysis",
+        decisionId,
+      },
     });
   }
   aiAnalytics.captureError(error);
@@ -485,7 +488,10 @@ const recordFailedRun = async ({
           [recorded.error, released.error],
           "The failed run's record could not be written nor its sentinel released",
         ),
-    { source: "case-law-analysis-failure-record", decisionId },
+    {
+      fingerprintKey: "analysis.recordFailedRun",
+      context: { source: "case-law-analysis-failure-record", decisionId },
+    },
   );
 };
 

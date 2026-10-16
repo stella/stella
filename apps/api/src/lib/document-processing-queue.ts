@@ -847,7 +847,10 @@ const completeDocumentProcessingRun = async ({
       });
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, { runId: run.id });
+      captureError(enqueued.error, {
+        fingerprintKey: "lib.completeDocumentProcessingRun.enqueued_error",
+        context: { runId: run.id },
+      });
       logger.error("document_processing.deadline_scout_enqueue_failed", {
         "error.type": errorTag(enqueued.error),
         runId: run.id,
@@ -1324,17 +1327,19 @@ const errorCode = (error: unknown): string => {
 };
 
 type ReportDocumentProcessingRunFailureOptions = {
+  fingerprintKey: `documentProcessing.${string}`;
   error: unknown;
   failureCode: string;
   runId: SafeId<"documentProcessingRun">;
 };
 
 const reportDocumentProcessingRunFailure = ({
+  fingerprintKey,
   error,
   failureCode,
   runId,
 }: ReportDocumentProcessingRunFailureOptions): void => {
-  captureError(error, { runId });
+  captureError(error, { fingerprintKey, context: { runId } });
   logger.error(
     "document_processing.run_failed",
     sanitizeErrorAttributesForOutput({
@@ -1397,7 +1402,12 @@ export const markRunFailed = async ({
     );
     return "settled";
   }
-  reportDocumentProcessingRunFailure({ error, failureCode, runId: run.id });
+  reportDocumentProcessingRunFailure({
+    fingerprintKey: "documentProcessing.settleRunFailure",
+    error,
+    failureCode,
+    runId: run.id,
+  });
   return "settled";
 };
 
@@ -1783,7 +1793,10 @@ export const tryEnqueueDocumentProcessingRun = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureEnqueueError(result.error, { runId });
+    captureEnqueueError(result.error, {
+      fingerprintKey: "tryEnqueueDocumentProcessingRun.result_error",
+      context: { runId },
+    });
     return { runId, status: "failed" };
   }
   return { runId, status: "enqueued" };
@@ -1975,7 +1988,11 @@ export const recoverDocumentDeadlineScoutDispatches = async ({
   });
   for (const result of results) {
     if (Result.isError(result)) {
-      captureError(result.error, { operation: "deadline-scout-dispatch" });
+      captureError(result.error, {
+        fingerprintKey:
+          "lib.recoverDocumentDeadlineScoutDispatches.result_error",
+        context: { operation: "deadline-scout-dispatch" },
+      });
     }
   }
 
@@ -2373,6 +2390,7 @@ const recoverRetryableOcrFailures = async (
         message: outcome.errorMessage,
       });
       reportDocumentProcessingRunFailure({
+        fingerprintKey: "documentProcessing.reconcileFailedRun",
         error,
         failureCode: outcome.errorCode,
         runId: run.id,
@@ -2516,7 +2534,10 @@ const recoverFailedSearchIndex = async (
   await runSearchIndexReplayAttempt({
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
-      captureError(error, { entityId, runId: id });
+      captureError(error, {
+        fingerprintKey: "lib.recoverFailedSearchIndex",
+        context: { entityId, runId: id },
+      });
       const safeError = sanitizeErrorForOutput(error);
       await failDocumentProcessingAttempt({
         database: dependencies.database,
@@ -3103,7 +3124,10 @@ export const handleDocumentProcessingReconcilePhaseFailure = (
     });
     return;
   }
-  captureError(error, { phase });
+  captureError(error, {
+    fingerprintKey: `documentProcessing.reconcile.${phase}`,
+    context: { phase },
+  });
   logger.error("document_processing.reconcile_phase_failed", {
     ...errorSystemFields(error),
     phase,
@@ -3154,7 +3178,9 @@ const reconcileDocumentProcessing = async ({
         "error.type": errorTag(error),
       });
     } else {
-      captureError(error);
+      captureError(error, {
+        fingerprintKey: "lib.reconcileDocumentProcessing",
+      });
       logger.error(
         "document_processing.reconcile_failed",
         errorSystemFields(error),

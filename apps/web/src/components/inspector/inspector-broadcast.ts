@@ -610,8 +610,11 @@ const writePersistedInspectorState = (
   }
   failedPersistenceScope = storageKey;
   getAnalytics().captureError(writeResult.error, {
-    type: "detached",
-    operation: "inspector-tabs.persist",
+    fingerprintKey: "writePersistedInspectorState:failure",
+    context: {
+      type: "detached",
+      operation: "inspector-tabs.persist",
+    },
   });
   notifyUserError(undefined, getTranslator()("inspector.groups.saveFailed"));
 };
@@ -688,8 +691,11 @@ export const createInspectorBroadcastSession = (
       });
     } catch (error) {
       getAnalytics().captureError(error, {
-        type: "detached",
-        operation: "inspector-tabs.broadcast",
+        fingerprintKey: "createInspectorBroadcastSession.postTabs:failure",
+        context: {
+          type: "detached",
+          operation: "inspector-tabs.broadcast",
+        },
       });
     }
   };

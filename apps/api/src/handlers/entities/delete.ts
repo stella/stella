@@ -339,7 +339,11 @@ export const deleteEntitiesHandler = async function* ({
   for (const entity of deletedEntities) {
     provider
       .removeEntity({ entityId: entity.id, workspaceId })
-      .catch(captureError);
+      .catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "deleteEntitiesHandler.rejection",
+        }),
+      );
   }
 
   return Result.ok({});

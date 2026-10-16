@@ -103,8 +103,11 @@ export const runScout = async ({
     );
     if (Result.isError(recorded)) {
       captureError(recorded.error, {
-        operation: "signals.scout.record-failure",
-        runId,
+        fingerprintKey: "signals.runScout.recorded_error",
+        context: {
+          operation: "signals.scout.record-failure",
+          runId,
+        },
       });
     }
     throw error;

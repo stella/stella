@@ -118,13 +118,24 @@ export const startStragglerCatchUp = async ({
               message: "Straggler catch-up could not start its follow-up run",
               workspaceId,
             }),
-            { workspaceId },
+            {
+              fingerprintKey: "workflowCatchUp.refused",
+              context: { workspaceId },
+            },
           );
         }
         return result;
       })
-      .catch((error: unknown) => captureError(error, { workspaceId }));
+      .catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "workflowCatchUp.rejected",
+          context: { workspaceId },
+        }),
+      );
   } catch (error: unknown) {
-    captureError(error, { workspaceId });
+    captureError(error, {
+      fingerprintKey: "workflowCatchUp.failed",
+      context: { workspaceId },
+    });
   }
 };

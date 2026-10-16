@@ -470,8 +470,11 @@ export const redactCaseLawDecision = async ({
     });
     if (corpusErasure.type === "incomplete") {
       captureError(corpusErasure.error, {
-        decisionId,
-        step: "redactCaseLawDecision.deleteCorpusDocument",
+        fingerprintKey: "caselaw.redactCaseLawDecision.corpusErasure_error",
+        context: {
+          decisionId,
+          step: "redactCaseLawDecision.deleteCorpusDocument",
+        },
       });
       await recordFailedRedactionAudit({
         decisionId,
@@ -496,8 +499,11 @@ export const redactCaseLawDecision = async ({
   });
   for (const { error } of incomplete) {
     captureError(error, {
-      decisionId,
-      step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      fingerprintKey: "caselaw.redactCaseLawDecision",
+      context: {
+        decisionId,
+        step: "redactCaseLawDecision.deleteReservedCorpusUpload",
+      },
     });
   }
   const intentCleanup = await Result.tryPromise({
@@ -510,8 +516,11 @@ export const redactCaseLawDecision = async ({
   });
   if (Result.isError(intentCleanup)) {
     captureError(intentCleanup.error, {
-      decisionId,
-      step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+      fingerprintKey: "caselaw.redactCaseLawDecision.intentCleanup_error",
+      context: {
+        decisionId,
+        step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
+      },
     });
   }
 
@@ -556,8 +565,11 @@ export const redactCaseLawDecision = async ({
   })();
   if (rawErasure.type === "incomplete") {
     captureError(rawErasure.error, {
-      decisionId,
-      step: "redactCaseLawDecision.sweepSourceRaw",
+      fingerprintKey: "caselaw.redactCaseLawDecision.rawErasure_error",
+      context: {
+        decisionId,
+        step: "redactCaseLawDecision.sweepSourceRaw",
+      },
     });
     await recordFailedRedactionAudit({
       decisionId,

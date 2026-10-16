@@ -598,7 +598,9 @@ export const acquireChatRuntime = ({
     initialMessages: data.messages,
     key,
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "acquireChatRuntime:failure",
+      });
       // The server persists a failed terminal outcome before emitting
       // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
       // durable message metadata just as a successful finish does.

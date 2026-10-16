@@ -157,7 +157,10 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure",
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -173,7 +176,10 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure-2",
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -189,7 +195,10 @@ export const Route = createFileRoute(
             toISODate(prevWeekEnd),
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-3",
+            });
           },
         ),
         "workspace-view.prefetch",
@@ -212,7 +221,10 @@ export const Route = createFileRoute(
           queryClient,
           correspondenceAddressOptions(workspaceId),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-4",
+            });
           },
         ),
       ]);

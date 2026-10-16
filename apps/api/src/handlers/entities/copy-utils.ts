@@ -546,7 +546,10 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
     }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "entity-copy-rollback" });
+    captureError(result.error, {
+      fingerprintKey: "entities.rollbackS3Copies.result_error",
+      context: { source: "entity-copy-rollback" },
+    });
   }
 };
 

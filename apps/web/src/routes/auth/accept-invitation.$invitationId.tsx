@@ -91,7 +91,9 @@ function AcceptInvitation() {
       await navigate({ to: "/workspaces", replace: true });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AcceptInvitation:failure",
+      });
     },
   });
 
@@ -110,7 +112,9 @@ function AcceptInvitation() {
     },
 
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AcceptInvitation:failure-2",
+      });
     },
   });
 

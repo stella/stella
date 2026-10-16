@@ -352,8 +352,11 @@ const loadConnectorTools = async ({
     }
 
     captureError(error, {
-      source: "external-mcp-tools",
-      connectorSlug: row.slug,
+      fingerprintKey: "tools.loadConnectorTools",
+      context: {
+        source: "external-mcp-tools",
+        connectorSlug: row.slug,
+      },
     });
     return null;
   }
@@ -373,8 +376,11 @@ const closeAbandonedClient = async ({
     await client.close();
   } catch (closeError) {
     captureError(closeError, {
-      source: "external-mcp-tools-close",
-      connectorSlug,
+      fingerprintKey: "tools.closeAbandonedClient.closeError",
+      context: {
+        source: "external-mcp-tools-close",
+        connectorSlug,
+      },
     });
   }
 };

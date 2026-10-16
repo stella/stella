@@ -271,7 +271,9 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(requested.error, {
+        fingerprintKey: "VersionsSidebar.handleDeleteVersion:failure",
+      });
       notifyUserError(requested.error, t("errors.actionFailed"));
       await invalidateVersions();
       return;
@@ -300,7 +302,9 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(requested.error, {
+        fingerprintKey: "VersionsSidebar.handleSetLabel:failure",
+      });
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 
@@ -318,7 +322,9 @@ export const VersionsSidebar = ({
       ),
     );
     if (Result.isError(requested)) {
-      getAnalytics().captureError(requested.error);
+      getAnalytics().captureError(requested.error, {
+        fingerprintKey: "VersionsSidebar.handleRestore:failure",
+      });
       notifyUserError(requested.error, t("errors.actionFailed"));
     }
 

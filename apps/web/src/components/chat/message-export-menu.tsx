@@ -187,7 +187,9 @@ export const MessageExportMenu = ({
     setIsExportPending(false);
 
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "MessageExportMenu.handleExport:failure",
+      });
       notifyUserError(result.error, t("common.export.failed"));
       return;
     }

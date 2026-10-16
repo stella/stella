@@ -133,10 +133,16 @@ describe("uploadFileEncryption", () => {
     const analytics = installRecordingAnalytics();
     try {
       expect(
-        uploadFileEncryption(unsure, { mimeType: PDF_MIME_TYPE })?.encrypted,
+        uploadFileEncryption(unsure, {
+          fingerprintKey: "test.detectEncryption",
+          context: { mimeType: PDF_MIME_TYPE },
+        })?.encrypted,
       ).toBe(false);
       expect(
-        uploadFileEncryption(unreadable, { mimeType: PDF_MIME_TYPE }),
+        uploadFileEncryption(unreadable, {
+          fingerprintKey: "test.detectEncryption",
+          context: { mimeType: PDF_MIME_TYPE },
+        }),
       ).toBeNull();
       // Both are reported; the unsure one is told apart by its stage.
       expect(
@@ -184,9 +190,24 @@ describe("retainedFileEncryption", () => {
     const analytics = installRecordingAnalytics();
     try {
       const context = { mimeType: PDF_MIME_TYPE };
-      expect(retainedFileEncryption(unsure, context).encrypted).toBe(false);
-      expect(retainedFileEncryption(unreadable, context).encrypted).toBe(false);
-      expect(retainedFileEncryption(known, context).encrypted).toBe(true);
+      expect(
+        retainedFileEncryption(unsure, {
+          fingerprintKey: "test.detectEncryption",
+          context,
+        }).encrypted,
+      ).toBe(false);
+      expect(
+        retainedFileEncryption(unreadable, {
+          fingerprintKey: "test.detectEncryption",
+          context,
+        }).encrypted,
+      ).toBe(false);
+      expect(
+        retainedFileEncryption(known, {
+          fingerprintKey: "test.detectEncryption",
+          context,
+        }).encrypted,
+      ).toBe(true);
       expect(
         analytics.exceptions().map((event) => event.properties),
       ).toMatchObject([

@@ -288,7 +288,10 @@ export const initEntityDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(error, {
+      fingerprintKey: "lib.initEntityDeletionCleanupWorker",
+      context: { requestId: job?.data.requestId ?? "" },
+    });
     logger.error("entity_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -304,7 +307,7 @@ export const initEntityDeletionCleanupWorker = ({
       await enqueuePendingEntityDeletionCleanupRequests(db);
     },
     onError: (error) => {
-      captureError(error);
+      captureError(error, { fingerprintKey: "entityDeletion.reconcile" });
       logger.error(
         "entity_deletion_cleanup.reconcile_failed",
         errorSystemFields(error),

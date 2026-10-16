@@ -347,7 +347,10 @@ export const updateClauseHandler = async function* ({
       body.body ?? existing.body,
     );
     if (Result.isError(searchVectorResult)) {
-      captureError(searchVectorResult.error, { clauseId });
+      captureError(searchVectorResult.error, {
+        fingerprintKey: "clauses.updateClauseHandler.searchVectorResult_error",
+        context: { clauseId },
+      });
     }
   }
 

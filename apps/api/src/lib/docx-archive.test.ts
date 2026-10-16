@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { writeZipEntry } from "@stll/docx-utils";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 const buildArchive = async (
   files: { path: string; content: string | Uint8Array }[],
@@ -136,5 +137,15 @@ describe("loadDocxArchive", () => {
         reason: "total-too-large",
       });
     }
+  });
+});
+
+test("archive capture preserves the published typed reason at the application boundary", () => {
+  const error = new DocxArchiveError({
+    message: "private",
+    reason: "load-failed",
+  });
+  expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+    reason: "load-failed",
   });
 });

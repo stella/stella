@@ -141,7 +141,9 @@ export const ReviewExportMenu = ({
     setPending(null);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "ReviewExportMenu.handleInternalExport:failure",
+      });
       notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }

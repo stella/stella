@@ -422,14 +422,21 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([params.entityId]).catch(captureError);
+  flushEntitySearchRepairs([params.entityId]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "deleteEntityVersionHandler.flushEntitySearchRepairs",
+    }),
+  );
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
     await processExtraction(params.entityId).catch((error: unknown) =>
       captureError(error, {
-        entityId: params.entityId,
-        versionId: promotedVersionId,
+        fingerprintKey: "versions.deleteEntityVersionHandler",
+        context: {
+          entityId: params.entityId,
+          versionId: promotedVersionId,
+        },
       }),
     );
   }

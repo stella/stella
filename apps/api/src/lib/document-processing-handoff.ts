@@ -44,7 +44,10 @@ export const handoffCommittedDocumentProcessingRuns = async ({
           catch: (cause) => cause,
         });
         if (Result.isError(result)) {
-          captureEnqueueError(result.error, { runId });
+          captureEnqueueError(result.error, {
+            fingerprintKey: "documentProcessing.handoff",
+            context: { runId },
+          });
         }
       }),
     );

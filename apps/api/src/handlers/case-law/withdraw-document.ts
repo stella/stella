@@ -162,8 +162,12 @@ export const withdrawCaseLawDecisionDocument = async ({
   }
   if (corpusErasure.type === "incomplete") {
     captureError(corpusErasure.error, {
-      decisionId,
-      step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
+      fingerprintKey:
+        "caselaw.withdrawCaseLawDecisionDocument.corpusErasure_error",
+      context: {
+        decisionId,
+        step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
+      },
     });
     return Result.ok({
       type: "corpus-objects-remain",
@@ -274,8 +278,12 @@ export const withdrawCaseLawDecisionDocument = async ({
         break;
       case "incomplete":
         captureError(erasure.error, {
-          decisionId,
-          step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
+          fingerprintKey:
+            "caselaw.withdrawCaseLawDecisionDocument.erasure_error",
+          context: {
+            decisionId,
+            step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
+          },
         });
         break;
       default:

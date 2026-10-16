@@ -34,7 +34,9 @@ export const prefetchDecisionFacetsAfterSearch = async <T>({
         queryClient,
         decisionFacetsOptions(country),
         (error) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "prefetchDecisionFacetsAfterSearch:failure",
+          });
         },
       ),
       "cases.facets-prefetch",

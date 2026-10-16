@@ -65,7 +65,10 @@ export const useWorkspaceChatMentionRegistration = (
       null,
   });
   const activeViewView = useQueryView(activeViewQuery);
-  useQueryViewError(activeViewView);
+  useQueryViewError(
+    activeViewView,
+    "useWorkspaceChatMentionRegistration:query",
+  );
   const activeView =
     activeViewView.type === "items" ? activeViewView.items : undefined;
   const { filters, sorts } = useMemo(

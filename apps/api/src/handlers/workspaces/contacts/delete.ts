@@ -93,7 +93,12 @@ export const deleteWorkspaceContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey:
+        "deleteWorkspaceContactHandler.flushWorkspaceSearchRepairs",
+    }),
+  );
 
   return Result.ok({ id: deleted.id });
 };

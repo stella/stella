@@ -324,8 +324,11 @@ const captureNotificationError = (
   { exportId, operation, workspaceId }: NotificationErrorContext,
 ) => {
   captureError(error, {
-    exportId,
-    operation: `report_export.notification.${operation}`,
-    workspaceId,
+    fingerprintKey: "reports.captureNotificationError",
+    context: {
+      exportId,
+      operation: `report_export.notification.${operation}`,
+      workspaceId,
+    },
   });
 };

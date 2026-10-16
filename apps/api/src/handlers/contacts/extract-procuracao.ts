@@ -389,7 +389,11 @@ const extractProcuracao = createSafeRootHandler(
       );
     }
 
-    getS3().delete(key).catch(captureError);
+    getS3()
+      .delete(key)
+      .catch((error: unknown) =>
+        captureError(error, { fingerprintKey: "extractProcuracao.rejection" }),
+      );
 
     return extractionResult;
   },

@@ -114,6 +114,7 @@ export const docxSuggestionsOptions = ({
           new Error(
             `docx-suggestions pending hydration capped at ${DOCX_SUGGESTIONS_PENDING_MAX} rows for entity ${entityId}; newer pending suggestions were not loaded`,
           ),
+          { fingerprintKey: "docxSuggestionsOptions.queryFn:Error" },
         );
       }
 

@@ -982,8 +982,11 @@ export const storeFolioCollabSnapshot = async ({
     );
     if (Result.isError(cleanup)) {
       captureError(cleanup.error, {
-        roomId: value.roomId,
-        storageKey: nextKey,
+        fingerprintKey: "lib.discardNewObject.cleanup_error",
+        context: {
+          roomId: value.roomId,
+          storageKey: nextKey,
+        },
       });
     }
     await value
@@ -999,7 +1002,10 @@ export const storeFolioCollabSnapshot = async ({
           }),
       )
       .catch((error: unknown) => {
-        captureError(error, { roomId: value.roomId, storageKey: nextKey });
+        captureError(error, {
+          fingerprintKey: "lib.discardNewObject",
+          context: { roomId: value.roomId, storageKey: nextKey },
+        });
       });
   };
   const written = Result.flatten(

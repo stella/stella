@@ -63,7 +63,9 @@ export const useCreateWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateWorkspace:failure",
+      });
     },
   });
 };
@@ -175,7 +177,9 @@ export const useUpdateWorkspace = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateWorkspace:failure",
+      });
     },
   });
 };
@@ -204,7 +208,9 @@ export const useUnarchiveWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUnarchiveWorkspace:failure",
+      });
     },
   });
 };
@@ -231,7 +237,9 @@ export const useDeleteWorkspace = () => {
       useTableStore.getState().dropMatter(workspaceId);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteWorkspace:failure",
+      });
     },
   });
 };
@@ -265,7 +273,9 @@ export const useDuplicateWorkspace = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDuplicateWorkspace:failure",
+      });
     },
   });
 };

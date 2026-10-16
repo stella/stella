@@ -77,7 +77,9 @@ export const isDocumentOcrWorkerAvailable = async (
         "error.type": errorTag(availability.error),
       });
     } else {
-      captureError(availability.error);
+      captureError(availability.error, {
+        fingerprintKey: "lib.isDocumentOcrWorkerAvailable.availability_error",
+      });
     }
     return false;
   }
@@ -202,7 +204,7 @@ export const startDocumentOcrWorkerReadiness = () => {
           });
           return;
         }
-        captureError(error);
+        captureError(error, { fingerprintKey: "documentProcessing.heartbeat" });
         logger.error("document_processing.readiness_heartbeat_failed", {
           "error.type": errorTag(error),
         });

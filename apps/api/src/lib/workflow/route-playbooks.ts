@@ -313,9 +313,12 @@ export const routeClassifiedDocuments = async ({
         // capture the reason so a per-playbook materialization failure (e.g.
         // hitting the properties cap) is not silently invisible.
         captureError(new Error(result.message), {
-          workspaceId,
-          playbookId: definition.id,
-          status: String(result.status),
+          fingerprintKey: "workflow.materializedPropertyIds",
+          context: {
+            workspaceId,
+            playbookId: definition.id,
+            status: String(result.status),
+          },
         });
         continue;
       }
@@ -347,8 +350,11 @@ export const routeClassifiedDocuments = async ({
     PLAYBOOK_RUN_START_OUTCOME.QUEUED
   ) {
     captureError(new Error("routeClassifiedDocuments.workflow_not_started"), {
-      workspaceId,
-      status: started.status,
+      fingerprintKey: "workflow.routeClassifiedDocuments",
+      context: {
+        workspaceId,
+        status: started.status,
+      },
     });
   }
 };

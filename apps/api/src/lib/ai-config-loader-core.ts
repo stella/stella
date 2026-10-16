@@ -83,8 +83,11 @@ export const decryptOrgAIConfigRow = async ({
       "organization AI config row has ciphertext or IV but not both",
     );
     captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
+      fingerprintKey: "aiConfig.validateEncryptionFields",
+      context: {
+        organizationId,
+        source: "loadOrgAIConfig",
+      },
     });
     return { status: "corrupt", error };
   }
@@ -94,8 +97,11 @@ export const decryptOrgAIConfigRow = async ({
     return { status: "ok", config };
   } catch (error) {
     captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
+      fingerprintKey: "aiConfig.decrypt",
+      context: {
+        organizationId,
+        source: "loadOrgAIConfig",
+      },
     });
     return { status: "corrupt", error };
   }

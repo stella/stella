@@ -77,7 +77,11 @@ export const maybeStartUploadTriggeredFlows = async ({
   });
 
   if (Result.isError(definitionsResult)) {
-    captureError(definitionsResult.error, { entityId, workspaceId });
+    captureError(definitionsResult.error, {
+      fingerprintKey:
+        "flows.maybeStartUploadTriggeredFlows.definitionsResult_error",
+      context: { entityId, workspaceId },
+    });
     logger.error("flow.upload_trigger_scan_failed", {
       entityId,
       workspaceId,

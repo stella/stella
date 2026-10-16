@@ -236,7 +236,9 @@ export const useMatterActions = (
     const url = `${window.location.origin}/workspaces/${target.id}`;
     const copied = await copyToClipboard(url);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "useMatterActions.handleCopyLink:failure",
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }

@@ -13,7 +13,10 @@ const CLEANUP_HANDOFF_BATCH_MAX = 4;
 type CleanupHandoffOptions = {
   captureDeliveryError: (
     error: unknown,
-    context: { requestId: SafeId<"entityDeletionCleanupRequest"> },
+    options: {
+      fingerprintKey: `${string}.${string}`;
+      context?: { requestId: SafeId<"entityDeletionCleanupRequest"> };
+    },
   ) => void;
   enqueueCleanup: (
     requestId: SafeId<"entityDeletionCleanupRequest">,
@@ -43,7 +46,11 @@ export const handoffCommittedEntityDeletionCleanup = async ({
   });
   if (Result.isError(enqueueResult)) {
     const captureResult = Result.try({
-      try: () => captureDeliveryError(enqueueResult.error, { requestId }),
+      try: () =>
+        captureDeliveryError(enqueueResult.error, {
+          fingerprintKey: "entityDeletion.handoff",
+          context: { requestId },
+        }),
       catch: (cause) => cause,
     });
     if (Result.isError(captureResult)) {

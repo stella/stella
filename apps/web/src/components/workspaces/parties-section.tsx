@@ -565,7 +565,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, { fingerprintKey: "PartyRow:failure" });
     },
   });
 
@@ -674,7 +674,9 @@ const AddPartyDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AddPartyDialog:failure",
+      });
     },
   });
   const [isOpen, setIsOpen] = useState(false);

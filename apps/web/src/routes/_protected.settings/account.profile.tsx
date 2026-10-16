@@ -481,7 +481,9 @@ function ProfilePageBody() {
               try {
                 await updateDisplayName.mutateAsync();
               } catch (error) {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ProfilePageBody:failure",
+                });
               }
             }}
             className="flex flex-col gap-4 p-4"
@@ -543,7 +545,9 @@ function ProfilePageBody() {
               try {
                 await updateWordEditIdentity.mutateAsync();
               } catch (error) {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ProfilePageBody:failure-2",
+                });
               }
             }}
             className="border-border flex flex-col gap-4 border-t p-4"

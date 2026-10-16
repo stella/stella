@@ -245,7 +245,10 @@ export const createEntityVersionFromBuffer = async ({
         }),
       );
       if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { entityId, objectKey });
+        captureError(cleanup.error, {
+          fingerprintKey: "entityversions.cleanupObject.cleanup_error",
+          context: { entityId, objectKey },
+        });
         return false;
       }
       return true;
@@ -424,7 +427,10 @@ export const createEntityVersionFromBuffer = async ({
       filePropertyId: written.filePropertyId,
     })
     .catch((error: unknown) => {
-      captureError(error, { entityId });
+      captureError(error, {
+        fingerprintKey: "entityVersionBuffer.processExtraction",
+        context: { entityId },
+      });
     });
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
@@ -437,7 +443,10 @@ export const createEntityVersionFromBuffer = async ({
       workspaceId,
     })
     .catch((error: unknown) => {
-      captureError(error, { entityId, fieldId, mimeType });
+      captureError(error, {
+        fingerprintKey: "entityVersionBuffer.enqueuePdfDerivative",
+        context: { entityId, fieldId, mimeType },
+      });
     });
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
@@ -450,7 +459,10 @@ export const createEntityVersionFromBuffer = async ({
       workspaceId,
     })
     .catch((error: unknown) => {
-      captureError(error, { entityId, fieldId, mimeType });
+      captureError(error, {
+        fingerprintKey: "entityVersionBuffer.enqueueThumbnail",
+        context: { entityId, fieldId, mimeType },
+      });
     });
   dependencies
     .computeVersionDiffStats({
@@ -465,7 +477,10 @@ export const createEntityVersionFromBuffer = async ({
       organizationId,
     })
     .catch((error: unknown) => {
-      captureError(error, { versionId: entityVersionId });
+      captureError(error, {
+        fingerprintKey: "entityVersionBuffer.computeVersionDiff",
+        context: { versionId: entityVersionId },
+      });
     });
   broadcastWorkspaceResourceUpdated(
     workspaceId,

@@ -114,7 +114,9 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
         return;
       }
 
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useDesktopFileOpen.open:failure",
+      });
       notifyUserError(
         error,
         t("workspaces.files.desktopEdit.unavailableTitle"),

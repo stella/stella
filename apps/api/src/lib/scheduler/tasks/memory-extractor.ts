@@ -337,8 +337,11 @@ const recordMemoryExtractionFailure = async ({
   });
   if (Result.isError(stampResult)) {
     captureError(stampResult.error, {
-      feature: "memory.extractor.failure_stamp",
-      compactionId,
+      fingerprintKey: "tasks.recordMemoryExtractionFailure.stampResult_error",
+      context: {
+        feature: "memory.extractor.failure_stamp",
+        compactionId,
+      },
     });
     logger.warn("scheduler.memory_extractor_failure_stamp_failed", {
       "error.type": errorTag(stampResult.error),
@@ -346,7 +349,10 @@ const recordMemoryExtractionFailure = async ({
     });
   }
 
-  captureError(error, { feature, compactionId });
+  captureError(error, {
+    fingerprintKey: "tasks.recordMemoryExtractionFailure",
+    context: { feature, compactionId },
+  });
   logger.warn(logEvent, {
     "error.type": errorTag(error),
     "compaction.id": compactionId,
@@ -510,7 +516,10 @@ const extractCandidates = async ({
   });
   if (Result.isError(transcriptResult)) {
     captureError(transcriptResult.error, {
-      feature: "memory.extractor.transcript",
+      fingerprintKey: "tasks.extractCandidates.transcriptResult_error",
+      context: {
+        feature: "memory.extractor.transcript",
+      },
     });
   }
   const transcript = Result.isError(transcriptResult)

@@ -294,7 +294,9 @@ const createPDFStore = ({
         seenRanges: new Set(),
       });
       if (located.isErr()) {
-        getAnalytics().captureError(located.error);
+        getAnalytics().captureError(located.error, {
+          fingerprintKey: "createPDFStore.addAnonymizationEntityByText:failure",
+        });
         notifyUserError(located.error, getTranslator()("errors.actionFailed"));
         return 0;
       }

@@ -73,7 +73,9 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateProperty:failure",
+      });
     },
   });
 };
@@ -131,7 +133,9 @@ export const useCreatePropertiesBatch = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreatePropertiesBatch:failure",
+      });
     },
   });
 };
@@ -189,7 +193,9 @@ export const useUpdateProperty = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateProperty:failure",
+      });
     },
   });
 };
@@ -232,7 +238,9 @@ export const useSuggestPrompt = () => {
   return useMutation({
     mutationFn: suggestPropertyPrompt,
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useSuggestPrompt:failure",
+      });
     },
   });
 };
@@ -263,7 +271,9 @@ export const useDeleteProperty = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteProperty:failure",
+      });
     },
   });
 };

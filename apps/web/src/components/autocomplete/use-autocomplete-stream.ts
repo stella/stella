@@ -225,7 +225,10 @@ export const useAutocompleteStream = (
           dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
         },
         reportError: (error) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "useAutocompleteStream.fireRequest.reportError:failure",
+          });
         },
       });
       if (inflight === controller) {

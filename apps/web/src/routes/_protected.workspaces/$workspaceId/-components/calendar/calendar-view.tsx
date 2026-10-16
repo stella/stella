@@ -452,7 +452,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure",
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
@@ -477,7 +479,9 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure-2",
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(

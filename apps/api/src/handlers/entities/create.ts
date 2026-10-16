@@ -151,7 +151,11 @@ export const createEntitiesHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+  flushEntitySearchRepairs([txResult.entityId]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "createEntitiesHandler.flushEntitySearchRepairs",
+    }),
+  );
 
   return Result.ok({ entityId: txResult.entityId });
 };

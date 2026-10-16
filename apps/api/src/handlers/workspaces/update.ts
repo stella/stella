@@ -324,7 +324,11 @@ export const updateWorkspaceHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+    }),
+  );
 
   return Result.ok({});
 };

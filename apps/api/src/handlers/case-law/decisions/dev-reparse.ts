@@ -111,8 +111,11 @@ export const reparseForDev = async (
   }
   const attempt = reparseNss(decision).catch((error: unknown) => {
     captureError(error, {
-      source: "case-law-dev-reparse",
-      decisionId: decision.id,
+      fingerprintKey: "decisions.attempt",
+      context: {
+        source: "case-law-dev-reparse",
+        decisionId: decision.id,
+      },
     });
     parsed.delete(decision.id);
     return null;

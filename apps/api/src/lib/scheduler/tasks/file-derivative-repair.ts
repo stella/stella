@@ -303,7 +303,10 @@ const requeueRow = async (
       new UnrecognizedDerivativeStateError({
         message: `Persisted ${kind} derivative state is unreadable to this build`,
       }),
-      { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+      {
+        fingerprintKey: "tasks.requeueRow",
+        context: { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+      },
     );
   }
   let requeued = 0;

@@ -85,6 +85,10 @@ const useCitingProvisionCitationGrammar = (
         area: "case-law-provision-grammar",
         message: `[Case-law provision grammar] Undeclared jurisdiction ${undeclared}`,
       }),
+      {
+        fingerprintKey:
+          "useCitingProvisionCitationGrammar:ClientTelemetryError",
+      },
     );
   }, [undeclared]);
   if (declared === null) {
@@ -128,7 +132,7 @@ export const useDecisionProvisionAnchors = ({
   const renderPart = useProvisionPartRenderer();
   const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useDecisionProvisionAnchors:query");
   const data = itemsOf(dataView);
   const rows = optionalArray(data?.items);
   // The list carries the wording of the provisions it could read, keyed by
@@ -213,7 +217,7 @@ export const useDecisionProvisionAnchors = ({
   }));
   const resolvedQuery = useQuery(statutesResolveOptions(citedWorks));
   const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  useQueryViewError(resolvedView, "useDecisionProvisionAnchors:query-2");
   const resolved = itemsOf(resolvedView);
   const statutesPending = resolvedQuery.isPending;
   const resolvedByCitedWork = statuteByCitedWork(resolved);
@@ -256,7 +260,7 @@ export const useDecisionProvisionAnchors = ({
     NonNullable<(typeof versions)[number]["data"]>
   >();
   const versionViews = versions.map((query) => queryView(query));
-  useQueryViewErrors(versionViews);
+  useQueryViewErrors(versionViews, "useDecisionProvisionAnchors:query-3");
   for (const [index, { key }] of versionedWorks.entries()) {
     const view = versionViews.at(index);
     if (view === undefined) {

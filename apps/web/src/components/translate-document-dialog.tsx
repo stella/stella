@@ -247,7 +247,9 @@ export const TranslateDocumentDialog = (
       return;
     }
 
-    analytics.captureError(result.error);
+    analytics.captureError(result.error, {
+      fingerprintKey: "TranslateDocumentDialog:failure",
+    });
     notifyUserError(result.error, t("translate.error.title"), {
       description: userErrorFromThrown(result.error, t("errors.actionFailed")),
     });
@@ -260,7 +262,9 @@ export const TranslateDocumentDialog = (
       availabilityErrorRef.current !== availabilityError
     ) {
       availabilityErrorRef.current = availabilityError;
-      analytics.captureError(availabilityError);
+      analytics.captureError(availabilityError, {
+        fingerprintKey: "TranslateDocumentDialog:availabilityError",
+      });
       notifyUserError(availabilityError, t("translate.error.title"), {
         description: userErrorFromThrown(
           availabilityError,
@@ -273,7 +277,9 @@ export const TranslateDocumentDialog = (
       preparationErrorRef.current !== preparationQuery.error
     ) {
       preparationErrorRef.current = preparationQuery.error;
-      analytics.captureError(preparationQuery.error);
+      analytics.captureError(preparationQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-2",
+      });
     }
     const run = runQuery.data?.run;
     if (
@@ -282,7 +288,9 @@ export const TranslateDocumentDialog = (
       pollingErrorRunRef.current !== runId
     ) {
       pollingErrorRunRef.current = runId;
-      analytics.captureError(runQuery.error);
+      analytics.captureError(runQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-3",
+      });
       notifyUserError(runQuery.error, t("translate.error.title"), {
         description: userErrorFromThrown(
           runQuery.error,
@@ -409,7 +417,9 @@ export const TranslateDocumentDialog = (
       setDialogOpen(true);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-4",
+      });
       notifyUserError(error, t("translate.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

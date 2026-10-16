@@ -102,8 +102,11 @@ export const absorbComposedSupplementRows = async ({
           "error.detail": wrappedErrorDetail(safeError),
         });
         captureError(safeError, {
-          sourceId,
-          step: "absorbComposedSupplementRows",
+          fingerprintKey: "pipeline.standing.safeError",
+          context: {
+            sourceId,
+            step: "absorbComposedSupplementRows",
+          },
         });
         return [sourceDocumentId];
       }

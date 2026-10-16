@@ -151,7 +151,10 @@ const generateAdmittedThreadTitle = async ({
   if (Result.isError(generated)) {
     aiAnalytics.captureError(generated.error);
     if (isUnanticipatedAIFailure(generated.error)) {
-      captureError(generated.error, { threadId });
+      captureError(generated.error, {
+        fingerprintKey: "chat.generateAdmittedThreadTitle.generated_error",
+        context: { threadId },
+      });
     }
     return;
   }
@@ -228,7 +231,10 @@ const generateAdmittedThreadTitle = async ({
   });
 
   if (Result.isError(updateResult)) {
-    captureError(updateResult.error, { threadId });
+    captureError(updateResult.error, {
+      fingerprintKey: "chat.generateAdmittedThreadTitle.updateResult_error",
+      context: { threadId },
+    });
     return;
   }
 
@@ -236,7 +242,11 @@ const generateAdmittedThreadTitle = async ({
   // a failure is reported, never thrown. Awaited, so whoever waits for
   // this title (the turn's follow-ups) waits for its indexing too.
   if (updateResult.value) {
-    await indexThread(threadId).catch(captureError);
+    await indexThread(threadId).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "generateAdmittedThreadTitle.indexThread",
+      }),
+    );
   }
 };
 

@@ -347,7 +347,11 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props.indexThread(props.threadId).catch(captureError);
+    props.indexThread(props.threadId).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "persistMessage.props_indexThread",
+      }),
+    );
   }
   return result;
 };
@@ -670,9 +674,12 @@ const reportStoredTurnDefects = ({
         message: "A settled chat turn stored a tool call without its result",
       }),
       {
-        outcome,
-        tool_call_states: unsettled.map(({ state }) => state).join(","),
-        unsettled_count: String(unsettled.length),
+        fingerprintKey: "chat.storedTurn.unsettledToolCall",
+        context: {
+          outcome,
+          tool_call_states: unsettled.map(({ state }) => state).join(","),
+          unsettled_count: String(unsettled.length),
+        },
       },
     );
   }
@@ -686,9 +693,12 @@ const reportStoredTurnDefects = ({
         message: "A continuation stored its message without earlier parts",
       }),
       {
-        dropped_tool_calls: String(dropped.droppedToolCallIds.length),
-        outcome,
-        part_count_drop: String(dropped.partCountDrop),
+        fingerprintKey: "chat.storedTurn.droppedParts",
+        context: {
+          dropped_tool_calls: String(dropped.droppedToolCallIds.length),
+          outcome,
+          part_count_drop: String(dropped.partCountDrop),
+        },
       },
     );
   }
@@ -1209,7 +1219,14 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey:
+          "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+      }),
+    );
   return Result.ok(result.value.value);
 };
 
@@ -1244,6 +1261,13 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey:
+          "persistClaimedReplayMessage.persistenceProps_indexThread",
+      }),
+    );
   return Result.ok(result.value.execution);
 };

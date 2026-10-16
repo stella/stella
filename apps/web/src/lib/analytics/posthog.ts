@@ -16,7 +16,12 @@ import {
 import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
-import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
+import {
+  fingerprintExceptionEvent,
+  isExceptionFingerprintKey,
+  capturedExceptionIdentity,
+  sanitizeFingerprintFields,
+} from "@/lib/analytics/exception-fingerprint";
 import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
@@ -429,6 +434,12 @@ const sanitizeExceptionEvent = (
   const safeArea =
     typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
   const http = apiErrorIdentity(properties);
+  const fields = sanitizeFingerprintFields(properties["exception_fields"]);
+  const causalType = properties["exception_error_type"];
+  const declaredKey = properties["exception_key"];
+  const key = isExceptionFingerprintKey(declaredKey)
+    ? declaredKey
+    : "browser:unhandled-error";
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];
@@ -448,9 +459,12 @@ const sanitizeExceptionEvent = (
       // Grouping identity derived from the sanitized list, so nothing the
       // redaction removed can reach it.
       $exception_fingerprint: fingerprintExceptionEvent({
-        area: safeArea,
-        entries: sanitizedList,
-        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+        key,
+        entries:
+          typeof causalType === "string"
+            ? [{ type: normalizeTelemetryErrorTypeName(causalType) }]
+            : sanitizedList,
+        fields,
         http,
       }),
       $exception_list: sanitizedList,
@@ -850,7 +864,7 @@ export const createPostHogAnalytics = ({
   };
 
   const analytics: Analytics = {
-    captureError: (error, context) => {
+    captureError: (error, { fingerprintKey, context }) => {
       // Cheap guards before the SDK call: a stray `captureError(null)`
       // or `captureError(undefined)` would otherwise reach PostHog as
       // `Error: "undefined"` noise that the `before_send` filter then
@@ -863,8 +877,12 @@ export const createPostHogAnalytics = ({
         return;
       }
       logDevError(error, devErrorContext(context));
+      const identity = capturedExceptionIdentity(error);
       captureRedactedException(error, (redacted) => {
         posthog.captureException(redacted, {
+          exception_key: fingerprintKey,
+          exception_error_type: identity.type,
+          exception_fields: identity.fields,
           ...errorContextProperties(context),
           ...telemetryAreaProperty(error),
           ...apiErrorTelemetryProperties(error),
@@ -915,8 +933,12 @@ export const createPostHogAnalytics = ({
         })
         .catch((error: unknown) => {
           analytics.captureError(error, {
-            operation: "posthog.route-error-lifecycle",
-            type: "detached",
+            fingerprintKey:
+              "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            context: {
+              operation: "posthog.route-error-lifecycle",
+              type: "detached",
+            },
           });
         }),
     identifyUser: (user) => {

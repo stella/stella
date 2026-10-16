@@ -485,7 +485,10 @@ const deleteStagedUploadObjects = async ({
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
-        captureError(deleteError, { key, stage, uploadId }),
+        captureError(deleteError, {
+          fingerprintKey: "uploads.deleteStagedUploadObjects.deleteError",
+          context: { key, stage, uploadId },
+        }),
       );
   }
 };
@@ -691,8 +694,11 @@ const runFinalize = async function* ({
     });
     if (Result.isError(postPromoteResult)) {
       captureError(postPromoteResult.error, {
-        uploadId: claimed.id,
-        stage: "post-promote",
+        fingerprintKey: "uploads.runFinalize.postPromoteResult_error",
+        context: {
+          uploadId: claimed.id,
+          stage: "post-promote",
+        },
       });
     }
   }
@@ -702,8 +708,11 @@ const runFinalize = async function* ({
     .delete(tmpKey)
     .catch((deleteError: unknown) =>
       captureError(deleteError, {
-        uploadId: claimed.id,
-        stage: "tmp-cleanup-after-promote",
+        fingerprintKey: "uploads.runFinalize.deleteError",
+        context: {
+          uploadId: claimed.id,
+          stage: "tmp-cleanup-after-promote",
+        },
       }),
     );
 

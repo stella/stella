@@ -189,7 +189,10 @@ export const createBullMqWorkerHost = <
             catch: (cause) => cause,
           });
           if (Result.isError(closed)) {
-            captureError(closed.error, { host, queues: queues.join(",") });
+            captureError(closed.error, {
+              fingerprintKey: "lib.createBullMqWorkerHost.closed_error",
+              context: { host, queues: queues.join(",") },
+            });
           }
         }),
       );

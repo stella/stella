@@ -206,7 +206,10 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: run.id });
+      captureError(outcome.error, {
+        fingerprintKey: "lib.handle.outcome_error",
+        context: { runId: run.id },
+      });
       return false;
     }
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;

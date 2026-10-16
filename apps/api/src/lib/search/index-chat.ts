@@ -470,8 +470,11 @@ export const backfillChatThreadSearchIndex = async ({
         await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
         captureError(error, {
-          feature: "chat_search.backfill",
-          threadId: row.id,
+          fingerprintKey: "search.backfillChatThreadSearchIndex",
+          context: {
+            feature: "chat_search.backfill",
+            threadId: row.id,
+          },
         });
         logger.error("chat_search.backfill_failed", {
           threadId: row.id,

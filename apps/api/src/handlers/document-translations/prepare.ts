@@ -59,7 +59,11 @@ const prepareDocumentTranslation = createSafeHandler<
     })
   ).andThen((inspected) => inspected);
   if (Result.isError(inspection)) {
-    captureError(inspection.error, { source: "document-translation-prepare" });
+    captureError(inspection.error, {
+      fingerprintKey:
+        "documenttranslations.prepareDocumentTranslation.inspection_error",
+      context: { source: "document-translation-prepare" },
+    });
     return Result.err(
       new HandlerError({
         status: 422,

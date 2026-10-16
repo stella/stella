@@ -236,8 +236,11 @@ export default createSafeHandler(
     // search freshness fence does not hide the restored entity indefinitely.
     await processExtraction(params.entityId).catch((error: unknown) =>
       captureError(error, {
-        entityId: params.entityId,
-        versionId: nextVersionId,
+        fingerprintKey: "versions.capture",
+        context: {
+          entityId: params.entityId,
+          versionId: nextVersionId,
+        },
       }),
     );
 

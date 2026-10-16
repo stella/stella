@@ -550,7 +550,10 @@ const rollbackCopiedS3Keys = async (
   });
   const completed = Result.flatten(deleted);
   if (Result.isError(completed)) {
-    captureError(completed.error, { source: "chat-fork-rollback" });
+    captureError(completed.error, {
+      fingerprintKey: "fork.rollbackCopiedS3Keys.completed_error",
+      context: { source: "chat-fork-rollback" },
+    });
   }
 };
 
@@ -780,8 +783,11 @@ export const createForkThread = ({
               "Chat fork prefix references attachments with no user_files row",
           }),
           {
-            fileIds: unresolvedFileIds.join(","),
-            threadId: params.threadId,
+            fingerprintKey: "chat.fork.missingAttachmentRow",
+            context: {
+              fileIds: unresolvedFileIds.join(","),
+              threadId: params.threadId,
+            },
           },
         );
       }
@@ -830,9 +836,12 @@ export const createForkThread = ({
               "Chat fork prefix references attachments whose storage objects are gone",
           }),
           {
-            fileIds: missingObjectFileIds.join(","),
-            threadId: params.threadId,
-            thumbnailFileIds: missingThumbnailFileIds.join(","),
+            fingerprintKey: "chat.fork.missingAttachmentObject",
+            context: {
+              fileIds: missingObjectFileIds.join(","),
+              threadId: params.threadId,
+              thumbnailFileIds: missingThumbnailFileIds.join(","),
+            },
           },
         );
       }
@@ -986,7 +995,11 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(captureError);
+      indexChatThread(newThreadId).catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "createForkThread.indexChatThread",
+        }),
+      );
 
       return Result.ok({ threadId: newThreadId, title: source.title });
     },

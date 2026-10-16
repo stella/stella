@@ -142,7 +142,11 @@ export const createBilingualEntityHandler = (
       });
 
       if (conversion.isErr()) {
-        captureError(conversion.error, { source: "bilingual-document" });
+        captureError(conversion.error, {
+          fingerprintKey:
+            "bilingual.createBilingualEntityHandler.conversion_error",
+          context: { source: "bilingual-document" },
+        });
         return Result.err(
           new HandlerError({
             status: 422,
@@ -162,7 +166,10 @@ export const createBilingualEntityHandler = (
       const validation = await validateDocxBuffer(buffer);
       if (!validation.valid) {
         captureError(new Error(validation.error), {
-          source: "bilingual-document",
+          fingerprintKey: "bilingual.createBilingualEntityHandler",
+          context: {
+            source: "bilingual-document",
+          },
         });
         return Result.err(
           new HandlerError({
@@ -178,7 +185,11 @@ export const createBilingualEntityHandler = (
         fileName,
       });
       if (Result.isError(scanResult)) {
-        captureError(scanResult.error, { source: "bilingual-document" });
+        captureError(scanResult.error, {
+          fingerprintKey:
+            "bilingual.createBilingualEntityHandler.scanResult_error",
+          context: { source: "bilingual-document" },
+        });
         return Result.err(
           new HandlerError({
             status: 422,

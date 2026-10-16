@@ -92,6 +92,9 @@ export const useTimerMutation = () => {
         queryKey: timeTimersKeys.all(user.activeOrganizationId, user.id),
       });
     },
-    onError: (error) => analytics.captureError(error),
+    onError: (error) =>
+      analytics.captureError(error, {
+        fingerprintKey: "useTimerMutation:failure",
+      }),
   });
 };

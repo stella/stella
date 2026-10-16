@@ -131,7 +131,10 @@ export const DefaultErrorComponent = ({
             query.state.status === "error",
         })
         .catch((refetchError: unknown) => {
-          analytics.captureError(refetchError);
+          analytics.captureError(refetchError, {
+            fingerprintKey:
+              "DefaultErrorComponent.retryErroredQueries:refetchError",
+          });
         });
 
       reset();
@@ -156,7 +159,9 @@ export const DefaultErrorComponent = ({
     }
 
     if (retriesAtLimit) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DefaultErrorComponent:failure",
+      });
     }
   }, [
     error,
@@ -301,7 +306,9 @@ const UnexpectedRouteError = ({
     }
     const copied = await copyToClipboard(errorReference);
     if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
+      analytics.captureError(copied.error, {
+        fingerprintKey: "UnexpectedRouteError.handleCopyReference:failure",
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }

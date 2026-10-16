@@ -57,7 +57,12 @@ const revertMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      upsertChatThreadSearchDocument(threadId).catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey:
+            "revertMessageRevision.upsertChatThreadSearchDocument",
+        }),
+      );
     }
     return revisionResult(result);
   },

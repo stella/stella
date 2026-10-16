@@ -90,7 +90,9 @@ export const navigateToWorkspaceReveal = async ({
     queryClient,
     viewsOptions(target.targetWorkspaceId),
   ).catch((error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "navigateToWorkspaceReveal:failure",
+    });
     return [];
   });
   await navigate(getWorkspaceRevealTarget({ ...target, views }));

@@ -136,7 +136,9 @@ const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 const EMPTY_EDIT_SNAPSHOT: FolioAIEditSnapshot = { blocks: [], anchors: {} };
 
 const capturePromptSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
+  getAnalytics().captureError(error, {
+    fingerprintKey: "capturePromptSubmitError:failure",
+  });
 };
 
 type TemplateStudioChatProps = {
@@ -222,7 +224,9 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       return unwrapEden(response);
     });
     if (Result.isError(rotated)) {
-      getAnalytics().captureError(rotated.error);
+      getAnalytics().captureError(rotated.error, {
+        fingerprintKey: "ResolvedTemplateStudioChat.rotateThread:failure",
+      });
       notifyUserError(rotated.error, t("common.somethingWentWrong"));
       return false;
     }
@@ -1210,7 +1214,9 @@ const TemplateStudioChatInner = ({
       } catch (toolCallError) {
         // Allow a retry on a later render of the same unresolved part.
         executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
-        getAnalytics().captureError(toolCallError);
+        getAnalytics().captureError(toolCallError, {
+          fingerprintKey: "TemplateStudioChatInner:toolCallError",
+        });
         try {
           await addToolResult(
             {
@@ -1227,7 +1233,9 @@ const TemplateStudioChatInner = ({
             scopedContinuationOptions,
           );
         } catch (reportError) {
-          getAnalytics().captureError(reportError);
+          getAnalytics().captureError(reportError, {
+            fingerprintKey: "TemplateStudioChatInner:reportError",
+          });
         }
       }
     },

@@ -66,9 +66,12 @@ export const recordDecisionUsage = async ({
   });
   if (Result.isError(result)) {
     captureError(result.error, {
-      source: "usage.decision",
-      organization_id: metering.organizationId,
-      trace_id: metering.callId,
+      fingerprintKey: "decisions.recordDecisionUsage.result_error",
+      context: {
+        source: "usage.decision",
+        organization_id: metering.organizationId,
+        trace_id: metering.callId,
+      },
     });
   }
 };

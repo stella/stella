@@ -257,7 +257,9 @@ const prepareCreateDocumentDraft = async (
   });
   switch (prepared.status) {
     case "failed":
-      getAnalytics().captureError(prepared.error);
+      getAnalytics().captureError(prepared.error, {
+        fingerprintKey: "prepareCreateDocumentDraft:failure",
+      });
       return null;
     case "ready":
       return { buffer: prepared.buffer, fileName };
@@ -330,7 +332,7 @@ export const useChatSession = ({
   const queryClient = useQueryClient();
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(organizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
+  useQueryViewError(mcpCatalogView, "useChatSession:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" ? mcpCatalogView.items : undefined;
   const mcpConnectorIdentities =
@@ -581,7 +583,9 @@ export const useChatSession = ({
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            getAnalytics().captureError(settleResult.error);
+            getAnalytics().captureError(settleResult.error, {
+              fingerprintKey: "useChatSession:failure",
+            });
             chat.setMessages(
               terminalizeUnsettledCreateDocumentDraft(
                 chat.getSnapshot().messages,
@@ -704,7 +708,9 @@ export const useChatSession = ({
       // for telemetry and surface a toast so the user knows the older history
       // failed to load. Keep the cursor but flag the error so auto-loading
       // pauses (the manual button retries) instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useChatSession:failure-2",
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
@@ -1396,7 +1402,9 @@ export const useChatSession = ({
           downloadResult.value.status === "invalid-source"
         ) {
           if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error);
+            getAnalytics().captureError(downloadResult.error, {
+              fingerprintKey: "useChatSession:failure-3",
+            });
           }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
@@ -1526,7 +1534,9 @@ export const useChatSession = ({
           getInspector: useInspectorTabsStore.getState,
           toolCallId,
         });
-        getAnalytics().captureError(createResult.error);
+        getAnalytics().captureError(createResult.error, {
+          fingerprintKey: "useChatSession:failure-4",
+        });
         notifyUserError(
           createResult.error,
           APIError.is(createResult.error)
@@ -1674,7 +1684,9 @@ export const useChatSession = ({
       return;
     }
     lastStopFailureRef.current = stopState.error;
-    getAnalytics().captureError(stopState.error);
+    getAnalytics().captureError(stopState.error, {
+      fingerprintKey: "useChatSession:failure-5",
+    });
     notifyUserError(stopState.error, t("chat.stopFailed"));
   }, [stopState, t]);
 

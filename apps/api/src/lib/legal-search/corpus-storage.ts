@@ -122,7 +122,10 @@ export const parsePersistedCorpusAst = (
         message: "Stored document AST carries undeclared vocabulary",
         degradations,
       }),
-      { step: "corpus-storage.parsePersistedCorpusAst" },
+      {
+        fingerprintKey: "legalsearch.parsePersistedCorpusAst",
+        context: { step: "corpus-storage.parsePersistedCorpusAst" },
+      },
     );
   }
   return parsed;
@@ -964,7 +967,10 @@ export const readCorpusPayloadOrFallback = async <T>({
         });
   }
 
-  captureError(payload.error, { documentId, step });
+  captureError(payload.error, {
+    fingerprintKey: "legalsearch.readCorpusPayloadOrFallback.payload_error",
+    context: { documentId, step },
+  });
   return postgresCopy;
 };
 

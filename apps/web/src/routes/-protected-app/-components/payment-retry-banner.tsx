@@ -42,7 +42,7 @@ export const PaymentRetryBanner = () => {
       },
     }),
   );
-  useQueryViewError(accessView);
+  useQueryViewError(accessView, "PaymentRetryBanner:query");
   const data = accessView.type === "items" ? accessView.items : undefined;
   const retryEndsAt =
     data?.paymentRetry.status === "payment_retry"

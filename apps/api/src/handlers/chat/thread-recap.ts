@@ -148,7 +148,10 @@ export const generateThreadRecapText = async ({
   } catch (error) {
     aiAnalytics.captureError(error);
     if (isUnanticipatedAIFailure(error)) {
-      captureError(error, { threadId, feature: "chat.thread_recap" });
+      captureError(error, {
+        fingerprintKey: "chat.generateThreadRecapText",
+        context: { threadId, feature: "chat.thread_recap" },
+      });
     }
     return null;
   }

@@ -80,7 +80,9 @@ const updateWebSearchKey = createSafeRootHandler(
           );
         }
       }
-      captureError(error);
+      captureError(error, {
+        fingerprintKey: "organizationsettings.updateWebSearchKey",
+      });
       return Result.err(
         new HandlerError({
           status: 502,

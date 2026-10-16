@@ -133,7 +133,7 @@ export const CompareVersionsPanel = ({
     enabled: false,
   });
   const outcomeQueryView = useQueryView(outcomeQuery);
-  useQueryViewError(outcomeQueryView);
+  useQueryViewError(outcomeQueryView, "CompareVersionsPanel:query");
   const [requestedSelection, setRequestedSelection] =
     useState<CompareVersionSelection | null>(null);
   const [baseTrackedChanges, setBaseTrackedChanges] =
@@ -248,7 +248,9 @@ export const CompareVersionsPanel = ({
     );
 
   const surfaceRequestError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "CompareVersionsPanel.surfaceRequestError:failure",
+    });
     setRequestState({
       status: "error",
       message: userErrorFromThrown(error, t("fileDetail.compareRequestFailed")),
@@ -352,7 +354,9 @@ export const CompareVersionsPanel = ({
       async () => await openRedline(result),
     );
     if (Result.isError(opened)) {
-      getAnalytics().captureError(opened.error);
+      getAnalytics().captureError(opened.error, {
+        fingerprintKey: "CompareVersionsPanel.saveComparison:failure",
+      });
       setOutcome({
         type: "created",
         result,

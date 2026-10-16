@@ -426,7 +426,8 @@ describe("PostHog browser analytics adapter", () => {
     });
 
     expect(sanitized?.properties).toEqual({
-      $exception_fingerprint: "QuotaExceededError|||",
+      $exception_fingerprint:
+        '["QuotaExceededError","browser:unhandled-error",null,null,[]]',
       $exception_list: [{ type: "QuotaExceededError", value: "" }],
       $exception_type: "QuotaExceededError",
     });
@@ -442,8 +443,12 @@ describe("PostHog browser analytics adapter", () => {
       })?.properties?.["$exception_fingerprint"];
 
     // A message-less DOM exception carries the bare name as its value.
-    expect(fingerprintOf("NetworkError")).toBe("NetworkError|||");
-    expect(fingerprintOf("NotAllowedError: denied")).toBe("NotAllowedError|||");
+    expect(fingerprintOf("NetworkError")).toBe(
+      '["NetworkError","browser:unhandled-error",null,null,[]]',
+    );
+    expect(fingerprintOf("NotAllowedError: denied")).toBe(
+      '["NotAllowedError","browser:unhandled-error",null,null,[]]',
+    );
     expect(fingerprintOf("NetworkError")).not.toBe(
       fingerprintOf("SecurityError"),
     );
@@ -462,7 +467,8 @@ describe("PostHog browser analytics adapter", () => {
     });
 
     expect(sanitized?.properties).toEqual({
-      $exception_fingerprint: "DOMException|||",
+      $exception_fingerprint:
+        '["DOMException","browser:unhandled-error",null,null,[]]',
       $exception_list: [{ type: "DOMException", value: "" }],
       $exception_type: "DOMException",
     });
@@ -527,7 +533,8 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint: "UnhandledRejection|||",
+        $exception_fingerprint:
+          '["UnhandledRejection","browser:unhandled-error",null,null,[]]',
         $exception_list: [{ type: "UnhandledRejection", value: "" }],
         $exception_type: "UnhandledRejection",
       },
@@ -552,7 +559,8 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint: "TypeError||app.js|",
+        $exception_fingerprint:
+          '["TypeError","browser:unhandled-error",null,null,[]]',
         $exception_list: [
           {
             type: "TypeError",
@@ -739,8 +747,8 @@ describe("PostHog browser analytics adapter", () => {
       host: "https://posthog.test",
       key: "phc_test",
     });
-    analytics.captureError(null);
-    analytics.captureError(undefined);
+    analytics.captureError(null, { fingerprintKey: "posthog:failure" });
+    analytics.captureError(undefined, { fingerprintKey: "posthog:undefined" });
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
@@ -754,7 +762,7 @@ describe("PostHog browser analytics adapter", () => {
       `TypeError: ${error.message}`,
       "    at renderMatter (https://stella.test/assets/index.js:10:15)",
     ].join("\n");
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-2" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     expect(captured).toBeInstanceOf(Error);
@@ -921,7 +929,7 @@ describe("PostHog browser analytics adapter", () => {
     const error = new Error(`Privileged document name\n${injectedFrame}`);
     error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-3" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -944,7 +952,7 @@ describe("PostHog browser analytics adapter", () => {
     error.name = "ClientTelemetryError";
     error.message = "Changed after stack serialization";
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-4" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -966,7 +974,7 @@ describe("PostHog browser analytics adapter", () => {
     error.stack = `Error: ${error.message}`;
     error.message = "Public summary";
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-5" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -989,7 +997,7 @@ describe("PostHog browser analytics adapter", () => {
     );
     error.stack = [`Error: ${error.message}`, actualFrame].join("\n");
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-6" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -1011,7 +1019,7 @@ describe("PostHog browser analytics adapter", () => {
     error.name = "";
     error.stack = [error.message, actualFrame].join("\n");
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-7" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -1032,7 +1040,7 @@ describe("PostHog browser analytics adapter", () => {
       "clientName@https://stella.test/assets/private.js:20:5",
     ].join("\n");
 
-    analytics.captureError(error);
+    analytics.captureError(error, { fingerprintKey: "posthog:failure-8" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -1049,7 +1057,7 @@ describe("PostHog browser analytics adapter", () => {
     const first = new Error("Privileged first");
     const second = new Error("Privileged second", { cause: first });
     first.cause = second;
-    analytics.captureError(second);
+    analytics.captureError(second, { fingerprintKey: "posthog:second" });
     expect(captureExceptionMock.mock.calls.at(-1)?.[0]).toBeInstanceOf(Error);
   });
 
@@ -1121,7 +1129,7 @@ describe("PostHog browser analytics adapter", () => {
     ].join("\n");
     original.stack =
       "RangeError: Privileged original message\n    at failureSite (https://stella.test/assets/failure.js:3:4)";
-    analytics.captureError(wrapper);
+    analytics.captureError(wrapper, { fingerprintKey: "posthog:wrapper" });
 
     const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
     if (!(captured instanceof Error)) {
@@ -1140,15 +1148,26 @@ describe("PostHog browser analytics adapter", () => {
     });
     const boundaryError = new Error("Privileged message");
     Object.assign(boundaryError, { area: "pdf-viewer" });
-    analytics.captureError(boundaryError);
+    analytics.captureError(boundaryError, {
+      fingerprintKey: "posthog:boundaryError",
+    });
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       area: "pdf-viewer",
+      exception_key: "posthog:boundaryError",
+      exception_error_type: "Error",
+      exception_fields: {},
     });
 
     const freeFormError = new Error("Privileged message");
     Object.assign(freeFormError, { area: "Client Smith v Example" });
-    analytics.captureError(freeFormError);
-    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({});
+    analytics.captureError(freeFormError, {
+      fingerprintKey: "posthog:freeFormError",
+    });
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
+      exception_key: "posthog:freeFormError",
+      exception_error_type: "Error",
+      exception_fields: {},
+    });
   });
 
   test("sanitizer keeps only slug-shaped area properties", () => {
@@ -1214,7 +1233,7 @@ describe("PostHog browser analytics adapter", () => {
         "$exception_fingerprint"
       ];
     expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|matter-view.js|RangeError",
+      '["RangeError","browser:unhandled-error",null,null,[]]',
     );
 
     // Deterministic: the same defect groups into the same issue.
@@ -1261,12 +1280,18 @@ describe("PostHog browser analytics adapter", () => {
       key: "phc_test",
     });
     analytics.captureError(new TypeError("Privileged document name"), {
-      type: "recovery",
-      reference: "ERR-DEAD-BEEF-1234",
+      fingerprintKey: "posthog:TypeError",
+      context: {
+        type: "recovery",
+        reference: "ERR-DEAD-BEEF-1234",
+      },
     });
 
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       error_reference: "ERR-DEAD-BEEF-1234",
+      exception_key: "posthog:TypeError",
+      exception_error_type: "TypeError",
+      exception_fields: {},
     });
   });
 
@@ -1425,7 +1450,8 @@ describe("PostHog browser analytics adapter", () => {
       properties: {
         token: "phc_test",
         distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
-        $exception_fingerprint: "TypeError||app.js|",
+        $exception_fingerprint:
+          '["TypeError","browser:unhandled-error",null,null,[]]',
         $exception_list: [
           {
             type: "TypeError",
@@ -1532,7 +1558,8 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         error_reference: "ERR-DEAD-BEEF-1234",
-        $exception_fingerprint: "TypeError|||",
+        $exception_fingerprint:
+          '["TypeError","browser:unhandled-error",null,null,[]]',
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
@@ -1548,7 +1575,8 @@ describe("PostHog browser analytics adapter", () => {
     expect(rejected).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_fingerprint: "TypeError|||",
+        $exception_fingerprint:
+          '["TypeError","browser:unhandled-error",null,null,[]]',
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
@@ -1890,7 +1918,7 @@ describe("PostHog browser analytics adapter", () => {
       },
     });
     expect(sanitized?.properties?.["$exception_fingerprint"]).toBe(
-      "ApiError||||409:conflict",
+      '["ApiError","browser:unhandled-error",409,"conflict",[]]',
     );
     expect(sanitized?.properties?.["error_status"]).toBe(409);
     expect(sanitized?.properties?.["error_code"]).toBe("conflict");
@@ -1905,7 +1933,7 @@ describe("PostHog browser analytics adapter", () => {
       },
     });
     expect(rejected?.properties?.["$exception_fingerprint"]).toBe(
-      "ApiError|||",
+      '["ApiError","browser:unhandled-error",null,null,[]]',
     );
     expect(rejected?.properties).not.toContainKey("error_status");
     expect(rejected?.properties).not.toContainKey("error_code");
@@ -1922,11 +1950,15 @@ describe("PostHog browser analytics adapter", () => {
         message: "Privileged localized text",
         status: 402,
       }),
+      { fingerprintKey: "posthog:APIError" },
     );
 
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       error_code: "usage_limit_exceeded",
       error_status: 402,
+      exception_key: "posthog:APIError",
+      exception_error_type: "ApiError",
+      exception_fields: {},
     });
   });
 
@@ -1945,10 +1977,14 @@ describe("PostHog browser analytics adapter", () => {
           status: 403,
         }),
       }),
+      { fingerprintKey: "posthog:ClientTelemetryError" },
     );
 
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       area: "pdf-viewer",
+      exception_key: "posthog:ClientTelemetryError",
+      exception_error_type: "ApiError",
+      exception_fields: {},
       error_code: "forbidden",
       error_status: 403,
     });

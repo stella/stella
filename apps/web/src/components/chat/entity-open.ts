@@ -184,7 +184,9 @@ export const openEntityInInspector = async (
     notifyUserError(undefined, t("errors.actionFailed"));
     return { type: "unsupported" };
   } catch (error) {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "openEntityInInspector:failure",
+    });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));
     return { type: "unsupported" };
@@ -242,7 +244,9 @@ export const openSourceBoundEntityFile = async ({
     notifyUserError(undefined, t("errors.actionFailed"));
     return false;
   } catch (error) {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "openSourceBoundEntityFile:failure",
+    });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));
     return false;

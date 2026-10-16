@@ -424,7 +424,11 @@ export const writeFieldValue = async function* ({
   }
 
   if (flushSearchRepairs) {
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "writeFieldValue.flushEntitySearchRepairs",
+      }),
+    );
   }
   return Result.ok({});
 };

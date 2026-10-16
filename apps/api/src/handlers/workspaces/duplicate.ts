@@ -439,7 +439,10 @@ const cleanupCopiedS3Keys = async ({
   );
 
   if (Result.isError(cleanupResult)) {
-    captureError(cleanupResult.error, { targetWorkspaceId });
+    captureError(cleanupResult.error, {
+      fingerprintKey: "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
+      context: { targetWorkspaceId },
+    });
   }
 };
 
@@ -1027,17 +1030,30 @@ export const createDuplicateWorkspace = (
       // made durable: projection marks and immutable-source extraction runs.
       dependencies
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch(captureError);
+        .catch((error: unknown) =>
+          captureError(error, {
+            fingerprintKey: "matterDuplicate.flushMatterSearch",
+          }),
+        );
       dependencies
         .flushEntitySearchRepairs(
           txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
         )
-        .catch(captureError);
+        .catch((error: unknown) =>
+          captureError(error, {
+            fingerprintKey: "matterDuplicate.flushEntitySearch",
+          }),
+        );
 
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.value.nativeExtractionRunIds,
-      }).catch(captureError);
+      }).catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey:
+            "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+        }),
+      );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });
     },

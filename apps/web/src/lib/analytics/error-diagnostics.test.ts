@@ -16,10 +16,12 @@ describe("browser error diagnostics", () => {
       "at https://staging.stll.app/assets/case-viewer-A1b2.js:42:7",
     );
 
-    expect(fingerprintTelemetryError(error)).toMatch(/^ERRFP-[0-9A-F]{8}$/u);
+    expect(fingerprintTelemetryError(error, "routeError:caught")).toMatch(
+      /^ERRFP-[0-9A-F]{8}$/u,
+    );
   });
 
-  test("fingerprints a compiled asset frame without using the message", () => {
+  test("fingerprints its declared owner without using the message", () => {
     const first = errorWithStack(
       "Client Smith privileged decision",
       "TypeError: private\n at render (https://staging.stll.app/assets/case-viewer-A1b2.js:42:7)",
@@ -29,12 +31,12 @@ describe("browser error diagnostics", () => {
       "TypeError: other\n at render (https://staging.stll.app/assets/case-viewer-A1b2.js:42:7)",
     );
 
-    expect(fingerprintTelemetryError(first)).toBe(
-      fingerprintTelemetryError(second),
+    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
+      fingerprintTelemetryError(second, "routeError:caught"),
     );
   });
 
-  test("distinguishes compiled asset positions", () => {
+  test("ignores compiled asset positions", () => {
     const first = errorWithStack(
       "redacted",
       "at https://staging.stll.app/assets/case-viewer-A1b2.js:42:7",
@@ -44,8 +46,8 @@ describe("browser error diagnostics", () => {
       "at https://staging.stll.app/assets/case-viewer-A1b2.js:43:7",
     );
 
-    expect(fingerprintTelemetryError(first)).not.toBe(
-      fingerprintTelemetryError(second),
+    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
+      fingerprintTelemetryError(second, "routeError:caught"),
     );
   });
 
@@ -62,8 +64,8 @@ describe("browser error diagnostics", () => {
     second.name = "Other Client secret";
 
     expect(telemetryErrorType(first)).toBe("UnknownError");
-    expect(fingerprintTelemetryError(first)).toBe(
-      fingerprintTelemetryError(second),
+    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
+      fingerprintTelemetryError(second, "routeError:caught"),
     );
   });
 });

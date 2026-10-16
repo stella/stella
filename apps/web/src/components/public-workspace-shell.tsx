@@ -122,7 +122,9 @@ export const PublicWorkspaceShell = ({
     }
 
     navigate({ to: "/chat/new" }).catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "PublicWorkspaceShell.openChat:failure",
+      });
     });
   };
 
@@ -331,7 +333,9 @@ const PublicSidebar = ({
                     onClick={() => {
                       if (authStatus.isAuthenticated) {
                         navigate({ to: item.to }).catch((error: unknown) => {
-                          getAnalytics().captureError(error);
+                          getAnalytics().captureError(error, {
+                            fingerprintKey: "PublicSidebar:failure",
+                          });
                         });
                         return;
                       }

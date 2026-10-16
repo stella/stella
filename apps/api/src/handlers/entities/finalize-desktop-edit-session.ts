@@ -184,8 +184,11 @@ export const finalizeDesktopEditSessionHandler = async ({
     );
     if (Result.isError(result)) {
       captureError(result.error, {
-        checkpointKey,
-        sessionId,
+        fingerprintKey: "entities.deleteCheckpointKey.result_error",
+        context: {
+          checkpointKey,
+          sessionId,
+        },
       });
     }
   };
@@ -215,8 +218,11 @@ export const finalizeDesktopEditSessionHandler = async ({
     );
     if (Result.isError(result)) {
       captureError(result.error, {
-        rollbackKey: uploadedKey,
-        sessionId,
+        fingerprintKey: "entities.deleteUploadedKey.result_error",
+        context: {
+          rollbackKey: uploadedKey,
+          sessionId,
+        },
       });
     }
     return Result.isOk(result);
@@ -749,7 +755,10 @@ export const finalizeDesktopEditSessionHandler = async ({
     if (result.outcome === "finalized") {
       await processExtraction(result.entityId).catch((error: unknown) => {
         captureError(error, {
-          entityId: result.entityId,
+          fingerprintKey: "desktopEdit.processExtraction",
+          context: {
+            entityId: result.entityId,
+          },
         });
       });
 
@@ -765,9 +774,12 @@ export const finalizeDesktopEditSessionHandler = async ({
         workspaceId: authorizedSession.value.workspaceId,
       }).catch((error: unknown) => {
         captureError(error, {
-          entityId: result.entityId,
-          fieldId: result.fieldId,
-          mimeType: desktopEditMimeTypeForFileType(result.fileType),
+          fingerprintKey: "desktopEdit.enqueuePdfDerivative",
+          context: {
+            entityId: result.entityId,
+            fieldId: result.fieldId,
+            mimeType: desktopEditMimeTypeForFileType(result.fileType),
+          },
         });
       });
 
@@ -779,7 +791,10 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspaceId: authorizedSession.value.workspaceId,
           organizationId: authorizedSession.value.organizationId,
         }).catch((error: unknown) => {
-          captureError(error, { versionId: result.versionId });
+          captureError(error, {
+            fingerprintKey: "desktopEdit.computeVersionDiff",
+            context: { versionId: result.versionId },
+          });
         });
       }
     }

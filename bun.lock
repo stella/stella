@@ -641,6 +641,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -978,6 +979,7 @@
       "dependencies": {
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
@@ -1132,6 +1134,7 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/errors": "workspace:*",
         "@stll/time": "workspace:*",
         "better-result": "catalog:",
         "valibot": "catalog:",

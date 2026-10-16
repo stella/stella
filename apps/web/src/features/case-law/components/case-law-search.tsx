@@ -66,7 +66,9 @@ export const CaseLawSearch = ({
       onRefined(refined.query);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "CaseLawSearch:failure",
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });

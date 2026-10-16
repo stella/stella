@@ -518,7 +518,10 @@ export const finalizeEntityCreate = async function* ({
   // the finalize runtime had to download it for scanning.
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+    {
+      fingerprintKey: "entityCreate.detectEncryption",
+      context: { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+    },
   );
   if (encryption === null) {
     return finalizeErr({
@@ -722,7 +725,10 @@ export const finalizeEntityCreate = async function* ({
       // both promotion and the DB transaction have succeeded, so
       // consumers never read a final key before it exists.
       processExtraction(entityId).catch((error: unknown) => {
-        captureError(error, { entityId, mimeType: declaredMime });
+        captureError(error, {
+          fingerprintKey: "entityCreate.processExtraction",
+          context: { entityId, mimeType: declaredMime },
+        });
       });
       // File-upload flow trigger. Fire-and-forget on the USER upload path only;
       // flow-created documents (create-document step) never reach this call site.
@@ -732,7 +738,10 @@ export const finalizeEntityCreate = async function* ({
         organizationId,
         fileName: finalized.fileName,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, workspaceId });
+        captureError(error, {
+          fingerprintKey: "entityCreate.startFlows",
+          context: { entityId, workspaceId },
+        });
       });
       enqueuePdfDerivativeOrMarkFailed({
         encrypted,
@@ -743,7 +752,10 @@ export const finalizeEntityCreate = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        captureError(error, {
+          fingerprintKey: "entityCreate.enqueuePdfDerivative",
+          context: { entityId, fieldId, mimeType: declaredMime },
+        });
       });
       enqueueImageThumbnailOrMarkFailed({
         encrypted,
@@ -754,7 +766,10 @@ export const finalizeEntityCreate = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        captureError(error, {
+          fingerprintKey: "entityCreate.enqueueThumbnail",
+          context: { entityId, fieldId, mimeType: declaredMime },
+        });
       });
     };
 

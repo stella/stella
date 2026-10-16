@@ -78,9 +78,12 @@ export const recordAbandonedRawWrite = async ({
   });
   if (Result.isError(recorded)) {
     captureError(recorded.error, {
-      decisionId,
-      sourceId,
-      step: "processDecision.recordAbandonedRawWrite",
+      fingerprintKey: "pipeline.recordAbandonedRawWrite.recorded_error",
+      context: {
+        decisionId,
+        sourceId,
+        step: "processDecision.recordAbandonedRawWrite",
+      },
     });
   }
 };
@@ -154,7 +157,10 @@ export const acquireSourceRawArtifact = async ({
         ...pgErrorFields(error),
         "error.detail": wrappedErrorDetail(safeError),
       });
-      captureError(safeError, { sourceId, step: "uploadSourceRaw" });
+      captureError(safeError, {
+        fingerprintKey: "rawSource.insertFailure",
+        context: { sourceId, step: "uploadSourceRaw" },
+      });
 
       return {
         type: "retry",
@@ -166,7 +172,10 @@ export const acquireSourceRawArtifact = async ({
       } as const;
     }
 
-    captureError(safeError, { sourceId, step: "uploadSourceRaw" });
+    captureError(safeError, {
+      fingerprintKey: "rawSource.updateFailure",
+      context: { sourceId, step: "uploadSourceRaw" },
+    });
 
     // Update: preserve existing S3 key and DO NOT advance sourceHash.
     // If we wrote the new hash with the old key, the hash mismatch

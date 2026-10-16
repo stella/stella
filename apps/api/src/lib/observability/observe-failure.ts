@@ -199,6 +199,7 @@ const observe = (
   }
   if (policy.capture) {
     captureObservedError(error, {
+      fingerprintKey: `observe.${sink.event}`,
       context: context.accepted,
       request,
       observation: grading,

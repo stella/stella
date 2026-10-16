@@ -131,7 +131,10 @@ export const classifyCitation = async ({
         ruleId: ruleMatch.ruleId,
         scopedDb,
       }).catch((error: unknown) => {
-        captureError(error, { ruleId: ruleMatch.ruleId });
+        captureError(error, {
+          fingerprintKey: "polarity.persistRuleMatch",
+          context: { ruleId: ruleMatch.ruleId },
+        });
       });
     }
     return {
@@ -182,7 +185,10 @@ export const classifyCitation = async ({
       polarity,
       scopedDb,
     }).catch((error: unknown) => {
-      captureError(error, { language, polarity });
+      captureError(error, {
+        fingerprintKey: "polarity.persistModelMatch",
+        context: { language, polarity },
+      });
     });
   }
 

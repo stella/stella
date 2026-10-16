@@ -269,7 +269,10 @@ export const submitFeedbackReport = async ({
     // The report and its receipt are already durable; a failed bookkeeping
     // update must not turn a delivered report into an error.
     if (Result.isError(recorded)) {
-      capture(recorded.error, { source: "feedback-submit" });
+      capture(recorded.error, {
+        fingerprintKey: "submitFeedbackReport.recorded_error",
+        context: { source: "feedback-submit" },
+      });
     }
   }
 
@@ -354,7 +357,10 @@ const deliver = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(sent)) {
-      capture(sent.error, { source: "feedback-delivery-email" });
+      capture(sent.error, {
+        fingerprintKey: "deliver.sent_error",
+        context: { source: "feedback-delivery-email" },
+      });
     }
     deliveries.push({
       channel: "email",
@@ -373,7 +379,10 @@ const deliver = async ({
       },
     });
     if (Result.isError(filed)) {
-      capture(filed.error, { source: "feedback-delivery-github" });
+      capture(filed.error, {
+        fingerprintKey: "deliver.filed_error",
+        context: { source: "feedback-delivery-github" },
+      });
       deliveries.push({ channel: "github", status: "failed" });
     } else {
       deliveries.push({

@@ -95,7 +95,9 @@ export const useVersionOrNewFileDrop = ({
     if (Result.isError(result)) {
       // A failed lookup costs the offer to file this as a version, not the
       // upload: the dialog falls back to comparing extensions.
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "useVersionOrNewFileDrop.resolveReference:failure",
+      });
     }
 
     setDrop((current) =>

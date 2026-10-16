@@ -598,8 +598,11 @@ export const runIngestionPipeline = async ({
           "error.detail": wrappedErrorDetail(error),
         });
         captureError(error, {
-          adapterKey: adapter.key,
-          step: "runIngestionPipeline.processSupplement",
+          fingerprintKey: "ingestion.placePageSupplements",
+          context: {
+            adapterKey: adapter.key,
+            step: "runIngestionPipeline.processSupplement",
+          },
         });
         if (error instanceof TimeoutError) {
           await flushIngestionFailures(failures);

@@ -54,7 +54,10 @@ export const createUnrecognizedSourceReporter = (feature: string) => {
     // unrecognized. This is the telemetry that keeps that from being silent.
     captureError(
       new Error(`case-law source adapter key is not registered: ${adapterKey}`),
-      { feature, sourceAdapterKey: adapterKey },
+      {
+        fingerprintKey: "legalsearch.createUnrecognizedSourceReporter",
+        context: { feature, sourceAdapterKey: adapterKey },
+      },
     );
     logger.warn("case_law.source_adapter_key_unregistered", {
       feature,

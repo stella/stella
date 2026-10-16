@@ -202,7 +202,9 @@ const RebindableBinding = ({
       }
       setPending(null);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.save:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);
@@ -214,7 +216,9 @@ const RebindableBinding = ({
     try {
       await onReset(id);
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RebindableBinding.resetToDefault:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsBusy(false);

@@ -141,7 +141,10 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(definitionResult)) {
-    captureError(definitionResult.error, logContext);
+    captureError(definitionResult.error, {
+      fingerprintKey: "flows.startAutomatedFlowRun.definitionResult_error",
+      context: logContext,
+    });
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(definitionResult.error),
@@ -176,7 +179,10 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(authorization)) {
-    captureError(authorization.error, logContext);
+    captureError(authorization.error, {
+      fingerprintKey: "flows.startAutomatedFlowRun.authorization_error",
+      context: logContext,
+    });
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(authorization.error),
@@ -214,7 +220,10 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(insertResult)) {
-      captureError(insertResult.error, logContext);
+      captureError(insertResult.error, {
+        fingerprintKey: "flows.createAndEnqueue.insertResult_error",
+        context: logContext,
+      });
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(insertResult.error),
@@ -242,7 +251,10 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, logContext);
+      captureError(enqueued.error, {
+        fingerprintKey: "flows.createAndEnqueue.enqueued_error",
+        context: logContext,
+      });
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(enqueued.error),

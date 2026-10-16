@@ -883,8 +883,11 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
         });
         if (Result.isError(released)) {
           captureError(released.error, {
-            corpusUploadIntentId: row.id,
-            step: "reconcileCaseLawCorpusUploadIntents.reclaim",
+            fingerprintKey: "legalsearch.cleanupResults.released_error",
+            context: {
+              corpusUploadIntentId: row.id,
+              step: "reconcileCaseLawCorpusUploadIntents.reclaim",
+            },
           });
           return null;
         }

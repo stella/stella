@@ -108,7 +108,10 @@ const processCleanup = async (
     error = deletion.value.error;
   }
   if (error !== null) {
-    captureError(error, { cleanupRequestId: claim.id });
+    captureError(error, {
+      fingerprintKey: "tasks.processCleanup",
+      context: { cleanupRequestId: claim.id },
+    });
     const failedAt = new Date();
     await db
       .update(templateDeletionCleanupRequests)

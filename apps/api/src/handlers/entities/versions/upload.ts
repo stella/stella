@@ -130,8 +130,11 @@ export default createSafeHandler(
         scanned: scanned.value,
       }),
       {
-        mimeType: file.type,
-        sizeBytes: String(scanned.value.bytes.byteLength),
+        fingerprintKey: "entityVersionUpload.detectEncryption",
+        context: {
+          mimeType: file.type,
+          sizeBytes: String(scanned.value.bytes.byteLength),
+        },
       },
     );
     if (encryption === null) {

@@ -202,7 +202,9 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
     setIsExtracting(false);
 
     if (Result.isError(extraction)) {
-      getAnalytics().captureError(extraction.error);
+      getAnalytics().captureError(extraction.error, {
+        fingerprintKey: "useProcuracaoExtraction.extractFile:failure",
+      });
       notifyUserError(
         extraction.error,
         t("contacts.extractProcuracao.parseErrorGeneric"),

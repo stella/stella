@@ -139,7 +139,7 @@ const CreateMatterDialogBody = ({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
   const workspacesDataView = useQueryView(workspacesDataQuery);
-  useQueryViewError(workspacesDataView);
+  useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
 

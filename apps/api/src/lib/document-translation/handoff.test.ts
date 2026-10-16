@@ -27,8 +27,8 @@ test("preserves a committed translation run when queue delivery stalls", async (
 
   expect(enqueue).toHaveBeenCalledWith(ids);
   expect(captureDeliveryError).toHaveBeenCalledWith(expect.any(TimeoutError), {
-    runId: ids.runId,
-    workspaceId: ids.workspaceId,
+    fingerprintKey: "documentTranslation.handoff",
+    context: { runId: ids.runId, workspaceId: ids.workspaceId },
   });
 });
 

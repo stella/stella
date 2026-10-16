@@ -89,7 +89,9 @@ const updateDeepLKey = createSafeRootHandler(
           }),
         );
       }
-      captureError(error);
+      captureError(error, {
+        fingerprintKey: "organizationsettings.updateDeepLKey",
+      });
       return Result.err(
         new HandlerError({
           status: 502,

@@ -324,8 +324,11 @@ export const backfillLegislationSearchIndex = async (
       return 1;
     }
     captureError(indexed.error, {
-      documentId: row.id,
-      step: "backfillLegislationSearchIndex",
+      fingerprintKey: "legislation.indexRow.indexed_error",
+      context: {
+        documentId: row.id,
+        step: "backfillLegislationSearchIndex",
+      },
     });
     logger.error("legislation.search_index.backfill_failed", {
       documentId: row.id,

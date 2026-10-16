@@ -471,7 +471,12 @@ const generateDecisionChunk = async ({
     resolveTextModel: () => model,
     analytics: {
       usageMetering: options.analytics?.usageMetering,
-      captureError: options.analytics?.captureError ?? captureError,
+      captureError:
+        options.analytics?.captureError ??
+        ((error: unknown) =>
+          captureError(error, {
+            fingerprintKey: "workflow.generateDecisionChunk",
+          })),
       middleware: {
         ...options.analytics?.middleware,
         name: options.analytics?.middleware.name ?? "typed-decision-usage",

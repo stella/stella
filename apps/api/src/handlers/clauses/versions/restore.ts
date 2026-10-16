@@ -260,7 +260,11 @@ const restoreClauseVersion = createSafeRootHandler(
       restoredBody,
     );
     if (Result.isError(searchVectorResult)) {
-      captureError(searchVectorResult.error, { clauseId });
+      captureError(searchVectorResult.error, {
+        fingerprintKey:
+          "versions.restoreClauseVersion.searchVectorResult_error",
+        context: { clauseId },
+      });
     }
 
     return Result.ok({

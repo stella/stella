@@ -45,7 +45,7 @@ export const FillClausesSection = ({
     },
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "FillClausesSection:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const slots = data ? data.slots : [];

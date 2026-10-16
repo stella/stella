@@ -40,7 +40,9 @@ export const useCreateTimeEntry = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateTimeEntry:failure",
+      });
     },
   });
 };
@@ -82,7 +84,9 @@ export const useUpdateTimeEntry = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateTimeEntry:failure",
+      });
     },
   });
 };
@@ -127,7 +131,9 @@ export const useDecideTimeSuggestion = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDecideTimeSuggestion:failure",
+      });
     },
   });
 };
@@ -151,7 +157,9 @@ export const useDeleteTimeEntry = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteTimeEntry:failure",
+      });
     },
   });
 };
@@ -179,7 +187,9 @@ export const useBatchUpdateTimeEntries = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useBatchUpdateTimeEntries:failure",
+      });
     },
   });
 };
@@ -203,7 +213,9 @@ export const useBatchDeleteTimeEntries = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useBatchDeleteTimeEntries:failure",
+      });
     },
   });
 };
@@ -231,7 +243,9 @@ export const useSplitTimeEntry = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useSplitTimeEntry:failure",
+      });
     },
   });
 };

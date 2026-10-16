@@ -370,7 +370,11 @@ const importContacts = createSafeRootHandler(
       result.status === "created" ? [result.contactId] : [],
     );
     if (createdContactIds.length > 0) {
-      flushContactSearchRepairs(createdContactIds).catch(captureError);
+      flushContactSearchRepairs(createdContactIds).catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "importContacts.flushContactSearchRepairs",
+        }),
+      );
     }
 
     return Result.ok({

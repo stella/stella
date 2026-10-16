@@ -174,7 +174,7 @@ export const useReaderAnnotations = (
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useReaderAnnotations:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const patchCache = async (
@@ -195,7 +195,9 @@ export const useReaderAnnotations = (
       if (context !== undefined) {
         queryClient.setQueryData(queryKey, context.previous);
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useReaderAnnotations:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
@@ -296,16 +298,22 @@ export const useReaderAnnotations = (
             });
             if (Result.isError(migrated)) {
               getAnalytics().captureError(migrated.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
+                fingerprintKey: "useReaderAnnotations.operation:failure",
+                context: {
+                  operation: "legal-reader.guest-annotation.migrate",
+                  type: "detached",
+                },
               });
               return migrated;
             }
             const removed = removeGuestAnnotation(storage, item.requestId);
             if (Result.isError(removed)) {
               getAnalytics().captureError(removed.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
+                fingerprintKey: "useReaderAnnotations.operation:failure-2",
+                context: {
+                  operation: "legal-reader.guest-annotation.migrate",
+                  type: "detached",
+                },
               });
               return removed;
             }
@@ -360,8 +368,11 @@ export const useReaderAnnotations = (
     const stored = writeGuestAnnotationStore(storage, next);
     if (Result.isError(stored)) {
       getAnalytics().captureError(stored.error, {
-        operation: `legal-reader.guest-annotation.${action}`,
-        type: "detached",
+        fingerprintKey: "useReaderAnnotations.commit:failure",
+        context: {
+          operation: `legal-reader.guest-annotation.${action}`,
+          type: "detached",
+        },
       });
       notifyUserError(
         stored.error,

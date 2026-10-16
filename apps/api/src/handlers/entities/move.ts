@@ -213,7 +213,11 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(captureError);
+  syncSearchActivity(workspaceId).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "moveEntityHandler.syncSearchActivity",
+    }),
+  );
 
   return Result.ok({});
 };

@@ -1092,13 +1092,19 @@ const loadEndpointGuarded = async (
   try {
     endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
-    captureError(error, { source: "mcp", toolName });
+    captureError(error, {
+      fingerprintKey: "mcp.loadEndpoint",
+      context: { source: "mcp", toolName },
+    });
     endpoint = null;
   }
   if (!endpoint) {
     captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName,
+      fingerprintKey: "mcp.missingEndpoint",
+      context: {
+        source: "mcp",
+        toolName,
+      },
     });
     return {
       ok: false,
@@ -1746,8 +1752,11 @@ const invokeCapabilityHandler = async ({
     });
   } catch (error) {
     captureError(error, {
-      source: "mcp",
-      toolName: MCP_CAPABILITY_EXECUTORS[access],
+      fingerprintKey: "mcp.invokeCapabilityHandler",
+      context: {
+        source: "mcp",
+        toolName: MCP_CAPABILITY_EXECUTORS[access],
+      },
     });
     return structuredErrorResult({
       code: "internal_error",

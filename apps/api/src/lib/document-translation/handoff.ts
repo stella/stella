@@ -42,6 +42,9 @@ export const handoffCommittedDocumentTranslationRun = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureDeliveryError(result.error, { runId, workspaceId });
+    captureDeliveryError(result.error, {
+      fingerprintKey: "documentTranslation.handoff",
+      context: { runId, workspaceId },
+    });
   }
 };

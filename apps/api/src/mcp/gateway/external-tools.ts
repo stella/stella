@@ -231,9 +231,12 @@ export const callGatewayExternalMcpTool = async ({
     return result;
   } catch (error) {
     captureError(error, {
-      source: "mcp-gateway-external-call",
-      connectorSlug: resolved.connectorSlug,
-      toolName: resolved.cachedTool.rawName,
+      fingerprintKey: "gateway.callGatewayExternalMcpTool",
+      context: {
+        source: "mcp-gateway-external-call",
+        connectorSlug: resolved.connectorSlug,
+        toolName: resolved.cachedTool.rawName,
+      },
     });
     await recordGatewayToolAudit({
       context,
@@ -283,7 +286,10 @@ const recordGatewayToolAudit = async ({
       }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-external-audit" });
+    captureError(result.error, {
+      fingerprintKey: "gateway.recordGatewayToolAudit.result_error",
+      context: { source: "mcp-gateway-external-audit" },
+    });
   }
 };
 
@@ -360,7 +366,10 @@ const loadCachedGatewayToolRows = async ({
   );
 
   if (Result.isError(rows)) {
-    captureError(rows.error, { source: "mcp-gateway-external-list" });
+    captureError(rows.error, {
+      fingerprintKey: "gateway.loadCachedGatewayToolRows.rows_error",
+      context: { source: "mcp-gateway-external-list" },
+    });
     // Propagate the load fault as a distinct state: returning `[]` here would
     // make a transient DB outage indistinguishable from "no connectors", so a
     // `tools/call` would answer `unknown_tool` and `tools/list` would silently

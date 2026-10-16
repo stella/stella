@@ -190,9 +190,12 @@ export const fillHandler = async ({
       }),
   ).catch((error: unknown) => {
     captureError(error, {
-      operation: "template_fill_analytics",
-      organizationId,
-      userId,
+      fingerprintKey: "templates.fillHandler",
+      context: {
+        operation: "template_fill_analytics",
+        organizationId,
+        userId,
+      },
     });
   });
 

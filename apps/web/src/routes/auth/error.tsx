@@ -24,7 +24,9 @@ export const Route = createFileRoute("/auth/error")({
       return NO_SOCIAL_LINK_HINT;
     }
     return await loadSocialLinkHint((error) =>
-      getAnalytics().captureError(error),
+      getAnalytics().captureError(error, {
+        fingerprintKey: "auth.error.loader:failure",
+      }),
     );
   },
   component: AuthError,

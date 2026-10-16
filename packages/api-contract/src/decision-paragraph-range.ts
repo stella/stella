@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 /** An inclusive range of court-assigned paragraph numbers. */
 export type DecisionParagraphRange = {
   readonly from: number;
@@ -23,7 +25,11 @@ export class DecisionParagraphRangeError extends TaggedError(
 )<{
   message: string;
   reason: DecisionParagraphRangeErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const invalidRange = (
   reason: DecisionParagraphRangeErrorReason,

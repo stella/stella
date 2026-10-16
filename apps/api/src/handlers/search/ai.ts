@@ -568,8 +568,11 @@ export const summarizeSearchResults = async ({
   if (result.isErr()) {
     aiAnalytics.captureError(result.error);
     captureError(result.error, {
-      feature: "search.summary",
-      organizationId,
+      fingerprintKey: "search.summarizeSearchResults.result_error",
+      context: {
+        feature: "search.summary",
+        organizationId,
+      },
     });
     const mapped = aiErrorStatusBody(result.error, {
       status: 502,
@@ -798,15 +801,22 @@ export const createSearchSummaryChatThread = async ({
 
   if (insertResult.isErr()) {
     captureError(insertResult.error, {
-      feature: "search.summary.chat",
-      organizationId,
+      fingerprintKey: "search.createSearchSummaryChatThread.insertResult_error",
+      context: {
+        feature: "search.summary.chat",
+        organizationId,
+      },
     });
     return status(500, { message: "Failed to create chat thread" });
   }
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertSearchDocument(threadId).catch(captureError);
+  upsertSearchDocument(threadId).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "createSearchSummaryChatThread.upsertSearchDocument",
+    }),
+  );
 
   return { threadId };
 };

@@ -462,7 +462,9 @@ const ActivityAdvancedFilters = ({
                       .fetchNextPage()
                       .then((result) => {
                         if (result.isError) {
-                          getAnalytics().captureError(result.error);
+                          getAnalytics().captureError(result.error, {
+                            fingerprintKey: "ActivityAdvancedFilters:failure",
+                          });
                           notifyUserError(
                             result.error,
                             t("errors.actionFailed"),
@@ -477,7 +479,9 @@ const ActivityAdvancedFilters = ({
                         return result;
                       })
                       .catch((error: unknown) => {
-                        getAnalytics().captureError(error);
+                        getAnalytics().captureError(error, {
+                          fingerprintKey: "ActivityAdvancedFilters:failure-2",
+                        });
                         notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
@@ -548,7 +552,9 @@ const ActivityExportMenu = ({
     });
     setExporting(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ActivityExportMenu.exportActivity:failure",
+      });
       notifyUserError(
         result.error,
         APIError.is(result.error) && result.error.status === 413
@@ -581,7 +587,9 @@ const ActivityExportMenu = ({
   const startExport = (format: "csv" | "json") => {
     detached(
       exportActivity(format).catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityExportMenu.startExport:failure",
+        });
         notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
@@ -646,7 +654,9 @@ const ActivityTimeline = ({
           // The resolved error result reaches the user through the same toast
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
-          getAnalytics().captureError(result.error);
+          getAnalytics().captureError(result.error, {
+            fingerprintKey: "ActivityTimeline.loadEarlier:failure",
+          });
           notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
@@ -657,7 +667,9 @@ const ActivityTimeline = ({
         return result;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityTimeline.loadEarlier:failure-2",
+        });
         notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });

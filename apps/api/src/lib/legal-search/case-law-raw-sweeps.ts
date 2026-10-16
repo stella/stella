@@ -428,9 +428,12 @@ export const reconcileCaseLawRawSweeps = async ({
     if (Result.isError(outcome)) {
       result.failed += 1;
       captureError(outcome.error, {
-        decisionId: owner.decisionId,
-        prefix: rawDocumentPrefix(documentOwner(owner)),
-        step: "reconcileCaseLawRawSweeps.sweep",
+        fingerprintKey: "legalsearch.reconcileCaseLawRawSweeps.outcome_error",
+        context: {
+          decisionId: owner.decisionId,
+          prefix: rawDocumentPrefix(documentOwner(owner)),
+          step: "reconcileCaseLawRawSweeps.sweep",
+        },
       });
       continue;
     }

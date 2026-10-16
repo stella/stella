@@ -292,7 +292,10 @@ export const createEntityFromBuffer = async ({
         }),
       );
       if (Result.isError(cleanup)) {
-        captureError(cleanup.error, { entityId, objectKey: s3Key });
+        captureError(cleanup.error, {
+          fingerprintKey: "entities.cleanupObject.cleanup_error",
+          context: { entityId, objectKey: s3Key },
+        });
         return false;
       }
       return true;
@@ -606,7 +609,11 @@ export const createEntityFromBuffer = async ({
   // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
   // fire the file-upload trigger, so a flow-created document can never spawn
   // another flow run. Keep the upload trigger out of this call site.
-  dependencies.processExtraction(entityId).catch(captureError);
+  dependencies.processExtraction(entityId).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "createEntityFromBuffer.dependencies_processExtraction",
+    }),
+  );
 
   dependencies
     .enqueuePdfDerivativeOrMarkFailed({
@@ -618,7 +625,11 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch(captureError);
+    .catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "entityBuffer.enqueuePdfDerivative",
+      }),
+    );
 
   dependencies
     .enqueueImageThumbnailOrMarkFailed({
@@ -630,7 +641,9 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch(captureError);
+    .catch((error: unknown) =>
+      captureError(error, { fingerprintKey: "entityBuffer.enqueueThumbnail" }),
+    );
 
   dependencies.broadcastWorkspaceResourceUpdated(
     workspaceId,

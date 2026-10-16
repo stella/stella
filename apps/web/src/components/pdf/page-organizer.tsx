@@ -782,7 +782,9 @@ const LoadedPDFPageOrganizer = ({
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "LoadedPDFPageOrganizer.runOperation:failure",
+      });
       notifyUserError(error, tErrors("actionFailed"));
     }
   };

@@ -32,6 +32,7 @@ import {
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
@@ -840,13 +841,14 @@ export const searchIndexUnavailableResult = (
  */
 export const internalFailureResult = (
   error: unknown,
+  fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
-      captureError(error, { source: "mcp" });
+      captureError(error, { fingerprintKey, context: { source: "mcp" } });
       return structuredErrorResult({
         code: "upstream_unavailable",
         message: error.message,
@@ -859,7 +861,7 @@ export const internalFailureResult = (
       return structuredErrorResult(projectMcpRefusal(error));
     }
   }
-  captureError(error, { source: "mcp" });
+  captureError(error, { fingerprintKey, context: { source: "mcp" } });
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",

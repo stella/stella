@@ -120,8 +120,11 @@ const GeneratedVisualFrame = ({
         }
         themeFailureReported.current = true;
         getAnalytics().captureError(error, {
-          type: "detached",
-          operation: "generated-visual.read-theme",
+          fingerprintKey: "GeneratedVisualFrame.report:failure",
+          context: {
+            type: "detached",
+            operation: "generated-visual.read-theme",
+          },
         });
       },
     }),

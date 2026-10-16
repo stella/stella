@@ -92,7 +92,10 @@ const missingChatToolPolicy = (toolDefinition: ChatTool): never => {
       new TelemetryError({
         message: "Chat tool policy lookup missed; refusing to execute tool",
       }),
-      { source: "chat-tool-policy", toolName: toolDefinition.name },
+      {
+        fingerprintKey: "tools.missingChatToolPolicy",
+        context: { source: "chat-tool-policy", toolName: toolDefinition.name },
+      },
     );
   }
 

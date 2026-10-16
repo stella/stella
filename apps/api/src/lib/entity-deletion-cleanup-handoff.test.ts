@@ -33,7 +33,8 @@ test("preserves committed deletion success and captures a stalled delivery", asy
   expect(captureDeliveryError).toHaveBeenCalledTimes(1);
   expect(capturedErrors.at(0)).toBeInstanceOf(TimeoutError);
   expect(captureDeliveryError).toHaveBeenCalledWith(expect.any(TimeoutError), {
-    requestId,
+    fingerprintKey: "entityDeletion.handoff",
+    context: { requestId },
   });
 });
 

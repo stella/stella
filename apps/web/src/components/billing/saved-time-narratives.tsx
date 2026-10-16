@@ -92,7 +92,9 @@ export const SavedTimeNarratives = ({
   });
 
   const reportError = (error: Error) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "SavedTimeNarratives.reportError:failure",
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
   const create = useMutation({

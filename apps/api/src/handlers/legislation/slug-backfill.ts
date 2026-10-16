@@ -140,9 +140,12 @@ export const backfillStatuteSlugsPage = async (
         );
       }
       (options.capture ?? captureError)(write.error, {
-        after: options.after ?? "start",
-        step: "backfillStatuteSlugs",
-        failed: String(assignments.length),
+        fingerprintKey: "legislation.backfillSlugs.write",
+        context: {
+          after: options.after ?? "start",
+          step: "backfillStatuteSlugs",
+          failed: String(assignments.length),
+        },
       });
       failed = assignments.length;
     } else {

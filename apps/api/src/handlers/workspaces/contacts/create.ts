@@ -206,7 +206,14 @@ export const createWorkspaceContactHandler = async function* ({
     );
   }
 
-  dependencies.flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  dependencies
+    .flushWorkspaceSearchRepairs([workspaceId])
+    .catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey:
+          "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
+      }),
+    );
 
   const created = txResult.value.created;
   if (!created) {

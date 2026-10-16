@@ -36,7 +36,9 @@ export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
           cause instanceof Error ? cause : new UnhandledException({ cause }),
       });
       if (Result.isError(result) && !signal.aborted) {
-        getAnalytics().captureError(result.error);
+        getAnalytics().captureError(result.error, {
+          fingerprintKey: "desktopPresenceOptions.queryFn:failure",
+        });
       }
       return readQueryResult(result);
     },

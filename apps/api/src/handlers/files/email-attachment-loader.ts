@@ -152,9 +152,12 @@ export const loadEmailAttachment = async function* ({
   const parsedResult = await parseEmail(sourceBuffer, emailMimeType);
   if (Result.isError(parsedResult)) {
     captureError(parsedResult.error, {
-      fieldId,
-      mimeType: emailMimeType,
-      workspaceId,
+      fingerprintKey: "files.loadEmailAttachment.parsedResult_error",
+      context: {
+        fieldId,
+        mimeType: emailMimeType,
+        workspaceId,
+      },
     });
     return {
       status: EMAIL_ATTACHMENT_LOAD_STATUS.unreadable,

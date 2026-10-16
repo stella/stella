@@ -833,7 +833,10 @@ export const createDocumentCompareGenerator = (
       if (Result.isError(recorded)) {
         // The caller already holds the link; withdrawing it over a failed
         // audit write would lose the redline as well as the record.
-        captureError(recorded.error, { documentId, workspaceId });
+        captureError(recorded.error, {
+          fingerprintKey: "documents.recordDownloadAudit.recorded_error",
+          context: { documentId, workspaceId },
+        });
       }
     };
 
@@ -857,9 +860,12 @@ export const createDocumentCompareGenerator = (
       });
       if (Result.isError(delivered)) {
         captureError(delivered.error.cause, {
-          documentId,
-          stage: "document-compare.deliver",
-          step: delivered.error.step,
+          fingerprintKey: "documents.deliverRedline.delivered_error_cause",
+          context: {
+            documentId,
+            stage: "document-compare.deliver",
+            step: delivered.error.step,
+          },
         });
       }
       await recordDownloadAudit({ changeCount: compared.changes.length, pair });

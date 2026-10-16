@@ -98,7 +98,10 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
         catch: (cause) => cause,
       });
       if (read.isErr()) {
-        captureError(read.error, { source: "read-user-file-visual" });
+        captureError(read.error, {
+          fingerprintKey: "userfiles.createReadUserFileVisual.read_error",
+          context: { source: "read-user-file-visual" },
+        });
         return Result.err(
           new HandlerError({
             status: 503,

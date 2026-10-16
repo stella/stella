@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import { env } from "@/api/env";
 import { logger } from "@/api/lib/observability/logger";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
@@ -14,7 +16,11 @@ export type ActionSizePolicy = {
 export class ActionSizeError extends TaggedError("ActionSizeError")<{
   message: string;
   reason: "configuration" | "request_too_large" | "response_too_large";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ActionSizeConfiguration = Pick<
   typeof env,

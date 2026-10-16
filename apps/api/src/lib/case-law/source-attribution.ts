@@ -62,7 +62,10 @@ export const decisionSourceAttributionUrl = ({
     new DatabaseError({
       message: "Case-law source names an unregistered adapter key",
     }),
-    { source: "case-law-source-attribution", adapterKey },
+    {
+      fingerprintKey: "caselaw.decisionSourceAttributionUrl",
+      context: { source: "case-law-source-attribution", adapterKey },
+    },
   );
   return null;
 };

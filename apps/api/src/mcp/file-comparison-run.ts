@@ -210,8 +210,11 @@ const discardInput = async ({
   if (Result.isError(removed)) {
     // The object is gone and the row is expired, so the sweep removes it.
     captureError(removed.error, {
-      fileComparisonUploadId: uploadId,
-      stage: "file-comparison.discard-row",
+      fingerprintKey: "mcp.discardInput.removed_error",
+      context: {
+        fileComparisonUploadId: uploadId,
+        stage: "file-comparison.discard-row",
+      },
     });
   }
 };
@@ -433,8 +436,11 @@ const deliver = async ({
   );
   if (Result.isError(delivered)) {
     captureError(delivered.error.cause, {
-      stage: "file-comparison.deliver",
-      step: delivered.error.step,
+      fingerprintKey: "mcp.deliver.delivered_error_cause",
+      context: {
+        stage: "file-comparison.deliver",
+        step: delivered.error.step,
+      },
     });
     return {
       status: "error",
@@ -486,8 +492,11 @@ const recordComparisonAudit = async ({
   );
   if (Result.isError(recorded)) {
     captureError(recorded.error, {
-      fileComparisonUploadId: base.id,
-      stage: "file-comparison.audit",
+      fingerprintKey: "mcp.recordComparisonAudit.recorded_error",
+      context: {
+        fileComparisonUploadId: base.id,
+        stage: "file-comparison.audit",
+      },
     });
   }
 };

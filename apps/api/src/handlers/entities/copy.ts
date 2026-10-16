@@ -327,9 +327,13 @@ const cleanupMovedSourceFiles = async ({
 
   if (Result.isError(unreferencedSourceFileRefsResult)) {
     captureError(unreferencedSourceFileRefsResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
+      fingerprintKey:
+        "entities.cleanupMovedSourceFiles.unreferencedSourceFileRefsResult_error",
+      context: {
+        operation: "move-cleanup",
+        sourceWorkspaceId,
+        sourceEntityId,
+      },
     });
     return;
   }
@@ -342,9 +346,12 @@ const cleanupMovedSourceFiles = async ({
 
   if (Result.isError(deleteResult)) {
     captureError(deleteResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
+      fingerprintKey: "entities.cleanupMovedSourceFiles.deleteResult_error",
+      context: {
+        operation: "move-cleanup",
+        sourceWorkspaceId,
+        sourceEntityId,
+      },
     });
   }
 };
@@ -535,9 +542,12 @@ const copyToWorkspaceHandler = async function* ({
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
     captureError(fileMappings.error, {
-      sourceWorkspaceId,
-      targetWorkspaceId,
-      sourceEntityId,
+      fingerprintKey: "entities.copyToWorkspaceHandler.fileMappings_error",
+      context: {
+        sourceWorkspaceId,
+        targetWorkspaceId,
+        sourceEntityId,
+      },
     });
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
@@ -639,13 +649,20 @@ const copyToWorkspaceHandler = async function* ({
     .flushEntitySearchRepairs(
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
-    .catch(captureError);
+    .catch((error: unknown) =>
+      captureError(error, { fingerprintKey: "entityCopy.flushSearch" }),
+    );
 
   // Acceleration only: each run already committed with its copied source.
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey:
+        "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
+    }),
+  );
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
@@ -659,7 +676,11 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "entityCopy.enqueuePdfDerivative",
+        }),
+      );
     dependencies
       .enqueueImageThumbnailOrMarkFailed({
         entityId: fileField.entityId,
@@ -670,17 +691,23 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch((error: unknown) =>
+        captureError(error, { fingerprintKey: "entityCopy.enqueueThumbnail" }),
+      );
   }
 
   // Sync search indexes
   dependencies
     .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(captureError);
+    .catch((error: unknown) =>
+      captureError(error, { fingerprintKey: "entityCopy.syncTargetSearch" }),
+    );
   if (deleteSource) {
     dependencies
       .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(captureError);
+      .catch((error: unknown) =>
+        captureError(error, { fingerprintKey: "entityCopy.syncSourceSearch" }),
+      );
   }
 
   // The source workspace event is emitted by the route macro. This explicit

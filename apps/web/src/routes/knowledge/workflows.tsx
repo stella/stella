@@ -144,7 +144,9 @@ function RouteComponent() {
     );
     if (Result.isError(detailResult)) {
       setTogglingId(null);
-      getAnalytics().captureError(detailResult.error);
+      getAnalytics().captureError(detailResult.error, {
+        fingerprintKey: "RouteComponent.handleToggleEnabled:failure",
+      });
       notifyUserError(detailResult.error, t("flows.saveFailed"));
       return;
     }

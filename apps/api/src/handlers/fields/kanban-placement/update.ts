@@ -139,12 +139,22 @@ export const createUpdateKanbanPlacement = ({
       await Promise.all(
         completionNotices.map(
           async (notice) =>
-            await notifyFlowRunActorOfCompletion(notice).catch(captureError),
+            await notifyFlowRunActorOfCompletion(notice).catch(
+              (error: unknown) =>
+                captureError(error, {
+                  fingerprintKey:
+                    "createUpdateKanbanPlacement.notifyFlowRunActorOfCompletion",
+                }),
+            ),
         ),
       );
 
       if (body.fields.length > 0) {
-        flushSearchRepairs([body.entityId]).catch(captureError);
+        flushSearchRepairs([body.entityId]).catch((error: unknown) =>
+          captureError(error, {
+            fingerprintKey: "createUpdateKanbanPlacement.flushSearchRepairs",
+          }),
+        );
       }
       return Result.ok({});
     },

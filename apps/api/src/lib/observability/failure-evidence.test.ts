@@ -2,9 +2,18 @@ import { Panic, UnhandledException } from "better-result";
 import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import { classifyFailure } from "@stll/errors";
+import {
+  classifyFailure,
+  declareFailureClass,
+  declareFingerprintFields,
+} from "@stll/errors";
 
-import { DatabaseRlsError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseRlsError,
+  HandlerError,
+  ExtractionWorkerError,
+  SandboxError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   MAX_EVIDENCE_DEPTH,
   readEvidence,
@@ -405,4 +414,78 @@ describe("provider status provenance", () => {
     expect(readProviderStatus({ code: "insufficient_quota" })).toBeUndefined();
     expect(readProviderStatus(new Panic({ message: "x" }))).toBeUndefined();
   });
+});
+
+describe("failure evidence snapshots typed fingerprint dimensions", () => {
+  test("keeps sandbox causes separate and reads a changing reason once", () => {
+    const error = new SandboxError({ message: "private", reason: "runtime" });
+    let reads = 0;
+    Object.defineProperty(error, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "runtime" : "timeout";
+      },
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(reads).toBe(1);
+  });
+
+  test("shares nested termination reads with extraction diagnostics", () => {
+    const error = new ExtractionWorkerError({
+      message: "private",
+      code: "worker_timeout",
+      exitCode: null,
+      mimeType: "text/plain",
+      sizeBytes: 10,
+      termination: { reason: "timeout", signalCode: "SIGTERM" },
+    });
+    let reads = 0;
+    Object.defineProperty(error.termination, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "timeout" : "crashed";
+      },
+    });
+    const node = readEvidence(error).nodes.at(0);
+    expect(node?.discriminators).toEqual({ "termination.reason": "timeout" });
+    expect(node?.extraction?.["terminationReason"]).toBe("timeout");
+    expect(reads).toBe(1);
+  });
+});
+
+test("failure evidence shares discriminator reads with class brands and accessors", () => {
+  class ReasonFailureError extends Error {
+    override readonly name = "ReasonFailureError";
+    readonly reason = "runtime" as const;
+    static {
+      declareFailureClass(this, ({ reason }) =>
+        reason === "runtime" ? "unclassified" : "invalid_declaration",
+      );
+      declareFingerprintFields(this, ["reason"]);
+    }
+    get code() {
+      return this.reason;
+    }
+  }
+  const error = new ReasonFailureError("private");
+  let reads = 0;
+  Object.defineProperty(error, "reason", {
+    get: () => {
+      reads += 1;
+      return reads === 1 ? "runtime" : "timeout";
+    },
+  });
+  const node = readEvidence(error).nodes.at(0);
+  expect(node?.code).toBe("runtime");
+  expect(node?.brand?.reason).toBe("unclassified");
+  expect(node?.discriminators).toEqual({
+    reason: "runtime",
+    failureReason: "unclassified",
+  });
+  expect(reads).toBe(1);
 });

@@ -382,7 +382,10 @@ const enqueueStorageCleanupOrLog = async (
   try {
     await enqueueAccountDeletionCleanup(deletionRequestId);
   } catch (error) {
-    captureError(error, { deletionRequestId });
+    captureError(error, {
+      fingerprintKey: "lib.enqueueStorageCleanupOrLog",
+      context: { deletionRequestId },
+    });
     logger.error("account_deletion_cleanup.enqueue_failed", {
       "error.type": errorTag(error),
       deletionRequestId,
@@ -392,7 +395,10 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
       createAccountDeletionCleanupRequestDeps(rootDb),
     ).catch((cleanupError: unknown) => {
-      captureError(cleanupError, { deletionRequestId });
+      captureError(cleanupError, {
+        fingerprintKey: "lib.enqueueStorageCleanupOrLog.cleanupError",
+        context: { deletionRequestId },
+      });
       logger.error("account_deletion_cleanup.inline_failed", {
         "error.type": errorTag(cleanupError),
         deletionRequestId,

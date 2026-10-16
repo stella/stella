@@ -394,7 +394,10 @@ export const parseStoredAnswerContent = (value: unknown): FieldContent => {
     new DatabaseError({
       message: "Stored research answer is not field content",
     }),
-    { source: "case-law-research-answers" },
+    {
+      fingerprintKey: "caselaw.parseStoredAnswerContent",
+      context: { source: "case-law-research-answers" },
+    },
   );
   return { version: 1, type: "error" };
 };

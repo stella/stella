@@ -61,7 +61,9 @@ export const useUpdateCorrespondence = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateCorrespondence:failure",
+      });
       notifyUserError(error, t("common.error"));
     },
   });
@@ -89,7 +91,9 @@ export const useRotateCorrespondenceAddress = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRotateCorrespondenceAddress:failure",
+      });
       notifyUserError(error, t("common.error"));
     },
   });
@@ -117,7 +121,9 @@ export const useRevokeCorrespondenceAddress = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRevokeCorrespondenceAddress:failure",
+      });
       notifyUserError(error, t("common.error"));
     },
   });

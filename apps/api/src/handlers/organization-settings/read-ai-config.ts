@@ -94,7 +94,10 @@ const readAIConfig = createSafeRootHandler(
       });
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error);
+        captureError(decryptResult.error, {
+          fingerprintKey:
+            "organizationsettings.readAIConfig.decryptResult_error",
+        });
         // Reporting the default here would present a stored-but-unreadable
         // config as an unconfigured org and invite re-entry of the key.
         return Result.err(storedAIConfigUnreadableError(decryptResult.error));

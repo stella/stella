@@ -15,7 +15,9 @@ export const ContactReadError = ({ error, onRetry }: ContactReadErrorProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "ContactReadError:failure",
+    });
   }, [analytics, error]);
   return (
     <div className="flex items-center gap-2 p-3" role="alert">

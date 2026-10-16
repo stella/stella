@@ -162,8 +162,11 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     failFlowRunFromWorker(job.data, error, { database: db }).catch(
       (finalizeError: unknown) => {
         captureError(finalizeError, {
-          runId: job.data.runId,
-          stepIndex: String(job.data.stepIndex),
+          fingerprintKey: "flows.initFlowRunWorker.finalizeError",
+          context: {
+            runId: job.data.runId,
+            stepIndex: String(job.data.stepIndex),
+          },
         });
       },
     );
@@ -187,7 +190,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
   reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
-    captureError(error);
+    captureError(error, { fingerprintKey: "flows.initFlowRunWorker" });
     logger.error("flow.reconcile_failed", errorSystemFields(error));
   });
 

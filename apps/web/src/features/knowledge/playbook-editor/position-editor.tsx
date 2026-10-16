@@ -1255,7 +1255,7 @@ const ClausePicker = ({
     enabled: clauseId !== "",
   });
   const detailView = useQueryView(detailQuery);
-  useQueryViewError(detailView);
+  useQueryViewError(detailView, "ClausePicker:query");
 
   const resolvedTitle = (() => {
     const detail = detailView.type === "items" ? detailView.items : undefined;

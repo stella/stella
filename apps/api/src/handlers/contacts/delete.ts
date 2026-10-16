@@ -140,7 +140,10 @@ export const deleteContactHandler = async function* ({
   }
 
   flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
-    captureError,
+    (error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "deleteContactHandler.flushWorkspaceSearchRepairs",
+      }),
   );
 
   return Result.ok({});

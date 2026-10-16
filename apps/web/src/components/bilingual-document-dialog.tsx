@@ -117,7 +117,9 @@ export const BilingualDocumentDialog = ({
       setOpen(false);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BilingualDocumentDialog:failure",
+      });
       notifyUserError(error, t("bilingual.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

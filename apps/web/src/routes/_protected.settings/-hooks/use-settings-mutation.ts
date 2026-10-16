@@ -106,7 +106,11 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   // keeps this out of the detached-promise ratchet and routes a failed
   // refetch to telemetry instead of an unhandled rejection.
   const invalidateInBackground = (): void => {
-    invalidate().catch((error: unknown) => analytics.captureError(error));
+    invalidate().catch((error: unknown) =>
+      analytics.captureError(error, {
+        fingerprintKey: "useSettingsMutation.invalidateInBackground:failure",
+      }),
+    );
   };
 
   const invalidatesOnSettle = options.invalidateOn === "settled";
@@ -141,7 +145,9 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
         }
       : {}),
     onError: (error, variables) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useSettingsMutation:failure",
+      });
       if (options.errorToast) {
         notifyUserError(error, options.errorToast.title, {
           ...(options.errorToast.description

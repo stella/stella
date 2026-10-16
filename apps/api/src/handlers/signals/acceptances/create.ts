@@ -244,7 +244,11 @@ export const createAcceptSignal = (
           );
           dependencies
             .flushEntitySearchRepairs([created.entityId])
-            .catch(captureError);
+            .catch((error: unknown) =>
+              captureError(error, {
+                fingerprintKey: "createAcceptSignal.rejection",
+              }),
+            );
 
           const row = yield* yield* loadVisibleSignal({
             safeDb,

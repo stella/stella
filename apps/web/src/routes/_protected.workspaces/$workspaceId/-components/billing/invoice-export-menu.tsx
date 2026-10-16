@@ -112,7 +112,9 @@ export const InvoiceExportMenu = ({
       link.remove();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "InvoiceExportMenu:failure",
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });

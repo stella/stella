@@ -127,8 +127,11 @@ export const backfillCaseLawSlugs = async (
       } catch (error) {
         failed += 1;
         captureError(error, {
-          decisionId: row.id,
-          step: "backfillCaseLawSlugs",
+          fingerprintKey: "decisions.backfillCaseLawSlugs",
+          context: {
+            decisionId: row.id,
+            step: "backfillCaseLawSlugs",
+          },
         });
       }
     }

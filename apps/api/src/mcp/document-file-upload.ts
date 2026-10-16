@@ -121,6 +121,7 @@ const invokeCapability = async ({
             new Error(
               "Upload capability returned an unexpected success result",
             ),
+            "mcp.uploadCapability.unexpectedResult",
           ),
         };
   }
@@ -129,6 +130,7 @@ const invokeCapability = async ({
       status: "error",
       result: internalFailureResult(
         new Error("Upload capability returned a non-structured egress plan"),
+        "mcp.uploadCapability.nonStructuredResult",
       ),
     };
   }
@@ -234,9 +236,12 @@ const abortCreatedReservation = async ({
   });
   if (Result.isError(aborted)) {
     dependencies.captureCleanupFailure(aborted.error, {
-      source: "mcp_document_upload",
-      uploadId,
-      workspaceId,
+      fingerprintKey: "abortCreatedReservation.aborted_error",
+      context: {
+        source: "mcp_document_upload",
+        uploadId,
+        workspaceId,
+      },
     });
     return false;
   }
@@ -249,9 +254,12 @@ const abortCreatedReservation = async ({
       cause: aborted.value.result,
     }),
     {
-      source: "mcp_document_upload",
-      uploadId,
-      workspaceId,
+      fingerprintKey: "abortCreatedReservation.failure",
+      context: {
+        source: "mcp_document_upload",
+        uploadId,
+        workspaceId,
+      },
     },
   );
   return false;
@@ -355,6 +363,7 @@ export const uploadRemoteDocumentVersion = async ({
     }
     return internalFailureResult(
       new Error("uploads.create returned an invalid reservation"),
+      "mcp.documentUpload.invalidReservation",
     );
   }
 
@@ -395,6 +404,7 @@ export const uploadRemoteDocumentVersion = async ({
   if (!parsedFinalized.success) {
     return internalFailureResult(
       new Error("uploads.update returned an invalid entity-version result"),
+      "mcp.documentUpload.invalidFinalizedResult",
     );
   }
   return structuredEgressPlan({

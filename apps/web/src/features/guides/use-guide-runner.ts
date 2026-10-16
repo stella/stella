@@ -284,7 +284,9 @@ export const useGuideRunner = ({
       }
     });
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "useGuideRunner.navigateToGuideRoute:failure",
+      });
       return false;
     }
     return result.value;

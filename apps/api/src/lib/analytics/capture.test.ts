@@ -12,12 +12,13 @@ import {
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   enrichRequestContext,
   getRequestFailure,
   initRequestContext,
 } from "@/api/lib/observability/request-context";
-import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
 const captured: {
   groups?: Record<string, string>;
@@ -39,17 +40,20 @@ setAnalyticsForTesting({
 });
 
 /**
- * Both helpers construct their error on a single source line, so every
- * occurrence from one helper shares a `error.frame` and therefore a
- * suppression key — the shape of a loop that keeps failing at the same site.
- * The two helpers sit on different lines, so they are different defects.
+ * Each helper supplies its own symbolic owner, so line moves cannot change
+ * grouping while failures from distinct paths remain separate.
  */
 const captureFromSiteA = (context?: Record<string, string>): void => {
-  captureError(new Error("boom"), context);
+  captureError(new Error("boom"), {
+    fingerprintKey: "analytics.captureFromSiteA",
+    context,
+  });
 };
 
 const captureFromSiteB = (): void => {
-  captureError(new Error("boom"));
+  captureError(new Error("boom"), {
+    fingerprintKey: "analytics.captureFromSiteB",
+  });
 };
 
 /**
@@ -62,7 +66,9 @@ const captureFromSiteB = (): void => {
 const captureQueryFailure = (sqlState: string): void => {
   const driverError = new Error("driver rejected the statement");
   Reflect.set(driverError, "errno", sqlState);
-  captureError(new Error("query failed", { cause: driverError }));
+  captureError(new Error("query failed", { cause: driverError }), {
+    fingerprintKey: "analytics.captureQueryFailure",
+  });
 };
 
 const extractionError = ({
@@ -190,7 +196,9 @@ describe("captureError issue grouping", () => {
   });
 
   test("the grouping fingerprint never carries the error message", () => {
-    captureError(new Error("Privileged client matter detail"));
+    captureError(new Error("Privileged client matter detail"), {
+      fingerprintKey: "analytics.capture",
+    });
 
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
@@ -205,7 +213,10 @@ describe("captureRequestError organization attribution", () => {
     initRequestContext(request);
     enrichRequestContext(request, { organizationId });
 
-    captureRequestError(new Error("boom"), { request });
+    captureRequestError(new Error("boom"), {
+      fingerprintKey: "analytics.capture",
+      request,
+    });
 
     // The group is what PostHog's organization breakdown reads; losing it
     // while organization_id survives as a plain property would go unnoticed.
@@ -216,7 +227,10 @@ describe("captureRequestError organization attribution", () => {
     const request = new Request("https://api.test/internal");
     initRequestContext(request);
 
-    captureRequestError(new Error("boom"), { request });
+    captureRequestError(new Error("boom"), {
+      fingerprintKey: "analytics.capture",
+      request,
+    });
 
     expect(captured.at(0)?.groups).toBeUndefined();
   });
@@ -233,7 +247,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
-      { runId: "run-1" },
+      { fingerprintKey: "analytics.capture", context: { runId: "run-1" } },
     );
 
     const properties = captured.at(0)?.properties;
@@ -255,6 +269,7 @@ describe("captureError extraction diagnostics", () => {
         message: "parser failed",
         termination: null,
       }),
+      { fingerprintKey: "analytics.capture" },
     );
     captureError(
       extractionError({
@@ -265,6 +280,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
+      { fingerprintKey: "analytics.capture" },
     );
 
     expect(captured).toHaveLength(2);
@@ -279,17 +295,17 @@ describe("captureError extraction diagnostics", () => {
 });
 
 describe("captureError owned fields", () => {
-  test("groups by the identity the legacy fields produced", () => {
+  test("groups and suppresses by the stable identity", () => {
     const driverError = Object.assign(new Error("driver"), {
       errno: "23505",
       constraint: "users_email_key",
     });
     const error = new Error("query failed", { cause: driverError });
 
-    captureError(error);
+    captureError(error, { fingerprintKey: "analytics.capture" });
 
     expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), "analytics.capture"),
     );
   });
 
@@ -326,7 +342,7 @@ describe("captureError owned fields", () => {
 
     captureRequestError(
       Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-      { request },
+      { fingerprintKey: "analytics.capture", request },
     );
 
     expect(getRequestFailure(request)).toEqual({

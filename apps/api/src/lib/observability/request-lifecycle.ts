@@ -209,6 +209,7 @@ export const answerRequestError = ({
   // it stays captured along with every other code.
   if (captured) {
     captureObservedError(error, {
+      fingerprintKey: "observability.answerRequestError",
       request,
       context: {
         route: getRouteName(route),

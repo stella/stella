@@ -125,7 +125,9 @@ export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.index.loader.onPrefetchError:failure",
+      });
     };
 
     detached(
@@ -303,7 +305,7 @@ function ChatIndex() {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, { fingerprintKey: "ChatIndex:failure" });
     },
   });
   const seededDraftRef = useRef<string | null>(null);
@@ -408,7 +410,7 @@ function ChatIndex() {
     }),
   );
   const memberPreviewsView = useQueryView(memberPreviewsQuery);
-  useQueryViewError(memberPreviewsView);
+  useQueryViewError(memberPreviewsView, "ChatIndex:query");
   const memberPreviews =
     memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
   const mattersHeading =

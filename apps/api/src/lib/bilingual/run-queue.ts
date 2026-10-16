@@ -268,15 +268,21 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
       setRunFailed(brandActor(job.data), "internal").catch(
         (markError: unknown) => {
           captureError(markError, {
-            runId: job.data.runId,
-            workspaceId: job.data.workspaceId,
+            fingerprintKey: "bilingual.initBilingualRunWorker.markError",
+            context: {
+              runId: job.data.runId,
+              workspaceId: job.data.workspaceId,
+            },
           });
         },
       );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
+    captureError(error, {
+      fingerprintKey: "bilingual.initBilingualRunWorker",
+      context: { runId, workspaceId },
+    });
     logger.error("bilingual_run.failed", {
       runId,
       "error.type": errorTag(error),
@@ -300,7 +306,10 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     onError: (error) => {
-      captureError(error, { operation: "bilingual_run.reconcile" });
+      captureError(error, {
+        fingerprintKey: "bilingual.closeReconcile",
+        context: { operation: "bilingual_run.reconcile" },
+      });
     },
   });
 
@@ -377,8 +386,11 @@ export const processBilingualRun = async (
   });
   if (Result.isError(outcome)) {
     captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+      fingerprintKey: "bilingual.processBilingualRun.outcome_error",
+      context: {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      },
     });
     await setRunFailed(actor, "internal");
     return;
@@ -449,8 +461,11 @@ const executeRun = async ({
   );
   if (Result.isError(config)) {
     captureError(config.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+      fingerprintKey: "bilingual.executeRun.config_error",
+      context: {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      },
     });
     return "ai_unavailable";
   }
@@ -525,8 +540,11 @@ const executeRun = async ({
     });
     if (Result.isError(result)) {
       captureError(result.error, {
-        runId: actor.runId,
-        workspaceId: actor.workspaceId,
+        fingerprintKey: "bilingual.translateFrom.result_error",
+        context: {
+          runId: actor.runId,
+          workspaceId: actor.workspaceId,
+        },
       });
       return "translation_failed";
     }
@@ -601,8 +619,11 @@ const executeRun = async ({
   const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
     captureError(applied.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+      fingerprintKey: "bilingual.executeRun.applied_error",
+      context: {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      },
     });
     return "apply_failed";
   }
@@ -617,8 +638,11 @@ const executeRun = async ({
   const validation = await validateDocxBuffer(applied.value.buffer);
   if (!validation.valid) {
     captureError(new Error(validation.error), {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+      fingerprintKey: "bilingual.executeRun",
+      context: {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      },
     });
     return "apply_failed";
   }
@@ -672,8 +696,11 @@ const executeRun = async ({
   });
   if (Result.isError(written)) {
     captureError(written.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
+      fingerprintKey: "bilingual.executeRun.written_error",
+      context: {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      },
     });
     return "apply_failed";
   }

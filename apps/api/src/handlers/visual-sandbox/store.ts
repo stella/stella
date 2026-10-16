@@ -53,7 +53,10 @@ export const createVisualStore =
       },
     });
     if (stored.isErr()) {
-      captureError(stored.error, { source: "show_visual" });
+      captureError(stored.error, {
+        fingerprintKey: "visualsandbox.createVisualStore.stored_error",
+        context: { source: "show_visual" },
+      });
       return Result.err(
         new ChatToolError({
           kind: "server-defect",

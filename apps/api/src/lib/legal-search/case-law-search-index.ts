@@ -594,8 +594,11 @@ export const backfillSearchIndex = async (
       error: indexed.error,
     });
     captureError(indexed.error, {
-      decisionId: row.id,
-      step: "backfillSearchIndex",
+      fingerprintKey: "legalsearch.indexRow.indexed_error",
+      context: {
+        decisionId: row.id,
+        step: "backfillSearchIndex",
+      },
     });
     logger.error("case_law.search_index.backfill_failed", {
       decisionId: row.id,

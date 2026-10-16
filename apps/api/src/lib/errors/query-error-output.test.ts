@@ -126,9 +126,12 @@ test("query error output excludes parameter values through logger and captureErr
   try {
     const error = queryFailure();
     captureError(error, {
-      params: SECRETS.join(","),
-      query: error.query,
-      toolName: "list_matters",
+      fingerprintKey: "errors.capture",
+      context: {
+        params: SECRETS.join(","),
+        query: error.query,
+        toolName: "list_matters",
+      },
     });
     logger.error("query.failed", {
       ...errorFingerprint(error),
@@ -214,7 +217,7 @@ test("every error output sink drops fields from the shared query policy", () => 
     });
     devLog(error, { ...payload, nested: payload });
     printError(payload);
-    captureError(error, payload);
+    captureError(error, { fingerprintKey: "errors.capture", context: payload });
     for (const level of ["debug", "info", "warn", "error"] as const) {
       logger[level]("query.failed", payload);
     }
@@ -266,7 +269,7 @@ test("output sinks exclude query text present only in an ordinary error stack", 
     });
     devLog(error);
     printError(error);
-    captureError(error);
+    captureError(error, { fingerprintKey: "errors.capture" });
     logger.error("query.failed", unredactedErrorFields(error));
     expect(analytics.exceptions()).toHaveLength(1);
     expect(logs.records).toHaveLength(1);
@@ -333,7 +336,10 @@ test("output sinks redact query markers in a nested payload", () => {
         scenario.payload,
         error,
       );
-      captureError(error, { diagnostic: marker });
+      captureError(error, {
+        fingerprintKey: "errors.capture",
+        context: { diagnostic: marker },
+      });
       logger.error(`Diagnostic ${marker}`, {
         diagnostic: scenario.payload,
         failure: error,

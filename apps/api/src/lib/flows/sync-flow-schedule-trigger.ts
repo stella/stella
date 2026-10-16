@@ -53,7 +53,10 @@ export const syncFlowScheduleTrigger = async ({
   });
 
   if (Result.isError(result)) {
-    captureError(result.error, { definitionId: id });
+    captureError(result.error, {
+      fingerprintKey: "flows.syncFlowScheduleTrigger.result_error",
+      context: { definitionId: id },
+    });
     logger.error("flow.schedule_sync_failed", {
       definitionId: id,
       triggerType: trigger.type,

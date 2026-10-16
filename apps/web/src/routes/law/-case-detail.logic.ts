@@ -128,7 +128,9 @@ const primeDecisionProvisions = (
   decisionId: string,
 ): void => {
   const captureError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "primeDecisionProvisions:failure",
+    });
   };
   detached(
     prefetchNonCriticalInfiniteQuery(

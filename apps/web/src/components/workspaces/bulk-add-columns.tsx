@@ -462,7 +462,9 @@ const useColumnsSubmit = (onClose: () => void) => {
   }) => {
     const created = await run();
     if (Result.isError(created)) {
-      getAnalytics().captureError(created.error);
+      getAnalytics().captureError(created.error, {
+        fingerprintKey: "useColumnsSubmit:failure",
+      });
       notifyUserError(
         created.error,
         t("workspaces.properties.bulk.createFailed"),
@@ -866,7 +868,9 @@ const DraftCard = ({
             scope: target.suggestion,
           }),
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "DraftCard:failure",
+      });
       notifyUserError(error, t("workspaces.properties.autoPromptFailed"));
     },
   });

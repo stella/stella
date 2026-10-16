@@ -159,7 +159,10 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decryptResult)) {
-    captureError(decryptResult.error, { operation: "office-evidence-decrypt" });
+    captureError(decryptResult.error, {
+      fingerprintKey: "files.decodeEvidenceRow.decryptResult_error",
+      context: { operation: "office-evidence-decrypt" },
+    });
     return null;
   }
   const jsonResult = Result.try({
@@ -167,7 +170,10 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(jsonResult)) {
-    captureError(jsonResult.error, { operation: "office-evidence-json" });
+    captureError(jsonResult.error, {
+      fingerprintKey: "files.decodeEvidenceRow.jsonResult_error",
+      context: { operation: "office-evidence-json" },
+    });
     return null;
   }
   const parsed = v.safeParse(officeEvidencePayloadSchema, jsonResult.value);
@@ -180,7 +186,10 @@ const decodeEvidenceRow = async (
       new TelemetryError({
         message: "Persisted Office evidence failed validation",
       }),
-      { operation: "office-evidence-validate" },
+      {
+        fingerprintKey: "files.decodeEvidenceRow",
+        context: { operation: "office-evidence-validate" },
+      },
     );
     return null;
   }
@@ -382,10 +391,16 @@ const captureAndAbandonOfficeEvidence = async ({
   operation,
   ...claim
 }: CaptureAndAbandonOfficeEvidenceOptions): Promise<null> => {
-  captureError(error, { operation });
+  captureError(error, {
+    fingerprintKey: "files.captureAndAbandonOfficeEvidence",
+    context: { operation },
+  });
   const abandoned = await abandonOfficeEvidenceClaim(claim);
   if (Result.isError(abandoned)) {
-    captureError(abandoned.error, { operation: "office-evidence-abandon" });
+    captureError(abandoned.error, {
+      fingerprintKey: "files.captureAndAbandonOfficeEvidence.abandoned_error",
+      context: { operation: "office-evidence-abandon" },
+    });
   }
   return null;
 };
@@ -545,7 +560,10 @@ export const loadOfficeEvidence = async ({
     workspaceId,
   });
   if (Result.isError(claimResult)) {
-    captureError(claimResult.error, { operation: "office-evidence-claim" });
+    captureError(claimResult.error, {
+      fingerprintKey: "files.loadOfficeEvidence.claimResult_error",
+      context: { operation: "office-evidence-claim" },
+    });
     return null;
   }
   const claim = claimResult.value;
@@ -566,7 +584,10 @@ export const loadOfficeEvidence = async ({
       workspaceId,
     });
     if (Result.isError(abandoned)) {
-      captureError(abandoned.error, { operation: "office-evidence-abandon" });
+      captureError(abandoned.error, {
+        fingerprintKey: "files.loadOfficeEvidence.abandoned_error",
+        context: { operation: "office-evidence-abandon" },
+      });
     }
     return null;
   }

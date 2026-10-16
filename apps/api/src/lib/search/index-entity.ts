@@ -303,7 +303,10 @@ const buildSearchDocument = async (
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
       // added or rotated after this content was stored.
       // Keep the last complete projection until re-extraction fixes it.
-      captureError(error, { entityId });
+      captureError(error, {
+        fingerprintKey: "search.buildSearchDocument",
+        context: { entityId },
+      });
       throw error;
     }
   }

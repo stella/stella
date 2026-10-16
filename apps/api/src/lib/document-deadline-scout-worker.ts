@@ -33,8 +33,11 @@ export const initDocumentDeadlineScoutWorker = ({
 
   worker.on("failed", (job, error) => {
     captureError(error, {
-      scout: DEADLINE_SCOUT_JOB_NAME,
-      sourceRunId: job?.data.sourceRunId ?? "",
+      fingerprintKey: "lib.initDocumentDeadlineScoutWorker",
+      context: {
+        scout: DEADLINE_SCOUT_JOB_NAME,
+        sourceRunId: job?.data.sourceRunId ?? "",
+      },
     });
     logger.error("scout.document_deadlines.failed", {
       "error.type": errorTag(error),

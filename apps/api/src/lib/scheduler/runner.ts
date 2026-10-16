@@ -231,7 +231,10 @@ export const startSchedulerLoop = ({
         signal: controller.signal,
       });
     } catch (error: unknown) {
-      captureError(error, { schedulerRunnerId: runnerId });
+      captureError(error, {
+        fingerprintKey: "scheduler.runTick",
+        context: { schedulerRunnerId: runnerId },
+      });
       logger.error("scheduler.tick_failed", {
         "scheduler.runner_id": runnerId,
         "error.type": errorTag(error),
@@ -765,9 +768,12 @@ const resolveRunOutcome = async ({
 }: ResolveRunOutcomeOptions): Promise<RunJobStatus> => {
   if (timeoutError) {
     captureError(timeoutError, {
-      schedulerJobId: job.id,
-      schedulerRunId: runId,
-      schedulerTask: job.task,
+      fingerprintKey: "scheduler.resolveRunOutcome.timeoutError",
+      context: {
+        schedulerJobId: job.id,
+        schedulerRunId: runId,
+        schedulerTask: job.task,
+      },
     });
     logger.error("scheduler.job_timed_out", {
       "scheduler.job_id": job.id,
@@ -824,9 +830,12 @@ const resolveRunOutcome = async ({
   }
 
   captureError(raceError, {
-    schedulerJobId: job.id,
-    schedulerRunId: runId,
-    schedulerTask: job.task,
+    fingerprintKey: "scheduler.resolveRunOutcome.raceError",
+    context: {
+      schedulerJobId: job.id,
+      schedulerRunId: runId,
+      schedulerTask: job.task,
+    },
   });
   logger.error("scheduler.job_failed", {
     "scheduler.job_id": job.id,

@@ -1409,7 +1409,10 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(teardown.error, { organizationId });
+          captureError(teardown.error, {
+            fingerprintKey: "lib.beforeDeleteOrganization.teardown_error",
+            context: { organizationId },
+          });
           throw teardown.error instanceof OrganizationStorageTeardownBoundError
             ? new APIError("BAD_REQUEST", {
                 error: "organization_storage_too_large",
@@ -2336,14 +2339,20 @@ export const createAuth = (
                 sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                 lang,
               }).catch((error: unknown) => {
-                captureError(error, { source: "new-device-login-email" });
+                captureError(error, {
+                  fingerprintKey: "lib.notified",
+                  context: { source: "new-device-login-email" },
+                });
               }),
             );
           },
           catch: (cause) => cause,
         });
         if (Result.isError(notified)) {
-          captureError(notified.error, { source: "new-device-login-hook" });
+          captureError(notified.error, {
+            fingerprintKey: "lib.auth.notified_error",
+            context: { source: "new-device-login-hook" },
+          });
         }
       }),
     },

@@ -89,6 +89,8 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 
+import { exceptionFingerprint } from "./exception-fingerprint";
+
 const SENTINEL = "PRIVILEGED-SENTINEL";
 
 const SINK = failureSink({ event: "contract.sink", expected: [] });
@@ -1358,7 +1360,7 @@ describe("observeFailure channels", () => {
     });
     const [exception] = analytics.exceptions();
     expect(exception?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), "observe.contract.sink"),
     );
     // Suppression keys on that same identity: the second capture is throttled.
     expect(analytics.exceptions()).toHaveLength(1);
@@ -1471,7 +1473,7 @@ describe("privileged content never leaves the process", () => {
       const request = scopedRequest();
       const defect = failureSink({ event: "sentinel.defect", expected: [] });
       observeFailure(error, { sink: defect, request, ctx: hostileContext });
-      captureError(error);
+      captureError(error, { fingerprintKey: "observability.capture" });
       logger.warn("helper.record", {
         ...errorSystemFields(error),
         ...pgErrorFields(error),

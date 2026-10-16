@@ -121,8 +121,11 @@ export const processResultForCorpusOutcome = (
         }),
       );
       captureError(outcome.error, {
-        decisionId,
-        step: "processDecision.corpusWrite",
+        fingerprintKey: "pipeline.processResultForCorpusOutcome.outcome_error",
+        context: {
+          decisionId,
+          step: "processDecision.corpusWrite",
+        },
       });
       return {
         status: PROCESS_DECISION_STATUS.RETRYABLE,

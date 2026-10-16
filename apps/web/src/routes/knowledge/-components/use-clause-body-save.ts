@@ -16,6 +16,11 @@ import {
   type ClauseEditorReviewStatus,
 } from "./clause-ai-tracked-changes";
 
+const ERROR_CAPTURE = {
+  report: { fingerprintKey: "useClauseBodySave:cause" },
+  ack: { fingerprintKey: "useClauseBodySave.acknowledged:cause" },
+} as const;
+
 export type ClauseBodyWrite = {
   body: ClauseParagraph[];
   expectedBody: ClauseParagraph[];
@@ -274,7 +279,7 @@ export const useClauseBodySave = ({
   const report = useLatestCallback((error: unknown) => {
     const notified = Result.try(() => onError(error));
     if (notified.isErr()) {
-      getAnalytics().captureError(notified.error.cause);
+      getAnalytics().captureError(notified.error.cause, ERROR_CAPTURE.report);
     }
   });
   const queue = useClauseBodyQueue({ initialBody, reconcile, report });
@@ -285,7 +290,7 @@ export const useClauseBodySave = ({
     review.acknowledge(next);
     const notified = Result.try(() => onPersisted?.(next));
     if (notified.isErr()) {
-      getAnalytics().captureError(notified.error.cause);
+      getAnalytics().captureError(notified.error.cause, ERROR_CAPTURE.ack);
     }
   };
   const { write, recoverConflict } = useClauseBodyTransport({

@@ -53,7 +53,9 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
         }),
     });
     if (Result.isError(read)) {
-      analytics.captureError(read.error);
+      analytics.captureError(read.error, {
+        fingerprintKey: "usePublicLawTableLayout:failure",
+      });
     }
     setLayouts(Result.isError(read) ? {} : read.value);
   }
@@ -89,7 +91,9 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
           }),
       });
       if (Result.isError(written)) {
-        analytics.captureError(written.error);
+        analytics.captureError(written.error, {
+          fingerprintKey: "usePublicLawTableLayout.setLayout:failure",
+        });
       }
     },
   };

@@ -158,9 +158,12 @@ const abortUpload = createSafeHandler(
         .delete(key)
         .catch((error: unknown) =>
           captureError(error, {
-            key,
-            uploadId,
-            stage: "tmp-cleanup-after-abort",
+            fingerprintKey: "uploads.abortUpload",
+            context: {
+              key,
+              uploadId,
+              stage: "tmp-cleanup-after-abort",
+            },
           }),
         );
     }

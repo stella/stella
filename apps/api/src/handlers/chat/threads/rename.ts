@@ -128,7 +128,11 @@ const renameThread = createSafeRootHandler(
     // Re-index so global search finds the thread by its new title. Fire-and-
     // forget after the rename commits: indexing must never block or fail the
     // rename. Mirrors generate-thread-title.ts and send-message.ts.
-    upsertChatThreadSearchDocument(params.threadId).catch(captureError);
+    upsertChatThreadSearchDocument(params.threadId).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "renameThread.upsertChatThreadSearchDocument",
+      }),
+    );
 
     return Result.ok({ title });
   },

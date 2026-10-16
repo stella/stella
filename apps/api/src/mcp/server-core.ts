@@ -183,7 +183,13 @@ type McpServerDependencies = {
     token: string,
     options: { mode: McpMode },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
-  captureError: (error: unknown, context?: Record<string, string>) => void;
+  captureError: (
+    error: unknown,
+    options: {
+      fingerprintKey: `${string}.${string}`;
+      context?: Record<string, string>;
+    },
+  ) => void;
   getMcpToolDefinition: (
     toolName: string,
     context: McpRequestContext,
@@ -737,7 +743,10 @@ const boundMcpToolResult = async ({
       return result;
     }
     if (charged.error.reason === "unavailable") {
-      captureError(charged.error, { phase: "read-fence", source: "mcp" });
+      captureError(charged.error, {
+        fingerprintKey: "boundMcpToolResult.charged_error",
+        context: { phase: "read-fence", source: "mcp" },
+      });
     }
     const refusal = actionAdmissionRefusal(charged.error);
     return mcpStructuredErrorResult({
@@ -847,9 +856,13 @@ export const createMcpHttpRequestHandler = ({
       // generic retryable result.
       if (!(error instanceof McpGatewayLoadError)) {
         captureError(error, {
-          phase: "tools/call",
-          mode,
-          source: "mcp",
+          fingerprintKey:
+            "createMcpHttpRequestHandler.handleToolsCallRequest.error",
+          context: {
+            phase: "tools/call",
+            mode,
+            source: "mcp",
+          },
         });
       }
       return retryableToolErrorResult(mode, context);
@@ -959,8 +972,12 @@ export const createMcpHttpRequestHandler = ({
     if (ActionAdmissionError.is(admitted.error)) {
       if (admitted.error.reason === "unavailable") {
         captureError(admitted.error, {
-          phase: "action-admission",
-          source: "mcp",
+          fingerprintKey:
+            "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
+          context: {
+            phase: "action-admission",
+            source: "mcp",
+          },
         });
       }
       const refusal = actionAdmissionRefusal(admitted.error);
@@ -973,8 +990,12 @@ export const createMcpHttpRequestHandler = ({
       });
     }
     captureError(admitted.error, {
-      phase: "action-admission",
-      source: "mcp",
+      fingerprintKey:
+        "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
+      context: {
+        phase: "action-admission",
+        source: "mcp",
+      },
     });
     return retryableToolErrorResult(mode, context);
   };
@@ -1120,7 +1141,11 @@ export const createMcpHttpRequestHandler = ({
         // the endpoint's observability contract through the handler's reporting
         // hook; the response is normalized to the retryable contract below.
         onerror: (error) => {
-          captureError(error, { phase: "transport", mode, source: "mcp" });
+          captureError(error, {
+            fingerprintKey:
+              "createMcpHttpRequestHandler.handlerForMode.handler.error",
+            context: { phase: "transport", mode, source: "mcp" },
+          });
         },
       },
     );
@@ -1186,19 +1211,27 @@ export const createMcpHttpRequestHandler = ({
       });
       if (recorded.isErr()) {
         captureError(recorded.error, {
-          phase: "initialize",
-          mode,
-          source: "mcp",
+          fingerprintKey:
+            "createMcpHttpRequestHandler.serveLegacyRequest.observeHandshake.recorded_error",
+          context: {
+            phase: "initialize",
+            mode,
+            source: "mcp",
+          },
         });
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);
     const reportTransportError = (error: unknown, operation: string) => {
       captureError(error, {
-        mode,
-        operation,
-        phase: "transport",
-        source: "mcp",
+        fingerprintKey:
+          "createMcpHttpRequestHandler.serveLegacyRequest.reportTransportError.error",
+        context: {
+          mode,
+          operation,
+          phase: "transport",
+          source: "mcp",
+        },
       });
     };
 
@@ -1407,9 +1440,12 @@ export const createMcpHttpRequestHandler = ({
       }
 
       captureError(error, {
-        phase: "transport",
-        mode,
-        source: "mcp",
+        fingerprintKey: "createMcpHttpRequestHandler.failureResponse.error",
+        context: {
+          phase: "transport",
+          mode,
+          source: "mcp",
+        },
       });
 
       return retryableServerErrorResponse();

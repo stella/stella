@@ -176,7 +176,10 @@ export const initAccountDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(error, {
+      fingerprintKey: "lib.initAccountDeletionCleanupWorker",
+      context: { requestId: job?.data.requestId ?? "" },
+    });
     logger.error("account_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -201,7 +204,7 @@ export const initAccountDeletionCleanupWorker = ({
             count: String(count),
           });
         } catch (error) {
-          captureError(error);
+          captureError(error, { fingerprintKey: "accountDeletion.reconcile" });
           logger.error(
             "account_deletion_cleanup.reconcile_failed",
             errorSystemFields(error),

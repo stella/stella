@@ -66,6 +66,7 @@ import {
 } from "@/api/lib/files/encrypted-ooxml";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import type { PdfEncryptionProbe } from "@/api/lib/files/pdf-utils";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -192,19 +193,30 @@ const detectOoxmlEncryption = (
   };
 };
 
+type FileEncryptionCaptureOptions = {
+  fingerprintKey: StableExceptionKey;
+  context: Record<string, string>;
+};
+
 /** Reports a detection that did not inspect the file; a known one is silent. */
 const reportDetection = (
   detection: FileEncryptionDetection,
-  context: Record<string, string>,
+  { fingerprintKey, context }: FileEncryptionCaptureOptions,
 ): void => {
   if (detection.status === "unsure") {
     captureError(detection.cause, {
-      ...context,
-      stage: "file-encryption-unsure",
+      fingerprintKey: `${fingerprintKey}.unsure`,
+      context: {
+        ...context,
+        stage: "file-encryption-unsure",
+      },
     });
   }
   if (detection.status === "unreadable") {
-    captureError(detection.cause, context);
+    captureError(detection.cause, {
+      fingerprintKey: `${fingerprintKey}.unreadable`,
+      context,
+    });
   }
 };
 
@@ -214,9 +226,9 @@ const reportDetection = (
  */
 export const uploadFileEncryption = (
   detection: FileEncryptionDetection,
-  context: Record<string, string>,
+  options: FileEncryptionCaptureOptions,
 ): FileEncryption | null => {
-  reportDetection(detection, context);
+  reportDetection(detection, options);
   return detection.status === "unreadable" ? null : detection.encryption;
 };
 
@@ -227,9 +239,9 @@ export const uploadFileEncryption = (
  */
 export const retainedFileEncryption = (
   detection: FileEncryptionDetection,
-  context: Record<string, string>,
+  options: FileEncryptionCaptureOptions,
 ): FileEncryption => {
-  reportDetection(detection, context);
+  reportDetection(detection, options);
   return detection.encryption;
 };
 

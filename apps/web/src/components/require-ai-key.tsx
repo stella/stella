@@ -95,7 +95,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   );
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
@@ -107,7 +107,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     const availability = await queryClient
       .query(availabilityOptions)
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "AIAvailabilityRoot:failure",
+        });
         // Callers read `false` as "do not proceed" and stop there, so without
         // this the action the user just triggered would appear to do nothing.
         notifyUserError(error, tErrors("actionFailed"));
@@ -216,7 +218,7 @@ export const RequireAIKey = ({
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "RequireAIKey:query");
   const { isFetching, isPending } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
   const { openAIKeyDialog } = useAIKeyGate();
@@ -293,7 +295,7 @@ export const AIKeyRequiredDialog = ({
     enabled: open,
   });
   const configView = useQueryView(configQuery);
-  useQueryViewError(configView);
+  useQueryViewError(configView, "AIKeyRequiredDialog:query");
   const config = configView.type === "items" ? configView.items : undefined;
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(
     DEFAULT_PROVIDER_DRAFTS,
@@ -419,7 +421,9 @@ export const AIKeyRequiredDialog = ({
       onOpenChange(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AIKeyRequiredDialog:failure",
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

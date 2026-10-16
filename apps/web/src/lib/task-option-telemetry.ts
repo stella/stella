@@ -10,5 +10,6 @@ export const captureInvalidTaskOption = (option: TaskOption) => {
       area: "task-option-rendering",
       message: `[Task option rendering] Invalid ${option}`,
     }),
+    { fingerprintKey: "captureInvalidTaskOption:ClientTelemetryError" },
   );
 };

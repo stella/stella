@@ -232,7 +232,10 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
       }),
   );
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, { threadId });
+    captureError(persistResult.error, {
+      fingerprintKey: "chat.getThreadRecap.persistResult_error",
+      context: { threadId },
+    });
   }
 
   return Result.ok<ThreadRecapResult>({ recap });

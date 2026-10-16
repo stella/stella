@@ -38,7 +38,9 @@ export const Route = createFileRoute("/_protected/settings/organization/usage")(
           context.queryClient,
           usagePoliciesOptions,
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "settings.organization.usage.loader:failure",
+            });
           },
         );
       }

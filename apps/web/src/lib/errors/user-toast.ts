@@ -45,7 +45,9 @@ export const notifyUserError = (
                 `${diagnostic.provider}: ${diagnostic.message}`,
               );
               if (Result.isError(copied)) {
-                getAnalytics().captureError(copied.error);
+                getAnalytics().captureError(copied.error, {
+                  fingerprintKey: "notifyUserError.onCopy:failure",
+                });
                 notifyUserError(
                   copied.error,
                   getTranslator()("errors.actionFailed"),
@@ -95,7 +97,10 @@ export const detachedUserAction = (
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
   createDetached((error, label) => {
-    getAnalytics().captureError(error, { type: "detached", operation: label });
+    getAnalytics().captureError(error, {
+      fingerprintKey: `detachedUserAction:${context}`,
+      context: { type: "detached", operation: label },
+    });
     notifyUserError(error, failureMessage);
   })(operation, context);
 };

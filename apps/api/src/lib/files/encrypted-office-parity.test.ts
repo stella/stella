@@ -89,7 +89,7 @@ const encryptedHandling = async ({
   }
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType, scanned: scanned.value }),
-    { mimeType },
+    { fingerprintKey: "test.detectEncryption", context: { mimeType } },
   );
   if (encryption === null) {
     return { accepted: false as const, status: 422 };

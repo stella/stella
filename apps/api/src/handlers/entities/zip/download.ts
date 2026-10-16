@@ -88,6 +88,8 @@ const collectDescendants = async (
   `),
   );
 
+const ZIP_FETCH_KEY = "zip.archiveEntries";
+
 const downloadZipHandler = async function* ({
   safeDb,
   entityId,
@@ -293,14 +295,12 @@ const downloadZipHandler = async function* ({
       yield { name: result.path, input: result.data };
     }
 
-    // Failures surface in two places: a notice inside the archive so the
-    // user sees what is missing, and telemetry (file ids only — never
-    // names) so the failure is observable server-side.
+    // Report missing entries in the archive and capture only their IDs.
     if (failedPaths.length > 0) {
-      captureError(
-        new Error(`${failedPaths.length} file(s) failed to fetch from S3`),
-        { entityId, fileIds: failedFileIds.join(",") },
-      );
+      const message = `${failedPaths.length} file(s) failed to fetch from S3`;
+      const error = new Error(message);
+      const context = { entityId, fileIds: failedFileIds.join(",") };
+      captureError(error, { fingerprintKey: ZIP_FETCH_KEY, context });
       yield {
         name: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
         input: buildErrorManifest(failedPaths),

@@ -1035,8 +1035,11 @@ const storedForCorpusOutcome = (
         throw outcome.error;
       }
       captureError(outcome.error, {
-        decisionId,
-        step: "storeBackfilledDocument.corpusBatchWrite",
+        fingerprintKey: "legalsearch.storedForCorpusOutcome.outcome_error",
+        context: {
+          decisionId,
+          step: "storeBackfilledDocument.corpusBatchWrite",
+        },
       });
       return false;
     default:
@@ -1255,8 +1258,11 @@ const storeBackfilledDocumentOwned = async ({
     // would make the queue fetch and parse the document again only to find
     // the row already filled.
     captureError(indexed.error, {
-      decisionId: decision.id,
-      step: "storeBackfilledDocument.indexDecision",
+      fingerprintKey: "legalsearch.storeBackfilledDocumentOwned.indexed_error",
+      context: {
+        decisionId: decision.id,
+        step: "storeBackfilledDocument.indexDecision",
+      },
     });
     logger.error("case_law.search_index.store_projection_failed", {
       decisionId: decision.id,

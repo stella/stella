@@ -152,7 +152,10 @@ const updateAIConfig = createSafeRootHandler(
       });
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error);
+        captureError(decryptResult.error, {
+          fingerprintKey:
+            "organizationsettings.updateAIConfig.decryptResult_error",
+        });
         // The stored config is the merge base for a partial update, so an
         // unreadable one cannot be treated as "no providers configured".
         return Result.err(storedAIConfigUnreadableError(decryptResult.error));

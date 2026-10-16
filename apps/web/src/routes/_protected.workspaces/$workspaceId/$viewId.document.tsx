@@ -175,7 +175,10 @@ export const Route = createFileRoute(
     const entityPromise = loadDocumentEntityWithChatPrefetch({
       activeOrganizationId: context.user.activeOrganizationId,
       captureError: (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey:
+            "workspaces.workspaceId.viewId.document.loader:failure",
+        });
       },
       loadEntity: async () =>
         await ensureRouteQueryData(
@@ -197,7 +200,10 @@ export const Route = createFileRoute(
           entityId: deps.entity,
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-2",
+          });
         },
       ),
       "document.prefetch",
@@ -217,7 +223,10 @@ export const Route = createFileRoute(
           entityIds: [deps.entity],
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-3",
+          });
         },
       ),
       "document.prefetch",
@@ -250,7 +259,10 @@ export const Route = createFileRoute(
             entityId: deps.entity,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-4",
+            });
           },
         ),
         "document.prefetch",
@@ -270,7 +282,10 @@ export const Route = createFileRoute(
             "cached",
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-5",
+            });
           },
         ),
         "document.prefetch",
@@ -290,7 +305,10 @@ export const Route = createFileRoute(
             fieldId: deps.field,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-6",
+            });
           },
         ),
         "document.prefetch",
@@ -311,7 +329,10 @@ export const Route = createFileRoute(
             purpose: "native-display",
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-7",
+            });
           },
         ),
         "document.prefetch",
@@ -331,7 +352,10 @@ export const Route = createFileRoute(
           context.queryClient,
           fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-8",
+            });
           },
         ),
         "document.prefetch",
@@ -633,7 +657,9 @@ function RouteComponentInner({
     const leaveResult = await Result.tryPromise(actions.leave);
     isLeavingDocxRef.current = false;
     if (Result.isError(leaveResult)) {
-      getAnalytics().captureError(leaveResult.error);
+      getAnalytics().captureError(leaveResult.error, {
+        fingerprintKey: "RouteComponentInner:failure",
+      });
       return true;
     }
     return !leaveResult.value;
@@ -1213,7 +1239,9 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                 });
                 await openEntityInInspector(entityId, "", workspaceId);
               } catch (openError) {
-                getAnalytics().captureError(openError);
+                getAnalytics().captureError(openError, {
+                  fingerprintKey: "DocumentDisplayUnavailable:openError",
+                });
                 notifyUserError(openError, t("errors.actionFailed"));
               }
             })(),

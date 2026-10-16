@@ -280,7 +280,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             return undefined;
           })
           .catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "InspectorPanel:failure",
+            });
           });
         return;
       }
@@ -319,7 +321,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         try {
           await action.flushPendingChanges();
         } catch (error) {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "InspectorPanel:failure-2",
+          });
         }
       }
       // The edit session lives in the document route now. Drop the

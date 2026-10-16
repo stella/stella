@@ -70,6 +70,10 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
+const ERROR_CAPTURE = {
+  run: { fingerprintKey: "SignalCard.run:failure" },
+} as const;
+
 type SignalCardProps = {
   signal: InboxSignal;
   organizationId: string;
@@ -104,7 +108,7 @@ export const SignalCard = ({
     const result = await operation();
     if (Result.isError(result)) {
       setBusy(false);
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, ERROR_CAPTURE.run);
       notifyUserError(result.error, t("common.unexpectedError"));
       return false;
     }
@@ -410,7 +414,7 @@ const OriginChip = ({
     enabled: origin === "manual" && createdByUserId !== null,
   });
   const organizationView = useQueryView(organizationQuery);
-  useQueryViewError(organizationView);
+  useQueryViewError(organizationView, "OriginChip:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const author =
@@ -446,7 +450,7 @@ const WorkspaceName = ({
     workspacesNavigationOptions({ organizationId, userId }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "WorkspaceName:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
@@ -567,7 +571,7 @@ const AssignMenu = ({
   const t = useTranslations();
   const organizationQuery = useQuery(organizationOptions(organizationId));
   const organizationView = useQueryView(organizationQuery);
-  useQueryViewError(organizationView);
+  useQueryViewError(organizationView, "AssignMenu:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const members = organization ? organization.members : [];

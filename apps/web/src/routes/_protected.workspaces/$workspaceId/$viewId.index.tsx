@@ -185,7 +185,9 @@ export const Route = createFileRoute(
             queryClient,
             correspondenceAddressOptions(workspaceId),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "loader.correspondence:failure",
+              });
             },
           ),
         ]);

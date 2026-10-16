@@ -131,7 +131,9 @@ type ReportPrefetchError = (error: unknown) => Promise<void>;
 
 const reportPrefetchError: ReportPrefetchError = async (error) => {
   const { getAnalytics } = await import("@/lib/analytics/provider");
-  getAnalytics().captureError(error);
+  getAnalytics().captureError(error, {
+    fingerprintKey: "reportPrefetchError:failure",
+  });
 };
 
 type StartBootPrefetchOptions = {

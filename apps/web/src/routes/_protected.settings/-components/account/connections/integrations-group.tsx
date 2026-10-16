@@ -299,7 +299,9 @@ const ApproveAuthorizationButton = ({
       setOpen(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ApproveAuthorizationButton:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

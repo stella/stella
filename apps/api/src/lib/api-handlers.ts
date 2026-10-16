@@ -2432,7 +2432,7 @@ const logAndCaptureSafeError = ({
 
   // Every answered failure is un-diagnosable without this: the message and
   // stack are redacted from every sink, leaving only `error.type`. The
-  // fingerprint (class, stable code, top `file:line:col` frames) is non-PII
+  // diagnostic identity (class, stable code and source positions) is non-PII
   // and uses keys that survive the logger's redaction, so a failure always
   // carries a code location. A 4xx needs it at least as much as a panic —
   // `error.type` reads `HandlerError` at every one of the dozens of sites
@@ -2482,6 +2482,7 @@ const logAndCaptureSafeError = ({
   // already carries the rejecting frame.
   if (telemetry === "capture") {
     captureObservedError(error, {
+      fingerprintKey: "lib.logAndCaptureSafeError",
       request,
       context: {
         method: request.method,

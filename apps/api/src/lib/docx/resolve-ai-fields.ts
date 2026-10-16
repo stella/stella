@@ -390,7 +390,7 @@ const draftRow = async ({
       maxLength,
     });
   } catch (error) {
-    captureError(error);
+    captureError(error, { fingerprintKey: "docx.draftRow" });
     return {
       type: "failed",
       reason: "generation-failed",

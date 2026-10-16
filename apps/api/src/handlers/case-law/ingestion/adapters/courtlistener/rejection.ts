@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 /**
  * Why a CourtListener record cannot become a decision. Every reason rejects
  * the whole cluster: no opinion, citation or judge of it is admitted alone.
@@ -50,7 +52,11 @@ export class CourtListenerRecordRejectedError extends TaggedError(
   /** Diagnostics past the bound, counted rather than kept. */
   omittedDiagnostics: number;
   opinionIds: readonly string[];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type RejectCourtListenerRecordOptions = {
   readonly reason: CourtListenerRejectionReason;

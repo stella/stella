@@ -343,7 +343,9 @@ export const AnonymizationDenyListCard = () => {
         type: "success",
       });
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "AnonymizationDenyListCard.submitTerm:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };

@@ -165,7 +165,7 @@ export const CreateProperty = ({
       properties.find((property) => property.id === propertyId),
   });
   const editingProperty = useQueryView(editingPropertyQuery);
-  useQueryViewError(editingProperty);
+  useQueryViewError(editingProperty, "CreateProperty:query");
   const action = propertyToolAction(
     editingProperty.type === "items" &&
       editingProperty.refetchError === undefined

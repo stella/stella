@@ -86,7 +86,11 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {
-      captureError(manifest.error, { source: "bilingual-prepare" });
+      captureError(manifest.error, {
+        fingerprintKey:
+          "bilingualtranslations.prepareBilingualTranslation.manifest_error",
+        context: { source: "bilingual-prepare" },
+      });
       return Result.err(
         new HandlerError({
           status: 422,
@@ -159,7 +163,11 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(prepared)) {
-      captureError(prepared.error, { source: "bilingual-prepare" });
+      captureError(prepared.error, {
+        fingerprintKey:
+          "bilingualtranslations.prepareBilingualTranslation.prepared_error",
+        context: { source: "bilingual-prepare" },
+      });
       return Result.err(
         new HandlerError({
           status: 502,

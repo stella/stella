@@ -3,6 +3,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import {
   createChatAttachmentPart,
   isChatPart,
@@ -28,7 +30,11 @@ export class LegacyChatContentError extends TaggedError(
 )<{
   message: string;
   reason: "invalid-legacy-part" | typeof LOSSY_JSON_NUMBER;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const invalidLegacyPart = (
   message = "Stored legacy chat content has an invalid or unsupported part",

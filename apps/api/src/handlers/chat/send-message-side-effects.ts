@@ -74,7 +74,10 @@ export const uploadMessageFilesWithRollback = async ({
     return Result.err(uploadResult.error);
   }
 
-  captureError(uploadResult.error, { threadId });
+  captureError(uploadResult.error, {
+    fingerprintKey: "chat.uploadMessageFilesWithRollback.uploadResult_error",
+    context: { threadId },
+  });
   return Result.err(rollbackResult.error);
 };
 

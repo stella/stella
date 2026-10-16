@@ -359,8 +359,11 @@ const repairClaim = async ({
   if (Result.isError(attempt)) {
     outcome.failed += 1;
     captureError(attempt.error, {
-      searchProjectionKind: claim.kind,
-      searchProjectionSourceId: claim.sourceId,
+      fingerprintKey: "search.repairClaim.attempt_error",
+      context: {
+        searchProjectionKind: claim.kind,
+        searchProjectionSourceId: claim.sourceId,
+      },
     });
     logger.error("search.projection_repair_failed", {
       "error.type": errorTag(attempt.error),

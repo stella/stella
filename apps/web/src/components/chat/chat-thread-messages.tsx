@@ -891,7 +891,9 @@ const downloadDataAttachment = ({
 }: DownloadDataAttachmentOptions): void => {
   const decoded = decodeBase64DataUrl(url);
   if (decoded.isErr()) {
-    getAnalytics().captureError(decoded.error);
+    getAnalytics().captureError(decoded.error, {
+      fingerprintKey: "downloadDataAttachment:failure",
+    });
     notifyUserError(decoded.error, errorTitle);
     return;
   }
@@ -1618,6 +1620,7 @@ const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
         area: "chat-unknown-activity",
         message: "A chat activity has no registered renderer",
       }),
+      { fingerprintKey: "UnknownChatActivity:ClientTelemetryError" },
     );
   }, [activitySession, activityType, analytics]);
   return null;

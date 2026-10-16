@@ -518,7 +518,9 @@ export const ExistingFileOrganizerDialog = ({
         return;
       })
       .catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "ExistingFileOrganizerDialog.handleApply:failure",
+        });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
           timeout: undefined,
@@ -618,7 +620,10 @@ export const ExistingFileOrganizerDialog = ({
       ) {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey:
+          "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+      });
       setSuggestionStatus("failed");
     }
   };

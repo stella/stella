@@ -70,7 +70,9 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure",
+      });
     },
   });
   const deleteCode = useMutation({
@@ -90,7 +92,9 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-2",
+      });
     },
   });
   type UpdateBillingCodeVars = {
@@ -115,7 +119,9 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-3",
+      });
     },
   });
 

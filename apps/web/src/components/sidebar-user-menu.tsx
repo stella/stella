@@ -86,7 +86,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const setLang = useI18nStore((s) => s.setLang);
   const roleQuery = useChromeQuery(roleOptions);
   const roleView = useQueryView(roleQuery);
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "SidebarUserMenu:query");
   const role = roleView.type === "items" ? roleView.items : undefined;
 
   const displayName = getDisplayName(user.name, user.email) ?? t("common.user");
@@ -302,7 +302,7 @@ const OrganizationMenuSection = ({
   const invalidateSession = useInvalidateSession();
   const organizationsQuery = useChromeQuery(organizationListOptions(userId));
   const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "OrganizationMenuSection:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
 
@@ -322,7 +322,9 @@ const OrganizationMenuSection = ({
       },
       onError: (error) => {
         notifyUserError(error, t("errors.actionFailed"));
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "OrganizationMenuSection:failure",
+        });
       },
     });
 

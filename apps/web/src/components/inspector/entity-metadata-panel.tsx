@@ -192,7 +192,7 @@ const EntityMetadataContent = ({
     entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
   );
   const versionsDataView = useQueryView(versionsDataQuery);
-  useQueryViewError(versionsDataView);
+  useQueryViewError(versionsDataView, "EntityMetadataContent:query");
   const versionsData =
     versionsDataView.type === "items" ? versionsDataView.items : undefined;
   // `useOptimistic` keeps any newly created property visible until the
@@ -668,7 +668,9 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
   const copy = async () => {
     const copied = await copyToClipboard(reference);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "DocumentReferenceChip.copy:failure",
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }

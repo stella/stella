@@ -35,7 +35,7 @@ const useToggleSection = (section: ToggleSection) => {
     userId: id,
   });
   const settingsView = useQueryView(useQuery(options));
-  useQueryViewError(settingsView);
+  useQueryViewError(settingsView, "useToggleSection:query");
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
   const [value, setValue] = useState<boolean | null>(null);

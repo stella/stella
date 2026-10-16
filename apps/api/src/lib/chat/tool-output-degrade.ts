@@ -298,6 +298,9 @@ export const reportToolOutputDegrade = ({
     new ToolOutputContractDegradedError({
       message: `Tool output degraded (${defect}) at ${joinedPaths}`,
     }),
-    { defect, paths: joinedPaths, source, toolName },
+    {
+      fingerprintKey: `chat.toolOutput.${source}.${toolName}.${defect}`,
+      context: { defect, paths: joinedPaths, source, toolName },
+    },
   );
 };

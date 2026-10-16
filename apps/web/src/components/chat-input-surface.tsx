@@ -178,7 +178,9 @@ export const ChatInputSurface = ({
       if (ChatSubmitPreservedError.is(error)) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatInputSurface:failure",
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],

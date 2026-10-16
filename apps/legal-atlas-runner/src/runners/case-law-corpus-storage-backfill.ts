@@ -205,8 +205,11 @@ const backfillRow = async (
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
     captureError(error, {
-      decisionId: row.id,
-      step: "caseLawCorpusStorageBackfill",
+      fingerprintKey: "runners.backfillRow",
+      context: {
+        decisionId: row.id,
+        step: "caseLawCorpusStorageBackfill",
+      },
     });
     return "failed";
   }
@@ -282,8 +285,11 @@ const backfillLegislationRow = async (
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
     captureError(error, {
-      documentId: row.id,
-      step: "legislationCorpusStorageBackfill",
+      fingerprintKey: "runners.backfillLegislationRow",
+      context: {
+        documentId: row.id,
+        step: "legislationCorpusStorageBackfill",
+      },
     });
     return "failed";
   }

@@ -29,7 +29,9 @@ describe("auth context query outcomes", () => {
       }
       expect(query).toHaveBeenCalledTimes(1);
       expect(captureError).toHaveBeenCalledTimes(1);
-      expect(captureError).toHaveBeenCalledWith(failure);
+      expect(captureError).toHaveBeenCalledWith(failure, {
+        fingerprintKey: "loadAuthContext:failure",
+      });
     } finally {
       query.mockRestore();
       captureError.mockRestore();
@@ -53,7 +55,9 @@ describe("auth context query outcomes", () => {
       });
       expect(query).toHaveBeenCalledTimes(1);
       expect(captureError).toHaveBeenCalledTimes(1);
-      expect(captureError).toHaveBeenCalledWith(failure);
+      expect(captureError).toHaveBeenCalledWith(failure, {
+        fingerprintKey: "loadAuthContext:failure",
+      });
     } finally {
       query.mockRestore();
       captureError.mockRestore();

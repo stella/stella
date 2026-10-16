@@ -141,8 +141,11 @@ export default createSafeHandler(
     const encryption = uploadFileEncryption(
       await detectFileEncryption({ mimeType: attachment.mimeType, scanned }),
       {
-        mimeType: attachment.mimeType,
-        sizeBytes: String(attachment.bytes.byteLength),
+        fingerprintKey: "emailAttachment.detectEncryption",
+        context: {
+          mimeType: attachment.mimeType,
+          sizeBytes: String(attachment.bytes.byteLength),
+        },
       },
     );
     if (encryption === null) {
@@ -186,8 +189,11 @@ export default createSafeHandler(
       fileName: created.fileName,
     }).catch((error: unknown) => {
       captureError(error, {
-        entityId: created.entityId,
-        workspaceId: destinationWorkspaceId,
+        fingerprintKey: "emailattachment.capture",
+        context: {
+          entityId: created.entityId,
+          workspaceId: destinationWorkspaceId,
+        },
       });
     });
     broadcastOrganizationResourceSetUpdated(

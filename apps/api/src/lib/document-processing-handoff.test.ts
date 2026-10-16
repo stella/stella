@@ -62,6 +62,7 @@ test("captures one failed handoff and continues draining committed runs", async 
 
   expect(enqueue).toHaveBeenCalledTimes(3);
   expect(captureEnqueueError).toHaveBeenCalledWith(enqueueError, {
-    runId: runIds.at(1),
+    fingerprintKey: "documentProcessing.handoff",
+    context: { runId: runIds.at(1) },
   });
 });

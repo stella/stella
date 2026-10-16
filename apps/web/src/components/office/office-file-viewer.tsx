@@ -98,13 +98,17 @@ export const OfficeFileViewer = ({
   }, []);
   const handleViewerError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure",
+      });
     },
     [analytics],
   );
   const handleNavigationError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure-2",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     [analytics, t],

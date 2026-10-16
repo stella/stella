@@ -191,7 +191,10 @@ const cleanupUnpublishedDerivative = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, telemetry);
+    captureError(cleanup.error, {
+      fingerprintKey: "lib.cleanupUnpublishedDerivative.cleanup_error",
+      context: telemetry,
+    });
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [intentId],
@@ -202,7 +205,10 @@ const cleanupUnpublishedDerivative = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, telemetry);
+    captureError(settlement.error, {
+      fingerprintKey: "lib.cleanupUnpublishedDerivative.settlement_error",
+      context: telemetry,
+    });
   }
 };
 
@@ -299,9 +305,12 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
       captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
+        fingerprintKey: "lib.enqueuePdfDerivativeOrMarkFailed.markError",
+        context: {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        },
       });
     });
 
@@ -362,9 +371,12 @@ export const enqueueImageThumbnailOrMarkFailed = async (
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
       captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
+        fingerprintKey: "lib.enqueueImageThumbnailOrMarkFailed.markError",
+        context: {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        },
       });
     });
 
@@ -454,9 +466,12 @@ export const initFileDerivativeWorker = () => {
         DERIVATIVE_FAILURE_REASON.PROCESSING,
       ).catch((markError: unknown) => {
         captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
+          fingerprintKey: "fileDerivative.markThumbnailFailed",
+          context: {
+            entityId: job.data.entityId,
+            fieldId: job.data.fieldId,
+            workspaceId: job.data.workspaceId,
+          },
         });
       });
     } else if (exhausted) {
@@ -465,17 +480,23 @@ export const initFileDerivativeWorker = () => {
         DERIVATIVE_FAILURE_REASON.PROCESSING,
       ).catch((markError: unknown) => {
         captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
+          fingerprintKey: "fileDerivative.markPdfFailed",
+          context: {
+            entityId: job.data.entityId,
+            fieldId: job.data.fieldId,
+            workspaceId: job.data.workspaceId,
+          },
         });
       });
     }
 
     captureError(error, {
-      entityId: job?.data.entityId ?? "",
-      fieldId: job?.data.fieldId ?? "",
-      workspaceId: job?.data.workspaceId ?? "",
+      fingerprintKey: "lib.initFileDerivativeWorker",
+      context: {
+        entityId: job?.data.entityId ?? "",
+        fieldId: job?.data.fieldId ?? "",
+        workspaceId: job?.data.workspaceId ?? "",
+      },
     });
     logger.error("file_derivative.failed", {
       entityId: job?.data.entityId ?? "",
@@ -1428,7 +1449,10 @@ export const requeueFileDerivative = async (
   } catch (error) {
     await markFailed(kind, jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
       (markError: unknown) => {
-        captureError(markError, { entityId, fieldId, workspaceId });
+        captureError(markError, {
+          fingerprintKey: "lib.requeueFileDerivative.markError",
+          context: { entityId, fieldId, workspaceId },
+        });
       },
     );
     throw error;

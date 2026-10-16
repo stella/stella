@@ -54,7 +54,9 @@ function ReportExportRecoveryPage() {
     setIsDownloading(false);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "ReportExportRecoveryPage.handleDownload:failure",
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
       return;
     }
@@ -71,7 +73,10 @@ function ReportExportRecoveryPage() {
   const handleDownloadClick = () => {
     detached(
       handleDownload().catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey:
+            "ReportExportRecoveryPage.handleDownloadClick:failure",
+        });
         notifyUserError(error, t("common.unexpectedError"));
       }),
       "reports.download",
@@ -101,7 +106,9 @@ function ReportExportRecoveryPage() {
     });
     if (Result.isError(result) || result.value === null) {
       if (Result.isError(result)) {
-        analytics.captureError(result.error);
+        analytics.captureError(result.error, {
+          fingerprintKey: "ReportExportRecoveryPage.handleOpen:failure",
+        });
       }
       notifyUserError(
         Result.isError(result) ? result.error : undefined,

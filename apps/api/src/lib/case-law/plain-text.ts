@@ -4,6 +4,8 @@ import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import {
   containsTagLikeMarkup,
   TAG_LIKE_MARKUP_SOURCE,
@@ -41,7 +43,11 @@ export class PlainTextError extends TaggedError("PlainTextError")<{
     | "unsupported-metadata"
     | "empty-present-text"
     | "entity-decode-failed";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const TAG = new RegExp(TAG_LIKE_MARKUP_SOURCE, "gu");
 const RTF_SYNTAX = /\\(?:[A-Za-z]+-?\d*\b|'[0-9a-fA-F]{2})/u;

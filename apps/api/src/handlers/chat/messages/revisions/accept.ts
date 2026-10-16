@@ -140,7 +140,12 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      upsertChatThreadSearchDocument(threadId).catch((error: unknown) =>
+        captureError(error, {
+          fingerprintKey:
+            "acceptMessageRevision.upsertChatThreadSearchDocument",
+        }),
+      );
     }
     return revisionResult(result);
   },

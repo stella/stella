@@ -228,7 +228,10 @@ const supplementRawWriteFailed = (
       "error.detail": wrappedErrorDetail(error),
     }),
   );
-  captureError(error, { sourceId, step: "processSupplement.raw" });
+  captureError(error, {
+    fingerprintKey: "pipeline.supplementRawWriteFailed",
+    context: { sourceId, step: "processSupplement.raw" },
+  });
   return {
     status: PROCESS_DECISION_STATUS.RETRYABLE,
     reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,

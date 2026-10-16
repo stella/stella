@@ -198,7 +198,10 @@ export const compileRules = (
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        { pattern: row.pattern, ruleId: row.id },
+        {
+          fingerprintKey: "polarity.compileRules.pattern",
+          context: { pattern: row.pattern, ruleId: row.id },
+        },
       );
       continue;
     }
@@ -208,7 +211,10 @@ export const compileRules = (
         new TelemetryError({
           message: "Polarity rule carries a polarity no match may assign",
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        {
+          fingerprintKey: "polarity.compileRules.polarity",
+          context: { polarity: row.polarity, ruleId: row.id },
+        },
       );
       continue;
     }

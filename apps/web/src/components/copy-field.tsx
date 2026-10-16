@@ -29,7 +29,9 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
   const handleCopy = async () => {
     const copied = await copyToClipboard(value);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "CopyField.handleCopy:failure",
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }

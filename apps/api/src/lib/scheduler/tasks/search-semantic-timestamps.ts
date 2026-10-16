@@ -277,8 +277,11 @@ export const repairSearchSemanticTimestamps = async ({
     if (Result.isError(reindexResult)) {
       failed += 1;
       captureError(reindexResult.error, {
-        entityId,
-        schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+        fingerprintKey: "tasks.reindexNext.reindexResult_error",
+        context: {
+          entityId,
+          schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+        },
       });
     } else {
       repaired += 1;

@@ -97,7 +97,9 @@ export const useUploadVersion = () => {
         ) {
           return;
         }
-        analytics.captureError(result.error);
+        analytics.captureError(result.error, {
+          fingerprintKey: "useUploadVersion:failure",
+        });
         notifyUserError(
           result.error,
           t("workspaces.files.versionUploadFailed"),

@@ -358,7 +358,7 @@ export const useTemplateStudioSlashMenu = ({
     enabled: slashClausesEnabled,
   });
   const slashClauseDataView = useQueryView(slashClauseDataQuery);
-  useQueryViewError(slashClauseDataView);
+  useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items

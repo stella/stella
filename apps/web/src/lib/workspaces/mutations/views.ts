@@ -56,7 +56,9 @@ export const useCreateView = (workspaceId: string) => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateView:failure",
+      });
     },
   });
 };
@@ -123,7 +125,9 @@ export const useUpdateView = (workspaceId: string) => {
       if (context?.previousViews) {
         queryClient.setQueryData(localizedKey, context.previousViews);
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateView:failure",
+      });
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
@@ -167,7 +171,9 @@ export const useConvertView = (workspaceId: string) => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useConvertView:failure",
+      });
     },
   });
 };
@@ -197,7 +203,9 @@ export const useReorderViews = (workspaceId: string) => {
       readQueryResult(await cache.apply(viewIds)),
     onError: (error, _variables, context) => {
       cache.restore(context);
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useReorderViews:failure",
+      });
     },
     onSettled: cache.settle,
   });
@@ -230,7 +238,9 @@ export const useDeleteView = (workspaceId: string) => {
       await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteView:failure",
+      });
     },
   });
 };

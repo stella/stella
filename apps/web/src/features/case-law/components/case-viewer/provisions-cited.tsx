@@ -117,7 +117,7 @@ export const ProvisionsCited = ({
     enabled: open && citedWorkByGroup.size > 0,
   });
   const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  useQueryViewError(resolvedView, "ProvisionsCited:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
@@ -268,7 +268,7 @@ const WorkReferences = ({
       }),
   });
   const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  useQueryViewError(versionsView, "WorkReferences:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
 

@@ -57,7 +57,10 @@ export const assertModelSurfaceFreeOfTenantIds = ({
   const error = new TelemetryError({
     message: `Model-bound ${surface} embeds a tenant workspace id`,
   });
-  captureError(error, { source: "model-ingress-guard", surface });
+  captureError(error, {
+    fingerprintKey: "chat.assertModelSurfaceFreeOfTenantIds",
+    context: { source: "model-ingress-guard", surface },
+  });
   if (surface === "system-prompt") {
     panic(error.message);
   }

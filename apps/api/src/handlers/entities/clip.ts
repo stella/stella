@@ -170,7 +170,9 @@ export default createSafeHandler(
       );
     }
 
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch((error: unknown) =>
+      captureError(error, { fingerprintKey: "clip.flushEntitySearchRepairs" }),
+    );
 
     return Result.ok({ entityId });
   },

@@ -38,7 +38,9 @@ export const openPublicLawLink = async <Resolved>({
   });
 
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error.cause);
+    getAnalytics().captureError(result.error.cause, {
+      fingerprintKey: "openPublicLawLink:cause",
+    });
     notifyUserError(result.error.cause, t("errors.actionFailed"));
     return;
   }

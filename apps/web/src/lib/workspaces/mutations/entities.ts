@@ -9,6 +9,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
@@ -52,7 +53,9 @@ export const useCreateEntities = () => {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateEntities:failure",
+      });
     },
   });
 };
@@ -84,7 +87,9 @@ export const useDeleteEntities = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteEntities:failure",
+      });
     },
   });
 };
@@ -110,7 +115,9 @@ export const useMoveEntity = () => {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMoveEntity:failure",
+      });
     },
   });
 };
@@ -140,8 +147,11 @@ export const useRenameEntity = (
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (error: unknown) => {
-    analytics.captureError(error);
+  const reportFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    analytics.captureError(error, { fingerprintKey });
     notifyUserError(error, t("errors.actionFailed"));
   };
 
@@ -228,7 +238,9 @@ export const useRenameEntity = (
         }
       });
       if (reconciled.isErr()) {
-        analytics.captureError(reconciled.error);
+        analytics.captureError(reconciled.error, {
+          fingerprintKey: "useRenameEntity:failure",
+        });
       }
       if (data.file) {
         replaceCachedFileName(queryClient, {
@@ -286,9 +298,11 @@ export const useRenameEntity = (
         }
       });
       if (rolledBack.isErr()) {
-        analytics.captureError(rolledBack.error);
+        analytics.captureError(rolledBack.error, {
+          fingerprintKey: "useRenameEntity:failure-2",
+        });
       }
-      reportFailure(error);
+      reportFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -300,7 +314,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error);
+        reportFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });
@@ -367,7 +381,9 @@ export const useUpdateKanbanPlacement = () => {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateKanbanPlacement:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -396,7 +412,9 @@ export const useUpsertField = () => {
     },
 
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpsertField:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

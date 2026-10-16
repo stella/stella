@@ -228,7 +228,9 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
     // context and can retry.
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisconnectButton:failure",
+      });
     },
   });
 

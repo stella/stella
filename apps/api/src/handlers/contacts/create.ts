@@ -258,7 +258,11 @@ export const createContactHandler = async function* ({
 
   const created = outcome.row ?? panic("Contact insert returned no row");
 
-  flushContactSearchRepairs([created.id]).catch(captureError);
+  flushContactSearchRepairs([created.id]).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey: "createContactHandler.flushContactSearchRepairs",
+    }),
+  );
 
   return Result.ok(created);
 };

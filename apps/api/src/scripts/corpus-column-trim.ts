@@ -365,7 +365,10 @@ const trimColumnRow = async ({
   } catch (error) {
     counts.failed += 1;
     counts.failedIds.push(row.id);
-    captureError(error, { decisionId: row.id, step: "corpusColumnTrim" });
+    captureError(error, {
+      fingerprintKey: "scripts.trimColumnRow",
+      context: { decisionId: row.id, step: "corpusColumnTrim" },
+    });
   }
 };
 

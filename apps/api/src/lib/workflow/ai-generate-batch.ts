@@ -227,7 +227,10 @@ const askSystemOne = async ({
       }),
   });
   if (Result.isError(prepared)) {
-    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    captureError(prepared.error, {
+      fingerprintKey: "workflow.askSystemOne.prepared_error",
+      context: { source: SYSTEM_ONE_ERROR_SOURCE },
+    });
     return Result.ok(fallbackAll);
   }
   const { sources, locators } = prepared.value;

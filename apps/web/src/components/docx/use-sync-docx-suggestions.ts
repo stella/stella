@@ -122,6 +122,7 @@ export const useSyncDocxSuggestions = ({
             area: "docx-suggestion-hydration",
             message: "Persisted DOCX suggestion operation failed validation.",
           }),
+          { fingerprintKey: "useSyncDocxSuggestions:ClientTelemetryError" },
         );
         return [];
       }

@@ -160,7 +160,9 @@ const CompanySpecificationEditor = ({
       stripRegistryFormatMarkdown(data.rendered),
     );
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "CompanySpecificationEditor.copySpecification:failure",
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }

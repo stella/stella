@@ -340,9 +340,12 @@ const organizeSuggestionsHandler = async function* ({
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
     captureError(result.error, {
-      feature: "entities.placements.suggest",
-      workspaceId,
-      organizationId,
+      fingerprintKey: "placements.organizeSuggestionsHandler.result_error",
+      context: {
+        feature: "entities.placements.suggest",
+        workspaceId,
+        organizationId,
+      },
     });
     return Result.err(
       aiHandlerError(result.error, {
@@ -808,9 +811,12 @@ const generateMissingSummaries = async ({
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
     captureError(result.error, {
-      feature: "entities.version-summary",
-      workspaceId,
-      organizationId,
+      fingerprintKey: "placements.generateMissingSummaries.result_error",
+      context: {
+        feature: "entities.version-summary",
+        workspaceId,
+        organizationId,
+      },
     });
     return Result.err(
       aiHandlerError(result.error, {

@@ -364,9 +364,12 @@ const rejectDecision = ({
     }),
   );
   captureError(error, {
-    adapterKey,
-    caseNumber: input.caseNumber,
-    cursor: cursor ?? "",
+    fingerprintKey: "pipeline.rejectDecision",
+    context: {
+      adapterKey,
+      caseNumber: input.caseNumber,
+      cursor: cursor ?? "",
+    },
   });
 
   if (error instanceof TimeoutError) {
@@ -488,8 +491,11 @@ const settlePack = ({
       }),
     );
     captureError(flushed.error, {
-      adapterKey,
-      step: "applyDecisionBatch.corpusPackFlush",
+      fingerprintKey: "pipeline.settlePack.flushed_error",
+      context: {
+        adapterKey,
+        step: "applyDecisionBatch.corpusPackFlush",
+      },
     });
     for (const indexes of queued.values()) {
       for (const index of indexes) {

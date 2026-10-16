@@ -2,6 +2,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -17,7 +18,11 @@ class DocumentTelemetryObserverError extends TaggedError(
   message: string;
   cause: unknown;
   reason: DocumentTelemetryObserverFailure["reason"];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type DocumentStageObserverOptions = {
   observation: DocumentStageObservation;

@@ -142,7 +142,11 @@ export const createRenameEntityHandler = ({
       );
     }
 
-    flushRepairs([body.entityId]).catch(captureError);
+    flushRepairs([body.entityId]).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "createRenameEntityHandler.flushRepairs",
+      }),
+    );
 
     return Result.ok({
       entityId: body.entityId,

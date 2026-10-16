@@ -696,7 +696,10 @@ const entityCreateTree = createSafeHandler(
     }
 
     flushEntitySearchRepairs(writeResult.indexedDirectoryIds).catch(
-      captureError,
+      (error: unknown) =>
+        captureError(error, {
+          fingerprintKey: "entityCreateTree.flushEntitySearchRepairs",
+        }),
     );
 
     return Result.ok({

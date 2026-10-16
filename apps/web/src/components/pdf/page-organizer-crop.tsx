@@ -331,7 +331,9 @@ const CropPreview = ({
           return;
         }
         if (Result.isError(result)) {
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "CropPreview:failure",
+          });
           setStatus("failed");
           return;
         }

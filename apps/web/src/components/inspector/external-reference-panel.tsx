@@ -308,7 +308,7 @@ const GenericExternalReferencePanel = ({
     enabled: shouldFetchPreview,
   });
   const fetchedPreviewView = useQueryView(fetchedPreviewQuery);
-  useQueryViewError(fetchedPreviewView);
+  useQueryViewError(fetchedPreviewView, "GenericExternalReferencePanel:query");
   const { isLoading: previewLoading } = fetchedPreviewQuery;
   const fetchedPreview =
     fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
@@ -377,7 +377,10 @@ const GenericExternalReferencePanel = ({
     enabled: connectorSlug !== undefined,
   });
   const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  useQueryViewError(
+    mcpConnectorsDataView,
+    "GenericExternalReferencePanel:query-2",
+  );
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items
@@ -421,7 +424,9 @@ const GenericExternalReferencePanel = ({
 
     const copied = await copyToClipboard(confirmHref);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "GenericExternalReferencePanel:failure",
+      });
       notifyUserError(copied.error, t("common.error"));
       return;
     }

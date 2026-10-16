@@ -228,6 +228,7 @@ import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-conte
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -436,14 +437,19 @@ export const PlaybookFacet = ({
   const editorAvailable = registration !== undefined;
   const pendingPlaybookName = pendingPlaybookNameFor(session, playbooks);
 
-  const reportStartFailure = (result: StartReviewResult) => {
+  const reportStartFailure = (
+    result: StartReviewResult,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
     if (result.ok) {
       return;
     }
     // A thrown request (client timeout / network) carries no Eden error to
     // capture; still surface the toast.
     if (result.error) {
-      analytics.captureError(toAPIError(result.error));
+      analytics.captureError(toAPIError(result.error), {
+        fingerprintKey,
+      });
     }
     notifyUserError(
       result.error ? toAPIError(result.error) : undefined,
@@ -465,6 +471,7 @@ export const PlaybookFacet = ({
         startMode,
         seededPositions,
       }),
+      "PlaybookFacet:start-review",
     );
   };
 
@@ -484,6 +491,7 @@ export const PlaybookFacet = ({
         skipped: basis.skipped,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
+      "PlaybookFacet:retry-review",
     );
   };
 
@@ -654,7 +662,9 @@ export const PlaybookFacet = ({
         : ({ type: "applied" } as const);
     });
     if (Result.isError(application)) {
-      analytics.captureError(application.error);
+      analytics.captureError(application.error, {
+        fingerprintKey: "PlaybookFacet.addCounterpartyNote:failure",
+      });
       return reportNote({ type: "failed" }, blockId);
     }
     return reportNote(application.value, blockId);
@@ -734,6 +744,7 @@ export const PlaybookFacet = ({
                   fileFieldId,
                   t("common.unexpectedError"),
                 ),
+                "PlaybookFacet:confirm-positions",
               );
             })(),
             "playbook-facet.confirm-positions",
@@ -817,7 +828,10 @@ export const PlaybookFacet = ({
       onConfirm={() => {
         detached(
           (async () => {
-            reportStartFailure(await confirmRunSize(entityId, fileFieldId));
+            reportStartFailure(
+              await confirmRunSize(entityId, fileFieldId),
+              "PlaybookFacet:confirm-run-size",
+            );
           })(),
           "playbook-facet.confirm-run-size",
         );
@@ -1078,7 +1092,7 @@ const usePlaybookPickerItems = (organizationId: string) => {
     playbooksOptions(organizationId, PLAYBOOK_PICKER_LIMIT),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "usePlaybookPickerItems:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     playbooks: data && "items" in data ? data.items : [],
@@ -1272,7 +1286,9 @@ const ReviewRunPanel = ({
     // `unwrapEden` already localized and tagged what the endpoint returned, so
     // the thrown error is what gets captured and shown.
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ReviewRunPanel:failure",
+      });
       notifyUserError(error, t("inspector.review.decisionFailed"));
     },
   });
@@ -1289,7 +1305,7 @@ const ReviewRunPanel = ({
     enabled: restoredPlaybookId !== null,
   });
   const playbookDetailView = useQueryView(playbookDetailQuery);
-  useQueryViewError(playbookDetailView);
+  useQueryViewError(playbookDetailView, "ReviewRunPanel:query");
   const playbookDetail =
     playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
 
@@ -1312,7 +1328,9 @@ const ReviewRunPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ReviewRunPanel:failure-2",
+      });
       notifyUserError(error, t("inspector.review.saveAsPlaybookFailed"));
     },
   });
@@ -1609,7 +1627,7 @@ const Launcher = ({
     enabled: selectedPlaybookId !== null,
   });
   const selectedPlaybookView = useQueryView(selectedPlaybookQuery);
-  useQueryViewError(selectedPlaybookView);
+  useQueryViewError(selectedPlaybookView, "Launcher:query");
   const selectedPlaybook =
     selectedPlaybookView.type === "items"
       ? selectedPlaybookView.items
@@ -2167,7 +2185,7 @@ const ReferenceFilePicker = ({
     documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
   const sourcePagesView = useQueryView(sourcePagesQuery);
-  useQueryViewError(sourcePagesView);
+  useQueryViewError(sourcePagesView, "ReferenceFilePicker:query");
   const sourcePages =
     sourcePagesView.type === "items" ? sourcePagesView.items : undefined;
   const sources =

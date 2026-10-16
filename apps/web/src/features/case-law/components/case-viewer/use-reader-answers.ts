@@ -89,7 +89,9 @@ const recordReaderAnswerError = ({
   origin,
   setErrors,
 }: RecordReaderAnswerErrorOptions) => {
-  getAnalytics().captureError(cause);
+  getAnalytics().captureError(cause, {
+    fingerprintKey: "recordReaderAnswerError:cause",
+  });
   const error =
     APIError.is(cause) || ReaderAnswerFailure.is(cause)
       ? cause
@@ -454,7 +456,9 @@ const readerAnswersRecoveryOptions = ({
       if (context.signal.aborted || runtime.isCancelled()) {
         return readQueryResult(fetched);
       }
-      getAnalytics().captureError(fetched.error);
+      getAnalytics().captureError(fetched.error, {
+        fingerprintKey: "readerAnswersRecoveryOptions.queryFn:failure",
+      });
       // A failed recovery may time out expired claims, but must preserve newer terminal cache data.
       const current = {
         ...polling,

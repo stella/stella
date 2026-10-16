@@ -319,8 +319,11 @@ const getSuggestedPrompts = createSafeRootHandler(
             aiAnalytics.captureError(error);
             if (isUnanticipatedAIFailure(error)) {
               captureError(error, {
-                threadId: checked.threadId,
-                feature: "chat.suggested_prompts",
+                fingerprintKey: "chat.suggestPrompts",
+                context: {
+                  threadId: checked.threadId,
+                  feature: "chat.suggested_prompts",
+                },
               });
             }
             return Result.ok<SuggestedPromptsResult>({ prompts: [] });

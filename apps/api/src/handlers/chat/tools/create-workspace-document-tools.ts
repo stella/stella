@@ -195,7 +195,11 @@ export const createCreateWorkspaceDocumentTools = ({
     const docxResult = await markdownToStellaDocx(markdown);
     if (Result.isError(docxResult)) {
       captureError(docxResult.error, {
-        source: "create_matter_document",
+        fingerprintKey:
+          "tools.createCreateWorkspaceDocumentTools.docxResult_error",
+        context: {
+          source: "create_matter_document",
+        },
       });
       throw new ChatToolError({
         kind: "server-defect",

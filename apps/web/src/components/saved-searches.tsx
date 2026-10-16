@@ -123,7 +123,9 @@ export const SavedSearches = ({
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
   };
   const onMutationError = (error: Error) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "SavedSearches.onMutationError:failure",
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
@@ -184,7 +186,9 @@ export const SavedSearches = ({
     if (!showList || !savedSearchesError) {
       return;
     }
-    analytics.captureError(savedSearchesError);
+    analytics.captureError(savedSearchesError, {
+      fingerprintKey: "SavedSearches:savedSearchesError",
+    });
   }, [analytics, savedSearchesError, showList]);
   const isSaving = createMutation.isPending || renameMutation.isPending;
   const isMutatingSavedSearch = isSaving || deleteMutation.isPending;

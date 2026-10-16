@@ -840,17 +840,23 @@ const resolveActiveFilePromptContext = async ({
   });
   if (Result.isError(readResult)) {
     captureError(readResult.error, {
-      fieldId: fileFieldId,
-      workspaceId,
+      fingerprintKey: "chat.resolveActiveFilePromptContext.readResult_error",
+      context: {
+        fieldId: fileFieldId,
+        workspaceId,
+      },
     });
     return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
     captureError(previewResult.error, {
-      fieldId: fileFieldId,
-      mimeType: emailMimeType,
-      workspaceId,
+      fingerprintKey: "chat.resolveActiveFilePromptContext.previewResult_error",
+      context: {
+        fieldId: fileFieldId,
+        mimeType: emailMimeType,
+        workspaceId,
+      },
     });
     return Result.ok(promptBase);
   }
@@ -2160,8 +2166,11 @@ const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
     );
   }
   captureError(raised, {
-    decisionId: row.id,
-    step: ACTIVE_DECISION_AST_READ_STEP,
+    fingerprintKey: "chat.readActiveDecisionAst.raised",
+    context: {
+      decisionId: row.id,
+      step: ACTIVE_DECISION_AST_READ_STEP,
+    },
   });
   return null;
 };

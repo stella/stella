@@ -203,7 +203,10 @@ const finishInboundAttachments = async ({
               mimeType: file.mimeType,
               scanned: file,
             }),
-            { mimeType: file.mimeType, stage: "inbound-attachment" },
+            {
+              fingerprintKey: "inboundMail.detectEncryption",
+              context: { mimeType: file.mimeType, stage: "inbound-attachment" },
+            },
           ),
         ] as const,
     }),

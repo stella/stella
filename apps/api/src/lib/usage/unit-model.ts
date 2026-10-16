@@ -68,7 +68,10 @@ const getModelRateOrFallback = (modelId: string): ModelRate => {
       new TelemetryError({
         message: "Usage rate lookup missed catalog; billing at fallback rate",
       }),
-      { source: "usage-unit-model", modelId },
+      {
+        fingerprintKey: "usage.getModelRateOrFallback",
+        context: { source: "usage-unit-model", modelId },
+      },
     );
   }
 
@@ -110,7 +113,10 @@ const reportUsageShapeAnomaly = ({
     new TelemetryError({
       message: `Provider usage shape anomaly (${anomaly}); metering fell back to a conservative value`,
     }),
-    { source: "usage-unit-model", modelId, anomaly, ...context },
+    {
+      fingerprintKey: "usage.reportUsageShapeAnomaly",
+      context: { source: "usage-unit-model", modelId, anomaly, ...context },
+    },
   );
 };
 

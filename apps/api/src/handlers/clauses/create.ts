@@ -167,7 +167,10 @@ export const createClauseHandler = async function* ({
     body.body,
   );
   if (Result.isError(searchVectorResult)) {
-    captureError(searchVectorResult.error, { clauseId });
+    captureError(searchVectorResult.error, {
+      fingerprintKey: "clauses.createClauseHandler.searchVectorResult_error",
+      context: { clauseId },
+    });
   }
 
   if (!inserted) {

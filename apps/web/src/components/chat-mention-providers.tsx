@@ -52,7 +52,9 @@ const loadFirstViewIdsByWorkspaceId = async ({
       );
 
       if (Result.isError(viewsResult)) {
-        getAnalytics().captureError(viewsResult.error);
+        getAnalytics().captureError(viewsResult.error, {
+          fingerprintKey: "loadFirstViewIdsByWorkspaceId:failure",
+        });
         return [workspace.id, null] as const;
       }
 

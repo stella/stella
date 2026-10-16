@@ -48,6 +48,7 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
               message: `Cell retry failed (status ${apiError.status})`,
               cause: apiError,
             }),
+            { fingerprintKey: "useRetryCell:ClientTelemetryError" },
           );
         }
         // Surface server-side rejections (locked cell, concurrent
@@ -72,7 +73,7 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
 
       return response.data;
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, { fingerprintKey: "useRetryCell:failure" });
       notifyUserError(error, t("errors.actionFailed"));
       return undefined;
     }

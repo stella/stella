@@ -379,9 +379,12 @@ const recordTanStackConsumption = async ({
 
   if (Result.isError(result)) {
     captureTelemetryError(result.error, {
-      organization_id: metering.organizationId,
-      source: "usage.tanstack_ai",
-      trace_id: config.traceId,
+      fingerprintKey: "analytics.recordTanStackConsumption.result_error",
+      context: {
+        organization_id: metering.organizationId,
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      },
     });
   }
 };
@@ -539,9 +542,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
       captureTelemetryError(error, {
-        feature: config.feature,
-        organization_id: analyticsOrganizationId ?? "",
-        trace_id: config.traceId,
+        fingerprintKey: `analytics.generation.${config.feature}.${kind}`,
+        context: {
+          feature: config.feature,
+          organization_id: analyticsOrganizationId ?? "",
+          trace_id: config.traceId,
+        },
       });
     }
 
@@ -670,8 +676,11 @@ export const createTanStackAIAnalyticsCallbacks = ({
     if (Result.isError(usageSnapshot)) {
       // The payload itself is unreadable: neither side effect can use it.
       captureTelemetryError(usageSnapshot.error, {
-        source: "usage.tanstack_ai",
-        trace_id: config.traceId,
+        fingerprintKey: "analytics.meterUsage.usageSnapshot_error",
+        context: {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        },
       });
       return;
     }
@@ -740,8 +749,11 @@ export const createTanStackAIAnalyticsCallbacks = ({
       });
       if (Result.isError(consumptionArgs)) {
         captureTelemetryError(consumptionArgs.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
+          fingerprintKey: "analytics.meterUsage.consumptionArgs_error",
+          context: {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          },
         });
       } else {
         const consumption = recordTanStackConsumption(
@@ -751,9 +763,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
           // capture it here so it cannot surface as an unhandled
           // rejection there.
           captureTelemetryError(error, {
-            organization_id: metering.organizationId,
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
+            fingerprintKey: "analytics.consumption",
+            context: {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            },
           });
         });
         ctx.defer(consumption);
@@ -781,8 +796,11 @@ export const createTanStackAIAnalyticsCallbacks = ({
     });
     if (Result.isError(captured)) {
       captureTelemetryError(captured.error, {
-        source: "analytics.tanstack_ai",
-        trace_id: config.traceId,
+        fingerprintKey: "analytics.meterUsage.captured_error",
+        context: {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        },
       });
     }
   };

@@ -668,8 +668,11 @@ export const abandonBufferIntent = async ({
   });
   if (Result.isError(abandoned)) {
     captureError(abandoned.error, {
-      pendingUploadId: intent.id,
-      stage: telemetry.abandon,
+      fingerprintKey: "lib.abandonBufferIntent.abandoned_error",
+      context: {
+        pendingUploadId: intent.id,
+        stage: telemetry.abandon,
+      },
     });
   }
 };
@@ -703,14 +706,20 @@ export const startBufferIntentHeartbeat = ({
       });
       if (Result.isError(renewed)) {
         captureError(renewed.error, {
-          pendingUploadId: intent.id,
-          stage: telemetry.heartbeat,
+          fingerprintKey: "lib.heartbeat.renewed_error",
+          context: {
+            pendingUploadId: intent.id,
+            stage: telemetry.heartbeat,
+          },
         });
       }
     } catch (error) {
       captureError(error, {
-        pendingUploadId: intent.id,
-        stage: telemetry.heartbeatUnhandled,
+        fingerprintKey: "bufferIntent.heartbeat",
+        context: {
+          pendingUploadId: intent.id,
+          stage: telemetry.heartbeatUnhandled,
+        },
       });
     } finally {
       heartbeatPromise = null;
@@ -907,9 +916,12 @@ const reconcileStaleBufferIntentBatch = async ({
           return null;
         }
         captureError(deleted.error, {
-          objectKey,
-          pendingUploadId: row.id,
-          stage: `buffer-${row.purpose}-intent-reconcile`,
+          fingerprintKey: "bufferIntent.reconcilePendingCleanup",
+          context: {
+            objectKey,
+            pendingUploadId: row.id,
+            stage: `buffer-${row.purpose}-intent-reconcile`,
+          },
         });
         return null;
       }
@@ -951,8 +963,12 @@ const reconcileStaleBufferIntentBatch = async ({
   });
   if (Result.isError(retainedCleanup)) {
     captureError(retainedCleanup.error, {
-      pendingUploadIds: cleanedIds.join(","),
-      stage: "buffer-intent-reconcile-retain",
+      fingerprintKey:
+        "lib.reconcileStaleBufferIntentBatch.retainedCleanup_error",
+      context: {
+        pendingUploadIds: cleanedIds.join(","),
+        stage: "buffer-intent-reconcile-retain",
+      },
     });
   }
   return claimedResult.value.length;
@@ -1043,8 +1059,11 @@ export const reconcileBufferObjectCleanupIntents = async ({
       );
       if (Result.isError(deleted) && !signal?.aborted) {
         captureError(deleted.error, {
-          pendingUploadId: row.id,
-          stage: "buffer-object-cleanup-reconcile",
+          fingerprintKey: "bufferIntent.reconcileObjectCleanup",
+          context: {
+            pendingUploadId: row.id,
+            stage: "buffer-object-cleanup-reconcile",
+          },
         });
       }
       if (Result.isError(deleted)) {

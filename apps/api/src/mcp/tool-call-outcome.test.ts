@@ -422,6 +422,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     internalFailureResult: () =>
       internalFailureResult(
         new HandlerError({ status: 500, message: PRIVATE_TEXT }),
+        "mcp.internalErrorBuilders.failure",
       ),
     structuredErrorResult: () =>
       structuredErrorResult({
@@ -473,6 +474,7 @@ describe("MCP calls emit one private-data-free outcome across dispatch paths", (
     const business = serializeToolResult(
       internalFailureResult(
         new HandlerError({ status: 400, message: "invalid date" }),
+        "mcp.business.failure",
       ),
     );
     expect(getMcpToolCallOutcome(business)).toBe("tool_error");

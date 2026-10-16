@@ -1064,6 +1064,7 @@ const parseManifestation = (
         message: `[eu-ecj] parse failed for ${input.celex}`,
         cause: error,
       }),
+      { fingerprintKey: "adapters.parseManifestation" },
     );
   }
 
@@ -2174,7 +2175,7 @@ export const buildDecision = async (
       error instanceof AdapterFetchError &&
       !(error.cause instanceof DOMException)
     ) {
-      captureError(error);
+      captureError(error, { fingerprintKey: "adapters.buildDecision" });
     }
     // The adapter and fixture callers expose a rejecting promise contract.
     throw error;

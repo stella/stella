@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
-import { declareFailureClass } from "@stll/errors";
+import { declareFingerprintFields, declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
@@ -123,6 +123,10 @@ export class ResearchPassageRetrievalError extends TaggedError(
   cause: unknown;
 }> {
   static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
+  static {
     declareFailureClass(
       this,
       ({ reason }) => RESEARCH_PASSAGE_FAILURE_REASON[reason],
@@ -215,8 +219,11 @@ export const runResearchAnswers = async (
         continue;
       }
       captureError(failure, {
-        source: "case-law-research-answers",
-        decisionId,
+        fingerprintKey: "caselaw.worker.failure",
+        context: {
+          source: "case-law-research-answers",
+          decisionId,
+        },
       });
       // Whatever this run still held for this decision is not coming: say so
       // rather than leave the cells to age out. Only the claimed columns, so a
@@ -231,8 +238,11 @@ export const runResearchAnswers = async (
         })),
       ).catch((writeError: unknown) => {
         captureError(writeError, {
-          source: "case-law-research-answers-cleanup",
-          decisionId,
+          fingerprintKey: "caselaw.worker.writeError",
+          context: {
+            source: "case-law-research-answers-cleanup",
+            decisionId,
+          },
         });
       });
     }

@@ -922,7 +922,10 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
               code: adapterKey,
               noProgressCycles: stall.sustained,
             }),
-            { adapterKey },
+            {
+              fingerprintKey: "runners.runAdapterLoop",
+              context: { adapterKey },
+            },
           );
         }
       }

@@ -133,15 +133,21 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
       markExportFailed(job.data, toExportErrorMessage(error)).catch(
         (markError: unknown) => {
           captureError(markError, {
-            exportId: job.data.exportId,
-            workspaceId: job.data.workspaceId,
+            fingerprintKey: "reports.initReportExportWorker.markError",
+            context: {
+              exportId: job.data.exportId,
+              workspaceId: job.data.workspaceId,
+            },
           });
         },
       );
     }
     captureError(error, {
-      exportId: job?.data.exportId ?? "",
-      workspaceId: job?.data.workspaceId ?? "",
+      fingerprintKey: "reports.initReportExportWorker",
+      context: {
+        exportId: job?.data.exportId ?? "",
+        workspaceId: job?.data.workspaceId ?? "",
+      },
     });
     logger.error("report_export.failed", {
       exportId: job?.data.exportId ?? "",
@@ -180,7 +186,10 @@ export const initReportExportWorker = ({ db }: BullMqWorkerContext) => {
     run: runNotificationReconcile,
     onError: (error) => {
       captureError(error, {
-        operation: "report_export.notification.reconcile",
+        fingerprintKey: "reports.closeNotificationReconcile",
+        context: {
+          operation: "report_export.notification.reconcile",
+        },
       });
     },
   });

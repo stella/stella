@@ -116,8 +116,11 @@ export const recordToolReadScope = ({
         const recorded = await recorder.recordObservedReads();
         if (Result.isError(recorded) && committedBeforeScope) {
           captureError(recorded.error, {
-            source: "chat-tool-read-scope",
-            tool: name,
+            fingerprintKey: "chat.recordingTool.recorded_error",
+            context: {
+              source: "chat-tool-read-scope",
+              tool: name,
+            },
           });
           return output;
         }

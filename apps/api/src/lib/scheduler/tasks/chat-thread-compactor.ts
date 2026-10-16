@@ -15,6 +15,8 @@
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -125,8 +127,11 @@ const drainCompactionQueue = async ({
     if (Result.isError(outcome)) {
       failed += 1;
       captureError(outcome.error, {
-        feature: "chat.thread_compactor",
-        threadId: thread.threadId,
+        fingerprintKey: "tasks.processThreadAt.outcome_error",
+        context: {
+          feature: "chat.thread_compactor",
+          threadId: thread.threadId,
+        },
       });
       logger.warn("scheduler.chat_compactor_failed", {
         "error.type": errorTag(outcome.error),
@@ -408,7 +413,11 @@ const compactThread = async ({
 class OwnerAccessLostError extends TaggedError("OwnerAccessLostError")<{
   message: string;
   reason: OwnerAccessLostReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const OWNER_ACCESS_LOST_MESSAGE = {
   [OWNER_ACCESS_LOST_REASON.ORGANIZATION]:

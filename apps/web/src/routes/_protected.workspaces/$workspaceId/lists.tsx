@@ -153,7 +153,9 @@ function LegalListsPage() {
     });
     setCreatingList(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListsPage.createList:failure",
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -310,7 +312,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setCreating(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.createItem:failure",
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -411,7 +415,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setDecidingCandidateId(null);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.decideCandidate:failure",
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }

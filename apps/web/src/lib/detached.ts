@@ -16,7 +16,10 @@ import { getAnalytics } from "@/lib/analytics/provider";
  */
 export const detached = createDetached((error, context) => {
   getAnalytics().captureError(error, {
-    type: "detached",
-    operation: context,
+    fingerprintKey: `detached:${context}`,
+    context: {
+      type: "detached",
+      operation: context,
+    },
   });
 });

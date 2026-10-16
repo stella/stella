@@ -68,7 +68,7 @@ const useCitedWordings = ({
     })),
   });
   const views = reads.map((read) => queryView(read));
-  useQueryViewErrors(views);
+  useQueryViewErrors(views, "useCitedWordings:query");
   return citations.map((target, index) => {
     if (target.preview !== null) {
       return { target, wording: target.preview };
@@ -105,7 +105,7 @@ const useFullProvision = ({ enabled, first }: FullProvisionArgs) => {
     enabled,
   });
   const view = useQueryView(read);
-  useQueryViewError(view);
+  useQueryViewError(view, "useFullProvision:query");
   return {
     full: {
       isPending: read.isFetching || view.type === "pending",

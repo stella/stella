@@ -161,7 +161,9 @@ function PublicToolDetail() {
                 onClearInstallIntent={() => {
                   navigate({ replace: true, search: {} }).catch(
                     (error: unknown) => {
-                      getAnalytics().captureError(error);
+                      getAnalytics().captureError(error, {
+                        fingerprintKey: "PublicToolDetail:failure",
+                      });
                     },
                   );
                 }}

@@ -626,8 +626,11 @@ const containPayloadUnavailable = async <TPayload>(
   }
 
   captureError(raised, {
-    decisionId,
-    step: "readDecision.corpusPayloadUnavailable",
+    fingerprintKey: "decisions.containPayloadUnavailable.raised",
+    context: {
+      decisionId,
+      step: "readDecision.corpusPayloadUnavailable",
+    },
   });
   return { payload: null, unavailable: true };
 };

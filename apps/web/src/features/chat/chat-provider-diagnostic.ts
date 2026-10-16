@@ -24,7 +24,9 @@ export const observeChatProviderDiagnostic = async function* (
         } else {
           // The run already failed and says so; only its setup guidance is
           // missing, which a malformed envelope must not invent.
-          getAnalytics().captureError(parsed.error);
+          getAnalytics().captureError(parsed.error, {
+            fingerprintKey: "observeChatProviderDiagnostic:failure",
+          });
         }
       }
     }

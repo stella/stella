@@ -29,7 +29,7 @@ const devErrorContext = (
 };
 
 export const noopAnalytics: Analytics = {
-  captureError: (error, context) => {
+  captureError: (error, { context }) => {
     if (error instanceof CancelledError) {
       return;
     }

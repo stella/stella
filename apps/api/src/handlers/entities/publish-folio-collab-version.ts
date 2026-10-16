@@ -214,7 +214,10 @@ const cleanupPublicationSource = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, { roomId, storageKey: source.key });
+    captureError(cleanup.error, {
+      fingerprintKey: "entities.cleanupPublicationSource.cleanup_error",
+      context: { roomId, storageKey: source.key },
+    });
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [source.cleanupIntentId],
@@ -225,7 +228,10 @@ const cleanupPublicationSource = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, { roomId, storageKey: source.key });
+    captureError(settlement.error, {
+      fingerprintKey: "entities.cleanupPublicationSource.settlement_error",
+      context: { roomId, storageKey: source.key },
+    });
   }
 };
 
@@ -331,7 +337,10 @@ const startPublicationFollowUps = async ({
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: publication.entityId }),
   );
   await processExtraction(publication.entityId).catch((error: unknown) => {
-    captureError(error, { entityId: publication.entityId });
+    captureError(error, {
+      fingerprintKey: "publication.processExtraction",
+      context: { entityId: publication.entityId },
+    });
   });
   enqueuePdfDerivativeOrMarkFailed({
     encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
@@ -343,8 +352,11 @@ const startPublicationFollowUps = async ({
     workspaceId,
   }).catch((error: unknown) => {
     captureError(error, {
-      entityId: publication.entityId,
-      fieldId: publication.fieldId,
+      fingerprintKey: "publication.enqueuePdfDerivative",
+      context: {
+        entityId: publication.entityId,
+        fieldId: publication.fieldId,
+      },
     });
   });
   computeVersionDiffStats({
@@ -359,7 +371,10 @@ const startPublicationFollowUps = async ({
     versionId: publication.versionId,
     workspaceId,
   }).catch((error: unknown) => {
-    captureError(error, { versionId: publication.versionId });
+    captureError(error, {
+      fingerprintKey: "publication.computeVersionDiff",
+      context: { versionId: publication.versionId },
+    });
   });
 };
 

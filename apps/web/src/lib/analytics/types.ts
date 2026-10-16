@@ -5,6 +5,7 @@ import type {
 } from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
@@ -39,10 +40,15 @@ export type NotEdenErrorEnvelope<E> = E extends Error
     ? never
     : E;
 
+export type ErrorCaptureOptions = {
+  fingerprintKey: ExceptionFingerprintKey;
+  context?: ErrorCaptureContext;
+};
+
 export type Analytics = {
   captureError: <E>(
     error: E & NotEdenErrorEnvelope<E>,
-    context?: ErrorCaptureContext,
+    options: ErrorCaptureOptions,
   ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;

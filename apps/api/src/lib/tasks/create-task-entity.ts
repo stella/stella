@@ -483,7 +483,11 @@ export const createTaskEntityHandler = async function* ({
   // A caller-provided transaction has not committed yet. Its owner flushes
   // after commit so the repair worker cannot race an invisible entity.
   if (props.tx === undefined) {
-    flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+    flushEntitySearchRepairs([txResult.entityId]).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "createTaskEntityHandler.flushEntitySearchRepairs",
+      }),
+    );
   }
 
   return Result.ok({ entityId: txResult.entityId });

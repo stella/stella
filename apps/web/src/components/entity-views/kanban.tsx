@@ -184,7 +184,9 @@ export const EntityViewKanban = ({
       }
     });
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "EntityViewKanban.move:failure",
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     }
     await invalidateTaskQueries({

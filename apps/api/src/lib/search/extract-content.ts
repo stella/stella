@@ -203,6 +203,9 @@ export const extractFileText = async (
     return result.value;
   }
 
-  captureError(result.error, context);
+  captureError(result.error, {
+    fingerprintKey: "search.extractFileText.result_error",
+    context,
+  });
   return null;
 };

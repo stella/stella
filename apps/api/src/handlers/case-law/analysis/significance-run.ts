@@ -207,8 +207,11 @@ export const refreshSignificance = async ({
     // A reader is already looking at the document layers; the graph one
     // simply does not appear this time. Captured, never swallowed.
     captureError(written.error, {
-      source: "case-law-analysis-significance",
-      decisionId,
+      fingerprintKey: "analysis.refreshSignificance.written_error",
+      context: {
+        source: "case-law-analysis-significance",
+        decisionId,
+      },
     });
     aiAnalytics?.captureError(written.error);
   }

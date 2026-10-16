@@ -81,6 +81,7 @@ export const GlobalTimerContent = ({
           message: "Multiple running timers in paginated snapshot",
           runningCount,
         }),
+        { fingerprintKey: "GlobalTimerContent:TimerSnapshotConflictError" },
       );
     }
   }, [analytics, runningCount]);

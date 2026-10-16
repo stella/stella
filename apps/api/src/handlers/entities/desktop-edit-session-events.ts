@@ -212,7 +212,10 @@ export const desktopEditSessionEventsHandler = async (
 
   const refreshLivenessInBackground = () => {
     refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
+      captureError(error, {
+        fingerprintKey: "entities.refreshLivenessInBackground",
+        context: { sessionId },
+      });
     });
   };
 

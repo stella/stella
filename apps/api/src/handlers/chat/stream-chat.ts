@@ -1066,9 +1066,12 @@ export const recordChatAttemptFinish = ({
     message: CHAT_EMPTY_COMPLETION_MESSAGE,
   });
   captureAttemptError(state.emptyCompletion, {
-    modelId: modelInfo.modelId,
-    provider: modelInfo.provider,
-    threadId,
+    fingerprintKey: "recordChatAttemptFinish.state_emptyCompletion",
+    context: {
+      modelId: modelInfo.modelId,
+      provider: modelInfo.provider,
+      threadId,
+    },
   });
 };
 
@@ -1208,8 +1211,11 @@ const resolveFallbackTextModel = async ({
     return fallbackModel;
   } catch (error) {
     captureError(error, {
-      feature: "chat.stream_fallback_resolution",
-      threadId,
+      fingerprintKey: "chat.resolveFallbackTextModel",
+      context: {
+        feature: "chat.stream_fallback_resolution",
+        threadId,
+      },
     });
     return null;
   }
@@ -1864,10 +1870,13 @@ const createChatRuntimeMiddleware = ({
         tenantWorkspaceIds,
         onSummaryError: (error) => {
           captureError(error, {
-            feature: compactionFeature,
-            modelId: model.modelId,
-            provider: model.provider,
-            threadId,
+            fingerprintKey: "chat.compactedMessages",
+            context: {
+              feature: compactionFeature,
+              modelId: model.modelId,
+              provider: model.provider,
+              threadId,
+            },
           });
         },
       });
@@ -1995,16 +2004,24 @@ export const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind => {
 // service raised for a configuration state the caller can act on; only an
 // unanticipated shape is logged at ERROR severity and reported as a defect.
 // Fingerprint only — provider error messages can echo request content.
+type ReportStreamFailureOptions = {
+  kind: AIErrorKind;
+  fingerprintKey: `chat.${string}`;
+  providerMessage?: string | undefined;
+};
+
 const reportStreamFailure = (
   error: unknown,
-  kind: AIErrorKind,
-  providerMessage?: string,
+  { kind, fingerprintKey, providerMessage }: ReportStreamFailureOptions,
 ): void => {
   if (isAnticipatedAIFailure(error, kind)) {
     return;
   }
   classifyRejectedProviderRequest(error, kind);
-  captureError(error, { kind });
+  captureError(error, {
+    fingerprintKey: `${fingerprintKey}.${kind}`,
+    context: { kind },
+  });
   logger.error(
     "chat.stream_failed",
     sanitizeErrorAttributesForOutput({
@@ -2024,7 +2041,11 @@ const reportStreamFailure = (
 const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   const error = errorForRunErrorChunk(chunk);
   const kind = classifyRunErrorChunk(chunk);
-  reportStreamFailure(error, kind, chunk.message);
+  reportStreamFailure(error, {
+    kind,
+    fingerprintKey: "chat.runErrorChunk",
+    providerMessage: chunk.message,
+  });
   const usage = safeTokenUsageFromTerminalChunk(chunk);
   return {
     type: EventType.RUN_ERROR,
@@ -3069,13 +3090,16 @@ export const processServerChatStream = async function* ({
       // An aborted stream is an expected exit (metered cutoff, ownership
       // loss); its rejection shape is not a stream defect even
       // when the classifier cannot name it.
-      captureError(error, { kind });
+      captureError(error, {
+        fingerprintKey: "chat.processServerChatStream",
+        context: { kind },
+      });
       await terminalize({
         flushProcessor: true,
         outcome: cutShortOutcome(),
       });
     } else {
-      reportStreamFailure(error, kind);
+      reportStreamFailure(error, { kind, fingerprintKey: "chat.streamRun" });
       await terminalize({
         flushProcessor: true,
         outcome: { type: "failed", error: kind },
@@ -3204,7 +3228,10 @@ const finalizeResponseProcessor = (processor: ChatStreamProcessor): void => {
   try {
     processor.finalizeStream();
   } catch (error) {
-    captureError(error, { kind: "aborted_stream_finish_failed" });
+    captureError(error, {
+      fingerprintKey: "chat.finalizeResponseProcessor",
+      context: { kind: "aborted_stream_finish_failed" },
+    });
   }
 };
 

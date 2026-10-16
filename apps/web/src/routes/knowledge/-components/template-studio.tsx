@@ -1260,7 +1260,9 @@ export const TemplateStudioPage = ({
       // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateStudioPage.handleSave:failure",
+      });
       notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {

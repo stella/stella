@@ -113,7 +113,9 @@ function ToolEntryPage() {
         markdown={page.markdown}
         onClearInstallIntent={() => {
           navigate({ replace: true, search: {} }).catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "ToolEntryPage:failure",
+            });
           });
         }}
       />

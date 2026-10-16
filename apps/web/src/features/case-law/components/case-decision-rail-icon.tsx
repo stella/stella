@@ -19,7 +19,7 @@ export const CaseDecisionRailIcon = ({
 }: InspectorRailIconProps<CaseDecisionViewPayload>) => {
   const decisionQuery = useQuery(decisionOptions(tab.payload.decisionId));
   const decisionView = useQueryView(decisionQuery);
-  useQueryViewError(decisionView);
+  useQueryViewError(decisionView, "CaseDecisionRailIcon:query");
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;
   return (

@@ -62,7 +62,9 @@ export const showDesktopEditOpenResultToast = async ({
       });
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "showDesktopEditOpenResultToast:failure",
+    });
     if (error instanceof DesktopBridgeIncompatibleError) {
       notifyUserError(error, messages.updateRequiredTitle, {
         toastId,

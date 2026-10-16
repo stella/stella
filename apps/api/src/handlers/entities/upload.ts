@@ -309,9 +309,12 @@ const cleanupUploadedS3Keys = async ({
   );
   if (Result.isError(cleanup)) {
     captureError(cleanup.error, {
-      operation: "upload-s3-cleanup",
-      fileId,
-      workspaceId,
+      fingerprintKey: "entities.cleanupUploadedS3Keys.cleanup_error",
+      context: {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      },
     });
   }
   return Result.isOk(cleanup);
@@ -870,7 +873,13 @@ export const uploadEntityHandler = async function* ({
 
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: file.type, scanned }),
-    { mimeType: file.type, sizeBytes: String(fileBuffer.byteLength) },
+    {
+      fingerprintKey: "entityUpload.detectEncryption",
+      context: {
+        mimeType: file.type,
+        sizeBytes: String(fileBuffer.byteLength),
+      },
+    },
   );
   if (encryption === null) {
     return Result.err(
@@ -1232,7 +1241,10 @@ export const uploadEntityHandler = async function* ({
     const fileName = writeResult.resolvedName;
 
     await processEntity(entityId).catch((error: unknown) =>
-      captureError(error, { entityId, mimeType: file.type }),
+      captureError(error, {
+        fingerprintKey: "entityUpload.processExtraction",
+        context: { entityId, mimeType: file.type },
+      }),
     );
 
     if (uploadTriggeredFlowPolicy(origin) === "start") {
@@ -1242,7 +1254,10 @@ export const uploadEntityHandler = async function* ({
         organizationId,
         fileName: fileName.value,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, workspaceId });
+        captureError(error, {
+          fingerprintKey: "entityUpload.startFlows",
+          context: { entityId, workspaceId },
+        });
       });
     }
 
@@ -1256,9 +1271,12 @@ export const uploadEntityHandler = async function* ({
       workspaceId,
     }).catch((error: unknown) => {
       captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
+        fingerprintKey: "entityUpload.enqueuePdfDerivative",
+        context: {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        },
       });
     });
 
@@ -1272,9 +1290,12 @@ export const uploadEntityHandler = async function* ({
       workspaceId,
     }).catch((error: unknown) => {
       captureError(error, {
-        entityId,
-        fieldId,
-        mimeType: file.type,
+        fingerprintKey: "entityUpload.enqueueThumbnail",
+        context: {
+          entityId,
+          fieldId,
+          mimeType: file.type,
+        },
       });
     });
 

@@ -114,7 +114,9 @@ export const warmupChatAnonymizeWorker = (): void => {
     (error: unknown) => {
       // Warmup is non-blocking; record the failure and allow the next mount
       // to retry a transient worker crash.
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "warmupChatAnonymizeWorker:failure",
+      });
       warmedUp = false;
     },
   );

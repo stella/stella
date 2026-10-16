@@ -353,7 +353,9 @@ export const Route = createFileRoute("/knowledge/styles")({
     }
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "knowledge.styles.loader.onPrefetchError:failure",
+      });
     };
 
     detached(

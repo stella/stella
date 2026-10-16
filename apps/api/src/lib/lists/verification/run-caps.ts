@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import { legalListVerificationBudgets } from "@/api/db/schema";
@@ -28,6 +29,10 @@ export class ListVerificationRunCapError extends TaggedError(
   reason: keyof typeof VERIFICATION_RUN_CAP_CODES;
   hint: string;
 }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   get code() {
     return VERIFICATION_RUN_CAP_CODES[this.reason];
   }

@@ -156,7 +156,10 @@ export const buildMemoryPromptParts = async ({
       });
       if (Result.isError(stampResult)) {
         // Recency bookkeeping must never make an otherwise valid chat fail.
-        captureError(stampResult.error, { feature: "memory.last_used_stamp" });
+        captureError(stampResult.error, {
+          fingerprintKey: "chat.buildMemoryPromptParts.stampResult_error",
+          context: { feature: "memory.last_used_stamp" },
+        });
       }
     }
 

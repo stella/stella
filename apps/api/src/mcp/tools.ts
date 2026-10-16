@@ -694,7 +694,10 @@ const internalErrorResult = ({
       ctx: { source: "mcp", tool: toolName },
     });
   } else {
-    captureError(error, { source: "mcp", toolName });
+    captureError(error, {
+      fingerprintKey: "mcp.internalErrorResult",
+      context: { source: "mcp", toolName },
+    });
   }
   return serializeToolResult(
     scopeToolResultToSurface(

@@ -379,7 +379,7 @@ export const RowActions = ({
     useState<TranslationDialogState>({ type: "closed" });
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
   const propertiesView = useQueryView(propertiesQuery);
-  useQueryViewError(propertiesView);
+  useQueryViewError(propertiesView, "RowActions:query");
   const properties =
     propertiesView.type === "items" ? propertiesView.items : undefined;
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
@@ -634,7 +634,9 @@ export const RowActions = ({
       const openResult = await openFileInDesktop(desktopInput);
       await showDesktopOpenResult(openResult);
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RowActions.handleOpenInDesktop:failure",
+      });
       if (error instanceof Error && isUnauthorizedError(error)) {
         notifyUserError(
           error,
@@ -696,7 +698,9 @@ export const RowActions = ({
     try {
       await doForceTakeover();
     } catch (forceError) {
-      analytics.captureError(forceError);
+      analytics.captureError(forceError, {
+        fingerprintKey: "RowActions.forceTakeoverWithFeedback:forceError",
+      });
       if (forceError instanceof Error && isUnauthorizedError(forceError)) {
         notifyUserError(
           forceError,
@@ -750,7 +754,9 @@ export const RowActions = ({
         ),
       );
       if (Result.isError(requested)) {
-        analytics.captureError(requested.error);
+        analytics.captureError(requested.error, {
+          fingerprintKey: "RowActions.handleReleaseLock:failure",
+        });
         notifyUserError(requested.error, t("errors.actionFailed"), {
           description: userErrorFromThrown(
             requested.error,
@@ -807,7 +813,9 @@ export const RowActions = ({
         }, 30_000);
       },
       reportError: (error) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "RowActions.handleReleaseLock.reportError:failure",
+        });
       },
     });
   };
@@ -887,7 +895,9 @@ export const RowActions = ({
         if (Result.isError(result)) {
           failedCount++;
           firstFailure ??= result.error;
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "RowActions.handleDuplicate:failure",
+          });
           continue;
         }
         duplicateTargetIdsRef.current.delete(target.entityId);
@@ -999,7 +1009,9 @@ export const RowActions = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RowActions.handleRunOcr:failure",
+      });
       notifyUserError(error, t("workspaces.files.ocrQueueFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

@@ -187,7 +187,10 @@ const duplicateEntityHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, { workspaceId, sourceEntityId });
+    captureError(fileMappings.error, {
+      fingerprintKey: "entities.duplicateEntityHandler.fileMappings_error",
+      context: { workspaceId, sourceEntityId },
+    });
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -246,12 +249,21 @@ const duplicateEntityHandler = async function* ({
     .flushEntitySearchRepairs(
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
-    .catch(captureError);
+    .catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey: "duplicateEntityHandler.rejection",
+      }),
+    );
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch((error: unknown) =>
+    captureError(error, {
+      fingerprintKey:
+        "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+    }),
+  );
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
@@ -264,7 +276,12 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey:
+          "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+      }),
+    );
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
@@ -273,7 +290,12 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch(captureError);
+    }).catch((error: unknown) =>
+      captureError(error, {
+        fingerprintKey:
+          "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+      }),
+    );
   }
 
   return Result.ok({

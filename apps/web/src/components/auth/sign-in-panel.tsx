@@ -159,7 +159,9 @@ const SignInOptionsPanel = ({
       return;
     }
 
-    analytics.captureError(toAuthClientError(error));
+    analytics.captureError(toAuthClientError(error), {
+      fingerprintKey: "SignInOptionsPanel.handleSocialSignIn:failure",
+    });
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
@@ -178,7 +180,9 @@ const SignInOptionsPanel = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "SignInOptionsPanel.onSubmit:failure",
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -225,6 +229,7 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    { fingerprintKey: "SignInOptionsPanel:failure" },
                   );
                 });
               }}
@@ -243,6 +248,7 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    { fingerprintKey: "SignInOptionsPanel:failure-2" },
                   );
                 });
               }}
@@ -374,7 +380,9 @@ const BootstrapSignUpForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "BootstrapSignUpForm.onSubmit:failure",
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }

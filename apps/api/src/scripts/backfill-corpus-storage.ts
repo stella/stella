@@ -217,8 +217,11 @@ await runScriptWithErrorOutput(async () => {
       case "failed":
         failed += 1;
         captureError(outcome.error, {
-          decisionId,
-          step: "backfillCorpusStorage",
+          fingerprintKey: "scripts.recordOutcome.outcome_error",
+          context: {
+            decisionId,
+            step: "backfillCorpusStorage",
+          },
         });
         return;
       default:
@@ -274,7 +277,10 @@ await runScriptWithErrorOutput(async () => {
         // The batch never reached its per-decision outcomes, so nothing in it
         // was recorded.
         failed += chunk.length;
-        captureError(settled.error, { step: "backfillCorpusStorage" });
+        captureError(settled.error, {
+          fingerprintKey: "scripts.capture.settled_error",
+          context: { step: "backfillCorpusStorage" },
+        });
         continue;
       }
       for (const [decisionId, outcome] of settled.value) {

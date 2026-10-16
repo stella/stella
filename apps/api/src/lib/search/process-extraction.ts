@@ -367,7 +367,10 @@ const recordDocxVersionLanguage = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(recorded)) {
-    captureError(recorded.error, { source: "native-extraction-docx-language" });
+    captureError(recorded.error, {
+      fingerprintKey: "search.recordDocxVersionLanguage.recorded_error",
+      context: { source: "native-extraction-docx-language" },
+    });
   }
 };
 

@@ -99,7 +99,9 @@ export const useClaimReviewActions = (scope: RunScope) => {
           : withClaimReviews(current, context.previous),
       );
     }
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "useClaimReviewActions.rollback:failure",
+    });
     notifyUserError(error, t("avt.save.failedTitle"));
   };
 

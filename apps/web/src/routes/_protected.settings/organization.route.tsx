@@ -73,7 +73,11 @@ export const Route = createFileRoute("/_protected/settings/organization")({
               organizationId: context.user.activeOrganizationId,
               userId: context.user.id,
             }),
-            (error) => getAnalytics().captureError(error),
+            (error) =>
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "settings.organization.route.beforeLoad:failure",
+              }),
           );
         })(),
         "organization-settings.time-policy-prefetch",

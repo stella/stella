@@ -167,7 +167,10 @@ const recordFailure = (
   // that, and it must not be escalated into the read it was recording a
   // failure for.
   Result.try(() => {
-    captureError(error, { source: CAPTURE_SOURCE, decisionId });
+    captureError(error, {
+      fingerprintKey: "decisions.recordFailure",
+      context: { source: CAPTURE_SOURCE, decisionId },
+    });
   }).unwrapOr(undefined);
 
 export const recordDocumentPacingOutcome = (

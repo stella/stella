@@ -189,7 +189,9 @@ export const createStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error);
+          captureError(cleanup.error, {
+            fingerprintKey: "stylesets.createStoredStyleSet.cleanup_error",
+          });
         }
       }
     }
@@ -425,7 +427,9 @@ export const replaceStoredStyleSet = async ({
           }),
       });
       if (Result.isError(cleanupResult)) {
-        captureError(cleanupResult.error);
+        captureError(cleanupResult.error, {
+          fingerprintKey: "stylesets.replaceStoredStyleSet.cleanupResult_error",
+        });
       } else {
         const cleared = await safeDb(async (tx) => {
           // audit: skip — cleanup metadata for the already-audited replacement
@@ -442,7 +446,9 @@ export const replaceStoredStyleSet = async ({
             );
         });
         if (Result.isError(cleared)) {
-          captureError(cleared.error);
+          captureError(cleared.error, {
+            fingerprintKey: "stylesets.replaceStoredStyleSet.cleared_error",
+          });
         }
       }
       return Result.ok(replaced.row);
@@ -470,7 +476,9 @@ export const replaceStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error);
+          captureError(cleanup.error, {
+            fingerprintKey: "stylesets.replaceStoredStyleSet.cleanup_error",
+          });
         }
       }
     }

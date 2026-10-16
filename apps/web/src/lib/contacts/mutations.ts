@@ -110,7 +110,9 @@ export const useCreateContact = () => {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateContact:failure",
+      });
     },
   });
 };
@@ -188,7 +190,9 @@ export const useUpdateContact = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateContact:failure",
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -210,7 +214,9 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteContact:failure",
+      });
     },
   });
 };
