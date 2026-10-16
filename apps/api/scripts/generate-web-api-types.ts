@@ -44,6 +44,7 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { printError } from "@stll/errors";
 import { repoRelativePath } from "@stll/portable-path";
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -57,6 +58,11 @@ import {
   isCompilerInputStampCurrent,
   scriptSourceHash,
 } from "./lib/compiler-input-stamp";
+import {
+  generatedStoreDir,
+  publishGeneratedOutput,
+  restoreGeneratedOutput,
+} from "./lib/generated-output-store";
 import {
   hasFlag,
   isReadonlyProperty,
@@ -1387,13 +1393,14 @@ const cacheStampSchema = v.strictObject({
   inputs: compilerInputStampSchema,
 });
 
-// Everything besides the program's own inputs that decides the printout.
+// Everything besides the program's own inputs that decides the printout. No
+// absolute path: the host-wide store shares entries between checkouts, and
+// the stamp itself pins every path the program read.
 const cacheContext = () =>
   sha256Hex(
     JSON.stringify({
-      format: 1,
-      root: REPO_ROOT,
-      output: OUTPUT_PATH,
+      format: 2,
+      output: repoRelativePath(REPO_ROOT, OUTPUT_PATH),
       bun: Bun.version,
       typescript: ts.version,
       generator: scriptSourceHash(import.meta.path),
@@ -1427,6 +1434,30 @@ const reuseCachedOutput = async (context: string): Promise<boolean> => {
   return true;
 };
 
+const STORE_DIR = generatedStoreDir("web-api-types");
+
+/**
+ * Restores a printout another checkout on this host (or a CI cache) made from
+ * inputs this checkout still has, and makes it this checkout's own cache.
+ */
+const reuseStoredOutput = async (context: string): Promise<boolean> => {
+  const stored = await restoreGeneratedOutput({
+    storeDir: STORE_DIR,
+    root: REPO_ROOT,
+    context,
+  });
+  if (stored === undefined) {
+    return false;
+  }
+  writeAtomically(OUTPUT_PATH, stored.output);
+  writeAtomically(CACHED_OUTPUT_PATH, stored.output);
+  writeAtomically(
+    STAMP_PATH,
+    JSON.stringify({ outputHash: stored.outputHash, inputs: stored.stamp }),
+  );
+  return true;
+};
+
 const main = async () => {
   const args = process.argv.slice(2);
   const check = args.includes("--check");
@@ -1443,6 +1474,13 @@ const main = async () => {
     console.log(
       `generate-web-api-types: compiler inputs unchanged; restored ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
         `in ${Math.round(performance.now() - started)} ms`,
+    );
+    return;
+  }
+  if (!check && (await reuseStoredOutput(context))) {
+    console.log(
+      `generate-web-api-types: compiler inputs match a stored printout; restored ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
+        `from ${STORE_DIR} in ${Math.round(performance.now() - started)} ms`,
     );
     return;
   }
@@ -1471,6 +1509,20 @@ const main = async () => {
       inputs: recorder.stamp(context),
     }),
   );
+  // A store failure costs only a later rebuild elsewhere, never this run.
+  const published = Result.try(() =>
+    publishGeneratedOutput({
+      storeDir: STORE_DIR,
+      stamp: recorder.portableStamp(context, REPO_ROOT),
+      output,
+    }),
+  );
+  if (published.isErr()) {
+    printError(
+      `generate-web-api-types: could not publish to ${STORE_DIR}:`,
+      published.error,
+    );
+  }
   console.log(
     `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
       `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms, ` +

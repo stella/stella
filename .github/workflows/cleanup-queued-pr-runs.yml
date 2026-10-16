@@ -4,11 +4,11 @@ defaults:
   run:
     shell: bash
 
-# Every few minutes this steward drops queued pull request work that can no
-# longer matter (superseded heads, closed or draft pull requests), defers
-# pull request runs whose remaining jobs are all still queued while the merge
-# queue has waiting work, and, once the merge queue has no waiting work,
-# re-runs the pull request runs that deferred to it.
+# Every few minutes this steward defers pull request runs whose remaining jobs
+# are all still queued while the merge queue has waiting work and, once the
+# merge queue has no waiting work,
+# re-runs the pull request runs that deferred to it. A pull request labelled
+# ci-protect is never cancelled by any of these steps.
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -27,95 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Cancel stale or superseded queued PR runs
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const repo = context.repo;
-            const prEvents = new Set(["pull_request", "pull_request_target"]);
-            const cutoff = Date.now() - 6 * 60 * 60 * 1000;
-            const isNotQueuedRefusal = error => error.status === 409
-              && error.message.split(" - https://docs.github.com/rest/actions/workflow-runs#").at(0)
-                === "Cannot cancel a workflow run that has not been queued yet.";
-
-            const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
-              ...repo, status: "queued", per_page: 100,
-            });
-            const reasonFor = async run => {
-              if (run.status !== "queued" || !prEvents.has(run.event)) return null;
-              if (Date.parse(run.created_at) < cutoff) return "queued over six hours";
-              const associated = run.pull_requests?.length
-                ? run.pull_requests
-                : context.payload.pull_request ? [context.payload.pull_request] : [];
-              if (associated.length === 0) return null;
-              for (const pull of associated) {
-                // Target runs use the base SHA as head_sha. Only their
-                // associated PR snapshot identifies the head they evaluated.
-                const recordedHead = pull.head?.sha
-                  || (run.event === "pull_request" ? run.head_sha : null);
-                if (!pull.number || !recordedHead) return null;
-                let current;
-                try {
-                  ({ data: current } = await github.rest.pulls.get({
-                    ...repo, pull_number: pull.number,
-                  }));
-                } catch (error) {
-                  if (error.status !== 403 && error.status !== 404) throw error;
-                  core.warning(`Superseded-head cleanup skipped for ${run.id}: PR metadata unavailable`);
-                  return null;
-                }
-                if (current.state !== "open") return "pull request closed";
-                if (current.draft) return "draft pull request";
-                if (!current.head?.sha || current.head.sha === recordedHead) return null;
-              }
-              return "superseded head";
-            };
-            // Re-read both run status and associated PR heads immediately
-            // before cancellation; an unresolved association fails closed.
-            core.info(`Queued runs: ${runs.length}`);
-            let failed = 0;
-            for (const selectedRun of runs) {
-              if (selectedRun.status !== "queued" || !prEvents.has(selectedRun.event)) continue;
-              const args = { ...repo, run_id: selectedRun.id };
-              const { data: current } = await github.rest.actions.getWorkflowRun(args);
-              const reason = await reasonFor(current);
-              if (!reason) {
-                core.info(`Skipped ${current.id}: no longer an eligible queued PR run`);
-                continue;
-              }
-              try {
-                await github.rest.actions.cancelWorkflowRun(args);
-                core.info(`Cancellation requested for ${current.id}: ${reason}`);
-                continue;
-              } catch (error) {
-                if (!isNotQueuedRefusal(error)) {
-                  failed += 1;
-                  core.error(`Unable to cancel queued PR run ${current.id}: ${error.message}; manual inspection required`);
-                  continue;
-                }
-                core.warning(`Cancel refused for ${current.id}: ${error.message}`);
-              }
-              // A run may start while cancellation is attempted. Never force-cancel that run.
-              const { data: retry } = await github.rest.actions.getWorkflowRun(args);
-              const retryReason = await reasonFor(retry);
-              if (!retryReason) {
-                core.info(`Skipped force-cancel for ${retry.id}: no longer an eligible queued PR run`);
-                continue;
-              }
-              try {
-                await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel", args);
-                core.info(`Force-cancellation requested for ${retry.id}: ${retryReason}`);
-              } catch (error) {
-                if (isNotQueuedRefusal(error)) {
-                  core.info(`Run ${retry.id} (status: ${retry.status}) skipped: not cancellable (GitHub state)`);
-                  continue;
-                }
-                failed += 1;
-                core.error(`Unable to cancel queued PR run ${retry.id}: ${error.message}; manual inspection required`);
-              }
-            }
-            if (failed > 0) core.setFailed(`${failed} queued PR run(s) could not be cancelled`);
-
       - name: Resume pull request runs that deferred to the merge queue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
@@ -235,13 +146,16 @@ jobs:
             }
             core.info(`Resumed ${resumed} deferred pull request run(s).`);
 
+      # Deferring is on only while CI_YIELD_TO_MERGE_QUEUE is `on`; the resume
+      # step above keeps releasing heads that were already deferred.
       - name: Defer queued pull request work while the merge queue waits
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && vars.CI_YIELD_TO_MERGE_QUEUE == 'on' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const repo = context.repo;
             const YIELD_CONTEXT = "ci/merge-queue-yield";
+            const PROTECT_LABEL = "ci-protect";
             const waiting = async () => {
               for (const status of ["queued", "waiting", "pending", "requested"]) {
                 const { data } = await github.rest.actions.listWorkflowRunsForRepo({
@@ -277,6 +191,20 @@ jobs:
               if (run.run_attempt > 1) continue;
               if (run.head_repository?.full_name !== `${repo.owner}/${repo.repo}`) continue;
               if (run.triggering_actor?.login === "dependabot[bot]") continue;
+              // A protected pull request is never deferred; one whose pull
+              // request cannot be resolved is left running (fail closed).
+              const numbers = (run.pull_requests ?? []).map((pull) => pull.number).filter(Boolean);
+              if (numbers.length === 0) continue;
+              let protectedOrUnknown = false;
+              for (const number of numbers) {
+                const pull = await github.rest.pulls.get({ ...repo, pull_number: number })
+                  .then(({ data }) => data, () => null);
+                if (!pull || pull.labels?.some((label) => label.name === PROTECT_LABEL)) {
+                  protectedOrUnknown = true;
+                  break;
+                }
+              }
+              if (protectedOrUnknown) continue;
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
                 ...repo, run_id: run.id, filter: "latest", per_page: 100,
               });

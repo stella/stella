@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/invoices/create.ts",
+  "delta": 1,
+  "reason": "Billed-time adjustments update one keyed row per changed entry with its own values, inside the create transaction, bounded by the 500-entry request limit."
+}

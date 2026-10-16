@@ -147,6 +147,7 @@
     "Validate CI service image mirror inventory": ["**"],
     "Test CI service image workflow contracts": ["**"],
     "Test CI workflow invariants": ["**"],
+    "Test reusable workflow permission contracts": ["**"],
     "Test main network recording selection": ["**"],
     "Test API duration workflow": ["**"],
     "Test autofix protected paths": ["**"],

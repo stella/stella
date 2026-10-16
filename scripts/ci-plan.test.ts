@@ -2882,13 +2882,9 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
     `\${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}`,
   );
   expect(jobScopes["ci-checks-rest"]).toBe("package_checks_required");
+  // A skipped fast-required job fails the result: the fast-depth test proves
+  // that for every fast-required job, this one included.
   expect(fastRequired).toContain("ci-checks-rest");
-  expect(
-    evaluateResult({
-      event: EVENT.pullRequest,
-      results: { "ci-checks-rest": "skipped" },
-    }),
-  ).toBe(1);
 
   const generators = GENERATORS.filter(({ id }) =>
     ["cli-registry", "cli-runtime"].includes(id),
@@ -5843,10 +5839,10 @@ test("property suites and their budgets select required PR checks", () => {
     "scripts/prepare-maintenance-release.property.test.ts",
     "apps/api/src/handlers/case-law/judges/judge-name.property.test.ts",
     "turbo.json",
+    "provenance/manifest.json",
   ]) {
-    expect(packageChecksPlan([file]), file).toBe("true");
+    expect(requiresPackageChecks({ changed: [file] }), file).toBe(true);
   }
-  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("true");
   for (const job of ["ci-tests", "ci-checks-policy", "ci-checks-rest"]) {
     expect(
       runsAtDepth(jobIf(ciJobs[job]), {
@@ -6199,7 +6195,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
         throw new Error("Merge API files must not be narrowed");
       },
     }).matrix.shard,
-  ).toEqual(["api-1", "api-2", "api-3", "api-4", "rest-web"]);
+  ).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -6209,7 +6205,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=4");
+  expect(planner?.run).toContain("api_test_shards=3");
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
@@ -6251,9 +6247,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","rest-web"]}',
     );
-    expect(values).toContain("api_test_shards=4");
+    expect(values).toContain("api_test_shards=3");
     expect(values).toContain("api_test_files=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -6418,10 +6414,10 @@ test("API planning only loads dependencies after installation and emits install-
   try {
     for (const [event, packages, unknown, selected, shards, expected] of [
       ["pull_request", "false", "false", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "4"],
-      ["pull_request", "false", "true", "", "", "4"],
-      ["merge_group", "true", "false", "", "", "4"],
-      ["workflow_dispatch", "true", "false", "", "", "4"],
+      ["pull_request", "true", "false", "", "", "3"],
+      ["pull_request", "false", "true", "", "", "3"],
+      ["merge_group", "true", "false", "", "", "3"],
+      ["workflow_dispatch", "true", "false", "", "", "3"],
       [
         "pull_request",
         "true",
