@@ -13,6 +13,11 @@ const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_SWEEP_MS = 60 * 1000;
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_DRAIN_BYTES = 8 * MAX_REQUEST_BYTES;
+// Closing a socket that still holds unread upload bytes sends a reset, and a
+// reset can discard the 413 from the client's receive buffer before it is read.
+// After the 413 the server half-closes and discards what is still in flight for
+// this long, then drops the connection.
+const LINGER_CLOSE_MS = 2000;
 
 const portValue = process.env["STELLA_DOCS_PORT"] ?? String(DEFAULT_PORT);
 const port = Number(portValue);
@@ -233,10 +238,20 @@ const handleHttpRequest = async (
   } catch (error) {
     if (error instanceof RequestBodyError) {
       if (error.closeConnection) {
-        // Stop reading an unbounded upload: answer, then drop the connection.
+        // Stop reading an unbounded upload: answer, half-close, discard what is in
+        // flight for a bounded time, then drop the connection.
         response.setHeader("connection", "close");
         response.on("finish", () => {
-          request.destroy();
+          const { socket } = request;
+          const linger = setTimeout(() => {
+            socket.destroy();
+          }, LINGER_CLOSE_MS);
+          linger.unref();
+          socket.once("close", () => {
+            clearTimeout(linger);
+          });
+          socket.end();
+          request.resume();
         });
       }
       if (!response.headersSent) {
