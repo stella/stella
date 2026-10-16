@@ -699,6 +699,7 @@ if [[ "$MODE" == install ]]; then
   step tools install_tools
   step shell install_shell_environment
   step dependencies dependency_install
+  step api-types runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" PATH="$PATH" bun run generate:cloud
 
   exit 0
 fi

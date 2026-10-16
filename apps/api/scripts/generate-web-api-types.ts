@@ -13,6 +13,8 @@ import { Result, panic } from "better-result";
 // Modes:
 //   bun --filter @stll/api gen:web-api-types           regenerate the file
 //   bun --filter @stll/api gen:web-api-types --check   CI determinism guard
+//   bun apps/api/scripts/generate-web-api-types.ts --require-cached <base-sha>
+//     restore only; fail before building a program if no stamp/store validates
 //
 // Printing rules:
 // - Types owned by a package apps/web depends on are imported by name, never
@@ -1461,10 +1463,17 @@ const reuseStoredOutput = async (context: string): Promise<boolean> => {
 const main = async () => {
   const args = process.argv.slice(2);
   const check = args.includes("--check");
-  if (args.some((arg) => arg !== "--check")) {
+  const requireCached = args.includes("--require-cached");
+  const baseSha = args.at(args.indexOf("--require-cached") + 1);
+  const allowed = requireCached
+    ? args.length === 2 &&
+      args[0] === "--require-cached" &&
+      /^[a-f0-9]{40}$/u.test(baseSha ?? "")
+    : args.every((arg) => arg === "--check");
+  if (!allowed) {
     panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
   }
-  if (!check && hasPreparedGeneratedSources(REPO_ROOT)) {
+  if (!check && !requireCached && hasPreparedGeneratedSources(REPO_ROOT)) {
     return;
   }
   const started = performance.now();
@@ -1483,6 +1492,11 @@ const main = async () => {
         `from ${STORE_DIR} in ${Math.round(performance.now() - started)} ms`,
     );
     return;
+  }
+  if (requireCached) {
+    panic(
+      `generate-web-api-types: no valid cache or generated store entry for base ${baseSha}; cold generation is disabled`,
+    );
   }
   const recorder = createCompilerInputRecorder();
   const output = generate({
