@@ -20,6 +20,8 @@ export const PILOT_DEFERRED = [
   "service-suites",
   "postgres-service-suites",
   "migration-upgrade-rehearsal",
+  "database-migrations-check",
+  "database-migrations-apply-fresh",
   "release-typecheck",
   "fix-tests-on-base",
   "web-build",
