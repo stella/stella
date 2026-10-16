@@ -4,11 +4,11 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { countsTowardsWaterfall } from "./network";
+import { countsTowardsWaterfall } from "../helpers/network";
 import {
   createNetworkRoundController,
   NETWORK_ROUND_SETTLE_MS,
-} from "./network-rounds";
+} from "../helpers/network-rounds";
 
 type Node = { parents: number[]; duration: number };
 const simulate = (nodes: Node[]) => {

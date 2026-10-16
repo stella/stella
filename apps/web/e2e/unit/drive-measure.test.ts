@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { collectSeparateNavigationMeasurements } from "./drive-measure";
+import { collectSeparateNavigationMeasurements } from "../agent/drive-measure";
 
 test("depth collection never installs a hold on the performance navigation", async () => {
   let requestHoldInstalled = false;
