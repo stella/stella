@@ -312,6 +312,10 @@ describe("PostHog browser analytics adapter", () => {
     ],
     ["signed-out session", { type: "AuthClientError", value: "x" }],
     [
+      "a provider failure with setup guidance",
+      { type: "ProviderDiagnosticError", value: "x" },
+    ],
+    [
       "a React removeChild race",
       {
         type: "NotFoundError",

@@ -33,6 +33,7 @@ type CaseLawSearchWarningsOptions = {
    * Empty when the query required every word it carried.
    */
   droppedFunctionWords: readonly string[];
+  partialHitCount?: number;
   /** Filters the request narrowed with, empty for an unnarrowed search. */
   filters: CaseLawSearchFilterNames;
   /**
@@ -82,12 +83,21 @@ const noHitsFilteredWarning = (
  */
 export const caseLawSearchWarnings = ({
   droppedFunctionWords,
+  partialHitCount = 0,
   filters,
   emptyResultSet,
 }: CaseLawSearchWarningsOptions): CaseLawSearchWarning[] => {
   const warnings: CaseLawSearchWarning[] = [];
   if (droppedFunctionWords.length > 0) {
     warnings.push(functionWordsWarning(droppedFunctionWords));
+  }
+  if (partialHitCount > 0) {
+    warnings.push(
+      partialMatchesAppendedWarning({
+        partial: partialHitCount,
+        countsStrictSet: true,
+      }),
+    );
   }
   if (!emptyResultSet) {
     return warnings;
@@ -116,16 +126,12 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
- * - `partial_matches_appended`: a short, exhausted first page was topped up
- *   with decisions that hold only some of the query's words. Each such hit is
- *   marked `some_terms`; the total and facets still describe the strict set.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
   "filter_dropped",
   "many_required_terms",
   "provision_cited_widely",
-  "partial_matches_appended",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -221,7 +227,7 @@ export const partialMatchesAppendedWarning = ({
    * uncounted and the facets describe the first phrasing only).
    */
   countsStrictSet: boolean;
-}): AgentCaseLawSearchWarning => ({
+}): CaseLawSearchWarning => ({
   code: "partial_matches_appended",
   message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
   hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
@@ -258,6 +264,8 @@ export const CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   function_words_optional: () => functionWordsWarning(["na"]),
   no_hits: noHitsWarning,
   no_hits_filtered: () => noHitsFilteredWarning(["court"]),
+  partial_matches_appended: () =>
+    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
 } as const satisfies Record<
   CaseLawSearchWarningCode,
   () => CaseLawSearchWarning
@@ -282,8 +290,6 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       provision: "§ 2910 OZ",
       citingDecisions: 4037,
     }),
-  partial_matches_appended: () =>
-    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
       terms: [

@@ -36,11 +36,13 @@ const runYield = async ({
   queueWaiting,
   yieldStatus,
   actor = "octocat",
+  enabled = true,
 }: {
   attempt: number;
   queueWaiting: boolean;
   yieldStatus?: string;
   actor?: string;
+  enabled?: boolean;
 }) => {
   const statuses: { state: string; context: string }[] = [];
   const cancelled: number[] = [];
@@ -53,7 +55,12 @@ const runYield = async ({
       payload: { pull_request: { head: { sha: "head-1" } } },
     },
     core: { notice: () => {} },
-    process: { env: { GITHUB_RUN_ATTEMPT: String(attempt) } },
+    process: {
+      env: {
+        GITHUB_RUN_ATTEMPT: String(attempt),
+        CI_YIELD_TO_MERGE_QUEUE: enabled ? "on" : "",
+      },
+    },
     setTimeout: (resolve: () => void) => {
       resolve();
     },
@@ -138,4 +145,20 @@ test("a re-run of a head that never deferred writes no status", async () => {
   expect(
     await runYield({ attempt: 2, queueWaiting: true, yieldStatus: "success" }),
   ).toEqual({ statuses: [], cancelled: [] });
+});
+
+test("switched off, a first run never defers, and a re-run still clears a deferral", async () => {
+  expect(
+    await runYield({ attempt: 1, queueWaiting: true, enabled: false }),
+  ).toEqual({ statuses: [], cancelled: [] });
+  expect(
+    await runYield({
+      attempt: 2,
+      queueWaiting: true,
+      yieldStatus: "pending",
+      enabled: false,
+    }),
+  ).toEqual(
+    await runYield({ attempt: 2, queueWaiting: true, yieldStatus: "pending" }),
+  );
 });

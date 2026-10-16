@@ -529,6 +529,70 @@
     },
     "hourlyRateMustBeNonNegative": "La tarifa por hora no puede ser negativa",
     "hours": "Horas",
+    "invoiceComposer": {
+      "addSellerProfile": "Añada un perfil de vendedor en la configuración de facturación",
+      "billedHours": "Horas facturadas",
+      "buyer": "Cliente (comprador)",
+      "continueToDetails": "Continuar con los datos",
+      "continueToIssue": "Continuar con la emisión",
+      "datesAndPayment": "Fechas y pago",
+      "days": "{days, plural, one {# día} other {# días}}",
+      "draftSavedTitle": "Borrador de factura guardado",
+      "dueIn": "Vence en",
+      "dueOn": "vence el {date}",
+      "flatFee": "Este asunto tiene honorarios fijos: la factura cobra los {amount} acordados y el tiempo de abajo queda cubierto por ellos.",
+      "flatFeeLine": "Honorarios fijos acordados",
+      "include": "Incluir en esta factura",
+      "issueFailed": "El borrador se guardó, pero no se pudo emitir la factura.",
+      "issueInvoice": "Emitir factura",
+      "issuedTitle": "Factura {number} emitida",
+      "lines": "Líneas de la factura",
+      "loggedHours": "{hours} h registradas",
+      "noCharge": "Sin cargo",
+      "noClient": "Este asunto no tiene cliente, por lo que la factura aún no tiene comprador.",
+      "noExpenses": "No hay gastos aprobados sin facturar en este asunto.",
+      "noTime": "No hay tiempo aprobado sin facturar en este asunto.",
+      "noVat": "Sin IVA",
+      "nothingToBill": "Aún no hay nada que facturar. Apruebe registros de tiempo o gastos de este asunto para facturarlos.",
+      "openInvoice": "Abrir factura",
+      "otherCurrency": "{count, plural, one {# concepto está registrado} other {# conceptos están registrados}} en una moneda distinta de {currency} y quedan pendientes para otra factura.",
+      "outsideScope": "Fuera del ámbito del IVA, 0 %",
+      "rate": "Tarifa",
+      "readyDescription": "Al emitirla, la factura recibe el siguiente número de su serie y queda bloqueada. Un borrador se puede seguir editando.",
+      "readyTitle": "Lista para emitir",
+      "reverseCharge": "Inversión del sujeto pasivo, 0 %",
+      "saveDraft": "Guardar como borrador",
+      "seller": "Vendedor",
+      "sources": {
+        "client": "Copiado del cliente del asunto",
+        "clientTerm": "Plazo de pago del cliente",
+        "defaultSeller": "Su perfil de vendedor predeterminado",
+        "defaultTerm": "Plazo de pago habitual",
+        "lastWorkDay": "Último día del trabajo incluido"
+      },
+      "steps": {
+        "issue": "Revisar y emitir",
+        "items": "Tiempo y gastos"
+      },
+      "tax": "Impuestos y moneda",
+      "taxableSupplyDate": "Fecha de devengo",
+      "timeEntries": "Registros de tiempo",
+      "timeSummary": "{count, plural, one {# registro} other {# registros}} · {hours} h",
+      "title": "Nueva factura",
+      "totalsSummary": "Base {net} · IVA {vat} · Total {total}",
+      "vat": "Tratamiento del IVA",
+      "vatRate": "IVA {rate} %",
+      "vatReasons": {
+        "clientCountryUnconfirmed": "No se pudo confirmar el país del cliente: su número de IVA y su dirección no indican el mismo país, así que se aplica el tipo general",
+        "clientVatIdInvalid": "El NIF-IVA del cliente no tiene el formato de su país, por lo que se aplica el tipo general",
+        "domesticRate": "Su tipo de IVA más alto vigente en la fecha de devengo",
+        "noSellerProfile": "No hay perfil de vendedor, así que no se cobra IVA hasta que lo indique en la factura",
+        "noVatRate": "No hay ningún tipo de IVA configurado en la facturación",
+        "outsideScope": "El NIF-IVA del cliente está registrado fuera de la UE, por lo que el lugar de prestación está en el extranjero",
+        "reverseCharge": "El número de IVA del cliente está registrado en otro país",
+        "sellerNotVatPayer": "El vendedor no es sujeto pasivo de IVA"
+      }
+    },
     "invoiceNarrative": "Descripción de factura",
     "invoiceNarrativePlaceholder": "Descripción para el cliente (opcional)",
     "invoices": {
@@ -671,7 +735,10 @@
       "registrationId": "Número de registro",
       "setDefault": "Establecer como predeterminado",
       "title": "Perfiles de vendedor",
-      "vatId": "Número de IVA"
+      "vatId": "Número de IVA",
+      "vatPayer": "Sujeto pasivo de IVA",
+      "vatPayerHelp": "Las facturas de este vendedor cobran IVA. Desactívelo para una persona registrada que tiene número de IVA pero no es sujeto pasivo.",
+      "vatPayerRequiresVatId": "Indique el número de IVA para emitir facturas como sujeto pasivo de IVA."
     },
     "settingsTitle": "Facturación",
     "split": {
@@ -749,6 +816,7 @@
         "answerIncomplete": "{source, select, organization {La clave de {provider} de tu organización devolvió una respuesta incompleta.} other {El modelo de IA devolvió una respuesta incompleta.}}",
         "providerRefused": "{source, select, organization {{provider} rechazó la solicitud hecha con la clave de tu organización. Revisa la clave, su cuota y la facturación en la configuración de la organización.} other {El proveedor de IA rechazó la solicitud.}}",
         "providerUnavailable": "{source, select, organization {{provider} no está disponible ahora mismo para la clave de tu organización.} other {El proveedor de IA no está disponible ahora mismo.}}",
+        "retryAfter": "Podrá intentarlo de nuevo a partir del {time}.",
         "timedOut": "{source, select, organization {{provider} no respondió a tiempo con la clave de tu organización.} other {El modelo de IA no respondió a tiempo.}}",
         "unavailable": "El análisis con IA no está disponible para esta resolución."
       },
@@ -1003,6 +1071,8 @@
         "hint": "Quite o amplíe un filtro y vuelva a buscar.",
         "message": "Nada coincide con los filtros aplicados."
       },
+      "partialMatch": "Coincidencia parcial",
+      "partialMatches": "Coincidencias parciales para: <bdi>{query}</bdi>",
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
@@ -1045,6 +1115,13 @@
       "provisionMentions": "{count, number}×",
       "provisionMentionsLabel": "{count, plural, one {# mención} other {# menciones}}",
       "provisionsCited": "Disposiciones citadas",
+      "provisionsFailed": "El procesamiento de citas ha fallado",
+      "provisionsNoneFound": "No se encontraron disposiciones citadas",
+      "provisionsProcessing": "Las citas se están procesando",
+      "provisionsUnavailable": "Las citas no están disponibles",
+      "provisionsUnplaceable": "Las citas no pueden ubicarse en el texto de la resolución",
+      "provisionsUnsupported": "El procesamiento de citas no está disponible para esta resolución",
+      "provisionsWithheld": "Las citas no se divulgan",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
         "publishedOnWeb": "Publicado en la web"
@@ -1295,6 +1372,7 @@
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
     },
+    "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
     "improvePromptDraftChanged": "El borrador cambió, por lo que no se aplicó la mejora.",
     "improvePromptPlainTextOnly": "La mejora de prompts solo está disponible para texto sin formato.",
@@ -1326,6 +1404,7 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "messageUnavailable": "Este mensaje no se puede mostrar.",
     "mockModel": {
       "description": "Respuestas predefinidas del modelo simulado local",
       "label": "IA simulada"
@@ -1485,6 +1564,18 @@
       "rejected": "Rechazado"
     },
     "tabToAsk": "→ para preguntar: \"{prompt}\"",
+    "tableChart": {
+      "bar": "Barras",
+      "kind": "Tipo de gráfico",
+      "line": "Líneas",
+      "loading": "Seleccionando un gráfico…",
+      "pie": "Circular",
+      "scatter": "Dispersión",
+      "showChart": "Mostrar como gráfico",
+      "summary": "Valores mostrados: {n, number}.",
+      "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
+      "values": "{label}: {value, number}"
+    },
     "thinking": "Trabajando con contexto",
     "threadFiles": {
       "title": "Archivos de este chat"
@@ -4667,9 +4758,19 @@
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. El historial completado del espacio de trabajo seguirá atribuido a su cuenta eliminada.",
       "desktop": "Escritorio",
       "desktopAppDescription": "Recupera todo lo que copies y abre documentos de stella en las aplicaciones de escritorio que ya utilizas.",
+      "desktopCardApproveDetail": "Aprueba para vincular este equipo a <bdi>{identity}</bdi> en {host}.",
+      "desktopCardApproveTitle": "stella desktop pide conectarse",
+      "desktopCardConnectedDetail": "Vinculado a <bdi>{identity}</bdi> en {host} · versión {version}",
+      "desktopCardConnectedDetailNoVersion": "Vinculado a <bdi>{identity}</bdi> en {host}",
+      "desktopCardConnectedTitle": "stella desktop está vinculado",
+      "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
+      "desktopCardMissingTitle": "stella desktop aún no está vinculado",
+      "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
+      "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
       "desktopClipboardTitle": "Historial del portapapeles con búsqueda",
       "desktopConnectFailed": "No se pudo conectar con stella desktop.",
+      "desktopConnectInstalled": "Ya está instalado, conectar",
       "desktopConnectedAs": "Conectado como <bdi>{email}</bdi>",
       "desktopDescription": "Historial del portapapeles y herramientas de documentos en tu ordenador",
       "desktopDocumentsDescription": "Abre archivos de stella en aplicaciones de escritorio; las revisiones vuelven al asunto correcto.",

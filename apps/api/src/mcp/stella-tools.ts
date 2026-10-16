@@ -2689,7 +2689,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
   } = parsed.output;
   const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
-  const unavailable = publicCountryUnavailable(country);
+  const unavailable = publicCountryUnavailable(country, "search");
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -2856,9 +2856,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         warnings: [
           ...filterWarnings,
           ...provisionRead.warnings,
-          ...outcome.page.warnings.map((warning) =>
-            withFacetValues(warning, values),
-          ),
+          // Recount partial matches after deduplication: another phrasing
+          // may have promoted a partial hit to a full match.
+          ...outcome.page.warnings
+            .filter(({ code }) => code !== "partial_matches_appended")
+            .map((warning) => withFacetValues(warning, values)),
           ...phrasingAnswerWarnings({
             guidance,
             subCursor,
@@ -3497,6 +3499,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       // interest counts as demand.
       caller: "attributed",
       documentHydration,
+      surface: "search",
     });
 
   // The deployment's half of every document-state answer, resolved once for
@@ -3598,6 +3601,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
           await readDigest({
             caseLawDb: caseLawPublicReadDb,
             decisionId: brandPersistedCaseLawDecisionId(decisionId),
+            surface: "search",
           }),
         ] as const,
     }),
@@ -3659,6 +3663,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     direction,
     limit,
+    surface: "search",
   });
   if (read === null) {
     return notFoundResult(

@@ -115,6 +115,18 @@ export type ReaderPage = {
             cited_anchor?: string | undefined;
           };
         }>;
+        provisionStatus: {
+          type:
+            | "out_of_scope"
+            | "withheld"
+            | "unavailable"
+            | "unplaceable"
+            | "failed"
+            | "current"
+            | "stale"
+            | "legacy"
+            | "pending";
+        } | null;
         nextCursor: string | null;
         limit: 60000;
       }
@@ -336,6 +348,7 @@ export type SearchResults =
             ecli: string | null;
             appUrl: string | null;
             source_url?: string | undefined;
+            match: "all_terms" | "some_terms";
             snippet: string | null;
             headnote: {
               type: "present";
@@ -357,6 +370,7 @@ export type SearchResults =
             ecli: string | null;
             appUrl: string | null;
             source_url?: string | undefined;
+            match: "all_terms" | "some_terms";
             excerpt: {
               type: "withheld";
               reason: "source_licence";

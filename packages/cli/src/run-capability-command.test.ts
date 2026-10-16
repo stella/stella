@@ -719,6 +719,34 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("JSON output preserves full and partial case-law matches and their warning", async () => {
+    const payload = {
+      results: [
+        { decisionId: "decision-1", match: "all_terms" },
+        { decisionId: "decision-2", match: "some_terms" },
+      ],
+      searches: [{ warnings: [{ code: "partial_matches_appended" }] }],
+      nextCursor: null,
+    };
+    const server = startServer({ kind: "pages", pages: [payload] });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "json" },
+      spec: capSpec({
+        capabilityId: "case-law.decisions.search",
+        itemsKey: "results",
+      }),
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(JSON.parse(tty.stdoutText())).toEqual(payload);
+  });
+
   test("a page under `result` renders as a table with its resume cursor", async () => {
     const server = startServer({
       kind: "pages",

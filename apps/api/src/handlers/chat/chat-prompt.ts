@@ -143,8 +143,8 @@ import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
 import {
-  publishedLegislationDocument,
-  redistributableLegislationVersion,
+  publishedLegislationDocumentFor,
+  redistributableLegislationVersionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
@@ -2264,6 +2264,7 @@ export const buildActiveDecisionSection = async ({
         try: async () => {
           const row = await withRedistributableSubject(
             caseLawDb,
+            "search",
             { kind: "id", id: activeDecision.decisionId },
             async ({ id, tx }) =>
               await tx.query.caseLawDecisions.findFirst({
@@ -2569,7 +2570,7 @@ const readActiveStatuteFulltext = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            redistributableLegislationVersion,
+            redistributableLegislationVersionFor("search"),
           ),
         )
         .limit(1),
@@ -2653,7 +2654,7 @@ export const buildActiveStatuteSection = async ({
                 .where(
                   and(
                     eq(legislationDocuments.id, activeStatute.documentId),
-                    publishedLegislationDocument,
+                    publishedLegislationDocumentFor("search"),
                   ),
                 )
                 .limit(1),
@@ -2668,6 +2669,7 @@ export const buildActiveStatuteSection = async ({
 
           // Outside the transaction above: the AST lives in object storage.
           const blocks = await readVersionBlocks({
+            surface: "search",
             row: version,
             legislationDb,
             step: ACTIVE_STATUTE_READ_STEP,

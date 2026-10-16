@@ -96,14 +96,8 @@ export const prDepthJobs = (workflow: unknown) => {
   ) {
     panic("Expected FAST_REQUIRED job names");
   }
-  // Docs-only checks certify ordinary PRs and merge groups. Heavy dispatches
-  // select package checks instead, so the scheduled main run cannot prove them.
   return fastRequired.filter(
-    (job) =>
-      job !== "ci-checks-docs" &&
-      (job === "ci-generated-sources" ||
-        job.startsWith("ci-checks-") ||
-        job.startsWith("code-quality-")),
+    (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
   );
 };
 

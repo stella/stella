@@ -32,6 +32,7 @@ import {
   SEARCH_TOTAL_NOT_COUNTED,
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
+  type DecisionSearchMatch,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -159,7 +160,6 @@ import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
 } from "@/api/lib/case-law/redistribution";
-import type { DecisionSearchMatch } from "@/api/lib/case-law/search-match";
 import {
   bodyPreviewJoin,
   publicCaseLawDecisionJoin,
@@ -381,6 +381,7 @@ export const searchDecisionsHandler = async ({
 }: SearchDecisionsHandlerArgs) => {
   const countryRead = readPublicLawCountry(body.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -455,6 +456,7 @@ export const CASE_LAW_SEARCH_FACETS = [
 ] as const satisfies readonly CaseLawSearchFacet[];
 
 type CaseLawSearchPlanOptions = {
+  match?: "all" | "any";
   body: PostgresSearchBody;
   configs: readonly FtsSearchConfig[];
   courtWeights: CourtWeightMap;
@@ -482,6 +484,7 @@ type CaseLawSearchPlan = {
  * so the reader-role suite executes these exact statements under SET ROLE.
  */
 export const caseLawSearchPlan = ({
+  match = "all",
   body,
   configs,
   courtWeights,
@@ -493,6 +496,7 @@ export const caseLawSearchPlan = ({
   sort,
 }: CaseLawSearchPlanOptions): CaseLawSearchPlan => {
   const ftsSearch = buildPgFtsSearchSql({
+    match,
     configs,
     query: queryUsed,
     refs: {
@@ -615,6 +619,7 @@ export const caseLawSearchPlan = ({
       SELECT
         sd.decision_id,
         d.language_group_key,
+        ${match === "any" ? ftsSearch.coverage : sql`0`} AS term_coverage,
         ${sortKeyExpr} AS sort_key,
         cb.cnt AS citation_count,
         cb.authority AS citation_authority
@@ -637,8 +642,11 @@ export const caseLawSearchPlan = ({
         SELECT 1
         FROM matched sibling
         WHERE sibling.language_group_key = m.language_group_key
-          AND (sibling.sort_key, sibling.decision_id)
-            > (m.sort_key, m.decision_id)
+          AND ${
+            match === "any"
+              ? sql`(sibling.term_coverage, sibling.sort_key, sibling.decision_id) > (m.term_coverage, m.sort_key, m.decision_id)`
+              : sql`(sibling.sort_key, sibling.decision_id) > (m.sort_key, m.decision_id)`
+          }
       )
   `;
 
@@ -694,7 +702,7 @@ export const caseLawSearchPlan = ({
     ${bodyPreviewJoin}
     WHERE ${representativeFilter}
       ${cursorFilter}
-    ORDER BY m.sort_key DESC, m.decision_id DESC
+    ORDER BY ${match === "any" ? sql`m.term_coverage DESC,` : sql``} m.sort_key DESC, m.decision_id DESC
     LIMIT ${limit + 1}
     OFFSET ${offset}
   `;
@@ -882,7 +890,7 @@ export const readCaseLawSearchFacet = definePublicLawSharedQuery(
   ): Promise<RawRows> => await tx.execute(plan.facets[facet]),
 );
 
-const searchPostgresDecisions = async (
+export const searchPostgresDecisions = async (
   body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
@@ -909,14 +917,15 @@ const searchPostgresDecisions = async (
   // Resolved here as well as on the corpus branch, through the same helper:
   // which words a search required is a property of the request, not of the
   // engine that answered it, so both providers must answer it identically.
+  const intent = parseDecisionQuery(body.query, {
+    grammar: decisionDocketGrammarForCountry(body.country),
+    reporters: decisionReporterGrammarForJurisdiction(body.country),
+  });
   const interpretation = interpretDecisionQuery({
     body,
     // Provision-reference grouping is supported only by the corpus index.
     configuredVariant: "off",
-    intent: parseDecisionQuery(body.query, {
-      grammar: decisionDocketGrammarForCountry(body.country),
-      reporters: decisionReporterGrammarForJurisdiction(body.country),
-    }),
+    intent,
   });
 
   const configs = await loadPublicFtsSearchConfigs();
@@ -968,7 +977,45 @@ const searchPostgresDecisions = async (
     ),
   ]);
 
-  const hitsResult = arrayOrEmpty(hitsResultRaw);
+  const strictHitsResult = arrayOrEmpty(hitsResultRaw);
+  const requiredTerms = partitionCorpusFunctionWords(
+    tokenizeCorpusFreeText(body.query),
+    interpretation.functionWords,
+  ).required;
+  const relaxed =
+    strictHitsResult.length === 0 &&
+    shouldRelaxCaseLawSearch({
+      body,
+      intentType: intent.type,
+      isFirstPage,
+      requiredTermCount: requiredTerms.length,
+      sort,
+      strictHitCount: strictHitsResult.length,
+      limit,
+      strictEnd: SEARCH_PAGE_END.COMPLETE,
+    });
+  const hitsResult = relaxed
+    ? arrayOrEmpty(
+        await caseLawDb(
+          async (tx) =>
+            await readCaseLawSearchHits(
+              tx,
+              caseLawSearchPlan({
+                body,
+                configs,
+                courtWeights,
+                excerpt,
+                limit,
+                offset,
+                parsedCursor,
+                queryUsed: interpretation.queryUsed,
+                sort,
+                match: "any",
+              }),
+            ),
+        ),
+      )
+    : strictHitsResult;
   const countResult = arrayOrEmpty(countResultRaw);
 
   const hasMore = hitsResult.length > limit;
@@ -988,7 +1035,7 @@ const searchPostgresDecisions = async (
 
   const lastRaw = resultRows.at(-1);
   const nextCursor =
-    hasMore && lastRaw
+    !relaxed && hasMore && lastRaw
       ? encodeDecisionSearchCursor({
           id: String(lastRaw["decision_id"]),
           sort,
@@ -1048,10 +1095,7 @@ const searchPostgresDecisions = async (
       // Whole-decision scoring has no passages to count, so the breadth
       // signal is the one match the decision itself is.
       matchingPassages: 1,
-      // Postgres FTS is strict-only: the relaxed, coverage-ranked phase of
-      // the corpus-index branch has no counterpart here in v1, so every hit
-      // satisfies the whole query.
-      match: "all_terms" as const,
+      match: relaxed ? ("some_terms" as const) : ("all_terms" as const),
       createdAt:
         row["created_at"] instanceof Date
           ? row["created_at"].toISOString()
@@ -1093,6 +1137,13 @@ const searchPostgresDecisions = async (
         language: facetBuckets(languageResultRaw),
       };
 
+  const answer = searchAnswer({
+    body,
+    interpretation,
+    hitCount: hits.length,
+    partialHitCount: relaxed ? hits.length : 0,
+    countsResultSet: isFirstPage,
+  });
   return projectCaseLawSearchResponse(
     {
       hits,
@@ -1101,12 +1152,7 @@ const searchPostgresDecisions = async (
       nextCursor,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
-      ...searchAnswer({
-        body,
-        interpretation,
-        hitCount: hits.length,
-        countsResultSet: isFirstPage,
-      }),
+      ...answer,
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );
@@ -2972,6 +3018,14 @@ export const searchCorpusIndexDecisions = async ({
         interpretation.droppedFunctionWords.length,
     });
   }
+  const answer = searchAnswer({
+    body,
+    interpretation,
+    hitCount: hits.length,
+    partialHitCount: relaxedHits.length,
+    countsResultSet:
+      isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
+  });
   return projectCaseLawSearchResponse(
     {
       ...page,
@@ -2979,13 +3033,7 @@ export const searchCorpusIndexDecisions = async ({
       hits,
       paginationOutcome: searchPage.paginationOutcome,
       pageReach: searchPage.reach,
-      ...searchAnswer({
-        body,
-        interpretation,
-        hitCount: hits.length,
-        countsResultSet:
-          isFirstPage && searchPageEnd(searchPage) === SEARCH_PAGE_END.COMPLETE,
-      }),
+      ...answer,
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),
   );

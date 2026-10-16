@@ -79,6 +79,7 @@ const benchDecisions = (): Decision[] =>
     const sequence = 1400 + index * 7;
     return {
       id: `bench-${index}`,
+      match: "all_terms",
       caseNumber: `${senate} Cdo ${sequence}/2024`,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: `ECLI:BENCH:2024:${senate}.CDO.${sequence}.1`,

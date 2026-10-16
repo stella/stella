@@ -10,13 +10,13 @@ import {
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { DECISION_SEARCH_MATCHES } from "../case-law/search-match";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";

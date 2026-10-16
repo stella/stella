@@ -37,22 +37,19 @@ type SearchCaseLawTexts = {
 };
 
 const DESCRIPTION_HEAD =
-  "Search case law within one country. `queries` merges phrasings of " +
-  "one question; matchedQueries names those behind each hit. " +
-  "`limit` is the merged page, split evenly " +
-  "across them.";
+  "Search case law. `queries` merges phrasings; matchedQueries " +
+  "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Filters: court, language, dates, decision type, provision, " +
-  "source_id (a `facets.source` bucket's `value`). Facets describe the " +
-  "first phrasing, page one only. Total is uncounted for " +
-  "multiple phrasings. Function words are not required terms; " +
-  "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
-  "`strict` requires every word. Hits carry citationAuthority, " +
-  "matchingPassages, match (some_terms: not all words), resourceName and caseNumber " +
-  "(a citable reference, not always a docket). read_case_law_decision " +
-  "types it; read_case_law_citations " +
-  "gives citing polarity.";
+  " Without strict, empty first relevance pages try some_terms hits ranked " +
+  "by term coverage; short pages may append them after all_terms hits. " +
+  "Totals/facets count full matches (facets: first phrasing, page one; total: " +
+  "uncounted for multiple phrasings). Filters: court, language, dates, " +
+  "decision type, provision, source_id (facets.source value). searches[] " +
+  "reports queryUsed and warnings. strict requires every word; otherwise " +
+  "function words are optional. Hits carry match, citationAuthority, " +
+  "matchingPassages, resourceName and caseNumber. read_case_law_decision " +
+  "types the reference; read_case_law_citations gives citing polarity.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.";
@@ -79,12 +76,7 @@ const SEARCH_CASE_LAW_TEXTS = {
     courts: `Match any listed court. For Czech apex courts use ["NS", "NSS", "ÚS"]. ${COURTS_TAIL}`,
   },
   v1: {
-    description:
-      `${DESCRIPTION_HEAD} Put the most central phrasing first; three are ` +
-      "usually enough. An all_terms hit is a passage holding every word of " +
-      "a phrasing except function words; some_terms hits only top up a short " +
-      "page. Keep each phrasing to the few words that " +
-      `define the issue.${DESCRIPTION_TAIL}`,
+    description: `${DESCRIPTION_HEAD} Put the most central phrasing first; three are usually enough.${DESCRIPTION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
       "A full match needs every word of a phrasing except function words in " +

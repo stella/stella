@@ -10,6 +10,7 @@ import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types"
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
 } from "@stll/api-contract/search";
@@ -29,7 +30,6 @@ import { tDecisionPageOffset } from "@/api/lib/case-law/decision-page-offset";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { caseLawProvisionFilterSchema } from "@/api/lib/case-law/provision-filter";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
-import { DECISION_SEARCH_MATCHES } from "@/api/lib/case-law/search-match";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   tPaginationCursor,

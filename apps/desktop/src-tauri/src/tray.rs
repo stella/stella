@@ -15,6 +15,7 @@ struct TrayMainThread;
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
+const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
 const OPEN_ACTIVITY_ACTION: &str = "open-activity";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
@@ -266,6 +267,14 @@ fn build_tray_menu_with_activity(
   );
   builder = builder.separator();
 
+  if crate::account::reconnect_needed() {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(RECONNECT_ACCOUNT_ACTION, t("tray.reconnectAccount"))
+        .build(app)?,
+    );
+    builder = builder.separator();
+  }
+
   builder = builder.item(
     &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
   );
@@ -419,7 +428,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == QUIT_ACTION {
     return MenuAction::Quit;
   }
-  if action == OPEN_PREFERENCES_ACTION {
+  if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
     return MenuAction::OpenPreferences("general");
   }
   if action == OPEN_CLIPBOARD_ACTION {
@@ -513,6 +522,14 @@ mod tests {
     for locale in crate::i18n::shipped_locales() {
       assert!(!format_activity_hours(18_720_000, locale).is_empty());
     }
+  }
+
+  #[test]
+  fn reconnect_opens_the_account_settings() {
+    assert!(matches!(
+      handle_menu_action(RECONNECT_ACCOUNT_ACTION),
+      MenuAction::OpenPreferences("general")
+    ));
   }
 
   #[test]

@@ -29,8 +29,21 @@ export const WEB_ANALYTICS_EVENTS = {
 export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
+// An Eden treaty error envelope carries the API status and body unparsed;
+// captured raw, analytics loses both. Callers convert it with `toAPIError`.
+type EdenErrorEnvelope = { status: number; value: unknown };
+
+export type NotEdenErrorEnvelope<E> = E extends Error
+  ? E
+  : E extends EdenErrorEnvelope
+    ? never
+    : E;
+
 export type Analytics = {
-  captureError: (error: unknown, context?: ErrorCaptureContext) => void;
+  captureError: <E>(
+    error: E & NotEdenErrorEnvelope<E>,
+    context?: ErrorCaptureContext,
+  ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   captureFeedbackDialogOpened: (

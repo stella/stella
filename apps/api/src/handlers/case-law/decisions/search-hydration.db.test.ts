@@ -31,6 +31,7 @@ import {
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
   searchCorpusIndexDecisions,
+  searchPostgresDecisions,
 } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
@@ -179,9 +180,18 @@ beforeAll(
     ) => {
       reads += 1;
       return await withPublicLawReaderRole(db, async (roleTx) => {
+        const adaptedTx = {
+          select: roleTx.select.bind(roleTx),
+          query: roleTx.query,
+          execute: async (statement: Parameters<typeof roleTx.execute>[0]) => {
+            const result = await roleTx.execute(statement);
+            // Public SQL readers accept postgres-js arrays and PGlite's rows envelope.
+            return Object.assign(result.rows, { rows: result.rows });
+          },
+        };
         // SAFETY: the role transaction supplies the select surface the reads use.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
-        const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+        const tx = adaptedTx as unknown as CaseLawPublicReadTransaction;
         return await fn(tx);
       });
     };
@@ -811,7 +821,7 @@ test("a short strict page is topped up with new partial matches only, after the 
       },
     });
     if (!("hits" in result)) {
-      return panic("Expected a successful indexed search page");
+      panic("Expected a successful indexed search page");
     }
     return { result, scans };
   };
@@ -852,6 +862,266 @@ test("a short strict page is topped up with new partial matches only, after the 
         held.map(({ intent }) => intent.id),
       ),
     );
+  }
+});
+
+test.each([
+  { strictHitCount: 0, configuredVariant: "off" as const },
+  { strictHitCount: 1, configuredVariant: "off" as const },
+  { strictHitCount: 0, configuredVariant: "core-stems-first" as const },
+  { strictHitCount: 1, configuredVariant: "core-stems-first" as const },
+])(
+  "a six-word question with $strictHitCount full matches reports its matching mode ($configuredVariant)",
+  async ({ strictHitCount, configuredVariant }) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const query = "promlčení nároku náhrada škody smlouva odpovědnost";
+    expect(query.split(" ")).toHaveLength(6);
+    const held = [czechId, projectedId].map((entityId) =>
+      heldProjection({
+        entityId,
+        generation: manifest.generation,
+        indexId,
+        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+      }),
+    );
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(corpusIndexProjectionIntents)
+      .values(held.map(({ intent }) => intent));
+    await db
+      .insert(corpusIndexProjectionStates)
+      .values(held.map(({ state }) => state));
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    let scans = 0;
+    const engine = getCorpusIndexClient(manifest.cluster);
+    const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+      async () => {
+        scans += 1;
+        const strictIds = strictHitCount === 0 ? [] : [czechId];
+        const ids = scans === 1 ? strictIds : [czechId, projectedId];
+        return await Promise.resolve(
+          Result.ok({
+            numHits: ids.length,
+            hits: ids.map((id, index) => ({
+              fields: { document_id: id, anchor_id: `${id}-p` },
+              score: 10 - index,
+            })),
+          }),
+        );
+      },
+    );
+    const snippets = new Map([
+      [czechId, strictHitCount === 0 ? "promlčení" : query],
+      [projectedId, "promlčení nároku náhrada škody"],
+    ]);
+    const searchSpy = spyOn(engine, "search").mockImplementation(
+      async (options) => {
+        const ids = [czechId, projectedId].filter((id) =>
+          options.query.includes(id),
+        );
+        return await Promise.resolve(
+          Result.ok({
+            numHits: ids.length,
+            hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
+            snippets: ids.map((id) => ({
+              text: [snippets.get(id) ?? panic("Expected a fixture excerpt")],
+            })),
+          }),
+        );
+      },
+    );
+    const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+      async ({ aggs }) => {
+        const answered: Record<string, unknown> = {};
+        for (const name of Object.keys(aggs)) {
+          answered[name] =
+            name === "total" ? { value: strictHitCount } : { buckets: [] };
+        }
+        return await Promise.resolve(Result.ok(answered));
+      },
+    );
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: { country: "CZE", query, limit: strictHitCount === 0 ? 2 : 1 },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant,
+          loadCourtWeights: async () => await Promise.resolve(courtWeights),
+          readSourceRegistry: async () =>
+            await Promise.resolve(
+              Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+            ),
+          readServingTarget: async () =>
+            await Promise.resolve(
+              Result.ok({
+                ...resolution.target,
+                manifest,
+                serving: {
+                  family: "case_law",
+                  generation: manifest.generation,
+                  cluster: manifest.cluster,
+                },
+              }),
+            ),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      const warningCodes = result.warnings.map(({ code }) => code);
+      expect(warningCodes.includes("partial_matches_appended")).toBe(
+        strictHitCount === 0,
+      );
+      expect(warningCodes).not.toContain("no_hits");
+      expect(warningCodes).not.toContain("no_hits_filtered");
+      // The strict engine deliberately returns no candidate in the zero case;
+      // the lower-scored partial hit covers four terms and must rank first.
+      expect(scans).toBe(strictHitCount === 0 ? 2 : 1);
+      expect(
+        result.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+      ).toEqual(
+        strictHitCount === 0
+          ? [
+              { decisionId: String(projectedId), match: "some_terms" },
+              { decisionId: String(czechId), match: "some_terms" },
+            ]
+          : [{ decisionId: String(czechId), match: "all_terms" }],
+      );
+    } finally {
+      scoredSpy.mockRestore();
+      searchSpy.mockRestore();
+      aggregateSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db.delete(corpusIndexProjectionStates).where(
+        and(
+          inArray(
+            corpusIndexProjectionStates.entityId,
+            held.map(({ state }) => state.entityId),
+          ),
+          eq(corpusIndexProjectionStates.generation, manifest.generation),
+        ),
+      );
+      await db.delete(corpusIndexProjectionIntents).where(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          held.map(({ intent }) => intent.id),
+        ),
+      );
+    }
+  },
+);
+
+test("Postgres relaxes an empty six-term question using whole-document term coverage", async () => {
+  const db = drizzle({ client });
+  const query = "promlčení nároku náhrada škody smlouva odpovědnost";
+  const fixtures = [
+    { id: czechId, text: "promlčení" },
+    { id: projectedId, text: "promlčení nároku náhrada škody" },
+  ];
+  const prior = await db
+    .select()
+    .from(caseLawSearchDocuments)
+    .where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+  resetPublicCaseLawConfigForTesting(caseLawDb);
+  try {
+    await db.delete(caseLawSearchDocuments).where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+    await db.insert(caseLawSearchDocuments).values(
+      fixtures.map(({ id, text }) => ({
+        decisionId: id,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: text,
+        tsv: sql`to_tsvector('simple', unaccent(${text}))`,
+      })),
+    );
+    const body = { country: "CZE", query, limit: 2 };
+    const strict = await searchPostgresDecisions(
+      { ...body, strict: true },
+      caseLawDb,
+    );
+    if (!("hits" in strict)) {
+      panic("Expected a successful strict Postgres search");
+    }
+    expect(strict.hits).toEqual([]);
+    const relaxed = await searchPostgresDecisions(body, caseLawDb);
+    if (!("hits" in relaxed)) {
+      panic("Expected a successful relaxed Postgres search");
+    }
+    expect(
+      relaxed.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([
+      { decisionId: String(projectedId), match: "some_terms" },
+      { decisionId: String(czechId), match: "some_terms" },
+    ]);
+    expect(relaxed.total).toEqual(strict.total);
+    expect(relaxed.facets).toEqual(strict.facets);
+    expect(relaxed.nextCursor).toBeNull();
+    expect(relaxed.warnings.map(({ code }) => code)).toContain(
+      "partial_matches_appended",
+    );
+    expect(relaxed.warnings.map(({ code }) => code)).not.toContain("no_hits");
+    expect(relaxed.warnings.map(({ code }) => code)).not.toContain(
+      "no_hits_filtered",
+    );
+    await db
+      .update(caseLawSearchDocuments)
+      .set({
+        searchableText: query,
+        tsv: sql`to_tsvector('simple', unaccent(${query}))`,
+      })
+      .where(eq(caseLawSearchDocuments.decisionId, czechId));
+    const full = await searchPostgresDecisions(body, caseLawDb);
+    if (!("hits" in full)) {
+      panic("Expected a successful full-match Postgres search");
+    }
+    expect(
+      full.hits.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([{ decisionId: String(czechId), match: "all_terms" }]);
+    expect(full.warnings.map(({ code }) => code)).not.toContain(
+      "partial_matches_appended",
+    );
+  } finally {
+    resetPublicCaseLawConfigForTesting();
+    await db.delete(caseLawSearchDocuments).where(
+      inArray(
+        caseLawSearchDocuments.decisionId,
+        fixtures.map(({ id }) => id),
+      ),
+    );
+    if (prior.length > 0) {
+      await db.insert(caseLawSearchDocuments).values(prior);
+    }
   }
 });
 
