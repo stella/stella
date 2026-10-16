@@ -36,12 +36,12 @@ const stampSchema = v.strictObject({
   outputHash: hashSchema,
   inputs: payloadInputs,
 });
-const portablePath = /^(?:<(?:real-)?root:\d+>)(?:\/[^\\]*)?$/u;
+const portablePath = /^(?:<(?:real-)?root>)(?:\/[^\\]*)?$/u;
 const assertPortablePath = (value: string) => {
   if (!portablePath.test(value) || value.includes("\0")) {
     panic("OCI payload contains a nonportable path");
   }
-  const relative = value.replace(/^<(?:real-)?root:\d+>\/?/u, "");
+  const relative = value.replace(/^<(?:real-)?root>\/?/u, "");
   const ancestorProbe = relative.replace(/^(?:\.\.(?:\/|$))+/u, "");
   if (
     relative.startsWith("..") &&

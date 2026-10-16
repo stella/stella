@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   mkdir,
   mkdtemp,
+  realpath,
   readFile,
   readdir,
   rm,
@@ -41,9 +42,19 @@ afterEach(async () =>
   ),
 );
 const directory = async () => {
-  const value = await mkdtemp(path.join(tmpdir(), "api-types-oci-"));
+  // The OS temp root can be a symlink (macOS /var -> /private/var); resolve it
+  // so recorded realpaths and fixture paths agree on every host.
+  const value = await realpath(
+    await mkdtemp(path.join(tmpdir(), "api-types-oci-")),
+  );
   temporary.push(value);
   return value;
+};
+const checkoutAt = async (...parents: string[]) => {
+  const base = await directory();
+  const root = path.join(base, ...parents, "stella");
+  await mkdir(root, { recursive: true });
+  return root;
 };
 const run = (cwd: string, ...args: string[]) => {
   const result = Bun.spawnSync(args, { cwd });
@@ -60,7 +71,7 @@ const stamp = (extra: Record<string, unknown> = {}) => ({
   inputs: {
     context: sha256Hex("context"),
     contents: {
-      "<root:5>/node_modules/example/index.d.ts": sha256Hex("dependency"),
+      "<root>/node_modules/example/index.d.ts": sha256Hex("dependency"),
     },
     installed: {},
     files: { present: [], absent: [] },
@@ -163,19 +174,19 @@ describe("web API types OCI payload", () => {
       stamp({
         contents: { "C:\\Users\\runner\\file.ts": sha256Hex("source") },
       }),
-      stamp({ realpaths: { "<root:5>/source": "/private/host/source" } }),
+      stamp({ realpaths: { "<root>/source": "/private/host/source" } }),
       stamp({ files: { present: ["/opt/secret"], absent: [] } }),
       stamp({
-        installed: { "<root:5>/node_modules/example/index.d.ts": "12:123.45" },
+        installed: { "<root>/node_modules/example/index.d.ts": "12:123.45" },
       }),
       stamp({
-        contents: { "<root:5>/node_modules/example/index.d.ts": "12:123.45" },
+        contents: { "<root>/node_modules/example/index.d.ts": "12:123.45" },
       }),
       stamp({
-        contents: { "<root:5>/../../home/runner/secret": sha256Hex("source") },
+        contents: { "<root>/../../home/runner/secret": sha256Hex("source") },
       }),
       stamp({
-        contents: { "<root:5>/apps/../../secret": sha256Hex("source") },
+        contents: { "<root>/apps/../../secret": sha256Hex("source") },
       }),
       { ...stamp(), outputHash: sha256Hex("different output") },
     ];
@@ -218,8 +229,8 @@ describe("web API types OCI payload", () => {
   });
 
   test("portable store entries survive different dependency mtimes and reject changed source", async () => {
-    const sourceRoot = await directory();
-    const destinationRoot = await directory();
+    const sourceRoot = await checkoutAt("a");
+    const destinationRoot = await checkoutAt("b", "c", "d");
     const payload = await directory();
     const sourceStore = await directory();
     const destinationStore = await directory();
@@ -258,7 +269,9 @@ describe("web API types OCI payload", () => {
     const host = recorder.wrap({
       getDirectories: ts.sys.getDirectories,
       readDirectory: ts.sys.readDirectory,
+      realpath: ts.sys.realpath,
     });
+    expect(host.realpath(sourceDependency)).toBe(sourceDependency);
     host.getDirectories(sourceRoot);
     host.readDirectory(
       sourceRoot,
@@ -268,6 +281,10 @@ describe("web API types OCI payload", () => {
     );
     const portable = recorder.portableStamp(context, sourceRoot);
     expect(portable.installed).toEqual({});
+    expect(JSON.stringify(portable)).not.toContain("<root:");
+    expect(portable.realpaths).toEqual({
+      [`<root>/${dependencyRelative}`]: `<root>/${dependencyRelative}`,
+    });
     testState.setEnv("STELLA_GENERATED_STORE", sourceStore);
     publishGeneratedOutput({
       storeDir: generatedStoreDir("web-api-types"),

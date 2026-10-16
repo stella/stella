@@ -109,12 +109,12 @@ export type CompilerInputRecorder = {
 
 // Stands for the checkout root, or its real path, in a portable stamp. Real
 // paths leave the root's spelling when it is reached through a symbolic link
-// (macOS /var and /tmp are), so they move with the real root instead. The
-// depth is part of the token: only a checkout with as many ancestors gets the
-// same module-resolution walk, so only it can reuse the stamp.
-const ROOT_TOKEN_PATTERN = /<(?:real-)?root:\d+>/gu;
-const rootToken = (kind: "root" | "real-root", base: string) =>
-  `<${kind}:${base.split(path.sep).filter(Boolean).length}>`;
+// (macOS /var and /tmp are), so they move with the real root instead. Tokens
+// deliberately omit directory depth: the same repository tree can be restored
+// into a checkout nested under a different number of parent directories.
+const ROOT_TOKEN_PATTERN = /<(?:real-)?root>/gu;
+const ROOT_TOKEN = "<root>";
+const REAL_ROOT_TOKEN = "<real-root>";
 
 // Module resolution walks up from the root: each ancestor's node_modules and
 // package.json scope. Those probes follow the checkout to its new parents;
@@ -203,30 +203,33 @@ const relocateStamp = (
  */
 const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
   const realRoot = realpathSync(root);
-  const token = rootToken("root", root);
-  const realToken = rootToken("real-root", realRoot);
   return relocateStamp(stamp, (value) => {
-    const portable = toPortablePath(value, root, token);
+    const portable = toPortablePath(value, root, ROOT_TOKEN);
     return portable === value
-      ? toPortablePath(value, realRoot, realToken)
+      ? toPortablePath(value, realRoot, REAL_ROOT_TOKEN)
       : portable;
   });
 };
 
 /**
- * Places a portable stamp's relative paths under the checkout `root`, or
- * returns undefined when the stamp came from a root at another depth.
+ * Places a portable stamp's repository-relative paths under checkout `root`.
+ * Absolute paths remain untouched, so the OCI payload validator can reject
+ * every machine-specific path outside the repository.
  */
 export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
   const realRoot = realpathSync(root);
-  const token = rootToken("root", root);
-  const realToken = rootToken("real-root", realRoot);
   const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
-  if (tokens.some((found) => found !== token && found !== realToken)) {
+  if (
+    tokens.some((found) => found !== ROOT_TOKEN && found !== REAL_ROOT_TOKEN)
+  ) {
     return undefined;
   }
   return relocateStamp(stamp, (value) =>
-    toLocalPath(toLocalPath(value, realToken, realRoot), token, root),
+    toLocalPath(
+      toLocalPath(value, REAL_ROOT_TOKEN, realRoot),
+      ROOT_TOKEN,
+      root,
+    ),
   );
 };
 
