@@ -167,7 +167,7 @@ export const recordCompletenessCensus = async (
       slice: options.slice,
       year: year === undefined || Number(year) === 0 ? null : Number(year),
       outcome,
-      scopeStatus:
+      scopeExtent:
         capability.type === "none-exposed"
           ? "partial-publisher"
           : capability.scopeStatus,
@@ -255,9 +255,9 @@ export const readCompletenessCensusQuery = async (
       .select({
         sourceId: census.sourceId,
         measured: count(),
-        unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeStatus} = 'partial-publisher')::int`,
+        unknown: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed' OR ${census.scopeExtent} = 'partial-publisher')::int`,
         noneExposed: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'none-exposed')::int`,
-        partial: sql<number>`count(*) FILTER (WHERE ${census.scopeStatus} = 'partial-publisher')::int`,
+        partial: sql<number>`count(*) FILTER (WHERE ${census.scopeExtent} = 'partial-publisher')::int`,
         stated: sql<number>`count(*) FILTER (WHERE ${census.outcome} = 'publisher-count')::int`,
         short: sql<number>`count(*) FILTER (WHERE ${short})::int`,
         publisher: sql<

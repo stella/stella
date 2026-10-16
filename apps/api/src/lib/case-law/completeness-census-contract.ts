@@ -21,7 +21,7 @@ export const CENSUS_VERDICTS = [
 export const CENSUS_WORST_SLICES_LIMIT = 10;
 export const CENSUS_YEAR_SUMMARIES_LIMIT = 300;
 
-export const censusSliceSchema = t.Object(
+const censusSliceSchema = t.Object(
   {
     slice: boundedString(256),
     year: t.Union([Type.Integer(), t.Null()]),

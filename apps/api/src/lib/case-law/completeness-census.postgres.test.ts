@@ -710,7 +710,7 @@ describe.skipIf(!enabled)(
               slice: "2026",
               year: 2026,
               outcome: "publisher-count" as const,
-              scopeStatus: "full-publisher" as const,
+              scopeExtent: "full-publisher" as const,
               publisherCount: 1,
               publisherStatedCount: 1,
               enumeratedCount: 1,

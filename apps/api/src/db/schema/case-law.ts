@@ -1678,7 +1678,8 @@ export const caseLawCompletenessCensus = p.pgTable(
     /** Publisher slice year; null for a source with no publisher enumeration. */
     year: p.integer(),
     outcome: p.text({ enum: CENSUS_OUTCOMES }).notNull(),
-    scopeStatus: p
+    /** Extent of the publisher corpus represented by this observation, not a lifecycle. */
+    scopeExtent: p
       .text("scope_status", { enum: CENSUS_SCOPE_STATUSES })
       .notNull(),
     /** Effective completeness denominator; outcome identifies its provenance. */
@@ -1708,7 +1709,7 @@ export const caseLawCompletenessCensus = p.pgTable(
       AND ${t.enumeratedCount} >= 0
       AND (${t.publisherStatedCount} IS NULL OR ${t.publisherStatedCount} >= 0)
       AND ${t.expectedSlices} > 0
-      AND ${t.scopeStatus} IN (${sql.join(
+      AND ${t.scopeExtent} IN (${sql.join(
         CENSUS_SCOPE_STATUSES.map((status) => sql`${status}`),
         sql`, `,
       )})
