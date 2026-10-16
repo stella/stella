@@ -3,6 +3,8 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+
 import { legislationDocuments } from "@/api/db/schema";
 import { projectStatuteVersion } from "@/api/handlers/legislation/reader-response";
 import {
@@ -48,6 +50,8 @@ type ListStatuteVersionsOptions = {
   documentId: SafeId<"legislationDocument">;
   query: ListStatuteVersionsQuery;
   legislationDb: LegislationReadDb;
+  /** The surface this read answers for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type VersionCursor = {
@@ -88,6 +92,7 @@ export const listStatuteVersionsHandler = async ({
   documentId,
   query,
   legislationDb,
+  surface,
 }: ListStatuteVersionsOptions) => {
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.legislationVersionsPageSizeDefault,
@@ -103,13 +108,13 @@ export const listStatuteVersionsHandler = async ({
   }
 
   const rows = await legislationDb(async (tx) => {
-    const work = await selectWorkKey(tx, documentId);
+    const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
       return null;
     }
 
-    const conditions: SQL[] = workKeyConditions(work);
+    const conditions: SQL[] = workKeyConditions(work, surface);
 
     if (cursor !== null) {
       conditions.push(
@@ -117,7 +122,7 @@ export const listStatuteVersionsHandler = async ({
       );
     }
 
-    const defaultId = await selectDefaultVersionId(tx, work);
+    const defaultId = await selectDefaultVersionId(tx, work, surface);
     const page = await tx
       .select({
         id: legislationDocuments.id,

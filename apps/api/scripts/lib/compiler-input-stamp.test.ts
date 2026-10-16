@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
@@ -10,6 +10,7 @@ import {
   compilerInputStampSchema,
   createCompilerInputRecorder,
   isCompilerInputStampCurrent,
+  scriptSourceHash,
 } from "./compiler-input-stamp";
 
 const CONTEXT = "context";
@@ -126,4 +127,18 @@ test("a new ambient declaration under the included tree is not current", async (
   const stamp = recordProgram();
   write("src/nested/globals.d.ts", "declare const injected: string;\n");
   expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(false);
+});
+
+test("a script's source hash is the same for checkouts at other paths", () => {
+  write("tool/main.ts", 'import { helper } from "./lib/helper";\nhelper();\n');
+  write("tool/lib/helper.ts", "export const helper = () => 1;\n");
+  const moved = path.join(directory, "elsewhere/deeper/tool");
+  cpSync(path.join(directory, "tool"), moved, { recursive: true });
+  const original = scriptSourceHash(path.join(directory, "tool/main.ts"));
+  expect(scriptSourceHash(path.join(moved, "main.ts"))).toBe(original);
+
+  write("tool/lib/helper.ts", "export const helper = () => 2;\n");
+  expect(scriptSourceHash(path.join(directory, "tool/main.ts"))).not.toBe(
+    original,
+  );
 });

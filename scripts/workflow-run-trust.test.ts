@@ -192,6 +192,82 @@ const workflowRunWorkflows = () =>
       isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
   );
 
+// Events that start a run nobody is watching. Pull request, merge queue and
+// manual dispatch runs report to the person who started them.
+const UNATTENDED_EVENTS = new Set([
+  "schedule",
+  "push",
+  "workflow_run",
+  "deployment_status",
+  "delete",
+]);
+
+// Unattended workflows that deliberately send no failed-run alert. Remove an
+// entry when its workflow becomes alerted or attended; the guard fails on a
+// stale one.
+const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
+  "bot-refresh-auto-merge.yml":
+    "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "cla.yml":
+    "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
+  "generated-conflicts-publish.yml":
+    "Follows a manually dispatched resolution run whose dispatcher watches the outcome.",
+  "marketing-screenshots-publish.yml":
+    "Follows a manually dispatched capture run whose dispatcher watches the outcome.",
+  "scheduled-run-alerts.yml":
+    "The alerting workflow itself cannot report its own failed delivery.",
+};
+
+const workflowOn = (file: string, workflow: unknown) => {
+  if (!isRecord(workflow)) {
+    expect.unreachable(`${file} requires a workflow`);
+  }
+  return workflow["on"];
+};
+
+const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
+  const alerting = workflows.find(
+    ({ file }) => file === "scheduled-run-alerts.yml",
+  )?.workflow;
+  if (!isRecord(alerting) || !isRecord(alerting["on"])) {
+    expect.unreachable("scheduled run alerts require workflow_run triggers");
+  }
+  const workflowRun = alerting["on"]["workflow_run"];
+  const jobs = alerting["jobs"];
+  if (
+    !isRecord(workflowRun) ||
+    !Array.isArray(workflowRun["workflows"]) ||
+    !isRecord(jobs) ||
+    !isRecord(jobs["notify"])
+  ) {
+    expect.unreachable("scheduled run alerts require a notify job");
+  }
+  const alertedNames: unknown[] = workflowRun["workflows"];
+  const condition = conditionOf(jobs["notify"]);
+  // GitHub starts the alert run for a listed workflow name; the notify
+  // condition must then let a failed run of that file and event through.
+  const alerts = (file: string, workflow: unknown, event: string) =>
+    isRecord(workflow) &&
+    alertedNames.includes(workflow["name"]) &&
+    !definitelyFalse(condition, {
+      values: {
+        "github.event_name": "workflow_run",
+        "github.repository": "owner/repo",
+        "github.event.workflow_run.conclusion": "failure",
+        "github.event.workflow_run.event": event,
+        "github.event.workflow_run.head_repository.full_name": "owner/repo",
+        "github.event.workflow_run.path": `.github/workflows/${file}`,
+      },
+      status: {
+        always: true,
+        success: true,
+        failure: false,
+        cancelled: false,
+      },
+    });
+  return { alerts };
+};
+
 const GATE = [
   "github.event.workflow_run.head_repository.full_name == github.repository",
   "github.event.workflow_run.path == '.github/workflows/release.yml'",
@@ -212,24 +288,7 @@ describe("workflow_run trust", () => {
 
   test("every release-chain workflow is covered by failed-run alerts", () => {
     const workflows = allWorkflows();
-    const alerting = workflows.find(
-      ({ file }) => file === "scheduled-run-alerts.yml",
-    )?.workflow;
-    if (!isRecord(alerting) || !isRecord(alerting["on"])) {
-      expect.unreachable("scheduled run alerts require workflow_run triggers");
-    }
-    const workflowRun = alerting["on"]["workflow_run"];
-    const jobs = alerting["jobs"];
-    if (
-      !isRecord(workflowRun) ||
-      !Array.isArray(workflowRun["workflows"]) ||
-      !isRecord(jobs) ||
-      !isRecord(jobs["notify"])
-    ) {
-      expect.unreachable("scheduled run alerts require a notify job");
-    }
-    const alertedNames = workflowRun["workflows"];
-    const condition = conditionOf(jobs["notify"]);
+    const alerting = failedRunAlerting(workflows);
     const releaseChain = workflows.filter(
       ({ source }) =>
         source.includes(RELEASE_CHAIN_MARKER) ||
@@ -237,33 +296,72 @@ describe("workflow_run trust", () => {
     );
 
     for (const { file, workflow } of releaseChain) {
-      if (!isRecord(workflow) || typeof workflow["name"] !== "string") {
-        expect.unreachable(`${file} requires a workflow name`);
-      }
-      expect(alertedNames, file).toContain(workflow["name"]);
-      for (const event of triggers(workflow["on"])) {
+      for (const event of triggers(workflowOn(file, workflow))) {
         expect(
-          definitelyFalse(condition, {
-            values: {
-              "github.event_name": "workflow_run",
-              "github.repository": "owner/repo",
-              "github.event.workflow_run.conclusion": "failure",
-              "github.event.workflow_run.event": event,
-              "github.event.workflow_run.head_repository.full_name":
-                "owner/repo",
-              "github.event.workflow_run.path": `.github/workflows/${file}`,
-            },
-            status: {
-              always: true,
-              success: true,
-              failure: false,
-              cancelled: false,
-            },
-          }),
+          alerting.alerts(file, workflow, event),
           `${file}: ${event}`,
-        ).toBe(false);
+        ).toBe(true);
       }
     }
+  });
+
+  test("every unattended workflow is covered by failed-run alerts", () => {
+    const workflows = allWorkflows();
+    const alerting = failedRunAlerting(workflows);
+    const missing: string[] = [];
+    const unattendedFiles: string[] = [];
+    for (const { file, workflow } of workflows) {
+      const events = triggers(workflowOn(file, workflow)).filter((event) =>
+        UNATTENDED_EVENTS.has(event),
+      );
+      if (events.length === 0) {
+        continue;
+      }
+      unattendedFiles.push(file);
+      if (Object.hasOwn(UNALERTED_UNATTENDED_WORKFLOWS, file)) {
+        continue;
+      }
+      for (const event of events) {
+        if (!alerting.alerts(file, workflow, event)) {
+          missing.push(`${file}: ${event}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+    // An exemption names an unattended workflow that is really left out,
+    // so a stale entry fails here instead of lingering.
+    for (const [file, reason] of Object.entries(
+      UNALERTED_UNATTENDED_WORKFLOWS,
+    )) {
+      expect(unattendedFiles, file).toContain(file);
+      expect(reason.length, file).toBeGreaterThan(20);
+      const workflow = workflows.find((entry) => entry.file === file)?.workflow;
+      expect(
+        triggers(workflowOn(file, workflow))
+          .filter((event) => UNATTENDED_EVENTS.has(event))
+          .some((event) => alerting.alerts(file, workflow, event)),
+        file,
+      ).toBe(false);
+    }
+  });
+
+  test("the unattended-workflow guard reports a workflow missing from alerts", () => {
+    const alerting = failedRunAlerting(allWorkflows());
+    const unlisted = { name: "Unlisted nightly", on: { schedule: [] } };
+    expect(alerting.alerts("unlisted-nightly.yml", unlisted, "schedule")).toBe(
+      false,
+    );
+    const nightly = allWorkflows().find(
+      ({ file }) => file === "nightly-test.yml",
+    )?.workflow;
+    expect(alerting.alerts("nightly-test.yml", nightly, "schedule")).toBe(true);
+    // Listed by name but run from another path: the condition refuses it.
+    expect(alerting.alerts("renamed-nightly.yml", nightly, "schedule")).toBe(
+      false,
+    );
+    expect(alerting.alerts("nightly-test.yml", nightly, "pull_request")).toBe(
+      false,
+    );
   });
 
   test("reusable network delivery trusts only the main recorder caller", () => {
