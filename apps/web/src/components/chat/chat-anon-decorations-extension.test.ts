@@ -82,7 +82,9 @@ describe("setChatAnonDecorationPairs", () => {
   ] as const satisfies readonly ChatAnonPair[];
 
   test("stores the pairs and recomputes only its own decorations on a live editor", () => {
-    const storage = { stllAnonDecorations: { pairs: [] } };
+    // Annotated: an empty array literal would infer `never[]`.
+    const emptyPairs: readonly ChatAnonPair[] = [];
+    const storage = { stllAnonDecorations: { pairs: emptyPairs } };
     const updated: (string | undefined)[] = [];
     const editor = {
       commands: {
