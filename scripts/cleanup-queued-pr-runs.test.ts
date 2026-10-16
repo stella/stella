@@ -270,11 +270,12 @@ test("an old run without an association is matched to its pull requests by commi
     pull_requests: [],
     created_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
   };
-  for (const commitPulls of [[{ labels: ["ci-protect"] }], "error"] as const) {
-    const result = await cleanup({
-      run,
-      commitPulls: commitPulls === "error" ? "error" : [...commitPulls],
-    });
+  const cases: ({ labels: string[] }[] | "error")[] = [
+    [{ labels: ["ci-protect"] }],
+    "error",
+  ];
+  for (const commitPulls of cases) {
+    const result = await cleanup({ run, commitPulls });
     expect(result.cancelled, JSON.stringify(commitPulls)).toEqual([]);
     expect(result.forced, JSON.stringify(commitPulls)).toEqual([]);
   }
