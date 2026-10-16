@@ -259,7 +259,7 @@ test("a caller that waited for the lock hashes the inputs it finds", async () =>
     const waiting = run();
     await writeFile(path.join(root, "input.txt"), "second");
     release();
-    await holder;
+    expect((await holder).isOk()).toBe(true);
     await waiting;
     expect(await readFile(output, "utf-8")).toBe("second");
   } finally {
