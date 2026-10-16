@@ -36,7 +36,15 @@ OUTPUT_USER="$(getent passwd "$OUTPUT_UID" | cut -d: -f1)"
 OUTPUT_HOME="$(getent passwd "$OUTPUT_UID" | cut -d: -f6)"
 [[ -n "$OUTPUT_USER" && "$OUTPUT_HOME" == /* && -d "$OUTPUT_HOME" ]] || fail 'Invoking user requires an existing home directory'
 root() { "$@"; }
-service_run() { runuser -u stll-cloud -- "$@" 9>&-; }
+# Service daemons outlive setup, so they inherit no descriptor beyond stdio: a cloud
+# runner can pass its terminal as extra descriptors and wait until every copy closes.
+service_run() (
+  for descriptor in "/proc/$BASHPID/fd/"*; do
+    descriptor="$(basename -- "$descriptor")"
+    if [[ "$descriptor" =~ ^[0-9]+$ ]] && (( descriptor > 2 )); then eval "exec $descriptor>&-"; fi
+  done
+  exec runuser -u stll-cloud -- "$@"
+)
 BUN_VERSION='1.4.3'
 NODE_VERSION='26.10.0'
 NODE_DIR="/opt/stll-cloud/node/$NODE_VERSION"

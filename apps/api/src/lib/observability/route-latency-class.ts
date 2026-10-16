@@ -202,6 +202,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/flows/:flowId": "crud",
   "GET /v1/invoices/:workspaceId/": "crud",
   "GET /v1/invoices/:workspaceId/:invoiceId": "crud",
+  "GET /v1/invoices/:workspaceId/prefill": "crud",
   "GET /v1/law/:country/citations/resolve": "search",
   "GET /v1/law/sitemap/shards": "batch",
   "GET /v1/law/sitemap/statutes/shard": "batch",
