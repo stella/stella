@@ -1707,8 +1707,6 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
-      "statusDone": "Concluído",
-      "statusRunning": "Em andamento",
       "statusWaiting": "Aguardando",
       "toggleDetails": "Alternar detalhes",
       "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"

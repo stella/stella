@@ -1710,8 +1710,6 @@ type Messages = {
       "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
-      "statusDone": "Done";
-      "statusRunning": "Running";
       "statusWaiting": "Waiting";
       "toggleDetails": "Toggle details";
       "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";

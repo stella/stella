@@ -1707,8 +1707,6 @@
       "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
-      "statusDone": "Kész",
-      "statusRunning": "Folyamatban",
       "statusWaiting": "Várakozik",
       "toggleDetails": "Részletek megjelenítése",
       "unrestoredFields": "Anonimizált módban {count, plural, one {# mezőt} other {# mezőt}} nem sikerült valódi értékekkel kitölteni. Ellenőrizze: {fields}"

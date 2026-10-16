@@ -1707,8 +1707,6 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
-      "statusDone": "Gotowe",
-      "statusRunning": "W toku",
       "statusWaiting": "Oczekuje",
       "toggleDetails": "Przełącz szczegóły",
       "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"

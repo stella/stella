@@ -1777,7 +1777,7 @@ function ToolActivityPlayground() {
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <StatusMark status="done" />
-          <span>{t("chat.toolCall.statusDone")}</span>
+          <span>{t("common.done")}</span>
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <StatusMark status="failed" />

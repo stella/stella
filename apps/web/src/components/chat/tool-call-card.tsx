@@ -382,7 +382,7 @@ const TOOL_CALL_SETTLED_STATUS = {
   "input-streaming": "pending",
 } as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
 
-export const toolCallStatus = ({
+const toolCallStatus = ({
   hasError,
   isRunning,
   state,
@@ -398,9 +398,9 @@ export const toolCallStatus = ({
 };
 
 const TOOL_CALL_STATUS_LABEL_KEYS = {
-  done: "chat.toolCall.statusDone",
+  done: "common.done",
   pending: "chat.toolCall.statusWaiting",
-  running: "chat.toolCall.statusRunning",
+  running: "common.running",
 } as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
 
 /** A follow-up a tool row offers once its call completed, such as opening

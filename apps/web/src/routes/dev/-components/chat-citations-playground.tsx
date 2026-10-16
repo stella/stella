@@ -101,9 +101,10 @@ export function ChatCitationsPlayground() {
     if (!replaying || frameIndex >= LAST_FRAME) {
       return undefined;
     }
-    const inText = (FRAMES[frameIndex + 1]?.messages[1]?.parts ?? []).some(
-      (part) => part.type === "text",
-    );
+    const inText =
+      FRAMES[frameIndex + 1]?.messages[1]?.parts.some(
+        (part) => part.type === "text",
+      ) === true;
     const timeout = setTimeout(
       () => {
         setFrameIndex((index) => index + 1);
