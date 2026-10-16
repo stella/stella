@@ -86,7 +86,8 @@ export const mergeQueueGate = async ({
   if (context.actor === "dependabot[bot]" || attempt > 1) {
     return "run";
   }
-  const waiting = async () => mergeQueueWaiting({ github, repo: context.repo });
+  const waiting = async () =>
+    await mergeQueueWaiting({ github, repo: context.repo });
   if (!(await waiting())) {
     return "run";
   }
