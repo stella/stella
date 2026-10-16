@@ -12,6 +12,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "../icons";
+import { SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME } from "../lib/safe-area";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
 import { Loader } from "./loader";
@@ -182,16 +183,11 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // glass, and above dialogs (z-[85]) so a toast raised by a dialog's
           // own action stays readable; still below actively-open context
           // menus (z-[100]). See @stll/ui/overlay-layer for the ladder.
-          "fixed z-[90] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
-          "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
+          "fixed z-[90] mx-auto flex max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
+          SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME,
           // Vertical positioning, clear of the status bar and home indicator
           "data-[position*=top]:top-[calc(var(--toast-inset)+var(--safe-area-top))]",
           "data-[position*=bottom]:bottom-[calc(var(--toast-inset)+var(--safe-area-bottom))]",
-          // Horizontal positioning, clear of a landscape notch
-          "data-[position*=left]:start-[calc(var(--toast-inset)+var(--safe-area-inline-start))]",
-          "data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end))]",
-          "md:data-[position*=right]:end-[calc(var(--toast-inset)+var(--safe-area-inline-end)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
         )}
         data-position={position}
         data-slot="toast-viewport"
