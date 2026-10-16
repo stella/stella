@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Másik eszközre áthelyezve",
     "sessionNeedsAttention": "Figyelmet igényel",
     "sessionOpeningInOffice": "Megnyitás Office-ban",
-    "sessionSavingDraft": "Piszkozat mentése"
+    "sessionSavingDraft": "Piszkozat mentése",
+    "reconnectAccount": "Újracsatlakozás a stella webhez…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — A változtatások helyben maradnak, és automatikusan újrapróbálkoznak",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "A stella desktop automatikus indítása bejelentkezéskor.",
     "stellaDesktop": "stella desktop",
     "support": "Támogatás",
-    "title": "Beállítások"
+    "title": "Beállítások",
+    "serverLabel": "Szerver",
+    "connectToHost": "Csatlakozás ehhez: {host}",
+    "connectToHostDescription": "Megnyitja a(z) {host} oldalt a böngészőben, ahol jóváhagyhatja ezt a számítógépet.",
+    "reconnectNeeded": "Újracsatlakozás szükséges",
+    "reconnect": "Újracsatlakozás",
+    "reconnectHostDescription": "A kapcsolatot ezzel: {host} meg kell újítani. Hagyja jóvá újra ezt a számítógépet a böngészőben."
   },
   "clipboard": {
     "registryUnavailable": "Az Ön működési joghatóságaihoz nincs engedélyezett nyilvántartás.",

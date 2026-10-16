@@ -373,7 +373,11 @@ describe("desktop registry API-key configuration", () => {
     ]
       .filter(
         (filename) =>
-          !filename.endsWith(".test.ts") && !filename.endsWith(".spec.ts"),
+          !filename.endsWith(".test.ts") &&
+          !filename.endsWith(".spec.ts") &&
+          // Test fixtures mint keys for the isolation matrix; the census
+          // covers production issuance only.
+          !filename.startsWith("tests/"),
       )
       .map((filename) => ({
         filename,

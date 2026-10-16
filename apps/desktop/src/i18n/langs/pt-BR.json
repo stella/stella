@@ -33,7 +33,8 @@
     "sessionMovedToAnotherDevice": "Movido para outro dispositivo",
     "sessionNeedsAttention": "Requer atenção",
     "sessionOpeningInOffice": "Abrindo no Office",
-    "sessionSavingDraft": "Salvando rascunho"
+    "sessionSavingDraft": "Salvando rascunho",
+    "reconnectAccount": "Reconectar ao stella web…"
   },
   "notification": {
     "checkpointDelayedBody": "{fileName} — As alterações permanecem locais e serão reenviadas automaticamente",
@@ -209,7 +210,13 @@
     "startOnLoginDescription": "Abrir o stella desktop automaticamente quando você fizer login.",
     "stellaDesktop": "stella desktop",
     "support": "Suporte",
-    "title": "Configurações"
+    "title": "Configurações",
+    "serverLabel": "Servidor",
+    "connectToHost": "Conectar a {host}",
+    "connectToHostDescription": "Abre {host} no navegador para você aprovar este computador.",
+    "reconnectNeeded": "É preciso reconectar",
+    "reconnect": "Reconectar",
+    "reconnectHostDescription": "A conexão com {host} precisa ser renovada. Aprove este computador novamente no navegador."
   },
   "clipboard": {
     "registryUnavailable": "Nenhum registro está habilitado para as jurisdições em que você atua.",

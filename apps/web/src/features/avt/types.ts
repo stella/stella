@@ -12,6 +12,9 @@ import type { WebApiRoutes } from "@/lib/eden-client";
 
 type ListsRoutes = WebApiRoutes["lists"][":workspaceId"];
 
+export type SampleCaseLoad =
+  ListsRoutes["sample-case"]["post"]["response"][200];
+
 export type VerificationRun =
   ListsRoutes["verifications"][":runId"]["get"]["response"][200];
 export type VerificationRunStatus = VerificationRun["status"];

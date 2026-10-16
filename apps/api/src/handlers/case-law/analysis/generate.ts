@@ -43,9 +43,11 @@ import {
   analysisFailureKeyTag,
   failureClaimGuard,
   analysisFailureRecord,
+  failureRetryPending,
   failureStillHolds,
   type AnalysisFailureRecord,
   type AnalysisReaderKey,
+  type AnalysisRequestKind,
 } from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
@@ -76,6 +78,7 @@ import {
   requireTanStackAIAvailableForRole,
   type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
+import { isRecord } from "@/api/lib/type-guards";
 
 import { resolveAnalysisInput } from "./analysis-input";
 import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
@@ -177,10 +180,16 @@ export type GenerateAnalysisResponse =
       error: string;
       key: AnalysisFailureKeyView;
       providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+      /**
+       * ISO time before which no new run starts, poll or retry, when the
+       * provider named one that is still ahead.
+       */
+      retryAt?: string | undefined;
     };
 
 const failureResponse = (
   failure: AnalysisFailureRecord,
+  now: Date,
 ): GenerateAnalysisResponse => {
   const view: AnalysisFailureKeyView =
     failure.keySource === "organization" && failure.provider !== null
@@ -203,7 +212,27 @@ const failureResponse = (
           ),
         }
       : {}),
+    ...(failure.retryAfter !== undefined && failureRetryPending(failure, now)
+      ? { retryAt: failure.retryAfter.toISOString() }
+      : {}),
   };
+};
+
+/**
+ * The retry delay a provider named for the run's failure, from the first
+ * `ProviderCallError` along the error's `cause` chain.
+ */
+const providerRetryAfterMs = (error: unknown): number | undefined => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (isRecord(current) && !seen.has(current)) {
+    if (current instanceof ProviderCallError) {
+      return current.retryAfterMs;
+    }
+    seen.add(current);
+    current = current["cause"];
+  }
+  return undefined;
 };
 
 const unavailable = (
@@ -415,6 +444,7 @@ const handleGenerationFailure = async ({
     fingerprint: sentinel.inputFingerprint,
     now: new Date(),
     reader,
+    retryAfterMs: providerRetryAfterMs(error),
     ...(reader.source === "organization" &&
     error instanceof ProviderCallError &&
     error.providerDiagnostic !== undefined
@@ -585,10 +615,12 @@ export const generateAnalysis = async ({
   }
 
   // Before a run starts: when the run this reader's key made last failed,
-  // say so until the reader asks again. The record is filed under this
-  // reader's key alone, so another reader's run on the shared row neither
-  // replaces nor clears it, and this reader never re-runs unasked.
-  const applicableFailure = async (): Promise<AnalysisFailureRecord | null> => {
+  // say so until the reader asks again, and even then until the provider's
+  // retry time when it named one. The record is filed under this reader's
+  // key alone, so another reader's run on the shared row neither replaces
+  // nor clears it, and this reader never re-runs unasked.
+  const request: AnalysisRequestKind = retry ? "retry" : "poll";
+  const answerFailure = async (): Promise<GenerateAnalysisResponse | null> => {
     if (reader === null) {
       return null;
     }
@@ -596,21 +628,21 @@ export const generateAnalysis = async ({
       decisionId,
       keyTag: analysisFailureKeyTag(reader, decisionId),
     });
+    const now = new Date();
     return failure !== null &&
       failureStillHolds({
         failure,
         fingerprint: input.fingerprint,
-        now: new Date(),
+        now,
         reader,
+        request,
       })
-      ? failure
+      ? failureResponse(failure, now)
       : null;
   };
-  if (!retry) {
-    const failure = await applicableFailure();
-    if (failure !== null) {
-      return Result.ok(failureResponse(failure));
-    }
+  const heldFailure = await answerFailure();
+  if (heldFailure !== null) {
+    return Result.ok(heldFailure);
   }
 
   if (!storesAnalyses()) {
@@ -658,30 +690,23 @@ export const generateAnalysis = async ({
   // background run settles, after this request has answered.
   const started = await startModelAction({
     label: "analysis-generate.run-generation",
-    // Another request won the race when the claim returns null. A plain
-    // read's claim also refuses, in its own transaction, while this reader's
-    // key has an applicable failure: one filed after the read above, by a
-    // run that started and failed meanwhile, still stops it. An explicit
-    // retry claims over that failure.
+    // Another request won the race when the claim returns null. The claim
+    // also refuses, in its own transaction, while this reader's key has an
+    // applicable failure: one filed after the read above, by a run that
+    // started and failed meanwhile, still stops it. An explicit retry claims
+    // over such a failure unless its provider's retry time is still ahead.
     start: async (): ReturnType<AnalysisStore["claimUnlessFailed"]> =>
-      retry
-        ? Result.ok(
-            await store.claim({
-              decisionId,
-              fingerprint: input.fingerprint,
-              observed,
-            }),
-          )
-        : await store.claimUnlessFailed({
-            decisionId,
-            fingerprint: input.fingerprint,
-            observed,
-            unlessFailed: failureClaimGuard({
-              decisionId,
-              now: new Date(),
-              reader,
-            }),
-          }),
+      await store.claimUnlessFailed({
+        decisionId,
+        fingerprint: input.fingerprint,
+        observed,
+        unlessFailed: failureClaimGuard({
+          decisionId,
+          now: new Date(),
+          reader,
+          request,
+        }),
+      }),
     // The proof aborts the generation's model call if the lease is lost.
     background: async ({ admission }, claimed) => {
       if (claimed.isErr() || claimed.value === null) {
@@ -726,10 +751,10 @@ export const generateAnalysis = async ({
 
   // A claim lost to a failure filed since the read answers that failure;
   // one lost to another run answers that run in flight.
-  if (claimed.value === null && !retry) {
-    const failure = await applicableFailure();
+  if (claimed.value === null) {
+    const failure = await answerFailure();
     if (failure !== null) {
-      return Result.ok(failureResponse(failure));
+      return Result.ok(failure);
     }
   }
   return Result.ok({ status: "generating" });
@@ -750,7 +775,9 @@ const config = {
     "naming whose AI key it used (the organization's own, or the platform's). " +
     "A failed run answers callers using the same key for 15 minutes; within " +
     "that window a call passing retry=true starts a new run, and after it the " +
-    "next call starts one on its own. Generation runs in the background and a call made while one " +
+    "next call starts one on its own. When the provider named a later time " +
+    "to retry, the failure carries it as retryAt (ISO 8601) and answers every " +
+    "call, retry=true included, until then. Generation runs in the background and a call made while one " +
     "is already running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
