@@ -346,7 +346,7 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
   // a backlog of rows already waiting in the queue never hides later ones.
   let cursor: QueuedCursor | null = null;
   for (let page = 0; page < MAX_HANDOFF_PAGES; page += 1) {
-    // Keyset pages are sequential by design: each starts after the previous page's last row
+    // db-await-in-loop: keyset pages are sequential by design; each page starts after the previous page's last row
     const queuedPage = await readQueuedPage({
       db,
       settled,

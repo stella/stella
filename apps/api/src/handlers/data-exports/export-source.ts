@@ -20,6 +20,7 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -75,6 +76,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { createFileKey } from "@/api/lib/files/utils";
 import { openS3ObjectStream } from "@/api/lib/s3";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -776,6 +778,13 @@ const readOrganizationChildren = async (
 const expandedTextBytes = (recordTable: PgTable) =>
   sql`octet_length(${recordTable}.*::text)`;
 
+// Sizes come back as bigint text so no byte count is rounded on the way.
+const OrganizationBytesRow = v.object({ bytes: v.string() });
+const MatterBytesRow = v.object({
+  workspace_id: v.string(),
+  bytes: v.string(),
+});
+
 const measureRecords = async (
   { db, organizationId, readForParents }: PagedReader,
   matterIds: readonly string[],
@@ -807,15 +816,18 @@ const measureRecords = async (
     ),
     sql` + `,
   );
-  const organizationRow = (
-    await db(
-      async (tx) =>
-        await tx.execute<{ bytes: string }>(
-          sql`SELECT (${organizationSum})::bigint::text AS bytes`,
-        ),
-    )
-  ).at(0);
-  const organizationBytes = Number(organizationRow?.bytes ?? "0");
+  const organizationRow = v.parse(
+    OrganizationBytesRow,
+    executedRows(
+      await db(
+        async (tx) =>
+          await tx.execute(
+            sql`SELECT (${organizationSum})::bigint::text AS bytes`,
+          ),
+      ),
+    ).at(0),
+  );
+  const organizationBytes = Number(organizationRow.bytes);
   // What `loadMatter` reads, grouped by matter: one query per page of
   // matters over all of its tables.
   const matterTables: readonly (readonly [PgTable, PgColumn])[] = [
@@ -838,12 +850,13 @@ const measureRecords = async (
         ),
         sql` UNION ALL `,
       );
-      return await db(
+      const result = await db(
         async (tx) =>
-          await tx.execute<{ workspace_id: string; bytes: string }>(
+          await tx.execute(
             sql`SELECT workspace_id::text AS workspace_id, COALESCE(SUM(bytes), 0)::bigint::text AS bytes FROM (${perRow}) AS measured GROUP BY workspace_id`,
           ),
       );
+      return v.parse(v.array(MatterBytesRow), executedRows(result));
     },
   );
   const matterBytes = new Map(
