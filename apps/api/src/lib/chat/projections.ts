@@ -2214,12 +2214,10 @@ const sanctionsListOutcomeProjection = v.strictObject({
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
   reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
-  // The one note the budget keeps: which edition these fields name depends
-  // on the list's status (the screened one when it answered).
-  editionId: v.pipe(
-    v.nullable(passthroughId()),
-    v.description("If unavailable: latest on file, NOT screened"),
-  ),
+  // Which edition these fields name depends on the list's status: the
+  // screened one when it answered, the latest on file (not screened) when
+  // unavailable. The tool description says so; the output schema has no room.
+  editionId: v.nullable(passthroughId()),
   publishedAt: v.nullable(v.string()),
   verifiedAt: v.nullable(v.string()),
   // A newer edition held back for review; the list still screens the
