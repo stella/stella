@@ -232,8 +232,7 @@ export const claimDocxEditorSlot = (
   const entry = registry[hostKey];
   const current = entry?.claims.find((each) => each.slot === claim.slot);
   if (
-    entry !== undefined &&
-    entry.releasedAt === null &&
+    entry?.releasedAt === null &&
     current !== undefined &&
     sameDocxEditorClaim(current, claim) &&
     sameDocxEditorClaim(entry.lastClaim, claim)
