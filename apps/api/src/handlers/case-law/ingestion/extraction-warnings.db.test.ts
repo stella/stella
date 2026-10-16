@@ -139,6 +139,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(pointer?.extractionWarnings).toEqual(dirty.extractionWarnings);
       const read = await withRedistributableSubject(
         caseLawPublicReadDb,
+        "pages",
         { kind: "id", id: dirty.id },
         async (subject) => await readDecisionHandler({ subject }),
       );
