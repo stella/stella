@@ -683,13 +683,8 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 4 |
-<<<<<<< HEAD
-| assistant_chat | 16 |
-| auth_plumbing | 36 |
-=======
 | assistant_chat | 17 |
 | auth_plumbing | 32 |
->>>>>>> origin/main
 | billing_ui | 1 |
 | chat_thread_ui | 11 |
 | compound_consent | 1 |
