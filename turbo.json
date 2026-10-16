@@ -753,6 +753,108 @@
         "src/mcp/generated/capability-dispatch/**"
       ]
     },
+    // typecheck prepares the derived contracts and bundles first, so its cache
+    // restores them and lint waits for it.
+    "@stll/mcp-apps#typecheck": {
+      "cache": true,
+      "dependsOn": [
+        "transit",
+        "^generate:capability-runtime"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/.oxfmtrc.json",
+        "!.env*",
+        "!.turbo/**",
+        "!.cache/**",
+        "!**/*.tsbuildinfo",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        "!$TURBO_ROOT$/packages/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/.env*",
+        "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
+        "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
+        "!$TURBO_ROOT$/apps/api/src/mcp/generated/**",
+        "$TURBO_ROOT$/scripts/generated-artifacts.ts",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
+        "$TURBO_ROOT$/scripts/check-mcp-generated-tracking.ts"
+      ],
+      "outputs": [
+        "src/*/generated/app.html.txt",
+        "src/shared/generated/messages.json",
+        "src/shared/generated/schemas.json",
+        "src/shared/generated/reader-messages.json",
+        "src/shared/generated/reader-inputs.json",
+        "src/shared/generated/contracts.js",
+        "src/shared/generated/contracts.d.ts",
+        "src/shared/generated/style.css",
+        "src/generated/bundles.ts"
+      ]
+    },
+    "@stll/mcp-apps#lint": {
+      "dependsOn": [
+        "typecheck"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership/*.ts",
+        "$TURBO_ROOT$/scripts/ownership-loader.ts",
+        "$TURBO_ROOT$/scripts/ownership-types.ts",
+        "$TURBO_ROOT$/scripts/sha256-owners.ts",
+        "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
+        "$TURBO_ROOT$/scripts/status-write-shapes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
+        "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
+        "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/status-tables.gen.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/db/public-corpus-audit/**",
+        "$TURBO_ROOT$/apps/api/drizzle/**",
+        "$TURBO_ROOT$/apps/api/src/lib/safe-handler-factories.ts",
+        "$TURBO_ROOT$/apps/api/src/lib/system-audit/modules.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/scripts/derived-attributes.ts",
+        "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json",
+        "$TURBO_ROOT$/scripts/audit-mutation-ledger-scope.ts",
+        "$TURBO_ROOT$/scripts/test-state-baseline.json",
+        "$TURBO_ROOT$/scripts/check-test-state-baseline.ts",
+        "$TURBO_ROOT$/scripts/baseline-paths.ts",
+        "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/product-frontend-files.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
+      ]
+    },
     "@stll/mcp-apps#build": {
       "inputs": [
         "$TURBO_DEFAULT$",
