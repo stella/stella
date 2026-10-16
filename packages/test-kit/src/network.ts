@@ -40,7 +40,13 @@ export const isLoopbackHost = (host: string): boolean => {
   if (LOOPBACK_NAMES.has(name) || name.endsWith(".localhost")) {
     return true;
   }
-  // 127.0.0.0/8, also as an IPv4-mapped IPv6 address.
+  // 127.0.0.0/8, also as an IPv4-mapped IPv6 address, which URL parsing
+  // normalizes to hex (`::ffff:127.0.0.1` becomes `::ffff:7f00:1`).
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/u.exec(name);
+  if (mappedHex?.[1] !== undefined) {
+    // The high hextet carries the first two octets; 0x7f00-0x7fff is 127.x.
+    return Math.floor(Number.parseInt(mappedHex[1], 16) / 256) === 127;
+  }
   const v4 = name.startsWith("::ffff:") ? name.slice("::ffff:".length) : name;
   return net.isIPv4(v4) && v4.startsWith("127.");
 };
@@ -49,6 +55,14 @@ const LOCAL_URL_SCHEMES = new Set(["blob:", "data:", "file:"]);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 20;
 const CREDENTIAL_HEADERS = ["authorization", "cookie", "proxy-authorization"];
+// The Fetch standard's request-body headers, dropped with the body.
+const REQUEST_BODY_HEADERS = [
+  "content-encoding",
+  "content-language",
+  "content-length",
+  "content-location",
+  "content-type",
+];
 
 type FetchRefusal = (url: URL) => NetworkAccessError | undefined;
 
@@ -117,8 +131,11 @@ const PROXY_ENVIRONMENT_KEYS = [
 ] as const;
 
 // 303, and 301/302 after a POST, continue as a GET without the body.
+// The fetch standard rewrites to a bodyless GET only for these; a GET or HEAD
+// that meets a 303 keeps its method and headers.
 const dropsBody = (status: number, method: string) =>
-  status === 303 || ((status === 301 || status === 302) && method === "POST");
+  (status === 303 && method !== "GET" && method !== "HEAD") ||
+  ((status === 301 || status === 302) && method === "POST");
 
 const deleteHeaders = (headers: Headers, names: readonly string[]) => {
   for (const name of names) {
@@ -185,10 +202,10 @@ const guardedFetch =
         deleteHeaders(headers, CREDENTIAL_HEADERS);
       }
       if (dropsBody(response.status, method)) {
-        method = method === "HEAD" ? "HEAD" : "GET";
+        method = "GET";
         body = undefined;
         replayable = true; // no body left to resend
-        deleteHeaders(headers, ["content-type", "content-length"]);
+        deleteHeaders(headers, REQUEST_BODY_HEADERS);
       } else if (!replayable) {
         return panic(
           `fetch: a ${response.status} redirect cannot resend a streamed body`,

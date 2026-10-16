@@ -261,6 +261,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "carried",
     retention: "cleared",
   },
+  // A desktop app's linking challenge, held across the sign-in redirect
+  // until the desktop settings page consumes it once.
+  {
+    area: "session",
+    prefix: "stella.desktop-account-link",
+    owner: "carried",
+    retention: "cleared",
+  },
   // Tools approved for one conversation: a grant.
   {
     area: "session",

@@ -12,11 +12,13 @@ const schema = sellerProfileFormSchema({
   invalidIban: "Invalid IBAN",
   invalidBic: "Invalid BIC",
   invalidCurrency: "Invalid currency",
+  vatPayerRequiresVatId: "VAT payer needs a VAT ID",
 });
 const empty = {
   legalName: "  Legal Practice  ",
   registrationId: "",
   vatId: "",
+  vatPayer: false,
   addressLine1: "",
   addressLine2: "",
   city: "",
@@ -35,10 +37,12 @@ describe("seller profile form normalization", () => {
     expect(values).toEqual({
       legalName: "Legal Practice",
       defaultCurrency: "EUR",
+      vatPayer: false,
     });
     expect(Object.keys(values).toSorted()).toEqual([
       "defaultCurrency",
       "legalName",
+      "vatPayer",
     ]);
     for (const name of SELLER_PROFILE_FIELDS) {
       expect(Object.hasOwn(values, name)).toBe(
@@ -65,6 +69,7 @@ describe("seller profile form normalization", () => {
     expect(values).toEqual({
       legalName: "Legal Practice",
       defaultCurrency: "EUR",
+      vatPayer: false,
       registrationId: "001234",
       vatId: "CZ001234",
       addressLine1: "First street",
@@ -88,11 +93,13 @@ describe("seller profile form normalization", () => {
       expect(result).toEqual({
         legalName: "Legal Practice",
         defaultCurrency: "EUR",
+        vatPayer: false,
       });
       expect(Object.hasOwn(result, name)).toBe(false);
       expect(Object.keys(result).toSorted()).toEqual([
         "defaultCurrency",
         "legalName",
+        "vatPayer",
       ]);
     }
   });
@@ -112,5 +119,19 @@ describe("seller profile form normalization", () => {
     expect(() => v.parse(schema, { ...empty, legalName: "  " })).toThrow(
       "Required",
     );
+  });
+});
+
+describe("seller profile VAT payer", () => {
+  test("a VAT payer needs a VAT ID; a VAT ID alone does not make one", () => {
+    expect(() => v.parse(schema, { ...empty, vatPayer: true })).toThrow(
+      "VAT payer needs a VAT ID",
+    );
+    expect(
+      v.parse(schema, { ...empty, vatPayer: true, vatId: " CZ12345678 " }),
+    ).toMatchObject({ vatPayer: true, vatId: "CZ12345678" });
+    expect(
+      v.parse(schema, { ...empty, vatPayer: false, vatId: "CZ12345678" }),
+    ).toMatchObject({ vatPayer: false, vatId: "CZ12345678" });
   });
 });

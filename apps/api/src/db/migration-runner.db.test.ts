@@ -31,6 +31,10 @@ import {
   runMigrations,
   runMigrationsUntilSettled,
 } from "./migration-runner";
+import type {
+  MigrationTiming,
+  MigrationTimingRecord,
+} from "./migration-timing";
 import {
   ONLINE_MIGRATION_INDEXES,
   type OnlineMigrationOutcome,
@@ -644,6 +648,73 @@ if (!runPostgresTests || databaseUrl === undefined) {
       });
     });
 
+    test("every run reports how long its schema and online phases took, a failed phase included", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ scratchUrl, openClient }) => {
+          const records: MigrationTimingRecord[] = [];
+          let now = 0;
+          const timing: MigrationTiming = {
+            // Each reading advances 10 ms, so every duration is non-zero and exact.
+            clock: () => (now += 10),
+            emit: (record) => {
+              records.push(record);
+            },
+          };
+          const connection = await openClient().reserve();
+          try {
+            await runMigrations({
+              connection,
+              migrationsFolder: folder,
+              ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
+              timing,
+              runOnline: async () => ONLINE_COMPLETE,
+            });
+            expect(records).toEqual([
+              {
+                event: "migrate.phase_duration",
+                phase: "schema",
+                durationMs: 20,
+                outcome: "applied",
+                laneWaitMs: 10,
+                appliedCount: 1,
+              },
+              {
+                event: "migrate.phase_duration",
+                phase: "online",
+                durationMs: 10,
+                outcome: "complete",
+              },
+            ]);
+
+            records.length = 0;
+            const failure = new Error("online step failed");
+            expect(
+              await rejectionOf(
+                async () =>
+                  await runMigrations({
+                    connection,
+                    migrationsFolder: folder,
+                    ebs: DISABLED_EBS,
+                    databaseUrl: scratchUrl,
+                    timing,
+                    runOnline: async () => {
+                      throw failure;
+                    },
+                  }),
+              ),
+            ).toBe(failure);
+            expect(records).toMatchObject([
+              { phase: "schema", outcome: "applied", appliedCount: 0 },
+              { phase: "online", outcome: "failed" },
+            ]);
+          } finally {
+            connection.release();
+          }
+        });
+      });
+    });
+
     /**
      * A held index build reports no completion, keeps the lane open while it
      * waits, and a later run resumes it.
@@ -939,7 +1010,16 @@ if (!runPostgresTests || databaseUrl === undefined) {
                         mismatchCount: 1,
                         mismatchedNames: [A],
                       });
-                      expect(stdout.mock.calls).toHaveLength(1);
+                      // The no-op event, then the schema phase's duration.
+                      expect(stdout.mock.calls).toHaveLength(2);
+                      expect(
+                        JSON.parse(String(stdout.mock.calls.at(1)?.at(0))),
+                      ).toMatchObject({
+                        event: "migrate.phase_duration",
+                        phase: "schema",
+                        outcome: "stale_bundle_noop",
+                        appliedCount: 0,
+                      });
                       const noopLine = String(stdout.mock.calls.at(0)?.at(0));
                       expect(noopLine.endsWith("\n")).toBe(true);
                       expect(JSON.parse(noopLine)).toEqual({

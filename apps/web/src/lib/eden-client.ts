@@ -63,6 +63,20 @@ const eden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
   clientOptions,
 );
+const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
+  browserApiBaseUrl(),
+  {
+    ...clientOptions,
+    async onResponse(response) {
+      await clientOptions.onResponse(response);
+      const mime = response.headers.get("content-type")?.split(";").at(0);
+      if (response.ok && (mime === "image/png" || mime === "image/x-icon")) {
+        return await response.blob();
+      }
+      return undefined;
+    },
+  },
+);
 const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
   import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
   clientOptions,
@@ -81,6 +95,7 @@ const myTimeEntriesEden = createStellaEdenClient<
 );
 
 export const api = eden.v1;
+export const linkIconsApi = linkIconsEden.v1.chat["link-icons"];
 export const publicFeedbackApi = eden.public.feedback;
 export const memoriesApi = memoriesEden.v1.memories;
 export const correspondenceApi = correspondenceEden.v1;
