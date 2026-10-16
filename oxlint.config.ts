@@ -2297,6 +2297,7 @@ const config = defineConfig({
       // code on structured logging. The type rules still apply to both.
       files: [
         "apps/api/src/tests/load/**/*.ts",
+        "apps/api/src/tests/exact-mirror-guard.ts",
         "apps/api/src/scripts/**/*.ts",
       ],
       rules: { "no-console": "off" },

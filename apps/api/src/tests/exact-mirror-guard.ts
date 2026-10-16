@@ -29,7 +29,7 @@
 // Side-effect import: seed env defaults so the app constructs without real
 // services. The app's own boot (migrations, S3, workers, listen) stays behind
 // `import.meta.main` in src/server.ts and never runs here.
-import "../tests/setup-env";
+import "./setup-env";
 import { Result } from "better-result";
 
 const EXACT_MIRROR_FAILURE_SIGNATURE = "Failed to create exactMirror";
@@ -223,7 +223,7 @@ const reportToExitCode = (report: ExactMirrorReport): number => {
 
 const runSelfTest = async (): Promise<number> => {
   const { buildRecursiveFixtureApp, SELF_TEST_ROUTE } =
-    await import("../tests/helpers/exact-mirror-fixture");
+    await import("./helpers/exact-mirror-fixture");
   const report = await findExactMirrorFailures(buildRecursiveFixtureApp);
   const detected = report.mirrorFailures.some((route) =>
     route.includes(SELF_TEST_ROUTE),
