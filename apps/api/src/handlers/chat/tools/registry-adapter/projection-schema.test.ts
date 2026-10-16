@@ -21,10 +21,8 @@ import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-conten
 import {
   chatEntityRef,
   chatRef,
-  containsRawUuid,
   contentText,
   deriveRefMediationEntry,
-  MASKED_CONTENT_ID,
   passthroughId,
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
   projectionBranch,
@@ -45,6 +43,7 @@ import type {
 } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 // The fail-closed and degrade tests assert the exact telemetry contract
 // (paths only, never values) on the event the real capture path would have
@@ -857,13 +856,23 @@ describe("projectForChat", () => {
       text: v.string(),
     });
     const uuid = fc
-      .tuple(fc.uuid(), fc.boolean())
-      .map(([id, upper]) => (upper ? id.toUpperCase() : id));
-    // Hex-free segments (diacritics included) with UUIDs spliced between
-    // them, so the expected text is the segments joined around the mask
-    // without re-running the masking regex.
+      .tuple(
+        fc.uuid(),
+        fc.array(fc.boolean(), { maxLength: 36, minLength: 36 }),
+      )
+      .map(([id, upper]) =>
+        [...id]
+          .map((char, index) =>
+            upper[index] === true ? char.toUpperCase() : char,
+          )
+          .join(""),
+      );
+    // Dash-free segments (hex digits and diacritics included) with UUIDs
+    // spliced between them. A UUID match needs dashes at fixed offsets, which
+    // only a spliced id provides, so the expected text is the segments joined
+    // around the mask without re-running the masking regex.
     const segment = fc.stringMatching(
-      /^[g-zG-Z áčďéěíňóřšťúůýž.,;:()"'„“«»\n-]{0,12}$/u,
+      /^[0-9a-zA-Z áčďéěíňóřšťúůýž.,;:()"'„“«»_\n]{0,12}$/u,
     );
     const textWithIds = fc
       .array(fc.tuple(segment, fc.option(uuid, { nil: undefined })), {
@@ -903,6 +912,54 @@ describe("projectForChat", () => {
         },
       ),
     );
+  });
+
+  test("UUID-bearing JSON keys are masked without one entry overwriting another", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: unenumeratedJson(),
+    });
+
+    const projected = project({
+      payload: {
+        content: {
+          [MASKED_CONTENT_ID]: "literal",
+          [ROGUE_UUID]: "first",
+          [WS_UUID.toUpperCase()]: { [`row-${ENTITY_UUID}`]: "nested" },
+        },
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      content: {
+        [MASKED_CONTENT_ID]: "literal",
+        [`${MASKED_CONTENT_ID} (2)`]: "first",
+        [`${MASKED_CONTENT_ID} (3)`]: {
+          [`row-${MASKED_CONTENT_ID}`]: "nested",
+        },
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id" }),
+    ]);
+    expect(containsRawUuid(allTelemetry())).toBe(false);
+  });
+
+  test("a degrade report masks ids in undeclared field paths", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: v.strictObject({ name: v.string() }),
+    });
+
+    project({
+      payload: { content: { [ROGUE_UUID]: "x", name: "Acme" } },
+      schema,
+    }).unwrap();
+
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "undeclared_fields" }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
   test("a data string without a UUID is forwarded byte for byte, with no degrade report", () => {

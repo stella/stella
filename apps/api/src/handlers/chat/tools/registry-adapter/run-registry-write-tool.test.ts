@@ -9,12 +9,9 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  containsRawUuid,
-  MASKED_CONTENT_ID,
-  projectForChat,
-} from "@/api/lib/chat/projection-schema";
+import { projectForChat } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";

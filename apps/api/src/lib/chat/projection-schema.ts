@@ -12,6 +12,7 @@ import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
+import { containsUuid, maskUuids } from "@/api/lib/chat/uuid-mask";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   brandPersistedContactId,
@@ -597,32 +598,8 @@ const strictParseProjection = ({
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-const UUID_ANYWHERE_REGEX =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu;
-const UUID_GLOBAL_REGEX =
-  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
-
-/**
- * Replaces each UUID-shaped substring of a forwarded data string. Not a chat
- * ref token, so a masked string can never be read back as a handle.
- */
-export const MASKED_CONTENT_ID = "[id]";
-
-const maskUuids = (value: string): string =>
-  value.replace(UUID_GLOBAL_REGEX, () => MASKED_CONTENT_ID);
-
 const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
-
-/**
- * A verbatim-UUID guard for the "no tenant UUID reaches the model" invariant.
- * A projected payload must serialize without any raw UUID: every tenant id is
- * a ref and every `passthroughId` handle is documented as either
- * non-UUID-formatted (opaque cursors) or an out-of-band handle. Tests assert
- * this holds.
- */
-export const containsRawUuid = (value: unknown): boolean =>
-  UUID_ANYWHERE_REGEX.test(JSON.stringify(value));
 
 /**
  * What input dehydration resolved, carried into the output walk so entity
@@ -695,7 +672,7 @@ const recordUuidLeaf = (
   value: unknown,
   segments: readonly string[],
 ): boolean => {
-  if (typeof value === "string" && UUID_ANYWHERE_REGEX.test(value)) {
+  if (typeof value === "string" && containsUuid(value)) {
     ctx.uuidViolations.push(segments.join("."));
     return true;
   }
@@ -718,10 +695,34 @@ const maskUuidLeaf = (
     : value;
 
 /**
- * Forward an `unenumeratedJson` subtree: every string inside stays subject to
- * the UUID invariant, unlicensed, and an offending string is masked in place.
- * Paths use the same `a.b` / `a[].b` grammar as the rest of the walk (arrays
- * collapsed to a `[]` suffix on their key).
+ * Mask the UUIDs in an object's keys. Id-free keys are reserved first, so a
+ * masked key that would collide with any other key gets a numbered variant
+ * (`[id]`, `[id] (2)`) and no entry overwrites another.
+ */
+const maskUuidKeys = (keys: readonly string[]): Map<string, string> => {
+  const taken = new Set(keys.filter((key) => !containsUuid(key)));
+  const projected = new Map<string, string>();
+  for (const key of keys) {
+    if (!containsUuid(key)) {
+      projected.set(key, key);
+      continue;
+    }
+    const masked = maskUuids(key);
+    let candidate = masked;
+    for (let suffix = 2; taken.has(candidate); suffix += 1) {
+      candidate = `${masked} (${suffix})`;
+    }
+    taken.add(candidate);
+    projected.set(key, candidate);
+  }
+  return projected;
+};
+
+/**
+ * Forward an `unenumeratedJson` subtree: every string inside, keys included,
+ * stays subject to the UUID invariant, unlicensed, and each id is masked in
+ * place. Paths use the masked keys and the same `a.b` / `a[].b` grammar as
+ * the rest of the walk (arrays collapsed to a `[]` suffix on their key).
  */
 const scrubUnenumerated = (
   ctx: ProjectWalkContext,
@@ -737,14 +738,22 @@ const scrubUnenumerated = (
   if (!isRecord(node)) {
     return node;
   }
+  const entries = Object.entries(node);
+  const keys = maskUuidKeys(entries.map(([key]) => key));
   return Object.fromEntries(
-    Object.entries(node).map(([key, value]) => [
-      key,
-      scrubUnenumerated(ctx, value, [
-        ...segments,
-        Array.isArray(value) ? `${key}[]` : key,
-      ]),
-    ]),
+    entries.map(([key, value]) => {
+      const projectedKey = keys.get(key) ?? panic("key mask skipped a key");
+      if (projectedKey !== key) {
+        ctx.uuidViolations.push([...segments, projectedKey].join("."));
+      }
+      return [
+        projectedKey,
+        scrubUnenumerated(ctx, value, [
+          ...segments,
+          Array.isArray(value) ? `${projectedKey}[]` : projectedKey,
+        ]),
+      ];
+    }),
   );
 };
 
