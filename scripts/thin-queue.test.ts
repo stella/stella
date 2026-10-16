@@ -133,6 +133,8 @@ const plan = {
   ),
   desktop_browser_required: "true",
   ci_browser_scope_required: "true",
+  // Scopes the quick-check parts select by inside their shared job.
+  docs_checks_required: "true",
   legal_atlas_image_inputs_required: "true",
   legal_atlas_api_source_required: "true",
   agent_sandbox_docker_required: "true",
@@ -819,28 +821,57 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   const baseline = original("ci.yml");
   const baselineMain = original("main-heavy.yml");
   expect(Object.keys(main.jobs)).toEqual(Object.keys(baselineMain.jobs));
+  // Retired jobs: ci-plan now produces the generated sources itself.
+  const retiredJobs = new Set([
+    "merge-group-fail-fast",
+    "ci-generated-sources",
+    "marketing-screenshots",
+    "marketing-screenshots-cancel",
+  ]);
   const collapsedJobs = new Map([
     ["code-quality-web", "code-quality-web-rest"],
     ["code-quality-rest", "code-quality-web-rest"],
     ["typecheck-baseline", "ci-checks-generated"],
     ["desktop-clippy", "desktop-rust-tests"],
   ]);
+  // Jobs that became one part of a shared job: the part's step condition,
+  // under the shared job's condition, keeps the historical predicate.
+  const foldedParts = new Map([
+    ["parser-version-guard", "ci-quick-checks"],
+    ["ci-checks-docs", "ci-quick-checks"],
+    ["dated-waiver-expiry", "ci-quick-checks"],
+  ]);
+  const partSelected = (job: string, value: ReturnType<typeof context>) => {
+    const host = foldedParts.get(job);
+    if (host === undefined) {
+      return selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value);
+    }
+    const parts = (ci.jobs[host]?.steps ?? []).filter(({ name }) =>
+      name?.startsWith(`${job}: `),
+    );
+    expect(parts.length, job).toBeGreaterThan(0);
+    const installed = {
+      ...value,
+      steps: { ...value.steps, install: { outcome: "success" } },
+    };
+    return (
+      selected(ci.jobs[host]?.if, installed) &&
+      parts.every((part) => selected(part.if, installed))
+    );
+  };
   expect(Object.keys(ci.jobs).toSorted()).toEqual(
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
           (id) =>
-            id !== "merge-group-fail-fast" &&
-            id !== "marketing-screenshots" &&
-            id !== "marketing-screenshots-cancel" &&
-            !collapsedJobs.has(id),
+            !retiredJobs.has(id) &&
+            !collapsedJobs.has(id) &&
+            !foldedParts.has(id),
         ),
         "api-test-durations",
         "postgres-service-suites",
-        "ci-generated-sources",
-        "ci-checks-docs",
+        "ci-quick-checks",
         "code-quality-web-rest",
-        "dated-waiver-expiry",
         "desktop-rust-tests",
         "desktop-rust-lint",
         "query-perf",
@@ -863,11 +894,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     )) {
       const value = context({ event, variable, queueDepth: "full", proveFix });
       for (const [job, body] of Object.entries(baseline.jobs)) {
-        if (
-          job === "merge-group-fail-fast" ||
-          job === "marketing-screenshots" ||
-          job === "marketing-screenshots-cancel"
-        ) {
+        if (retiredJobs.has(job)) {
           continue;
         }
         let expected = selected(body.if, value);
@@ -883,13 +910,13 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({
-            job: collapsedJobs.get(job) ?? job,
+            job: collapsedJobs.get(job) ?? foldedParts.get(job) ?? job,
             baseline: expected,
             value,
           });
         }
         expect(
-          selected(ci.jobs[collapsedJobs.get(job) ?? job]?.if, value),
+          partSelected(job, value),
           `${event.event}/${event.message}/${variable}/${proveFix}/${job}`,
         ).toBe(expected);
       }
@@ -1302,7 +1329,11 @@ test("queue admission covers every gated job except documented event and produce
 });
 
 test("docs checks certify scoped merge groups at both queue depths", () => {
-  expect(admitted).toContain("ci-checks-docs");
+  expect(admitted).toContain("ci-quick-checks");
+  const docs = (ci.jobs["ci-quick-checks"]?.steps ?? []).filter(({ name }) =>
+    name?.startsWith("ci-checks-docs: "),
+  );
+  expect(docs).toHaveLength(1);
   for (const queueDepth of ["thin", "full"]) {
     for (const required of ["true", "false"]) {
       const value = context({
@@ -1315,9 +1346,14 @@ test("docs checks certify scoped merge groups at both queue depths", () => {
         panic("Missing ci-plan context");
       }
       planner.outputs["docs_checks_required"] = required;
-      expect(selected(ci.jobs["ci-checks-docs"]?.if, value)).toBe(
-        required === "true",
-      );
+      const installed = {
+        ...value,
+        steps: { ...value.steps, install: { outcome: "success" } },
+      };
+      expect(selected(ci.jobs["ci-quick-checks"]?.if, installed)).toBe(true);
+      for (const part of docs) {
+        expect(selected(part.if, installed)).toBe(required === "true");
+      }
     }
   }
 });

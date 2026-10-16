@@ -472,7 +472,18 @@ test("only the final job can publish the main/heavy status", () => {
   const jobsWithStatusPermission = Object.entries(mainWorkflow.jobs)
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
-  expect(jobsWithStatusPermission).toEqual(["status"]);
+  // The suites call only grants a ceiling: ci.yml declares the scope for the
+  // merge-queue yield, which runs on pull_request events and never here.
+  expect(jobsWithStatusPermission).toEqual(["suites", "status"]);
+  const ciStatusWriters = Object.values(ciWorkflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => /commitstatus|\/statuses\b/iu.test(JSON.stringify(step)));
+  expect(ciStatusWriters.map(({ name }) => name)).toEqual([
+    "Yield to the merge queue",
+  ]);
+  expect(String(ciStatusWriters[0]?.["if"])).toContain(
+    "github.event_name == 'pull_request'",
+  );
   expect(mainWorkflow.jobs.status.permissions).toEqual({
     contents: "read",
     actions: "read",
