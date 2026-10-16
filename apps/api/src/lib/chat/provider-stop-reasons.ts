@@ -372,6 +372,11 @@ const sharedFields = (chunk: TerminalChunk) => ({
   ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
 });
 
+/** The message of a run error for a response the provider stopped before
+ *  it finished; `null` when it reported no stop reason at all. */
+export const unfinishedStopMessage = (reason: string | null): string =>
+  `The provider stopped before the response finished (${reason ?? "no stop reason"}).`;
+
 const stoppedError = (
   chunk: TerminalChunk,
   code: string,
@@ -442,11 +447,7 @@ const decidedTerminal = ({
       return finished(outcome);
     }
     case "unfinished": {
-      return stoppedError(
-        chunk,
-        unfinishedCode,
-        `The provider stopped before the response finished (${reason ?? "no stop reason"}).`,
-      );
+      return stoppedError(chunk, unfinishedCode, unfinishedStopMessage(reason));
     }
     case "failed": {
       return failed(

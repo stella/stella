@@ -27,6 +27,7 @@ import {
   recordedStopReasonOf,
   refuseTurnPausingRequest,
   UNRECOGNIZED_STOP_REASON,
+  unfinishedStopMessage,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
@@ -113,6 +114,29 @@ export const isOutputCeilingStopReport = ({
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
   isOutputCeilingStopReport(chunk);
 
+/**
+ * The patched OpenRouter adapter's run error for a stream that ended with
+ * no finish reason (`output-ceiling.test.ts` drives the real adapter to it).
+ * Its error for an `error` finish shares the code, so the message tells the
+ * two apart.
+ */
+const OPENROUTER_NO_FINISH_REPORT = {
+  code: "incomplete-stream",
+  message: "The provider stream ended before a finish reason.",
+} as const;
+
+/**
+ * Whether a run error says only that no stop reason arrived: the one failed
+ * ending usage may overrule. A failure the provider named (an error finish,
+ * a server error, a reason it does not document) stays a failure, whatever
+ * it spent.
+ */
+const reportsNoStopReason = (chunk: RunErrorChunk): boolean =>
+  (chunk.code === OPENROUTER_NO_FINISH_REPORT.code &&
+    chunk.message === OPENROUTER_NO_FINISH_REPORT.message) ||
+  (chunk.code === INCOMPLETE_STREAM_CODE &&
+    chunk.message === unfinishedStopMessage(null));
+
 type RunFinishReason = RunFinishedChunk["finishReason"];
 
 /**
@@ -181,7 +205,10 @@ export const readOutputCeilingStopAsLength = async function* (
         if (
           held !== undefined ||
           runIdentity === undefined ||
-          !(isOutputCeilingStop(chunk) || spentOutputCeiling(chunk, ceiling))
+          !(
+            isOutputCeilingStop(chunk) ||
+            (reportsNoStopReason(chunk) && spentOutputCeiling(chunk, ceiling))
+          )
         ) {
           break;
         }

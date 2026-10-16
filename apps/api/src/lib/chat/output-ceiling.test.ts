@@ -211,10 +211,10 @@ const failureOf = (result: Result<string, { cause: unknown }>) => {
 };
 
 describe("an answer cut at its output ceiling", () => {
-  // The provider labels the stop `length`, labels it otherwise (with a
-  // reason no table lists, too), or ends the stream without a label; the
-  // usage it reports shows the ceiling spent.
-  const LABELS = ["length", "error", "provider_specific_stop", null] as const;
+  // The provider labels the stop `length`, with a reason no table lists, or
+  // ends the stream without a label; the usage it reports shows the ceiling
+  // spent.
+  const LABELS = ["length", "provider_specific_stop", null] as const;
 
   for (const label of LABELS) {
     test(`reads as an incomplete answer on both key sources when labelled ${String(label)}`, async () => {
@@ -238,6 +238,21 @@ describe("an answer cut at its output ceiling", () => {
       });
     });
   }
+
+  test("keeps an explicit provider failure at the ceiling a failure", async () => {
+    // A generation the provider says failed is no partial answer, whatever
+    // it spent, so even a policy that accepts a ceiling stop rejects it.
+    script.answer = reasoningSpendsTheCeiling("error");
+    for (const keySource of ["byok", "managed"] as const) {
+      const result = await generate(keySource, 64, "allow-output-ceiling");
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.cause).not.toBeInstanceOf(
+          ModelOutputIncompleteError,
+        );
+      }
+    }
+  });
 
   test("keeps an explicit moderation at the ceiling a moderated answer", async () => {
     // Spent usage cannot overrule the provider's own word on the content, so
