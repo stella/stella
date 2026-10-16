@@ -2771,23 +2771,48 @@ if (packageScopeStart === -1 || packageScopeEnd <= packageScopeStart) {
 }
 const packageScope = workflow.slice(packageScopeStart, packageScopeEnd);
 
+// Runs the workflow's package scope with its detector call served in process:
+// the shim accepts only the exact CLI and changed files, and any other call
+// writes to stderr, which fails the plan. The selector test that spawns the
+// real detector CLIs proves the CLI answers as requiresPackageChecks does.
+const PACKAGE_CHECKS_BUN_SHIM = `bun() {
+  if [[ "\${1-}" != scripts/ci-package-scope.ts || "\${2-}" != --package-checks ]]; then
+    printf 'unserved bun call: %s\\n' "$*" >&2; return 127
+  fi
+  shift 2
+  [[ $# -eq \${#changed_files[@]} ]] || { printf 'unserved package-checks files\\n' >&2; return 127; }
+  local index=0 file
+  for file in "$@"; do
+    [[ "$file" == "\${changed_files[index]}" ]] || { printf 'unserved package-checks files\\n' >&2; return 127; }
+    index=$((index + 1))
+  done
+  printf '%s\\n' "$SERVED_PACKAGE_CHECKS"
+}`;
+
 const packageChecksPlan = (files: readonly string[]) => {
   const process = Bun.spawnSync({
     cmd: [
       "bash",
       "-e",
       "-c",
-      `changed_files=("$@"); desktop_rust_checks_required=false
+      `${PACKAGE_CHECKS_BUN_SHIM}
+changed_files=("$@"); desktop_rust_checks_required=false
 ${packageScope}
 printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
       ...files,
     ],
-    env: { PATH: Bun.env["PATH"] ?? "", EVENT_NAME: "pull_request" },
+    env: {
+      PATH: Bun.env["PATH"] ?? "",
+      EVENT_NAME: "pull_request",
+      SERVED_PACKAGE_CHECKS: String(requiresPackageChecks({ changed: files })),
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
-  expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
+  const stderr = new TextDecoder().decode(process.stderr);
+  expect(process.exitCode, stderr).toBe(0);
+  expect(stderr).toBe("");
   return new TextDecoder().decode(process.stdout).trim();
 };
 
@@ -2835,9 +2860,9 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
-// Two subprocesses prove the workflow hands its changed files to the scope
-// script; every case is classified in process, because each subprocess is a
-// cold Bun start that runs for seconds while CI checks run in parallel.
+// Two workflow runs prove the scope hands its changed files to the detector
+// and reads both answers; every case is classified in process, because a
+// spawned detector is a cold Bun start that runs for seconds under CI load.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(selector).toContain(packageScope);
@@ -2896,7 +2921,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       );
     }
   }
-}, 15_000);
+});
 
 const smokeCommands = (job: unknown) =>
   jobSteps(job).flatMap(({ run }) =>
