@@ -771,18 +771,16 @@ const readOrganizationChildren = async (
   };
 };
 
-// Expanded text size of the matched rows. Unlike the stored size, which is
-// compressed, it tracks what loading and serialising the rows costs.
+// Expanded text size of a row. Unlike the stored size, which is compressed,
+// it tracks what loading and serialising the row costs.
 const expandedTextBytes = (recordTable: PgTable) =>
-  sql<number>`COALESCE(SUM(octet_length(${recordTable}.*::text)), 0)::bigint`.mapWith(
-    Number,
-  );
+  sql`octet_length(${recordTable}.*::text)`;
 
 const measureRecords = async (
   { db, organizationId, readForParents }: PagedReader,
   matterIds: readonly string[],
 ): Promise<RecordBytes> => {
-  // What `loadOrganizationRecords` reads, one aggregate per table.
+  // What `loadOrganizationRecords` reads, summed over its tables in one query.
   const organizationTables: readonly (readonly [PgTable, SQL | undefined])[] = [
     [contacts, eq(contacts.organizationId, organizationId)],
     [
@@ -802,19 +800,24 @@ const measureRecords = async (
       ),
     ],
   ];
-  let organizationBytes = 0;
-  for (const [recordTable, where] of organizationTables) {
-    // One small aggregate per table, sequential to keep load low
-    const rows = await db(
+  const organizationSum = sql.join(
+    organizationTables.map(
+      ([recordTable, where]) =>
+        sql`(SELECT COALESCE(SUM(${expandedTextBytes(recordTable)}), 0) FROM ${recordTable} WHERE ${where ?? sql`true`})`,
+    ),
+    sql` + `,
+  );
+  const organizationRow = (
+    await db(
       async (tx) =>
-        await tx
-          .select({ bytes: expandedTextBytes(recordTable) })
-          .from(recordTable)
-          .where(where),
-    );
-    organizationBytes += rows.at(0)?.bytes ?? 0;
-  }
-  // What `loadMatter` reads, grouped by matter.
+        await tx.execute<{ bytes: string }>(
+          sql`SELECT (${organizationSum})::bigint::text AS bytes`,
+        ),
+    )
+  ).at(0);
+  const organizationBytes = Number(organizationRow?.bytes ?? "0");
+  // What `loadMatter` reads, grouped by matter: one query per page of
+  // matters over all of its tables.
   const matterTables: readonly (readonly [PgTable, PgColumn])[] = [
     [entities, entities.workspaceId],
     [entityVersions, entityVersions.workspaceId],
@@ -825,29 +828,27 @@ const measureRecords = async (
     [invoices, invoices.workspaceId],
     [invoiceLines, invoiceLines.workspaceId],
   ];
-  const matterBytes = new Map<string, number>();
-  for (const [recordTable, workspaceColumn] of matterTables) {
-    // One grouped aggregate per table and page of matters, sequential to keep load low
-    const rows = await readForParents(
-      matterIds.map((id) => brandPersistedWorkspaceId(id)),
-      async (ids) =>
-        await db(
-          async (tx) =>
-            await tx
-              .select({
-                workspaceId: workspaceColumn,
-                bytes: expandedTextBytes(recordTable),
-              })
-              .from(recordTable)
-              .where(inArray(workspaceColumn, ids))
-              .groupBy(workspaceColumn),
+  const rows = await readForParents(
+    matterIds.map((id) => brandPersistedWorkspaceId(id)),
+    async (ids) => {
+      const perRow = sql.join(
+        matterTables.map(
+          ([recordTable, workspaceColumn]) =>
+            sql`SELECT ${workspaceColumn} AS workspace_id, ${expandedTextBytes(recordTable)} AS bytes FROM ${recordTable} WHERE ${inArray(workspaceColumn, ids)}`,
         ),
-    );
-    for (const { workspaceId, bytes } of rows) {
-      const id = String(workspaceId);
-      matterBytes.set(id, (matterBytes.get(id) ?? 0) + bytes);
-    }
-  }
+        sql` UNION ALL `,
+      );
+      return await db(
+        async (tx) =>
+          await tx.execute<{ workspace_id: string; bytes: string }>(
+            sql`SELECT workspace_id::text AS workspace_id, COALESCE(SUM(bytes), 0)::bigint::text AS bytes FROM (${perRow}) AS measured GROUP BY workspace_id`,
+          ),
+      );
+    },
+  );
+  const matterBytes = new Map(
+    rows.map((row) => [row.workspace_id, Number(row.bytes)] as const),
+  );
   return { organizationBytes, matterBytes };
 };
 
