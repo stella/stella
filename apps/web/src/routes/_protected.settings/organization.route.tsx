@@ -24,7 +24,6 @@ export const Route = createFileRoute("/_protected/settings/organization")({
       if (
         !matches.some(
           ({ staticData }) =>
-            "organizationSettingsAdmission" in staticData &&
             staticData.organizationSettingsAdmission === "time-billing",
         )
       ) {

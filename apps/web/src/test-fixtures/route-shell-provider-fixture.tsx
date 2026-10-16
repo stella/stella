@@ -64,37 +64,41 @@ const setupFixtureEnvironment = (
     });
   }
 };
-class FixtureEventSource extends EventTarget implements EventSource {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSED = 2;
-  readonly CONNECTING = 0;
-  readonly OPEN = 1;
-  readonly CLOSED = 2;
-  readonly url: string;
-  readonly withCredentials: boolean;
-  readyState = 1;
-  onerror: EventSource["onerror"] = null;
-  onmessage: EventSource["onmessage"] = null;
-  onopen: EventSource["onopen"] = null;
-  constructor(url: string | URL, init: EventSourceInit = {}) {
-    super();
-    this.url = String(url);
-    this.withCredentials = init.withCredentials ?? false;
-    const path = new URL(this.url, window.location.origin).pathname;
-    if (path !== "/v1/workspaces/00000000-0000-4000-8000-000000000001/events") {
-      panic(`Unrecorded shell event stream: ${path}`);
-    }
-    queueMicrotask(() => {
-      if (this.readyState === 1) {
-        this.dispatchEvent(new Event("open"));
+// Resolve EventTarget after Happy DOM installs its matching Event constructor.
+const createFixtureEventSource = () =>
+  class FixtureEventSource extends EventTarget implements EventSource {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSED = 2;
+    readonly CONNECTING = 0;
+    readonly OPEN = 1;
+    readonly CLOSED = 2;
+    readonly url: string;
+    readonly withCredentials: boolean;
+    readyState = 1;
+    onerror: EventSource["onerror"] = null;
+    onmessage: EventSource["onmessage"] = null;
+    onopen: EventSource["onopen"] = null;
+    constructor(url: string | URL, init: EventSourceInit = {}) {
+      super();
+      this.url = String(url);
+      this.withCredentials = init.withCredentials ?? false;
+      const path = new URL(this.url, window.location.origin).pathname;
+      if (
+        path !== "/v1/workspaces/00000000-0000-4000-8000-000000000001/events"
+      ) {
+        panic(`Unrecorded shell event stream: ${path}`);
       }
-    });
-  }
-  close() {
-    this.readyState = 2;
-  }
-}
+      queueMicrotask(() => {
+        if (this.readyState === 1) {
+          this.dispatchEvent(new Event("open"));
+        }
+      });
+    }
+    close() {
+      this.readyState = 2;
+    }
+  };
 
 const installFixtureNetwork = () => {
   const originalFetch = globalThis.fetch;
@@ -118,7 +122,7 @@ const installFixtureNetwork = () => {
   } satisfies Omit<AuthenticatedUser, "activeOrganizationId">;
   const session = { userId: user.id, activeOrganizationId: "org-fixture" };
   const originalEventSource = globalThis.EventSource;
-  globalThis.EventSource = FixtureEventSource;
+  globalThis.EventSource = createFixtureEventSource();
   const timeZone = parseTimeZoneId("UTC");
   if (timeZone === null) {
     panic("UTC must be a supported fixture time zone");

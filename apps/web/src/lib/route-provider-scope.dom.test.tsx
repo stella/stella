@@ -50,7 +50,11 @@ for (const scope of Object.values(PROVIDER_SCOPE)) {
           path: "scope-fixture",
           staticData: { providerScopes: declared ? [scope] : [] },
           component: Probe,
-          errorComponent: ({ error }) => <output>{error.message}</output>,
+          errorComponent: ({ error }) => (
+            <output>
+              {error instanceof Error ? error.message : String(error)}
+            </output>
+          ),
         });
         const router = createRouter({
           routeTree: root.addChildren([route]),

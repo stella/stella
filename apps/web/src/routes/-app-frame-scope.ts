@@ -21,6 +21,7 @@ declare module "@tanstack/react-router" {
   interface StaticDataRouteOption {
     appFrame?: AppFrameScope;
     providerScopes?: readonly ProviderScope[];
+    organizationSettingsAdmission?: "time-billing";
   }
 }
 

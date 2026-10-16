@@ -44,17 +44,14 @@ const invitation = {
 export const authFixtureLoaderData = (routeId: string) => {
   switch (routeId) {
     case "/auth/otp":
-      return { devOtp: null } satisfies Awaited<
-        ReturnType<NonNullable<typeof OtpRoute.options.loader>>
-      >;
+      return { devOtp: null } satisfies typeof OtpRoute.types.loaderData;
     case "/auth/error":
-      return { method: null, provider: null } satisfies Awaited<
-        ReturnType<NonNullable<typeof ErrorRoute.options.loader>>
-      >;
+      return {
+        method: null,
+        provider: null,
+      } satisfies typeof ErrorRoute.types.loaderData;
     case "/auth/accept-invitation/$invitationId":
-      return { invitation } satisfies Awaited<
-        ReturnType<NonNullable<typeof InvitationRoute.options.loader>>
-      >;
+      return { invitation } satisfies typeof InvitationRoute.types.loaderData;
     default:
       return undefined;
   }
