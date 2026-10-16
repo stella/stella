@@ -53,23 +53,24 @@ export const matterProofMistakes = <U, M, T, O, Other>(
   return { forgedRead, forgedWrite, changedOrganization };
 };
 
+// A continuation that settles without awaiting anything.
+const settled = <T>(value: T): Promise<T> => Promise.resolve(value);
+
 export const matterProofCannotEscape = async (
   options: Parameters<typeof withMatterAccess<"read", unknown, never>>[0],
 ) => {
   // @ts-expect-error The transaction's ghost name cannot escape its continuation.
-  // oxlint-disable-next-line gdp-ts/no-matter-access-context-escape -- compile-only negative case proves the escape fails to type-check
-  await withMatterAccess(options, async ({ proof }) => Result.ok(proof));
+  await withMatterAccess(options, ({ proof }) => settled(Result.ok(proof)));
   // @ts-expect-error A named transaction cannot escape for use in another scope.
-  // oxlint-disable-next-line gdp-ts/no-matter-access-context-escape -- compile-only negative case proves the escape fails to type-check
-  await withMatterAccess(options, async ({ tx }) => Result.ok(tx));
+  await withMatterAccess(options, ({ tx }) => settled(Result.ok(tx)));
 };
 
 export const matterProofInference = async (
   options: Parameters<typeof withMatterAccess<"write", unknown, never>>[0],
 ) => {
-  const outcome = await withMatterAccess(options, async (context) => {
+  const outcome = await withMatterAccess(options, (context) => {
     checkedWrite(context);
-    return Result.ok({ type: "written" } as const);
+    return settled(Result.ok({ type: "written" } as const));
   });
   if (Result.isError(outcome)) {
     return outcome.error.status;
