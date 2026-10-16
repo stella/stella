@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   realpathSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -218,26 +217,33 @@ test("a portable stamp rejects an unrecorded destination ancestor dependency", (
     host: recorder.wrap(ts.createCompilerHost(config.options)),
   });
   const portable = recorder.portableStamp(CONTEXT, directory);
-  const destination = path.join(directory, "extra/depth/stella");
+  // The stamp records ancestors relative to the checkout, as deep as the
+  // source checkout sits. A destination nested deeper than that has an
+  // ancestor (its temporary root) the stamp never described.
+  const destinationRoot = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "compiler-input-destination-")),
+  );
+  const destination = path.join(
+    destinationRoot,
+    ...directory.split(path.sep).map((_, index) => `depth-${String(index)}`),
+  );
   mkdirSync(destination, { recursive: true });
-
-  const tempRoot = realpathSync(tmpdir());
-  const ancestorNodeModules = path.join(tempRoot, "node_modules");
-  const nodeModulesExisted = statSync(ancestorNodeModules, {
-    throwIfNoEntry: false,
-  });
-  const dependency = path.join(ancestorNodeModules, packageName, "index.d.ts");
+  const dependency = path.join(
+    destinationRoot,
+    "node_modules",
+    packageName,
+    "index.d.ts",
+  );
   mkdirSync(path.dirname(dependency), { recursive: true });
   writeFileSync(dependency, "export interface Missing {}\n");
   try {
     expect(localizeStamp(portable, destination)).toBeUndefined();
-  } finally {
-    rmSync(path.join(tempRoot, "node_modules", packageName), {
+    rmSync(path.join(destinationRoot, "node_modules"), {
       recursive: true,
       force: true,
     });
-    if (nodeModulesExisted === undefined) {
-      rmSync(ancestorNodeModules, { recursive: true, force: true });
-    }
+    expect(localizeStamp(portable, destination)).toBeDefined();
+  } finally {
+    rmSync(destinationRoot, { recursive: true, force: true });
   }
 });

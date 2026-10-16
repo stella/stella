@@ -213,14 +213,10 @@ const toPortableStamp = (stamp: CompilerInputStamp, root: string) => {
 
 /**
  * Places a portable stamp's repository-relative paths under checkout `root`.
- * Absolute paths remain untouched, so the OCI payload validator can reject
- * every machine-specific path outside the repository.
+ * Absolute paths remain untouched, so a machine-specific path outside the
+ * repository never matches another checkout.
  */
-export const localizeStamp = (
-  stamp: CompilerInputStamp,
-  root: string,
-  onUnrecordedAncestor?: (ancestor: string) => void,
-) => {
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) => {
   const realRoot = realpathSync(root);
   const tokens = JSON.stringify(stamp).match(ROOT_TOKEN_PATTERN) ?? [];
   if (
@@ -275,7 +271,6 @@ export const localizeStamp = (
         !recorded.has(candidate) &&
         statSync(candidate, { throwIfNoEntry: false }) !== undefined
       ) {
-        onUnrecordedAncestor?.(ancestor);
         return undefined;
       }
     }

@@ -31,22 +31,11 @@ export const generateCloudSetupArtifact = async (root: string) => {
       process.execPath,
       path.join(root, "node_modules/.bin/stll-cloud-setup"),
     ]);
-    const generated = await readFile(
-      path.join(directory, ".agents/cloud-setup.sh"),
-      "utf-8",
-    );
-    const installBoundary =
-      "  step dependencies dependency_install\n\n  exit 0";
-    if (!generated.includes(installBoundary)) {
-      panic(
-        "Cloud setup generation failed: dependency install boundary changed",
-      );
-    }
     return {
       path: path.join(root, ".agents/cloud-setup.sh"),
-      contents: generated.replace(
-        installBoundary,
-        '  step dependencies dependency_install\n  step api-types runuser -u "$OUTPUT_USER" -- env HOME="$OUTPUT_HOME" PATH="$PATH" bun run generate:cloud\n\n  exit 0',
+      contents: await readFile(
+        path.join(directory, ".agents/cloud-setup.sh"),
+        "utf-8",
       ),
     };
   } finally {

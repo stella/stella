@@ -70,7 +70,6 @@
       "cache": false
     },
     "@stll/web#generate:api-types": {
-      "passThroughEnv": ["STELLA_GENERATED_STORE"],
       "dependsOn": [
         "generate:route-tree",
         "@stll/api#generate:capability-runtime"

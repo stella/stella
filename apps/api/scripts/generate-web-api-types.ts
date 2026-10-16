@@ -13,8 +13,6 @@ import { Result, panic } from "better-result";
 // Modes:
 //   bun --filter @stll/api gen:web-api-types           regenerate the file
 //   bun --filter @stll/api gen:web-api-types --check   CI determinism guard
-//   bun apps/api/scripts/generate-web-api-types.ts --require-cached <base-sha>
-//     restore only; fail before building a program if no stamp/store validates
 //
 // Printing rules:
 // - Types owned by a package apps/web depends on are imported by name, never
@@ -1442,15 +1440,11 @@ const STORE_DIR = generatedStoreDir("web-api-types");
  * Restores a printout another checkout on this host (or a CI cache) made from
  * inputs this checkout still has, and makes it this checkout's own cache.
  */
-const reuseStoredOutput = async (
-  context: string,
-  onUnrecordedAncestor?: (ancestor: string) => void,
-): Promise<boolean> => {
+const reuseStoredOutput = async (context: string): Promise<boolean> => {
   const stored = await restoreGeneratedOutput({
     storeDir: STORE_DIR,
     root: REPO_ROOT,
     context,
-    ...(onUnrecordedAncestor === undefined ? {} : { onUnrecordedAncestor }),
   });
   if (stored === undefined) {
     return false;
@@ -1467,22 +1461,14 @@ const reuseStoredOutput = async (
 const main = async () => {
   const args = process.argv.slice(2);
   const check = args.includes("--check");
-  const requireCached = args.includes("--require-cached");
-  const baseSha = args.at(args.indexOf("--require-cached") + 1);
-  const allowed = requireCached
-    ? args.length === 2 &&
-      args[0] === "--require-cached" &&
-      /^[a-f0-9]{40}$/u.test(baseSha ?? "")
-    : args.every((arg) => arg === "--check");
-  if (!allowed) {
+  if (args.some((arg) => arg !== "--check")) {
     panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
   }
-  if (!check && !requireCached && hasPreparedGeneratedSources(REPO_ROOT)) {
+  if (!check && hasPreparedGeneratedSources(REPO_ROOT)) {
     return;
   }
   const started = performance.now();
   const context = cacheContext();
-  let unrecordedAncestor: string | undefined;
   // --check always builds the program: it owns identity and determinism.
   if (!check && (await reuseCachedOutput(context))) {
     console.log(
@@ -1491,22 +1477,12 @@ const main = async () => {
     );
     return;
   }
-  if (
-    !check &&
-    (await reuseStoredOutput(context, (ancestor) => {
-      unrecordedAncestor ??= ancestor;
-    }))
-  ) {
+  if (!check && (await reuseStoredOutput(context))) {
     console.log(
       `generate-web-api-types: compiler inputs match a stored printout; restored ${repoRelativePath(REPO_ROOT, OUTPUT_PATH)} ` +
         `from ${STORE_DIR} in ${Math.round(performance.now() - started)} ms`,
     );
     return;
-  }
-  if (requireCached) {
-    panic(
-      `generate-web-api-types: no valid cache or generated store entry for base ${String(baseSha)}; cold generation is disabled${unrecordedAncestor === undefined ? "" : ` because ${unrecordedAncestor} contains an unrecorded TypeScript module-resolution path`}`,
-    );
   }
   const recorder = createCompilerInputRecorder();
   const output = generate({
