@@ -63,7 +63,7 @@ const decision = (
   overrides: Partial<typeof caseLawDecisions.$inferInsert> & {
     caseNumber: string;
   },
-): typeof caseLawDecisions.$inferInsert => ({
+) => ({
   id: createSafeId<"caseLawDecision">(),
   sourceId: openSourceId,
   court: "Nejvyšší soud",
@@ -530,7 +530,7 @@ test(
     ) {
       return panic("Expected seven document version ids");
     }
-    await db.insert(caseLawDecisions).values([
+    const versions = [
       decision({
         id: withheld,
         caseNumber: "1 Cdo 1/2016",
@@ -590,7 +590,13 @@ test(
         languageGroupKey: "sitemap-opinion",
         decisionDate: "2016-02-01",
       }),
-    ]);
+    ];
+    await db.insert(caseLawDecisions).values(
+      versions.map((version) => ({
+        ...version,
+        sourceDocumentId: version.id,
+      })),
+    );
     try {
       await refreshCaseLawSitemapShards(refreshDb);
       const shards = (await listedShards()).filter(
