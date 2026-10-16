@@ -107,6 +107,9 @@ export const setChatAnonDecorationPairs = (
   editor: Editor,
   pairs: readonly ChatAnonPair[],
 ): void => {
+  if (editor.isDestroyed) {
+    return;
+  }
   editor.storage[CHAT_ANON_DECORATIONS_NAME].pairs = pairs;
   editor.commands.updateDecorations(CHAT_ANON_DECORATIONS_NAME);
 };
