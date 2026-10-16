@@ -1185,7 +1185,7 @@ jobs:
             # The web API types determinism guard compiles the API and wire
             # programs; mirror the complete cached generator input contract.
             case "$file" in
-              apps/api/*|apps/web/src/*|apps/web/package.json|apps/web/tsconfig*.json|packages/*|scripts/generated-files.ts|patches/*|types/*|tsconfig*.json|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/api/src/*|apps/api/scripts/*|apps/api/package.json|apps/api/tsconfig.json|apps/web/package.json|packages/ai-catalog/*|packages/boe/*|packages/business-registries/*|packages/chat-limits/*|packages/country-codes/*|packages/errors/*|packages/infosoud/*|packages/money/*|packages/permissions/*|packages/portable-path/*|packages/scripts/*|packages/sha256/*|packages/skills/*|packages/template-packs/*|packages/time/*|packages/typescript-config/base.json|scripts/generated-files.ts|types/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 web_api_types_required=true
                 ;;
             esac
