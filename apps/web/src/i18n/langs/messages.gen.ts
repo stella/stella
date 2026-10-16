@@ -2042,6 +2042,7 @@ type Messages = {
       "ZH-HANT": "Chinese (traditional)";
     };
     "lastUpdated": "Last updated";
+    "layoutResetAfterProblem": "The layout was reset after a problem.";
     "legalDatabase": "Legal database";
     "loadMore": "Load more";
     "loading": "Loading";

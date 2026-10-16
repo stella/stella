@@ -61,6 +61,34 @@ const configFiles = [
   "packages/ui/vite.config.ts",
 ];
 
+test("analytics imports stay independent of generated web route projections", () => {
+  const inventory = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: ROOT });
+  expect(inventory.exitCode).toBe(0);
+  const files = inventory.stdout.toString().split("\0").filter(Boolean);
+  const tree = new Map(files.map((file) => [`/app/${file}`, file]));
+  const routeTree = GENERATORS.find(({ id }) => id === "route-tree");
+  expect(routeTree).toBeDefined();
+  for (const output of routeTree?.outputs ?? []) {
+    tree.set(`/app/${output}`, output);
+  }
+  const seen = new Set<string>();
+  expect(
+    sourceClosureProblems(
+      ROOT,
+      tree,
+      [
+        "/app/apps/web/src/lib/analytics/provider.tsx",
+        "/app/apps/web/src/lib/analytics/posthog.ts",
+      ],
+      seen,
+    ),
+  ).toEqual([]);
+  expect(seen.size).toBeGreaterThan(0);
+  for (const output of routeTree?.outputs ?? []) {
+    expect(seen.has(`/app/${output}`), output).toBe(false);
+  }
+});
+
 test("browser scope skips unrelated API implementation and preserves every served runtime dependency", () => {
   expect(
     requiresCiBrowser({
@@ -72,6 +100,12 @@ test("browser scope skips unrelated API implementation and preserves every serve
   expect(inventory.exitCode).toBe(0);
   const files = inventory.stdout.toString().split("\0").filter(Boolean);
   const tree = new Map(files.map((file) => [`/app/${file}`, file]));
+  // Vite starts after this producer restores every declared route projection.
+  const routeTree = GENERATORS.find(({ id }) => id === "route-tree");
+  expect(routeTree).toBeDefined();
+  for (const output of routeTree?.outputs ?? []) {
+    tree.set(`/app/${output}`, output);
+  }
   const entries = files.filter(
     (file) =>
       /\.[cm]?[jt]sx?$/u.test(file) &&
@@ -89,15 +123,7 @@ test("browser scope skips unrelated API implementation and preserves every serve
     seen,
   );
   expect(entries.length).toBeGreaterThan(0);
-  // The route tree is generated before the Vite playground starts. Its
-  // declared inputs must be selected too; every other unresolved edge fails.
-  const routeTree = GENERATORS.find(({ outputs }) =>
-    outputs.includes("apps/web/src/routeTree.gen.ts"),
-  );
-  expect(routeTree).toBeDefined();
-  expect(problems).toEqual([
-    "apps/web/src/router.tsx imports @/routeTree.gen, unavailable in Docker stage",
-  ]);
+  expect(problems).toEqual([]);
   const required = ciBrowserScopePredicate({ root: ROOT });
   for (const input of routeTree?.inputs ?? []) {
     expect(

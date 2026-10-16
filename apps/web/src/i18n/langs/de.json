@@ -2039,6 +2039,7 @@
       "ZH-HANT": "Chinesisch (traditionell)"
     },
     "lastUpdated": "Zuletzt aktualisiert",
+    "layoutResetAfterProblem": "Das Layout wurde nach einem Problem zurückgesetzt.",
     "legalDatabase": "Rechtsdatenbank",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",

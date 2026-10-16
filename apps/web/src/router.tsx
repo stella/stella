@@ -18,17 +18,19 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
+import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { createAppQueryClient } from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
 
 export function getRouter() {
-  const analyticsValue = createAnalyticsValue();
+  const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
@@ -92,6 +94,10 @@ export function getRouter() {
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
   });
+  getWebHangDetector()?.attach({
+    analytics: analyticsValue.analytics,
+    routeTemplates: new Set(WEB_ROUTE_TEMPLATES),
+  });
   readCaughtRouteTemplate = () =>
     resolveCaughtRouteTemplate(router.state.matches);
 
@@ -107,6 +113,7 @@ export function getRouter() {
     if (path === undefined) {
       return;
     }
+    getWebHangDetector()?.routeReady(path);
     routeErrorLifecycle.routeResolved(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
