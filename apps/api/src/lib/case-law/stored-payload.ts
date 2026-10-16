@@ -77,7 +77,7 @@ export const rowHoldsDocumentFor = (
   ${pgPayloadCarriesDocumentFor(table)}
   or (
     ${storedCorpusWriteIsCompleteSql(table)}
-    and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
+    and ${notInArray(sql`${table.contentHash}`, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
 
@@ -107,7 +107,7 @@ export const publicRowHoldsDocumentFor = (
     ${table.textS3Key} is not null
     and ${table.astS3Key} is not null
     and ${table.contentHash} is not null
-    and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
+    and ${notInArray(sql`${table.contentHash}`, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
 

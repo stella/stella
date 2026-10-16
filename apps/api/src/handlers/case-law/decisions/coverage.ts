@@ -377,7 +377,10 @@ const censusKnownGaps = (
       gaps: census.worstSlices.map((slice) => ({
         from: slice.slice,
         to: slice.slice,
-        reason: `Stored ${slice.stored} of ${slice.publisher}; ${slice.withText} with text`,
+        reason:
+          slice.publisher === null
+            ? `Publisher count unavailable; ${slice.stored} stored; ${slice.withText} with text`
+            : `Stored ${slice.stored} of ${slice.publisher}; ${slice.withText} with text`,
         evidenceRef: slice.evidenceRef,
       })),
     };
