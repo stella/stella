@@ -19,6 +19,9 @@ type ReadWorkspaceSuccess = Extract<
 const workspaceRow = {
   id: WORKSPACE_ID,
   organizationId: ORGANIZATION_ID,
+  externalSource: null,
+  externalId: null,
+  importedAt: null,
   name: "Acme retainer",
   reference: "REF-1",
   clientId: toSafeId<"contact">("contact_test123"),

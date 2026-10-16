@@ -81,6 +81,9 @@ export const readExternalRefIds = async <TTable extends ExternalRefTable>({
   if (refs.length === 0) {
     return ids;
   }
+  // The selected id keeps its concrete column type; FROM only needs the
+  // table identity, without Drizzle's unresolved generic selection check.
+  const queryTable: PgTable = table;
   const rows = await tx
     // The tuple IN predicate never matches a NULL ref, so both are text.
     .select({
@@ -88,7 +91,7 @@ export const readExternalRefIds = async <TTable extends ExternalRefTable>({
       source: sql<string>`${table.externalSource}`,
       externalId: sql<string>`${table.externalId}`,
     })
-    .from(table)
+    .from(queryTable)
     .where(
       and(
         eq(table.organizationId, organizationId),

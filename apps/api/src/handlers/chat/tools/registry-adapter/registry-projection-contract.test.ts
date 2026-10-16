@@ -722,8 +722,8 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
-                externalSource: null,
-                externalId: null,
+                externalSource: "legacy",
+                externalId: uid(113),
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -732,6 +732,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [

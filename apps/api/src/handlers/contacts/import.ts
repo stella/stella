@@ -26,7 +26,12 @@ const config = {
   // A row whose external ref matches a stored contact updates it.
   permissions: { contact: ["create", "update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "covered", by: "save_contact" },
+  mcp: {
+    type: "capability",
+    consumesServices: false,
+    reason:
+      "Batch import can create and update contacts by external reference, requiring both permissions; save_contact selects a single operation.",
+  },
   body: importContactsBodySchema,
 } satisfies HandlerConfig;
 
