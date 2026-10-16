@@ -17,6 +17,7 @@ import {
   selectApiTestImpact,
 } from "./api-test-impact";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
+import { workflowJobSteps } from "./workflow-steps";
 
 const withRepository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
@@ -88,7 +89,7 @@ const ruleCases = {
   npm: ".npmrc",
   turbo: "turbo.json",
   patches: "patches/example.patch",
-  github: ".github/actions/test/action.yml",
+  github: ".github/workflows/ci.yml",
   migrations: "apps/api/drizzle/next/migration.sql",
   database: "apps/api/src/db/schema/table.ts",
   runner: "apps/api/scripts/run-tests.ts",
@@ -132,6 +133,50 @@ test("every full-suite rule widens a readable graph", () => {
       );
     }
   });
+});
+
+test("only GitHub readers used to execute API tests widen the suite", () => {
+  const githubRule = API_ALL_RULES.github;
+  for (const file of [
+    ".github/workflows/ci.yml",
+    ".github/actions/ci-install/action.yml",
+    ".github/actions/ci-install/install.ts",
+  ]) {
+    expect(githubRule.test(file), file).toBe(true);
+  }
+  for (const file of [
+    ".github/workflows/pr-lint.yml",
+    ".github/ci-event-policy.json",
+    ".github/ci-checks/ci-checks-policy.yml",
+    ".github/CODEOWNERS",
+    ".github/ISSUE_TEMPLATE/bug.yml",
+  ]) {
+    expect(githubRule.test(file), file).toBe(false);
+  }
+});
+
+test("every local action used by API-running jobs is an API suite reader", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const localActions = ["ci-tests", "postgres-service-suites"]
+    .flatMap((job) => workflowJobSteps(workflow, job))
+    .map((step) => step["uses"])
+    .filter(
+      (uses): uses is string =>
+        typeof uses === "string" &&
+        (uses.startsWith("./.github/actions/") ||
+          uses.startsWith("$/.github/actions/")),
+    )
+    .map((uses) => uses.replace(/^\$\//u, ""));
+
+  expect(localActions.length).toBeGreaterThan(0);
+  expect(
+    localActions.filter((action) => !API_ALL_RULES.github.test(action)),
+  ).toEqual([]);
 });
 
 test("preload dependencies always widen, while erased type imports do not select runtime tests", () => {
