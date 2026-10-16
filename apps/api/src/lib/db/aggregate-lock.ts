@@ -650,7 +650,7 @@ export const withExecutorSavepoint = async <T>(
           }
           await tx.execute(sql`RELEASE SAVEPOINT ${name}`);
           if (outcome.isErr()) {
-            throw outcome.error;
+            return abortTransaction(outcome.error);
           }
           return outcome.value.value;
         }),
