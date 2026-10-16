@@ -766,7 +766,8 @@ if (import.meta.main) {
   if (!process.argv.includes("--check") || !trackedFilesPath) {
     panic("--check requires --tracked-files <NUL-separated-file>");
   }
-  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
+  const tracked = readTrackedPolicyFiles(trackedFilesPath);
+  const entries = loadWaivers(tracked);
   const now = new Date();
   const contextFile = `${trackedFilesPath}.context.json`;
   if (process.env["GITHUB_ACTIONS"] === "true" && !existsSync(contextFile)) {

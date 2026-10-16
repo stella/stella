@@ -273,7 +273,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     "--ignore-scripts",
   ]);
   expect(trackedFiles?.run).toBe(
-    'bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
+    'bun scripts/dated-waiver-inventory.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
   expect(check?.run).toBe(
     'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
