@@ -203,6 +203,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("no-test-support-import.fixture.ts", [
+    "no-test-support-import/no-test-support-import",
+  ]),
   fixtureRuleOverride("no-failure-as-empty.fixture.ts", [
     "no-failure-as-empty/no-failure-as-empty",
   ]),
@@ -1482,6 +1485,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
+    "./.oxlint-plugins/no-test-support-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
@@ -1732,6 +1736,19 @@ const config = defineConfig({
         "gdp-ts/no-type-assertion": "error",
         "gdp-ts/no-any": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.type-test.ts",
+        "**/*.spec.ts",
+        "**/__fixtures__/**",
+        "**/__tests__/**",
+        "apps/api/src/tests/**",
+      ],
+      rules: { "no-test-support-import/no-test-support-import": "error" },
     },
     {
       files: ["apps/api/src/lib/proofs/checked-transaction.ts"],
