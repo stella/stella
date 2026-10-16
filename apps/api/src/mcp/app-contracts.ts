@@ -6,12 +6,12 @@ import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
-import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
 import {
   openDecisionOutput,
   blocksDecisionOutput,
   provisionPreviewOutput,
-} from "./decision-reader-contract";
+} from "../lib/chat/decision-reader-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 import type { McpToolVisibleTo } from "./tool-visibility";
 
