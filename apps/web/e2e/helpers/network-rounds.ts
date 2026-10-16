@@ -53,6 +53,8 @@ export const createNetworkRoundController = <Token>() => {
       held.clear();
       inFlight.clear();
     },
+    /** Whether the token still waits for release (false once released or dropped). */
+    holds: (token: Token) => held.has(token),
     get pending() {
       return held.size > 0 || inFlight.size > 0;
     },

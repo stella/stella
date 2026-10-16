@@ -190,7 +190,10 @@ test("a request aborted while held adds no round and blocks none", () => {
   const controller = createNetworkRoundController<string>();
   controller.arrive({ token: "aborted", key: "GET /aborted", now: 0 });
   // The page abandons the request before the barrier releases it.
+  expect(controller.holds("aborted")).toBe(true);
   controller.complete("aborted", 10);
+  // The route handler stops waiting once the controller no longer holds it.
+  expect(controller.holds("aborted")).toBe(false);
   controller.arrive({ token: "kept", key: "GET /kept", now: 20 });
   const released = controller.release(20 + NETWORK_ROUND_SETTLE_MS);
   expect(released).toEqual(["kept"]);

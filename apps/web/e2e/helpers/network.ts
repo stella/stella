@@ -235,6 +235,11 @@ export const createNetworkCollector = (
             if (released.has(request)) {
               continue;
             }
+            // The page abandoned the request while it was held: it never
+            // reaches the network, so stop waiting and do not continue it.
+            if (!rounds.holds(request)) {
+              return;
+            }
             await ownerSleep(NETWORK_ROUND_POLL_MS);
           }
           await route.continue();
