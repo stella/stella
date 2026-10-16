@@ -6,6 +6,7 @@ import {
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
   PUBLIC_COUNTRY_CAPABILITIES,
+  type PublicCountryCapabilities,
 } from "@stll/api-contract/public-country-capability";
 
 import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
@@ -134,7 +135,7 @@ describe("isSearchUnavailableError", () => {
             domain === "caseLaw"
               ? { caseLaw: reason, legislation: "admitted" }
               : { caseLaw: "admitted", legislation: reason },
-        } as const;
+        } satisfies PublicCountryCapabilities;
         expect(
           publicCountryUnavailableIn({
             capabilities,

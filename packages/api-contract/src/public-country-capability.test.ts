@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 import * as v from "valibot";
@@ -84,6 +85,9 @@ describe("public country availability contract", () => {
               if (PUBLIC_COUNTRY_SURFACE_OPEN[surface][expected]) {
                 expect(response).toBeNull();
               } else {
+                if (response === null) {
+                  panic("Expected a refusal for a closed public-law domain");
+                }
                 expect(response).toMatchObject({
                   country,
                   domain,
