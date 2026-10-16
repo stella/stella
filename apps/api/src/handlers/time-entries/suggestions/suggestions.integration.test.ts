@@ -21,6 +21,7 @@ import {
   featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
@@ -154,10 +155,10 @@ beforeAll(async () => {
     workspaceId: ids.wsA1,
     title: "Lease negotiation",
   });
-  const content = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
-  });
+  const content = (text: string) =>
+    toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: text }],
+    });
   await testDb.insert(chatMessages).values([
     {
       id: messageIds[0],

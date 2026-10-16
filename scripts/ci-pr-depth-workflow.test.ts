@@ -101,7 +101,6 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
   expect(JSON.stringify(main)).toContain("main/pr-depth");
   expect(JSON.stringify(main)).toContain('"pr_depth_only":true');
   expect(prDepthJobs(ci)).toEqual([
-    "ci-generated-sources",
     "ci-checks-generated",
     "ci-checks-policy",
     "ci-checks-rest",
@@ -119,6 +118,8 @@ const ciJobs = v.parse(
         v.array(
           v.looseObject({
             id: v.optional(v.string()),
+            name: v.optional(v.string()),
+            if: v.optional(v.string()),
             run: v.optional(v.string()),
           }),
         ),
@@ -130,11 +131,13 @@ const ciJobs = v.parse(
 const REUSE_SKIP = "needs.ci-plan.outputs.pr_depth_reused != 'true'";
 const MAIN_SKIP = "inputs.pr_depth_only != true";
 // Jobs that only orchestrate: the planner, the result gate and a cancellation
-// helper that acts on another job's failure.
+// helper that acts on another job's failure. The quick checks also run on a
+// PR-depth run for the wall-clock waiver guard; each other part's step keeps
+// the main skip.
 const ORCHESTRATION_JOBS = new Set([
   "ci-plan",
   "ci-result",
-  "dated-waiver-expiry",
+  "ci-quick-checks",
   "marketing-screenshots-cancel",
 ]);
 
@@ -156,13 +159,23 @@ const skipViolations = ({ jobs, depthJobs }: SkipViolationsOptions) =>
 test("PR-depth jobs retain reuse guards; other jobs stay off the main PR-depth run", () => {
   const depthJobs = prDepthJobs(ci);
   expect(skipViolations({ jobs: ciJobs, depthJobs })).toEqual([]);
-  const docs = ciJobs["ci-checks-docs"];
+  const malware = ciJobs["dependency-malware"];
   expect(
     skipViolations({
-      jobs: { ...ciJobs, "ci-checks-docs": { ...docs, if: REUSE_SKIP } },
+      jobs: { ...ciJobs, "dependency-malware": { ...malware, if: REUSE_SKIP } },
       depthJobs,
     }),
-  ).toEqual(["ci-checks-docs"]);
+  ).toEqual(["dependency-malware"]);
+  // Only the waiver guard of the quick checks runs on a PR-depth run.
+  const quickParts = (ciJobs["ci-quick-checks"]?.steps ?? []).filter(
+    ({ name }) =>
+      name?.startsWith("parser-version-guard: ") ||
+      name?.startsWith("ci-checks-docs: "),
+  );
+  expect(quickParts).toHaveLength(2);
+  for (const step of quickParts) {
+    expect(step.if, step.name).toContain(MAIN_SKIP);
+  }
   expect(
     skipViolations({ jobs: ciJobs, depthJobs: [...depthJobs, "ci-tests"] }),
   ).toEqual(["ci-tests"]);

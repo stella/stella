@@ -408,8 +408,7 @@ export const enumProp = (description: string, values: readonly string[]) =>
  * that behavior selects an irreversible operation or outbound send;
  * `destructiveHint` alone does not require confirmation. Set it only after a
  * human has approved the selected operation. Pass a custom `description` for
- * outbound sends or an action-scoped gate (e.g. `manage_organization`, where
- * only the `remove_member` action requires it).
+ * outbound sends or an operation-specific confirmation reason.
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +

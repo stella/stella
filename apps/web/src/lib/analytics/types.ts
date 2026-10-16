@@ -1,4 +1,8 @@
 import type { FeedbackArea, FeedbackKind } from "@stll/api-contract/feedback";
+import type {
+  ProvisionPlacementFailureKind,
+  ProvisionPlacementFailureReason,
+} from "@stll/api-contract/provision-placement";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 
@@ -19,13 +23,27 @@ export const WEB_ANALYTICS_EVENTS = {
   routeErrorRecovery: "route_error_recovery",
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
+  provisionPlacementGaps: "provision_placement_gaps",
 } as const;
 
 export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
+// An Eden treaty error envelope carries the API status and body unparsed;
+// captured raw, analytics loses both. Callers convert it with `toAPIError`.
+type EdenErrorEnvelope = { status: number; value: unknown };
+
+export type NotEdenErrorEnvelope<E> = E extends Error
+  ? E
+  : E extends EdenErrorEnvelope
+    ? never
+    : E;
+
 export type Analytics = {
-  captureError: (error: unknown, context?: ErrorCaptureContext) => void;
+  captureError: <E>(
+    error: E & NotEdenErrorEnvelope<E>,
+    context?: ErrorCaptureContext,
+  ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   captureFeedbackDialogOpened: (
@@ -33,6 +51,9 @@ export type Analytics = {
   ) => void;
   captureFeedbackReportSubmitted: (
     properties: FeedbackDialogSubmittedProperties,
+  ) => void;
+  captureProvisionPlacementGaps: (
+    properties: ProvisionPlacementGapsProperties,
   ) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
@@ -78,6 +99,16 @@ type FeedbackDialogSubmittedProperties = {
 export type ErrorCaptureContext =
   | { type: "detached"; operation: string }
   | { type: "recovery"; reference: ErrorReference };
+
+// Stored citations a decision reader could not place: one event per decision,
+// reader surface and reason, counting the rows. A placement gap is a data
+// outcome (corpus coverage or linker drift), not an exception.
+type ProvisionPlacementGapsProperties = {
+  surface: string;
+  kind: ProvisionPlacementFailureKind;
+  reason: ProvisionPlacementFailureReason;
+  count: number;
+};
 
 type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;
