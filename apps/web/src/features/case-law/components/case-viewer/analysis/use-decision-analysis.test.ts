@@ -211,18 +211,33 @@ describe("what Retry does for each analysis error", () => {
         { source: "organization", provider: "google" },
         { source: "platform" },
       ] as const) {
-        expect(analysisRetryOf({ kind: "failed", code, key })).toBe("new-run");
+        expect(analysisRetryOf({ kind: "failed", code, key }, true)).toBe(
+          "new-run",
+        );
       }
     }
   });
 
+  test("a failed run offers no retry before its provider's retry time, and a new run from then on", () => {
+    const failed: AnalysisError = {
+      kind: "failed",
+      code: "provider_refused",
+      key: { source: "organization", provider: "google" },
+      retryAt: new Date("2026-10-16T19:30:00.000Z"),
+    };
+    expect(analysisRetryOf(failed, false)).toBe("none");
+    expect(analysisRetryOf(failed, true)).toBe("new-run");
+  });
+
   test("an unreadable answer is read again: it may have been a transport blip", () => {
-    expect(analysisRetryOf(UNREADABLE)).toBe("read-again");
+    for (const retryTimePassed of [true, false]) {
+      expect(analysisRetryOf(UNREADABLE, retryTimePassed)).toBe("read-again");
+    }
   });
 
   test("a decision the server will never analyse offers no retry", () => {
     for (const code of CASE_LAW_ANALYSIS_UNAVAILABLE_CODES) {
-      expect(analysisRetryOf({ kind: "unavailable", code })).toBe("none");
+      expect(analysisRetryOf({ kind: "unavailable", code }, true)).toBe("none");
     }
   });
 });
@@ -257,7 +272,32 @@ test("a failed analysis preserves a validated provider diagnostic and its retry 
     result: { kind: "error", error: parsed.error },
   });
   expect(state).toEqual({ status: "error", error: parsed.error });
-  expect(analysisRetryOf(parsed.error)).toBe("new-run");
+  expect(analysisRetryOf(parsed.error, true)).toBe("new-run");
+});
+
+test("a failure's retry time is read as an instant, and a malformed one is unreadable", () => {
+  const failure = {
+    status: "error",
+    code: "provider_refused",
+    key: { source: "organization", provider: "google" },
+  } as const;
+  expect(
+    parseAnalysisResponse({ ...failure, retryAt: "2026-10-16T19:30:00.000Z" }),
+  ).toEqual({
+    status: "error",
+    error: {
+      kind: "failed",
+      code: "provider_refused",
+      key: { source: "organization", provider: "google" },
+      retryAt: new Date("2026-10-16T19:30:00.000Z"),
+    },
+  });
+  for (const retryAt of ["tomorrow", 1_760_000_000_000, null]) {
+    expect(parseAnalysisResponse({ ...failure, retryAt })).toEqual({
+      status: "error",
+      error: UNREADABLE,
+    });
+  }
 });
 
 test("malformed diagnostics cannot become an analysis error message", () => {

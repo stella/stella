@@ -53,4 +53,26 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
     },
   });
 
+/**
+ * What a new invoice in the matter starts from: unbilled entries and
+ * expenses, the seller, buyer, VAT and payment term with their sources.
+ * Always refetched on open, since billing elsewhere changes what is unbilled.
+ */
+export const invoicePrefillOptions = (workspaceId: string) =>
+  queryOptions({
+    queryKey: [...invoicesKeys.all(workspaceId), "prefill"],
+    staleTime: 0,
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .invoices({ workspaceId })
+        .prefill.get({ query: {}, fetch: { signal } });
+
+      return unwrapEden(response);
+    },
+  });
+
+export type InvoicePrefill = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof invoicePrefillOptions>["queryFn"]>>
+>;
+
 export type { InvoiceStatus };

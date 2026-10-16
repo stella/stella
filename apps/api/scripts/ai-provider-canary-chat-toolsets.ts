@@ -20,6 +20,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -195,13 +196,16 @@ const buildChatToolsForScenario = ({
     resolveMemorySourceWorkspaceIds: () => [workspaceId],
     safeDb: inertSafeDb,
     scopedDb: inertScopedDb,
-    skillMetadata: [
-      {
-        description: activeSkillContext.description,
-        name: activeSkillContext.toolName,
-        version: activeSkillContext.version,
-      },
-    ],
+    skillMetadata: offerSkillsToModel({
+      invokedSkillNames: new Set([activeSkillContext.toolName]),
+      skills: [
+        {
+          description: activeSkillContext.description,
+          name: activeSkillContext.toolName,
+          version: activeSkillContext.version,
+        },
+      ],
+    }),
     thirdPartyBoundary: { type: "raw" },
     threadId,
     toolDefectMemo: createChatToolDefectMemo(),

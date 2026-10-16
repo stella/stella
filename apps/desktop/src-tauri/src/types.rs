@@ -181,14 +181,23 @@ pub struct DesktopAccountIdentity {
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum DesktopAccountSnapshot {
-  Disconnected,
-  ReconnectRequired,
-  Expired,
+  // `server` is the web origin a connection would go to, so the window can
+  // say which stella it links to before the user clicks.
+  Disconnected {
+    server: String,
+  },
+  ReconnectRequired {
+    server: String,
+  },
+  Expired {
+    server: String,
+  },
   Connected {
     account: LinkedAccountSnapshot,
     identity: DesktopAccountIdentity,
     #[serde(rename = "expiresAt")]
     expires_at: String,
+    server: String,
   },
 }
 
@@ -274,7 +283,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 20;
+pub const BRIDGE_VERSION: u32 = 21;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.

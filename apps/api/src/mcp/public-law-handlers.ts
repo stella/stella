@@ -2,7 +2,10 @@ import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/de
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
@@ -35,6 +38,12 @@ export const defaultSearchDecisionsHandler: typeof searchDecisionsHandler =
     await (
       await import("@/api/handlers/case-law/decisions/search")
     ).searchDecisionsHandler(args);
+
+export const defaultListCaseLawProvisionDecisions: typeof listCaseLawProvisionDecisions =
+  async (args) =>
+    await (
+      await import("@/api/handlers/case-law/decisions/search")
+    ).listCaseLawProvisionDecisions(args);
 
 export const defaultReadGatedDecisionWithDocument: typeof readGatedDecisionWithDocument =
   async (input) =>

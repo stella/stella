@@ -37,6 +37,8 @@ describe("loopback hosts", () => {
     "::1",
     "[::1]",
     "::ffff:127.0.0.1",
+    new URL("http://[::ffff:127.0.0.1]/").hostname,
+    "[::ffff:7f12:3456]",
   ])("%s is local", (host) => {
     expect(isLoopbackHost(host)).toBe(true);
   });
@@ -47,6 +49,8 @@ describe("loopback hosts", () => {
     "128.0.0.1",
     "10.0.0.1",
     "::2",
+    new URL("http://[::ffff:10.0.0.1]/").hostname,
+    "[::ffff:8000:1]",
     "",
   ])("%s is not local", (host) => {
     expect(isLoopbackHost(host)).toBe(false);
@@ -271,6 +275,38 @@ describe("network guard", () => {
             expect(calls[2]?.init?.body).toBeNull();
           },
         );
+      });
+
+      test("a dropped body takes its request-body headers with it", async () => {
+        await withFake(redirectOnce(303), async (calls) => {
+          await fetch("http://127.0.0.1:1/", {
+            body: "compressed",
+            headers: {
+              "content-encoding": "gzip",
+              "content-language": "cs",
+              "content-location": "/doc",
+              "content-type": "text/plain",
+              "x-trace": "kept",
+            },
+            method: "POST",
+          });
+          const redirected = new Headers(calls[1]?.init?.headers);
+          expect([...redirected.keys()]).toEqual(["x-trace"]);
+        });
+      });
+
+      test("a GET or HEAD meeting a 303 keeps its method and headers", async () => {
+        for (const method of ["GET", "HEAD"]) {
+          await withFake(redirectOnce(303), async (calls) => {
+            await fetch("http://127.0.0.1:1/", {
+              headers: { "content-language": "cs" },
+              method,
+            });
+            expect(calls[1]?.init?.method).toBe(method);
+            const redirected = new Headers(calls[1]?.init?.headers);
+            expect(redirected.get("content-language")).toBe("cs");
+          });
+        }
       });
 
       test("a 307 cannot resend a streamed body", async () => {

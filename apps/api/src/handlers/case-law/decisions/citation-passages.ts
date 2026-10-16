@@ -21,6 +21,7 @@ import type { PublicCountrySurface } from "@stll/api-contract/public-country-cap
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
+import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -49,9 +50,14 @@ export type CitationPassage = {
   text: string;
   truncated: boolean;
   mention: CitationPassageMention;
+  evidenceQuote?: string;
+  evidenceAnchorId?: string | null;
 };
 
-export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
+export type CitationWithPassage = Omit<
+  DecisionCitationRow,
+  "citationText" | "evidenceQuote"
+> & {
   citationText: string | null;
   textWithheldReason: DecisionTextWithheldReason | null;
   /**
@@ -63,6 +69,7 @@ export type CitationWithPassage = Omit<DecisionCitationRow, "citationText"> & {
 };
 
 export type DecisionCitationsPage = {
+  doctrineAvailability: "available" | "unavailable";
   items: CitationWithPassage[];
   nextCursor: string | null;
 };
@@ -186,6 +193,7 @@ export type CitationPassageOptions = {
   citationText: string;
   /** The section the citation row was extracted from, when the row kept it. */
   sectionText: string | undefined;
+  evidenceQuote?: string | null;
 };
 
 /**
@@ -200,6 +208,7 @@ export const citationPassageIn = ({
   ast,
   citationText,
   sectionText,
+  evidenceQuote,
 }: CitationPassageOptions): CitationPassage | null => {
   const match = findCitationPassage({
     blocks: ast.blocks,
@@ -208,6 +217,27 @@ export const citationPassageIn = ({
   });
   if (match === null) {
     return null;
+  }
+  // The quote anchors to the paragraph that carries it, which need not repeat
+  // the citation: a court often discusses a precedent in the paragraph after
+  // the one naming it. The citing paragraph wins when it carries the quote.
+  const quoteBlocks =
+    evidenceQuote === null || evidenceQuote === undefined
+      ? []
+      : ast.blocks.filter(
+          (block) =>
+            hasBlockInlines(block) &&
+            plainTextOf(block.inlines).includes(evidenceQuote),
+        );
+  const evidenceBlock =
+    quoteBlocks.find((block) => block.id === match.blockId) ??
+    quoteBlocks.at(0);
+  if (
+    evidenceQuote !== null &&
+    evidenceQuote !== undefined &&
+    evidenceBlock === undefined
+  ) {
+    logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
   const excerpt = excerptAround(
     match.text,
@@ -219,6 +249,11 @@ export const citationPassageIn = ({
     text: excerpt.text,
     truncated: excerpt.truncated,
     mention: match.mention,
+    ...(evidenceBlock === undefined ||
+    evidenceQuote === null ||
+    evidenceQuote === undefined
+      ? {}
+      : { evidenceQuote, evidenceAnchorId: evidenceBlock.anchorId }),
   };
 };
 
@@ -377,14 +412,19 @@ export const readGatedDecisionCitations = async ({
     if (textWithheldReason === undefined) {
       return panic(`No source disposition for citing decision ${citingId}`);
     }
+    const { evidenceQuote, ...citation } = item;
     return {
-      ...item,
+      ...citation,
       citationText: textWithheldReason === null ? item.citationText : null,
       textWithheldReason,
       passage:
         textWithheldReason !== null || text === undefined
           ? null
           : citationPassageIn({
+              evidenceQuote:
+                item.doctrine === "distinguishes" || item.doctrine === "limits"
+                  ? evidenceQuote
+                  : null,
               ast: text.ast,
               citationText: item.citationText,
               sectionText: sectionTextAt(text.sections, item.sectionIndex),
@@ -393,7 +433,11 @@ export const readGatedDecisionCitations = async ({
   });
 
   return {
-    page: { items, nextCursor: gated.page.nextCursor },
+    page: {
+      items,
+      nextCursor: gated.page.nextCursor,
+      doctrineAvailability: gated.page.doctrineAvailability,
+    },
     type: "page",
   };
 };

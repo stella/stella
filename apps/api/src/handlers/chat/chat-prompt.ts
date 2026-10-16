@@ -90,6 +90,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   describeMissingSkillTools,
@@ -540,8 +542,10 @@ export type ChatUntrustedPromptSuffix = v.InferOutput<
 type ChatFullPrompt = v.InferOutput<typeof chatFullPromptSchema>;
 
 /** The turn's prompt, and what the turn may stamp onto the answer it gets. */
-export type ChatSystemPromptParts = ChatPromptParts & {
+export type ChatSystemPromptParts = Omit<ChatPromptParts, "skillMetadata"> & {
   decisionPassageNumbers: DecisionPassageNumbers;
+  /** The turn's catalog, invocation rule applied; what the skill tools serve. */
+  skillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
 };
 
 export type ChatPromptParts = {
@@ -697,6 +701,12 @@ type BuildChatSystemPromptProps = {
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   messages: readonly Pick<ChatMessage, "id" | "role">[];
+  /**
+   * Skills the latest user message invokes explicitly (skill references, by
+   * slug). A `manual` skill joins the turn's catalog only when invoked here
+   * or as the thread's active skill.
+   */
+  requestedSkillNames: ReadonlySet<string>;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -900,6 +910,7 @@ export const buildChatSystemPromptParts = async ({
   refRegistry,
   safeDb,
   messages,
+  requestedSkillNames,
   threadId,
   toolAvailability,
   userContext,
@@ -924,6 +935,7 @@ export const buildChatSystemPromptParts = async ({
         activeSkillContext,
         listedSkills,
         offeredToolNames: offeredToolNamesForSkills,
+        requestedSkillNames,
       });
 
     // The "safe" half is built by the workspace / global builders:
@@ -2833,19 +2845,22 @@ const buildActiveExternalSection = ({
  * A listed skill whose tools the turn does not offer is left out. An active
  * skill the turn cannot run keeps its read and edit context (the active-skill
  * section) but stays out of the runnable catalog, so neither `load-skill` nor
- * a skill reference can start it.
+ * a skill reference can start it. A `manual` skill joins only when the
+ * latest message references it or it is the active skill.
  */
 const resolveTurnSkillCatalog = ({
   activeSkillContext,
   listedSkills,
   offeredToolNames,
+  requestedSkillNames,
 }: {
   activeSkillContext: ActiveChatSkillContext | null;
   listedSkills: readonly PromptSkillMetadata[];
   offeredToolNames: () => ReadonlySet<string>;
+  requestedSkillNames: ReadonlySet<string>;
 }): {
   activeSkillMissingTools: readonly string[];
-  promptSkillMetadata: readonly PromptSkillMetadata[];
+  promptSkillMetadata: ModelOfferedSkills<PromptSkillMetadata>;
 } => {
   const skillMetadata = filterSkillsWithAvailableTools({
     offeredToolNames,
@@ -2857,12 +2872,18 @@ const resolveTurnSkillCatalog = ({
       : activeSkillContext.requiredTools.filter(
           (name) => !offeredToolNames().has(name),
         );
+  const activeSkillRuns =
+    activeSkillContext !== null && activeSkillMissingTools.length === 0;
   return {
     activeSkillMissingTools,
-    promptSkillMetadata:
-      activeSkillMissingTools.length === 0
+    promptSkillMetadata: offerSkillsToModel({
+      invokedSkillNames: activeSkillRuns
+        ? new Set([...requestedSkillNames, activeSkillContext.toolName])
+        : requestedSkillNames,
+      skills: activeSkillRuns
         ? mergeActiveSkillMetadata({ activeSkillContext, skillMetadata })
         : skillMetadata,
+    }),
   };
 };
 
