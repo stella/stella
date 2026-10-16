@@ -368,7 +368,9 @@ const noMatterProofKindOutsideOwner = {
           (parent?.type === "MemberExpression" &&
             parent.property === node &&
             !parent.computed) ||
-          (parent?.type === "Property" && parent.key === node && !parent.shorthand)
+          (parent?.type === "Property" &&
+            parent.key === node &&
+            !parent.shorthand)
         ) {
           return;
         }
@@ -392,7 +394,8 @@ const noMatterProofKindOutsideOwner = {
         }
         if (
           name === MINT &&
-          (!isDirectCallee(parent) || !isSafeOptions(parent.parent.arguments.at(0)))
+          (!isDirectCallee(parent) ||
+            !isSafeOptions(parent.parent.arguments.at(0)))
         ) {
           context.report({ node, message });
         }
@@ -400,7 +403,6 @@ const noMatterProofKindOutsideOwner = {
     };
   },
 };
-
 
 // The access context (`tx`, `matter`, `actor`, `proof`) is consumed inside the
 // `withMatterAccess` callback. Its ghost names keep a returned or stored proof
@@ -459,7 +461,9 @@ const noMatterAccessContextEscape = {
       } else if (pattern.type === "ObjectPattern") {
         for (const property of pattern.properties) {
           patternNames(
-            property.type === "RestElement" ? property.argument : property.value,
+            property.type === "RestElement"
+              ? property.argument
+              : property.value,
             into,
           );
         }
@@ -537,18 +541,25 @@ const noMatterAccessContextEscape = {
         case "ObjectExpression": {
           return node.properties.some((property) =>
             carries(
-              property.type === "SpreadElement" ? property.argument : property.value,
+              property.type === "SpreadElement"
+                ? property.argument
+                : property.value,
               names,
             ),
           );
         }
         case "ArrayExpression": {
           return node.elements.some((element) =>
-            carries(element?.type === "SpreadElement" ? element.argument : element, names),
+            carries(
+              element?.type === "SpreadElement" ? element.argument : element,
+              names,
+            ),
           );
         }
         case "ConditionalExpression": {
-          return carries(node.consequent, names) || carries(node.alternate, names);
+          return (
+            carries(node.consequent, names) || carries(node.alternate, names)
+          );
         }
         case "LogicalExpression": {
           return carries(node.left, names) || carries(node.right, names);
@@ -587,7 +598,10 @@ const noMatterAccessContextEscape = {
     const carryingLocals = (root, names) => {
       const declarators = [];
       const collect = (node) => {
-        if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+        if (
+          node.type === "VariableDeclarator" &&
+          node.id.type === "Identifier"
+        ) {
           declarators.push(node);
         }
         for (const child of children(node)) {
@@ -624,7 +638,11 @@ const noMatterAccessContextEscape = {
         ) {
           closureNames.add(node.id.name);
         }
-        if (node.type === "FunctionDeclaration" && node.id && references(node.body, names)) {
+        if (
+          node.type === "FunctionDeclaration" &&
+          node.id &&
+          references(node.body, names)
+        ) {
           closureNames.add(node.id.name);
         }
         for (const child of children(node)) {
@@ -648,7 +666,11 @@ const noMatterAccessContextEscape = {
         }
       }
       const visit = (node, nested) => {
-        if (!nested && node.type === "ReturnStatement" && carries(node.argument, names)) {
+        if (
+          !nested &&
+          node.type === "ReturnStatement" &&
+          carries(node.argument, names)
+        ) {
           context.report({ node, message });
         }
         if (
@@ -666,7 +688,9 @@ const noMatterAccessContextEscape = {
           node.arguments.some((argument) => carries(argument, names))
         ) {
           // Storing into an outer collection (push, set, add) keeps it alive.
-          const method = node.callee.computed ? undefined : node.callee.property.name;
+          const method = node.callee.computed
+            ? undefined
+            : node.callee.property.name;
           if (["push", "unshift", "set", "add", "splice"].includes(method)) {
             context.report({ node, message });
             stored = true;
