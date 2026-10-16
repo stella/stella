@@ -4,7 +4,7 @@
 // step it replaced. The pool evaluates every condition against the job's own
 // context (event, `needs`, earlier step outcomes and outputs), so selection by
 // changed inputs and static-receipt reuse behave exactly as they did per step.
-// Selected checks run concurrently, at most one per runner CPU; each log is
+// Selected checks run concurrently, one fewer than the runner CPUs; each log is
 // printed whole, in registry order, and every failure is annotated. Any failed
 // check fails the step after all selected checks have finished.
 //
@@ -435,7 +435,11 @@ const main = async () => {
   });
   const planned = planChecks(readCheckPool(job), context);
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
-  const concurrency = override ? Number(override) : availableParallelism();
+  // One check per CPU but one: four concurrent checks on a four-CPU runner
+  // pushed default 5 s Bun test budgets past their limit; three did not.
+  const concurrency = override
+    ? Number(override)
+    : Math.max(1, availableParallelism() - 1);
   const selected = planned.filter(({ status }) => status === "selected").length;
   print(
     `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,

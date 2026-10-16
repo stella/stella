@@ -2,9 +2,9 @@
 # repository checks" step runs them with `bun scripts/ci-check-pool.ts`: each
 # entry keeps the fields of the workflow step it replaced (condition, env,
 # command, timeout), the pool evaluates the condition against the job's
-# context, runs the selected checks concurrently up to the runner CPU count
-# and prints their logs in this order. Workflow guards read these entries as
-# steps of the job (scripts/workflow-steps.ts).
+# context, runs the selected checks concurrently (one fewer than the runner
+# CPUs) and prints their logs in this order. Workflow guards read these
+# entries as steps of the job (scripts/workflow-steps.ts).
 checks:
   - name: Content delivery declarations
     env:

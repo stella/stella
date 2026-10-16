@@ -203,15 +203,12 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
       async (entries, concurrency) => {
         const planned: PlannedCheck[] = entries.map((entry, index) => {
           const pooled = check(`check ${index}`);
-          switch (entry.status) {
-            case "selected":
-              return { check: pooled, status: "selected", env: {} };
-            case "skipped":
-              return { check: pooled, status: "skipped" };
-            case "invalid":
-              return { check: pooled, status: "invalid", message: "bad" };
+          if (entry.status === "selected") {
+            return { check: pooled, status: "selected", env: {} };
           }
-          return entry.status satisfies never;
+          return entry.status === "skipped"
+            ? { check: pooled, status: "skipped" }
+            : { check: pooled, status: "invalid", message: "bad" };
         });
         let running = 0;
         let peak = 0;
