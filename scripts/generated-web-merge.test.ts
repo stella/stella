@@ -115,6 +115,13 @@ const fixture = () => {
       file: ".gitignore",
       source: readFileSync(path.join(repository, ".gitignore"), "utf-8"),
     });
+    // The generator checks what the compiler read against the Turbo inputs it
+    // declares, as in a real checkout.
+    write({
+      directory,
+      file: "turbo.json",
+      source: readFileSync(path.join(repository, "turbo.json"), "utf-8"),
+    });
     write({
       directory,
       file: "apps/web/package.json",
