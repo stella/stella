@@ -174,6 +174,7 @@ const installFakeBroadcastChannel = () => {
     value: {
       BroadcastChannel: FakeBroadcastChannel,
       localStorage: new MemoryStorage(),
+      sessionStorage: new MemoryStorage(),
     },
   });
 };
@@ -1367,6 +1368,65 @@ describe("Inspector tab broadcast", () => {
     const restored = useInspectorTabsStore.getState().tabs.at(0);
     expect(restored).toMatchObject({ id: "field-1", type: "pdf" });
     expect(restored).not.toHaveProperty("metadataLane");
+  });
+
+  test("a restore that never settled reopens minimized on the next start", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A load that restores the tab, then never settles (no timer runs).
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+
+    // The next start still finds the flag: tabs come back, the pane stays shut.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered).toHaveBeenCalledWith({ tabCount: 1 });
+    recovered.mockRestore();
+  });
+
+  test("a restore that settles leaves the next start unchanged", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The page stays responsive past the settle delay.
+    await Bun.sleep(2200);
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
   });
 
   test("keeps each window's own file tab lane across syncs", () => {

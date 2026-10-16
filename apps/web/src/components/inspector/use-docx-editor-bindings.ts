@@ -38,6 +38,9 @@ export const useDocxEditorBindings = ({
 
   const handleScrollTopChange = (scrollTop: number) => {
     setDocxScrollTopByTab((prev) => {
+      if (prev.get(tabId) === scrollTop) {
+        return prev;
+      }
       const next = new Map(prev);
       next.set(tabId, scrollTop);
       return next;
