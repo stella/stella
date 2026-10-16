@@ -1,7 +1,6 @@
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
-// One real turn, recorded on a seeded local stack (2026-10-15): a Czech
-// case-law question answered by Claude Sonnet 5.5 over the seeded production
+// One recorded turn: a Czech case-law question answered over published
 // decisions, including the Constitutional Court's III. ÚS 2429/24. Kept
 // verbatim, so citation rendering is iterated against what a model really
 // writes (inline decision links, quoted passages), not hand-built markdown.
