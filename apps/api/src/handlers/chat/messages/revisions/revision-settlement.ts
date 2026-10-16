@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
 import { getAwaitingUserInteractions } from "@/api/handlers/chat/chat-message-parts";
-import type { NormalizedLegacyMessageParts } from "@/api/handlers/chat/chat-message-parts";
+import type { NormalizedChatMessageParts } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
 type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -27,7 +27,7 @@ export const isRevisionToolCallSettled = (part: ChatToolCallPart): boolean => {
 export const hasUnsettledRevisionContent = ({
   parts,
   metadata,
-}: NormalizedLegacyMessageParts) =>
+}: NormalizedChatMessageParts) =>
   getAwaitingUserInteractions({ role: "assistant", parts, metadata }).length >
     0 ||
   parts.some(

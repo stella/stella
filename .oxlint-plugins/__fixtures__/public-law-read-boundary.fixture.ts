@@ -29,6 +29,11 @@ export const searchCorpusIndexDecisions = () => {
   return deferredRead;
 };
 
+// expect-clean: public-law-read-boundary/require-language-alternate-counts
+export const listCaseLawProvisionDecisions = async () => {
+  await readPublicDecisionLanguageAlternatesByGroup();
+};
+
 // oxlint-disable-next-line public-law-read-boundary/require-configured-read-transaction -- fixture: the primary database branch reaches fn without read-only configuration
 export const publicLawReadDb = async <T>(
   fn: (tx: unknown) => Promise<T>,
