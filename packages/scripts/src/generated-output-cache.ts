@@ -222,5 +222,8 @@ export const withGeneratedOutputCache = async ({
       );
     },
   });
-  result.unwrap(`Generation failed: ${name}`);
+  if (result.isErr()) {
+    console.error(`${name}: generation failed`);
+  }
+  result.unwrap("Generated output generation failed");
 };
