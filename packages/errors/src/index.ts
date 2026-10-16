@@ -1,3 +1,4 @@
+// parser-output-unchanged: exports exception fingerprint and scope helpers without changing parser inputs or outputs.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { TaggedError } from "better-result";
 
@@ -52,3 +53,12 @@ export {
   declareFingerprintFields,
   readFingerprintFields,
 } from "./fingerprint-fields";
+
+export {
+  exceptionScopeIdentity,
+  type ExceptionScope,
+  type RequestExceptionScope,
+  type HandlerExceptionScope,
+  type JobExceptionScope,
+  type IngestionExceptionScope,
+} from "./exception-scope";

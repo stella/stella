@@ -67,6 +67,10 @@ export const ReportExportHistory = ({
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "ReportExportHistory.handleDownload:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ReportExportHistory.handleDownload:failure",
+        },
       });
       notifyUserError(result.error, t("workspaces.views.reportExport.failed"), {
         description: t("common.unexpectedError"),
@@ -101,6 +105,10 @@ export const ReportExportHistory = ({
       if (Result.isError(result)) {
         analytics.captureError(result.error, {
           fingerprintKey: "ReportExportHistory.handleOpen:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ReportExportHistory.handleOpen:failure",
+          },
         });
       }
       notifyUserError(
@@ -114,6 +122,10 @@ export const ReportExportHistory = ({
     handleDownload(exportId).catch((error: unknown) =>
       analytics.captureError(error, {
         fingerprintKey: "ReportExportHistory.handleDownloadClick:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ReportExportHistory.handleDownloadClick:failure",
+        },
       }),
     );
   };
@@ -122,6 +134,10 @@ export const ReportExportHistory = ({
     handleOpen(exportId).catch((error: unknown) =>
       analytics.captureError(error, {
         fingerprintKey: "ReportExportHistory.handleOpenClick:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ReportExportHistory.handleOpenClick:failure",
+        },
       }),
     );
   };
@@ -191,6 +207,10 @@ export const ReportExportHistory = ({
             fetchNextPage().catch((error: unknown) =>
               analytics.captureError(error, {
                 fingerprintKey: "ReportExportHistory:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportHistory:failure",
+                },
               }),
             );
           }}

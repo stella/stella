@@ -6,6 +6,7 @@ import { properties } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { COMPUTED_PROPERTY_TOOL_TYPES } from "@/api/lib/workflow/get-execution-plan";
 
@@ -118,24 +119,21 @@ export const startStragglerCatchUp = async ({
               message: "Straggler catch-up could not start its follow-up run",
               workspaceId,
             }),
-            {
-              fingerprintKey: "workflowCatchUp.refused",
-              context: { workspaceId },
-            },
+            handlerErrorContext("workflowCatchUp.refused", { workspaceId }),
           );
         }
         return result;
       })
       .catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey: "workflowCatchUp.rejected",
-          context: { workspaceId },
-        }),
+        captureError(
+          error,
+          handlerErrorContext("workflowCatchUp.rejected", { workspaceId }),
+        ),
       );
   } catch (error: unknown) {
-    captureError(error, {
-      fingerprintKey: "workflowCatchUp.failed",
-      context: { workspaceId },
-    });
+    captureError(
+      error,
+      handlerErrorContext("workflowCatchUp.failed", { workspaceId }),
+    );
   }
 };

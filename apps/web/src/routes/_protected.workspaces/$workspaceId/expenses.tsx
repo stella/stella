@@ -60,6 +60,11 @@ export const Route = createFileRoute(
         (error: unknown) => {
           getAnalytics().captureError(error, {
             fingerprintKey: "workspaces.workspaceId.expenses.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/workspaces/$workspaceId/expenses",
+            },
           });
         },
       ),

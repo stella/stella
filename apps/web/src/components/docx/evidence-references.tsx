@@ -245,6 +245,10 @@ const EvidenceFilePicker = ({
     }
     getAnalytics().captureError(error, {
       fingerprintKey: "EvidenceFilePicker.reportInsertError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "EvidenceFilePicker.reportInsertError:failure",
+      },
     });
     notifyUserError(error, t("folio.evidenceUnavailable"));
   };

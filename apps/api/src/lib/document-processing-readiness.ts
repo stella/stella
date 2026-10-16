@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createLazyRedisClient,
@@ -77,9 +78,12 @@ export const isDocumentOcrWorkerAvailable = async (
         "error.type": errorTag(availability.error),
       });
     } else {
-      captureError(availability.error, {
-        fingerprintKey: "lib.isDocumentOcrWorkerAvailable.availability_error",
-      });
+      captureError(
+        availability.error,
+        handlerErrorContext(
+          "lib.isDocumentOcrWorkerAvailable.availability_error",
+        ),
+      );
     }
     return false;
   }
@@ -204,7 +208,10 @@ export const startDocumentOcrWorkerReadiness = () => {
           });
           return;
         }
-        captureError(error, { fingerprintKey: "documentProcessing.heartbeat" });
+        captureError(
+          error,
+          handlerErrorContext("documentProcessing.heartbeat"),
+        );
         logger.error("document_processing.readiness_heartbeat_failed", {
           "error.type": errorTag(error),
         });

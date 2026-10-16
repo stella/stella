@@ -228,6 +228,11 @@ export const useAutocompleteStream = (
           getAnalytics().captureError(error, {
             fingerprintKey:
               "useAutocompleteStream.fireRequest.reportError:failure",
+            scope: {
+              type: "request",
+              method: "POST",
+              routeTemplate: "/v1/ai-autocomplete/stream",
+            },
           });
         },
       });

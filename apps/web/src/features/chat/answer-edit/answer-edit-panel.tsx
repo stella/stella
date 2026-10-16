@@ -61,6 +61,10 @@ export const AnswerEditPanel = ({
     }
     getAnalytics().captureError(refreshed.error, {
       fingerprintKey: "AnswerEditPanel.refreshAnswer:failure",
+      scope: {
+        type: "handler",
+        handlerId: "AnswerEditPanel.refreshAnswer:failure",
+      },
     });
     if (active.current) {
       setState({ status: "stale" });
@@ -92,6 +96,7 @@ export const AnswerEditPanel = ({
     }
     getAnalytics().captureError(result.error, {
       fingerprintKey: "AnswerEditPanel:failure",
+      scope: { type: "handler", handlerId: "AnswerEditPanel:failure" },
     });
     if (APIError.is(result.error) && result.error.status === 409) {
       setState({ status: "stale" });
@@ -134,6 +139,7 @@ export const AnswerEditPanel = ({
     }
     getAnalytics().captureError(result.error, {
       fingerprintKey: "AnswerEditPanel.save:failure",
+      scope: { type: "handler", handlerId: "AnswerEditPanel.save:failure" },
     });
     if (APIError.is(result.error) && result.error.status === 409) {
       setState({ status: "stale" });

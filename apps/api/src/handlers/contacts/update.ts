@@ -33,6 +33,7 @@ import { nationalityCodesSchema } from "@/api/lib/business-registries/nationalit
 import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -361,7 +362,7 @@ export const updateContactHandler = async function* ({
   }
 
   flushContactSearchRepairs([contactId]).catch((error: unknown) =>
-    captureError(error, { fingerprintKey: CONTACT_REPAIR_KEY }),
+    captureError(error, handlerErrorContext(CONTACT_REPAIR_KEY)),
   );
 
   return Result.ok(outcome.row);

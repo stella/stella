@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 
 const moveEntityBodySchema = t.Object({
@@ -214,9 +215,10 @@ export const moveEntityHandler = async function* ({
   yield* moved;
 
   syncSearchActivity(workspaceId).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "moveEntityHandler.syncSearchActivity",
-    }),
+    captureError(
+      error,
+      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+    ),
   );
 
   return Result.ok({});

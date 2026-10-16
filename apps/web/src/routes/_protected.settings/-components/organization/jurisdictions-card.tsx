@@ -49,6 +49,11 @@ export const OrganizationJurisdictionsCard = () => {
   const [, startSelectionTransition] = useTransition();
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId:
+        "OrganizationJurisdictionsCard.updateMutation.useSettingsMutation",
+    },
     mutationFn: async (next: PracticeJurisdiction[]) =>
       unwrapEden(
         await api["organization-settings"]["practice-jurisdictions"].post({

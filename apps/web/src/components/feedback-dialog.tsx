@@ -192,6 +192,7 @@ const FeedbackReport = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "FeedbackReport:failure",
+        scope: { type: "handler", handlerId: "FeedbackReport:failure" },
       });
       const rateLimited =
         APIError.is(error) && error.status === RATE_LIMITED_STATUS;
@@ -402,6 +403,10 @@ const FeedbackReceipt = ({ onClose, response }: FeedbackReceiptProps) => {
     if (Result.isError(copied)) {
       analytics.captureError(copied.error, {
         fingerprintKey: "FeedbackReceipt.handleCopy:failure",
+        scope: {
+          type: "handler",
+          handlerId: "FeedbackReceipt.handleCopy:failure",
+        },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;

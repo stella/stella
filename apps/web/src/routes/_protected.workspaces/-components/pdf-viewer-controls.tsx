@@ -154,6 +154,10 @@ export const PdfViewerControls = ({
     } catch (error: unknown) {
       analytics.captureError(error, {
         fingerprintKey: "PdfViewerControls.handlePrint:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PdfViewerControls.handlePrint:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {

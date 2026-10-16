@@ -150,6 +150,7 @@ export const VersionsFacet = ({
       // instead of looping the request.
       getAnalytics().captureError(result.error, {
         fingerprintKey: "VersionsFacet:failure",
+        scope: { type: "handler", handlerId: "VersionsFacet:failure" },
       });
       setLoadOlderError(true);
       notifyUserError(result.error, t("common.somethingWentWrong"));

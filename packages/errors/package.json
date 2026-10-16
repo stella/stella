@@ -7,7 +7,9 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./script-error": "./src/script-error.ts"
+    "./script-error": "./src/script-error.ts",
+    "./fingerprint-fields": "./src/fingerprint-fields.ts",
+    "./exception-scope": "./src/exception-scope.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

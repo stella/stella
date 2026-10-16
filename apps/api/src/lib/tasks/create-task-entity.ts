@@ -28,6 +28,7 @@ import {
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
@@ -484,9 +485,10 @@ export const createTaskEntityHandler = async function* ({
   // after commit so the repair worker cannot race an invisible entity.
   if (props.tx === undefined) {
     flushEntitySearchRepairs([txResult.entityId]).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "createTaskEntityHandler.flushEntitySearchRepairs",
-      }),
+      captureError(
+        error,
+        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
+      ),
     );
   }
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
 // parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.

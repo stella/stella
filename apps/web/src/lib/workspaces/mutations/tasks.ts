@@ -51,6 +51,7 @@ export const useCreateTask = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateTask:failure",
+        scope: { type: "handler", handlerId: "useCreateTask:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },
@@ -110,6 +111,7 @@ export const useAddTaskAssignee = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useAddTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useAddTaskAssignee:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },
@@ -138,6 +140,7 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useRemoveTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useRemoveTaskAssignee:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },
@@ -182,6 +185,7 @@ export const useMoveTaskAssignee = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useMoveTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useMoveTaskAssignee:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

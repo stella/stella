@@ -43,7 +43,13 @@ export class PDFErrorBoundary extends Component<
         message: `[PDF] ${error.message}`,
         cause: error,
       }),
-      { fingerprintKey: "PDFErrorBoundary.componentDidCatch:caught" },
+      {
+        fingerprintKey: "PDFErrorBoundary.componentDidCatch:caught",
+        scope: {
+          type: "handler",
+          handlerId: "PDFErrorBoundary.componentDidCatch:caught",
+        },
+      },
     );
     this.props.onError?.(error);
   }

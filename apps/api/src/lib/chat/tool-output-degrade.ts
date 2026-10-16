@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { declareFailureClass } from "@stll/errors";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -298,9 +299,11 @@ export const reportToolOutputDegrade = ({
     new ToolOutputContractDegradedError({
       message: `Tool output degraded (${defect}) at ${joinedPaths}`,
     }),
-    {
-      fingerprintKey: `chat.toolOutput.${source}.${toolName}.${defect}`,
-      context: { defect, paths: joinedPaths, source, toolName },
-    },
+    handlerErrorContext(`chat.toolOutput.${source}.${toolName}.${defect}`, {
+      defect,
+      paths: joinedPaths,
+      source,
+      toolName,
+    }),
   );
 };

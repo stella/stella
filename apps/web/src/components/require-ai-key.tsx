@@ -109,6 +109,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       .catch((error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "AIAvailabilityRoot:failure",
+          scope: { type: "handler", handlerId: "AIAvailabilityRoot:failure" },
         });
         // Callers read `false` as "do not proceed" and stop there, so without
         // this the action the user just triggered would appear to do nothing.
@@ -423,6 +424,7 @@ export const AIKeyRequiredDialog = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "AIKeyRequiredDialog:failure",
+        scope: { type: "handler", handlerId: "AIKeyRequiredDialog:failure" },
       });
       notifyUserError(error, tErrors("actionFailed"));
     },

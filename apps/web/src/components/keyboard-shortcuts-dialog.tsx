@@ -204,6 +204,7 @@ const RebindableBinding = ({
     } catch (error) {
       getAnalytics().captureError(error, {
         fingerprintKey: "RebindableBinding.save:failure",
+        scope: { type: "handler", handlerId: "RebindableBinding.save:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
@@ -218,6 +219,10 @@ const RebindableBinding = ({
     } catch (error) {
       getAnalytics().captureError(error, {
         fingerprintKey: "RebindableBinding.resetToDefault:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RebindableBinding.resetToDefault:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {

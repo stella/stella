@@ -34,6 +34,7 @@ import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
@@ -131,10 +132,12 @@ export const classifyCitation = async ({
         ruleId: ruleMatch.ruleId,
         scopedDb,
       }).catch((error: unknown) => {
-        captureError(error, {
-          fingerprintKey: "polarity.persistRuleMatch",
-          context: { ruleId: ruleMatch.ruleId },
-        });
+        captureError(
+          error,
+          handlerErrorContext("polarity.persistRuleMatch", {
+            ruleId: ruleMatch.ruleId,
+          }),
+        );
       });
     }
     return {
@@ -185,10 +188,13 @@ export const classifyCitation = async ({
       polarity,
       scopedDb,
     }).catch((error: unknown) => {
-      captureError(error, {
-        fingerprintKey: "polarity.persistModelMatch",
-        context: { language, polarity },
-      });
+      captureError(
+        error,
+        handlerErrorContext("polarity.persistModelMatch", {
+          language,
+          polarity,
+        }),
+      );
     });
   }
 

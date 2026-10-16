@@ -610,6 +610,7 @@ describe("confirmed file rename state", () => {
     expect(toast).not.toHaveBeenCalled();
     expect(capture).toHaveBeenCalledWith(expect.any(Error), {
       fingerprintKey: "detached:entity-rename.refresh",
+      scope: { type: "handler", handlerId: "detached:entity-rename.refresh" },
       context: { type: "detached", operation: "entity-rename.refresh" },
     });
     capture.mockRestore();

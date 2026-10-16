@@ -81,6 +81,10 @@ export const NewEntityViewTask = ({
     if (result.isErr()) {
       analytics.captureError(result.error, {
         fingerprintKey: "NewEntityViewTask.create:failure",
+        scope: {
+          type: "handler",
+          handlerId: "NewEntityViewTask.create:failure",
+        },
       });
       notifyUserError(result.error, t("common.unexpectedError"));
     } else {

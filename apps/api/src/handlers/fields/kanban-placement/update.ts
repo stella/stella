@@ -17,6 +17,7 @@ import {
 import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
 import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
 import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 
@@ -141,19 +142,24 @@ export const createUpdateKanbanPlacement = ({
           async (notice) =>
             await notifyFlowRunActorOfCompletion(notice).catch(
               (error: unknown) =>
-                captureError(error, {
-                  fingerprintKey:
+                captureError(
+                  error,
+                  handlerErrorContext(
                     "createUpdateKanbanPlacement.notifyFlowRunActorOfCompletion",
-                }),
+                  ),
+                ),
             ),
         ),
       );
 
       if (body.fields.length > 0) {
         flushSearchRepairs([body.entityId]).catch((error: unknown) =>
-          captureError(error, {
-            fingerprintKey: "createUpdateKanbanPlacement.flushSearchRepairs",
-          }),
+          captureError(
+            error,
+            handlerErrorContext(
+              "createUpdateKanbanPlacement.flushSearchRepairs",
+            ),
+          ),
         );
       }
       return Result.ok({});

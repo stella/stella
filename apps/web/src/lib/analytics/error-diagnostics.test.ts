@@ -16,9 +16,12 @@ describe("browser error diagnostics", () => {
       "at https://staging.stll.app/assets/case-viewer-A1b2.js:42:7",
     );
 
-    expect(fingerprintTelemetryError(error, "routeError:caught")).toMatch(
-      /^ERRFP-[0-9A-F]{8}$/u,
-    );
+    expect(
+      fingerprintTelemetryError(error, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
+    ).toMatch(/^ERRFP-[0-9A-F]{8}$/u);
   });
 
   test("fingerprints its declared owner without using the message", () => {
@@ -31,8 +34,16 @@ describe("browser error diagnostics", () => {
       "TypeError: other\n at render (https://staging.stll.app/assets/case-viewer-A1b2.js:42:7)",
     );
 
-    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
-      fingerprintTelemetryError(second, "routeError:caught"),
+    expect(
+      fingerprintTelemetryError(first, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
+    ).toBe(
+      fingerprintTelemetryError(second, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
     );
   });
 
@@ -46,8 +57,16 @@ describe("browser error diagnostics", () => {
       "at https://staging.stll.app/assets/case-viewer-A1b2.js:43:7",
     );
 
-    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
-      fingerprintTelemetryError(second, "routeError:caught"),
+    expect(
+      fingerprintTelemetryError(first, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
+    ).toBe(
+      fingerprintTelemetryError(second, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
     );
   });
 
@@ -64,8 +83,16 @@ describe("browser error diagnostics", () => {
     second.name = "Other Client secret";
 
     expect(telemetryErrorType(first)).toBe("UnknownError");
-    expect(fingerprintTelemetryError(first, "routeError:caught")).toBe(
-      fingerprintTelemetryError(second, "routeError:caught"),
+    expect(
+      fingerprintTelemetryError(first, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
+    ).toBe(
+      fingerprintTelemetryError(second, {
+        key: "routeError:caught",
+        scope: { type: "handler", handlerId: "routeError:caught" },
+      }),
     );
   });
 });

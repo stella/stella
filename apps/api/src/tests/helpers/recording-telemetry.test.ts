@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
@@ -33,12 +34,12 @@ describe("recording telemetry carries the real capture and logger paths", () => 
   test("captureError ships a fingerprinted $exception with the caller's context", () => {
     analytics = installRecordingAnalytics();
 
-    captureError(new QuotaExceededError("user 42 exceeded"), {
-      fingerprintKey: "helpers.capture",
-      context: {
+    captureError(
+      new QuotaExceededError("user 42 exceeded"),
+      handlerErrorContext("helpers.capture", {
         source: "usage.meter",
-      },
-    });
+      }),
+    );
 
     const [event] = analytics.exceptions();
     expect(event).toBeDefined();
@@ -56,14 +57,14 @@ describe("recording telemetry carries the real capture and logger paths", () => 
 
     // The owner and class match; message changes cannot bypass suppression.
     const quotaExceeded = (message: string) => new QuotaExceededError(message);
-    captureError(quotaExceeded("first"), {
-      fingerprintKey: "helpers.capture",
-      context: { source: "usage.meter" },
-    });
-    captureError(quotaExceeded("second"), {
-      fingerprintKey: "helpers.capture",
-      context: { source: "usage.meter" },
-    });
+    captureError(
+      quotaExceeded("first"),
+      handlerErrorContext("helpers.capture", { source: "usage.meter" }),
+    );
+    captureError(
+      quotaExceeded("second"),
+      handlerErrorContext("helpers.capture", { source: "usage.meter" }),
+    );
 
     expect(analytics.exceptions()).toHaveLength(1);
   });

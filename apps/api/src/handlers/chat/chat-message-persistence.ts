@@ -66,6 +66,7 @@ import {
 } from "@/api/lib/chat/thread-names";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -347,11 +348,14 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props.indexThread(props.threadId).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "persistMessage.props_indexThread",
-      }),
-    );
+    props
+      .indexThread(props.threadId)
+      .catch((error: unknown) =>
+        captureError(
+          error,
+          handlerErrorContext("persistMessage.props_indexThread"),
+        ),
+      );
   }
   return result;
 };
@@ -673,14 +677,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnUnsettledToolCallError({
         message: "A settled chat turn stored a tool call without its result",
       }),
-      {
-        fingerprintKey: "chat.storedTurn.unsettledToolCall",
-        context: {
-          outcome,
-          tool_call_states: unsettled.map(({ state }) => state).join(","),
-          unsettled_count: String(unsettled.length),
-        },
-      },
+      handlerErrorContext("chat.storedTurn.unsettledToolCall", {
+        outcome,
+        tool_call_states: unsettled.map(({ state }) => state).join(","),
+        unsettled_count: String(unsettled.length),
+      }),
     );
   }
   const dropped =
@@ -692,14 +693,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnDroppedPartsError({
         message: "A continuation stored its message without earlier parts",
       }),
-      {
-        fingerprintKey: "chat.storedTurn.droppedParts",
-        context: {
-          dropped_tool_calls: String(dropped.droppedToolCallIds.length),
-          outcome,
-          part_count_drop: String(dropped.partCountDrop),
-        },
-      },
+      handlerErrorContext("chat.storedTurn.droppedParts", {
+        dropped_tool_calls: String(dropped.droppedToolCallIds.length),
+        outcome,
+        part_count_drop: String(dropped.partCountDrop),
+      }),
     );
   }
 };
@@ -1222,10 +1220,12 @@ export const persistAcceptedMessageWithClaim = async ({
   persistenceProps
     .indexThread(persistenceProps.threadId)
     .catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey:
+      captureError(
+        error,
+        handlerErrorContext(
           "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
-      }),
+        ),
+      ),
     );
   return Result.ok(result.value.value);
 };
@@ -1264,10 +1264,12 @@ export const persistClaimedReplayMessage = async ({
   persistenceProps
     .indexThread(persistenceProps.threadId)
     .catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey:
+      captureError(
+        error,
+        handlerErrorContext(
           "persistClaimedReplayMessage.persistenceProps_indexThread",
-      }),
+        ),
+      ),
     );
   return Result.ok(result.value.execution);
 };

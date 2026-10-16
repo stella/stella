@@ -17,6 +17,7 @@ export const ContactReadError = ({ error, onRetry }: ContactReadErrorProps) => {
   useExternalSyncEffect(() => {
     analytics.captureError(error, {
       fingerprintKey: "ContactReadError:failure",
+      scope: { type: "handler", handlerId: "ContactReadError:failure" },
     });
   }, [analytics, error]);
   return (

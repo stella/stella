@@ -278,6 +278,7 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
     conversationId: threadRef.threadId,
     getContextMatterIds,
@@ -933,6 +934,7 @@ const useChatWebSearchSeed = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useChatWebSearchSeed:failure",
+        scope: { type: "handler", handlerId: "useChatWebSearchSeed:failure" },
       });
       onSettled(threadRef.threadId, false);
     },

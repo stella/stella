@@ -13,6 +13,7 @@ import {
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedContactId,
   brandPersistedEntityId,
@@ -1136,14 +1137,17 @@ export const projectForChat = <TPayload>({
       kind: "server-defect",
       message: PROJECTION_SCHEMA_FAILURE_MESSAGE,
     });
-    captureError(error, {
-      fingerprintKey: `chat.projection.${source}.${toolName}.validateSchema`,
-      context: {
-        paths: parsed.error.issuePaths.join(", "),
-        source,
-        toolName,
-      },
-    });
+    captureError(
+      error,
+      handlerErrorContext(
+        `chat.projection.${source}.${toolName}.validateSchema`,
+        {
+          paths: parsed.error.issuePaths.join(", "),
+          source,
+          toolName,
+        },
+      ),
+    );
     return Result.err(error);
   }
 
@@ -1170,14 +1174,14 @@ export const projectForChat = <TPayload>({
       kind: "server-defect",
       message: REF_PROJECTION_FAILURE_MESSAGE,
     });
-    captureError(error, {
-      fingerprintKey: `chat.projection.${source}.${toolName}.resolveRefs`,
-      context: {
+    captureError(
+      error,
+      handlerErrorContext(`chat.projection.${source}.${toolName}.resolveRefs`, {
         path: ctx.uuidViolations.at(0) ?? "(root)",
         source,
         toolName,
-      },
-    });
+      }),
+    );
     return Result.err(error);
   }
   if (ctx.uuidViolations.length > 0) {

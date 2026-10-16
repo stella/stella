@@ -82,6 +82,7 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "TwoFactorPanel:failure",
+        scope: { type: "handler", handlerId: "TwoFactorPanel:failure" },
       });
     },
   });

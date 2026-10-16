@@ -42,6 +42,7 @@ import {
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint, errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type {
   ExpectedReason,
   FailureExpectation,
@@ -1250,7 +1251,11 @@ describe("observeFailure channels", () => {
       const expected = OUTPUT_BY_GRADE[row.grade];
       const request = scopedRequest();
 
-      observeFailure(materialize(row), { sink: SINK, request });
+      observeFailure(materialize(row), {
+        sink: SINK,
+        request,
+        scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+      });
 
       expect(logs.records.map(({ severityText }) => severityText)).toEqual([
         expected.severity,
@@ -1314,6 +1319,7 @@ describe("observeFailure channels", () => {
     observeFailure(codedError("ECONNRESET"), {
       sink: SINK,
       request: scopedRequest(),
+      scope: { type: "request", method: "GET", routeTemplate: "/contract" },
     });
 
     const [line] = metricLines;
@@ -1360,7 +1366,10 @@ describe("observeFailure channels", () => {
     });
     const [exception] = analytics.exceptions();
     expect(exception?.properties["$exception_fingerprint"]).toBe(
-      exceptionFingerprint(readEvidence(error), "observe.contract.sink"),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "observe.contract.sink",
+        scope: { type: "handler", handlerId: "contract.sink" },
+      }),
     );
     // Suppression keys on that same identity: the second capture is throttled.
     expect(analytics.exceptions()).toHaveLength(1);
@@ -1472,8 +1481,13 @@ describe("privileged content never leaves the process", () => {
       const error = make();
       const request = scopedRequest();
       const defect = failureSink({ event: "sentinel.defect", expected: [] });
-      observeFailure(error, { sink: defect, request, ctx: hostileContext });
-      captureError(error, { fingerprintKey: "observability.capture" });
+      observeFailure(error, {
+        sink: defect,
+        request,
+        scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        ctx: hostileContext,
+      });
+      captureError(error, handlerErrorContext("observability.capture"));
       logger.warn("helper.record", {
         ...errorSystemFields(error),
         ...pgErrorFields(error),

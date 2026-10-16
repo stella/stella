@@ -203,6 +203,10 @@ class ViewerErrorBoundary extends Component<
       }),
       {
         fingerprintKey: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        scope: {
+          type: "handler",
+          handlerId: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        },
       },
     );
   }

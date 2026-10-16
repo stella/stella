@@ -99,6 +99,7 @@ export const useUploadVersion = () => {
         }
         analytics.captureError(result.error, {
           fingerprintKey: "useUploadVersion:failure",
+          scope: { type: "handler", handlerId: "useUploadVersion:failure" },
         });
         notifyUserError(
           result.error,

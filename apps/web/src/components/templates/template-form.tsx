@@ -1296,6 +1296,10 @@ const RegistryAutofillControl = ({
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "RegistryAutofillControl.handleLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegistryAutofillControl.handleLookup:failure",
+        },
       });
       return;
     }
@@ -1941,6 +1945,7 @@ export const TemplateForm = ({
       if (Result.isError(aiFieldPaths)) {
         getAnalytics().captureError(aiFieldPaths.error, {
           fingerprintKey: "TemplateForm:failure",
+          scope: { type: "handler", handlerId: "TemplateForm:failure" },
         });
         stellaToast.add({
           type: "warning",
@@ -1961,6 +1966,7 @@ export const TemplateForm = ({
       if (Result.isError(undecidedLabels)) {
         getAnalytics().captureError(undecidedLabels.error, {
           fingerprintKey: "TemplateForm:failure-2",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-2" },
         });
         stellaToast.add({
           type: "warning",
@@ -1979,6 +1985,7 @@ export const TemplateForm = ({
       if (clauseWarnings.isErr()) {
         getAnalytics().captureError(clauseWarnings.error, {
           fingerprintKey: "TemplateForm:failure-3",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-3" },
         });
         stellaToast.add({
           type: "warning",
@@ -2033,6 +2040,7 @@ export const TemplateForm = ({
       );
       getAnalytics().captureError(error, {
         fingerprintKey: "TemplateForm.runDownload:failure",
+        scope: { type: "handler", handlerId: `template-export.${format}` },
       });
     });
   };
@@ -2158,6 +2166,10 @@ export const TemplateForm = ({
       if (Result.isError(destinationResult)) {
         getAnalytics().captureError(destinationResult.error, {
           fingerprintKey: "TemplateForm.performFillToMatter:failure",
+          scope: {
+            type: "handler",
+            handlerId: "TemplateForm.performFillToMatter:failure",
+          },
         });
       }
       const destination = Result.isError(destinationResult)

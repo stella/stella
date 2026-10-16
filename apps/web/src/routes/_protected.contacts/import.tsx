@@ -427,6 +427,10 @@ const UploadStep = ({
   const t = useTranslations();
   const isInspecting = busy === "inspecting";
   const { ref, isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "UploadStep.useExternalFileDrop",
+    },
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {

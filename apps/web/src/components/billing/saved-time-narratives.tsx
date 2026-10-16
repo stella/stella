@@ -94,6 +94,10 @@ export const SavedTimeNarratives = ({
   const reportError = (error: Error) => {
     analytics.captureError(error, {
       fingerprintKey: "SavedTimeNarratives.reportError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SavedTimeNarratives.reportError:failure",
+      },
     });
     notifyUserError(error, t("common.somethingWentWrong"));
   };

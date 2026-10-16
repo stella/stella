@@ -176,6 +176,10 @@ const LoadedStyleSetEditor = ({
       const apiError = toAPIError(error);
       getAnalytics().captureError(apiError, {
         fingerprintKey: "LoadedStyleSetEditor.finishSave:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.finishSave:apiError",
+        },
       });
       setSaving(false);
       notifyUserError(apiError, t("styleSets.editor.saveFailed"));
@@ -223,6 +227,10 @@ const LoadedStyleSetEditor = ({
     save().catch((error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "LoadedStyleSetEditor.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.handleSubmit:failure",
+        },
       });
       setSaving(false);
       notifyUserError(error, t("styleSets.editor.saveFailed"));

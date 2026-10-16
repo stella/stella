@@ -213,6 +213,7 @@ const CopyValueButton = ({ value }: { value: string }) => {
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "CopyValueButton.copy:failure",
+        scope: { type: "handler", handlerId: "CopyValueButton.copy:failure" },
       });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;

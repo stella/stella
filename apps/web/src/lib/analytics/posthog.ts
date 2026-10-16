@@ -18,6 +18,8 @@ import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnosti
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import {
   fingerprintExceptionEvent,
+  fingerprintExceptionScope,
+  isExceptionScopeFingerprint,
   automaticExceptionKey,
   isExceptionFingerprintKey,
   capturedExceptionIdentity,
@@ -445,6 +447,10 @@ const sanitizeExceptionEvent = (
         message: readStringField(entries.at(-1), "value"),
         firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
       });
+  const declaredScope = properties["exception_scope"];
+  const scopeIdentity = isExceptionScopeFingerprint(declaredScope)
+    ? declaredScope
+    : fingerprintExceptionScope({ type: "handler", handlerId: key });
   // Session and window ids join an exception to the page views and actions
   // around it; they are random SDK ids that carry no user content.
   const sessionId = properties["$session_id"];
@@ -465,6 +471,7 @@ const sanitizeExceptionEvent = (
       // opaque normalized message shape. Source positions remain diagnostic.
       $exception_fingerprint: fingerprintExceptionEvent({
         key,
+        scopeIdentity,
         entries:
           typeof causalType === "string"
             ? [{ type: normalizeTelemetryErrorTypeName(causalType) }]
@@ -869,7 +876,7 @@ export const createPostHogAnalytics = ({
   };
 
   const analytics: Analytics = {
-    captureError: (error, { fingerprintKey, context }) => {
+    captureError: (error, { fingerprintKey, scope, context }) => {
       // Cheap guards before the SDK call: a stray `captureError(null)`
       // or `captureError(undefined)` would otherwise reach PostHog as
       // `Error: "undefined"` noise that the `before_send` filter then
@@ -886,6 +893,7 @@ export const createPostHogAnalytics = ({
       captureRedactedException(error, (redacted) => {
         posthog.captureException(redacted, {
           exception_key: fingerprintKey,
+          exception_scope: fingerprintExceptionScope(scope),
           exception_error_type: identity.type,
           exception_fields: identity.fields,
           ...errorContextProperties(context),
@@ -940,6 +948,11 @@ export const createPostHogAnalytics = ({
           analytics.captureError(error, {
             fingerprintKey:
               "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            scope: {
+              type: "handler",
+              handlerId:
+                "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            },
             context: {
               operation: "posthog.route-error-lifecycle",
               type: "detached",

@@ -30,6 +30,7 @@ import {
   type OfficeEvidencePayload,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
@@ -159,10 +160,12 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decryptResult)) {
-    captureError(decryptResult.error, {
-      fingerprintKey: "files.decodeEvidenceRow.decryptResult_error",
-      context: { operation: "office-evidence-decrypt" },
-    });
+    captureError(
+      decryptResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.decryptResult_error", {
+        operation: "office-evidence-decrypt",
+      }),
+    );
     return null;
   }
   const jsonResult = Result.try({
@@ -170,10 +173,12 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(jsonResult)) {
-    captureError(jsonResult.error, {
-      fingerprintKey: "files.decodeEvidenceRow.jsonResult_error",
-      context: { operation: "office-evidence-json" },
-    });
+    captureError(
+      jsonResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.jsonResult_error", {
+        operation: "office-evidence-json",
+      }),
+    );
     return null;
   }
   const parsed = v.safeParse(officeEvidencePayloadSchema, jsonResult.value);
@@ -186,10 +191,9 @@ const decodeEvidenceRow = async (
       new TelemetryError({
         message: "Persisted Office evidence failed validation",
       }),
-      {
-        fingerprintKey: "files.decodeEvidenceRow",
-        context: { operation: "office-evidence-validate" },
-      },
+      handlerErrorContext("files.decodeEvidenceRow", {
+        operation: "office-evidence-validate",
+      }),
     );
     return null;
   }
@@ -383,7 +387,11 @@ const abandonOfficeEvidenceClaim = async ({
 type CaptureAndAbandonOfficeEvidenceOptions =
   AbandonOfficeEvidenceClaimOptions & {
     error: unknown;
-    operation: string;
+    operation:
+      | "office-evidence-file-read"
+      | "office-evidence-extract"
+      | "office-evidence-encrypt"
+      | "office-evidence-persist";
   };
 
 const captureAndAbandonOfficeEvidence = async ({
@@ -391,16 +399,15 @@ const captureAndAbandonOfficeEvidence = async ({
   operation,
   ...claim
 }: CaptureAndAbandonOfficeEvidenceOptions): Promise<null> => {
-  captureError(error, {
-    fingerprintKey: "files.captureAndAbandonOfficeEvidence",
-    context: { operation },
-  });
+  captureError(error, handlerErrorContext(`files.${operation}`, { operation }));
   const abandoned = await abandonOfficeEvidenceClaim(claim);
   if (Result.isError(abandoned)) {
-    captureError(abandoned.error, {
-      fingerprintKey: "files.captureAndAbandonOfficeEvidence.abandoned_error",
-      context: { operation: "office-evidence-abandon" },
-    });
+    captureError(
+      abandoned.error,
+      handlerErrorContext(`files.${operation}.abandon`, {
+        operation: "office-evidence-abandon",
+      }),
+    );
   }
   return null;
 };
@@ -560,10 +567,12 @@ export const loadOfficeEvidence = async ({
     workspaceId,
   });
   if (Result.isError(claimResult)) {
-    captureError(claimResult.error, {
-      fingerprintKey: "files.loadOfficeEvidence.claimResult_error",
-      context: { operation: "office-evidence-claim" },
-    });
+    captureError(
+      claimResult.error,
+      handlerErrorContext("files.loadOfficeEvidence.claimResult_error", {
+        operation: "office-evidence-claim",
+      }),
+    );
     return null;
   }
   const claim = claimResult.value;
@@ -584,10 +593,12 @@ export const loadOfficeEvidence = async ({
       workspaceId,
     });
     if (Result.isError(abandoned)) {
-      captureError(abandoned.error, {
-        fingerprintKey: "files.loadOfficeEvidence.abandoned_error",
-        context: { operation: "office-evidence-abandon" },
-      });
+      captureError(
+        abandoned.error,
+        handlerErrorContext("files.loadOfficeEvidence.abandoned_error", {
+          operation: "office-evidence-abandon",
+        }),
+      );
     }
     return null;
   }

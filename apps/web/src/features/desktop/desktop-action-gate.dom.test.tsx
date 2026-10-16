@@ -356,7 +356,10 @@ describe("desktop action gate uses observed presence", () => {
     expect(captureError).toHaveBeenCalledTimes(1);
     expect(captureError).toHaveBeenCalledWith(
       queryError,
-      expect.objectContaining({ fingerprintKey: expect.any(String) }),
+      expect.objectContaining({
+        fingerprintKey: expect.any(String),
+        scope: { type: "handler", handlerId: expect.any(String) },
+      }),
     );
     const trigger = view.getByRole("button", {
       name: messages.workspaces.files.desktopEdit.openAction,

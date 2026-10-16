@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers typed failure fingerprint fields without changing parsed values or rejection outcomes.
 import { TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";

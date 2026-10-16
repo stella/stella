@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -31,6 +31,7 @@ import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { resolveCaughtRouteTemplate } from "@/lib/analytics/route-error-lifecycle";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -115,6 +116,9 @@ export const DefaultErrorComponent = ({
   className,
 }: DefaultErrorComponentProps) => {
   const analytics = useAnalytics();
+  const routeTemplate = useRouterState({
+    select: ({ matches }) => resolveCaughtRouteTemplate(matches),
+  });
   const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   const isCancelledError = error instanceof CancelledError;
@@ -134,6 +138,7 @@ export const DefaultErrorComponent = ({
           analytics.captureError(refetchError, {
             fingerprintKey:
               "DefaultErrorComponent.retryErroredQueries:refetchError",
+            scope: { type: "request", method: "GET", routeTemplate },
           });
         });
 
@@ -161,6 +166,7 @@ export const DefaultErrorComponent = ({
     if (retriesAtLimit) {
       analytics.captureError(error, {
         fingerprintKey: "DefaultErrorComponent:failure",
+        scope: { type: "request", method: "GET", routeTemplate },
       });
     }
   }, [
@@ -170,6 +176,7 @@ export const DefaultErrorComponent = ({
     networkError,
     isCancelledError,
     retriesAtLimit,
+    routeTemplate,
   ]);
 
   const t = useTranslations();
@@ -308,6 +315,10 @@ const UnexpectedRouteError = ({
     if (Result.isError(copied)) {
       analytics.captureError(copied.error, {
         fingerprintKey: "UnexpectedRouteError.handleCopyReference:failure",
+        scope: {
+          type: "handler",
+          handlerId: "UnexpectedRouteError.handleCopyReference:failure",
+        },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;

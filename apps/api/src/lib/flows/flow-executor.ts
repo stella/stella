@@ -81,6 +81,7 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1186,9 +1187,10 @@ const pauseAtReviewGate = async ({
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   flushSearchRepairs([taskEntityId]).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "pauseAtReviewGate.flushSearchRepairs",
-    }),
+    captureError(
+      error,
+      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+    ),
   );
 };
 

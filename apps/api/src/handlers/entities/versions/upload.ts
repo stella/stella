@@ -25,6 +25,7 @@ import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
@@ -129,13 +130,10 @@ export default createSafeHandler(
         mimeType: file.type,
         scanned: scanned.value,
       }),
-      {
-        fingerprintKey: "entityVersionUpload.detectEncryption",
-        context: {
-          mimeType: file.type,
-          sizeBytes: String(scanned.value.bytes.byteLength),
-        },
-      },
+      handlerErrorContext("entityVersionUpload.detectEncryption", {
+        mimeType: file.type,
+        sizeBytes: String(scanned.value.bytes.byteLength),
+      }),
     );
     if (encryption === null) {
       return Result.err(

@@ -636,6 +636,10 @@ export const RowActions = ({
     } catch (error) {
       analytics.captureError(error, {
         fingerprintKey: "RowActions.handleOpenInDesktop:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.handleOpenInDesktop:failure",
+        },
       });
       if (error instanceof Error && isUnauthorizedError(error)) {
         notifyUserError(
@@ -700,6 +704,10 @@ export const RowActions = ({
     } catch (forceError) {
       analytics.captureError(forceError, {
         fingerprintKey: "RowActions.forceTakeoverWithFeedback:forceError",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.forceTakeoverWithFeedback:forceError",
+        },
       });
       if (forceError instanceof Error && isUnauthorizedError(forceError)) {
         notifyUserError(
@@ -756,6 +764,10 @@ export const RowActions = ({
       if (Result.isError(requested)) {
         analytics.captureError(requested.error, {
           fingerprintKey: "RowActions.handleReleaseLock:failure",
+          scope: {
+            type: "handler",
+            handlerId: "RowActions.handleReleaseLock:failure",
+          },
         });
         notifyUserError(requested.error, t("errors.actionFailed"), {
           description: userErrorFromThrown(
@@ -815,6 +827,10 @@ export const RowActions = ({
       reportError: (error) => {
         analytics.captureError(error, {
           fingerprintKey: "RowActions.handleReleaseLock.reportError:failure",
+          scope: {
+            type: "handler",
+            handlerId: "RowActions.handleReleaseLock.reportError:failure",
+          },
         });
       },
     });
@@ -897,6 +913,10 @@ export const RowActions = ({
           firstFailure ??= result.error;
           analytics.captureError(result.error, {
             fingerprintKey: "RowActions.handleDuplicate:failure",
+            scope: {
+              type: "handler",
+              handlerId: "RowActions.handleDuplicate:failure",
+            },
           });
           continue;
         }
@@ -1011,6 +1031,10 @@ export const RowActions = ({
     } catch (error) {
       analytics.captureError(error, {
         fingerprintKey: "RowActions.handleRunOcr:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.handleRunOcr:failure",
+        },
       });
       notifyUserError(error, t("workspaces.files.ocrQueueFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),

@@ -41,6 +41,7 @@ import {
   caseLawCorpusTombstoneWriter,
   CORPUS_TOMBSTONE_REASON,
 } from "@/api/lib/legal-search/corpus-tombstones";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type WithdrawInput = {
   decisionId: SafeId<"caseLawDecision">;
@@ -161,14 +162,16 @@ export const withdrawCaseLawDecisionDocument = async ({
     });
   }
   if (corpusErasure.type === "incomplete") {
-    captureError(corpusErasure.error, {
-      fingerprintKey:
+    captureError(
+      corpusErasure.error,
+      handlerErrorContext(
         "caselaw.withdrawCaseLawDecisionDocument.corpusErasure_error",
-      context: {
-        decisionId,
-        step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
-      },
-    });
+        {
+          decisionId,
+          step: "withdrawCaseLawDecisionDocument.deleteCorpusDocument",
+        },
+      ),
+    );
     return Result.ok({
       type: "corpus-objects-remain",
       error: corpusErasure.error,
@@ -277,14 +280,16 @@ export const withdrawCaseLawDecisionDocument = async ({
         cleanedIntentIds.push(intentId);
         break;
       case "incomplete":
-        captureError(erasure.error, {
-          fingerprintKey:
+        captureError(
+          erasure.error,
+          handlerErrorContext(
             "caselaw.withdrawCaseLawDecisionDocument.erasure_error",
-          context: {
-            decisionId,
-            step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
-          },
-        });
+            {
+              decisionId,
+              step: "withdrawCaseLawDecisionDocument.deleteReservedCorpusUpload",
+            },
+          ),
+        );
         break;
       default:
         erasure satisfies never;

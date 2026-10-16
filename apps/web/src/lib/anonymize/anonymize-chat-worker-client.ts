@@ -116,6 +116,10 @@ export const warmupChatAnonymizeWorker = (): void => {
       // to retry a transient worker crash.
       getAnalytics().captureError(error, {
         fingerprintKey: "warmupChatAnonymizeWorker:failure",
+        scope: {
+          type: "handler",
+          handlerId: "warmupChatAnonymizeWorker:failure",
+        },
       });
       warmedUp = false;
     },

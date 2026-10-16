@@ -27,7 +27,10 @@ export const useQueryViewError = <TData, TError>(
   const error = queryViewError(view);
   useExternalSyncEffect(() => {
     if (error !== undefined) {
-      analytics.captureError<TError>(error, { fingerprintKey });
+      analytics.captureError<TError>(error, {
+        fingerprintKey,
+        scope: { type: "handler", handlerId: fingerprintKey },
+      });
     }
   }, [analytics, error, fingerprintKey]);
 };
@@ -50,6 +53,7 @@ export const useQueryViewErrors = <TData, TError>(
       if (!reportedErrors.current.has(error)) {
         analytics.captureError<TError>(error, {
           fingerprintKey,
+          scope: { type: "handler", handlerId: fingerprintKey },
         });
       }
     }

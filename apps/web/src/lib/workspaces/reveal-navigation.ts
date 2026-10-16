@@ -92,6 +92,10 @@ export const navigateToWorkspaceReveal = async ({
   ).catch((error: unknown) => {
     getAnalytics().captureError(error, {
       fingerprintKey: "navigateToWorkspaceReveal:failure",
+      scope: {
+        type: "handler",
+        handlerId: "navigateToWorkspaceReveal:failure",
+      },
     });
     return [];
   });

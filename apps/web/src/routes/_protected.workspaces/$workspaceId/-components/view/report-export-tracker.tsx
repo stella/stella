@@ -83,6 +83,7 @@ export const ReportExportTracker = ({
       .catch((error: unknown) =>
         analytics.captureError(error, {
           fingerprintKey: "ReportExportTracker:failure",
+          scope: { type: "handler", handlerId: "ReportExportTracker:failure" },
         }),
       );
 
@@ -118,6 +119,10 @@ export const ReportExportTracker = ({
         if (Result.isError(result)) {
           analytics.captureError(result.error, {
             fingerprintKey: "ReportExportTracker.handleDownload:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker.handleDownload:failure",
+            },
           });
           notifyUserError(
             result.error,
@@ -135,6 +140,10 @@ export const ReportExportTracker = ({
             handleDownload().catch((error: unknown) =>
               analytics.captureError(error, {
                 fingerprintKey: "ReportExportTracker.onClick:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure",
+                },
               }),
             );
           },
@@ -156,6 +165,10 @@ export const ReportExportTracker = ({
         .catch((error: unknown) =>
           analytics.captureError(error, {
             fingerprintKey: "ReportExportTracker:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker:failure-2",
+            },
           }),
         );
       const handleOpen = async () => {
@@ -186,6 +199,10 @@ export const ReportExportTracker = ({
           if (Result.isError(result)) {
             analytics.captureError(result.error, {
               fingerprintKey: "ReportExportTracker.handleOpen:failure",
+              scope: {
+                type: "handler",
+                handlerId: "ReportExportTracker.handleOpen:failure",
+              },
             });
           }
           notifyUserError(
@@ -203,6 +220,10 @@ export const ReportExportTracker = ({
             handleOpen().catch((error: unknown) =>
               analytics.captureError(error, {
                 fingerprintKey: "ReportExportTracker.onClick:failure-2",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure-2",
+                },
               }),
             );
           },

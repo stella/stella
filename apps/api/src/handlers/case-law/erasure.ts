@@ -43,6 +43,7 @@ import {
   deleteRawKeys,
   RAW_KEY_OWNERSHIP,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
 const RAW_ERASE_TIMEOUT_MS = 60_000;
@@ -469,13 +470,16 @@ export const redactCaseLawDecision = async ({
       deleteCorpus,
     });
     if (corpusErasure.type === "incomplete") {
-      captureError(corpusErasure.error, {
-        fingerprintKey: "caselaw.redactCaseLawDecision.corpusErasure_error",
-        context: {
-          decisionId,
-          step: "redactCaseLawDecision.deleteCorpusDocument",
-        },
-      });
+      captureError(
+        corpusErasure.error,
+        handlerErrorContext(
+          "caselaw.redactCaseLawDecision.corpusErasure_error",
+          {
+            decisionId,
+            step: "redactCaseLawDecision.deleteCorpusDocument",
+          },
+        ),
+      );
       await recordFailedRedactionAudit({
         decisionId,
         error: corpusErasure.error,
@@ -498,13 +502,13 @@ export const redactCaseLawDecision = async ({
     deleteCorpus,
   });
   for (const { error } of incomplete) {
-    captureError(error, {
-      fingerprintKey: "caselaw.redactCaseLawDecision",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("caselaw.redactCaseLawDecision", {
         decisionId,
         step: "redactCaseLawDecision.deleteReservedCorpusUpload",
-      },
-    });
+      }),
+    );
   }
   const intentCleanup = await Result.tryPromise({
     try: async () =>
@@ -515,13 +519,13 @@ export const redactCaseLawDecision = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(intentCleanup)) {
-    captureError(intentCleanup.error, {
-      fingerprintKey: "caselaw.redactCaseLawDecision.intentCleanup_error",
-      context: {
+    captureError(
+      intentCleanup.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.intentCleanup_error", {
         decisionId,
         step: "redactCaseLawDecision.completeReservedCorpusUploadCleanup",
-      },
-    });
+      }),
+    );
   }
 
   // The publisher's own payloads and files carry the same text as the
@@ -564,13 +568,13 @@ export const redactCaseLawDecision = async ({
     return { type: "swept", legacyRaw: rawSwept.value.legacy };
   })();
   if (rawErasure.type === "incomplete") {
-    captureError(rawErasure.error, {
-      fingerprintKey: "caselaw.redactCaseLawDecision.rawErasure_error",
-      context: {
+    captureError(
+      rawErasure.error,
+      handlerErrorContext("caselaw.redactCaseLawDecision.rawErasure_error", {
         decisionId,
         step: "redactCaseLawDecision.sweepSourceRaw",
-      },
-    });
+      }),
+    );
     await recordFailedRedactionAudit({
       decisionId,
       error: rawErasure.error,

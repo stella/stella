@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 
-import { readFingerprintFields } from "@stll/errors";
+import type { ExceptionScope } from "@stll/errors/exception-scope";
+import { exceptionScopeIdentity } from "@stll/errors/exception-scope";
+import { readFingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 
@@ -27,6 +29,7 @@ export type ApiErrorIdentity = {
 type ExceptionFingerprintInput = {
   entries: readonly FingerprintEntry[];
   key: ExceptionFingerprintKey;
+  scopeIdentity: ExceptionScopeFingerprint;
   http?: ApiErrorIdentity | undefined;
   fields?: Readonly<Record<string, string>> | undefined;
 };
@@ -36,12 +39,14 @@ type ExceptionFingerprintInput = {
 export const fingerprintExceptionEvent = ({
   entries,
   key,
+  scopeIdentity,
   http,
   fields,
 }: ExceptionFingerprintInput): string =>
   JSON.stringify([
     entries.at(-1)?.type ?? "UnknownError",
     key,
+    scopeIdentity,
     http?.status ?? null,
     http?.code ?? null,
     Object.entries(fields ?? {}).toSorted(([left], [right]) => {
@@ -203,3 +208,24 @@ export const automaticExceptionKey = ({
   }
   return `browser:frameless.${automaticMessageHash(message)}`;
 };
+
+export type ExceptionScopeFingerprint = `scope:${string}`;
+
+/** Source-declared scope is hashed before entering SDK properties. */
+export const fingerprintExceptionScope = (
+  scope: ExceptionScope,
+): ExceptionScopeFingerprint => {
+  let hash = HASH_OFFSET;
+  for (const character of exceptionScopeIdentity(scope)) {
+    hash = BigInt.asUintN(
+      HASH_BITS,
+      hash * HASH_PRIME + BigInt(character.codePointAt(0) ?? 0),
+    );
+  }
+  return `scope:${hash.toString(16)}`;
+};
+
+export const isExceptionScopeFingerprint = (
+  value: unknown,
+): value is ExceptionScopeFingerprint =>
+  typeof value === "string" && /^scope:[0-9a-f]{1,16}$/u.test(value);

@@ -1,6 +1,9 @@
+import type { ExceptionScope } from "@stll/errors";
+
 import {
   capturedExceptionIdentity,
   fingerprintExceptionEvent,
+  fingerprintExceptionScope,
 } from "@/lib/analytics/exception-fingerprint";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 
@@ -12,11 +15,16 @@ const stableHash = (value: string): string => {
   return hash.toString(16).padStart(8, "0").toUpperCase();
 };
 
+type FingerprintTelemetryErrorOptions = {
+  key: ExceptionFingerprintKey;
+  scope: ExceptionScope;
+};
+
 /** A compact presentation of the same identity used for issue grouping. */
 export const fingerprintTelemetryError = (
   error: unknown,
-  key: ExceptionFingerprintKey,
+  { key, scope }: FingerprintTelemetryErrorOptions,
 ): string => {
   const { type, fields } = capturedExceptionIdentity(error);
-  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: [{ type }], key, fields }))}`;
+  return `ERRFP-${stableHash(fingerprintExceptionEvent({ entries: [{ type }], key, scopeIdentity: fingerprintExceptionScope(scope), fields }))}`;
 };

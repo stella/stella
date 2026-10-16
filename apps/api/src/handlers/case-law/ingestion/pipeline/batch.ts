@@ -51,6 +51,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
@@ -363,14 +364,14 @@ const rejectDecision = ({
       consecutiveFailures: tally.failureStreak,
     }),
   );
-  captureError(error, {
-    fingerprintKey: "pipeline.rejectDecision",
-    context: {
+  captureError(
+    error,
+    handlerErrorContext("pipeline.rejectDecision", {
       adapterKey,
       caseNumber: input.caseNumber,
       cursor: cursor ?? "",
-    },
-  });
+    }),
+  );
 
   if (error instanceof TimeoutError) {
     tally.settlements.push({
@@ -490,13 +491,13 @@ const settlePack = ({
         "error.detail": wrappedErrorDetail(flushed.error),
       }),
     );
-    captureError(flushed.error, {
-      fingerprintKey: "pipeline.settlePack.flushed_error",
-      context: {
+    captureError(
+      flushed.error,
+      handlerErrorContext("pipeline.settlePack.flushed_error", {
         adapterKey,
         step: "applyDecisionBatch.corpusPackFlush",
-      },
-    });
+      }),
+    );
     for (const indexes of queued.values()) {
       for (const index of indexes) {
         unsettlePayload(tally, index);

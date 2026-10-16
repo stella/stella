@@ -31,6 +31,7 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error, {
         fingerprintKey: "CopyField.handleCopy:failure",
+        scope: { type: "handler", handlerId: "CopyField.handleCopy:failure" },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;

@@ -1,3 +1,4 @@
+// parser-output-unchanged: shares guarded reads for telemetry classification; parsed values and rejection decisions are unchanged.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 

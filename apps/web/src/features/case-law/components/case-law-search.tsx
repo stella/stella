@@ -68,6 +68,7 @@ export const CaseLawSearch = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "CaseLawSearch:failure",
+        scope: { type: "handler", handlerId: "CaseLawSearch:failure" },
       });
       notifyUserError(error, t("common.somethingWentWrong"));
     },

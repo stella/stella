@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers URL defect fingerprint dimensions; URL validation and returned values are unchanged.
 // parser-output-unchanged: adds a typed constructor; existing callers are unaffected
 import { TaggedError } from "better-result";
 import * as v from "valibot";

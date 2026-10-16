@@ -34,6 +34,7 @@ import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { createSafeId } from "@/api/lib/branded-types";
 import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
 import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -152,10 +153,12 @@ const updateAIConfig = createSafeRootHandler(
       });
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error, {
-          fingerprintKey:
+        captureError(
+          decryptResult.error,
+          handlerErrorContext(
             "organizationsettings.updateAIConfig.decryptResult_error",
-        });
+          ),
+        );
         // The stored config is the merge base for a partial update, so an
         // unreadable one cannot be treated as "no providers configured".
         return Result.err(storedAIConfigUnreadableError(decryptResult.error));

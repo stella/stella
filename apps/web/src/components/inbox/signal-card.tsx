@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AlarmClockIcon, MessageSquareIcon, XIcon } from "@stll/ui/icons";
@@ -71,7 +72,10 @@ import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
 const ERROR_CAPTURE = {
-  run: { fingerprintKey: "SignalCard.run:failure" },
+  run: {
+    fingerprintKey: "SignalCard.run:failure",
+    scope: { type: "handler", handlerId: "SignalCard.run:failure" },
+  },
 } as const;
 
 type SignalCardProps = {
@@ -79,6 +83,12 @@ type SignalCardProps = {
   organizationId: string;
   presentation?: "card" | "actions";
   onChanged?: () => Promise<void>;
+};
+
+type RunSignalOptions = {
+  scope: HandlerExceptionScope;
+  successMessage: string | null;
+  invalidateMyWork?: boolean;
 };
 
 export const SignalCard = ({
@@ -101,14 +111,13 @@ export const SignalCard = ({
 
   const run = async (
     operation: () => Promise<Result<unknown, unknown>>,
-    successMessage: string | null,
-    invalidateMyWork = false,
+    { scope, successMessage, invalidateMyWork = false }: RunSignalOptions,
   ) => {
     setBusy(true);
     const result = await operation();
     if (Result.isError(result)) {
       setBusy(false);
-      analytics.captureError(result.error, ERROR_CAPTURE.run);
+      analytics.captureError(result.error, { ...ERROR_CAPTURE.run, scope });
       notifyUserError(result.error, t("common.unexpectedError"));
       return false;
     }
@@ -161,30 +170,45 @@ export const SignalCard = ({
           suggestionKind,
           ...(result ? { result } : {}),
         }),
-      t("inspector.review.decisions.accepted"),
-      true,
+      {
+        scope: { type: "handler", handlerId: `inbox.accept.${suggestionKind}` },
+        successMessage: t("inspector.review.decisions.accepted"),
+        invalidateMyWork: true,
+      },
     );
 
   const assign = async (assigneeUserId: string) =>
-    await run(async () => {
-      const assigned = await assignSignal({
-        ...mutationArgs,
-        assigneeUserId,
-      });
-      if (Result.isError(assigned)) {
-        return assigned;
-      }
-      return acceptSignal({
-        ...mutationArgs,
-        suggestionKind: SUGGESTION_KIND.ASSIGN,
-      });
-    }, t("inspector.review.decisions.accepted"));
+    await run(
+      async () => {
+        const assigned = await assignSignal({
+          ...mutationArgs,
+          assigneeUserId,
+        });
+        if (Result.isError(assigned)) {
+          return assigned;
+        }
+        return acceptSignal({
+          ...mutationArgs,
+          suggestionKind: SUGGESTION_KIND.ASSIGN,
+        });
+      },
+      {
+        scope: { type: "handler", handlerId: "inbox.assign" },
+        successMessage: t("inspector.review.decisions.accepted"),
+      },
+    );
 
   const dismiss = async (reason: string | null) =>
-    await run(
-      async () => await dismissSignal({ ...mutationArgs, reason }),
-      null,
-    );
+    await run(async () => await dismissSignal({ ...mutationArgs, reason }), {
+      scope: { type: "handler", handlerId: "inbox.dismiss" },
+      successMessage: null,
+    });
+
+  const snooze = (period: "tomorrow" | "next-week") =>
+    run(() => snoozeSignal({ ...mutationArgs, until: snoozeUntil(period) }), {
+      scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
+      successMessage: null,
+    });
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
   const taskSuggestion = signal.suggestions.find(
@@ -257,36 +281,12 @@ export const SignalCard = ({
               <MenuGroup>
                 <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("tomorrow"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("tomorrow"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeTomorrow")}
                 </MenuItem>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("next-week"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("next-week"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeNextWeek")}
                 </MenuItem>

@@ -513,6 +513,7 @@ const AddSkillForm = () => {
             resolveLatestCommit().catch((error: unknown) => {
               getAnalytics().captureError(error, {
                 fingerprintKey: "AddSkillForm:failure",
+                scope: { type: "handler", handlerId: "AddSkillForm:failure" },
               });
             });
           }}

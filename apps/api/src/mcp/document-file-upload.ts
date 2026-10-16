@@ -12,6 +12,7 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putPresignedUpload } from "@/api/lib/s3-presign";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
@@ -235,14 +236,14 @@ const abortCreatedReservation = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(aborted)) {
-    dependencies.captureCleanupFailure(aborted.error, {
-      fingerprintKey: "abortCreatedReservation.aborted_error",
-      context: {
+    dependencies.captureCleanupFailure(
+      aborted.error,
+      handlerErrorContext("abortCreatedReservation.aborted_error", {
         source: "mcp_document_upload",
         uploadId,
         workspaceId,
-      },
-    });
+      }),
+    );
     return false;
   }
   if (aborted.value.status === "ok") {
@@ -253,14 +254,11 @@ const abortCreatedReservation = async ({
     new Error("Document upload reservation cleanup failed", {
       cause: aborted.value.result,
     }),
-    {
-      fingerprintKey: "abortCreatedReservation.failure",
-      context: {
-        source: "mcp_document_upload",
-        uploadId,
-        workspaceId,
-      },
-    },
+    handlerErrorContext("abortCreatedReservation.failure", {
+      source: "mcp_document_upload",
+      uploadId,
+      workspaceId,
+    }),
   );
   return false;
 };

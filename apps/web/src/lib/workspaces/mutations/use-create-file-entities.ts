@@ -791,6 +791,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
           onError: (error) =>
             analytics.captureError(error, {
               fingerprintKey: "useCreateFileEntities.mutationFn:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useCreateFileEntities.mutationFn:failure",
+              },
             }),
         });
         startWorkflowForUploadedFiles(uploaded);
@@ -806,6 +810,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
         onError: (error) =>
           analytics.captureError(error, {
             fingerprintKey: "useCreateFileEntities.mutationFn:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "useCreateFileEntities.mutationFn:failure-2",
+            },
           }),
       });
       startWorkflowForUploadedFiles(uploaded);
@@ -813,6 +821,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateFileEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateFileEntities:failure" },
       });
     },
     onSettled: () => {
@@ -848,6 +857,11 @@ export const useCreateFileEntities = (workspaceId: string) => {
         analytics.captureError(error, {
           fingerprintKey:
             "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          scope: {
+            type: "handler",
+            handlerId:
+              "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          },
         }),
     });
 

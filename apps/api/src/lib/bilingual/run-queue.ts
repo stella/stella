@@ -55,6 +55,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -267,22 +268,25 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
     if (job) {
       setRunFailed(brandActor(job.data), "internal").catch(
         (markError: unknown) => {
-          captureError(markError, {
-            fingerprintKey: "bilingual.initBilingualRunWorker.markError",
-            context: {
+          captureError(
+            markError,
+            handlerErrorContext("bilingual.initBilingualRunWorker.markError", {
               runId: job.data.runId,
               workspaceId: job.data.workspaceId,
-            },
-          });
+            }),
+          );
         },
       );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, {
-      fingerprintKey: "bilingual.initBilingualRunWorker",
-      context: { runId, workspaceId },
-    });
+    captureError(
+      error,
+      handlerErrorContext("bilingual.initBilingualRunWorker", {
+        runId,
+        workspaceId,
+      }),
+    );
     logger.error("bilingual_run.failed", {
       runId,
       "error.type": errorTag(error),
@@ -306,10 +310,12 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     onError: (error) => {
-      captureError(error, {
-        fingerprintKey: "bilingual.closeReconcile",
-        context: { operation: "bilingual_run.reconcile" },
-      });
+      captureError(
+        error,
+        handlerErrorContext("bilingual.closeReconcile", {
+          operation: "bilingual_run.reconcile",
+        }),
+      );
     },
   });
 
@@ -385,13 +391,13 @@ export const processBilingualRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      fingerprintKey: "bilingual.processBilingualRun.outcome_error",
-      context: {
+    captureError(
+      outcome.error,
+      handlerErrorContext("bilingual.processBilingualRun.outcome_error", {
         runId: actor.runId,
         workspaceId: actor.workspaceId,
-      },
-    });
+      }),
+    );
     await setRunFailed(actor, "internal");
     return;
   }
@@ -460,13 +466,13 @@ const executeRun = async ({
     }),
   );
   if (Result.isError(config)) {
-    captureError(config.error, {
-      fingerprintKey: "bilingual.executeRun.config_error",
-      context: {
+    captureError(
+      config.error,
+      handlerErrorContext("bilingual.executeRun.config_error", {
         runId: actor.runId,
         workspaceId: actor.workspaceId,
-      },
-    });
+      }),
+    );
     return "ai_unavailable";
   }
 
@@ -539,13 +545,13 @@ const executeRun = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      captureError(result.error, {
-        fingerprintKey: "bilingual.translateFrom.result_error",
-        context: {
+      captureError(
+        result.error,
+        handlerErrorContext("bilingual.translateFrom.result_error", {
           runId: actor.runId,
           workspaceId: actor.workspaceId,
-        },
-      });
+        }),
+      );
       return "translation_failed";
     }
 
@@ -618,13 +624,13 @@ const executeRun = async ({
   const operations = buildOperations(rows, translated);
   const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
-    captureError(applied.error, {
-      fingerprintKey: "bilingual.executeRun.applied_error",
-      context: {
+    captureError(
+      applied.error,
+      handlerErrorContext("bilingual.executeRun.applied_error", {
         runId: actor.runId,
         workspaceId: actor.workspaceId,
-      },
-    });
+      }),
+    );
     return "apply_failed";
   }
   if (applied.value.skipped.length > 0) {
@@ -637,13 +643,13 @@ const executeRun = async ({
 
   const validation = await validateDocxBuffer(applied.value.buffer);
   if (!validation.valid) {
-    captureError(new Error(validation.error), {
-      fingerprintKey: "bilingual.executeRun",
-      context: {
+    captureError(
+      new Error(validation.error),
+      handlerErrorContext("bilingual.executeRun", {
         runId: actor.runId,
         workspaceId: actor.workspaceId,
-      },
-    });
+      }),
+    );
     return "apply_failed";
   }
   const scanResult = await scanFile({
@@ -695,13 +701,13 @@ const executeRun = async ({
     scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
   });
   if (Result.isError(written)) {
-    captureError(written.error, {
-      fingerprintKey: "bilingual.executeRun.written_error",
-      context: {
+    captureError(
+      written.error,
+      handlerErrorContext("bilingual.executeRun.written_error", {
         runId: actor.runId,
         workspaceId: actor.workspaceId,
-      },
-    });
+      }),
+    );
     return "apply_failed";
   }
 

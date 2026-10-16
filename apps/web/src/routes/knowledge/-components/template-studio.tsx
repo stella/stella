@@ -1262,6 +1262,10 @@ export const TemplateStudioPage = ({
     } catch (error) {
       getAnalytics().captureError(error, {
         fingerprintKey: "TemplateStudioPage.handleSave:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TemplateStudioPage.handleSave:failure",
+        },
       });
       notifyUserError(error, t("templates.saveFailed"));
       return false;

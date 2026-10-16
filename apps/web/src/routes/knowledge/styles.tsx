@@ -355,6 +355,11 @@ export const Route = createFileRoute("/knowledge/styles")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "knowledge.styles.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/knowledge/styles",
+        },
       });
     };
 

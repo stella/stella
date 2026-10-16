@@ -426,6 +426,10 @@ const GenericExternalReferencePanel = ({
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error, {
         fingerprintKey: "GenericExternalReferencePanel:failure",
+        scope: {
+          type: "handler",
+          handlerId: "GenericExternalReferencePanel:failure",
+        },
       });
       notifyUserError(copied.error, t("common.error"));
       return;

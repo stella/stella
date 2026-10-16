@@ -10,6 +10,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { EmitSignalsResult, NewSignal } from "@/api/lib/signals/emit";
 
@@ -102,13 +103,13 @@ export const runScout = async ({
         ),
     );
     if (Result.isError(recorded)) {
-      captureError(recorded.error, {
-        fingerprintKey: "signals.runScout.recorded_error",
-        context: {
+      captureError(
+        recorded.error,
+        handlerErrorContext("signals.runScout.recorded_error", {
           operation: "signals.scout.record-failure",
           runId,
-        },
-      });
+        }),
+      );
     }
     throw error;
   }

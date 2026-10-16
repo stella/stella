@@ -38,6 +38,10 @@ export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
       if (Result.isError(result) && !signal.aborted) {
         getAnalytics().captureError(result.error, {
           fingerprintKey: "desktopPresenceOptions.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "desktopPresenceOptions.queryFn:failure",
+          },
         });
       }
       return readQueryResult(result);

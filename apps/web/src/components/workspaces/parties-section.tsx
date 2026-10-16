@@ -565,7 +565,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error, { fingerprintKey: "PartyRow:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "PartyRow:failure",
+        scope: { type: "handler", handlerId: "PartyRow:failure" },
+      });
     },
   });
 
@@ -676,6 +679,7 @@ const AddPartyDialog = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "AddPartyDialog:failure",
+        scope: { type: "handler", handlerId: "AddPartyDialog:failure" },
       });
     },
   });

@@ -256,6 +256,7 @@ export const AnonymizationFacet = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "AnonymizationFacet:failure",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure" },
       });
     },
   });
@@ -390,6 +391,10 @@ export const AnonymizationFacet = ({
     } catch (error) {
       analytics.captureError(error, {
         fingerprintKey: "AnonymizationFacet.addTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.addTerm:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     }
@@ -435,6 +440,7 @@ export const AnonymizationFacet = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "AnonymizationFacet:failure-2",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-2" },
       });
     },
   });
@@ -453,6 +459,7 @@ export const AnonymizationFacet = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "AnonymizationFacet:failure-3",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-3" },
       });
     },
   });
@@ -501,6 +508,10 @@ export const AnonymizationFacet = ({
     if (download.isErr()) {
       analytics.captureError(download.error, {
         fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        },
       });
       notifyUserError(
         download.error,

@@ -24,6 +24,7 @@ import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { executeFolioToolCall } from "@stll/folio-agents";
 import type {
   FolioAgentBridge,
@@ -135,9 +136,13 @@ const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 /** Snapshot handed to folio when the Studio editor has not produced one yet. */
 const EMPTY_EDIT_SNAPSHOT: FolioAIEditSnapshot = { blocks: [], anchors: {} };
 
-const capturePromptSubmitError = (error: unknown): void => {
+const capturePromptSubmitError = (
+  error: unknown,
+  scope: HandlerExceptionScope,
+): void => {
   getAnalytics().captureError(error, {
     fingerprintKey: "capturePromptSubmitError:failure",
+    scope,
   });
 };
 
@@ -226,6 +231,10 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
     if (Result.isError(rotated)) {
       getAnalytics().captureError(rotated.error, {
         fingerprintKey: "ResolvedTemplateStudioChat.rotateThread:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ResolvedTemplateStudioChat.rotateThread:failure",
+        },
       });
       notifyUserError(rotated.error, t("common.somethingWentWrong"));
       return false;
@@ -690,6 +699,10 @@ const TemplateStudioChatInner = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "chat-session.template-studio",
+    },
     chat,
     conversationId: threadRef.threadId,
     getSendMode,
@@ -738,7 +751,12 @@ const TemplateStudioChatInner = ({
     });
   });
   useMountEffect(() => {
-    dispatchPendingPresetSend().catch(capturePromptSubmitError);
+    dispatchPendingPresetSend().catch((promptError: unknown) =>
+      capturePromptSubmitError(promptError, {
+        type: "handler",
+        handlerId: "template-chat.preset-send",
+      }),
+    );
   });
 
   /**
@@ -1216,6 +1234,10 @@ const TemplateStudioChatInner = ({
         executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
         getAnalytics().captureError(toolCallError, {
           fingerprintKey: "TemplateStudioChatInner:toolCallError",
+          scope: {
+            type: "handler",
+            handlerId: "TemplateStudioChatInner:toolCallError",
+          },
         });
         try {
           await addToolResult(
@@ -1235,6 +1257,10 @@ const TemplateStudioChatInner = ({
         } catch (reportError) {
           getAnalytics().captureError(reportError, {
             fingerprintKey: "TemplateStudioChatInner:reportError",
+            scope: {
+              type: "handler",
+              handlerId: "TemplateStudioChatInner:reportError",
+            },
           });
         }
       }
@@ -1505,7 +1531,12 @@ const TemplateStudioChatInner = ({
                 );
                 return;
               })
-              .catch(capturePromptSubmitError);
+              .catch((promptError: unknown) =>
+                capturePromptSubmitError(promptError, {
+                  type: "handler",
+                  handlerId: "template-chat.prompt-send",
+                }),
+              );
           }}
           pendingCount={pendingCount}
           presetScopeChooser={{

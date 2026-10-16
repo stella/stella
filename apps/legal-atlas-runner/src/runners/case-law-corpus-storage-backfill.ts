@@ -17,6 +17,7 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   isCorpusS3Stale,
   isS3Stale,
@@ -204,13 +205,13 @@ const backfillRow = async (
     // points nowhere, and only the recording makes the work durable.
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      fingerprintKey: "runners.backfillRow",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillRow", {
         decisionId: row.id,
         step: "caseLawCorpusStorageBackfill",
-      },
-    });
+      }),
+    );
     return "failed";
   }
 };
@@ -284,13 +285,13 @@ const backfillLegislationRow = async (
 
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      fingerprintKey: "runners.backfillLegislationRow",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillLegislationRow", {
         documentId: row.id,
         step: "legislationCorpusStorageBackfill",
-      },
-    });
+      }),
+    );
     return "failed";
   }
 };

@@ -130,6 +130,7 @@ const primeDecisionProvisions = (
   const captureError = (error: unknown) => {
     getAnalytics().captureError(error, {
       fingerprintKey: "primeDecisionProvisions:failure",
+      scope: { type: "handler", handlerId: "primeDecisionProvisions:failure" },
     });
   };
   detached(

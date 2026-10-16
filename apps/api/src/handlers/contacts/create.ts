@@ -32,6 +32,7 @@ import { tMinorUnitAmount, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -259,9 +260,10 @@ export const createContactHandler = async function* ({
   const created = outcome.row ?? panic("Contact insert returned no row");
 
   flushContactSearchRepairs([created.id]).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "createContactHandler.flushContactSearchRepairs",
-    }),
+    captureError(
+      error,
+      handlerErrorContext("createContactHandler.flushContactSearchRepairs"),
+    ),
   );
 
   return Result.ok(created);

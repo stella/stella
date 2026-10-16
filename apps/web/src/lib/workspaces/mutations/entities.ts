@@ -55,6 +55,7 @@ export const useCreateEntities = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateEntities:failure" },
       });
     },
   });
@@ -89,6 +90,7 @@ export const useDeleteEntities = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteEntities:failure",
+        scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
       });
     },
   });
@@ -117,6 +119,7 @@ export const useMoveEntity = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useMoveEntity:failure",
+        scope: { type: "handler", handlerId: "useMoveEntity:failure" },
       });
     },
   });
@@ -151,7 +154,10 @@ export const useRenameEntity = (
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
-    analytics.captureError(error, { fingerprintKey });
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, t("errors.actionFailed"));
   };
 
@@ -240,6 +246,7 @@ export const useRenameEntity = (
       if (reconciled.isErr()) {
         analytics.captureError(reconciled.error, {
           fingerprintKey: "useRenameEntity:failure",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure" },
         });
       }
       if (data.file) {
@@ -300,6 +307,7 @@ export const useRenameEntity = (
       if (rolledBack.isErr()) {
         analytics.captureError(rolledBack.error, {
           fingerprintKey: "useRenameEntity:failure-2",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
         });
       }
       reportFailure(error, "useRenameEntity:rename");
@@ -383,6 +391,10 @@ export const useUpdateKanbanPlacement = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpdateKanbanPlacement:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useUpdateKanbanPlacement:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },
@@ -414,6 +426,7 @@ export const useUpsertField = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpsertField:failure",
+        scope: { type: "handler", handlerId: "useUpsertField:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

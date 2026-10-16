@@ -80,6 +80,7 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -218,13 +219,13 @@ export const runResearchAnswers = async (
       if (failure === null) {
         continue;
       }
-      captureError(failure, {
-        fingerprintKey: "caselaw.worker.failure",
-        context: {
+      captureError(
+        failure,
+        handlerErrorContext("caselaw.worker.failure", {
           source: "case-law-research-answers",
           decisionId,
-        },
-      });
+        }),
+      );
       // Whatever this run still held for this decision is not coming: say so
       // rather than leave the cells to age out. Only the claimed columns, so a
       // cell that belongs to another run is untouched.
@@ -237,13 +238,13 @@ export const runResearchAnswers = async (
           outcome: { state: "failed", failureReason: "run_error" },
         })),
       ).catch((writeError: unknown) => {
-        captureError(writeError, {
-          fingerprintKey: "caselaw.worker.writeError",
-          context: {
+        captureError(
+          writeError,
+          handlerErrorContext("caselaw.worker.writeError", {
             source: "case-law-research-answers-cleanup",
             decisionId,
-          },
-        });
+          }),
+        );
       });
     }
   };

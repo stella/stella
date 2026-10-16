@@ -174,7 +174,7 @@ export const useReaderAnnotations = (
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView, "useReaderAnnotations:query");
+  useQueryViewError(dataView, `useReaderAnnotations.${target.type}:query`);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const patchCache = async (
@@ -186,7 +186,7 @@ export const useReaderAnnotations = (
     return { previous };
   };
 
-  const settle = {
+  const settle = (operation: "create" | "update" | "delete") => ({
     onError: (
       error: unknown,
       _input: unknown,
@@ -197,13 +197,17 @@ export const useReaderAnnotations = (
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "useReaderAnnotations:failure",
+        scope: {
+          type: "handler",
+          handlerId: `reader-annotations.${target.type}.${operation}`,
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey });
     },
-  };
+  });
 
   const create = useMutation({
     mutationFn: async (input: CreateAnnotationInput) => {
@@ -231,7 +235,7 @@ export const useReaderAnnotations = (
         }),
       ]);
     },
-    ...settle,
+    ...settle("create"),
   });
 
   const update = useMutation({
@@ -248,7 +252,7 @@ export const useReaderAnnotations = (
           touched(row) ? applyChange(row, input) : row,
         );
       }),
-    ...settle,
+    ...settle("update"),
   });
 
   const remove = useMutation({
@@ -263,7 +267,7 @@ export const useReaderAnnotations = (
         const touched = rowsOfSame(rows, id);
         return rows.filter((row) => !touched(row));
       }),
-    ...settle,
+    ...settle("delete"),
   });
 
   // Whatever this tab still holds from before the reader had an account.
@@ -299,6 +303,10 @@ export const useReaderAnnotations = (
             if (Result.isError(migrated)) {
               getAnalytics().captureError(migrated.error, {
                 fingerprintKey: "useReaderAnnotations.operation:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: `reader-annotations.guest.${target.type}.migrate`,
+                },
                 context: {
                   operation: "legal-reader.guest-annotation.migrate",
                   type: "detached",
@@ -310,6 +318,10 @@ export const useReaderAnnotations = (
             if (Result.isError(removed)) {
               getAnalytics().captureError(removed.error, {
                 fingerprintKey: "useReaderAnnotations.operation:failure-2",
+                scope: {
+                  type: "handler",
+                  handlerId: `reader-annotations.guest.${target.type}.remove-migrated`,
+                },
                 context: {
                   operation: "legal-reader.guest-annotation.migrate",
                   type: "detached",
@@ -339,7 +351,7 @@ export const useReaderAnnotations = (
       })(),
       "legal-reader.migrate-guest-annotations",
     );
-  }, [queryClient, signedIn, storage, t]);
+  }, [queryClient, signedIn, storage, t, target.type]);
 
   if (user !== null) {
     return {
@@ -369,6 +381,10 @@ export const useReaderAnnotations = (
     if (Result.isError(stored)) {
       getAnalytics().captureError(stored.error, {
         fingerprintKey: "useReaderAnnotations.commit:failure",
+        scope: {
+          type: "handler",
+          handlerId: `reader-annotations.guest.${target.type}.${action}`,
+        },
         context: {
           operation: `legal-reader.guest-annotation.${action}`,
           type: "detached",

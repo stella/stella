@@ -91,6 +91,10 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     if (Result.isError(copied)) {
       analytics.captureError(copied.error, {
         fingerprintKey: "AddressCard.copyAddress:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AddressCard.copyAddress:failure",
+        },
       });
       notifyUserError(copied.error, t("common.error"));
       return;

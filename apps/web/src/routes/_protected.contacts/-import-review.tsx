@@ -259,6 +259,10 @@ export const useImportReview = ({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "useImportReview.revalidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.revalidate:failure",
+        },
       });
       setValidation({
         status: "failed",
@@ -311,6 +315,10 @@ export const useImportReview = ({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "useImportReview.seedValidated:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.seedValidated:failure",
+        },
       });
       notifyUserError(result.error, t("contacts.importStudio.validateFailed"));
       return false;
@@ -384,6 +392,7 @@ export const useImportReview = ({
     if (Result.isError(outcome)) {
       getAnalytics().captureError(outcome.error, {
         fingerprintKey: "useImportReview.commit:failure",
+        scope: { type: "handler", handlerId: "useImportReview.commit:failure" },
       });
       notifyUserError(outcome.error, t("contacts.importStudio.importFailed"));
       return;

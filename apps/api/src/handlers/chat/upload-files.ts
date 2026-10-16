@@ -71,6 +71,7 @@ import {
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -152,7 +153,7 @@ export const uploadMessageFiles = async ({
       return Result.err(error);
     }
 
-    captureError(error, { fingerprintKey: "chat.fail", context: { threadId } });
+    captureError(error, handlerErrorContext("chat.fail", { threadId }));
     return Result.err(rollbackResult.error);
   };
 
@@ -823,13 +824,13 @@ export const uploadUserFile = async ({
     if (isThumbnailableMimeType(file.mimeType)) {
       const thumbnailResult = await generateThumbnail(file.bytes);
       if (Result.isError(thumbnailResult)) {
-        captureError(thumbnailResult.error, {
-          fingerprintKey: "chat.uploadUserFile.thumbnailResult_error",
-          context: {
+        captureError(
+          thumbnailResult.error,
+          handlerErrorContext("chat.uploadUserFile.thumbnailResult_error", {
             stage: "chat-thumbnail-generate",
             userFileId: id,
-          },
-        });
+          }),
+        );
       } else {
         const generatedThumbnailId = Bun.randomUUIDv7();
         const key = createUserFileKey({
@@ -866,13 +867,16 @@ export const uploadUserFile = async ({
         threadId,
       });
       if (Result.isError(thumbnailCleanupIntent)) {
-        captureError(thumbnailCleanupIntent.error, {
-          fingerprintKey: "chat.uploadUserFile.thumbnailCleanupIntent_error",
-          context: {
-            stage: "chat-thumbnail-cleanup-reserve",
-            userFileId: id,
-          },
-        });
+        captureError(
+          thumbnailCleanupIntent.error,
+          handlerErrorContext(
+            "chat.uploadUserFile.thumbnailCleanupIntent_error",
+            {
+              stage: "chat-thumbnail-cleanup-reserve",
+              userFileId: id,
+            },
+          ),
+        );
         preparedThumbnail = null;
       } else {
         thumbnailCleanupIntentIds = thumbnailCleanupIntent.value;
@@ -928,14 +932,14 @@ export const uploadUserFile = async ({
         }),
       );
       if (Result.isError(cleanupResult)) {
-        captureError(cleanupResult.error, {
-          fingerprintKey: "chat.upload.cleanupAttachment",
-          context: {
+        captureError(
+          cleanupResult.error,
+          handlerErrorContext("chat.upload.cleanupAttachment", {
             s3Key,
             stage: "chat-attachment-write-cleanup",
             userFileId: id,
-          },
-        });
+          }),
+        );
       }
       const sourceSettlement = await settleCleanupIntents({
         intentIds: sourceCleanupIntentIds,
@@ -943,14 +947,14 @@ export const uploadUserFile = async ({
         safeDb,
       });
       if (Result.isError(sourceSettlement)) {
-        captureError(sourceSettlement.error, {
-          fingerprintKey: "chat.upload.settleAttachmentWrite",
-          context: {
+        captureError(
+          sourceSettlement.error,
+          handlerErrorContext("chat.upload.settleAttachmentWrite", {
             s3Key,
             stage: "chat-attachment-write-settle",
             userFileId: id,
-          },
-        });
+          }),
+        );
       }
       const thumbnailSettlement = await settleCleanupIntents({
         intentIds: thumbnailCleanupIntentIds,
@@ -958,13 +962,13 @@ export const uploadUserFile = async ({
         safeDb,
       });
       if (Result.isError(thumbnailSettlement)) {
-        captureError(thumbnailSettlement.error, {
-          fingerprintKey: "chat.uploadUserFile.thumbnailSettlement_error",
-          context: {
+        captureError(
+          thumbnailSettlement.error,
+          handlerErrorContext("chat.uploadUserFile.thumbnailSettlement_error", {
             stage: "chat-thumbnail-unwritten-settle",
             userFileId: id,
-          },
-        });
+          }),
+        );
       }
       return Result.err(chatAttachmentStoreError(writeSourceResult.error));
     }
@@ -1004,13 +1008,16 @@ export const uploadUserFile = async ({
             catch: (cause) => cause,
           });
       if (Result.isError(writeThumbnailResult)) {
-        captureError(writeThumbnailResult.error, {
-          fingerprintKey: "chat.uploadUserFile.writeThumbnailResult_error",
-          context: {
-            stage: "chat-thumbnail-write",
-            userFileId: id,
-          },
-        });
+        captureError(
+          writeThumbnailResult.error,
+          handlerErrorContext(
+            "chat.uploadUserFile.writeThumbnailResult_error",
+            {
+              stage: "chat-thumbnail-write",
+              userFileId: id,
+            },
+          ),
+        );
         const cleanupResult = Result.flatten(
           await Result.tryPromise({
             try: async () =>
@@ -1023,13 +1030,13 @@ export const uploadUserFile = async ({
           }),
         );
         if (Result.isError(cleanupResult)) {
-          captureError(cleanupResult.error, {
-            fingerprintKey: "chat.upload.cleanupThumbnail",
-            context: {
+          captureError(
+            cleanupResult.error,
+            handlerErrorContext("chat.upload.cleanupThumbnail", {
               stage: "chat-thumbnail-write-cleanup",
               userFileId: id,
-            },
-          });
+            }),
+          );
         }
         const settlement = await settleCleanupIntents({
           intentIds: thumbnailCleanupIntentIds,
@@ -1056,24 +1063,24 @@ export const uploadUserFile = async ({
             safeDb,
           });
           if (Result.isError(sourceCleanup)) {
-            captureError(sourceCleanup.error, {
-              fingerprintKey: "chat.uploadUserFile.sourceCleanup_error",
-              context: {
+            captureError(
+              sourceCleanup.error,
+              handlerErrorContext("chat.uploadUserFile.sourceCleanup_error", {
                 s3Key,
                 stage: "chat-attachment-thumbnail-settle-cleanup",
                 userFileId: id,
-              },
-            });
+              }),
+            );
           }
           if (Result.isError(sourceSettlement)) {
-            captureError(sourceSettlement.error, {
-              fingerprintKey: "chat.upload.settleThumbnailAttachment",
-              context: {
+            captureError(
+              sourceSettlement.error,
+              handlerErrorContext("chat.upload.settleThumbnailAttachment", {
                 s3Key,
                 stage: "chat-attachment-thumbnail-settle",
                 userFileId: id,
-              },
-            });
+              }),
+            );
           }
           return Result.err(settlement.error);
         }
@@ -1200,10 +1207,14 @@ export const uploadUserFile = async ({
       return Result.err(saveResult.error);
     }
 
-    captureError(saveResult.error, {
-      fingerprintKey: "chat.uploadUserFile.saveResult_error",
-      context: { s3Key, threadId, userFileId: id },
-    });
+    captureError(
+      saveResult.error,
+      handlerErrorContext("chat.uploadUserFile.saveResult_error", {
+        s3Key,
+        threadId,
+        userFileId: id,
+      }),
+    );
     let cleanupError: unknown = saveResult.error;
     if (Result.isError(sourceCleanupResult)) {
       cleanupError = sourceCleanupResult.error;

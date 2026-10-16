@@ -107,6 +107,7 @@ export const useFactDetailActions = (scope: ListScope) => {
       }
       analytics.captureError(error, {
         fingerprintKey: "useFactDetailActions:failure",
+        scope: { type: "handler", handlerId: "useFactDetailActions:failure" },
       });
       notifyUserError(error, t("avt.save.failedTitle"));
     },

@@ -49,6 +49,7 @@ import {
   updateWebhookEventResultInTx,
 } from "@/api/lib/hosted-usage-provider/webhook-store";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -116,10 +117,12 @@ export const receiveHostedUsageWebhook = async (
   try {
     parsedJson = JSON.parse(rawBody);
   } catch (error) {
-    captureError(error, {
-      fingerprintKey: "usageWebhook.parseBody",
-      context: { source: "usage_provider.webhook.json_parse" },
-    });
+    captureError(
+      error,
+      handlerErrorContext("usageWebhook.parseBody", {
+        source: "usage_provider.webhook.json_parse",
+      }),
+    );
     return respond(400, "Malformed JSON body");
   }
 
@@ -270,14 +273,14 @@ export const receiveHostedUsageWebhook = async (
     // NOT persist a failure row, because that would re-introduce
     // the "dedupe committed without dispatch" hole this refactor
     // closed.
-    captureError(error, {
-      fingerprintKey: "usageWebhook.dispatch",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("usageWebhook.dispatch", {
         source: "usage_provider.webhook.dispatch",
         eventId,
         eventType: envelope.type,
-      },
-    });
+      }),
+    );
     return respond(500, "Dispatch failed");
   }
 
@@ -354,14 +357,14 @@ const persistUnknownEventType = async ({
       });
       return UNKNOWN_EVENT_RECORD.rejected;
     }
-    captureError(error, {
-      fingerprintKey: "hostedusagewebhook.persistUnknownEventType",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("hostedusagewebhook.persistUnknownEventType", {
         source: "usage_provider.webhook.unknown_event_persist",
         eventId,
         eventType,
-      },
-    });
+      }),
+    );
     return UNKNOWN_EVENT_RECORD.retry;
   }
 };

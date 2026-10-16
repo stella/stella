@@ -128,6 +128,7 @@ export function MemberPlaybooksPage({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "MemberPlaybooksPage:failure",
+        scope: { type: "handler", handlerId: "MemberPlaybooksPage:failure" },
       });
       notifyUserError(result.error, t("knowledge.playbooks.loadFailed"), {
         description: userErrorFromThrown(

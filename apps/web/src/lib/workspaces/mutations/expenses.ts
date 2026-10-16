@@ -39,6 +39,7 @@ export const useCreateExpense = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateExpense:failure",
+        scope: { type: "handler", handlerId: "useCreateExpense:failure" },
       });
     },
   });
@@ -81,6 +82,7 @@ export const useUpdateExpense = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpdateExpense:failure",
+        scope: { type: "handler", handlerId: "useUpdateExpense:failure" },
       });
     },
   });
@@ -107,6 +109,7 @@ export const useDeleteExpense = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteExpense:failure",
+        scope: { type: "handler", handlerId: "useDeleteExpense:failure" },
       });
     },
   });

@@ -38,6 +38,7 @@ import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { isMemoryExtractionConsentValid } from "@/api/lib/memory/memory-extraction-consent";
 import { buildExtractionPrompt } from "@/api/lib/memory/memory-extraction-prompt";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -336,23 +337,29 @@ const recordMemoryExtractionFailure = async ({
       .where(eq(chatThreadCompactions.id, compactionId));
   });
   if (Result.isError(stampResult)) {
-    captureError(stampResult.error, {
-      fingerprintKey: "tasks.recordMemoryExtractionFailure.stampResult_error",
-      context: {
-        feature: "memory.extractor.failure_stamp",
-        compactionId,
-      },
-    });
+    captureError(
+      stampResult.error,
+      handlerErrorContext(
+        "tasks.recordMemoryExtractionFailure.stampResult_error",
+        {
+          feature: "memory.extractor.failure_stamp",
+          compactionId,
+        },
+      ),
+    );
     logger.warn("scheduler.memory_extractor_failure_stamp_failed", {
       "error.type": errorTag(stampResult.error),
       "compaction.id": compactionId,
     });
   }
 
-  captureError(error, {
-    fingerprintKey: "tasks.recordMemoryExtractionFailure",
-    context: { feature, compactionId },
-  });
+  captureError(
+    error,
+    handlerErrorContext("tasks.recordMemoryExtractionFailure", {
+      feature,
+      compactionId,
+    }),
+  );
   logger.warn(logEvent, {
     "error.type": errorTag(error),
     "compaction.id": compactionId,
@@ -515,12 +522,12 @@ const extractCandidates = async ({
     catch: (error: unknown) => error,
   });
   if (Result.isError(transcriptResult)) {
-    captureError(transcriptResult.error, {
-      fingerprintKey: "tasks.extractCandidates.transcriptResult_error",
-      context: {
+    captureError(
+      transcriptResult.error,
+      handlerErrorContext("tasks.extractCandidates.transcriptResult_error", {
         feature: "memory.extractor.transcript",
-      },
-    });
+      }),
+    );
   }
   const transcript = Result.isError(transcriptResult)
     ? ""

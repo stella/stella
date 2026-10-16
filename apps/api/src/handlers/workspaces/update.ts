@@ -22,6 +22,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -325,9 +326,10 @@ export const updateWorkspaceHandler = async function* ({
   }
 
   flushWorkspaceSearchRepairs([workspaceId]).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
-    }),
+    captureError(
+      error,
+      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
   );
 
   return Result.ok({});

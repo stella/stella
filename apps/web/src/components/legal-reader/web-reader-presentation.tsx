@@ -30,6 +30,11 @@ export const useWebReaderPresentationAdapters =
               analytics.captureError(copied.error, {
                 fingerprintKey:
                   "useWebReaderPresentationAdapters.copyPermalink:failure",
+                scope: {
+                  type: "handler",
+                  handlerId:
+                    "useWebReaderPresentationAdapters.copyPermalink:failure",
+                },
               });
               notifyUserError(copied.error, t("errors.actionFailed"));
               return;

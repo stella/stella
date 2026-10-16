@@ -406,6 +406,11 @@ export const useTemplateStudioSelectionGesture = ({
       getAnalytics().captureError(toAPIError(error), {
         fingerprintKey:
           "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId:
+            "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        },
       });
       setEnrichment({ status: "idle" });
       return;
@@ -445,6 +450,10 @@ export const useTemplateStudioSelectionGesture = ({
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "useTemplateStudioSelectionGesture:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useTemplateStudioSelectionGesture:failure",
+        },
       });
       setEnrichment({ status: "idle" });
       notifyUserError(error, t("errors.actionFailed"));

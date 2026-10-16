@@ -321,6 +321,10 @@ export const DetailContent = ({
     }
     getAnalytics().captureError(error, {
       fingerprintKey: "DetailContent.reportBodyError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "DetailContent.reportBodyError:failure",
+      },
     });
     notifyUserError(error, t("clauses.saveFailed"), {
       description: userErrorFromThrown(error, t("common.unexpectedError")),

@@ -52,6 +52,10 @@ export const useExpandedDecisionFilters = (
       onFailure: (failure) =>
         analytics.captureError(failure, {
           fingerprintKey: "useExpandedDecisionFilters.onFailure:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useExpandedDecisionFilters.onFailure:failure",
+          },
         }),
       query,
     }),

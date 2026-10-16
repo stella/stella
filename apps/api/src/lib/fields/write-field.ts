@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -425,9 +426,10 @@ export const writeFieldValue = async function* ({
 
   if (flushSearchRepairs) {
     flushEntitySearchRepairs([entityId]).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "writeFieldValue.flushEntitySearchRepairs",
-      }),
+      captureError(
+        error,
+        handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
+      ),
     );
   }
   return Result.ok({});

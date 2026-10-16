@@ -173,6 +173,10 @@ export const startAnonymizationDetection = ({
         ) {
           getAnalytics().captureError(error, {
             fingerprintKey: "startAnonymizationDetection.run:failure",
+            scope: {
+              type: "handler",
+              handlerId: "startAnonymizationDetection.run:failure",
+            },
           });
           run();
           return;
@@ -180,6 +184,10 @@ export const startAnonymizationDetection = ({
         failedKey = cacheKey;
         getAnalytics().captureError(error, {
           fingerprintKey: "startAnonymizationDetection.run:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "startAnonymizationDetection.run:failure-2",
+          },
         });
         useInspectorAnonymizationStore
           .getState()

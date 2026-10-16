@@ -423,6 +423,11 @@ export const useFolioCollaborationRoom = ({
                     getAnalytics().captureError(rejoinResult.error, {
                       fingerprintKey:
                         "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId:
+                          "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      },
                     });
                   }
                   if (status === 403) {
@@ -493,6 +498,11 @@ export const useFolioCollaborationRoom = ({
               getAnalytics().captureError(error, {
                 fingerprintKey:
                   "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                scope: {
+                  type: "handler",
+                  handlerId:
+                    "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                },
               });
               setConnectedState("reconnecting");
             })

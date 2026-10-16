@@ -11,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -141,9 +142,10 @@ export const deleteContactHandler = async function* ({
 
   flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
     (error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "deleteContactHandler.flushWorkspaceSearchRepairs",
-      }),
+      captureError(
+        error,
+        handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
+      ),
   );
 
   return Result.ok({});

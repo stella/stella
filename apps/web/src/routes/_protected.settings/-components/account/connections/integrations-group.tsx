@@ -301,6 +301,10 @@ const ApproveAuthorizationButton = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "ApproveAuthorizationButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ApproveAuthorizationButton:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

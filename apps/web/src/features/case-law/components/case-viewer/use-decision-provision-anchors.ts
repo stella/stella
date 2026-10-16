@@ -88,6 +88,10 @@ const useCitingProvisionCitationGrammar = (
       {
         fingerprintKey:
           "useCitingProvisionCitationGrammar:ClientTelemetryError",
+        scope: {
+          type: "handler",
+          handlerId: "useCitingProvisionCitationGrammar:ClientTelemetryError",
+        },
       },
     );
   }, [undeclared]);

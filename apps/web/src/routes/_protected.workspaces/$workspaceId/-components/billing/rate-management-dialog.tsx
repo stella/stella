@@ -131,6 +131,7 @@ const RateTablesView = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RateTablesView:failure",
+        scope: { type: "handler", handlerId: "RateTablesView:failure" },
       });
     },
   });
@@ -153,6 +154,7 @@ const RateTablesView = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RateTablesView:failure-2",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-2" },
       });
     },
   });
@@ -179,6 +181,7 @@ const RateTablesView = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RateTablesView:failure-3",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-3" },
       });
     },
   });
@@ -476,6 +479,7 @@ const RateEntriesView = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RateEntriesView:failure",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure" },
       });
     },
   });
@@ -502,6 +506,7 @@ const RateEntriesView = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RateEntriesView:failure-2",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure-2" },
       });
     },
   });

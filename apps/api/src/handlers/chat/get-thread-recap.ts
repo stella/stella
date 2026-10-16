@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 type CacheThreadRecapOptions = {
@@ -232,10 +233,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
       }),
   );
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, {
-      fingerprintKey: "chat.getThreadRecap.persistResult_error",
-      context: { threadId },
-    });
+    captureError(
+      persistResult.error,
+      handlerErrorContext("chat.getThreadRecap.persistResult_error", {
+        threadId,
+      }),
+    );
   }
 
   return Result.ok<ThreadRecapResult>({ recap });

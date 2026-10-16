@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enqueueDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const HANDOFF_TIMEOUT_MS = 2000;
@@ -42,9 +43,12 @@ export const handoffCommittedDocumentTranslationRun = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureDeliveryError(result.error, {
-      fingerprintKey: "documentTranslation.handoff",
-      context: { runId, workspaceId },
-    });
+    captureDeliveryError(
+      result.error,
+      handlerErrorContext("documentTranslation.handoff", {
+        runId,
+        workspaceId,
+      }),
+    );
   }
 };

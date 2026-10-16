@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 const BATCH_SIZE = 200;
@@ -126,13 +127,13 @@ export const backfillCaseLawSlugs = async (
         }
       } catch (error) {
         failed += 1;
-        captureError(error, {
-          fingerprintKey: "decisions.backfillCaseLawSlugs",
-          context: {
+        captureError(
+          error,
+          handlerErrorContext("decisions.backfillCaseLawSlugs", {
             decisionId: row.id,
             step: "backfillCaseLawSlugs",
-          },
-        });
+          }),
+        );
       }
     }
 

@@ -63,6 +63,10 @@ export const useUpdateCorrespondence = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpdateCorrespondence:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useUpdateCorrespondence:failure",
+        },
       });
       notifyUserError(error, t("common.error"));
     },
@@ -93,6 +97,10 @@ export const useRotateCorrespondenceAddress = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useRotateCorrespondenceAddress:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useRotateCorrespondenceAddress:failure",
+        },
       });
       notifyUserError(error, t("common.error"));
     },
@@ -123,6 +131,10 @@ export const useRevokeCorrespondenceAddress = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useRevokeCorrespondenceAddress:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useRevokeCorrespondenceAddress:failure",
+        },
       });
       notifyUserError(error, t("common.error"));
     },

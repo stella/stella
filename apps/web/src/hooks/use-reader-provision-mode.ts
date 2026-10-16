@@ -80,6 +80,10 @@ export const useReaderProvisionMode = (
     if (readError !== null) {
       analytics.captureError(readError, {
         fingerprintKey: "useReaderProvisionMode:readError",
+        scope: {
+          type: "handler",
+          handlerId: "useReaderProvisionMode:readError",
+        },
       });
     }
     const refresh = () => {
@@ -87,6 +91,10 @@ export const useReaderProvisionMode = (
       if (Result.isError(read)) {
         analytics.captureError(read.error, {
           fingerprintKey: "useReaderProvisionMode.refresh:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useReaderProvisionMode.refresh:failure",
+          },
         });
         return;
       }
@@ -146,6 +154,10 @@ export const useReaderProvisionMode = (
       if (Result.isError(written)) {
         analytics.captureError(written.error, {
           fingerprintKey: "useReaderProvisionMode.toggle:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useReaderProvisionMode.toggle:failure",
+          },
         });
         return;
       }

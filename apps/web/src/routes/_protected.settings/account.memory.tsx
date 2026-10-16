@@ -39,6 +39,11 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
           } catch (error: unknown) {
             getAnalytics().captureError(error, {
               fingerprintKey: "settings.account.memory.beforeLoad:failure",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/settings/account/memory",
+              },
             });
           }
         }),

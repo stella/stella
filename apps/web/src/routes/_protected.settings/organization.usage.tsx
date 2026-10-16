@@ -40,6 +40,11 @@ export const Route = createFileRoute("/_protected/settings/organization/usage")(
           (error: unknown) => {
             getAnalytics().captureError(error, {
               fingerprintKey: "settings.organization.usage.loader:failure",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/settings/organization/usage",
+              },
             });
           },
         );

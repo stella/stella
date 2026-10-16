@@ -143,7 +143,7 @@ const reportMissingRowField = (
 ) => {
   getAnalytics().captureError(
     new ClientTelemetryError({ area: "docx-suggestion-cache", message }),
-    { fingerprintKey },
+    { fingerprintKey, scope: { type: "handler", handlerId: fingerprintKey } },
   );
 };
 

@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import type { HandlerExceptionScope } from "@stll/errors";
+
 import { layoutForSurface } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import { useLocalStorage } from "@/hooks/use-local-storage";
@@ -13,6 +15,7 @@ import { ClientOperationError } from "@/lib/errors/client";
  * module constant per table, so the hook reads one identity across renders.
  */
 export type PublicLawTableLayoutStore<TLayout extends PublicLawTableLayout> = {
+  exceptionScope: HandlerExceptionScope;
   /** The browser storage key; renaming it forgets every stored arrangement. */
   storageKey: string;
   /** Every stored arrangement, normalised once, from the raw stored value. */
@@ -55,6 +58,7 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
     if (Result.isError(read)) {
       analytics.captureError(read.error, {
         fingerprintKey: "usePublicLawTableLayout:failure",
+        scope: store.exceptionScope,
       });
     }
     setLayouts(Result.isError(read) ? {} : read.value);
@@ -93,6 +97,7 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
       if (Result.isError(written)) {
         analytics.captureError(written.error, {
           fingerprintKey: "usePublicLawTableLayout.setLayout:failure",
+          scope: store.exceptionScope,
         });
       }
     },

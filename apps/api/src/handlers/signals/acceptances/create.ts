@@ -27,6 +27,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -245,9 +246,10 @@ export const createAcceptSignal = (
           dependencies
             .flushEntitySearchRepairs([created.entityId])
             .catch((error: unknown) =>
-              captureError(error, {
-                fingerprintKey: "createAcceptSignal.rejection",
-              }),
+              captureError(
+                error,
+                handlerErrorContext("createAcceptSignal.rejection"),
+              ),
             );
 
           const row = yield* yield* loadVisibleSignal({

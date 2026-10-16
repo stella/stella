@@ -8,6 +8,7 @@ import {
   capturedExceptionIdentity,
   automaticExceptionKey,
   fingerprintExceptionEvent,
+  fingerprintExceptionScope,
   isExceptionFingerprintKey,
   routeExceptionFingerprintKey,
 } from "@/lib/analytics/exception-fingerprint";
@@ -15,6 +16,10 @@ import {
 const fixture = {
   entries: [{ type: "TypeError" }],
   key: "chatRuntime:send" as const,
+  scopeIdentity: fingerprintExceptionScope({
+    type: "handler",
+    handlerId: "chatRuntime:send",
+  }),
 };
 
 describe("stable exception identity", () => {
@@ -97,9 +102,23 @@ describe("stable exception identity", () => {
 
   test("frameless failures retain their declared path", () => {
     expect(
-      fingerprintExceptionEvent({ entries: [], key: "worker:decode" }),
+      fingerprintExceptionEvent({
+        entries: [],
+        key: "worker:decode",
+        scopeIdentity: fingerprintExceptionScope({
+          type: "handler",
+          handlerId: "worker.decode",
+        }),
+      }),
     ).not.toBe(
-      fingerprintExceptionEvent({ entries: [], key: "worker:encode" }),
+      fingerprintExceptionEvent({
+        entries: [],
+        key: "worker:encode",
+        scopeIdentity: fingerprintExceptionScope({
+          type: "handler",
+          handlerId: "worker.encode",
+        }),
+      }),
     );
   });
 
@@ -238,5 +257,36 @@ test("automatic exceptions distinguish crash owners and stable message shapes", 
   );
   expect(automaticKey(input)).not.toBe(
     automaticKey({ ...input, message: "Cannot convert object to primitive" }),
+  );
+});
+
+test("distinct declared scopes split the same cause and owner", () => {
+  const scopes = [
+    { type: "request", method: "GET", routeTemplate: "/v1/views/:viewId" },
+    { type: "request", method: "PATCH", routeTemplate: "/v1/views/:viewId" },
+    { type: "request", method: "GET", routeTemplate: "/v1/entities/:entityId" },
+    { type: "handler", handlerId: "settings.members.invite" },
+    { type: "handler", handlerId: "settings.members.remove" },
+  ] as const;
+  assertProperty(
+    "distinct declared scopes split the same cause and owner",
+    fc.property(
+      fc
+        .tuple(fc.constantFrom(...scopes), fc.constantFrom(...scopes))
+        .filter(
+          ([left, right]) => JSON.stringify(left) !== JSON.stringify(right),
+        ),
+      ([left, right]) => {
+        const leftIdentity = fingerprintExceptionEvent({
+          ...fixture,
+          scopeIdentity: fingerprintExceptionScope(left),
+        });
+        const rightIdentity = fingerprintExceptionEvent({
+          ...fixture,
+          scopeIdentity: fingerprintExceptionScope(right),
+        });
+        expect(leftIdentity).not.toBe(rightIdentity);
+      },
+    ),
   );
 });

@@ -9,6 +9,7 @@ import { legislationDocuments } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 class StatuteSlugPageError extends TaggedError("StatuteSlugPageError")<{
@@ -139,14 +140,14 @@ export const backfillStatuteSlugsPage = async (
           }),
         );
       }
-      (options.capture ?? captureError)(write.error, {
-        fingerprintKey: "legislation.backfillSlugs.write",
-        context: {
+      (options.capture ?? captureError)(
+        write.error,
+        handlerErrorContext("legislation.backfillSlugs.write", {
           after: options.after ?? "start",
           step: "backfillStatuteSlugs",
           failed: String(assignments.length),
-        },
-      });
+        }),
+      );
       failed = assignments.length;
     } else {
       written = write.value;

@@ -77,6 +77,11 @@ export const Route = createFileRoute("/_protected/settings/organization")({
               getAnalytics().captureError(error, {
                 fingerprintKey:
                   "settings.organization.route.beforeLoad:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/settings/organization",
+                },
               }),
           );
         })(),

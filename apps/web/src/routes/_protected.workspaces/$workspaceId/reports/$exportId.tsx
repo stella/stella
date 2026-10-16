@@ -56,6 +56,10 @@ function ReportExportRecoveryPage() {
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "ReportExportRecoveryPage.handleDownload:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ReportExportRecoveryPage.handleDownload:failure",
+        },
       });
       notifyUserError(result.error, t("common.unexpectedError"));
       return;
@@ -76,6 +80,10 @@ function ReportExportRecoveryPage() {
         analytics.captureError(error, {
           fingerprintKey:
             "ReportExportRecoveryPage.handleDownloadClick:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ReportExportRecoveryPage.handleDownloadClick:failure",
+          },
         });
         notifyUserError(error, t("common.unexpectedError"));
       }),
@@ -108,6 +116,10 @@ function ReportExportRecoveryPage() {
       if (Result.isError(result)) {
         analytics.captureError(result.error, {
           fingerprintKey: "ReportExportRecoveryPage.handleOpen:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ReportExportRecoveryPage.handleOpen:failure",
+          },
         });
       }
       notifyUserError(

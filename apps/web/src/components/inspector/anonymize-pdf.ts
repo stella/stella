@@ -124,6 +124,10 @@ export const useFileAnonymizationPipeline = ({
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error, {
           fingerprintKey: "useFileAnonymizationPipeline.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useFileAnonymizationPipeline.queryFn:failure",
+          },
         });
       }
       readQueryResult(result);

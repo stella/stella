@@ -18,6 +18,7 @@ import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organiz
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -189,9 +190,10 @@ export const createStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error, {
-            fingerprintKey: "stylesets.createStoredStyleSet.cleanup_error",
-          });
+          captureError(
+            cleanup.error,
+            handlerErrorContext("stylesets.createStoredStyleSet.cleanup_error"),
+          );
         }
       }
     }
@@ -427,9 +429,12 @@ export const replaceStoredStyleSet = async ({
           }),
       });
       if (Result.isError(cleanupResult)) {
-        captureError(cleanupResult.error, {
-          fingerprintKey: "stylesets.replaceStoredStyleSet.cleanupResult_error",
-        });
+        captureError(
+          cleanupResult.error,
+          handlerErrorContext(
+            "stylesets.replaceStoredStyleSet.cleanupResult_error",
+          ),
+        );
       } else {
         const cleared = await safeDb(async (tx) => {
           // audit: skip — cleanup metadata for the already-audited replacement
@@ -446,9 +451,12 @@ export const replaceStoredStyleSet = async ({
             );
         });
         if (Result.isError(cleared)) {
-          captureError(cleared.error, {
-            fingerprintKey: "stylesets.replaceStoredStyleSet.cleared_error",
-          });
+          captureError(
+            cleared.error,
+            handlerErrorContext(
+              "stylesets.replaceStoredStyleSet.cleared_error",
+            ),
+          );
         }
       }
       return Result.ok(replaced.row);
@@ -476,9 +484,12 @@ export const replaceStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error, {
-            fingerprintKey: "stylesets.replaceStoredStyleSet.cleanup_error",
-          });
+          captureError(
+            cleanup.error,
+            handlerErrorContext(
+              "stylesets.replaceStoredStyleSet.cleanup_error",
+            ),
+          );
         }
       }
     }

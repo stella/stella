@@ -1,8 +1,9 @@
+// parser-output-unchanged: declares observer error fingerprint metadata; observation delivery and parser results are unchanged.
 // parser-output-unchanged: observer failure handling is isolated from parser results.
 import { Result, TaggedError } from "better-result";
 
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
-import { declareFingerprintFields } from "@stll/errors";
+import type { FingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -19,9 +20,9 @@ class DocumentTelemetryObserverError extends TaggedError(
   cause: unknown;
   reason: DocumentTelemetryObserverFailure["reason"];
 }> {
-  static {
-    declareFingerprintFields(this, ["reason"]);
-  }
+  static readonly stellaExceptionFingerprintFields = [
+    "reason",
+  ] as const satisfies FingerprintFields<DocumentTelemetryObserverError>;
 }
 
 type DocumentStageObserverOptions = {

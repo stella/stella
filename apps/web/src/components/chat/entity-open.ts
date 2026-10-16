@@ -186,6 +186,7 @@ export const openEntityInInspector = async (
   } catch (error) {
     getAnalytics().captureError(error, {
       fingerprintKey: "openEntityInInspector:failure",
+      scope: { type: "handler", handlerId: "openEntityInInspector:failure" },
     });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));
@@ -246,6 +247,10 @@ export const openSourceBoundEntityFile = async ({
   } catch (error) {
     getAnalytics().captureError(error, {
       fingerprintKey: "openSourceBoundEntityFile:failure",
+      scope: {
+        type: "handler",
+        handlerId: "openSourceBoundEntityFile:failure",
+      },
     });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));

@@ -241,6 +241,10 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "DevQuickStartButton.runQuickStart:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartButton.runQuickStart:failure",
+        },
       });
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
@@ -360,6 +364,10 @@ export const DevQuickStartContinuation = ({
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "DevQuickStartContinuation.runContinuation:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartContinuation.runContinuation:failure",
+        },
       });
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)

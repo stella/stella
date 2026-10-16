@@ -483,6 +483,10 @@ function ProfilePageBody() {
               } catch (error) {
                 getAnalytics().captureError(error, {
                   fingerprintKey: "ProfilePageBody:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ProfilePageBody:failure",
+                  },
                 });
               }
             }}
@@ -547,6 +551,10 @@ function ProfilePageBody() {
               } catch (error) {
                 getAnalytics().captureError(error, {
                   fingerprintKey: "ProfilePageBody:failure-2",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ProfilePageBody:failure-2",
+                  },
                 });
               }
             }}

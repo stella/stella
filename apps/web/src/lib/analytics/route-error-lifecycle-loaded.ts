@@ -56,10 +56,10 @@ export const createLoadedRouteErrorLifecycleController = (
     const routeTemplate =
       state.type === "caught" ? state.routeTemplate : currentRouteTemplate;
     const incident: RouteErrorIncident = {
-      errorFingerprint: fingerprintTelemetryError(
-        error,
-        routeExceptionFingerprintKey(routeTemplate),
-      ),
+      errorFingerprint: fingerprintTelemetryError(error, {
+        key: routeExceptionFingerprintKey(routeTemplate),
+        scope: { type: "request", method: "GET", routeTemplate },
+      }),
       incidentReference: priorIncident?.incidentReference ?? reference,
       inspectorState:
         state.type === "caught" ? state.inspectorState : inspectorState,

@@ -24,6 +24,7 @@ import type {
   RawSourceWriteFailure,
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
@@ -77,14 +78,14 @@ export const recordAbandonedRawWrite = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      fingerprintKey: "pipeline.recordAbandonedRawWrite.recorded_error",
-      context: {
+    captureError(
+      recorded.error,
+      handlerErrorContext("pipeline.recordAbandonedRawWrite.recorded_error", {
         decisionId,
         sourceId,
         step: "processDecision.recordAbandonedRawWrite",
-      },
-    });
+      }),
+    );
   }
 };
 
@@ -157,10 +158,13 @@ export const acquireSourceRawArtifact = async ({
         ...pgErrorFields(error),
         "error.detail": wrappedErrorDetail(safeError),
       });
-      captureError(safeError, {
-        fingerprintKey: "rawSource.insertFailure",
-        context: { sourceId, step: "uploadSourceRaw" },
-      });
+      captureError(
+        safeError,
+        handlerErrorContext("rawSource.insertFailure", {
+          sourceId,
+          step: "uploadSourceRaw",
+        }),
+      );
 
       return {
         type: "retry",
@@ -172,10 +176,13 @@ export const acquireSourceRawArtifact = async ({
       } as const;
     }
 
-    captureError(safeError, {
-      fingerprintKey: "rawSource.updateFailure",
-      context: { sourceId, step: "uploadSourceRaw" },
-    });
+    captureError(
+      safeError,
+      handlerErrorContext("rawSource.updateFailure", {
+        sourceId,
+        step: "uploadSourceRaw",
+      }),
+    );
 
     // Update: preserve existing S3 key and DO NOT advance sourceHash.
     // If we wrote the new hash with the old key, the hash mismatch

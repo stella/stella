@@ -17,8 +17,17 @@ import {
 } from "./clause-ai-tracked-changes";
 
 const ERROR_CAPTURE = {
-  report: { fingerprintKey: "useClauseBodySave:cause" },
-  ack: { fingerprintKey: "useClauseBodySave.acknowledged:cause" },
+  report: {
+    fingerprintKey: "useClauseBodySave:cause",
+    scope: { type: "handler", handlerId: "useClauseBodySave:cause" },
+  },
+  ack: {
+    fingerprintKey: "useClauseBodySave.acknowledged:cause",
+    scope: {
+      type: "handler",
+      handlerId: "useClauseBodySave.acknowledged:cause",
+    },
+  },
 } as const;
 
 export type ClauseBodyWrite = {

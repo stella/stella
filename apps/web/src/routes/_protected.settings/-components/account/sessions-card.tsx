@@ -231,6 +231,7 @@ const RevokeSessionButton = ({ sessionId }: RevokeSessionButtonProps) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RevokeSessionButton:failure",
+        scope: { type: "handler", handlerId: "RevokeSessionButton:failure" },
       });
     },
   });
@@ -279,6 +280,7 @@ const RevokeAllDialog = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "RevokeAllDialog:failure",
+        scope: { type: "handler", handlerId: "RevokeAllDialog:failure" },
       });
     },
     onSettled: () => {

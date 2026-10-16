@@ -281,6 +281,7 @@ const OrganizationList = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "OrganizationList:failure",
+        scope: { type: "handler", handlerId: "OrganizationList:failure" },
       });
     },
   });
@@ -365,6 +366,10 @@ const CreateOrganizationForm = ({
         if (slugCheckError) {
           analytics.captureError(toAuthClientError(slugCheckError), {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure",
+            },
           });
           notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
           return;
@@ -386,6 +391,10 @@ const CreateOrganizationForm = ({
         if (createError) {
           analytics.captureError(toAuthClientError(createError), {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-2",
+            },
           });
           notifyAuthClientError(createError, t("errors.actionFailed"));
           return;
@@ -399,6 +408,10 @@ const CreateOrganizationForm = ({
         if (setActiveError) {
           analytics.captureError(toAuthClientError(setActiveError), {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure-3",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-3",
+            },
           });
           notifyAuthClientError(setActiveError, t("errors.actionFailed"));
           return;
@@ -415,6 +428,10 @@ const CreateOrganizationForm = ({
         } catch (error) {
           analytics.captureError(error, {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure-4",
+            scope: {
+              type: "handler",
+              handlerId: "CreateOrganizationForm.onSubmit:failure-4",
+            },
           });
           notifyUserError(error, t("errors.actionFailed"));
         }

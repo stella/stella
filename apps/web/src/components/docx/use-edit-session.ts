@@ -97,12 +97,14 @@ const releaseEditSession = async ({
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error, {
       fingerprintKey: "releaseEditSession:failure",
+      scope: { type: "handler", handlerId: "releaseEditSession:failure" },
     });
     return false;
   }
   if (result.value.status === "error") {
     getAnalytics().captureError(result.value.error, {
       fingerprintKey: "releaseEditSession:failure-2",
+      scope: { type: "handler", handlerId: "releaseEditSession:failure-2" },
     });
     return false;
   }
@@ -178,6 +180,7 @@ export const useEditSession = ({
     }).catch((error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "useEditSession.open:failure",
+        scope: { type: "handler", handlerId: "useEditSession.open:failure" },
       });
       return null;
     });

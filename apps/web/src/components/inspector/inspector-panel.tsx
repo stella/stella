@@ -282,6 +282,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           .catch((error: unknown) => {
             getAnalytics().captureError(error, {
               fingerprintKey: "InspectorPanel:failure",
+              scope: { type: "handler", handlerId: "InspectorPanel:failure" },
             });
           });
         return;
@@ -323,6 +324,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         } catch (error) {
           getAnalytics().captureError(error, {
             fingerprintKey: "InspectorPanel:failure-2",
+            scope: { type: "handler", handlerId: "InspectorPanel:failure-2" },
           });
         }
       }

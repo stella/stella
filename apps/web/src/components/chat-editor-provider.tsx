@@ -213,6 +213,10 @@ const readMentionSources = async (
       });
       getAnalytics().captureError(error, {
         fingerprintKey: "readMentionSources:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-mention.${labelKey}.${read.operation}`,
+        },
       });
       failures.push(error);
       continue;

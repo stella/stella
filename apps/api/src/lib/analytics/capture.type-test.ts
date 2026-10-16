@@ -17,10 +17,28 @@ export const framelessCaptureRequiresKey = (
   captureRequestError(error, { request });
   // @ts-expect-error A prior observation does not identify the owning path.
   captureObservedError(error, { observation: undefined });
+  // @ts-expect-error A path cannot replace execution scope.
   captureError(error, { fingerprintKey: "worker.processJob" });
+  // @ts-expect-error Request captures require method and declared route scope.
   captureRequestError(error, { request, fingerprintKey: "request.handle" });
+  // @ts-expect-error A string key is not a typed execution scope.
+  captureObservedError(error, {
+    observation: undefined,
+    scope: "request.handle",
+    fingerprintKey: "request.handle",
+  });
+  captureError(error, {
+    fingerprintKey: "worker.processJob",
+    scope: { type: "job", jobId: "nightly", task: "repair" },
+  });
+  captureRequestError(error, {
+    request,
+    fingerprintKey: "request.handle",
+    scope: { type: "request", method: "GET", routeTemplate: "/files/:id" },
+  });
   captureObservedError(error, {
     observation: undefined,
     fingerprintKey: "worker.observeJob",
+    scope: { type: "job", jobId: "nightly", task: "repair" },
   });
 };

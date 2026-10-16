@@ -160,7 +160,10 @@ export const OTPPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error, { fingerprintKey: "OTPPanel:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "OTPPanel:failure",
+        scope: { type: "handler", handlerId: "OTPPanel:failure" },
+      });
     },
   });
 
@@ -229,6 +232,10 @@ export const OTPPanel = ({
         .catch((error: unknown) => {
           analytics.captureError(error, {
             fingerprintKey: "OTPPanel.mutationFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OTPPanel.mutationFn:failure",
+            },
           });
         });
 
@@ -238,7 +245,10 @@ export const OTPPanel = ({
     onError: (error) => {
       analytics.captureError(
         AlreadyToastedError.is(error) ? error.cause : error,
-        { fingerprintKey: "OTPPanel:failure-2" },
+        {
+          fingerprintKey: "OTPPanel:failure-2",
+          scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+        },
       );
       // Only the structured sign-in error already toasted a message in the
       // mutationFn (marked by AlreadyToastedError); every other throw

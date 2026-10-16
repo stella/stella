@@ -20,6 +20,11 @@ export const Route = createFileRoute("/_protected/chat/history")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "chat.history.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/history",
+        },
       });
     };
     detached(

@@ -58,6 +58,7 @@ export const useCreateView = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateView:failure",
+        scope: { type: "handler", handlerId: "useCreateView:failure" },
       });
     },
   });
@@ -127,6 +128,7 @@ export const useUpdateView = (workspaceId: string) => {
       }
       analytics.captureError(error, {
         fingerprintKey: "useUpdateView:failure",
+        scope: { type: "handler", handlerId: "useUpdateView:failure" },
       });
     },
     onSettled: async () => {
@@ -173,6 +175,7 @@ export const useConvertView = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useConvertView:failure",
+        scope: { type: "handler", handlerId: "useConvertView:failure" },
       });
     },
   });
@@ -205,6 +208,7 @@ export const useReorderViews = (workspaceId: string) => {
       cache.restore(context);
       analytics.captureError(error, {
         fingerprintKey: "useReorderViews:failure",
+        scope: { type: "handler", handlerId: "useReorderViews:failure" },
       });
     },
     onSettled: cache.settle,
@@ -240,6 +244,7 @@ export const useDeleteView = (workspaceId: string) => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteView:failure",
+        scope: { type: "handler", handlerId: "useDeleteView:failure" },
       });
     },
   });

@@ -20,6 +20,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 import {
@@ -392,7 +393,7 @@ const extractProcuracao = createSafeRootHandler(
     getS3()
       .delete(key)
       .catch((error: unknown) =>
-        captureError(error, { fingerprintKey: "extractProcuracao.rejection" }),
+        captureError(error, handlerErrorContext("extractProcuracao.rejection")),
       );
 
     return extractionResult;

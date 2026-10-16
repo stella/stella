@@ -100,6 +100,7 @@ export const OfficeFileViewer = ({
     (error: Error) => {
       analytics.captureError(error, {
         fingerprintKey: "OfficeFileViewer:failure",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
       });
     },
     [analytics],
@@ -108,6 +109,7 @@ export const OfficeFileViewer = ({
     (error: Error) => {
       analytics.captureError(error, {
         fingerprintKey: "OfficeFileViewer:failure-2",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

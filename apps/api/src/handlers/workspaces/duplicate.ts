@@ -58,6 +58,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
@@ -439,10 +440,13 @@ const cleanupCopiedS3Keys = async ({
   );
 
   if (Result.isError(cleanupResult)) {
-    captureError(cleanupResult.error, {
-      fingerprintKey: "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
-      context: { targetWorkspaceId },
-    });
+    captureError(
+      cleanupResult.error,
+      handlerErrorContext(
+        "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
+        { targetWorkspaceId },
+      ),
+    );
   }
 };
 
@@ -1031,28 +1035,32 @@ export const createDuplicateWorkspace = (
       dependencies
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
         .catch((error: unknown) =>
-          captureError(error, {
-            fingerprintKey: "matterDuplicate.flushMatterSearch",
-          }),
+          captureError(
+            error,
+            handlerErrorContext("matterDuplicate.flushMatterSearch"),
+          ),
         );
       dependencies
         .flushEntitySearchRepairs(
           txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
         )
         .catch((error: unknown) =>
-          captureError(error, {
-            fingerprintKey: "matterDuplicate.flushEntitySearch",
-          }),
+          captureError(
+            error,
+            handlerErrorContext("matterDuplicate.flushEntitySearch"),
+          ),
         );
 
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.value.nativeExtractionRunIds,
       }).catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey:
+        captureError(
+          error,
+          handlerErrorContext(
             "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
-        }),
+          ),
+        ),
       );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });

@@ -290,6 +290,10 @@ export const PropertyPopover = ({
       } catch (error) {
         getAnalytics().captureError(error, {
           fingerprintKey: "PropertyPopover.replaceDependency:failure",
+          scope: {
+            type: "handler",
+            handlerId: "PropertyPopover.replaceDependency:failure",
+          },
         });
         notifyUserError(error, t("errors.actionFailed"));
       } finally {

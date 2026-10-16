@@ -230,6 +230,7 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
       notifyUserError(error, t("errors.actionFailed"));
       analytics.captureError(error, {
         fingerprintKey: "DisconnectButton:failure",
+        scope: { type: "handler", handlerId: "DisconnectButton:failure" },
       });
     },
   });

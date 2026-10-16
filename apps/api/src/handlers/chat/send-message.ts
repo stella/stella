@@ -275,6 +275,7 @@ import {
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
@@ -556,10 +557,12 @@ const persistedTurnSettlement = ({
     return Result.ok({ followUps: null, settlement: { type: "not-owned" } });
   }
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, {
-      fingerprintKey: "chat.persistedTurnSettlement.persistResult_error",
-      context: { threadId },
-    });
+    captureError(
+      persistResult.error,
+      handlerErrorContext("chat.persistedTurnSettlement.persistResult_error", {
+        threadId,
+      }),
+    );
     return Result.err({
       code: "persistence",
       error: new HandlerError({
@@ -926,10 +929,12 @@ export class ChatSendLifecycle {
               owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
             }),
       };
-      captureError(failureResult.error, {
-        fingerprintKey: "chat.failCurrentTurn.failureResult_error",
-        context: { threadId: this.options.threadId },
-      });
+      captureError(
+        failureResult.error,
+        handlerErrorContext("chat.failCurrentTurn.failureResult_error", {
+          threadId: this.options.threadId,
+        }),
+      );
       return;
     }
     this.claimedTurn = { status: "unclaimed" };
@@ -1079,13 +1084,13 @@ export class ChatSendLifecycle {
           failureResult,
         );
         if (Result.isError(failureResult)) {
-          captureError(failureResult.error, {
-            fingerprintKey: "chat.cleanup.failureResult_error",
-            context: {
+          captureError(
+            failureResult.error,
+            handlerErrorContext("chat.cleanup.failureResult_error", {
               source: "send-message-claimed-turn-preflight-cleanup",
               threadId: this.options.threadId,
-            },
-          });
+            }),
+          );
         }
       }
       if (this.pendingSideEffects !== undefined) {
@@ -1098,13 +1103,13 @@ export class ChatSendLifecycle {
           userId: this.options.userId,
         });
         if (Result.isError(rollbackResult)) {
-          captureError(rollbackResult.error, {
-            fingerprintKey: "chat.cleanup.rollbackResult_error",
-            context: {
+          captureError(
+            rollbackResult.error,
+            handlerErrorContext("chat.cleanup.rollbackResult_error", {
               source: "send-message-unpersisted-side-effect-rollback",
               threadId: this.options.threadId,
-            },
-          });
+            }),
+          );
         }
       }
       if (!this.connectorsHandedOff) {

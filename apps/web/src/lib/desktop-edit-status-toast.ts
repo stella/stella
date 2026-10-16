@@ -64,6 +64,10 @@ export const showDesktopEditOpenResultToast = async ({
     }
     getAnalytics().captureError(error, {
       fingerprintKey: "showDesktopEditOpenResultToast:failure",
+      scope: {
+        type: "handler",
+        handlerId: "showDesktopEditOpenResultToast:failure",
+      },
     });
     if (error instanceof DesktopBridgeIncompatibleError) {
       notifyUserError(error, messages.updateRequiredTitle, {

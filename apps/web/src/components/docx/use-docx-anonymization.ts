@@ -201,6 +201,10 @@ export const useDocxAnonymizationHighlights = ({
     if (Result.isError(dispatched)) {
       getAnalytics().captureError(dispatched.error, {
         fingerprintKey: "useDocxAnonymizationHighlights:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDocxAnonymizationHighlights:failure",
+        },
       });
       useInspectorAnonymizationStore
         .getState()

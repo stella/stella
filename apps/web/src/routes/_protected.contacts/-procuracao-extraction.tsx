@@ -204,6 +204,10 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
     if (Result.isError(extraction)) {
       getAnalytics().captureError(extraction.error, {
         fingerprintKey: "useProcuracaoExtraction.extractFile:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useProcuracaoExtraction.extractFile:failure",
+        },
       });
       notifyUserError(
         extraction.error,
@@ -267,6 +271,10 @@ export const ProcuracaoDropZone = ({
 }: ProcuracaoDropZoneProps) => {
   const t = useTranslations();
   const { ref, isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "ProcuracaoDropZone.useExternalFileDrop",
+    },
     onDrop: (files) => {
       const file = files.at(0);
       if (file) {

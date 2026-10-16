@@ -475,6 +475,7 @@ export const useI18nStore = create<State & Actions>()(
           // did not happen. The toast renders in that previous language.
           getAnalytics().captureError(error, {
             fingerprintKey: "loadMessages:failure",
+            scope: { type: "handler", handlerId: "loadMessages:failure" },
           });
           notifyUserError(error, getTranslator()("common.languageLoadFailed"));
           return;

@@ -44,6 +44,7 @@ import {
 import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
 import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
+import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
 import { api } from "@/lib/api";
@@ -645,8 +646,14 @@ export const createChatRuntime = ({
             runContext,
           ),
         ),
-        (diagnostic) => {
-          providerDiagnostic = diagnostic;
+        {
+          scope: {
+            type: "handler",
+            handlerId: `chat-provider-diagnostic.${key.scope}.${getChatRuntimeContextKind(context)}`,
+          },
+          onDiagnostic: (diagnostic) => {
+            providerDiagnostic = diagnostic;
+          },
         },
       );
     },

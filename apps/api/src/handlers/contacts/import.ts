@@ -32,6 +32,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -371,9 +372,10 @@ const importContacts = createSafeRootHandler(
     );
     if (createdContactIds.length > 0) {
       flushContactSearchRepairs(createdContactIds).catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey: "importContacts.flushContactSearchRepairs",
-        }),
+        captureError(
+          error,
+          handlerErrorContext("importContacts.flushContactSearchRepairs"),
+        ),
       );
     }
 

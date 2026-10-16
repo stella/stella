@@ -121,6 +121,10 @@ export const PasswordSignInForm = ({
         if (error) {
           analytics.captureError(toAuthClientError(error), {
             fingerprintKey: "PasswordSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "PasswordSignInForm.onSubmit:failure",
+            },
           });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));

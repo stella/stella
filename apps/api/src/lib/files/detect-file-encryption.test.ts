@@ -22,6 +22,7 @@ import {
   isEncryptedPdf,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
 } from "@/api/lib/files/pdf-utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -133,16 +134,20 @@ describe("uploadFileEncryption", () => {
     const analytics = installRecordingAnalytics();
     try {
       expect(
-        uploadFileEncryption(unsure, {
-          fingerprintKey: "test.detectEncryption",
-          context: { mimeType: PDF_MIME_TYPE },
-        })?.encrypted,
+        uploadFileEncryption(
+          unsure,
+          handlerErrorContext("test.detectEncryption", {
+            mimeType: PDF_MIME_TYPE,
+          }),
+        )?.encrypted,
       ).toBe(false);
       expect(
-        uploadFileEncryption(unreadable, {
-          fingerprintKey: "test.detectEncryption",
-          context: { mimeType: PDF_MIME_TYPE },
-        }),
+        uploadFileEncryption(
+          unreadable,
+          handlerErrorContext("test.detectEncryption", {
+            mimeType: PDF_MIME_TYPE,
+          }),
+        ),
       ).toBeNull();
       // Both are reported; the unsure one is told apart by its stage.
       expect(
@@ -191,22 +196,22 @@ describe("retainedFileEncryption", () => {
     try {
       const context = { mimeType: PDF_MIME_TYPE };
       expect(
-        retainedFileEncryption(unsure, {
-          fingerprintKey: "test.detectEncryption",
-          context,
-        }).encrypted,
+        retainedFileEncryption(
+          unsure,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
       ).toBe(false);
       expect(
-        retainedFileEncryption(unreadable, {
-          fingerprintKey: "test.detectEncryption",
-          context,
-        }).encrypted,
+        retainedFileEncryption(
+          unreadable,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
       ).toBe(false);
       expect(
-        retainedFileEncryption(known, {
-          fingerprintKey: "test.detectEncryption",
-          context,
-        }).encrypted,
+        retainedFileEncryption(
+          known,
+          handlerErrorContext("test.detectEncryption", context),
+        ).encrypted,
       ).toBe(true);
       expect(
         analytics.exceptions().map((event) => event.properties),

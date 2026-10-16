@@ -250,6 +250,10 @@ export const CompareVersionsPanel = ({
   const surfaceRequestError = (error: unknown) => {
     getAnalytics().captureError(error, {
       fingerprintKey: "CompareVersionsPanel.surfaceRequestError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "CompareVersionsPanel.surfaceRequestError:failure",
+      },
     });
     setRequestState({
       status: "error",
@@ -356,6 +360,10 @@ export const CompareVersionsPanel = ({
     if (Result.isError(opened)) {
       getAnalytics().captureError(opened.error, {
         fingerprintKey: "CompareVersionsPanel.saveComparison:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CompareVersionsPanel.saveComparison:failure",
+        },
       });
       setOutcome({
         type: "created",

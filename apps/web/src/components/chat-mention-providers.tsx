@@ -54,6 +54,10 @@ const loadFirstViewIdsByWorkspaceId = async ({
       if (Result.isError(viewsResult)) {
         getAnalytics().captureError(viewsResult.error, {
           fingerprintKey: "loadFirstViewIdsByWorkspaceId:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadFirstViewIdsByWorkspaceId:failure",
+          },
         });
         return [workspace.id, null] as const;
       }

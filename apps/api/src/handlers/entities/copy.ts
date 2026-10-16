@@ -48,6 +48,7 @@ import {
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -326,15 +327,17 @@ const cleanupMovedSourceFiles = async ({
   );
 
   if (Result.isError(unreferencedSourceFileRefsResult)) {
-    captureError(unreferencedSourceFileRefsResult.error, {
-      fingerprintKey:
+    captureError(
+      unreferencedSourceFileRefsResult.error,
+      handlerErrorContext(
         "entities.cleanupMovedSourceFiles.unreferencedSourceFileRefsResult_error",
-      context: {
-        operation: "move-cleanup",
-        sourceWorkspaceId,
-        sourceEntityId,
-      },
-    });
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return;
   }
 
@@ -345,14 +348,17 @@ const cleanupMovedSourceFiles = async ({
   });
 
   if (Result.isError(deleteResult)) {
-    captureError(deleteResult.error, {
-      fingerprintKey: "entities.cleanupMovedSourceFiles.deleteResult_error",
-      context: {
-        operation: "move-cleanup",
-        sourceWorkspaceId,
-        sourceEntityId,
-      },
-    });
+    captureError(
+      deleteResult.error,
+      handlerErrorContext(
+        "entities.cleanupMovedSourceFiles.deleteResult_error",
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
   }
 };
 
@@ -541,14 +547,17 @@ const copyToWorkspaceHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, {
-      fingerprintKey: "entities.copyToWorkspaceHandler.fileMappings_error",
-      context: {
-        sourceWorkspaceId,
-        targetWorkspaceId,
-        sourceEntityId,
-      },
-    });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.copyToWorkspaceHandler.fileMappings_error",
+        {
+          sourceWorkspaceId,
+          targetWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -650,7 +659,7 @@ const copyToWorkspaceHandler = async function* ({
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
     .catch((error: unknown) =>
-      captureError(error, { fingerprintKey: "entityCopy.flushSearch" }),
+      captureError(error, handlerErrorContext("entityCopy.flushSearch")),
     );
 
   // Acceleration only: each run already committed with its copied source.
@@ -658,10 +667,12 @@ const copyToWorkspaceHandler = async function* ({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
   }).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey:
+    captureError(
+      error,
+      handlerErrorContext(
         "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
-    }),
+      ),
+    ),
   );
 
   // Enqueue PDF derivative generation for copied file fields
@@ -677,9 +688,10 @@ const copyToWorkspaceHandler = async function* ({
         workspaceId: targetWorkspaceId,
       })
       .catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey: "entityCopy.enqueuePdfDerivative",
-        }),
+        captureError(
+          error,
+          handlerErrorContext("entityCopy.enqueuePdfDerivative"),
+        ),
       );
     dependencies
       .enqueueImageThumbnailOrMarkFailed({
@@ -692,7 +704,7 @@ const copyToWorkspaceHandler = async function* ({
         workspaceId: targetWorkspaceId,
       })
       .catch((error: unknown) =>
-        captureError(error, { fingerprintKey: "entityCopy.enqueueThumbnail" }),
+        captureError(error, handlerErrorContext("entityCopy.enqueueThumbnail")),
       );
   }
 
@@ -700,13 +712,13 @@ const copyToWorkspaceHandler = async function* ({
   dependencies
     .syncWorkspaceSearchActivity(targetWorkspaceId)
     .catch((error: unknown) =>
-      captureError(error, { fingerprintKey: "entityCopy.syncTargetSearch" }),
+      captureError(error, handlerErrorContext("entityCopy.syncTargetSearch")),
     );
   if (deleteSource) {
     dependencies
       .syncWorkspaceSearchActivity(sourceWorkspaceId)
       .catch((error: unknown) =>
-        captureError(error, { fingerprintKey: "entityCopy.syncSourceSearch" }),
+        captureError(error, handlerErrorContext("entityCopy.syncSourceSearch")),
       );
   }
 

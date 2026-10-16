@@ -1,3 +1,4 @@
+// parser-output-unchanged: reads typed error dimensions for telemetry only; parsed values and rejection outcomes are unchanged.
 /** Fingerprint dimensions are finite domain values vouched for by their error owner. */
 type FingerprintField<TValue> = {
   [
@@ -11,6 +12,9 @@ type FingerprintField<TValue> = {
       : never;
 }[keyof TValue & ("reason" | "phase" | "stage" | "termination")];
 
+export type FingerprintFields<TInstance> =
+  readonly FingerprintField<TInstance>[];
+
 type ErrorClass<TInstance extends object> = abstract new (
   ...args: never
 ) => TInstance;
@@ -20,7 +24,7 @@ const declarations = new WeakMap<object, readonly string[]>();
 /** Prototype identity prevents remote errors from opting in by copying a tag. */
 export const declareFingerprintFields = <TInstance extends object>(
   errorClass: ErrorClass<TInstance>,
-  fields: readonly FingerprintField<TInstance>[],
+  fields: FingerprintFields<TInstance>,
 ): void => {
   const prototype: unknown = errorClass.prototype;
   if (typeof prototype === "object" && prototype !== null) {
@@ -42,9 +46,31 @@ export const readFingerprintFields = ({
 }: ReadFingerprintFieldsOptions):
   | Readonly<Record<string, string>>
   | undefined => {
-  const fields = prototypes.flatMap(
-    (prototype) => declarations.get(prototype) ?? [],
-  );
+  const fields = prototypes.flatMap((prototype) => {
+    const registered = declarations.get(prototype) ?? [];
+    if (!Object.hasOwn(prototype, "constructor")) {
+      return registered;
+    }
+    const constructor = read(prototype, "constructor");
+    if (
+      typeof constructor !== "function" ||
+      !Object.hasOwn(constructor, "stellaExceptionFingerprintFields")
+    ) {
+      return registered;
+    }
+    const metadata = read(constructor, "stellaExceptionFingerprintFields");
+    if (!Array.isArray(metadata)) {
+      return registered;
+    }
+    const staticFields = metadata.filter(
+      (field): field is string =>
+        typeof field === "string" &&
+        /^(?:reason|phase|stage|termination)(?:\.(?:reason|phase|stage|termination))*$/u.test(
+          field,
+        ),
+    );
+    return [...registered, ...staticFields];
+  });
   if (fields.length === 0) {
     return undefined;
   }

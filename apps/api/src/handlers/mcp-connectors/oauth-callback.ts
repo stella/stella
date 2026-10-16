@@ -45,6 +45,7 @@ import type {
   TokenResponse,
 } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -477,6 +478,7 @@ export const createMcpOAuthCallbackHandler = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
+              scope: requireRequestExceptionScope(request),
               operation: "mcp_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,

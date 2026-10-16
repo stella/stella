@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  recordRequestExceptionScope,
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
@@ -208,7 +209,14 @@ export const answerRequestError = ({
   // violation shares the VALIDATION code but is the handler's own fault, so
   // it stays captured along with every other code.
   if (captured) {
+    const scope = {
+      type: "request",
+      method: request.method,
+      routeTemplate: getRouteName(route),
+    } as const;
+    recordRequestExceptionScope(request, scope);
     captureObservedError(error, {
+      scope,
       fingerprintKey: "observability.answerRequestError",
       request,
       context: {

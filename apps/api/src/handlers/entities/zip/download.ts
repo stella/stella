@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -300,7 +301,7 @@ const downloadZipHandler = async function* ({
       const message = `${failedPaths.length} file(s) failed to fetch from S3`;
       const error = new Error(message);
       const context = { entityId, fileIds: failedFileIds.join(",") };
-      captureError(error, { fingerprintKey: ZIP_FETCH_KEY, context });
+      captureError(error, handlerErrorContext(ZIP_FETCH_KEY, context));
       yield {
         name: uniquePath(seenPaths, `${rootPath}/${ERROR_MANIFEST_NAME}`),
         input: buildErrorManifest(failedPaths),

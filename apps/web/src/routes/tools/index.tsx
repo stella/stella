@@ -46,6 +46,10 @@ function PublicToolsIndexRoute() {
     navigate({ search: { kind: nextKind } }).catch((error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "PublicToolsIndexRoute.onKindChange:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PublicToolsIndexRoute.onKindChange:failure",
+        },
       });
     });
   };

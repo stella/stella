@@ -44,6 +44,11 @@ export const Route = createFileRoute(
       (error) =>
         getAnalytics().captureError(error, {
           fingerprintKey: "settings.organization.vat-rates.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: "/_protected/settings/organization/vat-rates",
+          },
         }),
     );
   },

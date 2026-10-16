@@ -167,6 +167,10 @@ export const useAIConfigForm = ({
   };
 
   const aiMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "useAIConfigForm.aiMutation.useSettingsMutation",
+    },
     invalidate: aiConfigKeys.all,
     mutationFn: async () => {
       if (providers.length === 0 || recoveryAction === "remove") {

@@ -97,7 +97,7 @@ export const ProvisionInspectorView = ({
           (row) => row.anchor === payload.anchorId,
         )?.decisionCount ?? 0)
       : null;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("provision");
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
   const versionsView = useQueryView(versionsQuery);

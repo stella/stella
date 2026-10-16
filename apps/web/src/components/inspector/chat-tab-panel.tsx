@@ -170,6 +170,7 @@ export const ChatTabPanel = ({
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "ChatTabPanel:failure",
+        scope: { type: "handler", handlerId: "ChatTabPanel:failure" },
       });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
@@ -283,6 +284,7 @@ export const ChatTabPanel = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
     conversationId: threadRef.threadId,
     getContextMatterIds,

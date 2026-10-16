@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   forEachOcrDerivativePage,
   ocrDerivativeCursorFilter,
@@ -340,9 +341,10 @@ export const deleteEntitiesHandler = async function* ({
     provider
       .removeEntity({ entityId: entity.id, workspaceId })
       .catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey: "deleteEntitiesHandler.rejection",
-        }),
+        captureError(
+          error,
+          handlerErrorContext("deleteEntitiesHandler.rejection"),
+        ),
       );
   }
 

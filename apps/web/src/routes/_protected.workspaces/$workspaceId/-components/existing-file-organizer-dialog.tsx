@@ -520,6 +520,10 @@ export const ExistingFileOrganizerDialog = ({
       .catch((error: unknown) => {
         analytics.captureError(error, {
           fingerprintKey: "ExistingFileOrganizerDialog.handleApply:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ExistingFileOrganizerDialog.handleApply:failure",
+          },
         });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
@@ -623,6 +627,10 @@ export const ExistingFileOrganizerDialog = ({
       analytics.captureError(error, {
         fingerprintKey:
           "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        },
       });
       setSuggestionStatus("failed");
     }

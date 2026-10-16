@@ -439,6 +439,7 @@ async function copySelectedText({
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error, {
       fingerprintKey: "copySelectedText:failure",
+      scope: { type: "handler", handlerId: "copySelectedText:failure" },
     });
     notifyUserError(result.error, errorMessage);
     return;

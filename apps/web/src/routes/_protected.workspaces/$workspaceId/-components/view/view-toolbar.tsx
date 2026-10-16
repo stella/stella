@@ -577,6 +577,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "TableExportMenu.handleExport:failure",
+        scope: { type: "handler", handlerId: `table-export.${format}` },
       });
       notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
@@ -706,6 +707,10 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     if (Result.isError(result)) {
       analytics.captureError(result.error, {
         fingerprintKey: "RunPlaybookControl.requestRun:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure",
+        },
       });
       reportFailure(result.error, t("common.unexpectedError"));
       return null;
@@ -715,6 +720,10 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     if (response.error) {
       analytics.captureError(toAPIError(response.error), {
         fingerprintKey: "RunPlaybookControl.requestRun:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure-2",
+        },
       });
       reportFailure(
         toAPIError(response.error),

@@ -56,6 +56,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
@@ -2226,10 +2227,12 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     catch: (cause) => cause,
   });
   if (Result.isError(started)) {
-    captureError(started.error, {
-      fingerprintKey: "mcp.handleRunPlaybookTool.started_error",
-      context: { workspaceId },
-    });
+    captureError(
+      started.error,
+      handlerErrorContext("mcp.handleRunPlaybookTool.started_error", {
+        workspaceId,
+      }),
+    );
     return workflowStartFailureResult();
   }
   // The queue reports an enqueue failure in band (having already captured the

@@ -186,6 +186,7 @@ export const EntityViewKanban = ({
     if (result.isErr()) {
       analytics.captureError(result.error, {
         fingerprintKey: "EntityViewKanban.move:failure",
+        scope: { type: "handler", handlerId: "EntityViewKanban.move:failure" },
       });
       notifyUserError(result.error, t("common.unexpectedError"));
     }

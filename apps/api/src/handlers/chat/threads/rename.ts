@@ -11,6 +11,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
@@ -129,9 +130,10 @@ const renameThread = createSafeRootHandler(
     // forget after the rename commits: indexing must never block or fail the
     // rename. Mirrors generate-thread-title.ts and send-message.ts.
     upsertChatThreadSearchDocument(params.threadId).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "renameThread.upsertChatThreadSearchDocument",
-      }),
+      captureError(
+        error,
+        handlerErrorContext("renameThread.upsertChatThreadSearchDocument"),
+      ),
     );
 
     return Result.ok({ title });

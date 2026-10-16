@@ -111,9 +111,10 @@ export const InvoiceExportMenu = ({
       link.click();
       link.remove();
     },
-    onError: (error) => {
+    onError: (error, format) => {
       analytics.captureError(error, {
         fingerprintKey: "InvoiceExportMenu:failure",
+        scope: { type: "handler", handlerId: `invoice-export.${format}` },
       });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },

@@ -12,6 +12,7 @@ import {
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
@@ -44,16 +45,17 @@ setAnalyticsForTesting({
  * grouping while failures from distinct paths remain separate.
  */
 const captureFromSiteA = (context?: Record<string, string>): void => {
-  captureError(new Error("boom"), {
-    fingerprintKey: "analytics.captureFromSiteA",
-    context,
-  });
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteA", context),
+  );
 };
 
 const captureFromSiteB = (): void => {
-  captureError(new Error("boom"), {
-    fingerprintKey: "analytics.captureFromSiteB",
-  });
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteB"),
+  );
 };
 
 /**
@@ -66,9 +68,10 @@ const captureFromSiteB = (): void => {
 const captureQueryFailure = (sqlState: string): void => {
   const driverError = new Error("driver rejected the statement");
   Reflect.set(driverError, "errno", sqlState);
-  captureError(new Error("query failed", { cause: driverError }), {
-    fingerprintKey: "analytics.captureQueryFailure",
-  });
+  captureError(
+    new Error("query failed", { cause: driverError }),
+    handlerErrorContext("analytics.captureQueryFailure"),
+  );
 };
 
 const extractionError = ({
@@ -196,9 +199,10 @@ describe("captureError issue grouping", () => {
   });
 
   test("the grouping fingerprint never carries the error message", () => {
-    captureError(new Error("Privileged client matter detail"), {
-      fingerprintKey: "analytics.capture",
-    });
+    captureError(
+      new Error("Privileged client matter detail"),
+      handlerErrorContext("analytics.capture"),
+    );
 
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
@@ -214,6 +218,11 @@ describe("captureRequestError organization attribution", () => {
     enrichRequestContext(request, { organizationId });
 
     captureRequestError(new Error("boom"), {
+      scope: {
+        type: "request",
+        method: request.method,
+        routeTemplate: "/capture-test",
+      },
       fingerprintKey: "analytics.capture",
       request,
     });
@@ -228,6 +237,11 @@ describe("captureRequestError organization attribution", () => {
     initRequestContext(request);
 
     captureRequestError(new Error("boom"), {
+      scope: {
+        type: "request",
+        method: request.method,
+        routeTemplate: "/capture-test",
+      },
       fingerprintKey: "analytics.capture",
       request,
     });
@@ -247,7 +261,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
-      { fingerprintKey: "analytics.capture", context: { runId: "run-1" } },
+      handlerErrorContext("analytics.capture", { runId: "run-1" }),
     );
 
     const properties = captured.at(0)?.properties;
@@ -269,7 +283,7 @@ describe("captureError extraction diagnostics", () => {
         message: "parser failed",
         termination: null,
       }),
-      { fingerprintKey: "analytics.capture" },
+      handlerErrorContext("analytics.capture"),
     );
     captureError(
       extractionError({
@@ -280,7 +294,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
-      { fingerprintKey: "analytics.capture" },
+      handlerErrorContext("analytics.capture"),
     );
 
     expect(captured).toHaveLength(2);
@@ -302,10 +316,13 @@ describe("captureError owned fields", () => {
     });
     const error = new Error("query failed", { cause: driverError });
 
-    captureError(error, { fingerprintKey: "analytics.capture" });
+    captureError(error, handlerErrorContext("analytics.capture"));
 
     expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
-      exceptionFingerprint(readEvidence(error), "analytics.capture"),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "analytics.capture",
+        scope: { type: "handler", handlerId: "analytics.capture" },
+      }),
     );
   });
 
@@ -342,7 +359,15 @@ describe("captureError owned fields", () => {
 
     captureRequestError(
       Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-      { fingerprintKey: "analytics.capture", request },
+      {
+        scope: {
+          type: "request",
+          method: request.method,
+          routeTemplate: "/capture-test",
+        },
+        fingerprintKey: "analytics.capture",
+        request,
+      },
     );
 
     expect(getRequestFailure(request)).toEqual({

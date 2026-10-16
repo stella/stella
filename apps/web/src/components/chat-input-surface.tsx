@@ -180,6 +180,7 @@ export const ChatInputSurface = ({
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "ChatInputSurface:failure",
+        scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
       });
       notifyUserError(error, t("common.somethingWentWrong"));
     },

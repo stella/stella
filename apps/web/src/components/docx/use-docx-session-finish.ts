@@ -157,6 +157,7 @@ export const useDocxSessionFinish = ({
       if (Result.isError(flushResult)) {
         getAnalytics().captureError(flushResult.error, {
           fingerprintKey: "useDocxSessionFinish:failure",
+          scope: { type: "handler", handlerId: "useDocxSessionFinish:failure" },
         });
         notifyUserError(flushResult.error, t("folio.networkError"));
         throw flushResult.error;
@@ -170,6 +171,10 @@ export const useDocxSessionFinish = ({
         });
         getAnalytics().captureError(error, {
           fingerprintKey: "useDocxSessionFinish:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "useDocxSessionFinish:failure-2",
+          },
         });
         notifyUserError(error, t("folio.networkError"));
         throw error;

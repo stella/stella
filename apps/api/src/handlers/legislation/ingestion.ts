@@ -64,6 +64,7 @@ import {
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
@@ -382,13 +383,13 @@ const storeSourceRaw = async ({
       sourceId: input.sourceId,
       eli: input.eli,
     });
-    captureError(written.error, {
-      fingerprintKey: "legislation.storeSourceRaw.written_error",
-      context: {
+    captureError(
+      written.error,
+      handlerErrorContext("legislation.storeSourceRaw.written_error", {
         sourceId: input.sourceId,
         step: "processLegislationDocument.sourceRawWrite",
-      },
-    });
+      }),
+    );
     return null;
   }
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
@@ -974,14 +975,14 @@ export const processLegislationDocument = async (
       });
     } catch (error) {
       corpusWriteFailed = true;
-      captureError(error, {
-        fingerprintKey: "legislation.processLegislationDocument",
-        context: {
+      captureError(
+        error,
+        handlerErrorContext("legislation.processLegislationDocument", {
           documentId: id,
           sourceId: input.sourceId,
           step: "processLegislationDocument.corpusWrite",
-        },
-      });
+        }),
+      );
       await preserveLegislationCorpusWriteRetry({
         documentId: id,
         previousSourceHash: existing?.sourceHash ?? null,

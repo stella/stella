@@ -55,9 +55,18 @@ import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 
 const ERROR_CAPTURE = {
-  enable: { fingerprintKey: "EnableTwoFactorDialog:failure" },
-  verify: { fingerprintKey: "EnableTwoFactorDialog:failure-2" },
-  backup: { fingerprintKey: "EnableTwoFactorDialog:failure-3" },
+  enable: {
+    fingerprintKey: "EnableTwoFactorDialog:failure",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure" },
+  },
+  verify: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-2",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-2" },
+  },
+  backup: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-3",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-3" },
+  },
 } as const;
 
 const TOTP_LENGTH = 6;
@@ -288,6 +297,10 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error, {
         fingerprintKey: "BackupCodesList.handleCopyAll:failure",
+        scope: {
+          type: "handler",
+          handlerId: "BackupCodesList.handleCopyAll:failure",
+        },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;
@@ -713,6 +726,7 @@ const DisableTwoFactorDialog = ({
       );
       analytics.captureError(error, {
         fingerprintKey: "DisableTwoFactorDialog:failure",
+        scope: { type: "handler", handlerId: "DisableTwoFactorDialog:failure" },
       });
     },
   });
@@ -762,6 +776,10 @@ const DisableTwoFactorDialog = ({
       setStep("confirm");
       analytics.captureError(error, {
         fingerprintKey: "DisableTwoFactorDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "DisableTwoFactorDialog:failure-2",
+        },
       });
     },
   });
@@ -909,6 +927,10 @@ const RegenerateBackupCodesDialog = ({
       );
       analytics.captureError(error, {
         fingerprintKey: "RegenerateBackupCodesDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure",
+        },
       });
     },
   });
@@ -963,6 +985,10 @@ const RegenerateBackupCodesDialog = ({
       setStep("confirm");
       analytics.captureError(error, {
         fingerprintKey: "RegenerateBackupCodesDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure-2",
+        },
       });
     },
   });

@@ -66,6 +66,11 @@ export const Route = createFileRoute("/knowledge/clauses")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "knowledge.clauses.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/knowledge/clauses",
+        },
       });
     };
 

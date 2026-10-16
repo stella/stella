@@ -42,6 +42,7 @@ export const useCreateTimeEntry = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useCreateTimeEntry:failure" },
       });
     },
   });
@@ -86,6 +87,7 @@ export const useUpdateTimeEntry = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpdateTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useUpdateTimeEntry:failure" },
       });
     },
   });
@@ -133,6 +135,10 @@ export const useDecideTimeSuggestion = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDecideTimeSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDecideTimeSuggestion:failure",
+        },
       });
     },
   });
@@ -159,6 +165,7 @@ export const useDeleteTimeEntry = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useDeleteTimeEntry:failure" },
       });
     },
   });
@@ -189,6 +196,10 @@ export const useBatchUpdateTimeEntries = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useBatchUpdateTimeEntries:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useBatchUpdateTimeEntries:failure",
+        },
       });
     },
   });
@@ -215,6 +226,10 @@ export const useBatchDeleteTimeEntries = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useBatchDeleteTimeEntries:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useBatchDeleteTimeEntries:failure",
+        },
       });
     },
   });
@@ -245,6 +260,7 @@ export const useSplitTimeEntry = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useSplitTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useSplitTimeEntry:failure" },
       });
     },
   });

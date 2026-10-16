@@ -178,6 +178,12 @@ export const Route = createFileRoute(
         getAnalytics().captureError(error, {
           fingerprintKey:
             "workspaces.workspaceId.viewId.document.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate:
+              "/_protected/workspaces/$workspaceId/$viewId/document",
+          },
         });
       },
       loadEntity: async () =>
@@ -203,6 +209,12 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error, {
             fingerprintKey:
               "workspaces.workspaceId.viewId.document.loader:failure-2",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
           });
         },
       ),
@@ -226,6 +238,12 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error, {
             fingerprintKey:
               "workspaces.workspaceId.viewId.document.loader:failure-3",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
           });
         },
       ),
@@ -262,6 +280,12 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error, {
               fingerprintKey:
                 "workspaces.workspaceId.viewId.document.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
             });
           },
         ),
@@ -285,6 +309,12 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error, {
               fingerprintKey:
                 "workspaces.workspaceId.viewId.document.loader:failure-5",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
             });
           },
         ),
@@ -308,6 +338,12 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error, {
               fingerprintKey:
                 "workspaces.workspaceId.viewId.document.loader:failure-6",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
             });
           },
         ),
@@ -332,6 +368,12 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error, {
               fingerprintKey:
                 "workspaces.workspaceId.viewId.document.loader:failure-7",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
             });
           },
         ),
@@ -355,6 +397,12 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error, {
               fingerprintKey:
                 "workspaces.workspaceId.viewId.document.loader:failure-8",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
             });
           },
         ),
@@ -659,6 +707,7 @@ function RouteComponentInner({
     if (Result.isError(leaveResult)) {
       getAnalytics().captureError(leaveResult.error, {
         fingerprintKey: "RouteComponentInner:failure",
+        scope: { type: "handler", handlerId: "RouteComponentInner:failure" },
       });
       return true;
     }
@@ -1241,6 +1290,10 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
               } catch (openError) {
                 getAnalytics().captureError(openError, {
                   fingerprintKey: "DocumentDisplayUnavailable:openError",
+                  scope: {
+                    type: "handler",
+                    handlerId: "DocumentDisplayUnavailable:openError",
+                  },
                 });
                 notifyUserError(openError, t("errors.actionFailed"));
               }

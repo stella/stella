@@ -97,6 +97,10 @@ export const useVersionOrNewFileDrop = ({
       // upload: the dialog falls back to comparing extensions.
       analytics.captureError(result.error, {
         fingerprintKey: "useVersionOrNewFileDrop.resolveReference:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useVersionOrNewFileDrop.resolveReference:failure",
+        },
       });
     }
 
@@ -126,6 +130,10 @@ export const useVersionOrNewFileDrop = ({
   };
 
   const { isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "useVersionOrNewFileDrop.useExternalFileDrop",
+    },
     enabled: canAcceptDrop,
     externalRef: rowRef,
     onDrop: (files) => {

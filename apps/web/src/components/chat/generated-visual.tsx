@@ -121,6 +121,10 @@ const GeneratedVisualFrame = ({
         themeFailureReported.current = true;
         getAnalytics().captureError(error, {
           fingerprintKey: "GeneratedVisualFrame.report:failure",
+          scope: {
+            type: "handler",
+            handlerId: "GeneratedVisualFrame.report:failure",
+          },
           context: {
             type: "detached",
             operation: "generated-visual.read-theme",

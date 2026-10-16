@@ -784,6 +784,10 @@ const LoadedPDFPageOrganizer = ({
       }
       analytics.captureError(error, {
         fingerprintKey: "LoadedPDFPageOrganizer.runOperation:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedPDFPageOrganizer.runOperation:failure",
+        },
       });
       notifyUserError(error, tErrors("actionFailed"));
     }

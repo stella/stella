@@ -1013,6 +1013,10 @@ const CreateContactDialog = ({
     } catch (error) {
       getAnalytics().captureError(error, {
         fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CreateContactDialog.handleAresLookup:failure",
+        },
       });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {

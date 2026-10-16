@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isPgError,
@@ -593,13 +594,13 @@ export const backfillSearchIndex = async (
       sourceUpdatedAt: row.sourceUpdatedAt,
       error: indexed.error,
     });
-    captureError(indexed.error, {
-      fingerprintKey: "legalsearch.indexRow.indexed_error",
-      context: {
+    captureError(
+      indexed.error,
+      handlerErrorContext("legalsearch.indexRow.indexed_error", {
         decisionId: row.id,
         step: "backfillSearchIndex",
-      },
-    });
+      }),
+    );
     logger.error("case_law.search_index.backfill_failed", {
       decisionId: row.id,
       retry: retry.type,

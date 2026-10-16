@@ -80,8 +80,9 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let factoryName = "TaggedError";
         let declarationName = "";
-        const checkClass = (node: AstNode) => {
+        const checkClass = (node: unknown) => {
           if (
+            !isAstNode(node) ||
             !isAstNode(node.superClass) ||
             node.superClass.type !== "CallExpression" ||
             !isIdentifier(node.superClass.callee, factoryName)

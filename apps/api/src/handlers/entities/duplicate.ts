@@ -33,6 +33,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
@@ -89,6 +90,19 @@ const defaultDuplicateEntityDependencies = {
   flushEntitySearchRepairs,
   requestNativeExtractionRuns,
 } satisfies DuplicateEntityDependencies;
+
+const DUPLICATE_CAPTURE_CONTEXT = {
+  searchRepair: handlerErrorContext("duplicateEntityHandler.rejection"),
+  documentProcessing: handlerErrorContext(
+    "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+  ),
+  pdfDerivative: handlerErrorContext(
+    "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+  ),
+  imageThumbnail: handlerErrorContext(
+    "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+  ),
+} as const;
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -187,10 +201,13 @@ const duplicateEntityHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, {
-      fingerprintKey: "entities.duplicateEntityHandler.fileMappings_error",
-      context: { workspaceId, sourceEntityId },
-    });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.duplicateEntityHandler.fileMappings_error",
+        { workspaceId, sourceEntityId },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -250,19 +267,14 @@ const duplicateEntityHandler = async function* ({
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
     .catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "duplicateEntityHandler.rejection",
-      }),
+      captureError(error, DUPLICATE_CAPTURE_CONTEXT.searchRepair),
     );
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
   }).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey:
-        "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
-    }),
+    captureError(error, DUPLICATE_CAPTURE_CONTEXT.documentProcessing),
   );
 
   // The copies reference fresh file IDs, so each needs its own
@@ -277,10 +289,7 @@ const duplicateEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey:
-          "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
-      }),
+      captureError(error, DUPLICATE_CAPTURE_CONTEXT.pdfDerivative),
     );
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
@@ -291,10 +300,7 @@ const duplicateEntityHandler = async function* ({
       userId,
       workspaceId,
     }).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey:
-          "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
-      }),
+      captureError(error, DUPLICATE_CAPTURE_CONTEXT.imageThumbnail),
     );
   }
 

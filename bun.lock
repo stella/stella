@@ -629,6 +629,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@elysia/eden": "^1.4.10",
+        "@stll/errors": "workspace:*",
+        "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",

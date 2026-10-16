@@ -611,6 +611,10 @@ const writePersistedInspectorState = (
   failedPersistenceScope = storageKey;
   getAnalytics().captureError(writeResult.error, {
     fingerprintKey: "writePersistedInspectorState:failure",
+    scope: {
+      type: "handler",
+      handlerId: "writePersistedInspectorState:failure",
+    },
     context: {
       type: "detached",
       operation: "inspector-tabs.persist",
@@ -692,6 +696,10 @@ export const createInspectorBroadcastSession = (
     } catch (error) {
       getAnalytics().captureError(error, {
         fingerprintKey: "createInspectorBroadcastSession.postTabs:failure",
+        scope: {
+          type: "handler",
+          handlerId: "createInspectorBroadcastSession.postTabs:failure",
+        },
         context: {
           type: "detached",
           operation: "inspector-tabs.broadcast",

@@ -66,7 +66,6 @@ import {
 } from "@/api/lib/files/encrypted-ooxml";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import type { PdfEncryptionProbe } from "@/api/lib/files/pdf-utils";
-import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -193,19 +192,17 @@ const detectOoxmlEncryption = (
   };
 };
 
-type FileEncryptionCaptureOptions = {
-  fingerprintKey: StableExceptionKey;
-  context: Record<string, string>;
-};
+type FileEncryptionCaptureOptions = Parameters<typeof captureError>[1];
 
 /** Reports a detection that did not inspect the file; a known one is silent. */
 const reportDetection = (
   detection: FileEncryptionDetection,
-  { fingerprintKey, context }: FileEncryptionCaptureOptions,
+  { fingerprintKey, scope, context }: FileEncryptionCaptureOptions,
 ): void => {
   if (detection.status === "unsure") {
     captureError(detection.cause, {
       fingerprintKey: `${fingerprintKey}.unsure`,
+      scope,
       context: {
         ...context,
         stage: "file-encryption-unsure",
@@ -215,6 +212,7 @@ const reportDetection = (
   if (detection.status === "unreadable") {
     captureError(detection.cause, {
       fingerprintKey: `${fingerprintKey}.unreadable`,
+      scope,
       context,
     });
   }

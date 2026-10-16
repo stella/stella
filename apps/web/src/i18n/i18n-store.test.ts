@@ -308,6 +308,7 @@ const expectFailedCsSwitchIsReported = async (
     expect(state.isLoaded).toBe(true);
     expect(captureSpy).toHaveBeenCalledWith(bundleError, {
       fingerprintKey: "loadMessages:failure",
+      scope: { type: "handler", handlerId: "loadMessages:failure" },
     });
     expect(toastSpy).toHaveBeenCalledWith({
       type: "error",

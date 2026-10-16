@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -183,13 +184,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       }),
     );
     if (Result.isError(result)) {
-      captureError(result.error, {
-        fingerprintKey: "entities.deleteCheckpointKey.result_error",
-        context: {
+      captureError(
+        result.error,
+        handlerErrorContext("entities.deleteCheckpointKey.result_error", {
           checkpointKey,
           sessionId,
-        },
-      });
+        }),
+      );
     }
   };
 
@@ -217,13 +218,13 @@ export const finalizeDesktopEditSessionHandler = async ({
       }),
     );
     if (Result.isError(result)) {
-      captureError(result.error, {
-        fingerprintKey: "entities.deleteUploadedKey.result_error",
-        context: {
+      captureError(
+        result.error,
+        handlerErrorContext("entities.deleteUploadedKey.result_error", {
           rollbackKey: uploadedKey,
           sessionId,
-        },
-      });
+        }),
+      );
     }
     return Result.isOk(result);
   };
@@ -754,12 +755,12 @@ export const finalizeDesktopEditSessionHandler = async ({
 
     if (result.outcome === "finalized") {
       await processExtraction(result.entityId).catch((error: unknown) => {
-        captureError(error, {
-          fingerprintKey: "desktopEdit.processExtraction",
-          context: {
+        captureError(
+          error,
+          handlerErrorContext("desktopEdit.processExtraction", {
             entityId: result.entityId,
-          },
-        });
+          }),
+        );
       });
 
       enqueuePdfDerivativeOrMarkFailed({
@@ -773,14 +774,14 @@ export const finalizeDesktopEditSessionHandler = async ({
         userId: brandPersistedUserId(authorizedSession.value.userId),
         workspaceId: authorizedSession.value.workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, {
-          fingerprintKey: "desktopEdit.enqueuePdfDerivative",
-          context: {
+        captureError(
+          error,
+          handlerErrorContext("desktopEdit.enqueuePdfDerivative", {
             entityId: result.entityId,
             fieldId: result.fieldId,
             mimeType: desktopEditMimeTypeForFileType(result.fileType),
-          },
-        });
+          }),
+        );
       });
 
       if (result.fileType === "docx") {
@@ -791,10 +792,12 @@ export const finalizeDesktopEditSessionHandler = async ({
           workspaceId: authorizedSession.value.workspaceId,
           organizationId: authorizedSession.value.organizationId,
         }).catch((error: unknown) => {
-          captureError(error, {
-            fingerprintKey: "desktopEdit.computeVersionDiff",
-            context: { versionId: result.versionId },
-          });
+          captureError(
+            error,
+            handlerErrorContext("desktopEdit.computeVersionDiff", {
+              versionId: result.versionId,
+            }),
+          );
         });
       }
     }

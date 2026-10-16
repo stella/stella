@@ -114,7 +114,10 @@ export const PersonalTimesheetDay = ({
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
-    getAnalytics().captureError(error, { fingerprintKey });
+    getAnalytics().captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, tErrors("actionFailed"));
   };
 

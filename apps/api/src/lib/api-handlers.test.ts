@@ -13,7 +13,11 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
-import { resetCaptureWindows } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  detached,
+  resetCaptureWindows,
+} from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
@@ -33,6 +37,7 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -568,8 +573,8 @@ test("safe handlers group plain errors by declared route across source-line move
     expect(original).toHaveLength(2);
     const firstFingerprint = original.at(0)?.properties.$exception_fingerprint;
     const secondFingerprint = original.at(1)?.properties.$exception_fingerprint;
-    expect(firstFingerprint).toContain("GET./first/:entityId");
-    expect(secondFingerprint).toContain("GET./second/:entityId");
+    expect(firstFingerprint).toContain("/first/:entityId");
+    expect(secondFingerprint).toContain("/second/:entityId");
     expect(firstFingerprint).not.toBe(secondFingerprint);
     expect(JSON.stringify(original)).not.toContain("private-id");
 
@@ -589,6 +594,67 @@ test("safe handlers group plain errors by declared route across source-line move
     );
   } finally {
     recordingLogger.restore();
+    analytics.restore();
+  }
+});
+
+test("safe handlers preserve request scope through shared helpers and detached rejections", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      captureError(
+        new Error("Shared failure"),
+        handlerErrorContext("test.sharedCapture"),
+      );
+      detached(
+        Promise.reject(new Error("Detached failure")),
+        "test.shared-detached",
+      );
+      return Result.ok({ ok: true });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = new Elysia()
+    .get("/first/:id", ({ request, route }) =>
+      endpoint.handler({ ...createContext(endpoint, safeDb), request, route }),
+    )
+    .get("/second/:id", ({ request, route }) =>
+      endpoint.handler({ ...createContext(endpoint, safeDb), request, route }),
+    );
+  try {
+    for (const path of ["/first/private-first", "/second/private-second"]) {
+      const response = await app.handle(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(200);
+    }
+    const fingerprints = analytics
+      .exceptions()
+      .map(({ properties }) => properties.$exception_fingerprint);
+    expect(fingerprints).toHaveLength(4);
+    expect(new Set(fingerprints).size).toBe(4);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/first/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/second/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(JSON.stringify(fingerprints)).not.toContain("private-first");
+    expect(JSON.stringify(fingerprints)).not.toContain("private-second");
+  } finally {
+    logs.restore();
     analytics.restore();
   }
 });

@@ -93,6 +93,10 @@ export const TimeEntryNarrativeField = ({
     if (Result.isError(requestResult)) {
       analytics.captureError(requestResult.error, {
         fingerprintKey: "TimeEntryNarrativeField.polishNarrative:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TimeEntryNarrativeField.polishNarrative:failure",
+        },
       });
       notifyUserError(requestResult.error, tAi("editWithAI"), {
         description: userErrorFromThrown(

@@ -31,6 +31,7 @@ describe("auth context query outcomes", () => {
       expect(captureError).toHaveBeenCalledTimes(1);
       expect(captureError).toHaveBeenCalledWith(failure, {
         fingerprintKey: "loadAuthContext:failure",
+        scope: { type: "handler", handlerId: "loadAuthContext:failure" },
       });
     } finally {
       query.mockRestore();
@@ -57,6 +58,7 @@ describe("auth context query outcomes", () => {
       expect(captureError).toHaveBeenCalledTimes(1);
       expect(captureError).toHaveBeenCalledWith(failure, {
         fingerprintKey: "loadAuthContext:failure",
+        scope: { type: "handler", handlerId: "loadAuthContext:failure" },
       });
     } finally {
       query.mockRestore();

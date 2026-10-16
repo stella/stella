@@ -201,6 +201,10 @@ export const useInspectorGroupTransfer = (
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error, {
           fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useInspectorGroupTransfer.copyAndAssign:failure",
+          },
         });
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
@@ -232,6 +236,11 @@ export const useInspectorGroupTransfer = (
           {
             fingerprintKey:
               "useInspectorGroupTransfer.copyAndAssign:InspectorCopyMappingError",
+            scope: {
+              type: "handler",
+              handlerId:
+                "useInspectorGroupTransfer.copyAndAssign:InspectorCopyMappingError",
+            },
           },
         );
         notifyUserError(undefined, t("errors.actionFailed"));
@@ -248,6 +257,10 @@ export const useInspectorGroupTransfer = (
       if (Result.isError(invalidation)) {
         getAnalytics().captureError(invalidation.error, {
           fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "useInspectorGroupTransfer.copyAndAssign:failure-2",
+          },
         });
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
@@ -293,6 +306,10 @@ export const useInspectorGroupTransfer = (
     if (Result.isError(openResult)) {
       getAnalytics().captureError(openResult.error, {
         fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "useInspectorGroupTransfer.copyAndAssign:failure-3",
+        },
       });
       submittingRef.current = false;
       if (isCurrentScope(requestScope)) {

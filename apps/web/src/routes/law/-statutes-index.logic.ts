@@ -80,6 +80,10 @@ export const loadPublicStatutesIndex = async ({
       (error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "loadPublicStatutesIndex:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadPublicStatutesIndex:failure",
+          },
         });
       },
     ),

@@ -163,6 +163,10 @@ function PublicToolDetail() {
                     (error: unknown) => {
                       getAnalytics().captureError(error, {
                         fingerprintKey: "PublicToolDetail:failure",
+                        scope: {
+                          type: "handler",
+                          handlerId: "PublicToolDetail:failure",
+                        },
                       });
                     },
                   );

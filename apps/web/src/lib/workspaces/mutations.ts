@@ -65,6 +65,7 @@ export const useCreateWorkspace = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
       });
     },
   });
@@ -179,6 +180,7 @@ export const useUpdateWorkspace = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUpdateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
       });
     },
   });
@@ -210,6 +212,7 @@ export const useUnarchiveWorkspace = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useUnarchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
       });
     },
   });
@@ -239,6 +242,7 @@ export const useDeleteWorkspace = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDeleteWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
       });
     },
   });
@@ -275,6 +279,7 @@ export const useDuplicateWorkspace = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useDuplicateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
       });
     },
   });

@@ -45,6 +45,10 @@ const useToggleSection = (section: ToggleSection) => {
       ? settings?.documentProcessingMode === SEARCHABLE_TEXT
       : settings?.[TOGGLE_SECTION[section]];
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: `settings.toggle.${section}`,
+    },
     invalidate: organizationSettingsKeys.all,
     mutationFn: async (next: boolean) => {
       switch (section) {

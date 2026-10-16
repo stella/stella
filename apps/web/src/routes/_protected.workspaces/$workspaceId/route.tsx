@@ -68,6 +68,11 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       getAnalytics().captureError(error, {
         fingerprintKey:
           "workspaces.workspaceId.route.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/workspaces/$workspaceId",
+        },
       });
     };
 
@@ -129,6 +134,10 @@ const loadWorkspaceOrRedirect = async (
       // below reaches the route error boundary, which captures already.
       getAnalytics().captureError(error, {
         fingerprintKey: "loadWorkspaceOrRedirect:failure",
+        scope: {
+          type: "handler",
+          handlerId: "loadWorkspaceOrRedirect:failure",
+        },
       });
       const t = getTranslator();
       notifyUserError(error, t("errors.matterNotFound"));

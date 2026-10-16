@@ -92,9 +92,10 @@ export const useTimerMutation = () => {
         queryKey: timeTimersKeys.all(user.activeOrganizationId, user.id),
       });
     },
-    onError: (error) =>
+    onError: (error, command) =>
       analytics.captureError(error, {
         fingerprintKey: "useTimerMutation:failure",
+        scope: { type: "handler", handlerId: `timer.${command.type}` },
       }),
   });
 };

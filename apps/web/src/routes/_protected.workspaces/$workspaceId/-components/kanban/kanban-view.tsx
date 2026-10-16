@@ -168,6 +168,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         inspector.closeTab(pendingTaskId);
         analytics.captureError(createResult.error, {
           fingerprintKey: "KanbanView.handleCreate:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleCreate:failure",
+          },
         });
         notifyUserError(createResult.error, t("errors.actionFailed"));
         return null;
@@ -184,7 +188,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 action: "create-task",
                 message: "Task creation returned no entity ID",
               }),
-          { fingerprintKey: "KanbanView.handleCreate:failure-2" },
+          {
+            fingerprintKey: "KanbanView.handleCreate:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "KanbanView.handleCreate:failure-2",
+            },
+          },
         );
         inspector.closeTab(pendingTaskId);
         notifyUserError(
@@ -431,7 +441,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return { taskId };
     },
     onError: (error) => {
-      analytics.captureError(error, { fingerprintKey: "KanbanView:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "KanbanView:failure",
+        scope: { type: "handler", handlerId: "KanbanView:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async ({ taskId }) => {
@@ -540,6 +553,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       onError: (error) =>
         analytics.captureError(error, {
           fingerprintKey: "KanbanView.handleFileUpload:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload:failure",
+          },
         }),
     });
 

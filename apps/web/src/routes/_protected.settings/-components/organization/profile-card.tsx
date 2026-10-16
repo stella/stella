@@ -64,6 +64,10 @@ export const OrganizationProfileCard = () => {
     if (result.error) {
       analytics.captureError(toAuthClientError(result.error), {
         fingerprintKey: "OrganizationProfileCard.performRename:failure",
+        scope: {
+          type: "handler",
+          handlerId: "OrganizationProfileCard.performRename:failure",
+        },
       });
       notifyUserError(
         toAuthClientError(result.error),

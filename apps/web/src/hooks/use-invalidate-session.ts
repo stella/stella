@@ -17,6 +17,7 @@ export const useInvalidateSession = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useInvalidateSession:failure",
+        scope: { type: "handler", handlerId: "useInvalidateSession:failure" },
       });
     },
   });

@@ -30,6 +30,11 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "chat.threadId.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/$threadId",
+        },
       });
     };
     const prefetchManagerEntitlement = async () => {

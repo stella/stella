@@ -464,6 +464,10 @@ const ActivityAdvancedFilters = ({
                         if (result.isError) {
                           getAnalytics().captureError(result.error, {
                             fingerprintKey: "ActivityAdvancedFilters:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "ActivityAdvancedFilters:failure",
+                            },
                           });
                           notifyUserError(
                             result.error,
@@ -481,6 +485,10 @@ const ActivityAdvancedFilters = ({
                       .catch((error: unknown) => {
                         getAnalytics().captureError(error, {
                           fingerprintKey: "ActivityAdvancedFilters:failure-2",
+                          scope: {
+                            type: "handler",
+                            handlerId: "ActivityAdvancedFilters:failure-2",
+                          },
                         });
                         notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
@@ -554,6 +562,7 @@ const ActivityExportMenu = ({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "ActivityExportMenu.exportActivity:failure",
+        scope: { type: "handler", handlerId: `activity-export.${format}` },
       });
       notifyUserError(
         result.error,
@@ -589,6 +598,7 @@ const ActivityExportMenu = ({
       exportActivity(format).catch((error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "ActivityExportMenu.startExport:failure",
+          scope: { type: "handler", handlerId: `activity-export.${format}` },
         });
         notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
@@ -656,6 +666,10 @@ const ActivityTimeline = ({
           // sees a rejected request.
           getAnalytics().captureError(result.error, {
             fingerprintKey: "ActivityTimeline.loadEarlier:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ActivityTimeline.loadEarlier:failure",
+            },
           });
           notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
@@ -669,6 +683,10 @@ const ActivityTimeline = ({
       .catch((error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "ActivityTimeline.loadEarlier:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "ActivityTimeline.loadEarlier:failure-2",
+          },
         });
         notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),

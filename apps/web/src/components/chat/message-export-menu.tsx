@@ -189,6 +189,10 @@ export const MessageExportMenu = ({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "MessageExportMenu.handleExport:failure",
+        scope: {
+          type: "handler",
+          handlerId: "MessageExportMenu.handleExport:failure",
+        },
       });
       notifyUserError(result.error, t("common.export.failed"));
       return;

@@ -60,7 +60,10 @@ export const useSignOut = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error, { fingerprintKey: "useSignOut:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "useSignOut:failure",
+        scope: { type: "handler", handlerId: "useSignOut:failure" },
+      });
     },
   });
 };

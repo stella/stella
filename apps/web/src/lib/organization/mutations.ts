@@ -41,6 +41,7 @@ export const useRemoveMember = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useRemoveMember:failure",
+        scope: { type: "handler", handlerId: "useRemoveMember:failure" },
       });
     },
   });
@@ -76,6 +77,7 @@ export const useInviteMember = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useInviteMember:failure",
+        scope: { type: "handler", handlerId: "useInviteMember:failure" },
       });
     },
   });
@@ -112,6 +114,7 @@ export const useCancelInvitation = () => {
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCancelInvitation:failure",
+        scope: { type: "handler", handlerId: "useCancelInvitation:failure" },
       });
     },
   });
@@ -132,6 +135,10 @@ export const useUpdateMemberRole = (memberId: string) => {
       if (result.error) {
         analytics.captureError(toAuthClientError(result.error), {
           fingerprintKey: "useUpdateMemberRole.mutationFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useUpdateMemberRole.mutationFn:failure",
+          },
         });
         notifyUserError(
           toAuthClientError(result.error),

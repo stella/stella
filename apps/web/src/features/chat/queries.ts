@@ -930,6 +930,7 @@ const fetchThreadRecap = async (
     // but keep the error in telemetry.
     getAnalytics().captureError(toAPIError(response.error), {
       fingerprintKey: "fetchThreadRecap:failure",
+      scope: { type: "handler", handlerId: "fetchThreadRecap:failure" },
     });
     return { recap: null };
   }
@@ -979,6 +980,10 @@ const fetchThreadSuggestedPrompts = async (
   if (response.error) {
     getAnalytics().captureError(toAPIError(response.error), {
       fingerprintKey: "fetchThreadSuggestedPrompts:failure",
+      scope: {
+        type: "handler",
+        handlerId: "fetchThreadSuggestedPrompts:failure",
+      },
     });
     return { prompts: [] };
   }

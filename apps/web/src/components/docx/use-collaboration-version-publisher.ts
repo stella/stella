@@ -50,6 +50,10 @@ const prepareCollaborationPublication = async ({
   if (Result.isError(flushResult)) {
     getAnalytics().captureError(flushResult.error, {
       fingerprintKey: "prepareCollaborationPublication:failure",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure",
+      },
     });
     return null;
   }
@@ -65,12 +69,20 @@ const prepareCollaborationPublication = async ({
   if (Result.isError(checkpointResult)) {
     getAnalytics().captureError(checkpointResult.error, {
       fingerprintKey: "prepareCollaborationPublication:failure-2",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure-2",
+      },
     });
     return null;
   }
   if (checkpointResult.value.error) {
     getAnalytics().captureError(toAPIError(checkpointResult.value.error), {
       fingerprintKey: "prepareCollaborationPublication:failure-3",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure-3",
+      },
     });
     return null;
   }
@@ -175,6 +187,10 @@ export const useCollaborationVersionPublisher = ({
     if (Result.isError(publishResult)) {
       getAnalytics().captureError(publishResult.error, {
         fingerprintKey: "useCollaborationVersionPublisher:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useCollaborationVersionPublisher:failure",
+        },
       });
       notifyUserError(
         publishResult.error,
@@ -187,6 +203,10 @@ export const useCollaborationVersionPublisher = ({
       const apiError = toAPIError(publishResult.value.error);
       getAnalytics().captureError(apiError, {
         fingerprintKey: "useCollaborationVersionPublisher:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "useCollaborationVersionPublisher:apiError",
+        },
       });
       if (apiError.code === "folio_collab_base_version_changed") {
         pendingCollaborationPublicationRef.current = null;

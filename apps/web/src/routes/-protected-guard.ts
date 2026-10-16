@@ -91,6 +91,10 @@ export const loadProtectedContext = async ({
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error, {
       fingerprintKey: "loadProtectedContext.onPrefetchError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "loadProtectedContext.onPrefetchError:failure",
+      },
     });
   };
   if (location.pathname === "/settings/organization/time-policy") {
@@ -163,5 +167,6 @@ export const prefetchProtectedShell = async ({
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
     getAnalytics().captureError(error, {
       fingerprintKey: "prefetchProtectedShell:failure",
+      scope: { type: "handler", handlerId: "prefetchProtectedShell:failure" },
     });
   });

@@ -171,6 +171,10 @@ export const DocumentAiSourceBar = ({
       if (Result.isError(result)) {
         getAnalytics().captureError(result.error, {
           fingerprintKey: "DocumentAiSourceBar.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "DocumentAiSourceBar.queryFn:failure",
+          },
         });
         throw result.error;
       }

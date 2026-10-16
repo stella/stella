@@ -50,6 +50,7 @@ import {
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
@@ -480,15 +481,19 @@ const deleteStagedUploadObjects = async ({
   stage,
   uploadId,
   workspaceId,
-}: StagedUploadKeyProps & { stage: string }) => {
+}: StagedUploadKeyProps & { stage: "tmp-cleanup-after-reject" }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
-        captureError(deleteError, {
-          fingerprintKey: "uploads.deleteStagedUploadObjects.deleteError",
-          context: { key, stage, uploadId },
-        }),
+        captureError(
+          deleteError,
+          handlerErrorContext(`uploads.cleanup.${stage}`, {
+            key,
+            stage,
+            uploadId,
+          }),
+        ),
       );
   }
 };
@@ -693,13 +698,13 @@ const runFinalize = async function* ({
       await Promise.resolve();
     });
     if (Result.isError(postPromoteResult)) {
-      captureError(postPromoteResult.error, {
-        fingerprintKey: "uploads.runFinalize.postPromoteResult_error",
-        context: {
+      captureError(
+        postPromoteResult.error,
+        handlerErrorContext("uploads.runFinalize.postPromoteResult_error", {
           uploadId: claimed.id,
           stage: "post-promote",
-        },
-      });
+        }),
+      );
     }
   }
 
@@ -707,13 +712,13 @@ const runFinalize = async function* ({
   await getS3()
     .delete(tmpKey)
     .catch((deleteError: unknown) =>
-      captureError(deleteError, {
-        fingerprintKey: "uploads.runFinalize.deleteError",
-        context: {
+      captureError(
+        deleteError,
+        handlerErrorContext("uploads.runFinalize.deleteError", {
           uploadId: claimed.id,
           stage: "tmp-cleanup-after-promote",
-        },
-      }),
+        }),
+      ),
     );
 
   return Result.ok({ finalizedResult: purposeOk.value.finalizedResult });

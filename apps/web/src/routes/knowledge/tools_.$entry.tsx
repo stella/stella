@@ -115,6 +115,7 @@ function ToolEntryPage() {
           navigate({ replace: true, search: {} }).catch((error: unknown) => {
             getAnalytics().captureError(error, {
               fingerprintKey: "ToolEntryPage:failure",
+              scope: { type: "handler", handlerId: "ToolEntryPage:failure" },
             });
           });
         }}

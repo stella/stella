@@ -75,7 +75,10 @@ export const MemoryRow = ({
       }
     },
     onError: (error: unknown) => {
-      analytics.captureError(error, { fingerprintKey: "MemoryRow:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow:failure",
+        scope: { type: "handler", handlerId: "MemoryRow:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

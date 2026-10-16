@@ -9,6 +9,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -474,9 +475,10 @@ const generateDecisionChunk = async ({
       captureError:
         options.analytics?.captureError ??
         ((error: unknown) =>
-          captureError(error, {
-            fingerprintKey: "workflow.generateDecisionChunk",
-          })),
+          captureError(
+            error,
+            handlerErrorContext("workflow.generateDecisionChunk"),
+          )),
       middleware: {
         ...options.analytics?.middleware,
         name: options.analytics?.middleware.name ?? "typed-decision-usage",

@@ -20,6 +20,7 @@ import {
   refreshCachedMcpToolsForConnection,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
@@ -230,14 +231,14 @@ export const callGatewayExternalMcpTool = async ({
     });
     return result;
   } catch (error) {
-    captureError(error, {
-      fingerprintKey: "gateway.callGatewayExternalMcpTool",
-      context: {
+    captureError(
+      error,
+      handlerErrorContext("gateway.callGatewayExternalMcpTool", {
         source: "mcp-gateway-external-call",
         connectorSlug: resolved.connectorSlug,
         toolName: resolved.cachedTool.rawName,
-      },
-    });
+      }),
+    );
     await recordGatewayToolAudit({
       context,
       durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
@@ -286,10 +287,12 @@ const recordGatewayToolAudit = async ({
       }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, {
-      fingerprintKey: "gateway.recordGatewayToolAudit.result_error",
-      context: { source: "mcp-gateway-external-audit" },
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.recordGatewayToolAudit.result_error", {
+        source: "mcp-gateway-external-audit",
+      }),
+    );
   }
 };
 
@@ -366,10 +369,12 @@ const loadCachedGatewayToolRows = async ({
   );
 
   if (Result.isError(rows)) {
-    captureError(rows.error, {
-      fingerprintKey: "gateway.loadCachedGatewayToolRows.rows_error",
-      context: { source: "mcp-gateway-external-list" },
-    });
+    captureError(
+      rows.error,
+      handlerErrorContext("gateway.loadCachedGatewayToolRows.rows_error", {
+        source: "mcp-gateway-external-list",
+      }),
+    );
     // Propagate the load fault as a distinct state: returning `[]` here would
     // make a transient DB outage indistinguishable from "no connectors", so a
     // `tools/call` would answer `unknown_tool` and `tools/list` would silently

@@ -51,9 +51,13 @@ export const createTenantActionClassifier = ({
       ? "tenant"
       : "exempt";
   };
+  const routeMetadata = (route: InternalRoute) => ({
+    type: routeType(route),
+    routeTemplate: route.path,
+  });
   const staticMetadata = new Map<
     string,
-    Record<string, ReturnType<typeof routeType>>
+    Record<string, ReturnType<typeof routeMetadata>>
   >();
   let hasDynamicWebSocket = false;
   for (const route of routes) {
@@ -66,19 +70,19 @@ export const createTenantActionClassifier = ({
     if (route.method === "WS") {
       hasDynamicWebSocket = true;
     }
-    registry.route(route.method, route.path, { type: routeType(route) });
+    registry.route(route.method, route.path, routeMetadata(route));
   }
   if (aot !== false) {
     // AOT's first static path group owns its encoded/loose aliases, including
     // method misses. Derive the same aliases with the framework's utilities.
     for (const [path, indices] of Object.entries(staticRoutes)) {
-      const methods: Record<string, ReturnType<typeof routeType>> = {};
+      const methods: Record<string, ReturnType<typeof routeMetadata>> = {};
       for (const [method, index] of Object.entries(indices)) {
         const route = routes.at(index);
         if (route === undefined) {
           panic("Static tenant route index is missing from route history");
         }
-        methods[method] = routeType(route);
+        methods[method] = routeMetadata(route);
       }
       const aliases =
         strictPath === true
@@ -101,13 +105,14 @@ export const createTenantActionClassifier = ({
     const { handle } = match.store;
     if (
       !isRecord(handle) ||
-      (handle["type"] !== "tenant" && handle["type"] !== "exempt")
+      (handle["type"] !== "tenant" && handle["type"] !== "exempt") ||
+      typeof handle["routeTemplate"] !== "string"
     ) {
       return panic("Tenant route registry lost its derived metadata");
     }
-    return handle["type"];
+    return { type: handle["type"], routeTemplate: handle["routeTemplate"] };
   };
-  return (request: Request): boolean => {
+  return (request: Request) => {
     const path = new URL(request.url).pathname;
     const upgrade =
       request.method === "GET" &&
@@ -122,7 +127,7 @@ export const createTenantActionClassifier = ({
           methods[request.method] ??
           methods["ALL"];
         if (selected !== undefined) {
-          return selected === "tenant";
+          return selected;
         }
       }
     }
@@ -134,7 +139,9 @@ export const createTenantActionClassifier = ({
         ? metadata(matchRoute("WS", path))
         : undefined) ??
       metadata(matchRoute("ALL", path));
-    return selected === "tenant";
+    return (
+      selected ?? ({ type: "unmatched", routeTemplate: "unmatched" } as const)
+    );
   };
 };
 

@@ -14,6 +14,7 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpMode } from "@/api/mcp/constants";
@@ -694,10 +695,13 @@ const internalErrorResult = ({
       ctx: { source: "mcp", tool: toolName },
     });
   } else {
-    captureError(error, {
-      fingerprintKey: "mcp.internalErrorResult",
-      context: { source: "mcp", toolName },
-    });
+    captureError(
+      error,
+      handlerErrorContext("mcp.internalErrorResult", {
+        source: "mcp",
+        toolName,
+      }),
+    );
   }
   return serializeToolResult(
     scopeToolResultToSurface(

@@ -127,6 +127,11 @@ export const Route = createFileRoute("/_protected/chat/")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "chat.index.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/",
+        },
       });
     };
 
@@ -305,7 +310,10 @@ function ChatIndex() {
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error, { fingerprintKey: "ChatIndex:failure" });
+      analytics.captureError(error, {
+        fingerprintKey: "ChatIndex:failure",
+        scope: { type: "handler", handlerId: "ChatIndex:failure" },
+      });
     },
   });
   const seededDraftRef = useRef<string | null>(null);

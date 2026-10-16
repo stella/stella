@@ -30,6 +30,8 @@ import {
 } from "@/api/lib/capability-transport";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -1092,20 +1094,20 @@ const loadEndpointGuarded = async (
   try {
     endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
-    captureError(error, {
-      fingerprintKey: "mcp.loadEndpoint",
-      context: { source: "mcp", toolName },
-    });
+    captureError(
+      error,
+      handlerErrorContext("mcp.loadEndpoint", { source: "mcp", toolName }),
+    );
     endpoint = null;
   }
   if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      fingerprintKey: "mcp.missingEndpoint",
-      context: {
+    captureError(
+      new Error(`capability dispatch missing endpoint: ${id}`),
+      handlerErrorContext("mcp.missingEndpoint", {
         source: "mcp",
         toolName,
-      },
-    });
+      }),
+    );
     return {
       ok: false,
       result: structuredErrorResult({
@@ -1740,19 +1742,24 @@ const invokeCapabilityHandler = async ({
   }
 
   try {
-    return await executeInvoke({
-      context: entry.destructive
-        ? bindApprovedMcpAuditContext(context)
-        : context,
-      entry,
-      id,
-      input,
-      validateOnly,
-      confirm,
-    });
+    return await withExceptionScope(
+      { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      async () =>
+        await executeInvoke({
+          context: entry.destructive
+            ? bindApprovedMcpAuditContext(context)
+            : context,
+          entry,
+          id,
+          input,
+          validateOnly,
+          confirm,
+        }),
+    );
   } catch (error) {
     captureError(error, {
       fingerprintKey: "mcp.invokeCapabilityHandler",
+      scope: { type: "handler", handlerId: `mcp.capability.${entry.id}` },
       context: {
         source: "mcp",
         toolName: MCP_CAPABILITY_EXECUTORS[access],

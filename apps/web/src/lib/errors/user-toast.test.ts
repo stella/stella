@@ -33,6 +33,7 @@ describe("detachedUserAction", () => {
 
     expect(capture).toHaveBeenCalledWith(failure, {
       fingerprintKey: "detachedUserAction:test.press",
+      scope: { type: "handler", handlerId: "detachedUserAction:test.press" },
       context: { type: "detached", operation: "test.press" },
     });
     expect(add).toHaveBeenCalledTimes(1);

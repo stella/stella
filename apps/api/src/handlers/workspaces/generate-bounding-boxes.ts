@@ -18,6 +18,7 @@ import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -65,14 +66,16 @@ const generateBoundingBoxes = createSafeHandler(
     );
 
     if (Result.isError(preparedDataResult)) {
-      captureError(preparedDataResult.error, {
-        fingerprintKey:
+      captureError(
+        preparedDataResult.error,
+        handlerErrorContext(
           "workspaces.generateBoundingBoxes.preparedDataResult_error",
-        context: {
-          method: "POST",
-          path: `/workspaces/${workspaceId}/bounding-boxes`,
-        },
-      });
+          {
+            method: "POST",
+            path: `/workspaces/${workspaceId}/bounding-boxes`,
+          },
+        ),
+      );
 
       return Result.ok({ boxes: [] });
     }
@@ -108,15 +111,17 @@ const generateBoundingBoxes = createSafeHandler(
       });
 
       if (Result.isError(pageBoxesResult)) {
-        captureError(pageBoxesResult.error, {
-          fingerprintKey:
+        captureError(
+          pageBoxesResult.error,
+          handlerErrorContext(
             "workspaces.generateBoundingBoxes.pageBoxesResult_error",
-          context: {
-            feature: "bbox.generate",
-            workspaceId,
-            organizationId,
-          },
-        });
+            {
+              feature: "bbox.generate",
+              workspaceId,
+              organizationId,
+            },
+          ),
+        );
         // `WorkflowIntegrationError.cause` carries the underlying
         // provider failure — classify
         // against that so quota/usage-limit errors map to 429/402 instead of

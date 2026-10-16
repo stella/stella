@@ -115,6 +115,7 @@ export const ListSourceForm = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "ListSourceForm:failure",
+        scope: { type: "handler", handlerId: "ListSourceForm:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

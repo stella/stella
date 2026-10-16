@@ -221,6 +221,10 @@ export const useDesktopPdfSign = ({
     if (Result.isError(started)) {
       getAnalytics().captureError(started.error.cause, {
         fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause",
+        },
       });
       notifyUserError(
         started.error,
@@ -289,6 +293,10 @@ export const useDesktopPdfSign = ({
     if (Result.isError(watched)) {
       getAnalytics().captureError(watched.error.cause, {
         fingerprintKey: "useDesktopPdfSign.signWithToast:cause-2",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause-2",
+        },
       });
       notifyUserError(
         watched.error,
@@ -409,6 +417,7 @@ export const useDesktopPdfSign = ({
     if (Result.isError(signed)) {
       getAnalytics().captureError(signed.error.cause, {
         fingerprintKey: "useDesktopPdfSign.sign:cause",
+        scope: { type: "handler", handlerId: "useDesktopPdfSign.sign:cause" },
       });
       notifyUserError(signed.error, t("errors.actionFailed"), {
         ...NO_ACTION,

@@ -449,6 +449,7 @@ export const PlaybookFacet = ({
     if (result.error) {
       analytics.captureError(toAPIError(result.error), {
         fingerprintKey,
+        scope: { type: "handler", handlerId: fingerprintKey },
       });
     }
     notifyUserError(
@@ -664,6 +665,10 @@ export const PlaybookFacet = ({
     if (Result.isError(application)) {
       analytics.captureError(application.error, {
         fingerprintKey: "PlaybookFacet.addCounterpartyNote:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PlaybookFacet.addCounterpartyNote:failure",
+        },
       });
       return reportNote({ type: "failed" }, blockId);
     }
@@ -1288,6 +1293,7 @@ const ReviewRunPanel = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "ReviewRunPanel:failure",
+        scope: { type: "handler", handlerId: "ReviewRunPanel:failure" },
       });
       notifyUserError(error, t("inspector.review.decisionFailed"));
     },
@@ -1330,6 +1336,7 @@ const ReviewRunPanel = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "ReviewRunPanel:failure-2",
+        scope: { type: "handler", handlerId: "ReviewRunPanel:failure-2" },
       });
       notifyUserError(error, t("inspector.review.saveAsPlaybookFailed"));
     },

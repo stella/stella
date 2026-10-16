@@ -302,6 +302,10 @@ export const ClauseEditor = ({
               settleReviewPersist(persistReviewedBody, (error) => {
                 getAnalytics().captureError(error, {
                   fingerprintKey: "ClauseEditor.onUpdate:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ClauseEditor.onUpdate:failure",
+                  },
                 });
                 notifyUserError(error, t("clauses.saveFailed"), {
                   description: userErrorFromThrown(
@@ -439,6 +443,7 @@ export const ClauseEditor = ({
     if (rewrittenResult.isErr()) {
       getAnalytics().captureError(rewrittenResult.error.cause, {
         fingerprintKey: "ClauseEditor.runRewrite:cause",
+        scope: { type: "handler", handlerId: "ClauseEditor.runRewrite:cause" },
       });
       notifyUserError(rewrittenResult.error, t("ai.editWithAI"), {
         description: userErrorFromThrown(

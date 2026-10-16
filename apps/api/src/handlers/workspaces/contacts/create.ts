@@ -19,6 +19,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -209,10 +210,12 @@ export const createWorkspaceContactHandler = async function* ({
   dependencies
     .flushWorkspaceSearchRepairs([workspaceId])
     .catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey:
+      captureError(
+        error,
+        handlerErrorContext(
           "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
-      }),
+        ),
+      ),
     );
 
   const created = txResult.value.created;

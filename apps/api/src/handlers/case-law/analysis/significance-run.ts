@@ -26,6 +26,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { analysisStore } from "@/api/lib/case-law/analysis-store";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -206,13 +207,13 @@ export const refreshSignificance = async ({
   if (Result.isError(written) && !ActionAdmissionError.is(written.error)) {
     // A reader is already looking at the document layers; the graph one
     // simply does not appear this time. Captured, never swallowed.
-    captureError(written.error, {
-      fingerprintKey: "analysis.refreshSignificance.written_error",
-      context: {
+    captureError(
+      written.error,
+      handlerErrorContext("analysis.refreshSignificance.written_error", {
         source: "case-law-analysis-significance",
         decisionId,
-      },
-    });
+      }),
+    );
     aiAnalytics?.captureError(written.error);
   }
 };

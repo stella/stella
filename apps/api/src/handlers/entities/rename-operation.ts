@@ -8,6 +8,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -143,9 +144,10 @@ export const createRenameEntityHandler = ({
     }
 
     flushRepairs([body.entityId]).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "createRenameEntityHandler.flushRepairs",
-      }),
+      captureError(
+        error,
+        handlerErrorContext("createRenameEntityHandler.flushRepairs"),
+      ),
     );
 
     return Result.ok({

@@ -218,6 +218,7 @@ export const loadPDF = async ({
           .catch((error: unknown) => {
             getAnalytics().captureError(error, {
               fingerprintKey: "loadPDF:failure",
+              scope: { type: "handler", handlerId: "loadPDF:failure" },
             });
             return null;
           });

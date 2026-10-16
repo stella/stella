@@ -293,6 +293,7 @@ export const OnboardingWizard = () => {
       if (createOrgError) {
         analytics.captureError(toAuthClientError(createOrgError), {
           fingerprintKey: "OnboardingWizard:failure",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure" },
         });
         notifyAuthClientError(createOrgError, t("errors.actionFailed"));
         setIsCreating(false);
@@ -308,6 +309,7 @@ export const OnboardingWizard = () => {
       if (setActiveError) {
         analytics.captureError(toAuthClientError(setActiveError), {
           fingerprintKey: "OnboardingWizard:failure-2",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-2" },
         });
         notifyAuthClientError(setActiveError, t("errors.actionFailed"));
         setIsCreating(false);
@@ -337,6 +339,10 @@ export const OnboardingWizard = () => {
           if (jurisdictionError) {
             analytics.captureError(toAPIError(jurisdictionError), {
               fingerprintKey: "OnboardingWizard:failure-3",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-3",
+              },
             });
             stellaToast.add({
               title: t("onboarding.jurisdictionSaveFailed"),
@@ -417,6 +423,10 @@ export const OnboardingWizard = () => {
           if (aiConfigError) {
             analytics.captureError(toAPIError(aiConfigError), {
               fingerprintKey: "OnboardingWizard:failure-4",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-4",
+              },
             });
             stellaToast.add({
               title: t("onboarding.aiConfigFailed"),
@@ -463,6 +473,7 @@ export const OnboardingWizard = () => {
       } catch (error) {
         analytics.captureError(error, {
           fingerprintKey: "OnboardingWizard:failure-5",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
         });
       }
 

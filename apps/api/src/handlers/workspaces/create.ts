@@ -35,6 +35,7 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -327,9 +328,10 @@ export const createWorkspaceHandler = async function* ({
   );
 
   flushWorkspaceSearchRepairs([txResult.id]).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "createWorkspaceHandler.flushWorkspaceSearchRepairs",
-    }),
+    captureError(
+      error,
+      handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
   );
 
   return Result.ok({ id: txResult.id });

@@ -1,6 +1,12 @@
 import { Result } from "better-result";
 
-import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
+import {
+  createDetached,
+  sanitizeErrorForOutput,
+  type ExceptionScope,
+  type RequestExceptionScope,
+  type HandlerExceptionScope,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -11,10 +17,15 @@ import {
   logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
+import type {
+  CaptureErrorInput,
+  ErrorTelemetryContext,
+} from "@/api/lib/observability/exception-context";
 import {
   exceptionFingerprint,
   type StableExceptionKey,
 } from "@/api/lib/observability/exception-fingerprint";
+import { getExceptionScopes } from "@/api/lib/observability/exception-scope";
 import type { FailureGrading } from "@/api/lib/observability/failure";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -44,9 +55,9 @@ import { getRequestContext } from "@/api/lib/observability/request-context";
  * Pass `context` with safe correlation IDs (entity IDs, request
  * IDs) to make errors traceable without leaking content.
  */
-type ErrorTelemetryContext = Record<string, string>;
 
 type CaptureErrorOptions = {
+  scope: ExceptionScope;
   fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   distinctId?: string | undefined;
@@ -61,6 +72,7 @@ type CaptureErrorOptions = {
 };
 
 type CaptureRequestErrorOptions = {
+  scope: RequestExceptionScope;
   fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   request: Request;
@@ -172,10 +184,11 @@ const captureErrorWithOptions = (
   const tag = errorTag(error);
   const evidence = readEvidence(error);
   const fingerprint = identityFields(evidence);
-  const stableFingerprint = exceptionFingerprint(
-    evidence,
-    options.fingerprintKey,
-  );
+  const stableFingerprint = exceptionFingerprint(evidence, {
+    fingerprintKey: options.fingerprintKey,
+    scope: options.scope,
+    inheritedScopes: getExceptionScopes(),
+  });
   const grading =
     options.observed === undefined
       ? observeShadow({
@@ -271,16 +284,11 @@ const captureErrorWithOptions = (
   }
 };
 
-type CaptureErrorInput = {
-  fingerprintKey: StableExceptionKey;
-  context?: ErrorTelemetryContext | undefined;
-};
-
 export const captureError = (
   error: unknown,
-  { fingerprintKey, context }: CaptureErrorInput,
+  { fingerprintKey, context, scope }: CaptureErrorInput,
 ) => {
-  captureErrorWithOptions(error, { fingerprintKey, context });
+  captureErrorWithOptions(error, { fingerprintKey, context, scope });
 };
 
 const requestCaptureOptions = (request: Request) => {
@@ -295,21 +303,24 @@ const requestCaptureOptions = (request: Request) => {
 
 export const captureRequestError = (
   error: unknown,
-  { context, request, fingerprintKey }: CaptureRequestErrorOptions,
+  { context, request, fingerprintKey, scope }: CaptureRequestErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
     fingerprintKey,
     context,
     ...requestCaptureOptions(request),
+    scope,
   });
 };
 
 type CaptureObservedErrorOptions = {
   fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
-  request?: Request | undefined;
   observation: FailureGrading | undefined;
-};
+} & (
+  | { request: Request; scope: RequestExceptionScope | HandlerExceptionScope }
+  | { request?: undefined; scope: ExceptionScope }
+);
 
 /**
  * Capture a failure its caller has already graded and counted, so the capture
@@ -322,6 +333,7 @@ export const captureObservedError = (
     request,
     observation,
     fingerprintKey,
+    scope,
   }: CaptureObservedErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
@@ -329,6 +341,7 @@ export const captureObservedError = (
     context,
     ...(request === undefined ? {} : requestCaptureOptions(request)),
     observed: { grading: observation },
+    scope,
   });
 };
 
@@ -346,6 +359,7 @@ export const captureObservedError = (
 export const detached = createDetached((error, context) => {
   captureError(error, {
     fingerprintKey: `detached.${context}`,
+    scope: { type: "handler", handlerId: `detached.${context}` },
     context: { detached: context },
   });
 });

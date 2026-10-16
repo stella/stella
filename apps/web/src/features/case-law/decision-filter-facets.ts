@@ -36,6 +36,10 @@ export const prefetchDecisionFacetsAfterSearch = async <T>({
         (error) => {
           getAnalytics().captureError(error, {
             fingerprintKey: "prefetchDecisionFacetsAfterSearch:failure",
+            scope: {
+              type: "handler",
+              handlerId: "prefetchDecisionFacetsAfterSearch:failure",
+            },
           });
         },
       ),

@@ -50,6 +50,7 @@ import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -1882,9 +1883,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       claimToken,
     });
     if (Result.isError(released)) {
-      captureError(released.error, {
-        fingerprintKey: "mcp.releaseClaim.released_error",
-      });
+      captureError(
+        released.error,
+        handlerErrorContext("mcp.releaseClaim.released_error"),
+      );
     }
   };
 

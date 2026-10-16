@@ -670,6 +670,10 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error, {
         fingerprintKey: "DocumentReferenceChip.copy:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DocumentReferenceChip.copy:failure",
+        },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;

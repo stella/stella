@@ -101,6 +101,7 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "useRenameChatThread:failure",
+        scope: { type: "handler", handlerId: "useRenameChatThread:failure" },
       });
       notifyUserError(error, t("errors.actionFailed"));
     },

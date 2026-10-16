@@ -157,6 +157,7 @@ const CopyTextButton = ({
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
         fingerprintKey: "CopyTextButton.copy:failure",
+        scope: { type: "handler", handlerId: "CopyTextButton.copy:failure" },
       });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;

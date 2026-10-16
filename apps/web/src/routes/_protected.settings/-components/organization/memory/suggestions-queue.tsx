@@ -69,6 +69,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
     onError: (error: unknown) => {
       analytics.captureError(error, {
         fingerprintKey: "SuggestionsQueue:failure",
+        scope: { type: "handler", handlerId: "SuggestionsQueue:failure" },
       });
       notifyUserError(error, tErrors("actionFailed"));
     },

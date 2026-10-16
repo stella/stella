@@ -16,6 +16,10 @@ const store = createDesktopConnectionStore({
   onError: (error) =>
     getAnalytics().captureError(error, {
       fingerprintKey: "use-desktop-account-connection:failure",
+      scope: {
+        type: "handler",
+        handlerId: "use-desktop-account-connection:failure",
+      },
     }),
 });
 

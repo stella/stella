@@ -33,6 +33,7 @@ import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
 import {
   createRootMembershipSafeDb,
@@ -126,13 +127,13 @@ const drainCompactionQueue = async ({
     const outcome = await compactThread({ database, db, signal, thread });
     if (Result.isError(outcome)) {
       failed += 1;
-      captureError(outcome.error, {
-        fingerprintKey: "tasks.processThreadAt.outcome_error",
-        context: {
+      captureError(
+        outcome.error,
+        handlerErrorContext("tasks.processThreadAt.outcome_error", {
           feature: "chat.thread_compactor",
           threadId: thread.threadId,
-        },
-      });
+        }),
+      );
       logger.warn("scheduler.chat_compactor_failed", {
         "error.type": errorTag(outcome.error),
         "thread.id": thread.threadId,

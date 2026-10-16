@@ -94,6 +94,10 @@ export const ToolCallCodeBlock = ({
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error, {
         fingerprintKey: "ToolCallCodeBlock.handleCopy:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ToolCallCodeBlock.handleCopy:failure",
+        },
       });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return;

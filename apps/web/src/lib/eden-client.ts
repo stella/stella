@@ -48,12 +48,13 @@ const clientOptions = {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
-  async onResponse(response) {
+  async onScopedResponse({ response, scope }) {
     await observeActionAdmissionResponse(response, {
       notifyRefusal: notifyActionAdmissionRefusal,
       captureError: (error) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "onResponse:failure",
+          scope,
         });
       },
     });

@@ -68,6 +68,7 @@ export const SocialRecoveryPanel = ({
   const onError = (cause: unknown) => {
     analytics.captureError(cause, {
       fingerprintKey: "SocialRecoveryPanel:cause",
+      scope: { type: "handler", handlerId: "SocialRecoveryPanel:cause" },
     });
     notifyUserError(cause, t("errors.actionFailed"));
   };

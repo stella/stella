@@ -18,6 +18,7 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -303,10 +304,10 @@ const buildSearchDocument = async (
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
       // added or rotated after this content was stored.
       // Keep the last complete projection until re-extraction fixes it.
-      captureError(error, {
-        fingerprintKey: "search.buildSearchDocument",
-        context: { entityId },
-      });
+      captureError(
+        error,
+        handlerErrorContext("search.buildSearchDocument", { entityId }),
+      );
       throw error;
     }
   }

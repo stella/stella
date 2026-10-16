@@ -49,6 +49,7 @@ test("optional batches report a shared failure once until it clears", async () =
   expect(captureError).toHaveBeenCalledTimes(1);
   expect(captureError).toHaveBeenCalledWith(failure, {
     fingerprintKey: "use-query-view-error:query",
+    scope: { type: "handler", handlerId: "use-query-view-error:query" },
   });
   rerender({ views: [failed, failed] });
   expect(captureError).toHaveBeenCalledTimes(1);

@@ -588,6 +588,10 @@ const PeekDocxViewer = ({
           .catch((error: unknown) => {
             analytics.captureError(error, {
               fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
             });
           }),
         "peek-pdf-viewer.fetch-print-pdf",

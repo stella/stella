@@ -1,6 +1,7 @@
 import { expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import {
   DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY,
@@ -61,8 +62,8 @@ test("captures one failed handoff and continues draining committed runs", async 
   });
 
   expect(enqueue).toHaveBeenCalledTimes(3);
-  expect(captureEnqueueError).toHaveBeenCalledWith(enqueueError, {
-    fingerprintKey: "documentProcessing.handoff",
-    context: { runId: runIds.at(1) },
-  });
+  expect(captureEnqueueError).toHaveBeenCalledWith(
+    enqueueError,
+    handlerErrorContext("documentProcessing.handoff", { runId: runIds.at(1) }),
+  );
 });

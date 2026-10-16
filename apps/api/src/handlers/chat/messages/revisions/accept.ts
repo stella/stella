@@ -17,6 +17,7 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 export const revisionParams = t.Object({
@@ -141,10 +142,12 @@ const acceptMessageRevision = createSafeRootHandler(
     );
     if (result.type === "ok") {
       upsertChatThreadSearchDocument(threadId).catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey:
+        captureError(
+          error,
+          handlerErrorContext(
             "acceptMessageRevision.upsertChatThreadSearchDocument",
-        }),
+          ),
+        ),
       );
     }
     return revisionResult(result);

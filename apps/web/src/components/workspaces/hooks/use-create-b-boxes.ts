@@ -86,6 +86,7 @@ export const useCreateBBoxes = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "useCreateBBoxes:failure",
+        scope: { type: "handler", handlerId: "useCreateBBoxes:failure" },
       });
     },
   });

@@ -59,6 +59,11 @@ export const Route = createFileRoute(
       (error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "settings.organization.audit-logs.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: "/_protected/settings/organization/audit-logs",
+          },
         });
       },
     );
@@ -182,6 +187,10 @@ function AuditLogsPage() {
       handleExport().catch((error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "AuditLogsPage.handleExportClick:failure",
+          scope: {
+            type: "handler",
+            handlerId: "AuditLogsPage.handleExportClick:failure",
+          },
         });
         notifyUserError(
           error,

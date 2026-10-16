@@ -64,6 +64,10 @@ export const createRouteErrorLifecycleController = (
         .catch((error: unknown) => {
           analytics.captureError(error, {
             fingerprintKey: "createRouteErrorLifecycleController.load:failure",
+            scope: {
+              type: "handler",
+              handlerId: "createRouteErrorLifecycleController.load:failure",
+            },
             context: {
               operation: "route-error.load",
               type: "detached",
@@ -78,6 +82,11 @@ export const createRouteErrorLifecycleController = (
     analytics.captureError(error, {
       fingerprintKey:
         "createRouteErrorLifecycleController.captureDispatchError:failure",
+      scope: {
+        type: "handler",
+        handlerId:
+          "createRouteErrorLifecycleController.captureDispatchError:failure",
+      },
       context: {
         operation: "route-error.dispatch",
         type: "detached",
@@ -125,6 +134,11 @@ export const createRouteErrorLifecycleController = (
           fingerprintKey: routeExceptionFingerprintKey(
             caughtRouteTemplate ?? snapshot.routeTemplate,
           ),
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: caughtRouteTemplate ?? snapshot.routeTemplate,
+          },
           context: {
             reference: options.reference,
             type: "recovery",

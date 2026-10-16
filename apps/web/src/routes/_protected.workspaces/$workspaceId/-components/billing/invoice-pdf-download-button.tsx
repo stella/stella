@@ -60,6 +60,10 @@ export const InvoicePdfDownloadButton = ({
     onError: (error) => {
       analytics.captureError(error, {
         fingerprintKey: "InvoicePdfDownloadButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "InvoicePdfDownloadButton:failure",
+        },
       });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },

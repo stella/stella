@@ -117,7 +117,10 @@ export const BilingualTranslateDialog = ({
     error: unknown,
     { title, fingerprintKey }: ReportFailureOptions,
   ) => {
-    analytics.captureError(error, { fingerprintKey });
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, title, {
       description: userErrorFromThrown(error, t("errors.actionFailed")),
     });
@@ -147,6 +150,10 @@ export const BilingualTranslateDialog = ({
       reportFailure(error, {
         title: t("bilingualTranslate.error.prepareTitle"),
         fingerprintKey: "BilingualTranslateDialog:prepare",
+        scope: {
+          type: "handler",
+          handlerId: "BilingualTranslateDialog:prepare",
+        },
       });
     },
   });
@@ -173,6 +180,7 @@ export const BilingualTranslateDialog = ({
       reportFailure(error, {
         title: t("bilingualTranslate.error.startTitle"),
         fingerprintKey: "BilingualTranslateDialog:start",
+        scope: { type: "handler", handlerId: "BilingualTranslateDialog:start" },
       });
     },
   });

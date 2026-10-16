@@ -116,6 +116,10 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
 
       getAnalytics().captureError(error, {
         fingerprintKey: "useDesktopFileOpen.open:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopFileOpen.open:failure",
+        },
       });
       notifyUserError(
         error,

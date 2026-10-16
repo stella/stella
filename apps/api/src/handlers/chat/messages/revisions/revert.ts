@@ -12,6 +12,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
@@ -58,10 +59,12 @@ const revertMessageRevision = createSafeRootHandler(
     );
     if (result.type === "ok") {
       upsertChatThreadSearchDocument(threadId).catch((error: unknown) =>
-        captureError(error, {
-          fingerprintKey:
+        captureError(
+          error,
+          handlerErrorContext(
             "revertMessageRevision.upsertChatThreadSearchDocument",
-        }),
+          ),
+        ),
       );
     }
     return revisionResult(result);

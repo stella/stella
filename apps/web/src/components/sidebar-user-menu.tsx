@@ -324,6 +324,10 @@ const OrganizationMenuSection = ({
         notifyUserError(error, t("errors.actionFailed"));
         analytics.captureError(error, {
           fingerprintKey: "OrganizationMenuSection:failure",
+          scope: {
+            type: "handler",
+            handlerId: "OrganizationMenuSection:failure",
+          },
         });
       },
     });

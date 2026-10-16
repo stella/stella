@@ -87,6 +87,7 @@ export const useStartWorkflow = (workspaceId: string) => {
         captureError: (error) => {
           analytics.captureError(error, {
             fingerprintKey: "useStartWorkflow:failure",
+            scope: { type: "handler", handlerId: "useStartWorkflow:failure" },
           });
         },
         notifyFailure: notifyStartFailed,
@@ -128,6 +129,7 @@ export const useStartWorkflow = (workspaceId: string) => {
       // failure here means nothing was started either.
       analytics.captureError(error, {
         fingerprintKey: "useStartWorkflow:failure-2",
+        scope: { type: "handler", handlerId: "useStartWorkflow:failure-2" },
       });
       notifyStartFailed(error);
       return WORKFLOW_START_FAILED;

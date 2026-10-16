@@ -63,6 +63,7 @@ const searchCaseLawMentions = async ({
     if (!PublicLawUnavailableError.is(error)) {
       getAnalytics().captureError(error, {
         fingerprintKey: "searchCaseLawMentions:failure",
+        scope: { type: "handler", handlerId: "searchCaseLawMentions:failure" },
       });
     }
     return [];

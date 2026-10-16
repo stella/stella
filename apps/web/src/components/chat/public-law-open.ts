@@ -40,6 +40,7 @@ export const openPublicLawLink = async <Resolved>({
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error.cause, {
       fingerprintKey: "openPublicLawLink:cause",
+      scope: { type: "handler", handlerId: "openPublicLawLink:cause" },
     });
     notifyUserError(result.error.cause, t("errors.actionFailed"));
     return;

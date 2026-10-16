@@ -24,6 +24,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   broadcastWorkspaceResourceSetUpdated,
   broadcastWorkspaceResourceUpdated,
@@ -423,21 +424,24 @@ export const deleteEntityVersionHandler = async function* ({
   }
 
   flushEntitySearchRepairs([params.entityId]).catch((error: unknown) =>
-    captureError(error, {
-      fingerprintKey: "deleteEntityVersionHandler.flushEntitySearchRepairs",
-    }),
+    captureError(
+      error,
+      handlerErrorContext(
+        "deleteEntityVersionHandler.flushEntitySearchRepairs",
+      ),
+    ),
   );
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
     await processExtraction(params.entityId).catch((error: unknown) =>
-      captureError(error, {
-        fingerprintKey: "versions.deleteEntityVersionHandler",
-        context: {
+      captureError(
+        error,
+        handlerErrorContext("versions.deleteEntityVersionHandler", {
           entityId: params.entityId,
           versionId: promotedVersionId,
-        },
-      }),
+        }),
+      ),
     );
   }
 

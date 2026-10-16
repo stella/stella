@@ -124,6 +124,10 @@ export const PublicWorkspaceShell = ({
     navigate({ to: "/chat/new" }).catch((error: unknown) => {
       getAnalytics().captureError(error, {
         fingerprintKey: "PublicWorkspaceShell.openChat:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PublicWorkspaceShell.openChat:failure",
+        },
       });
     });
   };
@@ -335,6 +339,10 @@ const PublicSidebar = ({
                         navigate({ to: item.to }).catch((error: unknown) => {
                           getAnalytics().captureError(error, {
                             fingerprintKey: "PublicSidebar:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "PublicSidebar:failure",
+                            },
                           });
                         });
                         return;

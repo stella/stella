@@ -1,3 +1,5 @@
+import { exceptionScopeIdentity, type ExceptionScope } from "@stll/errors";
+
 import { identityFields } from "@/api/lib/observability/failure";
 import type { FailureEvidence } from "@/api/lib/observability/failure-evidence";
 
@@ -9,14 +11,23 @@ export type StableExceptionKey = `${string}.${string}`;
  * source moves and also identifies failures without a usable stack. Locations
  * remain diagnostic properties only; engine-inferred symbols can contain data.
  */
+type ExceptionFingerprintOptions = {
+  fingerprintKey: StableExceptionKey;
+  scope: ExceptionScope;
+  inheritedScopes?: readonly ExceptionScope[];
+};
+
 export const exceptionFingerprint = (
   evidence: FailureEvidence,
-  key: StableExceptionKey,
+  { fingerprintKey, scope, inheritedScopes = [] }: ExceptionFingerprintOptions,
 ): string => {
   const fields = identityFields(evidence);
   return JSON.stringify([
     evidence.nodes.at(0)?.tag ?? "UnknownError",
-    key,
+    fingerprintKey,
+    [
+      ...new Set([scope, ...inheritedScopes].map(exceptionScopeIdentity)),
+    ].toSorted(),
     fields["error.code"] ?? "",
     fields["error.cause.pg_code"] ?? "",
     evidence.nodes

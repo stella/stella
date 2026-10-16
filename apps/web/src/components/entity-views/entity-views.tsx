@@ -91,6 +91,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     if (saved.error) {
       analytics.captureError(saved.error, {
         fingerprintKey: "EntityViews:failure",
+        scope: { type: "handler", handlerId: "EntityViews:failure" },
       });
     }
   }, [analytics, saved.error]);
@@ -130,6 +131,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const reportError = (error: unknown) => {
     analytics.captureError(error, {
       fingerprintKey: "EntityViews.reportError:failure",
+      scope: { type: "handler", handlerId: "EntityViews.reportError:failure" },
     });
     notifyUserError(error, t("common.unexpectedError"));
   };
@@ -533,6 +535,7 @@ const EntityViewContent = ({
     if (records.error) {
       analytics.captureError(records.error, {
         fingerprintKey: "EntityViewContent:failure",
+        scope: { type: "handler", handlerId: "EntityViewContent:failure" },
       });
     }
   }, [analytics, records.error]);

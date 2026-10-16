@@ -557,6 +557,7 @@ const persistQueuedSuggestions = async ({
   if (Result.isError(result)) {
     getAnalytics().captureError(result.error.cause, {
       fingerprintKey: "persistQueuedSuggestions:cause",
+      scope: { type: "handler", handlerId: "persistQueuedSuggestions:cause" },
     });
     switch (result.error.type) {
       case CREATE_DOCX_SUGGESTIONS_ERROR.pendingLimit:
@@ -655,7 +656,10 @@ const persistQueuedSuggestions = async ({
 
   getAnalytics().captureError(
     new Error("DOCX suggestion resolution replay failed to persist"),
-    { fingerprintKey: "persistQueuedSuggestions:Error" },
+    {
+      fingerprintKey: "persistQueuedSuggestions:Error",
+      scope: { type: "handler", handlerId: "persistQueuedSuggestions:Error" },
+    },
   );
   notifyUserError(undefined, getTranslator()("docxReview.persistFailed"));
 };
@@ -1189,6 +1193,7 @@ const FileChatOverlayInner = ({
       }
       getAnalytics().captureError(error, {
         fingerprintKey: "FileChatOverlayInner:failure",
+        scope: { type: "handler", handlerId: "FileChatOverlayInner:failure" },
       });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
@@ -1577,6 +1582,7 @@ const FileChatOverlayInner = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.file-overlay" },
     chat,
     conversationId: threadRef.threadId,
     getContextMatterIds,
@@ -1836,6 +1842,10 @@ const FileChatOverlayInner = ({
       getAnalytics().captureError(toolCallError, {
         fingerprintKey:
           "FileChatOverlayInner.runFolioAgentCommentMutationTool:toolCallError",
+        scope: {
+          type: "handler",
+          handlerId: `folio-comment-tool.${part.name}`,
+        },
       });
       try {
         await addToolResult({
@@ -1853,6 +1863,11 @@ const FileChatOverlayInner = ({
         getAnalytics().captureError(reportError, {
           fingerprintKey:
             "FileChatOverlayInner.runFolioAgentCommentMutationTool:reportError",
+          scope: {
+            type: "handler",
+            handlerId:
+              "FileChatOverlayInner.runFolioAgentCommentMutationTool:reportError",
+          },
         });
       }
     }
@@ -1996,6 +2011,10 @@ const FileChatOverlayInner = ({
         executedFolioAgentDocToolCallIdsRef.current?.delete(part.id);
         getAnalytics().captureError(toolCallError, {
           fingerprintKey: "FileChatOverlayInner:toolCallError",
+          scope: {
+            type: "handler",
+            handlerId: `folio-document-tool.${part.name}`,
+          },
         });
         try {
           await addToolResult({
@@ -2012,6 +2031,10 @@ const FileChatOverlayInner = ({
         } catch (reportError) {
           getAnalytics().captureError(reportError, {
             fingerprintKey: "FileChatOverlayInner:reportError",
+            scope: {
+              type: "handler",
+              handlerId: `folio-document-tool.${part.name}`,
+            },
           });
         }
       }
@@ -2322,6 +2345,10 @@ const FileChatOverlayInner = ({
         getAnalytics().captureError(rejected.error, {
           fingerprintKey:
             "FileChatOverlayInner.rejectPendingReviewRows:failure",
+          scope: {
+            type: "handler",
+            handlerId: "FileChatOverlayInner.rejectPendingReviewRows:failure",
+          },
         });
         notifyUserError(rejected.error, t("docxReview.persistFailed"));
         return false;

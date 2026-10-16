@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -171,10 +172,10 @@ export const finalizeEntityVersion = async function* ({
   // the one it replaces, and may be encrypted when that one was not.
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    {
-      fingerprintKey: "entityVersion.detectEncryption",
-      context: { mimeType: declaredMime, sizeBytes: String(declaredSize) },
-    },
+    handlerErrorContext("entityVersion.detectEncryption", {
+      mimeType: declaredMime,
+      sizeBytes: String(declaredSize),
+    }),
   );
   if (encryption === null) {
     return finalizeErr({
@@ -309,7 +310,7 @@ export const finalizeEntityVersion = async function* ({
     const afterPromote = () => {
       processExtraction(entityId).catch((error: unknown) => {
         const context = { entityId };
-        captureError(error, { fingerprintKey: EXTRACTION_KEY, context });
+        captureError(error, handlerErrorContext(EXTRACTION_KEY, context));
       });
       enqueuePdfDerivativeOrMarkFailed({
         encrypted: encryption.encrypted,
@@ -321,7 +322,7 @@ export const finalizeEntityVersion = async function* ({
         workspaceId,
       }).catch((error: unknown) => {
         const context = { entityId, fieldId, mimeType: declaredMime };
-        captureError(error, { fingerprintKey: PDF_KEY, context });
+        captureError(error, handlerErrorContext(PDF_KEY, context));
       });
       enqueueImageThumbnailOrMarkFailed({
         encrypted: encryption.encrypted,
@@ -333,7 +334,7 @@ export const finalizeEntityVersion = async function* ({
         workspaceId,
       }).catch((error: unknown) => {
         const context = { entityId, fieldId, mimeType: declaredMime };
-        captureError(error, { fingerprintKey: THUMBNAIL_KEY, context });
+        captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
       });
       computeVersionDiffStats({
         versionId: entityVersionId,
@@ -347,7 +348,7 @@ export const finalizeEntityVersion = async function* ({
         organizationId,
       }).catch((error: unknown) => {
         const context = { versionId: entityVersionId };
-        captureError(error, { fingerprintKey: DIFF_KEY, context });
+        captureError(error, handlerErrorContext(DIFF_KEY, context));
       });
       broadcastWorkspaceResourceUpdated(
         workspaceId,

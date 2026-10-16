@@ -101,6 +101,10 @@ export const useClaimReviewActions = (scope: RunScope) => {
     }
     analytics.captureError(error, {
       fingerprintKey: "useClaimReviewActions.rollback:failure",
+      scope: {
+        type: "handler",
+        handlerId: "useClaimReviewActions.rollback:failure",
+      },
     });
     notifyUserError(error, t("avt.save.failedTitle"));
   };

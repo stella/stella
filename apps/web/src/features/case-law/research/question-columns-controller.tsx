@@ -214,7 +214,10 @@ export const useQuestionColumns = ({
     error: unknown,
     fingerprintKey: ExceptionFingerprintKey,
   ) => {
-    analytics.captureError(error, { fingerprintKey });
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
