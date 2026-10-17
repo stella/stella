@@ -26,6 +26,7 @@ import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import { openOnlineIndexObserver } from "./online-index-observer";
+import { readOnlineLockBlockers } from "./online-lock-blockers";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 /** How long index work has been held on database health. */
@@ -350,6 +351,28 @@ const readIndexStartVerdict = async ({
   ]);
 };
 
+type BlockerReaderOptions = {
+  config: OnlineIndexConfig;
+  log: NonNullable<OnlineIndexGateOptions["log"]>;
+  name: string;
+  tableName: string;
+};
+
+const blockerReader =
+  ({ config, log, name, tableName }: BlockerReaderOptions) =>
+  async (session: Pick<OnlineMigrationConnection, "query">) => {
+    const blockers = await readOnlineLockBlockers({
+      connection: session,
+      tableName,
+      idleInTransactionMs: config.idleBlockerMs,
+      longTransactionMs: config.health.longTxMaxAgeMs,
+    });
+    if (blockers.length > 0) {
+      log({ event: "online_lock_blocked", name, tableName, blockers });
+    }
+    return blockers;
+  };
+
 type CreateOnlineIndexGateOptions = OnlineIndexGateOptions & {
   connection: OnlineMigrationConnection;
   observer: OnlineMigrationConnection;
@@ -548,6 +571,7 @@ export const createOnlineIndexGate = ({
   };
   return {
     attempt,
+    readBlockers: blockerReader({ config, log, name, tableName }),
     close: async () => {
       if (sessionIsActive()) {
         await slot.close();

@@ -665,6 +665,7 @@ export const runMigrations = async ({
         status: "online_deferred" as const,
         step: online.step,
         retryAfterMs: online.retryAfterMs,
+        cause: online.cause,
         predictedNames,
         insertedNames,
       };
@@ -714,6 +715,7 @@ export const runMigrationsUntilSettled = async ({
       event: "migrate.online_deferred",
       step: result.step,
       retryAfterMs: result.retryAfterMs,
+      cause: result.cause,
     })}\n`,
   );
   await sleep(result.retryAfterMs);

@@ -427,6 +427,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Delay before the migrator retries a deferred online index build.",
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS:
     "Maximum time an online index build may stay in one waiting phase, such as waiting for older transactions, before it is cancelled and retried.",
+  ONLINE_INDEX_IDLE_BLOCKER_MS:
+    "How long a session holding a lock on a table may stay idle in its transaction before the online migration phase defers that table's lock-taking step instead of queueing behind it.",
   ONLINE_INDEX_PARALLEL_WORKERS:
     "max_parallel_maintenance_workers for online index builds (0 or 1).",
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB:
@@ -874,6 +876,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: ENV_CREDENTIAL_KIND.notCredential,
   MISTRAL_API_KEY: ENV_CREDENTIAL_KIND.credential,
   ONLINE_INDEX_CLIENT_CHECK_MS: ENV_CREDENTIAL_KIND.notCredential,
+  ONLINE_INDEX_IDLE_BLOCKER_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: ENV_CREDENTIAL_KIND.notCredential,
   ONLINE_INDEX_PARALLEL_WORKERS: ENV_CREDENTIAL_KIND.notCredential,

@@ -730,6 +730,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             type: "deferred",
             step: "probe_idx",
             retryAfterMs: 7,
+            cause: { type: "held" },
           } as const satisfies OnlineMigrationOutcome;
           const connection = await openClient().reserve();
           try {

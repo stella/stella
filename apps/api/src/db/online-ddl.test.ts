@@ -189,7 +189,12 @@ describe("validateOnlineConstraints", () => {
     const held: OnlineTableGate = {
       run: async ({ target }) => {
         requested.push(target.name);
-        return { type: "deferred", step: target.name, retryAfterMs: 5 };
+        return {
+          type: "deferred",
+          step: target.name,
+          retryAfterMs: 5,
+          cause: { type: "held" },
+        };
       },
     };
     expect(
@@ -198,7 +203,12 @@ describe("validateOnlineConstraints", () => {
         tables: held,
         constraints,
       }),
-    ).toEqual({ type: "deferred", step: "first_check", retryAfterMs: 5 });
+    ).toEqual({
+      type: "deferred",
+      step: "first_check",
+      retryAfterMs: 5,
+      cause: { type: "held" },
+    });
     expect(requested).toEqual(["first_check"]);
   });
 

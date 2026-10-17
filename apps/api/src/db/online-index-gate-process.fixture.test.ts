@@ -60,6 +60,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
             pollMs: 1,
             retryMs: 1,
             maxSnapshotWaitMs: 600_000,
+            idleBlockerMs: 3_600_000,
             clientConnectionCheckMs: 10,
             parallelWorkers: 1,
             maintenanceWorkMemMb: 16,

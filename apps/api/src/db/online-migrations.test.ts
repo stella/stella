@@ -336,6 +336,7 @@ describe("online migrations", () => {
       type: "deferred",
       step: REPORT_EXPORT_INDEX,
       retryAfterMs: healthyIndexGate.config.retryMs,
+      cause: { type: "held" },
     });
     expect(waits).toEqual([]);
     expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
@@ -402,6 +403,7 @@ describe("online migrations", () => {
           type: "deferred",
           step: staged.name,
           retryAfterMs: heldIndexGate.config.retryMs,
+          cause: { type: "held" },
         });
         expect(waits).toEqual([]);
         for (const fragment of [
@@ -752,6 +754,7 @@ describe("online migrations", () => {
       type: "deferred",
       step: firstLegacy,
       retryAfterMs: heldIndexGate.config.retryMs,
+      cause: { type: "held" },
     });
     expect(records.at(-1)).toEqual({
       event: "migrate.online_step_duration",
@@ -805,6 +808,7 @@ describe("online migrations", () => {
         type: "deferred",
         step: name,
         retryAfterMs: heldIndexGate.config.retryMs,
+        cause: { type: "held" },
       });
       expect(records.at(-1)).toEqual({
         event: "migrate.online_step_duration",
@@ -1446,6 +1450,9 @@ const createHarness = ({
             return [{ pid: 1, database: "test" }];
           }
           if (query.includes("pg_advisory_xact_lock")) {
+            return [];
+          }
+          if (query.includes("pg_blocking_pids")) {
             return [];
           }
           if (

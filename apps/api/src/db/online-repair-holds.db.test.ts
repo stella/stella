@@ -369,6 +369,7 @@ describe.skipIf(!enabled)(
               type: "deferred",
               step: staged.name,
               retryAfterMs: config.retryMs,
+              cause: { type: reason === "wait" ? "held" : "cancelled" },
             });
             expect(await readFinal()).toEqual(before);
             expect(repairs).toBe(0);
