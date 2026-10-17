@@ -36,6 +36,10 @@ import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layo
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
+import {
+  caseLawCanariesEnvSchema,
+  caseLawDailyBandsEnvSchema,
+} from "@/api/lib/observability/data-invariants/config-schema";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   isLoopbackHostname,
@@ -253,6 +257,10 @@ export const envBaseServerSchema = {
   // against, so a continuation page is either ranked against that same
   // dictionary or refused as a stale cursor.
   QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
+  // Data invariants: each adapter's expected published decisions per day, and
+  // case-law queries the corpus must answer. Unset skips that invariant.
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
+  DATA_INVARIANT_CASE_LAW_CANARIES: caseLawCanariesEnvSchema,
   /**
    * Optional here because an entrypoint that boots with the base environment
    * alone (a migration, a one-off script) may never open a connection. The

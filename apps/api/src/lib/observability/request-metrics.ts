@@ -170,6 +170,54 @@ export const emitSanctionsScreeningWorkMetric = ({
   });
 };
 
+const DATA_INVARIANT_METRIC = "DataInvariantUnhealthy";
+
+type DataInvariantMetricInput = {
+  /** A stable id from `DATA_INVARIANT_ID`: a closed set, so a safe dimension. */
+  invariant: string;
+  owner: string;
+  severity: string;
+  status: "held" | "violated" | "errored";
+  checked: number;
+  findings: number;
+};
+
+/**
+ * One evaluated data invariant: 0 when it held, 1 when it was violated or
+ * could not be checked. Emitted on every run, so an alarm can also treat a
+ * missing datapoint as breaching: a runner that stopped is not a healthy one.
+ */
+export const emitDataInvariantMetric = ({
+  invariant,
+  owner,
+  severity,
+  status,
+  checked,
+  findings,
+}: DataInvariantMetricInput): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["invariant", "severity"]],
+          Metrics: [{ Name: DATA_INVARIANT_METRIC, Unit: "Count" }],
+        },
+      ],
+    },
+    event: "data_invariant.evaluated",
+    invariant,
+    severity,
+    // Plain log properties; deliberately absent from the dimensions.
+    owner,
+    status,
+    checked,
+    findings,
+    [DATA_INVARIANT_METRIC]: status === "held" ? 0 : 1,
+  });
+};
+
 const EVENT_LOOP_DELAY_METRIC = {
   max: "EventLoopDelayMax",
   p99: "EventLoopDelayP99",

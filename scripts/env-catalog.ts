@@ -82,6 +82,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "MCP_READ_PUBLIC_ORG_BYTES",
   "MCP_READ_PUBLIC_USER_BYTES",
   "MCP_CASE_LAW_SEARCH_GUIDANCE",
+  "DATA_INVARIANT_CASE_LAW_CANARIES",
+  "DATA_INVARIANT_CASE_LAW_DAILY_BANDS",
   "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
@@ -399,6 +401,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   CORPUS_INDEX_Q09_ENDPOINT: "Corpus index mutation endpoint.",
   CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
+  DATA_INVARIANT_CASE_LAW_CANARIES:
+    'Case-law queries the corpus must answer, as a JSON array of {"country","query"} (at most 32). The hourly data-invariant run searches each and reports any that returns nothing. Unset or "[]" skips the check.',
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS:
+    'Expected published decisions per day for each ingestion adapter, as a JSON array of {"adapterKey","min","max"}. The hourly data-invariant run reports an enabled source outside its band. Unset or "[]" skips the check.',
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
@@ -772,6 +778,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DATABASE_RLS_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_ROOT_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_STATEMENT_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
+  DATA_INVARIANT_CASE_LAW_CANARIES: ENV_CREDENTIAL_KIND.notCredential,
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: ENV_CREDENTIAL_KIND.notCredential,
   DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   DB_HOST: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_BUSY_WINDOWS: ENV_CREDENTIAL_KIND.notCredential,
