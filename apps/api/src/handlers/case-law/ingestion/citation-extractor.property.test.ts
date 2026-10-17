@@ -114,7 +114,7 @@ test(
   "Commission case numbers require a nearby official-language cue",
   () => {
     assertProperty(
-      "commission-case-numbers-require-official-language-cue",
+      "Commission case numbers require a nearby official-language cue",
       fc.property(commissionCaseNumber, (caseNumber) => {
         expect(extractCitations([{ index: 0, text: caseNumber }])).toEqual([]);
         for (const { cue } of COMMISSION_CASE_CUES) {
