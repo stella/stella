@@ -424,7 +424,7 @@ const FlowEditorForm = ({
         ? await idempotentSubmit.run({
             operation: "api.flows",
             body,
-            send: api.flows.post,
+            send: (input) => api.flows.post(input),
           })
         : await api
             .flows({ flowId: toSafeId<"flowDefinition">(flowId) })

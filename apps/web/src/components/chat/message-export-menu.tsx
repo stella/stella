@@ -123,11 +123,10 @@ export const MessageExportMenu = ({
             format: "docx" as const,
             citationStyle: hasCitations ? citationStyle : ("none" as const),
           },
-          send: (body, request) =>
+          send: (body) =>
             api.chat
               .threads({ threadId: threadRef.threadId })
               .export.post(body, {
-                ...request,
                 query:
                   threadRef.scope === "workspace"
                     ? {

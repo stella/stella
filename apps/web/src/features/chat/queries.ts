@@ -26,12 +26,9 @@ import { detached } from "@/lib/detached";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
-import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
-import { createUuid } from "@/lib/uuid";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
@@ -364,20 +361,12 @@ const fetchFileChatThread = async ({
   };
 };
 
-type TemplateChatThreadFetchOptions = TemplateChatThreadKey & {
-  request: IdempotentRequest;
-};
-
 const fetchTemplateChatThread = async ({
   templateId,
-  request,
-}: TemplateChatThreadFetchOptions): Promise<ChatThreadId> => {
-  const response = await api.chat["template-thread"].post(
-    {
-      templateId: toSafeId<"template">(templateId),
-    },
-    request,
-  );
+}: TemplateChatThreadKey): Promise<ChatThreadId> => {
+  const response = await api.chat["template-thread"].post({
+    templateId: toSafeId<"template">(templateId),
+  });
 
   return toChatThreadId(unwrapEden(response).threadId);
 };
@@ -712,14 +701,11 @@ export const materializeFileChatThread = async ({
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
   const response = await api.chat
     .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post(
-      {
-        entityId: toSafeId<"entity">(key.entityId),
-        fieldId: toSafeId<"field">(key.fieldId),
-        threadId: toSafeId<"chatThread">(draftThreadId),
-      },
-      createSubmitIntent(() => draftThreadId).request(),
-    );
+    ["file-thread"].post({
+      entityId: toSafeId<"entity">(key.entityId),
+      fieldId: toSafeId<"field">(key.fieldId),
+      threadId: toSafeId<"chatThread">(draftThreadId),
+    });
 
   const data = unwrapEden(response);
   const threadId = toChatThreadId(data.threadId);
@@ -769,20 +755,13 @@ type TemplateChatThreadOptionsArgs = {
 export const templateChatThreadOptions = ({
   activeOrganizationId,
   key,
-}: TemplateChatThreadOptionsArgs) => {
-  const intent = createSubmitIntent(createUuid);
-  return queryOptions({
+}: TemplateChatThreadOptionsArgs) =>
+  queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.templateThread(activeOrganizationId, key),
-    queryFn: async () => {
-      const request = intent.request();
-      const result = await fetchTemplateChatThread({ ...key, request });
-      intent.complete(request.headers["Idempotency-Key"]);
-      return result;
-    },
+    queryFn: async () => await fetchTemplateChatThread(key),
   });
-};
 
 /**
  * The reader's own conversation about a decision, found on the server by

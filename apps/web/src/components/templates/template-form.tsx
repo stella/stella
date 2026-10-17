@@ -2063,11 +2063,8 @@ export const TemplateForm = ({
           clauseOverrides,
           ...(parentId !== null && { parentId: toSafeId<"entity">(parentId) }),
         },
-        send: (body, request) =>
-          api
-            .templates({ templateId })
-            ["fill-to"]({ workspaceId })
-            .post(body, request),
+        send: (body) =>
+          api.templates({ templateId })["fill-to"]({ workspaceId }).post(body),
       });
 
       if (response.error) {

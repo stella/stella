@@ -19,13 +19,10 @@ export const useAddWorkspaceMember = () => {
   const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async ({ workspaceId, userId }: AddMemberVars, request) => {
-      const response = await api.workspaces({ workspaceId }).members.put(
-        {
-          userId: toSafeId<"user">(userId),
-        },
-        request,
-      );
+    mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
+      const response = await api.workspaces({ workspaceId }).members.put({
+        userId: toSafeId<"user">(userId),
+      });
 
       return unwrapEden(response);
     },

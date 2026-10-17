@@ -80,8 +80,10 @@ export const BilingualDocumentDialog = ({
     mutationFn: async () => {
       const response = await submit.run({
         operation: `bilingual-create:${workspaceId}`,
-        send: api.entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .bilingual.post,
+        send: (body) =>
+          api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .bilingual.post(body),
         body: {
           entityId: toSafeId<"entity">(entityId),
           fieldId: toSafeId<"field">(fieldId),

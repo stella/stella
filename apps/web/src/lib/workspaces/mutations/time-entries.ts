@@ -223,12 +223,8 @@ export const useSplitTimeEntry = () => {
   const analytics = useAnalytics();
 
   return useIdempotentMutation({
-    mutationFn: async (
-      { workspaceId, ...body }: SplitTimeEntryVars,
-      request,
-    ) => {
+    mutationFn: async ({ workspaceId, ...body }: SplitTimeEntryVars) => {
       await sendTimeEntryMutation({
-        headers: request.headers,
         workspaceId,
         mutation: {
           type: "split",

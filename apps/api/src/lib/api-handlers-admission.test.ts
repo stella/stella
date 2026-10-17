@@ -135,6 +135,39 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test("undeclared request replay rejects keys before running the handler", async () => {
+    let calls = 0;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { chat: ["create"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "assistant_chat" },
+      },
+      async function* () {
+        calls += 1;
+        return Result.ok({ ok: true });
+      },
+    );
+    const rejected = await endpoint.handler(
+      asTestRaw({
+        ...context(),
+        request: new Request("https://example.test/action", {
+          headers: { "Idempotency-Key": "unsupported-intent" },
+        }),
+      }),
+    );
+    expect(rejected).toMatchObject({
+      code: 400,
+      response: {
+        message: expect.stringContaining("does not support Idempotency-Key"),
+      },
+    });
+    expect(calls).toBe(0);
+    expect(await endpoint.handler(asTestRaw(context()))).toEqual({ ok: true });
+    expect(calls).toBe(1);
+  });
+
   test("each refusal preserves response headers and exposes only its curated contract", async () => {
     await withFeature(true, async () => {
       const previousContact = env.ACTION_LIMIT_CONTACT_URL;

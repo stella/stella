@@ -164,7 +164,8 @@ export const AddEntityMenu = ({
         ? await idempotentSubmit.run({
             operation: 'api.entities({workspaceId})["blank-document"]',
             body: input,
-            send: api.entities({ workspaceId })["blank-document"].put,
+            send: (body) =>
+              api.entities({ workspaceId })["blank-document"].put(body),
           })
         : await idempotentSubmit.run({
             operation:
@@ -173,8 +174,10 @@ export const AddEntityMenu = ({
               ...input,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
             },
-            send: api.entities({ workspaceId })["blank-document-from-style-set"]
-              .put,
+            send: (body) =>
+              api
+                .entities({ workspaceId })
+                ["blank-document-from-style-set"].put(body),
           });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));

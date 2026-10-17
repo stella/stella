@@ -595,10 +595,10 @@ export const useTemplateStudioSlashMenu = ({
     const response = await idempotentSubmit.run({
       operation: `templates.${templateId}.clauses.create`,
       body: { clauseId: toSafeId<"clause">(clauseId), slotName },
-      send: (body, request) =>
+      send: (body) =>
         api
           .templates({ templateId: toSafeId<"template">(templateId) })
-          .clauses.put(body, request),
+          .clauses.put(body),
     });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {

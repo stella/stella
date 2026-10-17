@@ -54,7 +54,7 @@ export const useCreateBBoxes = ({
       id: justification.id,
     },
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
-    mutationFn: async (_variables, request) => {
+    mutationFn: async () => {
       if (justification.boundingBoxes || inflight.has(justification.id)) {
         return undefined;
       }
@@ -63,12 +63,9 @@ export const useCreateBBoxes = ({
 
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["bounding-boxes"].post(
-          {
-            justificationId: toSafeId<"justification">(justification.id),
-          },
-          request,
-        );
+        ["bounding-boxes"].post({
+          justificationId: toSafeId<"justification">(justification.id),
+        });
 
       return unwrapEden(response);
     },

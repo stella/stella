@@ -101,7 +101,7 @@ export const ChatMessageActionsMenu = ({
 
   const fork = useIdempotentMutation({
     idempotencyScope: `chat.${threadRef.threadId}.${message.id}.fork`,
-    mutationFn: async (_destination: ForkDestination, request) => {
+    mutationFn: async (_destination: ForkDestination) => {
       if (pendingForkThreadId.current === null) {
         pendingForkThreadId.current = createChatThreadId();
       }
@@ -113,7 +113,6 @@ export const ChatMessageActionsMenu = ({
             upToMessageId: toSafeId<"chatMessage">(message.id),
           },
           {
-            ...request,
             query: workspaceId
               ? { workspaceId: toSafeId<"workspace">(workspaceId) }
               : {},

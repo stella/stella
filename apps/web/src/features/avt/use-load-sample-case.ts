@@ -42,7 +42,7 @@ export const useLoadSampleCase = ({
                 // Used only when the matter has no file property yet.
                 filePropertyName: t("common.documents"),
               },
-              send: listsApi["sample-case"].post,
+              send: (body) => listsApi["sample-case"].post(body),
             }),
           ),
         openList: async (listId) =>

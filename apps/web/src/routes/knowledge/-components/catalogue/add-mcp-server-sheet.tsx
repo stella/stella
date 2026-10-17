@@ -132,8 +132,8 @@ export const AddMcpServerSheet = ({
   });
 
   const addServerMutation = useIdempotentMutation({
-    mutationFn: async (params: AddServerParams, request) => {
-      const response = await api.mcp.connectors.post(params, request);
+    mutationFn: async (params: AddServerParams) => {
+      const response = await api.mcp.connectors.post(params);
       return unwrapEden(response);
     },
     onSuccess: (data, { url }) => {
@@ -158,17 +158,11 @@ export const AddMcpServerSheet = ({
   });
 
   const saveTokenMutation = useIdempotentMutation({
-    mutationFn: async (
-      payload: { connectorSlug: string; token: string },
-      request,
-    ) => {
-      const response = await api.mcp.connections.post(
-        {
-          connectorSlug: payload.connectorSlug,
-          token: payload.token,
-        },
-        request,
-      );
+    mutationFn: async (payload: { connectorSlug: string; token: string }) => {
+      const response = await api.mcp.connections.post({
+        connectorSlug: payload.connectorSlug,
+        token: payload.token,
+      });
       return unwrapEden(response);
     },
     onSuccess: () => {

@@ -1324,8 +1324,23 @@ export const runCheckedScopedHandler = async <
               }),
     });
   const key = ctx.request.headers.get("Idempotency-Key");
-  if (config.idempotency === undefined || key === null) {
+  if (key === null) {
     return await run(ctx);
+  }
+  if (config.idempotency === undefined) {
+    return await runSafeHandler({
+      ctx,
+      contentDelivery: undefined,
+      async *handler() {
+        return yield* Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+          }),
+        );
+      },
+    });
   }
   return await runSafeHandler({
     ctx,

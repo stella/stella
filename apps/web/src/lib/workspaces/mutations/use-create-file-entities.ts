@@ -72,7 +72,6 @@ type PreparedFileEntityUpload = {
 
 type PrepareFolderTreeUploadOptions = {
   workspaceId: string;
-  headers: Record<string, string>;
   parentId: string | null;
   propertyId: string | null;
   plan: DroppedFolderUploadPlan;
@@ -85,7 +84,6 @@ type PreparedFolderTreeUpload = {
 };
 
 const prepareFolderTreeUpload = async ({
-  headers,
   workspaceId,
   parentId,
   propertyId,
@@ -105,15 +103,12 @@ const prepareFolderTreeUpload = async ({
 
   const response = await api
     .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["entity-create"].tree.post(
-      {
-        propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
-        parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-        directories: plan.directories,
-        files,
-      },
-      { headers },
-    );
+    ["entity-create"].tree.post({
+      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+      directories: plan.directories,
+      files,
+    });
 
   if (response.error) {
     throw toAPIError(response.error);
@@ -775,7 +770,6 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty(request) : null;
         const preparedTree = await prepareFolderTreeUpload({
-          headers: (await deriveIdempotentRequest(request, "tree")).headers,
           workspaceId,
           parentId,
           propertyId,

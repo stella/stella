@@ -249,18 +249,15 @@ export const useDuplicateWorkspace = () => {
   const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async (
-      { includeContent, workspaceId }: DuplicateWorkspaceVars,
-      request,
-    ) => {
+    mutationFn: async ({
+      includeContent,
+      workspaceId,
+    }: DuplicateWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .duplicate.post(
-          {
-            includeContent,
-          },
-          request,
-        );
+        .duplicate.post({
+          includeContent,
+        });
 
       return unwrapEden(response);
     },

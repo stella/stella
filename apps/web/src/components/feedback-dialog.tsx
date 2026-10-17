@@ -65,7 +65,6 @@ import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
-import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const RATE_LIMITED_STATUS = 429;
@@ -75,17 +74,15 @@ type FeedbackRequestBody = ReturnType<typeof buildFeedbackRequestBody>;
 type SubmitFeedbackReportOptions = {
   channel: FeedbackChannel;
   body: FeedbackRequestBody;
-  request: IdempotentRequest;
 };
 
 const submitFeedbackReport = async ({
   channel,
   body,
-  request,
 }: SubmitFeedbackReportOptions): Promise<FeedbackReceiptView> => {
   switch (channel) {
     case FEEDBACK_CHANNELS.account:
-      return unwrapEden(await api.feedback.post(body, request));
+      return unwrapEden(await api.feedback.post(body));
     case FEEDBACK_CHANNELS.public: {
       // The intake parses the raw text itself so it can reject unknown keys.
       const data = unwrapEden(
@@ -191,8 +188,7 @@ const FeedbackReport = ({
           report,
           route,
         }),
-        send: async (body, request) =>
-          await submitFeedbackReport({ channel, body, request }),
+        send: async (body) => await submitFeedbackReport({ channel, body }),
       }),
     onSuccess: (_response, report) => {
       analytics.captureFeedbackReportSubmitted({

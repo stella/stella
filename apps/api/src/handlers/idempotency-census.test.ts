@@ -11,6 +11,48 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "The one-time response contains credential material that must not be retained.",
   "src/handlers/api-keys/personal/create.ts":
     "The one-time response contains credential material that must not be retained.",
+  "src/handlers/chat/export/create.ts":
+    "Writes an export object to S3 outside the database transaction.",
+  "src/handlers/chat/fork/create.ts":
+    "Copies S3 objects and retains its native fork deduplication and cleanup lifecycle.",
+  "src/handlers/document-translations/runs/create.ts":
+    "Retains durable run admission and worker handoff outside the request transaction.",
+  "src/handlers/entities/bilingual/create.ts":
+    "Creates stored document bytes through the durable upload lifecycle.",
+  "src/handlers/entities/blank-document/create.ts":
+    "Creates stored document bytes through the durable upload lifecycle.",
+  "src/handlers/entities/from-legal-source/create.ts":
+    "Creates stored document bytes through the durable upload lifecycle.",
+  "src/handlers/entities/ocr/create.ts":
+    "Retains native processing-run deduplication by source version.",
+  "src/handlers/feedback/create.ts":
+    "Submits to the detached feedback store outside the organization transaction.",
+  "src/handlers/files/email-attachment/create.ts":
+    "Saves attachment bytes through the durable upload lifecycle.",
+  "src/handlers/flows/create.ts":
+    "Synchronizes the scheduled trigger after the database mutation.",
+  "src/handlers/lists/items/comments/create.ts":
+    "Fans out mention notifications after the comment transaction commits.",
+  "src/handlers/lists/sample-case/create.ts":
+    "Retains its native sample deduplication and durable document upload lifecycle.",
+  "src/handlers/lists/verifications/create.ts":
+    "Retains durable run admission and queue handoff outside the request transaction.",
+  "src/handlers/style-sets/create.ts":
+    "Stores a style package through the durable upload lifecycle.",
+  "src/handlers/style-sets/from-editor/create.ts":
+    "Stores generated style-package bytes through the durable upload lifecycle.",
+  "src/handlers/template-packs/installs/create.ts":
+    "Retains native install deduplication while storing templates through durable uploads.",
+  "src/handlers/templates/blank/create.ts":
+    "Stores generated template bytes through the durable upload lifecycle.",
+  "src/handlers/templates/create.ts":
+    "Stores template bytes through the durable upload lifecycle.",
+  "src/handlers/templates/fills/create.ts":
+    "Creates filled document bytes through the durable upload lifecycle.",
+  "src/handlers/templates/from-style-set/create.ts":
+    "Stores generated template bytes through the durable upload lifecycle.",
+  "src/handlers/templates/from-styles/create.ts":
+    "Stores generated template bytes through the durable upload lifecycle.",
   "src/handlers/desktop-time-entries/create.ts":
     "Public desktop authentication establishes its organization inside the handler.",
   "src/handlers/legal-reader/answers/create.ts":
@@ -40,6 +82,9 @@ const resolveImport = (file: string, specifier: string) => {
 };
 
 const collectCreateRoutes = (file: string, source: string) => {
+  if (!/\b(?:post|put)\b/u.test(source)) {
+    return new Set<string>();
+  }
   const tree = parse(source);
   const imports = new Map<string, string>();
   for (const statement of tree.statements) {
