@@ -15,6 +15,7 @@ import { rootCheckGate } from "./ci-root-check-gate";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -896,6 +897,21 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (step.name === "CLI sharded registry and derived runtime guard") {
+    const run = v.parse(v.string(), fields.run);
+    const continuation = " \\";
+    const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
+    const additions = CI_GENERATED_OUTPUTS.cliRegistry
+      .filter((output) => !run.includes(`  ${output}${continuation}`))
+      .map((output) => `  ${output}${continuation}`)
+      .join("\n");
+    if (additions.length > 0) {
+      expect(run).toContain(anchor);
+      return Object.assign(step, {
+        run: run.replace(anchor, () => `${anchor}\n${additions}`),
+      });
+    }
+  }
   if (
     step.name === "Test oxlint plugins" &&
     fields.run ===
