@@ -15,6 +15,7 @@ const FILTER_LABELS = {
   courts: "court",
   category: "filterCategory",
   hasLegalSentence: "filterLegalSentence",
+  provision: "reference",
   dateFrom: "from",
   dateTo: "to",
   decisionType: "filterType",
@@ -65,6 +66,7 @@ export const searchNoticeDetails = (
       case "no_hits":
         noHits = true;
         break;
+      case "provision_cited_widely":
       case "many_required_terms":
         break;
       default:

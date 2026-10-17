@@ -54,6 +54,31 @@ export const appInputSchema = (schema: unknown) => {
   return Object.fromEntries(Object.entries(value));
 };
 
+/** Only the metadata browser controls consume belongs in their bundle. */
+export const appInputProjection = (schema: Record<string, unknown>) => {
+  const properties = schema["properties"];
+  if (
+    typeof properties !== "object" ||
+    properties === null ||
+    Array.isArray(properties)
+  ) {
+    return panic("App tool input must declare object properties");
+  }
+  return {
+    properties: Object.keys(properties),
+    arrayLimits: Object.fromEntries(
+      Object.entries(properties).flatMap(([name, field]) =>
+        typeof field === "object" &&
+        field !== null &&
+        "maxItems" in field &&
+        typeof field.maxItems === "number"
+          ? [[name, field.maxItems]]
+          : [],
+      ),
+    ),
+  };
+};
+
 /** Browser-side input schemas for the tools presentation apps call. */
 export const mcpAppInputArtifacts = (generatedRoot: string) => {
   const tools = [
@@ -70,6 +95,10 @@ export const mcpAppInputArtifacts = (generatedRoot: string) => {
     {
       path: path.join(generatedRoot, "input-schemas.json"),
       contents: `${JSON.stringify(schemas, null, 2)}\n`,
+    },
+    {
+      path: path.join(generatedRoot, "input-projections.json"),
+      contents: `${JSON.stringify(Object.fromEntries(Object.entries(schemas).map(([name, schema]) => [name, appInputProjection(schema)])), null, 2)}\n`,
     },
   ];
 };

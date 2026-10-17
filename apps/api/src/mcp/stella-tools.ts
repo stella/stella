@@ -2290,7 +2290,7 @@ const readSearchProvision = async ({
   context,
   country,
 }: {
-  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  args: v.InferOutput<typeof searchCaseLawArgs>;
   context: McpRequestContext;
   country: string;
 }): Promise<SearchProvisionArgRead> => {
@@ -2330,7 +2330,7 @@ const readSearchProvision = async ({
 };
 
 type ListSearchCaseLawProvisionOptions = {
-  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  args: v.InferOutput<typeof searchCaseLawArgs>;
   context: McpRequestContext;
   country: NonNullable<ReturnType<typeof publicCaseLawCountry>>;
   /** Absent when the call named neither queries nor a provision. */

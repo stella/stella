@@ -124,20 +124,9 @@ export const caseLawSearchWarnings = ({
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
  */
-export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
-  "filter_read",
-  "filter_dropped",
-  "many_required_terms",
-  "provision_cited_widely",
-] as const;
-
-type AgentCaseLawSearchWarningCode =
-  (typeof AGENT_CASE_LAW_SEARCH_WARNING_CODES)[number];
-
 const agentWarningText = { message: v.string(), hint: v.string() };
 
-export const agentCaseLawSearchWarningSchema = v.variant("code", [
-  ...caseLawSearchWarningSchema.options,
+const agentWarningSchemas = [
   v.strictObject({
     code: v.literal("filter_read"),
     filter: caseLawSearchFilterSchema,
@@ -156,10 +145,28 @@ export const agentCaseLawSearchWarningSchema = v.variant("code", [
     code: v.literal("many_required_terms"),
     ...agentWarningText,
   }),
+  v.strictObject({
+    code: v.literal("provision_cited_widely"),
+    ...agentWarningText,
+  }),
+] as const;
+
+export const agentCaseLawSearchWarningSchema = v.variant("code", [
+  ...caseLawSearchWarningSchema.options,
+  ...agentWarningSchemas,
 ]);
 
 export type AgentCaseLawSearchWarning = v.InferOutput<
   typeof agentCaseLawSearchWarningSchema
+>;
+
+export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = agentWarningSchemas.map(
+  ({ entries }) => entries.code.literal,
+);
+
+type AgentCaseLawSearchWarningCode = Exclude<
+  AgentCaseLawSearchWarning["code"],
+  CaseLawSearchWarningCode
 >;
 
 /**

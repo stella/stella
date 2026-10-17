@@ -4,6 +4,7 @@ export const MCP_APP_GENERATED_OUTPUTS = {
     "packages/mcp-apps/src/shared/generated/contracts.js",
     "packages/mcp-apps/src/shared/generated/contracts.d.ts",
     "packages/mcp-apps/src/shared/generated/input-schemas.json",
+    "packages/mcp-apps/src/shared/generated/input-projections.json",
   ],
   bundles: [
     "packages/mcp-apps/src/shared/generated/messages.json",

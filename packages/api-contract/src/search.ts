@@ -117,6 +117,7 @@ export const CASE_LAW_SEARCH_FILTERS = [
   "courts",
   "category",
   "hasLegalSentence",
+  "provision",
   "dateFrom",
   "dateTo",
   "decisionType",
