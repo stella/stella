@@ -365,7 +365,7 @@ describe.skipIf(!enabled)(
             );
             expect(outcome).toEqual({
               type: "deferred",
-              index: staged.name,
+              step: staged.name,
               retryAfterMs: config.retryMs,
             });
             expect(await readFinal()).toEqual(before);
