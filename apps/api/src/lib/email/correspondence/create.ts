@@ -25,15 +25,15 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  deriveDataBoxDirectionBasis,
-  DIRECTION_BY_BASIS,
-} from "@/api/lib/data-box/direction";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import {
   assertCorrespondenceAccess,
   type CorrespondenceActor,
 } from "@/api/lib/email/correspondence/access";
+import {
+  deriveDataBoxDirectionBasis,
+  DIRECTION_BY_BASIS,
+} from "@/api/lib/email/correspondence/data-box/direction";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 

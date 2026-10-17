@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   deriveDataBoxDirectionBasis,
   DIRECTION_BY_BASIS,
-} from "@/api/lib/data-box/direction";
+} from "@/api/lib/email/correspondence/data-box/direction";
 
 const ORGANIZATION_BOX = "xyz9876";
 const COURT_BOX = "abc2def";

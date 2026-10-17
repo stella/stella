@@ -8,7 +8,7 @@ import {
   DATA_BOX_MESSAGE_LIMITS,
   dataBoxMessageText,
   parseDataBoxMessage,
-} from "@/api/lib/data-box/zfo";
+} from "@/api/lib/email/correspondence/data-box/zfo";
 import {
   FIXTURE_MESSAGE,
   messageXml,

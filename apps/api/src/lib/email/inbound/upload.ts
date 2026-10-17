@@ -27,17 +27,17 @@ import {
   type AuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { DIRECTION_BY_BASIS } from "@/api/lib/data-box/direction";
-import {
-  parseDataBoxMessage,
-  type DataBoxMessageParseError,
-  type ParsedDataBoxMessage,
-} from "@/api/lib/data-box/zfo";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   createCorrespondence,
   retireCorrespondenceSource,
 } from "@/api/lib/email/correspondence/create";
+import { DIRECTION_BY_BASIS } from "@/api/lib/email/correspondence/data-box/direction";
+import {
+  parseDataBoxMessage,
+  type DataBoxMessageParseError,
+  type ParsedDataBoxMessage,
+} from "@/api/lib/email/correspondence/data-box/zfo";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
 import { PARSE_DROP_REASON } from "@/api/lib/email/inbound/ingest";
 import {

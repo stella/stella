@@ -16,11 +16,11 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { parseDataBoxMessage } from "@/api/lib/data-box/zfo";
 import {
   createCorrespondence,
   retireCorrespondenceSource,
 } from "@/api/lib/email/correspondence/create";
+import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { zfoFile } from "@/api/tests/fixtures/zfo";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {

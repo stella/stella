@@ -158,7 +158,7 @@ no full-table backfill is needed.
 A `.zfo` file, a Czech data-box (ISDS) message exported as a CMS SignedData
 over the message XML, takes the same path and files a `data_box` record.
 
-- `parseDataBoxMessage` (`src/lib/data-box/zfo.ts`) reads the envelope and the
+- `parseDataBoxMessage` (`src/lib/email/correspondence/data-box/zfo.ts`) reads the envelope and the
   base64 files without network access. The file is bounded by the document
   upload limit and its files by the correspondence attachment limit; a
   document type declaration is refused, so no entity is expanded or fetched.

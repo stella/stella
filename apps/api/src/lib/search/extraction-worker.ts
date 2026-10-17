@@ -33,7 +33,7 @@ import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import {
   dataBoxMessageText,
   parseDataBoxMessage,
-} from "@/api/lib/data-box/zfo";
+} from "@/api/lib/email/correspondence/data-box/zfo";
 import {
   parseEmail,
   parsedEmailToText,

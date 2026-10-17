@@ -6,11 +6,11 @@ import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   dataBoxIdSchema,
   saveOrganizationDataBoxes,
-} from "@/api/lib/data-box/organization-boxes";
-import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+} from "@/api/lib/email/correspondence/data-box/organization-boxes";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
