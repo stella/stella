@@ -462,7 +462,7 @@ export const AIKeyRequiredDialog = ({
       : {}),
   });
   const defaultsView = useQueryView(defaultsQuery);
-  useQueryViewError(defaultsView);
+  useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =
     defaultsView.type === "items" ? defaultsView.items.defaultModels : null;
   const providerDefaultModels =

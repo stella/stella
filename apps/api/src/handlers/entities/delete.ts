@@ -14,7 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -340,9 +340,8 @@ export const deleteEntitiesHandler = async function* ({
   for (const entity of deletedEntities) {
     provider
       .removeEntity({ entityId: entity.id, workspaceId })
-      .catch((error: unknown) =>
-        captureError(
-          error,
+      .catch(
+        createErrorCapture(
           handlerErrorContext("deleteEntitiesHandler.rejection"),
         ),
       );

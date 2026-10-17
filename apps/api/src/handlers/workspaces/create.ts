@@ -14,7 +14,7 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -327,9 +327,8 @@ export const createWorkspaceHandler = async function* ({
     }),
   );
 
-  flushWorkspaceSearchRepairs([txResult.id]).catch((error: unknown) =>
-    captureError(
-      error,
+  flushWorkspaceSearchRepairs([txResult.id]).catch(
+    createErrorCapture(
       handlerErrorContext("createWorkspaceHandler.flushWorkspaceSearchRepairs"),
     ),
   );

@@ -50,7 +50,7 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -350,9 +350,8 @@ export const persistMessage = async (props: PersistMessageProps) => {
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
     props
       .indexThread(props.threadId)
-      .catch((error: unknown) =>
-        captureError(
-          error,
+      .catch(
+        createErrorCapture(
           handlerErrorContext("persistMessage.props_indexThread"),
         ),
       );
@@ -1219,9 +1218,8 @@ export const persistAcceptedMessageWithClaim = async ({
   }
   persistenceProps
     .indexThread(persistenceProps.threadId)
-    .catch((error: unknown) =>
-      captureError(
-        error,
+    .catch(
+      createErrorCapture(
         handlerErrorContext(
           "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
         ),
@@ -1263,9 +1261,8 @@ export const persistClaimedReplayMessage = async ({
   }
   persistenceProps
     .indexThread(persistenceProps.threadId)
-    .catch((error: unknown) =>
-      captureError(
-        error,
+    .catch(
+      createErrorCapture(
         handlerErrorContext(
           "persistClaimedReplayMessage.persistenceProps_indexThread",
         ),

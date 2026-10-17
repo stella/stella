@@ -5,7 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { kanbanPlacementRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -141,21 +141,18 @@ export const createUpdateKanbanPlacement = ({
         completionNotices.map(
           async (notice) =>
             await notifyFlowRunActorOfCompletion(notice).catch(
-              (error: unknown) =>
-                captureError(
-                  error,
-                  handlerErrorContext(
-                    "createUpdateKanbanPlacement.notifyFlowRunActorOfCompletion",
-                  ),
+              createErrorCapture(
+                handlerErrorContext(
+                  "createUpdateKanbanPlacement.notifyFlowRunActorOfCompletion",
                 ),
+              ),
             ),
         ),
       );
 
       if (body.fields.length > 0) {
-        flushSearchRepairs([body.entityId]).catch((error: unknown) =>
-          captureError(
-            error,
+        flushSearchRepairs([body.entityId]).catch(
+          createErrorCapture(
             handlerErrorContext(
               "createUpdateKanbanPlacement.flushSearchRepairs",
             ),

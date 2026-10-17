@@ -22,7 +22,7 @@ import {
 } from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -371,9 +371,8 @@ const importContacts = createSafeRootHandler(
       result.status === "created" ? [result.contactId] : [],
     );
     if (createdContactIds.length > 0) {
-      flushContactSearchRepairs(createdContactIds).catch((error: unknown) =>
-        captureError(
-          error,
+      flushContactSearchRepairs(createdContactIds).catch(
+        createErrorCapture(
           handlerErrorContext("importContacts.flushContactSearchRepairs"),
         ),
       );

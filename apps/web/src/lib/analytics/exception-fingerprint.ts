@@ -206,15 +206,58 @@ const HASH_OFFSET = 14_695_981_039_346_656_037n;
 const HASH_PRIME = 1_099_511_628_211n;
 const HASH_BITS = 64;
 
+const MESSAGE_QUOTES = [
+  { open: '"', close: '"', escaping: "backslash" },
+  { open: "'", close: "'", escaping: "backslash" },
+  { open: "`", close: "`", escaping: "backslash" },
+  { open: "“", close: "”", escaping: "literal" },
+  { open: "‘", close: "’", escaping: "literal" },
+  { open: "«", close: "»", escaping: "literal" },
+] as const;
+
+/** Cache quote endings so unmatched escaped delimiters never rescan suffixes. */
+const redactQuotedMessageValues = (message: string): string => {
+  const endings = new Map<string, readonly number[]>();
+  for (const { open, close, escaping } of MESSAGE_QUOTES) {
+    const closingAt = Array.from({ length: message.length + 2 }, () => -1);
+    for (let index = message.length - 1; index >= 0; index -= 1) {
+      const character = message.at(index);
+      if (character === close) {
+        closingAt[index] = index;
+        continue;
+      }
+      const escaped = escaping === "backslash" && character === "\\";
+      const next = message.at(index + 1);
+      if (escaped && (next === undefined || /[\n\r\u2028\u2029]/u.test(next))) {
+        continue;
+      }
+      closingAt[index] = closingAt.at(index + (escaped ? 2 : 1)) ?? -1;
+    }
+    endings.set(open, closingAt);
+  }
+  const parts: string[] = [];
+  let index = 0;
+  while (index < message.length) {
+    const character = message.slice(index, index + 1);
+    const closing = endings.get(character)?.at(index + 1) ?? -1;
+    if (closing >= 0) {
+      parts.push("<value>");
+      index = closing + 1;
+      continue;
+    }
+    parts.push(character);
+    index += 1;
+  }
+  return parts.join("");
+};
+
 /** A bounded opaque identity; readable messages remain excluded from events. */
 const automaticMessageHash = (message: string): string => {
-  const normalized = message
-    .slice(0, AUTOMATIC_MESSAGE_LIMIT)
-    .replace(
-      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|“[^”]*”|‘[^’]*’|«[^»]*»/gu,
-      "<value>",
-    )
-    .replace(/https?:\/\/\S+|[^\s@]+@[^\s@]+\.[^\s@]+/gu, "<value>")
+  const normalized = redactQuotedMessageValues(
+    message.slice(0, AUTOMATIC_MESSAGE_LIMIT),
+  )
+    // An email match always starts at its whitespace/@ segment boundary.
+    .replace(/https?:\/\/\S+|(?<![^\s@])[^\s@]+@[^\s@]+\.[^\s@]+/gu, "<value>")
     .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/giu, "<id>")
     .replace(/\b[0-9a-f]{16,}\b|\b[0-9A-HJKMNP-TV-Z]{26}\b/giu, "<id>")
     .replace(/\b[A-Za-z_-]*\d[A-Za-z0-9_-]*\b/gu, "<id>")
@@ -247,7 +290,10 @@ export const automaticExceptionKey = ({
 }: AutomaticExceptionKeyOptions): ExceptionFingerprintKey => {
   const appOrigin = new URL(firstPartyOrigin).origin;
   for (const entry of entries.toReversed()) {
-    const frames = entry.stacktrace?.frames ?? [];
+    if (entry.stacktrace === undefined) {
+      continue;
+    }
+    const { frames } = entry.stacktrace;
     for (const frame of frames.toReversed()) {
       if (
         frame.in_app === false ||

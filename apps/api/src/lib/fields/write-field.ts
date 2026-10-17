@@ -11,7 +11,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type { CellMetadata } from "@/api/db/schema-validators";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
@@ -425,9 +425,8 @@ export const writeFieldValue = async function* ({
   }
 
   if (flushSearchRepairs) {
-    flushEntitySearchRepairs([entityId]).catch((error: unknown) =>
-      captureError(
-        error,
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(
         handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
       ),
     );

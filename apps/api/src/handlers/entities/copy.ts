@@ -26,7 +26,7 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -658,17 +658,14 @@ const copyToWorkspaceHandler = async function* ({
     .flushEntitySearchRepairs(
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
-    .catch((error: unknown) =>
-      captureError(error, handlerErrorContext("entityCopy.flushSearch")),
-    );
+    .catch(createErrorCapture(handlerErrorContext("entityCopy.flushSearch")));
 
   // Acceleration only: each run already committed with its copied source.
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch((error: unknown) =>
-    captureError(
-      error,
+  }).catch(
+    createErrorCapture(
       handlerErrorContext(
         "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
       ),
@@ -687,9 +684,8 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch((error: unknown) =>
-        captureError(
-          error,
+      .catch(
+        createErrorCapture(
           handlerErrorContext("entityCopy.enqueuePdfDerivative"),
         ),
       );
@@ -703,22 +699,22 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch((error: unknown) =>
-        captureError(error, handlerErrorContext("entityCopy.enqueueThumbnail")),
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.enqueueThumbnail")),
       );
   }
 
   // Sync search indexes
   dependencies
     .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch((error: unknown) =>
-      captureError(error, handlerErrorContext("entityCopy.syncTargetSearch")),
+    .catch(
+      createErrorCapture(handlerErrorContext("entityCopy.syncTargetSearch")),
     );
   if (deleteSource) {
     dependencies
       .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch((error: unknown) =>
-        captureError(error, handlerErrorContext("entityCopy.syncSourceSearch")),
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.syncSourceSearch")),
       );
   }
 

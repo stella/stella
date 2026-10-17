@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -141,11 +141,9 @@ export const deleteContactHandler = async function* ({
   }
 
   flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
-    (error: unknown) =>
-      captureError(
-        error,
-        handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
-      ),
+    createErrorCapture(
+      handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
+    ),
   );
 
   return Result.ok({});

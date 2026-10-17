@@ -9,7 +9,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -610,9 +610,8 @@ export const createEntityFromBuffer = async ({
   // another flow run. Keep the upload trigger out of this call site.
   dependencies
     .processExtraction(entityId)
-    .catch((error: unknown) =>
-      captureError(
-        error,
+    .catch(
+      createErrorCapture(
         handlerErrorContext(
           "createEntityFromBuffer.dependencies_processExtraction",
         ),
@@ -629,9 +628,8 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch((error: unknown) =>
-      captureError(
-        error,
+    .catch(
+      createErrorCapture(
         handlerErrorContext("entityBuffer.enqueuePdfDerivative"),
       ),
     );
@@ -646,8 +644,8 @@ export const createEntityFromBuffer = async ({
       userId,
       workspaceId,
     })
-    .catch((error: unknown) =>
-      captureError(error, handlerErrorContext("entityBuffer.enqueueThumbnail")),
+    .catch(
+      createErrorCapture(handlerErrorContext("entityBuffer.enqueueThumbnail")),
     );
 
   dependencies.broadcastWorkspaceResourceUpdated(

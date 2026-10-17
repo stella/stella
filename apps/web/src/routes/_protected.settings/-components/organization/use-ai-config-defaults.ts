@@ -39,7 +39,7 @@ export const useAIConfigDefaults = ({
       : {}),
   });
   const defaultsView = useQueryView(defaultsQuery);
-  useQueryViewError(defaultsView);
+  useQueryViewError(defaultsView, "useAIConfigDefaults:query");
   return {
     defaultModels:
       defaultsView.type === "items" ? defaultsView.items.defaultModels : null,

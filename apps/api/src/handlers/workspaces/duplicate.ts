@@ -17,7 +17,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -1034,9 +1034,8 @@ export const createDuplicateWorkspace = (
       // made durable: projection marks and immutable-source extraction runs.
       dependencies
         .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch((error: unknown) =>
-          captureError(
-            error,
+        .catch(
+          createErrorCapture(
             handlerErrorContext("matterDuplicate.flushMatterSearch"),
           ),
         );
@@ -1044,9 +1043,8 @@ export const createDuplicateWorkspace = (
         .flushEntitySearchRepairs(
           txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
         )
-        .catch((error: unknown) =>
-          captureError(
-            error,
+        .catch(
+          createErrorCapture(
             handlerErrorContext("matterDuplicate.flushEntitySearch"),
           ),
         );
@@ -1054,9 +1052,8 @@ export const createDuplicateWorkspace = (
       handoffCommittedDocumentProcessingRuns({
         enqueue: dependencies.enqueueDocumentProcessingRun,
         runIds: txResult.value.nativeExtractionRunIds,
-      }).catch((error: unknown) =>
-        captureError(
-          error,
+      }).catch(
+        createErrorCapture(
           handlerErrorContext(
             "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
           ),

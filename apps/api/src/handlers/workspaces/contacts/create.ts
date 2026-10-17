@@ -9,7 +9,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -209,9 +209,8 @@ export const createWorkspaceContactHandler = async function* ({
 
   dependencies
     .flushWorkspaceSearchRepairs([workspaceId])
-    .catch((error: unknown) =>
-      captureError(
-        error,
+    .catch(
+      createErrorCapture(
         handlerErrorContext(
           "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
         ),

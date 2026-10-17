@@ -23,7 +23,7 @@ import {
   validatePersonDetails,
 } from "@/api/handlers/contacts/person-details";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -361,8 +361,8 @@ export const updateContactHandler = async function* ({
     return Result.ok(outcome.row);
   }
 
-  flushContactSearchRepairs([contactId]).catch((error: unknown) =>
-    captureError(error, handlerErrorContext(CONTACT_REPAIR_KEY)),
+  flushContactSearchRepairs([contactId]).catch(
+    createErrorCapture(handlerErrorContext(CONTACT_REPAIR_KEY)),
   );
 
   return Result.ok(outcome.row);

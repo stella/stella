@@ -388,3 +388,57 @@ test("declared reasons remain distinct at every repeated causal class position",
     }),
   );
 });
+
+// Keep the previous normalization as a bounded parity oracle for message shapes.
+const originalAutomaticMessageHash = (message: string): string => {
+  const normalized = message
+    .slice(0, 8192)
+    .replace(
+      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|“[^”]*”|‘[^’]*’|«[^»]*»/gu,
+      "<value>",
+    )
+    .replace(/https?:\/\/\S+|[^\s@]+@[^\s@]+\.[^\s@]+/gu, "<value>")
+    .replace(/\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b/giu, "<id>")
+    .replace(/\b[0-9a-f]{16,}\b|\b[0-9A-HJKMNP-TV-Z]{26}\b/giu, "<id>")
+    .replace(/\b[A-Za-z_-]*\d[A-Za-z0-9_-]*\b/gu, "<id>")
+    .replace(/\d+(?:\.\d+)?/gu, "<number>")
+    .replace(/\s+/gu, " ")
+    .trim();
+  let hash = 14_695_981_039_346_656_037n;
+  for (const character of normalized) {
+    hash = BigInt.asUintN(
+      64,
+      hash * 1_099_511_628_211n + BigInt(character.codePointAt(0) ?? 0),
+    );
+  }
+  return hash.toString(16);
+};
+
+test("linear message redaction preserves existing quote and email fingerprints", () => {
+  const fragments = Array.from(
+    "\"'`“”‘’«»\\\n\r\u2028\u2029a@a.bhttps://x.test/_- ",
+  );
+  const messages = fc.oneof(
+    fc.string(),
+    fc.array(fc.constantFrom(...fragments)).map((parts) => parts.join("")),
+    fc.constantFrom(
+      'unmatched "before\\"after',
+      '"escaped\\"value" and “unicode\nvalue”',
+      '"backslash\\\nline" and ‘other’ «more»',
+      "prefix+name@example.test@next.invalid end",
+      "a@b@c.example xhttps://host.test p@https://host.test",
+    ),
+  );
+  assertProperty(
+    "linear message redaction preserves existing quote and email fingerprints",
+    fc.property(messages, (message) => {
+      expect(
+        automaticExceptionKey({
+          entries: [],
+          message,
+          firstPartyOrigin: "https://app.example",
+        }),
+      ).toBe(`browser:frameless.${originalAutomaticMessageHash(message)}`);
+    }),
+  );
+});

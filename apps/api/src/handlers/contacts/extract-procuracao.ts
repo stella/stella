@@ -9,7 +9,7 @@ import { Temporal } from "@stll/time";
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -392,8 +392,8 @@ const extractProcuracao = createSafeRootHandler(
 
     getS3()
       .delete(key)
-      .catch((error: unknown) =>
-        captureError(error, handlerErrorContext("extractProcuracao.rejection")),
+      .catch(
+        createErrorCapture(handlerErrorContext("extractProcuracao.rejection")),
       );
 
     return extractionResult;

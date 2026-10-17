@@ -9,7 +9,7 @@ import {
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -141,9 +141,8 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch((error: unknown) =>
-        captureError(
-          error,
+      upsertChatThreadSearchDocument(threadId).catch(
+        createErrorCapture(
           handlerErrorContext(
             "acceptMessageRevision.upsertChatThreadSearchDocument",
           ),

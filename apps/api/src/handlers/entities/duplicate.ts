@@ -19,7 +19,7 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -266,16 +266,12 @@ const duplicateEntityHandler = async function* ({
     .flushEntitySearchRepairs(
       txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
     )
-    .catch((error: unknown) =>
-      captureError(error, DUPLICATE_CAPTURE_CONTEXT.searchRepair),
-    );
+    .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair));
 
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch((error: unknown) =>
-    captureError(error, DUPLICATE_CAPTURE_CONTEXT.documentProcessing),
-  );
+  }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing));
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
@@ -288,9 +284,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch((error: unknown) =>
-      captureError(error, DUPLICATE_CAPTURE_CONTEXT.pdfDerivative),
-    );
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative));
     enqueueImageThumbnailOrMarkFailed({
       entityId: fileField.entityId,
       fieldId: fileField.fieldId,
@@ -299,9 +293,7 @@ const duplicateEntityHandler = async function* ({
       organizationId,
       userId,
       workspaceId,
-    }).catch((error: unknown) =>
-      captureError(error, DUPLICATE_CAPTURE_CONTEXT.imageThumbnail),
-    );
+    }).catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail));
   }
 
   return Result.ok({

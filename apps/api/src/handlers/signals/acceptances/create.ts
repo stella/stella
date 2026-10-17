@@ -20,7 +20,7 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -245,9 +245,8 @@ export const createAcceptSignal = (
           );
           dependencies
             .flushEntitySearchRepairs([created.entityId])
-            .catch((error: unknown) =>
-              captureError(
-                error,
+            .catch(
+              createErrorCapture(
                 handlerErrorContext("createAcceptSignal.rejection"),
               ),
             );

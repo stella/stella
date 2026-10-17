@@ -29,7 +29,7 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -992,9 +992,8 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch((error: unknown) =>
-        captureError(
-          error,
+      indexChatThread(newThreadId).catch(
+        createErrorCapture(
           handlerErrorContext("createForkThread.indexChatThread"),
         ),
       );

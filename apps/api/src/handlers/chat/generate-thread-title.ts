@@ -13,7 +13,7 @@ import {
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -249,9 +249,8 @@ const generateAdmittedThreadTitle = async ({
   // a failure is reported, never thrown. Awaited, so whoever waits for
   // this title (the turn's follow-ups) waits for its indexing too.
   if (updateResult.value) {
-    await indexThread(threadId).catch((error: unknown) =>
-      captureError(
-        error,
+    await indexThread(threadId).catch(
+      createErrorCapture(
         handlerErrorContext("generateAdmittedThreadTitle.indexThread"),
       ),
     );
