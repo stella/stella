@@ -1,0 +1,166 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "length",
+  "variant": "reasoning-only",
+  "source": "synthetic",
+  "basis": "Amazon Bedrock ConverseStream API reference: application/vnd.amazon.eventstream frames (messageStart, contentBlockStart/Delta/Stop, messageStop, metadata); reasoningContent deltas spend maxTokens before any text block",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "text": "[prompt]"
+                  }
+                ]
+              }
+            ],
+            "inferenceConfig": {
+              "maxTokens": 16,
+              "temperature": 0
+            },
+            "toolConfig": {
+              "tools": [
+                {
+                  "toolSpec": {
+                    "name": "mcp__external__delete",
+                    "inputSchema": {
+                      "json": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": ["name"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "description": "Delete a draft by name."
+                  }
+                }
+              ],
+              "toolChoice": {
+                "auto": {}
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream",
+          "x-amzn-requestid": "8e1f4c2a-3b6d-4f8e-a0c2-5d7e9f1b3a64"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "role": "assistant"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "reasoningContent": {
+                    "text": "Counting in words needs"
+                  }
+                }
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "reasoningContent": {
+                    "text": " every number up to five hundred"
+                  }
+                }
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "stopReason": "max_tokens"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "metrics": {
+                  "latencyMs": 912
+                },
+                "usage": {
+                  "inputTokens": 600,
+                  "outputTokens": 16,
+                  "totalTokens": 616
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "length",
+    "text": "",
+    "usage": {
+      "promptTokens": 600,
+      "completionTokens": 16,
+      "totalTokens": 616
+    }
+  }
+}
