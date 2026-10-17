@@ -18,10 +18,11 @@ import {
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
-  DocumentAstMetadata,
+  DecisionDocumentAst,
+  DecisionMetadata,
   Inline,
   ParagraphBlock,
   TableCell,
@@ -64,9 +65,9 @@ export type ParseNsDecisionInput = {
 };
 
 type ParseNsDecisionOutput = {
-  metadata: DocumentAstMetadata;
+  metadata: DecisionMetadata;
   sourceMetadata: NsSourceMetadata;
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -97,7 +98,7 @@ export const parseNsDecisionHtml = (
     blocks,
   );
 
-  const documentAst: DocumentAst = {
+  const documentAst: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "cz_ns",
@@ -216,7 +217,7 @@ type SourceMetadataTable = {
 };
 
 type MetadataResult = {
-  canonical: DocumentAstMetadata;
+  canonical: DecisionMetadata;
   source: NsSourceMetadata;
   relatedProceedingsTable: TableCell[][] | null;
 };
@@ -246,7 +247,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       $(node).replaceWith(nodes);
     });
 
-  const canonical: DocumentAstMetadata = {
+  const canonical: DecisionMetadata = {
     caseNumber: null,
     ecli: null,
     court: null,

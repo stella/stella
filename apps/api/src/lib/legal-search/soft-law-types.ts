@@ -1,6 +1,8 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import type {
   SourceFieldInventory,
   SourceSurfaceCensus,
@@ -15,17 +17,6 @@ import {
   type SoftLawFetch,
 } from "./soft-law-access-types";
 
-export const SOFT_LAW_KINDS = [
-  "methodology",
-  "recommendation",
-  "opinion",
-  "faq",
-  "guideline",
-  "position",
-  "inspection_report",
-  "annual_report",
-  "other",
-] as const;
 export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
 export const SOFT_LAW_LOCATOR_STATES = ["current", "historical"] as const;
 export const SOFT_LAW_BATCH_LIMIT = 100;
@@ -81,7 +72,7 @@ export type SoftLawStated<T> =
   | { state: "not_stated" };
 export type SoftLawMetadata = {
   title: string;
-  kind: (typeof SOFT_LAW_KINDS)[number];
+  kind: GuidanceKind;
   statedReference: SoftLawStated<string>;
   issuedOn: SoftLawStated<string>;
   validity: {
