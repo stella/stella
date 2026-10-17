@@ -25,7 +25,7 @@ import type {
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   resolveCaching,
-  resolveOrgAIModelForRole,
+  resolveOrgAIModelForTask,
   type OrgAIConfig,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -72,10 +72,10 @@ import {
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
   type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
@@ -243,7 +243,7 @@ const unavailable = (
 /**
  * The key a reader's run would call the provider with: the organization's
  * own fast-role provider when it configured one, the platform's otherwise.
- * The same rule `getTanStackTextModelInfoForRole` dispatches by.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by.
  */
 const readerKeyOf = ({
   orgAIConfig,
@@ -255,7 +255,7 @@ const readerKeyOf = ({
   if (orgAIConfig === null) {
     return { source: "platform" };
   }
-  const selection = resolveOrgAIModelForRole(orgAIConfig, "fast");
+  const selection = resolveOrgAIModelForTask(orgAIConfig, "short-text");
   return selection === null
     ? null
     : {
@@ -320,7 +320,7 @@ const runGeneration = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "public_corpus",
     feature: "case-law.analysis",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId,
     orgAIConfig,
     modelTier: admission.modelTier,
@@ -336,14 +336,18 @@ const runGeneration = async ({
 
   let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } = getTanStackTextModelInfoForTask(
+      "short-text",
+      orgAIConfig,
+      {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      },
+    );
+    const result = await generateTanStackObjectForTask({
       dataClass: "public_corpus",
-      organizationId,
-      modelTier: admission.modelTier,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
@@ -353,7 +357,7 @@ const runGeneration = async ({
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: input.systemPrompt,
@@ -683,11 +687,11 @@ export const generateAnalysis = async ({
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (Result.isError(available)) {
     return Result.err(available.error);

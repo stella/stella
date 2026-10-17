@@ -26,8 +26,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 import { preservesFrontmatter } from "../frontmatter-guard";
 
@@ -90,7 +90,7 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies HandlerConfig;
 
@@ -133,11 +133,11 @@ const createProposalFromComments = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const source = yield* Result.await(
@@ -225,7 +225,7 @@ const createProposalFromComments = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.apply_comments",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
       modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
@@ -234,12 +234,12 @@ const createProposalFromComments = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
           dataClass: "customer",
           admission: configuredModelAdmission({ modelAdmission }),
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "flex",
           orgAIConfig,
           managedAIResidency,
@@ -249,7 +249,7 @@ const createProposalFromComments = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:comments`,
           }),
           outputSchema: aiRevisionSchema,
