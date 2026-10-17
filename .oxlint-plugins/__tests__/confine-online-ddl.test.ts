@@ -58,6 +58,21 @@ describe(RULE, () => {
     ).toEqual([]);
   });
 
+  test("lowercase maintenance statements and escaped newlines read as SQL", async () => {
+    expect(
+      await lint(
+        [
+          'await connection.execute("reindex index concurrently public.x");',
+          'await connection.execute("analyze public.t");',
+          'await connection.execute("vacuum verbose \\"t\\"");',
+          "await connection.execute(`DROP\\nINDEX CONCURRENTLY public.x`);",
+          'const reason = "reindex artifacts are dropped first";',
+          'const reason2 = "analyze the table before the cutover";',
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2, 3, 4]);
+  });
+
   test("an index declaration's createSql is exempt, and reading it is the violation", async () => {
     expect(
       await lint(
@@ -88,6 +103,18 @@ describe(RULE, () => {
     expect(await lint(source, "apps/api/src/scripts/backfill.ts")).toEqual([
       1, 2,
     ]);
+  });
+
+  test("a namespace import does not open the gate either", async () => {
+    expect(
+      await lint(
+        [
+          'import * as gate from "./online-index-gate";',
+          "const runtime = gate.createOnlineIndexGate(options);",
+          'const ungated = gate["createUngatedTableGateForTests"];',
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3]);
   });
 
   test("the owner, tests, fixtures and the schema phase are out of scope", async () => {

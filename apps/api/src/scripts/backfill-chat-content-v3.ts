@@ -39,6 +39,16 @@ const run = async (): Promise<void> => {
     panic("Chat content backfill requires a database connection");
   }
   const connection = await openOnlineRepairConnection(url);
+  // The gate terminates this session when it cannot cancel its own work; the
+  // lock went with the session, and an unlock there would mask why.
+  let sessionStatus: "active" | "terminated" = "active";
+  const { terminate } = connection;
+  if (terminate) {
+    connection.terminate = async () => {
+      sessionStatus = "terminated";
+      await terminate();
+    };
+  }
   try {
     if (!args.includes("--apply")) {
       await connection.execute("BEGIN READ ONLY");
@@ -79,7 +89,9 @@ const run = async (): Promise<void> => {
             : `Chat content v3 backfill deferred at ${outcome.step}; rerun after ${String(outcome.retryAfterMs)} ms\n`,
         );
       } finally {
-        await releaseOnlineMigrationLock(connection);
+        if (sessionStatus === "active") {
+          await releaseOnlineMigrationLock(connection);
+        }
       }
     }
   } finally {
