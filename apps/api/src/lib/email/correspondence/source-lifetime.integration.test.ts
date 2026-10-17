@@ -224,12 +224,14 @@ test("data-box correspondence lives until its last matter source is deleted", as
       await tx.execute(sql`SELECT
         set_config('app.correspondence_source_organization_id', ${ids.orgB}, true),
         set_config('app.correspondence_source_workspace_id', ${ids.wsB1}, true),
-        set_config('app.correspondence_source_record_id', ${other.id}, true)
+        set_config('app.correspondence_source_record_id', ${other.id}, true),
+        set_config('app.correspondence_source_entity_id', ${otherMatterSource}, true)
       `);
       const scope = sql`SELECT
         current_setting('app.correspondence_source_organization_id', true) AS organization_id,
         current_setting('app.correspondence_source_workspace_id', true) AS workspace_id,
-        current_setting('app.correspondence_source_record_id', true) AS record_id
+        current_setting('app.correspondence_source_record_id', true) AS record_id,
+        current_setting('app.correspondence_source_entity_id', true) AS entity_id
       `;
       const before = await tx.execute(scope);
       await tx.delete(entities).where(eq(entities.id, sourceId));

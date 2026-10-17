@@ -436,6 +436,12 @@ export const installPgliteCorrespondenceSources = async (
   await db.execute(
     sql`DROP POLICY correspondence_source_maintenance ON public.correspondence`,
   );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence_sources`,
+  );
+  await db.execute(
+    sql`DROP POLICY correspondence_source_entity_maintenance ON public.correspondence`,
+  );
   for (const statement of maintenance) {
     await db.execute(sql.raw(statement));
   }

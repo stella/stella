@@ -3,6 +3,7 @@
  * SignedData sealed by a throwaway certificate. Every name, box ID and number
  * is invented.
  */
+import { PDF } from "@libpdf/core";
 import * as asn1js from "asn1js";
 import * as pkijs from "pkijs";
 
@@ -46,6 +47,9 @@ export type FixtureMessage = {
   files: FixtureFile[];
 };
 
+const decisionPdf = PDF.create();
+decisionPdf.addPage();
+
 export const FIXTURE_MESSAGE: FixtureMessage = {
   messageId: "1234567890",
   messageType: "V",
@@ -68,7 +72,7 @@ export const FIXTURE_MESSAGE: FixtureMessage = {
     {
       name: "usneseni.pdf",
       mimeType: "application/pdf",
-      content: new TextEncoder().encode("%PDF-1.4\n% synthetic decision\n"),
+      content: await decisionPdf.save(),
     },
     {
       name: "pouceni.txt",

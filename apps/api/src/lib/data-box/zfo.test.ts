@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -90,6 +91,12 @@ describe("parseDataBoxMessage", () => {
         text: new TextDecoder().decode(file.content),
       })),
     );
+    for (const file of files) {
+      if (file.mimeType === "application/pdf") {
+        const pdf = await PDF.load(file.bytes);
+        expect(pdf.isEncrypted).toBe(false);
+      }
+    }
   });
 
   test("maps acceptance by fiction and leaves unzoned times unknown", async () => {

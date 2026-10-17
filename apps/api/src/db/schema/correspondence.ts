@@ -94,6 +94,20 @@ const sourceMaintenanceScope = ({
   AND ${recordId} = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
 `;
 
+type SourceEntityMaintenanceScopeColumns = {
+  workspaceId: SQLWrapper;
+  entityId: SQLWrapper;
+};
+
+// The trigger supplies both identifiers from the entity row being deleted.
+const sourceEntityMaintenanceScope = ({
+  workspaceId,
+  entityId,
+}: SourceEntityMaintenanceScopeColumns) => sql`
+  ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${entityId} = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid
+`;
+
 const offboardingScopeCheck = sql`(
   current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
   or (current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'organization'
@@ -161,6 +175,15 @@ export const correspondence = p.pgTable.withRLS(
   },
   (table) => [
     ...reviewResetOwnerPolicies("correspondence"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.sourceEntityId,
+      }),
+      withCheck: sql`false`,
+    }),
     p.pgPolicy("correspondence_source_maintenance", {
       for: "all",
       to: correspondenceSourceMaintenance,
@@ -281,6 +304,15 @@ export const correspondenceSources = p.pgTable.withRLS(
   },
   (table) => [
     ...reviewResetOwnerPolicies("correspondence_sources"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.entityId,
+      }),
+      withCheck: sql`false`,
+    }),
     p.pgPolicy("correspondence_source_maintenance", {
       for: "select",
       to: correspondenceSourceMaintenance,

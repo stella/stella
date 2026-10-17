@@ -124,6 +124,12 @@ if (!databaseUrl || !runPostgresTests) {
       memberA1wsA1: createSafeId<"workspaceMember">(),
       filePropertyA1: createSafeId<"property">(),
     };
+    const fixtureScopedDb = createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    );
     gated.cleanUp(async () => {
       await testDb.delete(organization).where(eq(organization.id, ids.orgA));
       for (const id of [ids.userA1, ids.userAdmin]) {
@@ -287,16 +293,19 @@ if (!databaseUrl || !runPostgresTests) {
           if (delivered.isErr() || delivered.value.status === "skipped") {
             throw new Error("Expected owning correspondence");
           }
-          await testDb.insert(correspondenceAttachments).values({
-            organizationId: ids.orgA,
-            workspaceId: ids.wsA1,
-            correspondenceId: delivered.value.correspondenceId,
-            entityId,
-            ordinal: 0,
-            filename: "letter.eml",
-            mediaType: EML_MIME_TYPE,
-            byteSize: 1,
-            scanVerdict: "clean",
+          const correspondenceId = delivered.value.correspondenceId;
+          await fixtureScopedDb(async (tx) => {
+            await tx.insert(correspondenceAttachments).values({
+              organizationId: ids.orgA,
+              workspaceId: ids.wsA1,
+              correspondenceId,
+              entityId,
+              ordinal: 0,
+              filename: "letter.eml",
+              mediaType: EML_MIME_TYPE,
+              byteSize: 1,
+              scanVerdict: "clean",
+            });
           });
         }
         const rejectingScan: NonNullable<
@@ -409,10 +418,13 @@ if (!databaseUrl || !runPostgresTests) {
             if ("unavailable" in scenario && attempt === 1) {
               expect(outcome.isErr()).toBe(true);
               expect(
-                await testDb
-                  .select({ id: correspondence.id })
-                  .from(correspondence)
-                  .where(eq(correspondence.id, oldId)),
+                await fixtureScopedDb(
+                  async (tx) =>
+                    await tx
+                      .select({ id: correspondence.id })
+                      .from(correspondence)
+                      .where(eq(correspondence.id, oldId)),
+                ),
               ).toHaveLength(1);
               continue;
             }
@@ -424,23 +436,32 @@ if (!databaseUrl || !runPostgresTests) {
               outcome: { status: "skipped", reason: scenario.reason },
             });
             expect(
-              await testDb
-                .select({ id: correspondence.id })
-                .from(correspondence)
-                .where(eq(correspondence.id, oldId)),
+              await fixtureScopedDb(
+                async (tx) =>
+                  await tx
+                    .select({ id: correspondence.id })
+                    .from(correspondence)
+                    .where(eq(correspondence.id, oldId)),
+              ),
             ).toEqual([]);
             expect(
-              await testDb
-                .select({ id: correspondenceSources.entityId })
-                .from(correspondenceSources)
-                .where(eq(correspondenceSources.entityId, entityId)),
+              await fixtureScopedDb(
+                async (tx) =>
+                  await tx
+                    .select({ id: correspondenceSources.entityId })
+                    .from(correspondenceSources)
+                    .where(eq(correspondenceSources.entityId, entityId)),
+              ),
             ).toHaveLength("superseded" in scenario ? 1 : 0);
             if ("superseded" in scenario) {
               expect(
-                await testDb
-                  .select({ subject: correspondence.subject })
-                  .from(correspondence)
-                  .where(eq(correspondence.sourceEntityId, entityId)),
+                await fixtureScopedDb(
+                  async (tx) =>
+                    await tx
+                      .select({ subject: correspondence.subject })
+                      .from(correspondence)
+                      .where(eq(correspondence.sourceEntityId, entityId)),
+                ),
               ).toEqual([{ subject: "Newest message" }]);
             }
             expect(
@@ -582,10 +603,13 @@ if (!databaseUrl || !runPostgresTests) {
       });
       expect(initial.isOk() && initial.value.status).toBe("filed");
       const records = () =>
-        testDb
-          .select({ id: correspondence.id })
-          .from(correspondence)
-          .where(eq(correspondence.sourceEntityId, entityId));
+        fixtureScopedDb(
+          async (tx) =>
+            await tx
+              .select({ id: correspondence.id })
+              .from(correspondence)
+              .where(eq(correspondence.sourceEntityId, entityId)),
+        );
       expect(await records()).toHaveLength(1);
       await testDb
         .update(entities)

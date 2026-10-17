@@ -1,13 +1,17 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   dataBoxIdSchema,
   saveOrganizationDataBoxes,
 } from "@/api/lib/data-box/organization-boxes";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const concurrentChange = () =>
   new HandlerError({
@@ -18,6 +22,7 @@ const concurrentChange = () =>
 
 const config = {
   contract: "patch",
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   description:
     "Remove one of the organization's own data-box IDs and re-derive the direction of the data-box messages filed in the matters the caller can reach. Removing an ID not listed changes nothing but re-derives; recomputed counts the records whose direction changed.",
   permissions: { organizationSettings: ["update"] },
@@ -58,5 +63,10 @@ const removeOrganizationDataBox = createSafeRootHandler(
     }
   },
 );
+
+declareAggregateMutation(removeOrganizationDataBox.handler, {
+  type: "aggregate",
+  aggregates: ["dataBoxDirection"],
+});
 
 export default removeOrganizationDataBox;

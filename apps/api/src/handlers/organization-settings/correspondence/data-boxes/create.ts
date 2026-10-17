@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,7 +10,9 @@ import {
   dataBoxIdSchema,
   saveOrganizationDataBoxes,
 } from "@/api/lib/data-box/organization-boxes";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const concurrentChange = () =>
   new HandlerError({
@@ -20,6 +23,7 @@ const concurrentChange = () =>
 
 const config = {
   contract: "patch",
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   description:
     `Add one of the organization's own data-box IDs (at most ${ORGANIZATION_DATA_BOX_LIMIT}; stored lowercase) and re-derive the direction of the data-box messages filed in the matters the caller can reach: sent from one of the organization's boxes is outgoing, sent to one incoming, otherwise incoming with directionBasis unknown. ` +
     "Adding an ID already listed changes nothing but re-derives; recomputed counts the records whose direction changed.",
@@ -67,5 +71,10 @@ const addOrganizationDataBox = createSafeRootHandler(
     }
   },
 );
+
+declareAggregateMutation(addOrganizationDataBox.handler, {
+  type: "aggregate",
+  aggregates: ["dataBoxDirection"],
+});
 
 export default addOrganizationDataBox;
