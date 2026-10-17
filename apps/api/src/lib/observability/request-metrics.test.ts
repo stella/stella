@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
 import { compareCodeUnit } from "@stll/collation";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
@@ -13,6 +14,7 @@ import {
   ANONYMIZATION_REFUSAL_SITES,
   buildAnonymizationRefusalRecord,
   buildChatTurnSettlementRecord,
+  buildMcpRequestMetricRecord,
   buildRequestDurationRecord,
   emitActionCostDropMetric,
   emitChatRunLogMetric,
@@ -24,6 +26,80 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
+import {
+  allowlistedMcpMetricToolName,
+  measureMcpPhase,
+  normalizeMcpMetricMethod,
+  observeMcpRequest,
+} from "@/api/mcp/request-metrics";
+
+test("MCP phase records are integral, non-overlapping, and bounded", () => {
+  const freeText = "private caller supplied text";
+  const record = buildMcpRequestMetricRecord({
+    method: normalizeMcpMetricMethod(freeText),
+    mode: "default",
+    path: "modern",
+    phases: {
+      auth: 1.9,
+      context: 2.9,
+      server_build: 3.9,
+      tool_projection: 4.9,
+      dispatch: 5.9,
+      serialize: 6.9,
+    },
+    queryCount: 7,
+    totalMs: 30.1,
+  });
+  expect(record).toEqual({
+    event: "mcp.request.phases",
+    method: "unknown",
+    mode: "default",
+    path: "modern",
+    queryCount: 7,
+    auth: 1,
+    context: 2,
+    server_build: 3,
+    tool_projection: 4,
+    dispatch: 5,
+    serialize: 6,
+    total: 31,
+  });
+  const phaseTotal =
+    record.auth +
+    record.context +
+    record.server_build +
+    record.tool_projection +
+    record.dispatch +
+    record.serialize;
+  expect(phaseTotal).toBeLessThanOrEqual(record.total);
+  expect(JSON.stringify(record)).not.toContain(freeText);
+  expect(normalizeMcpMetricMethod("tools/call")).toBe("tools/call");
+  expect(
+    allowlistedMcpMetricToolName(freeText, ["list_matters", "get_matter"]),
+  ).toBeUndefined();
+  expect(
+    allowlistedMcpMetricToolName("list_matters", [
+      "list_matters",
+      "get_matter",
+    ]),
+  ).toBe("list_matters");
+});
+
+test("MCP phases reject overlap so nested timing cannot double count", async () => {
+  const run = observeMcpRequest({
+    method: "tools/list",
+    mode: "default",
+    run: async () =>
+      await measureMcpPhase(
+        "auth",
+        async () => await measureMcpPhase("context", async () => undefined),
+      ),
+  });
+  expect(await rejectionOf(run)).toHaveProperty(
+    "message",
+    expect.stringContaining("MCP metric phases overlap"),
+  );
+});
 
 test("reasoning replay drops emit only bounded provider and reason dimensions", () => {
   const lines: string[] = [];

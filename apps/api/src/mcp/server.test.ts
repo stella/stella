@@ -33,6 +33,10 @@ import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
@@ -226,6 +230,39 @@ describe("handleMcpHttpRequest", () => {
     readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
     resetAnalyticsForTesting();
+    resetMetricLineSinkForTesting();
+  });
+
+  test("a real MCP transport request emits exactly one phase record", async () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => lines.push(line));
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({ id: 1, method: "tools/list" }),
+    );
+
+    expect(response.status).toBe(200);
+    const records = lines
+      .map((line) => JSON.parse(line))
+      .filter((record) => record.event === "mcp.request.phases");
+    expect(records).toHaveLength(1);
+    expect(records.at(0)).toMatchObject({
+      event: "mcp.request.phases",
+      method: "tools/list",
+      mode: "default",
+      path: "modern",
+    });
   });
 
   test("native admission refusals keep their code and capture only infrastructure failure", async () => {
