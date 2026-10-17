@@ -22,6 +22,7 @@ export type Generator = {
   inputs: readonly string[];
   write: readonly string[];
   prepare?: readonly string[];
+  prerequisites?: readonly string[];
   /**
    * Whether the autofix workflow may run `write` and push its outputs. Only a
    * pure function of committed source qualifies: no network, secrets, clock,
@@ -201,6 +202,7 @@ const GENERATOR_DECLARATIONS = [
       ".oxfmtrc.json",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
+    prerequisites: ["capability-runtime", "mcp-app-bundles"],
     check: null,
     checkedBy: "Capability catalog drift guard",
     autofix: true,
@@ -258,6 +260,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/capabilities/**",
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
+    prerequisites: ["capability-runtime", "mcp-app-bundles"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
@@ -1030,6 +1033,20 @@ const GENERATOR_DECLARATIONS = [
   },
 ] as const satisfies readonly Generator[];
 
+type GeneratorDeclaration = (typeof GENERATOR_DECLARATIONS)[number];
+
+true satisfies [
+  Exclude<
+    Extract<
+      GeneratorDeclaration,
+      { prerequisites: unknown }
+    >["prerequisites"][number],
+    Extract<GeneratorDeclaration, { outputKind: "derived" }>["id"]
+  >,
+] extends [never]
+  ? true
+  : never;
+
 export const GENERATORS: readonly (Generator & {
   id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
 })[] = GENERATOR_DECLARATIONS;
@@ -1152,6 +1169,40 @@ export const orderGenerators = (
     }
     ordered.push(next);
     pending.delete(next.id);
+  }
+  return ordered;
+};
+
+export const buildCommand = (generator: Generator) =>
+  generator.prepare ?? generator.write;
+
+export const prerequisiteBuilds = (generators: readonly Generator[]) => {
+  const ordered: Generator[] = [];
+  const visiting = new Set<string>();
+  const visit = (id: string) => {
+    if (ordered.some((built) => built.id === id)) {
+      return;
+    }
+    if (visiting.has(id)) {
+      console.error(`Generator prerequisite cycle at ${id}`);
+      process.exit(1);
+    }
+    const prerequisite = GENERATORS.find((generator) => generator.id === id);
+    if (!prerequisite) {
+      console.error(`Unknown generator prerequisite: ${id}`);
+      process.exit(1);
+    }
+    visiting.add(id);
+    for (const next of prerequisite.prerequisites ?? []) {
+      visit(next);
+    }
+    visiting.delete(id);
+    ordered.push(prerequisite);
+  };
+  for (const generator of generators) {
+    for (const id of generator.prerequisites ?? []) {
+      visit(id);
+    }
   }
   return ordered;
 };
