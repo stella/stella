@@ -17,6 +17,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   usage_limited: "limit",
   [ACTION_ADMISSION_CODES.periodExhausted]: "limit",
   [ACTION_ADMISSION_CODES.notEnabled]: "unavailable",
+  [ACTION_ADMISSION_CODES.featureDisabled]: "unavailable",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "transient",
   [ACTION_ADMISSION_CODES.admissionUnavailable]: "transient",
   // Active runs free up as they finish; the daily cap holds until tomorrow.

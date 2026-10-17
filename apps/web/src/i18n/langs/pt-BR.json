@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
       "contact": "Entre em contato",
+      "featureDisabled": "Este recurso está temporariamente desativado.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },

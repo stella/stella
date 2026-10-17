@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Ez a művelet átmenetileg szünetel. Kérjük, próbálja újra hamarosan.",
       "concurrencyBusy": "Más műveletek folyamatban vannak. Kérjük, próbálja újra hamarosan.",
       "contact": "Lépjen kapcsolatba velünk",
+      "featureDisabled": "Ez a funkció átmenetileg ki van kapcsolva.",
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
       "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
     },

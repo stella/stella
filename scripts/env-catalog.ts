@@ -112,6 +112,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
+  "KILL_SWITCHES",
   "PUBLIC_LAW_DATABASE_POOL_MAX",
   "PUBLIC_CORPUS_RESERVED_CONNECTIONS",
   "PUBLIC_CORPUS_ASSUMED_REPLICAS",
@@ -228,6 +229,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 
 const EXAMPLE_VALUES: Record<string, string> = {
   API_FEATURE_ACCESS_GRANTS: "{}",
+  KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
   BETTER_AUTH_URL: "http://localhost:3001",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
@@ -343,6 +345,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Stop background case-law replay at the next batch boundary. Defaults to false.",
   CASE_LAW_REPLAY_DISABLED_SOURCES:
     "Comma-separated adapter keys excluded from background case-law replay.",
+  KILL_SWITCHES:
+    'Operator kill-switch overrides: a JSON object of switch id to "on" or "off", such as {"chat":"off"}. A switched-off feature refuses new work with a typed "turned off" refusal; restarting the running build applies a change. Switch ids live in apps/api/src/lib/kill-switches/registry.ts; an unknown id or state refuses startup.',
   UNUSED_CLIENT_RETENTION_DAYS:
     "Age in days before unused client registrations expire (1–365; default 30).",
   AGENT_REGISTRATION_DAILY_LIMIT:
@@ -802,6 +806,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EMAIL_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
+  KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,

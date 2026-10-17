@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
       "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
       "contact": "Kontaktujte nás",
+      "featureDisabled": "Tato funkce je dočasně vypnutá.",
       "notEnabled": "Tato akce není pro vaši organizaci povolena.",
       "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
     },

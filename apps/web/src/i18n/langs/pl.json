@@ -2609,6 +2609,7 @@
       "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
       "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
       "contact": "Skontaktuj się z nami",
+      "featureDisabled": "Ta funkcja jest tymczasowo wyłączona.",
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },
