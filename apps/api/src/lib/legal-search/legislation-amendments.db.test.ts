@@ -6,12 +6,19 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, TransactionRollbackError } from "drizzle-orm";
+import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { legislationSources } from "@/api/db/schema";
+import {
+  legislationAmendments,
+  legislationAmendmentSnapshots,
+  legislationDocuments,
+  legislationSources,
+} from "@/api/db/schema";
+import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   readLegislationAmendments,
@@ -23,13 +30,24 @@ import type {
   LegislationAmendmentRelation,
   LegislationAmendmentSnapshot,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
+import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const sourceId = toSafeId<"legislationSource">(
   "0198e331-e578-7000-8000-000000001a01",
 );
 const work = { sourceId, eli: "eli/cz/sb/2012/89", language: "cs" };
+const documentId = toSafeId<"legislationDocument">(
+  "0198e331-e578-7000-8000-000000001a02",
+);
 // Neutral model of an insertion, not a captured publisher response.
 const relation = {
   publisherId: "publisher:159-2026-1",
@@ -80,12 +98,84 @@ beforeEach(async () => {
     name: "Amendment fixture",
     adapterKey: "amendment-fixture",
   });
+  await db.insert(legislationDocuments).values({
+    id: documentId,
+    sourceId,
+    eli: work.eli,
+    title: "Civil Code",
+    country: "CZE",
+    language: work.language,
+    contentHash: "a".repeat(64),
+    versionValidFrom: "2027-01-01",
+  });
 });
 afterAll(async () => {
   await client.close();
 });
 
 describe("publisher amendment snapshots", () => {
+  test("public reads tolerate the pre-grant schema and expose amendments after the grant", async () => {
+    await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
+    const amendmentRelations = [
+      getTableName(legislationAmendmentSnapshots),
+      getTableName(legislationAmendments),
+    ] as const;
+    const setAmendmentGrants = async (action: "GRANT" | "REVOKE") => {
+      for (const table of amendmentRelations) {
+        const columns = Object.keys(
+          PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[table],
+        );
+        const direction = action === "GRANT" ? "TO" : "FROM";
+        await db.execute(
+          sql.raw(
+            `${action} SELECT (${columns.map((column) => `"${column}"`).join(", ")}) ON TABLE "${table}" ${direction} stella_public_law_reader`,
+          ),
+        );
+      }
+    };
+    const legislationDb: LegislationReadDb = async (read) =>
+      await withPublicLawReaderRole(db, async (tx) =>
+        read(asTestRaw<LegislationReadTransaction>(tx)),
+      );
+    const readBoth = async () => ({
+      statute: await readPublicLegislationHandler(
+        documentId,
+        legislationDb,
+        "pages",
+      ),
+      versions: await listStatuteVersionsHandler({
+        documentId,
+        query: {},
+        legislationDb,
+        surface: "pages",
+      }),
+    });
+
+    await setAmendmentGrants("REVOKE");
+    try {
+      const beforeGrant = await readBoth();
+      expect(beforeGrant.statute).toMatchObject({ pendingChanges: null });
+      expect(beforeGrant.versions).toMatchObject({
+        items: [{ amendedBy: null }],
+      });
+
+      await setAmendmentGrants("GRANT");
+      const afterGrant = await readBoth();
+      expect(afterGrant.statute).toMatchObject({
+        pendingChanges: {
+          items: [{ publisherId: relation.publisherId }],
+        },
+      });
+      expect(afterGrant.versions).toMatchObject({
+        items: [
+          { amendedBy: { items: [{ publisherId: relation.publisherId }] } },
+        ],
+      });
+    } finally {
+      await setAmendmentGrants("GRANT");
+    }
+  });
+
   test("replay and stale observations converge while staged dates and same-day acts retain their identities", async () => {
     const staged = {
       ...relation,

@@ -11,3 +11,7 @@ test("bare ELI identifiers resolve to statute routes", () => {
 test("inert identifiers have no link destination", () => {
   expect(resolveAmendmentHref("publisher-record-159")).toBeUndefined();
 });
+
+test("an ELI from a country without statute routes remains plain text", () => {
+  expect(resolveAmendmentHref("eli/at/bgbl/2026/159")).toBeUndefined();
+});

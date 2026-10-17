@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 import { parsePlainDate, Temporal } from "@stll/time";

@@ -36,6 +36,11 @@ export default {
         reason:
           "The package entry point re-exports the table it defines; readers stay confined at the package specifier.",
       },
+      {
+        path: "apps/web/src/features/statutes/components/pending-statute-changes.logic.ts",
+        reason:
+          "An ELI carries an exact ISO alpha-2 segment; amendment links convert that standard identifier to the statute route's alpha-3 segment without accepting country names or aliases.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;
