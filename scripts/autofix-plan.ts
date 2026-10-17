@@ -1,5 +1,12 @@
 import { planAutofix } from "./autofix-push-scope";
-import { GENERATORS, allowedOutputs, orderGenerators } from "./generated-files";
+import {
+  GENERATORS,
+  allowedOutputs,
+  buildCommand,
+  orderGenerators,
+  prerequisiteBuilds,
+  type Generator,
+} from "./generated-files";
 
 // The explicit type lets calls narrow the values they reject.
 const fail: (message: string) => never = (message) => {
@@ -9,6 +16,35 @@ const fail: (message: string) => never = (message) => {
 
 const [rawMode, ...args] = process.argv.slice(2);
 const mode = rawMode ?? "";
+
+const succeeds = (command: readonly string[]) =>
+  Bun.spawnSync([...command], { stdout: "inherit", stderr: "inherit" })
+    .exitCode === 0;
+
+const build = (generator: Generator) => {
+  console.log(`Building ${generator.id}`);
+  if (!succeeds(buildCommand(generator))) {
+    fail(`Generator ${generator.id} failed`);
+  }
+};
+
+const regenerate = (generator: Generator) => {
+  if (generator.check && succeeds(generator.check)) {
+    return;
+  }
+  console.log(`Regenerating ${generator.id}`);
+  if (!succeeds(generator.write)) {
+    fail(`Generator ${generator.id} failed`);
+  }
+};
+
+const RUN_BY_OUTPUT_KIND = {
+  derived: build,
+  committed: regenerate,
+} as const satisfies Record<
+  Generator["outputKind"],
+  (generator: Generator) => void
+>;
 
 const selectedFromIds = (ids: string) => {
   if (ids === "") {
@@ -55,24 +91,11 @@ switch (mode) {
   }
   case "run": {
     const selected = selectedFromIds(args.at(0) ?? "");
+    for (const prerequisite of prerequisiteBuilds(selected)) {
+      build(prerequisite);
+    }
     for (const generator of selected) {
-      if (generator.check) {
-        const checked = Bun.spawnSync([...generator.check], {
-          stdout: "inherit",
-          stderr: "inherit",
-        });
-        if (checked.exitCode === 0) {
-          continue;
-        }
-      }
-      console.log(`Regenerating ${generator.id}`);
-      const result = Bun.spawnSync([...generator.write], {
-        stdout: "inherit",
-        stderr: "inherit",
-      });
-      if (result.exitCode !== 0) {
-        fail(`Generator ${generator.id} failed`);
-      }
+      RUN_BY_OUTPUT_KIND[generator.outputKind](generator);
     }
     break;
   }
