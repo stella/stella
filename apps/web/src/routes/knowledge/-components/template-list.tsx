@@ -82,6 +82,7 @@ import {
 } from "@/routes/knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/knowledge/-components/template-category-sidebar";
 import { TEMPLATE_DRAG_MIME } from "@/routes/knowledge/-components/template-drag";
+import { filterTemplateTagSuggestions } from "@/routes/knowledge/-components/template-studio-search.logic";
 import { TemplateUpload } from "@/routes/knowledge/-components/template-upload";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
@@ -503,8 +504,6 @@ const MemberTemplateRow = ({
 
 // ── Tags dialog ──────────────────────────────────────
 
-const MAX_TAG_SUGGESTIONS = 6;
-
 type TemplateTagsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -553,13 +552,11 @@ const TemplateTagsDialogBody = ({
     setInput("");
   };
 
-  const matchingSuggestions = suggestions
-    .filter(
-      (tag) =>
-        !tags.includes(tag) &&
-        tag.toLowerCase().includes(input.trim().toLowerCase()),
-    )
-    .slice(0, MAX_TAG_SUGGESTIONS);
+  const matchingSuggestions = filterTemplateTagSuggestions(
+    suggestions,
+    tags,
+    input,
+  );
 
   const handleSave = async () => {
     setSaving(true);
