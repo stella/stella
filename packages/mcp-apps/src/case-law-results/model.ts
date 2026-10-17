@@ -1,10 +1,8 @@
 import { panic } from "better-result";
 
-import {
-  normalizeCountry,
-  normalizeDateBound,
-  normalizeStringList,
-} from "@stll/agent-input";
+import { normalizeCountry } from "@stll/agent-input/country";
+import { normalizeDateBound } from "@stll/agent-input/date-value";
+import { normalizeStringList } from "@stll/agent-input/string-list";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
