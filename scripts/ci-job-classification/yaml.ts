@@ -135,7 +135,7 @@ def steps(value)
     {'uses'=>s['uses'],'run'=>s['run'],'with'=>s['with']}
   end
 end
-# Run bodies remain opaque, but their secret references are retained separately.
+# Run bodies retain secret references and a publication-command marker.
 # Everything else participates unless its owning job/step exclusion names it.
 def secret_refs(value)
   case value
@@ -153,13 +153,14 @@ def project(value, scope)
   value.reject { |key,_| EXCLUSIONS.fetch(scope).include?(key) }
 end
 def step_shapes(value)
-  value.filter_map do |s|
+  value.map do |s|
     shape = project(s, 'step')
+    publication_command = s.fetch('run', '').match?(/publish|deploy|release|push/i)
     shape['parallel'] = step_shapes(s['parallel']) if s.key?('parallel')
     refs = secret_refs(s['run'])
-    next if shape.empty? && refs.empty?
-    {'definition'=>shape, 'run-secret-refs'=>refs}
-  end
+    next if shape.empty? && refs.empty? && !publication_command
+    {'definition'=>shape, 'run-secret-refs'=>refs, 'publication-command'=>publication_command}
+  end.compact
 end
 def job_shape(job)
   shape = project(job, 'job')

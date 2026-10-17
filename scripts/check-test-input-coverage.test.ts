@@ -82,6 +82,26 @@ const createRoot = ({ files, tasks }: Fixture): string => {
   return root;
 };
 
+test("classification keys extending a file path are absent targets", () => {
+  const root = createRoot({
+    tasks: {},
+    files: { ".github/workflows/ci.yml": "jobs: {}" },
+  });
+  for (const suffix of ["job", "job/step"]) {
+    expect(
+      classifyTarget({
+        candidate: {
+          path: `.github/workflows/ci.yml/${suffix}`,
+          fromGlob: false,
+        },
+        packageDir: "apps/alpha",
+        root,
+        testDir: "apps/alpha/src",
+      }),
+    ).toEqual({ type: "absent" });
+  }
+});
+
 describe("string literals", () => {
   test("tags each literal with the innermost enclosing call", () => {
     const literals = readStringLiterals(

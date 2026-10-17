@@ -193,7 +193,9 @@ const existsExact = (root: string, relativePath: string): boolean => {
     const entries =
       cached ??
       new Set(
-        existsSync(directory) ? readdirSync(directory) : ([] as string[]),
+        existsSync(directory) && statSync(directory).isDirectory()
+          ? readdirSync(directory)
+          : ([] as string[]),
       );
     if (cached === undefined) {
       directoryEntries.set(directory, entries);

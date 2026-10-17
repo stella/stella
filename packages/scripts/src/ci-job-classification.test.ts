@@ -42,8 +42,17 @@ const githubExpression = (expression: string) =>
   ["$", "{{ ", expression, " }}"].join("");
 
 test("committed classifications cover the repository and its pinned metadata callees", () => {
-  const { manifest, decisions, reader } =
+  const { manifest, decisions, snapshots, reader } =
     readClassificationInputs(repositoryRoot);
+  // Parsing must preserve all reviewed decisions and pinned supplier metadata.
+  for (const [file, parsed] of [
+    [".github/ci-job-classification-decisions.json", decisions],
+    [".github/ci-job-classification-sources.json", snapshots],
+  ] as const) {
+    expect(parsed).toEqual(
+      JSON.parse(readFileSync(path.join(repositoryRoot, file), "utf-8")),
+    );
+  }
   expect(fixtureDecisions(manifest)).toEqual(decisions);
   const result = verifyPublicMetadata({ manifest, reader });
   expect(result.isOk()).toBe(true);
@@ -1020,6 +1029,31 @@ test("real ci.yml classification is stable across comments, timeouts and step na
     expect(parsed.value.digest).toBe(baseline.value.digest);
   }
 });
+
+for (const command of [
+  "npm publish",
+  "bun deploy",
+  "bun release",
+  "git push",
+]) {
+  for (const steps of ["[]", "[{run: 'echo ok'}]"]) {
+    test(`unconditional publication commands change job digests: ${steps} to ${command}`, () => {
+      const original = parseDocument(`jobs: {ordinary: {steps: ${steps}}}`);
+      const changed = parseDocument(
+        `jobs: {ordinary: {steps: [{run: '${command}'}]}}`,
+      );
+      if (original.isErr()) {
+        throw original.error;
+      }
+      if (changed.isErr()) {
+        throw changed.error;
+      }
+      expect(changed.value.jobs["ordinary"]?.digest).not.toBe(
+        original.value.jobs["ordinary"]?.digest,
+      );
+    });
+  }
+}
 
 test("workflow permission defaults and publication gates enter classification digests", () => {
   for (const [before, after] of [

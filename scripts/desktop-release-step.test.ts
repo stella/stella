@@ -107,24 +107,17 @@ const releaseToolingViolations = (workflowSource: string): string[] => {
       ) {
         violations.push(`${jobName}: script does not use preserved tooling`);
       }
-      if (
-        uses.includes("desktop-windows-build") &&
-        uses !== "./.release-tooling/desktop-windows-build"
-      ) {
-        violations.push(`${jobName}: action does not use restored tooling`);
-      }
       if (uses.includes("desktop-windows-build")) {
+        const destination = uses.slice(2);
         const actionRestored = steps
           .slice(releaseCheckoutIndex + 1, index)
           .some(
             (candidate) =>
               record(candidate) &&
               typeof candidate["run"] === "string" &&
+              candidate["run"].includes(`rm -rf ${destination}`) &&
               candidate["run"].includes(
-                "$RELEASE_TOOLING/actions/desktop-windows-build",
-              ) &&
-              candidate["run"].includes(
-                ".release-tooling/desktop-windows-build",
+                `cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" ${destination}`,
               ),
           );
         if (!actionRestored) {
@@ -194,13 +187,22 @@ test("release jobs preserve workflow tooling before checking out release source"
       "bun scripts/desktop-release-step.ts stamp",
     )
     .replace(
-      "uses: ./.release-tooling/desktop-windows-build",
-      "uses: ./.github/actions/desktop-windows-build",
+      'cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build',
+      "echo action restore omitted",
     );
   expect(releaseToolingViolations(brokenWorkflow)).toEqual([
     "build: script does not use preserved tooling",
-    "build: action does not use restored tooling",
+    "build: action is not restored after checkout",
   ]);
+
+  expect(
+    releaseToolingViolations(
+      releaseWorkflow.replace(
+        "rm -rf .github/actions/desktop-windows-build",
+        "echo cleanup omitted",
+      ),
+    ),
+  ).toEqual(["build: action is not restored after checkout"]);
 });
 
 test("the preserved release script imports only Node built-ins", () => {
