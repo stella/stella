@@ -48,10 +48,21 @@ export const createNetworkRoundController = <Token>() => {
       held.clear();
       return tokens;
     },
+    /**
+     * Ends measurement. Held requests are let through either way, but a round
+     * still held or in flight means the depth is incomplete, so finishing then
+     * throws instead of accepting a short measurement.
+     */
     finish: () => {
+      const undrained = held.size + inFlight.size;
       status = "loaded";
       held.clear();
       inFlight.clear();
+      if (undrained > 0) {
+        throw new Error(
+          `Network rounds did not drain before the measurement ended: ${String(undrained)} request(s) still held or in flight`,
+        );
+      }
     },
     /** Whether the token still waits for release (false once released or dropped). */
     holds: (token: Token) => held.has(token),

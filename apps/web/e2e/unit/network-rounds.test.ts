@@ -232,3 +232,28 @@ test("a background poll while a round is in flight never adds depth", () => {
   expect(controller.release(1000)).toEqual([]);
   expect(controller.rounds).toEqual([["GET /v1/matters"]]);
 });
+
+test("finishing while a round is held or in flight rejects the measurement", () => {
+  const controller = createNetworkRoundController<string>();
+  controller.arrive({ token: "slow", key: "slow", now: 0 });
+  expect(controller.release(150)).toEqual(["slow"]);
+  // The quiet wait expired with one request in flight and its dependent held.
+  controller.arrive({ token: "dependent", key: "dependent", now: 200 });
+  expect(() => {
+    controller.finish();
+  }).toThrow("did not drain");
+  // Held requests are still let through, and nothing records another round.
+  expect(controller.loaded).toBe(true);
+  expect(controller.holds("dependent")).toBe(false);
+  expect(controller.rounds).toEqual([["slow"]]);
+});
+
+test("finishing after every round completed accepts the measurement", () => {
+  const controller = createNetworkRoundController<string>();
+  controller.arrive({ token: "a", key: "a", now: 0 });
+  expect(controller.release(150)).toEqual(["a"]);
+  controller.complete("a", 200);
+  expect(() => {
+    controller.finish();
+  }).not.toThrow();
+});
