@@ -13,6 +13,8 @@ import type { PresentationPrefs } from "@/lib/account/presentation-prefs/prefere
 import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { forceReflow } from "@/lib/utils";
 
+import { syncThemeColorMeta } from "./theme-color";
+
 type Theme = PresentationPrefs["theme"];
 
 type Palette = PresentationPrefs["palette"];
@@ -98,6 +100,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     root.classList.toggle("dark", resolvedTheme === "dark");
     // Keep native controls in sync when an explicit theme replaces system mode.
     root.style.setProperty("color-scheme", resolvedTheme);
+    syncThemeColorMeta();
     restore();
   }, [hydrated, resolvedTheme]);
 
@@ -118,6 +121,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
       root.classList.add(`${PALETTE_PREFIX}${palette}`);
     }
 
+    syncThemeColorMeta();
     restore();
   }, [hydrated, palette]);
 

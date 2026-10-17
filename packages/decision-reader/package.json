@@ -26,6 +26,7 @@
     "./provision-card.logic": "./src/provision-card.logic.ts",
     "./query-marks": "./src/query-marks.ts",
     "./reader-adapters": "./src/reader-adapters.tsx",
+    "./reader-ai-label": "./src/reader-ai-label.tsx",
     "./reader-inset-box": "./src/reader-inset-box.tsx",
     "./reader-landing": "./src/reader-landing.ts",
     "./reader-message-types": "./src/reader-message-types.ts",
