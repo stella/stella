@@ -173,9 +173,10 @@ const LoadedStyleSetEditor = ({
       // An API error response reaches the user through the same toast as a
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
-      getAnalytics().captureError(error);
+      const apiError = toAPIError(error);
+      getAnalytics().captureError(apiError);
       setSaving(false);
-      notifyUserError(toAPIError(error), t("styleSets.editor.saveFailed"));
+      notifyUserError(apiError, t("styleSets.editor.saveFailed"));
       return;
     }
 

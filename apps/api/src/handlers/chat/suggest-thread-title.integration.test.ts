@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -96,9 +96,8 @@ const seedThread = async ({
   if (messageTexts.length > 0) {
     await testDb.insert(chatMessages).values(
       messageTexts.map((text, index) => ({
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ content: text, type: "text" }],
-          version: 2,
         }),
         createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
         id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),

@@ -162,6 +162,7 @@ describe("buildRequestDurationRecord", () => {
       crud: "extracted",
       search: "extracted",
       batch: "log_only",
+      stream: "log_only",
     });
   });
 });

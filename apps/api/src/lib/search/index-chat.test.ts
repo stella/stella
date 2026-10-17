@@ -50,11 +50,11 @@ beforeEach(() => {
       role: "user",
       createdAt: new Date("2026-06-06T07:55:00.000Z"),
       content: {
-        version: 1 as const,
+        version: 3 as const,
         data: [
           {
             type: "text" as const,
-            text: "Review the termination clause.",
+            content: "Review the termination clause.",
           },
         ],
       },
@@ -78,26 +78,16 @@ const findExecutedQuery = (needle: string): string | undefined => {
 };
 
 describe("chat search indexing", () => {
-  test("normalizes legacy text and source-document parts for search", async () => {
-    const { extractMessageSearchText } = await import("./index-chat");
-
-    expect(
-      extractMessageSearchText({
-        version: 1,
-        data: [
-          { type: "text", text: "Review the termination clause." },
-          {
-            type: "data-stella-source-document",
-            data: {
-              kind: "document",
-              mention: "@agreement",
-              title: "Agreement.pdf",
-            },
-          },
-        ],
-      }),
-    ).toBe("Review the termination clause. Agreement.pdf @agreement document");
-  });
+  test.each([1, 2])(
+    "rejects unmigrated version %i content",
+    async (version) => {
+      const { normalizeSearchableChatMessageContent } =
+        await import("./index-chat");
+      expect(() =>
+        normalizeSearchableChatMessageContent({ version, data: [] }),
+      ).toThrow("Stored chat content requires the v3 data backfill");
+    },
+  );
 
   test("indexes citation labels without their link targets", async () => {
     const { extractMessageSearchText } = await import("./index-chat");
@@ -105,7 +95,7 @@ describe("chat search indexing", () => {
     const entityId = "6d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e55";
 
     const indexed = extractMessageSearchText({
-      version: 2,
+      version: 3,
       data: [
         {
           type: "text",
@@ -131,7 +121,7 @@ describe("chat search indexing", () => {
 
     expect(
       extractMessageSearchText({
-        version: 2,
+        version: 3,
         data: [],
         metadata: {
           sourceDocuments: [
@@ -151,7 +141,7 @@ describe("chat search indexing", () => {
     ).toBe("Closing memorandum @closing-memo document");
   });
 
-  test("filters malformed version 2 source-document metadata", async () => {
+  test("filters malformed version 3 source-document metadata", async () => {
     const { normalizeSearchableChatMessageContent } =
       await import("./index-chat");
     const validSource = {
@@ -164,7 +154,7 @@ describe("chat search indexing", () => {
 
     expect(
       normalizeSearchableChatMessageContent({
-        version: 2,
+        version: 3,
         data: [],
         metadata: { sourceDocuments: [null, validSource] },
       }),
@@ -233,7 +223,7 @@ describe("chat search indexing", () => {
     );
   });
 
-  test("indexes malformed source-document parts without throwing", async () => {
+  test("indexes messages with malformed source-document metadata", async () => {
     rootDbChatThreadFindFirstMock.mockImplementation(
       async () =>
         await Promise.resolve({
@@ -248,8 +238,9 @@ describe("chat search indexing", () => {
         role: "assistant",
         createdAt: new Date("2026-06-06T07:55:00.000Z"),
         content: {
-          version: 1 as const,
-          data: [{ type: "data-stella-source-document" }],
+          version: 3 as const,
+          data: [],
+          metadata: { sourceDocuments: [null, { kind: "document" }] },
         },
       },
     ]);

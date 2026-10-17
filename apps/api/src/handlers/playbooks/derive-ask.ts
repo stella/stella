@@ -47,7 +47,8 @@ const DERIVE_ASK_SYSTEM_PROMPT =
   'how to grade it. Choose contentType "date" for a calendar date, "int" ' +
   'for a whole number or monetary amount, otherwise "text".';
 
-const deriveAskSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const deriveAskSchema = v.strictObject({
   question: v.pipe(v.string(), v.maxLength(1000)),
   contentType: v.picklist(["text", "date", "int"]),
 });

@@ -4,6 +4,9 @@ import { normalizeIban } from "@stll/invoicing";
 
 import type { SellerProfileInput } from "@/lib/organization/seller-profiles";
 
+/** The profile's text fields; whether it is a VAT payer is a switch. */
+type SellerProfileTextField = Exclude<keyof SellerProfileInput, "vatPayer">;
+
 export const SELLER_PROFILE_FIELDS = [
   "legalName",
   "registrationId",
@@ -21,7 +24,7 @@ export const SELLER_PROFILE_FIELDS = [
 ] as const;
 
 true satisfies Exclude<
-  keyof SellerProfileInput,
+  SellerProfileTextField,
   (typeof SELLER_PROFILE_FIELDS)[number]
 > extends never
   ? true
@@ -41,7 +44,7 @@ export const SELLER_PROFILE_LIMITS = {
   accountNumber: 64,
   defaultCurrency: 3,
   footerNotes: 10_000,
-} as const satisfies Record<keyof SellerProfileInput, number>;
+} as const satisfies Record<SellerProfileTextField, number>;
 
 type SellerProfileValidationMessages = {
   required: string;
@@ -49,6 +52,7 @@ type SellerProfileValidationMessages = {
   invalidIban: string;
   invalidBic: string;
   invalidCurrency: string;
+  vatPayerRequiresVatId: string;
 };
 
 export const sellerProfileFormSchema = (
@@ -71,6 +75,7 @@ export const sellerProfileFormSchema = (
       ),
       registrationId: optionalText(SELLER_PROFILE_LIMITS.registrationId),
       vatId: optionalText(SELLER_PROFILE_LIMITS.vatId),
+      vatPayer: v.boolean(),
       addressLine1: optionalText(SELLER_PROFILE_LIMITS.addressLine1),
       addressLine2: optionalText(SELLER_PROFILE_LIMITS.addressLine2),
       city: optionalText(SELLER_PROFILE_LIMITS.city),
@@ -111,11 +116,20 @@ export const sellerProfileFormSchema = (
       ),
       footerNotes: optionalText(SELLER_PROFILE_LIMITS.footerNotes),
     } satisfies Record<keyof SellerProfileInput, v.GenericSchema>),
+    v.forward(
+      v.partialCheck(
+        [["vatPayer"], ["vatId"]],
+        (input) => !input.vatPayer || input.vatId !== undefined,
+        messages.vatPayerRequiresVatId,
+      ),
+      ["vatId"],
+    ),
     v.transform(
       ({
         legalName,
         registrationId,
         vatId,
+        vatPayer,
         addressLine1,
         addressLine2,
         city,
@@ -130,6 +144,7 @@ export const sellerProfileFormSchema = (
         ({
           legalName,
           defaultCurrency,
+          vatPayer,
           ...(registrationId === undefined ? {} : { registrationId }),
           ...(vatId === undefined ? {} : { vatId }),
           ...(addressLine1 === undefined ? {} : { addressLine1 }),

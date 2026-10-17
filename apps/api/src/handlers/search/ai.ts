@@ -740,10 +740,10 @@ export const createSearchSummaryChatThread = async ({
         workspaceId: null,
         userId,
         role: "user",
-        content: {
-          version: 1,
-          data: [{ type: "text", text: userText }],
-        },
+        content: proveTextOnlyPersistedChatMessageContent({
+          version: 3,
+          data: [{ type: "text", content: userText }],
+        }),
         memoryExtractionEligible:
           isDeploymentFeatureEnabled("FEATURE_AI_MEMORY"),
         createdAt: now,
@@ -755,7 +755,7 @@ export const createSearchSummaryChatThread = async ({
         userId,
         role: "assistant",
         content: proveTextOnlyPersistedChatMessageContent({
-          version: 2,
+          version: 3,
           data: [{ type: "text", content: assistantText }],
           metadata: {
             serverProvenance: SEARCH_SUMMARY_PROVENANCE,

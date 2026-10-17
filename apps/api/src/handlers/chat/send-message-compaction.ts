@@ -1,13 +1,12 @@
 import { Result } from "better-result";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
   compactChatMessagesForModel,
   chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
+import type { CompactedHistory } from "@/api/handlers/chat/compaction";
 import {
   applyChatCompactionCheckpoint,
   readLatestChatCompaction,
@@ -31,8 +30,6 @@ type ChatCompactionModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  /** Effective reasoning override paired with the selected thread model. */
-  reasoningEffort: ReasoningEffort | undefined;
 };
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
@@ -98,7 +95,6 @@ export const compactMessagesForContext = async ({
   admission,
   orgAIConfig,
   managedAIResidency,
-  reasoningEffort,
   safeDb,
   tenantWorkspaceIds,
   threadId,
@@ -106,7 +102,7 @@ export const compactMessagesForContext = async ({
   userId,
   workspaceId,
 }: CompactMessagesForContextProps): Promise<
-  Result<ChatMessage[], HandlerError>
+  Result<CompactedHistory<ChatMessage>, HandlerError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -157,7 +153,6 @@ export const compactMessagesForContext = async ({
     admission,
     orgAIConfig,
     managedAIResidency,
-    reasoningEffort,
     preserveTokens,
     triggerTokens,
   });

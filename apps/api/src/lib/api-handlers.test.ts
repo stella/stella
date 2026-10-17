@@ -8,6 +8,7 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import tableChart from "@/api/handlers/chat/table-chart";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
@@ -394,6 +395,34 @@ describe("createSafeRootHandler member AI access", () => {
     Result.err<T, SafeDbError>(
       new DatabaseError({ message: "the ledger should not be read" }),
     );
+
+  test("applies chart member AI access before model dispatch", async () => {
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      { ...tableChart.config, contract: "patch" },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfig: createOrgAIConfig(),
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new HandlerError({
+        message: "Expected an AI access response",
+        status: 500,
+      });
+    }
+    expect(result.code).toBe(403);
+    expect(result.response).toMatchObject({
+      code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+    });
+  });
 
   test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
     const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;

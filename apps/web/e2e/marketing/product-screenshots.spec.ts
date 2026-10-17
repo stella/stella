@@ -14,6 +14,7 @@ import {
   MARKETING_AGENT_THREAD_TITLE,
   settleMarketingAgentThread,
 } from "./agent-thread";
+import { CAPTURE_DPR } from "./captures";
 import {
   assertNoActiveEditBadge,
   releaseSupplierAgreementEditLock,
@@ -27,6 +28,15 @@ const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 // the anonymization capture.
 const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
 const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
+// seedId("ws-due-diligence") and seedId("invoice-2") from db:seed-dev:
+// INV-2025-0003, a sent invoice whose billed time entries the invoicing
+// capture lists.
+const DUE_DILIGENCE_WORKSPACE_ID = "fb2ce658-f761-5fdd-84c9-109a15003f49";
+const SENT_INVOICE_ID = "e55ceae6-b520-565d-8cb9-96f96d928994";
+const SENT_INVOICE_NUMBER = "INV-2025-0003";
+// The seeded time entries span fixed dates (Dec 2024 - Feb 2025); naming the
+// day in the URL keeps the timesheet off the wall-clock "today".
+const TIME_TRACKING_DATE = "2024-12-13";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -153,7 +163,48 @@ const captures = [
       entityId: ANONYMIZED_EXTRACT_ENTITY_ID,
     },
   },
+  {
+    // Contacts are listed by display name, so the first seeded organisation
+    // heads the list on every run.
+    name: "contacts",
+    path: "/contacts",
+    readyText: "Bratislava Legal Group, s.r.o.",
+  },
+  {
+    name: "time-tracking",
+    path: `/time?date=${TIME_TRACKING_DATE}`,
+    prepare: "await-time-entries",
+    readyText: "Timesheets",
+  },
+  {
+    name: "invoicing",
+    path: `/workspaces/${DUE_DILIGENCE_WORKSPACE_ID}/invoices/${SENT_INVOICE_ID}`,
+    prepare: "await-invoice-entries",
+    readyText: SENT_INVOICE_NUMBER,
+  },
+  {
+    // The Export Review table with its export menu open.
+    name: "import-export",
+    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
+    prepare: "open-table-export",
+    readyText: "Export Review - Project Atlas Data Room",
+  },
+  {
+    // The Czech results listing without a query: every seeded CZE decision,
+    // in the listing's own order. A keyword query depends on what the
+    // best-effort seed search index matched and returned no rows in CI.
+    name: "case-law-search",
+    path: "/law/cases?country=cze",
+    prepare: "await-search-results",
+    country: "CZE",
+    readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
+  },
 ] as const;
+
+// Stills share the recordings' device pixel ratio, so the PNGs are twice the
+// CSS clip size and stay sharp on retina screens. Clips stay in CSS pixels.
+test.use({ deviceScaleFactor: CAPTURE_DPR });
 
 test("capture landing product screenshots", async ({
   context,
@@ -234,7 +285,7 @@ test("capture landing product screenshots", async ({
       // Anchor the inspector's relative timestamp before navigating, so the
       // caption paints with the pinned clock on its first render. Captures
       // without an anchor run on real time; the clock is only restored when a
-      // previous capture actually pinned it, so the eight captures that never
+      // previous capture actually pinned it, so the captures that never
       // show a timestamp keep an untouched Date/timer implementation.
       if ("versionAnchor" in capture) {
         const versionCreatedAt = await resolveCurrentVersionCreatedAt(
@@ -358,6 +409,36 @@ test("capture landing product screenshots", async ({
         await page.getByRole("tab", { name: "Table" }).click();
         await expect(page.getByRole("grid")).toBeVisible();
       }
+      if ("prepare" in capture && capture.prepare === "await-time-entries") {
+        // The total row renders only once the day's entries have loaded.
+        await expect(
+          page.getByText("Total", { exact: true }).first(),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-invoice-entries") {
+        await expect(page.getByText("Linked time entries")).toBeVisible();
+        await expect(page.locator("table tbody tr").first()).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "open-table-export") {
+        await page.getByRole("tab", { name: "Table" }).click();
+        await expect(page.getByRole("grid")).toBeVisible();
+        await page
+          .getByRole("button", { exact: true, name: "Export table" })
+          .first()
+          .click();
+        await expect(
+          page.getByRole("menuitem", { name: "Export XLSX" }),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-search-results") {
+        // Several result rows, not just the first, so the shot shows a list
+        // rather than a single hit.
+        await expect(
+          page.locator('main a[href*="/cases/"]').nth(1),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("#route-error-title")).toHaveCount(0);
+      }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
         // Waits for every answer, citation chip, the generated view's guest
         // page (content, fonts, final height, host theme) and the recap, then
@@ -400,7 +481,7 @@ test("capture landing product screenshots", async ({
           // a macOS-to-Linux font gap. Dispatch that workflow on the branch
           // when the UI change is intended.
           maxDiffPixelRatio: 0.005,
-          scale: "css",
+          scale: "device",
         });
       // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
       // Supplier Agreement. A full navigation never unmounts the editor, so

@@ -53,7 +53,8 @@ const outorganteCandidateSchema = v.strictObject({
   contactType: v.nullable(v.picklist(["person", "organization"])),
 });
 
-const extractProcuracaoOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const extractProcuracaoOutputSchema = v.strictObject({
   outorgantes: v.array(outorganteCandidateSchema),
 });
 

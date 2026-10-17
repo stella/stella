@@ -699,6 +699,7 @@ describe("AI provider canary retry contract", () => {
       provider_stream_incomplete: true,
       output_incomplete: true,
       output_invalid: false,
+      output_moderated: false,
       deadline_exceeded: true,
       loop_detected: false,
       empty_completion: false,

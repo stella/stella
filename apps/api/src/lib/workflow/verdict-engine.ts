@@ -259,7 +259,8 @@ export const buildTierMatchUserMessage = ({
   return lines.join("\n");
 };
 
-const tierMatchSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const tierMatchSchema = v.strictObject({
   tier: v.picklist(["compliant", "fallback", "deviation", "not-applicable"]),
   rationale: v.pipe(v.string(), v.maxLength(1000)),
   matched: v.optional(
@@ -452,7 +453,8 @@ const TIER_MATCH_BATCH_SYSTEM_PROMPT =
   "Grade every item on its own, keep its item number, and return exactly one " +
   "verdict per item.";
 
-const tierMatchBatchSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const tierMatchBatchSchema = v.strictObject({
   verdicts: v.array(
     v.strictObject({
       item: v.pipe(v.number(), v.integer(), v.minValue(1)),

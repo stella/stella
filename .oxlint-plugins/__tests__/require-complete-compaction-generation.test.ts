@@ -16,7 +16,16 @@ describe("require-complete-compaction-generation", () => {
     expect(
       await lintSingleRule(
         "require-complete-compaction-generation",
-        'import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";\nimport { COMPACTION_GENERATION_POLICY as policy } from "@/api/lib/chat/compaction-tokens";\ngenerate({ ...policy, maxOutputTokens: 10 });',
+        'import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";\nimport { compactionGenerationRequest as request } from "@/api/lib/chat/compaction-tokens";\ngenerate({ ...request("summarize"), maxOutputTokens: 10 });',
+        { sourcePath: "apps/api/src/lib/chat/compaction.ts" },
+      ),
+    ).toEqual([3]);
+  });
+  test("reports a prompt that replaces the bounded one", async () => {
+    expect(
+      await lintSingleRule(
+        "require-complete-compaction-generation",
+        'import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";\nimport { compactionGenerationRequest as request } from "@/api/lib/chat/compaction-tokens";\ngenerate({ ...request("summarize"), prompt: "summarize at length" });',
         { sourcePath: "apps/api/src/lib/chat/compaction.ts" },
       ),
     ).toEqual([3]);
@@ -25,7 +34,7 @@ describe("require-complete-compaction-generation", () => {
     expect(
       await lintSingleRule(
         "require-complete-compaction-generation",
-        'import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";\nimport { COMPACTION_GENERATION_POLICY as policy } from "@/api/lib/chat/compaction-tokens";\ngenerate({ ...options, ...policy, prompt: "summarize" });',
+        'import { generateTanStackTextForTask as generate } from "@/api/lib/tanstack-ai-generate";\nimport { compactionGenerationRequest as request } from "@/api/lib/chat/compaction-tokens";\ngenerate({ ...options, ...request("summarize"), task: "chat" });',
         { sourcePath: "apps/api/src/lib/chat/compaction.ts" },
       ),
     ).toEqual([]);

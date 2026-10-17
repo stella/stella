@@ -1,7 +1,7 @@
 // Passive regression fixture for
 // `require-complete-compaction-generation/require-complete-compaction-generation`.
 
-import { COMPACTION_GENERATION_POLICY as completePolicy } from "@/api/lib/chat/compaction-tokens";
+import { compactionGenerationRequest as completeRequest } from "@/api/lib/chat/compaction-tokens";
 import { generateTanStackTextForTask as generateText } from "@/api/lib/tanstack-ai-generate";
 
 declare const baseOptions: Parameters<typeof generateText>[0];
@@ -14,13 +14,13 @@ export const unsafeCompaction =
 // expect-clean: require-complete-compaction-generation/require-complete-compaction-generation
 export const completeCompaction = generateText({
   ...baseOptions,
-  ...completePolicy,
+  ...completeRequest("Summarize the transcript."),
 });
 
-// A statically-known unrelated spread cannot override either policy key.
+// A statically-known unrelated spread cannot override a policy key.
 export const completeWithSafeTail = generateText({
   ...baseOptions,
-  ...completePolicy,
+  ...completeRequest("Summarize the transcript."),
   ...{ temperature: 0 },
 });
 
@@ -29,7 +29,7 @@ export const unsafePolicyOverride =
   // oxlint-disable-next-line require-complete-compaction-generation/require-complete-compaction-generation -- fixture: a finish policy after the shared policy must be rejected
   generateText({
     ...baseOptions,
-    ...completePolicy,
+    ...completeRequest("Summarize the transcript."),
     finishPolicy: "allow-incomplete",
   });
 
@@ -39,6 +39,6 @@ export const unsafePolicySpread =
   // oxlint-disable-next-line require-complete-compaction-generation/require-complete-compaction-generation -- fixture: an opaque spread after the shared policy must be rejected
   generateText({
     ...baseOptions,
-    ...completePolicy,
+    ...completeRequest("Summarize the transcript."),
     ...laterOptions,
   });

@@ -29,10 +29,12 @@ import {
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
+import { recordedStopReasonOf } from "@/api/lib/chat/provider-stop-reasons";
 import {
   finishReasonOf,
   type TanStackTextFinishReason,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -71,6 +73,8 @@ type RunAnalyticsState = {
   /** Start of the current agent-loop iteration (one model call). */
   iterationStartedAt: number;
   finishReason: TanStackTextFinishReason;
+  /** The provider's own stop reason, where its table lists it. */
+  providerStopReason: string | undefined;
   outputTokens: number | undefined;
   toolCount: number;
   /** Sum of every iteration's reported usage. */
@@ -415,6 +419,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     const created: RunAnalyticsState = {
       iterationStartedAt: now,
       finishReason: null,
+      providerStopReason: undefined,
       outputTokens: undefined,
       toolCount: 0,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -497,7 +502,14 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // The AI boundary: naming the failure also classifies it for the shadow
     // grade the record carries.
     const kind = classifyAIBoundaryFailure(error);
-    const finishReason = context?.run?.finishReason;
+    const providerStatus = providerStatusFields(error)["error.provider.status"];
+    // A failure caught outside the run (a caller's own catch) has no run
+    // state; a refused finish carries the finish on the error instead.
+    const refusedFinish =
+      error instanceof ModelRunError ? error.finish : undefined;
+    const finishReason = context?.run?.finishReason ?? refusedFinish?.finish;
+    const providerStopReason =
+      context?.run?.providerStopReason ?? refusedFinish?.providerStopReason;
     const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
       "ai.error_kind": sanitizeQueryErrorText(kind),
@@ -505,6 +517,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
         : {}),
+      ...(providerStopReason === undefined
+        ? {}
+        : { "ai.provider_stop_reason": providerStopReason }),
       ...(context?.run?.outputTokens !== undefined
         ? { "ai.output_tokens": context.run.outputTokens }
         : {}),
@@ -572,6 +587,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
         error_message_kind: "non_standard",
         error_type: errorTag(error),
         failure_reason: "provider",
+        failure_kind: kind,
+        ...(providerStatus === undefined
+          ? {}
+          : { provider_status: providerStatus }),
         feature: config.feature,
         latency_bucket: bucketLatency(
           (performance.now() - startedAt) / ONE_SECOND_MS,
@@ -780,16 +799,20 @@ export const createTanStackAIAnalyticsCallbacks = ({
         const run = runState(ctx);
         run.iterationStartedAt = performance.now();
         run.finishReason = null;
+        run.providerStopReason = undefined;
         run.outputTokens = undefined;
       },
       onStructuredOutputConfig: (ctx) => {
         const run = runState(ctx);
         run.finishReason = null;
+        run.providerStopReason = undefined;
         run.outputTokens = undefined;
       },
       onChunk: (ctx, chunk) => {
         if (chunk.type === EventType.RUN_FINISHED) {
-          runState(ctx).finishReason = finishReasonOf(chunk);
+          const run = runState(ctx);
+          run.finishReason = finishReasonOf(chunk);
+          run.providerStopReason = recordedStopReasonOf(chunk);
         }
         // TanStack reports usage for a finished model call only. A call that
         // failed after the provider reported usage was billed as well, so its

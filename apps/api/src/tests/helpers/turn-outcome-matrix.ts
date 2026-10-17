@@ -7,9 +7,9 @@ import type { AIErrorKind } from "@stll/api-contract";
 import type {
   ChatTurnFailureCode,
   ChatTurnInteractionType,
-  ChatTurnStatus,
 } from "@/api/handlers/chat/chat-turn-state";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { PLAIN_TOOL_NAME } from "@/api/tests/helpers/chat-approval-harness";
 import {
@@ -166,6 +166,10 @@ export const AI_ERROR_KIND_SHAPES = {
   output_invalid: {
     notAShape:
       "A structured answer its schema rejects (`generateTanStackObjectForTask`); a chat turn carries no schema.",
+  },
+  output_moderated: {
+    notAShape:
+      "A text generation the provider filtered (`generateTanStackTextForTask`); a chat turn keeps a `content_filter` answer.",
   },
   deadline_exceeded: {
     notAShape:

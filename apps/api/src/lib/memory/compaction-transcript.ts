@@ -14,6 +14,7 @@
  * before the prompt constructor escapes it at the trust boundary.
  */
 
+import { panic } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
@@ -113,6 +114,9 @@ export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
 };
 
 const messageText = (content: TranscriptRow["content"]): string => {
+  if (!Array.isArray(content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
   const parts: string[] = [];
   for (const part of content.data) {
     const text = persistedTextPartContent(part);
@@ -135,9 +139,6 @@ const persistedTextPartContent = (part: unknown): string | null => {
   }
   if ("content" in part && typeof part.content === "string") {
     return part.content;
-  }
-  if ("text" in part && typeof part.text === "string") {
-    return part.text;
   }
   return null;
 };

@@ -1,11 +1,15 @@
 /** Each linked reader owns the same stored-row loading and placement path. */
 export const DECISION_READER_SURFACES = {
-  "full-reader":
+  "full-reader": [
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx",
-  inspector:
+  ],
+  inspector: [
     "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx",
-  development:
+  ],
+  development: [
     "apps/web/src/routes/dev/-components/inspector-pane-playground.tsx",
+    "apps/web/src/routes/dev/-components/hungarian-decision-playground.tsx",
+  ],
 } as const;
 
 export type DecisionReaderSurface = keyof typeof DECISION_READER_SURFACES;

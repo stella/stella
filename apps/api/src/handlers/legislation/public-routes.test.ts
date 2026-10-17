@@ -24,7 +24,8 @@ const readHandlerSource = async (file: string) =>
 describe("public statute routes", () => {
   test.each(
     PUBLIC_COUNTRIES.filter(
-      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+      (country) =>
+        PUBLIC_COUNTRY_CAPABILITIES[country].legislation !== "admitted",
     ),
   )(
     "advertised %s reports its capability before reading data",
@@ -41,7 +42,7 @@ describe("public statute routes", () => {
         expect(await response.json()).toMatchObject({
           status: "unavailable",
           country,
-          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country].legislation,
         });
       }
     },
