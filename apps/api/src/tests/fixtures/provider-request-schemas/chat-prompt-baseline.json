@@ -40,6 +40,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32845
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 32670
       }
     ],
     "anthropic/extended": [
@@ -82,6 +86,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33336
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 33160
       }
     ],
     "bedrock/default": [
@@ -444,6 +452,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
       }
     ],
     "openrouter-anthropic/extended": [
@@ -482,6 +494,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
       }
     ],
     "openrouter/default": [
@@ -520,6 +536,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34298
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34013
       }
     ],
     "openrouter/extended": [
@@ -558,6 +578,10 @@
       {
         "reason": "Connector input tools and feature admission share the stable prefix",
         "tokens": 34797
+      },
+      {
+        "reason": "Lock in connect-time MCP prompt savings",
+        "tokens": 34525
       }
     ]
   },

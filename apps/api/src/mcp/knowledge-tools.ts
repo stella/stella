@@ -2243,15 +2243,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a clause in the organization's clause library. Omit " +
-      "clause_id to create (title and body required); pass clause_id to update. " +
-      "body is an ordered array of paragraphs, each with text and optional " +
+      "Create or update a library clause. Omit clause_id to create (title and " +
+      "body required); pass it to update. body is an ordered paragraph array with " +
       "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. Use balanced {% ... %} tags. " +
-      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
-      "category_id, language, description, usage_notes, and metadata " +
-      "accept null to clear them on update. Set snapshot_version true on an " +
-      "update to also append a version snapshot of the body. Returns the clause id.",
+      "and directive_expression. Use balanced {% ... %} tags; keep num(), ref(), " +
+      "clause() and ai(adapt=true) in the body. Nullable metadata fields accept " +
+      "null to clear. snapshot_version appends an update snapshot. Returns the id.",
     inputSchema: saveClauseArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
@@ -2339,16 +2336,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create a review playbook, or add, change, and remove positions in one. " +
-      "Omit playbook_id to create (name required); pass playbook_id and " +
-      "expected_updated_at to update. positions lists only what is added or " +
-      "changed, never the whole playbook: an entry with source_id replaces " +
-      "that stored position whole, an entry without one is added. Entries are " +
-      "checked one by one; a refused entry comes back in issues with the fix " +
-      "and the rest are saved. A saved playbook is a draft that a person " +
-      "approves in the editor before it can run. Returns the playbook id, the " +
-      "updatedAt to pass as the next expected_updated_at, and each written " +
-      "position's sourceId.",
+      "Create a review playbook or change its positions. Omit playbook_id to " +
+      "create (name required); to update, pass it with expected_updated_at. " +
+      "positions is a patch: source_id replaces one position, while no source_id " +
+      "adds one. Invalid entries return in issues; valid entries are saved. The " +
+      "result is a draft for human approval and returns the id, updatedAt for the " +
+      "next update, and written sourceIds.",
     inputSchema: savePlaybookArgsSchema,
     inputNormalization: {
       "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

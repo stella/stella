@@ -610,6 +610,12 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
+  const trackedOutputs = new Map(
+    GENERATORS.flatMap(({ outputs }) => outputs).map((output) => [
+      output,
+      tracked.filter((file) => matchesGeneratedGlob(output, file)),
+    ]),
+  );
   const changedPaths = [
     [
       ".oxfmtrc.json",
@@ -639,13 +645,13 @@ test("autofix selection closes over generated outputs and ordering dependencies"
           ).toBe(true);
         }
         for (const output of upstream.outputs) {
-          const feedsDownstream = tracked.some(
-            (outputFile) =>
-              matchesGeneratedGlob(output, outputFile) &&
+          const feedsDownstream = trackedOutputs
+            .get(output)
+            ?.some((outputFile) =>
               downstream.inputs.some((input) =>
                 matchesGeneratedGlob(input, outputFile),
               ),
-          );
+            );
           if (feedsDownstream) {
             expect(
               ids.has(downstream.id),
