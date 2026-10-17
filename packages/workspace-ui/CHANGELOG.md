@@ -1,5 +1,15 @@
 # @stll/workspace-ui
 
+## 0.12.2
+
+### Patch Changes
+
+- [#5858](https://github.com/stella/stella/pull/5858) [`a67d306`](https://github.com/stella/stella/commit/a67d306deebd7e5d6bdec53e907996990dcee819) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update runtime dependencies.
+
+- [#5646](https://github.com/stella/stella/pull/5646) [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Pad edge-attached surfaces (workspace shell, rails, sheets, bottom-stuck dialogs, toasts) with the device safe-area insets, contain overscroll in shared scrollers, keep long-press from selecting control labels, use a strong ease-out for entering and exiting motion, and give `Button` a short press scale while it is enabled.
+- Updated dependencies [[`eac3ba7`](https://github.com/stella/stella/commit/eac3ba744bf28f96adcec06a6ebc9edf6b60d1c1), [`4a9c808`](https://github.com/stella/stella/commit/4a9c808a3c3d68cfcc53496913c3a531c8bcfe94), [`4479e67`](https://github.com/stella/stella/commit/4479e67c3290234e3a73fc307b213eb061f74870), [`1b7773e`](https://github.com/stella/stella/commit/1b7773effd472e11422bc82d0d417fdf22ce9ff1), [`ad3cd0a`](https://github.com/stella/stella/commit/ad3cd0a68ebcb2bee63dc8a8d12a0fb3c9783975)]:
+  - @stll/ui@0.46.0
+
 ## 0.12.1
 
 ### Patch Changes

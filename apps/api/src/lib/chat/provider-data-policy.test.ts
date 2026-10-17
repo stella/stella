@@ -8,9 +8,9 @@ import type { TanStackAIProvider } from "@stll/ai-catalog";
 import {
   AI_PROVIDERS,
   BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
@@ -35,9 +35,9 @@ import {
   createTanStackTextAdapterFactory,
   getTanStackTextModelById,
   getStructuredOutputFallbackModelId,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   resolveTanStackAIProviderSupport,
 } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
@@ -297,7 +297,7 @@ describe("provider request policy", () => {
         env.AI_PROVIDER = provider;
         for (const dataClass of ["customer", "public_corpus"] as const) {
           const available = isManagedProviderAvailable(provider, dataClass);
-          const info = getTanStackTextModelInfoForRole("chat", null, {
+          const info = getTanStackTextModelInfoForTask("chat", null, {
             organizationId: null,
             dataClass,
             modelTier: MANAGED_MODEL_TIER.standard,
@@ -326,18 +326,18 @@ describe("provider request policy", () => {
             };
             if (!available) {
               expect(() =>
-                getTanStackTextModelForRole("chat", null, options),
+                getTanStackTextModelForTask("chat", null, options),
               ).toThrow("Managed AI is not available");
               expect(() =>
                 getTanStackTextModelById(selection, null, {
-                  role: "chat",
+                  task: "chat",
                   ...options,
                 }),
               ).toThrow("Managed AI is not available");
               continue;
             }
             expect(
-              getTanStackTextModelForRole("chat", null, options),
+              getTanStackTextModelForTask("chat", null, options),
             ).toMatchObject({
               keySource: info.keySource,
               modelId: info.modelId,
@@ -345,7 +345,7 @@ describe("provider request policy", () => {
             });
             expect(
               getTanStackTextModelById(selection, null, {
-                role: "chat",
+                task: "chat",
                 ...options,
               }),
             ).toMatchObject({
@@ -474,7 +474,7 @@ describe("provider request policy", () => {
         { preconnect: originalFetch.preconnect },
       );
       try {
-        const model = DEFAULT_MODELS[provider].chat;
+        const model = MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
         const expected = ORIGINAL_REQUESTS[provider](model);
         const expectedRequest = {
           url: expected.url,
@@ -566,9 +566,10 @@ describe("provider request policy", () => {
         requests.length = 0;
         const policy = { dataClass: "customer", managedAIResidency } as const;
         const selection = getStructuredOutputFallbackModelId({
-          failedModelId: DEFAULT_MODELS.openrouter.chat,
+          failedModelId:
+            MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
           orgAIConfig: null,
-          role: "chat",
+          task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
           ...policy,
         });
@@ -578,12 +579,14 @@ describe("provider request policy", () => {
         }
         const model = getTanStackTextModelById(selection, null, {
           organizationId: null,
-          role: "chat",
+          task: "chat",
           modelTier: MANAGED_MODEL_TIER.standard,
           ...policy,
         });
         expect(model.provider).toBe("openrouter");
-        expect(model.modelId).not.toBe(DEFAULT_MODELS.openrouter.chat);
+        expect(model.modelId).not.toBe(
+          MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
+        );
         for await (const _chunk of model.adapter.chatStream({
           model: model.modelId,
           logger: resolveDebugOption(false),
@@ -667,7 +670,7 @@ describe("provider request policy", () => {
               try: () =>
                 getTanStackTextModelById(`openrouter::${modelId}`, null, {
                   organizationId: null,
-                  role: "chat",
+                  task: "chat",
                   ...policy,
                   modelTier: MANAGED_MODEL_TIER.standard,
                 }),

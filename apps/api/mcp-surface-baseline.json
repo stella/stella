@@ -279,8 +279,8 @@
       "default": {"title": 12, "description": 272, "inputSchema": 281, "outputSchema": 130, "annotations": 113, "payloadUtf8Bytes": 905}
     },
     "save_clause": {
-      "advanced": {"title": 11, "description": 614, "inputSchema": 2963, "outputSchema": 114, "annotations": 112, "payloadUtf8Bytes": 3910},
-      "default": {"title": 11, "description": 614, "inputSchema": 2963, "outputSchema": 114, "annotations": 112, "payloadUtf8Bytes": 3910}
+      "advanced": {"title": 11, "description": 402, "inputSchema": 3241, "outputSchema": 114, "annotations": 112, "payloadUtf8Bytes": 3976},
+      "default": {"title": 11, "description": 402, "inputSchema": 3241, "outputSchema": 114, "annotations": 112, "payloadUtf8Bytes": 3976}
     },
     "save_contact": {
       "advanced": {"title": 12, "description": 303, "inputSchema": 2245, "outputSchema": 116, "annotations": 113, "payloadUtf8Bytes": 2886},

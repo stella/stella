@@ -24,7 +24,7 @@ import {
   getOutputTokenLimit,
 } from "@stll/ai-catalog";
 import type {
-  ModelRole,
+  ModelTask,
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
@@ -128,9 +128,9 @@ import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getStructuredOutputFallbackModelId,
   getTanStackTextModelById,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   isMockTextAdapter,
   mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
@@ -174,7 +174,7 @@ type GenerateTanStackBaseOptions = {
     | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  role: ModelRole;
+  task: ModelTask;
   serviceTier: AIRequestServiceTier;
   system?: string | undefined;
   systemPromptOrigin?: SystemPromptOrigin | undefined;
@@ -189,7 +189,7 @@ type GenerateTanStackBaseOptions = {
 } & AIRequestPolicy &
   ModelDispatchScope;
 
-type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
+type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
 
 /**
@@ -214,7 +214,7 @@ type GenerationDeadlineOption = {
   deadlineMs?: number | undefined;
 };
 
-type GenerateTanStackTextForRoleOptions = TanStackTextForRoleOptions &
+type GenerateTanStackTextForTaskOptions = TanStackTextForTaskOptions &
   GenerationDeadlineOption & {
     finishPolicy: TanStackTextFinishPolicy;
   };
@@ -230,8 +230,8 @@ type OutputTokenBudgetOption =
   | { outputTokenBudget?: never }
   | { maxOutputTokens?: never; outputTokenBudget: number };
 
-type GenerateTanStackObjectForRoleOptions<TSchema extends v.GenericSchema> =
-  TanStackTextForRoleOptions &
+type GenerateTanStackObjectForTaskOptions<TSchema extends v.GenericSchema> =
+  TanStackTextForTaskOptions &
     OutputTokenBudgetOption &
     Pick<StreamChatChunksOptions, "tools" | "agentLoopStrategy"> & {
       /** Explicit exception for a generative fallback or provider-path probe. */
@@ -262,10 +262,11 @@ export type TanStackStructuredOutputEvent<TOutput> =
     };
 
 type ResolveTextModelOptions = {
+  abortSignal?: AbortSignal | undefined;
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null | undefined;
   reasoningEffort?: ReasoningEffort | undefined;
-  role: ModelRole;
+  task: ModelTask;
 } & AIRequestPolicy &
   ModelDispatchScope;
 
@@ -496,8 +497,8 @@ export const withProviderRetryWait = async <T>(
   return await run();
 };
 
-export const generateTanStackTextForRole = async (
-  options: GenerateTanStackTextForRoleOptions,
+export const generateTanStackTextForTask = async (
+  options: GenerateTanStackTextForTaskOptions,
 ): Promise<string> =>
   await withGenerationDeadline(
     options,
@@ -511,7 +512,7 @@ export const generateTanStackTextForRole = async (
   );
 
 const generateTanStackTextWithin = async (
-  options: GenerateTanStackTextForRoleOptions,
+  options: GenerateTanStackTextForTaskOptions,
 ): Promise<string> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -569,8 +570,8 @@ const generateTanStackTextWithin = async (
   return output;
 };
 
-export const streamTanStackTextForRole = async function* (
-  options: TanStackTextForRoleOptions,
+export const streamTanStackTextForTask = async function* (
+  options: TanStackTextForTaskOptions,
 ): AsyncIterable<string> {
   // Checked before the model resolves: a dispatch on a settled proof panics.
   const abortSignal = admittedDispatchSignal(options);
@@ -639,7 +640,7 @@ export type TanStackTextRun = {
  * output ceiling — for a drafted document field that difference is the
  * difference between a value and a sentence ending mid-word.
  *
- * Unlike `generateTanStackTextForRole` this takes the assembled chat options,
+ * Unlike `generateTanStackTextForTask` this takes the assembled chat options,
  * so a run carrying tools (the skill loop) can be graded the same way. The
  * caller owns the model resolution and must dispatch through
  * {@link textAdapterWithNormalizedStops}.
@@ -1499,10 +1500,10 @@ const requestedOutputTokens = (
     ? options.maxOutputTokens
     : outputTokensWithinModelLimit(model, options.outputTokenBudget);
 
-export const generateTanStackObjectForRole = async <
+export const generateTanStackObjectForTask = async <
   TSchema extends v.GenericSchema,
 >(
-  options: GenerateTanStackObjectForRoleOptions<TSchema> &
+  options: GenerateTanStackObjectForTaskOptions<TSchema> &
     GenerationDeadlineOption,
 ): Promise<v.InferOutput<TSchema>> =>
   await withGenerationDeadline(
@@ -1519,7 +1520,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
     outputMode: _outputMode,
     outputSchema,
     ...options
-  }: GenerateTanStackObjectForRoleOptions<TSchema>,
+  }: GenerateTanStackObjectForTaskOptions<TSchema>,
   deadlineAt: number | undefined,
 ): Promise<v.InferOutput<TSchema>> => {
   // Checked before the model resolves: a dispatch on a settled proof panics.
@@ -1535,6 +1536,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
     messages: GuardedModelMessages<ModelMessage[]>,
     requestModel: ResolvedTanStackTextModel,
   ): Promise<unknown> => {
+    const analytics = options.analytics?.forModel(requestModel);
     guardStructuredOutputBudget({ model: requestModel, outputSchema });
     const tanStackOutputSchema = ownerValidatedSchema(
       toTanStackValibotSchema(
@@ -1574,9 +1576,7 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
                     serviceTier,
                     temperature: options.temperature,
                   }),
-                  ...(options.analytics
-                    ? { middleware: [options.analytics.middleware] }
-                    : {}),
+                  ...(analytics ? { middleware: [analytics.middleware] } : {}),
                   ...(abortController ? { abortController } : {}),
                 }),
             }),
@@ -1634,6 +1634,13 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
             ...options,
             modelId,
           });
+          // Custom resolvers may pin an adapter instead of honoring overrides.
+          // Prove the selected identity before sending the conversation again.
+          if (
+            `${fallbackModel.provider}::${fallbackModel.modelId}` !== modelId
+          ) {
+            throw new ModelOutputInvalidError({ model: fallbackModel });
+          }
           return {
             model: fallbackModel,
             output: await run(requestMessages, fallbackModel),
@@ -1641,17 +1648,17 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
         },
       };
     },
-    role: options.role,
+    role: options.task,
   });
 };
 
-export const streamTanStackObjectForRole = async function* <
+export const streamTanStackObjectForTask = async function* <
   TSchema extends v.GenericSchema,
 >({
   outputMode: _outputMode,
   outputSchema,
   ...options
-}: GenerateTanStackObjectForRoleOptions<TSchema>): AsyncIterable<
+}: GenerateTanStackObjectForTaskOptions<TSchema>): AsyncIterable<
   TanStackStructuredOutputEvent<v.InferOutput<TSchema>>
 > {
   // Checked before the model resolves: a dispatch on a settled proof panics.
@@ -1887,7 +1894,7 @@ export const resolveTanStackTextModel = async (
     organizationId,
     orgAIConfig,
     reasoningEffort,
-    role,
+    task,
     ...policy
   } = options;
   // Every inference path (chat, subagents, field generators, workflow
@@ -1900,11 +1907,11 @@ export const resolveTanStackTextModel = async (
   let managedOpenRouterCredential: ManagedOpenRouterCredential | undefined;
   if (!orgAIConfig && !mockAnswersForOrganization(orgAIConfig)) {
     const info = modelId
-      ? getTanStackTextModelInfoById(modelId, orgAIConfig, role, {
+      ? getTanStackTextModelInfoById(modelId, orgAIConfig, task, {
           dataClass: policy.dataClass,
           modelTier,
         })
-      : getTanStackTextModelInfoForRole(role, orgAIConfig, {
+      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
           organizationId,
           modelTier,
           ...policy,
@@ -1938,14 +1945,14 @@ export const resolveTanStackTextModel = async (
 
   return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
-        role,
+        task,
         organizationId,
         modelTier,
         reasoningEffort,
         managedOpenRouterCredential,
         ...policy,
       })
-    : getTanStackTextModelForRole(role, orgAIConfig, {
+    : getTanStackTextModelForTask(task, orgAIConfig, {
         organizationId,
         modelTier,
         managedOpenRouterCredential,
@@ -1968,7 +1975,7 @@ const messagesFromInput = (
  * provider with unredacted tenant ids in its messages or system prompt.
  */
 const guardedMessagesFromInput = (
-  options: TanStackTextForRoleOptions,
+  options: TanStackTextForTaskOptions,
 ): GuardedModelMessages<ModelMessage[]> =>
   guardModelMessages({
     messages: messagesFromInput(options),
@@ -2255,11 +2262,11 @@ export const mergeGenerationOptions = ({
     caching,
     model,
   });
-  // Caller temperature overrides only apply where the role builder
+  // Caller temperature overrides only apply where the task builder
   // itself emitted a temperature. Builder omission is always
   // deliberate — the model rejects, deprecates, or ignores sampling
   // overrides (`MODEL_TEMPERATURE_POLICIES`), the id is uncatalogued, or the
-  // role runs a thinking/reasoning mode that is incompatible with
+  // task runs a thinking/reasoning mode that is incompatible with
   // temperature (Anthropic extended thinking rejects it even on
   // models that accept temperature otherwise). The suppression is
   // logged so a caller's explicit setting never disappears without a

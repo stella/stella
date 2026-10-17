@@ -6,7 +6,7 @@ import {
 } from "@tanstack/ai";
 import { Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 import {
   sanitizeErrorAttributesForOutput,
   sanitizeErrorForOutput,
@@ -42,7 +42,7 @@ import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
 } from "@/api/lib/tanstack-ai-models";
@@ -120,7 +120,7 @@ type TanStackAIAnalyticsProps = {
   distinctId?: string;
   properties?: AnalyticsMetadata;
   analytics?: ServerAnalytics;
-  modelRole?: ModelRole;
+  modelTask?: ModelTask;
   /**
    * Explicit per-turn model selection (dev override or validated
    * thread model). When set, metering rates this model instead of the
@@ -151,6 +151,10 @@ type TanStackAIAnalyticsProps = {
 export type TanStackAIAnalyticsCallbacks = {
   /** Shared attribution for nested non-generative model calls. */
   readonly usageMetering?: AIUsageMetering | undefined;
+  /** Bind one request without changing callbacks shared by concurrent runs. */
+  forModel: (
+    model: Omit<ResolvedTanStackTextModelInfo, "availability">,
+  ) => TanStackAIAnalyticsCallbacks;
   middleware: ChatMiddleware;
   captureError: (error: unknown) => void;
 };
@@ -352,7 +356,7 @@ const recordTanStackConsumption = async ({
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       isByok: modelInfo.keySource === "byok",
       lane,
-      modelRole: config.modelRole ?? "chat",
+      modelTask: config.modelTask ?? "chat",
       organizationId: metering.organizationId,
       rawUsageMicroUnits,
       serviceTier: effectiveServiceTier,
@@ -386,12 +390,12 @@ const recordTanStackConsumption = async ({
   }
 };
 
-export const createTanStackAIAnalyticsCallbacks = ({
-  analytics = getServerAnalytics(),
-  ...config
-}: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
+export const createTanStackAIAnalyticsCallbacks = (
+  { analytics = getServerAnalytics(), ...config }: TanStackAIAnalyticsProps,
+  resolvedModel?: Omit<ResolvedTanStackTextModelInfo, "availability">,
+): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
-  const modelRole = config.modelRole ?? "chat";
+  const modelTask = config.modelTask ?? "chat";
   // Group attachment is derived centrally so call sites cannot forget it:
   // from the metering context when present, else from the analytics-only
   // organization identity. Events with neither stay ungrouped.
@@ -402,7 +406,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ? {}
       : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
-  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
+  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined =
+    resolvedModel === undefined
+      ? undefined
+      : { ...resolvedModel, availability: "available" };
   const startedAt = performance.now();
   // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
   // several `chat()` requests (template filling shares one across up to
@@ -446,10 +453,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
             ? getTanStackTextModelInfoById(
                 selectedModelId,
                 config.orgAIConfig,
-                modelRole,
+                modelTask,
                 { dataClass: config.dataClass, modelTier: config.modelTier },
               )
-            : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
+            : getTanStackTextModelInfoForTask(modelTask, config.orgAIConfig, {
                 dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
                 modelTier: config.modelTier,
@@ -460,7 +467,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
         modelInfo = null;
         logger.warn("tanstack_ai.analytics.model_info_unavailable", {
           "ai.feature": config.feature,
-          "ai.role": modelRole,
+          "ai.task": modelTask,
           "error.type": errorTag(resolved.error),
         });
       } else {
@@ -789,6 +796,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
   return {
     captureError: captureGenerationError,
+    forModel: (model) =>
+      createTanStackAIAnalyticsCallbacks({ ...config, analytics }, model),
     usageMetering: config.usageMetering,
     middleware: {
       name: "stella-tanstack-analytics",
