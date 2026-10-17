@@ -1766,11 +1766,12 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
 
 type ScopedCallbacks<TSource> = {
   [
-    TKey in keyof TSource as NonNullable<TSource[TKey]> extends (
-      ...args: never[]
-    ) => unknown
-      ? TKey
-      : never
+    TKey in keyof TSource as Extract<
+      TSource[TKey],
+      (...args: never[]) => unknown
+    > extends never
+      ? never
+      : TKey
   ]-?: TSource[TKey] | undefined;
 };
 
