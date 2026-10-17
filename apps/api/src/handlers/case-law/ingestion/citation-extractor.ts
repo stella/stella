@@ -762,7 +762,9 @@ const COMMISSION_CASE_CUE_RE = new RegExp(
 const COMMISSION_CASE_CUE_WINDOW = 40;
 
 const COMMISSION_CASE_NUMBER_PATTERN =
-  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?<!\d\s*)(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
+const NATIONAL_DOCKET_ROMAN_DIVISION_RE = /\b[IVXLCDM]{1,8}\s*$/u;
 
 /** What marks a nearby authority file number as the data protection authority's. */
 const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
@@ -1997,6 +1999,16 @@ export const extractCitations = (
                 match[0].length +
                 PL_UOKIK_DECISION_TRAILING_CUE_WINDOW,
             ),
+          )
+        ) {
+          continue;
+        }
+        if (
+          pattern === COMMISSION_CASE_NUMBER_PATTERN &&
+          caseNumber !== undefined &&
+          COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
+          NATIONAL_DOCKET_ROMAN_DIVISION_RE.test(
+            section.text.slice(0, match.index),
           )
         ) {
           continue;

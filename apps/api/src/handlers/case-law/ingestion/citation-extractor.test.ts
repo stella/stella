@@ -3644,4 +3644,21 @@ describe("European Commission competition case numbers", () => {
   ])("does not read an uncued or remote number: %s", (text) => {
     expect(extractCitations([{ index: 0, text }])).toEqual([]);
   });
+
+  test.each([
+    "case no. 21 C 123/2020",
+    "case no. sp. zn. 21 C 123/2020",
+    "vec sp. zn.: 4 C 309/2020",
+    "sprawa sygn. akt IV C 123/2020",
+  ])(
+    "does not read a national docket tail as a Commission identifier: %s",
+    (text) => {
+      expect(
+        extractCitations([{ index: 0, text }]).filter(
+          ({ identifierType }) =>
+            identifierType === DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+        ),
+      ).toEqual([]);
+    },
+  );
 });

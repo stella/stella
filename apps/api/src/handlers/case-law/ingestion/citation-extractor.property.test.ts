@@ -134,6 +134,35 @@ test(
 );
 
 test(
+  "national docket prefixes cannot license Commission case numbers",
+  () => {
+    assertProperty(
+      "national docket prefixes cannot license Commission case numbers",
+      fc.property(
+        fc.constantFrom("C", "N", "NN"),
+        fc.integer({ min: 1, max: 999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+        fc.oneof(
+          fc.integer({ min: 1, max: 999 }).map(String),
+          fc.constantFrom("I", "II", "III", "IV", "V", "VI", "VII"),
+        ),
+        (series, number, year, division) => {
+          const text = `case no. ${division} ${series} ${String(number)}/${String(year)}`;
+          expect(
+            extractCitations([{ index: 0, text }]).filter(
+              ({ identifierType }) =>
+                identifierType ===
+                DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+            ),
+          ).toEqual([]);
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
   "identifier normalization reaches a fixed point",
   () => {
     fc.assert(
