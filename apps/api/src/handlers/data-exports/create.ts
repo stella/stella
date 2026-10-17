@@ -7,13 +7,19 @@ import {
   startDataExport,
 } from "@/api/handlers/data-exports/start-export";
 import { toDataExportSummary } from "@/api/handlers/data-exports/summary";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { enqueueDataExport } from "@/api/lib/data-export-queue";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+
+const dataExportEnqueueFailed = failureSink({
+  event: "data_export.enqueue",
+  expected: [],
+});
 
 const config = {
   contract: "patch",
@@ -85,7 +91,10 @@ const createDataExport = createSafeRootHandler(
         userId: user.id,
         attempt: 0,
       }).catch((error: unknown) => {
-        captureError(error, { exportId, operation: "data_export.enqueue" });
+        observeFailure(error, {
+          sink: dataExportEnqueueFailed,
+          ctx: { entityId: exportId, operation: "data_export.enqueue" },
+        });
       });
     }
     return Result.ok({

@@ -73,13 +73,19 @@ import {
   TEMPLATE_VERSION_COLUMNS,
   TIME_ENTRY_COLUMNS,
 } from "@/api/handlers/data-exports/records";
-import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { createFileKey } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { openS3ObjectStream } from "@/api/lib/s3";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+const dataExportReadFileFailed = failureSink({
+  event: "data_export.read_file",
+  expected: [],
+});
 
 /** Rows per query: small enough that each transaction is brief. */
 const DATA_EXPORT_PAGE_SIZE = 500;
@@ -935,7 +941,10 @@ const openKey = async (key: string, signal: AbortSignal): Promise<FileRead> => {
     (error: unknown) => {
       // The requester sees the file under the manifest's problems; the
       // object key stays out of telemetry.
-      captureError(error, { operation: "data_export.read_file" });
+      observeFailure(error, {
+        sink: dataExportReadFileFailed,
+        ctx: { operation: "data_export.read_file" },
+      });
       return { type: "failed" } as const;
     },
   );

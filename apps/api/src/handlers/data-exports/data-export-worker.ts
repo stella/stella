@@ -42,7 +42,6 @@ import type {
 } from "@/api/handlers/data-exports/build-export";
 import { createExportSource } from "@/api/handlers/data-exports/export-source";
 import { createExportPacer } from "@/api/handlers/data-exports/pacer";
-import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -64,10 +63,11 @@ import {
 import type { DataExportJobData } from "@/api/lib/data-export-queue";
 import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import { transition } from "@/api/lib/db/transitions";
-import { errorTag } from "@/api/lib/errors/utils";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -78,6 +78,19 @@ import {
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { brandPersistedDataExportId } from "@/api/lib/safe-id-boundaries";
+
+const dataExportHeartbeatFailed = failureSink({
+  event: "data_export.heartbeat",
+  expected: [],
+});
+const dataExportAttemptFailed = failureSink({
+  event: "data_export.attempt_failed",
+  expected: [],
+});
+const dataExportGlobalConcurrencyFailed = failureSink({
+  event: "data_export.global_concurrency",
+  expected: [],
+});
 
 // One export per API process; the global cap bounds all processes together.
 const WORKER_CONCURRENCY = 1;
@@ -511,7 +524,10 @@ export const runDataExport = async (
       if (error instanceof DataExportSupersededError) {
         return;
       }
-      captureError(error, { exportId, operation: "data_export.heartbeat" });
+      observeFailure(error, {
+        sink: dataExportHeartbeatFailed,
+        ctx: { entityId: exportId, operation: "data_export.heartbeat" },
+      });
     },
   });
 
@@ -634,11 +650,14 @@ export const runDataExport = async (
       );
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
-    captureError(error, { exportId, organizationId });
-    logger.error("data_export.attempt_failed", {
-      exportId,
-      attempt: String(run.attempt),
-      "error.type": errorTag(error),
+    observeFailure(error, {
+      sink: dataExportAttemptFailed,
+      ctx: {
+        entityId: exportId,
+        organizationId,
+        operation: "data_export.attempt",
+        step: `attempt-${run.attempt}`,
+      },
     });
     if (run.failures + 1 < DATA_EXPORT_MAX_FAILURES) {
       await markResumable(deps.db, ids, run.attempt, RESUME_REASON.FAILURE);
@@ -784,7 +803,10 @@ export const initDataExportWorker = (_context: BullMqWorkerContext) => {
   getDataExportQueue()
     .setGlobalConcurrency(DATA_EXPORT_GLOBAL_CONCURRENCY)
     .catch((error: unknown) => {
-      captureError(error, { operation: "data_export.global_concurrency" });
+      observeFailure(error, {
+        sink: dataExportGlobalConcurrencyFailed,
+        ctx: { operation: "data_export.global_concurrency" },
+      });
     });
   worker.on("error", createQueueWorkerErrorLogger("data_export.worker_error"));
   logger.info("data_export.worker_started", {
