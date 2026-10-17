@@ -6,7 +6,7 @@ import * as v from "valibot";
 import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -474,11 +474,9 @@ const generateDecisionChunk = async ({
       usageMetering: options.analytics?.usageMetering,
       captureError:
         options.analytics?.captureError ??
-        ((error: unknown) =>
-          captureError(
-            error,
-            handlerErrorContext("workflow.generateDecisionChunk"),
-          )),
+        createErrorCapture(
+          handlerErrorContext("workflow.generateDecisionChunk"),
+        ),
       middleware: {
         ...options.analytics?.middleware,
         name: options.analytics?.middleware.name ?? "typed-decision-usage",

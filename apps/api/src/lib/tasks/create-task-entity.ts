@@ -12,7 +12,7 @@ import {
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -484,9 +484,8 @@ export const createTaskEntityHandler = async function* ({
   // A caller-provided transaction has not committed yet. Its owner flushes
   // after commit so the repair worker cannot race an invisible entity.
   if (props.tx === undefined) {
-    flushEntitySearchRepairs([txResult.entityId]).catch((error: unknown) =>
-      captureError(
-        error,
+    flushEntitySearchRepairs([txResult.entityId]).catch(
+      createErrorCapture(
         handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
       ),
     );

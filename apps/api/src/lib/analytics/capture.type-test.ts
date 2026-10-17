@@ -2,6 +2,7 @@ import { handlerErrorContext } from "@stll/errors/exception-context";
 
 import {
   captureError,
+  createErrorCapture,
   captureObservedError,
   captureRequestError,
 } from "@/api/lib/analytics/capture";
@@ -54,5 +55,7 @@ export const requestAttributionRequiresRequestCapture = (
   captureError(error, options);
   // @ts-expect-error A spread cannot discard request attribution through frameless capture.
   captureError(error, { ...handlerErrorContext("request.handle"), request });
+  // @ts-expect-error Bound callbacks cannot discard request attribution.
+  createErrorCapture(options);
   captureRequestError(error, options);
 };

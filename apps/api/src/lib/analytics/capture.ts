@@ -291,6 +291,11 @@ export const captureError = (
   captureErrorWithOptions(error, { fingerprintKey, context, scope });
 };
 
+/** Bind a callback's declared identity at the shared capture boundary. */
+export const createErrorCapture =
+  (options: Parameters<typeof captureError>[1]) => (error: unknown) =>
+    captureError(error, options);
+
 const requestCaptureOptions = (request: Request) => {
   const reqCtx = getRequestContext(request);
   return {

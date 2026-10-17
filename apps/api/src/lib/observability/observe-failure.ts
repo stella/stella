@@ -207,23 +207,19 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
   }
   if (policy.capture) {
     const capture = {
-      scope: { type: "handler", handlerId: `observe.${sink.event}` },
+      scope: { type: "handler", handlerId: sink.event },
       fingerprintKey: `observe.${sink.event}`,
       context: context.accepted,
       observation: grading,
     } as const;
-    if (options.request !== undefined) {
-      captureObservedError(error, {
-        ...capture,
-        request: options.request,
-        scope: options.scope,
-      });
-      return;
-    }
-    captureObservedError(error, {
-      ...capture,
-      scope: options.scope ?? { type: "handler", handlerId: sink.event },
-    });
+    const captureOptions =
+      options.request !== undefined
+        ? { ...capture, request: options.request, scope: options.scope }
+        : {
+            ...capture,
+            scope: options.scope ?? capture.scope,
+          };
+    captureObservedError(error, captureOptions);
   }
 };
 

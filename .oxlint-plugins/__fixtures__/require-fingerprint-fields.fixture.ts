@@ -8,6 +8,7 @@ export class MissingFingerprint extends TaggedError("MissingFingerprint")<{
   reason: "read" | "write";
 }> {}
 
+// expect-clean: require-fingerprint-fields/require-fingerprint-fields
 export class RegisteredFingerprint extends TaggedError(
   "RegisteredFingerprint",
 )<{

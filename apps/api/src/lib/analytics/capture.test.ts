@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import {
   captureError,
+  createErrorCapture,
   captureRequestError,
   resetCaptureWindows,
 } from "@/api/lib/analytics/capture";
@@ -96,6 +97,32 @@ const extractionError = ({
 beforeEach(() => {
   captured.length = 0;
   resetCaptureWindows();
+});
+
+test("bound capture callbacks preserve each caller identity and context", () => {
+  const error = new TypeError("callback unavailable");
+  const firstOptions = handlerErrorContext("callbacks.first", {
+    phase: "read",
+  });
+  const secondOptions = handlerErrorContext("callbacks.second", {
+    phase: "write",
+  });
+  const first = createErrorCapture(firstOptions);
+  const second = createErrorCapture(secondOptions);
+  first(error);
+  first(error);
+  second(error);
+  expect(captured).toHaveLength(2);
+  expect(
+    captured.map(({ properties }) => properties["$exception_fingerprint"]),
+  ).toEqual([
+    exceptionFingerprint(readEvidence(error), firstOptions),
+    exceptionFingerprint(readEvidence(error), secondOptions),
+  ]);
+  expect(captured.map(({ properties }) => properties["phase"])).toEqual([
+    "read",
+    "write",
+  ]);
 });
 
 describe("captureError repeat suppression", () => {

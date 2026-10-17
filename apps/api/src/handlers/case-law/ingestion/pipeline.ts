@@ -230,14 +230,7 @@ const PAGE_SLOT = {
 
 type PageSlot = (typeof PAGE_SLOT)[keyof typeof PAGE_SLOT];
 
-/**
- * Run the ingestion pipeline for a configured source.
- *
- * Fetches pages from the source adapter, processes each
- * decision (segment, extract citations, dedup), and stores
- * results in the database.
- */
-export const runIngestionPipeline = async ({
+const runScopedIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
@@ -250,631 +243,635 @@ export const runIngestionPipeline = async ({
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-}: PipelineInput): Promise<IngestionPipelineResult> =>
-  await withExceptionScope(
-    { type: "ingestion", adapterKey: source.adapterKey },
-    async () => {
-      const resolveSourceContract = createSourceContractResolver(scopedDb);
-      const adapter = getAdapter(source.adapterKey);
+}: PipelineInput): Promise<IngestionPipelineResult> => {
+  const resolveSourceContract = createSourceContractResolver(scopedDb);
+  const adapter = getAdapter(source.adapterKey);
 
-      if (!adapter) {
-        panic(`Unknown adapter: ${source.adapterKey}`);
-      }
+  if (!adapter) {
+    panic(`Unknown adapter: ${source.adapterKey}`);
+  }
 
-      // Started here rather than passed in, so the budget the loop measures a page
-      // against is the same one the abort it would get is derived from.
-      const deadline =
-        cycle === undefined ? undefined : startCycleDeadline(cycle);
+  // Started here rather than passed in, so the budget the loop measures a page
+  // against is the same one the abort it would get is derived from.
+  const deadline = cycle === undefined ? undefined : startCycleDeadline(cycle);
 
-      let cursor = source.syncCursor;
-      /** The held page's consecutive unavailable cycles, as last stored. */
-      let unavailableStreaks = loadUnavailableStreaks({
-        adapterKey: adapter.key,
-        config: source.config,
-      });
-      let inserted = 0;
-      let skipped = 0;
-      let searchVectorFailures = 0;
-      let s3UploadFailures = 0;
-      let pagesProcessed = 0;
-      /** Track recent cursors to detect parking (stagnation or ping-pong). */
-      const recentCursors = new Set<string | null>();
-      /**
-       * Consecutive decision-level failures. Reset on each success.
-       * If this reaches the batch threshold, the adapter is halted for
-       * this cycle to avoid hammering a broken court API.
-       */
-      let consecutiveFailures = 0;
-      let haltReason: string | null = null;
-      let stopKind: IngestionStopKind | undefined;
-      let checkpointObservationOrder = source.checkpointObservationOrder;
-      /**
-       * Compiled polarity rules for this cycle. One read per language the cycle
-       * meets, rather than one per decision; a rule edited mid-cycle lands on the
-       * next one, which is the same bargain the background classifier makes.
-       */
-      const polarityRules: RuleCache = new Map();
+  let cursor = source.syncCursor;
+  /** The held page's consecutive unavailable cycles, as last stored. */
+  let unavailableStreaks = loadUnavailableStreaks({
+    adapterKey: adapter.key,
+    config: source.config,
+  });
+  let inserted = 0;
+  let skipped = 0;
+  let searchVectorFailures = 0;
+  let s3UploadFailures = 0;
+  let pagesProcessed = 0;
+  /** Track recent cursors to detect parking (stagnation or ping-pong). */
+  const recentCursors = new Set<string | null>();
+  /**
+   * Consecutive decision-level failures. Reset on each success.
+   * If this reaches the batch threshold, the adapter is halted for
+   * this cycle to avoid hammering a broken court API.
+   */
+  let consecutiveFailures = 0;
+  let haltReason: string | null = null;
+  let stopKind: IngestionStopKind | undefined;
+  let checkpointObservationOrder = source.checkpointObservationOrder;
+  /**
+   * Compiled polarity rules for this cycle. One read per language the cycle
+   * meets, rather than one per decision; a rule edited mid-cycle lands on the
+   * next one, which is the same bargain the background classifier makes.
+   */
+  const polarityRules: RuleCache = new Map();
 
-      const maxPages =
-        maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
-      const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
+  const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
+  const pageTimeout = adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE;
 
-      const fetchObservedPage = async (
-        fetchCursor: string | null,
-        pageSignal: AbortSignal,
-      ) =>
-        await Result.tryPromise({
-          try: async () =>
-            await sourceLease.beforeRemoteEffect(async () => {
-              // The lease renewal this callback runs behind spends budget of its
-              // own, so the page admitted a moment ago may no longer fit. This is
-              // the last point before the request where that can still be read.
-              if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
-                return { type: "budget-exhausted" } as const;
-              }
-              const fetched = await Result.tryPromise({
-                try: async () =>
-                  await adapter.fetchPage(
-                    fetchCursor,
-                    source.config ?? {},
-                    pageSignal,
-                    onDocumentObservation,
-                  ),
-                catch: (cause) =>
-                  new AdapterFetchError({
-                    message:
-                      cause instanceof Error ? cause.message : String(cause),
-                    adapterKey: adapter.key,
-                    cursor: fetchCursor,
-                    cause,
-                    stopKind: pageSignal.aborted
-                      ? INGESTION_STOP_KIND.DEADLINE
-                      : ingestionStopKindOf(cause, "adapter"),
-                  }),
-              });
-              if (Result.isError(fetched)) {
-                return { error: fetched.error, type: "fetch-error" } as const;
-              }
-              const pageResult = fetched.value;
-              if (Result.isError(pageResult)) {
-                return {
-                  error: pageResult.error,
-                  type: "fetch-error",
-                } as const;
-              }
-              return {
-                observationOrder: await allocateSourceObservationOrder({
-                  leaseToken: sourceLease.leaseToken,
-                  scopedDb,
-                  sourceId: source.id,
-                }),
-                page: pageResult.value,
-                type: "fetched",
-              } as const;
-            }),
-          catch: (cause) => cause,
-        });
-
-      const cycleTimeoutHalt = () => {
-        logger.warn("case_law.ingestion.cycle_timeout", {
-          adapterKey: adapter.key,
-          cursor: cursor ?? "",
-          pagesProcessed,
-          inserted,
-          skipped,
-          remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
-          pageTimeoutMs: pageTimeout,
-        });
-        return {
-          type: "halt",
-          reason: CYCLE_HALT_REASON.TIMEOUT,
-          stopKind: INGESTION_STOP_KIND.DEADLINE,
-        } as const;
-      };
-
-      const fetchNextObservedPage = async () => {
-        // Starting a page the remaining budget cannot cover buys nothing: the
-        // cycle deadline aborts it mid-flight, its work is discarded and the
-        // cycle is reported as an adapter failure instead of a timeout. Stop on
-        // the last completed page, which is where the cursor already stands, and
-        // spend no lease renewal on the attempt.
-        if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
-          return cycleTimeoutHalt();
-        }
-        const pageSignal = deadline
-          ? AbortSignal.any([deadline.signal, AbortSignal.timeout(pageTimeout)])
-          : AbortSignal.timeout(pageTimeout);
-        recentCursors.add(cursor);
-        const observedPageResult = await fetchObservedPage(cursor, pageSignal);
-        if (Result.isError(observedPageResult)) {
-          if (observedPageResult.error instanceof TimeoutError) {
+  const fetchObservedPage = async (
+    fetchCursor: string | null,
+    pageSignal: AbortSignal,
+  ) =>
+    await Result.tryPromise({
+      try: async () =>
+        await sourceLease.beforeRemoteEffect(async () => {
+          // The lease renewal this callback runs behind spends budget of its
+          // own, so the page admitted a moment ago may no longer fit. This is
+          // the last point before the request where that can still be read.
+          if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
+            return { type: "budget-exhausted" } as const;
+          }
+          const fetched = await Result.tryPromise({
+            try: async () =>
+              await adapter.fetchPage(
+                fetchCursor,
+                source.config ?? {},
+                pageSignal,
+                onDocumentObservation,
+              ),
+            catch: (cause) =>
+              new AdapterFetchError({
+                message: cause instanceof Error ? cause.message : String(cause),
+                adapterKey: adapter.key,
+                cursor: fetchCursor,
+                cause,
+                stopKind: pageSignal.aborted
+                  ? INGESTION_STOP_KIND.DEADLINE
+                  : ingestionStopKindOf(cause, "adapter"),
+              }),
+          });
+          if (Result.isError(fetched)) {
+            return { error: fetched.error, type: "fetch-error" } as const;
+          }
+          const pageResult = fetched.value;
+          if (Result.isError(pageResult)) {
             return {
-              type: "halt",
-              reason: databaseTimeoutHaltReason(observedPageResult.error),
-              stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
+              error: pageResult.error,
+              type: "fetch-error",
             } as const;
           }
-          if (observedPageResult.error instanceof Error) {
-            throw observedPageResult.error;
-          }
-          throw new ConcurrentModificationError({
-            message: "Case-law source observation failed",
-          });
-        }
-        if (observedPageResult.value.type === "budget-exhausted") {
-          return cycleTimeoutHalt();
-        }
-        if (observedPageResult.value.type === "fetch-error") {
-          // Expected operational failure: record one halt in the event/log path;
-          // the runner, rather than every attempt, captures sustained stalls.
-          const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
-          const pageStopKind =
-            deadline?.signal.aborted || pageSignal.aborted
-              ? INGESTION_STOP_KIND.DEADLINE
-              : observedPageResult.value.error.stopKind;
-          logger.error(
-            "case_law.ingestion.adapter_halted",
-            sanitizeErrorAttributesForOutput({
-              adapterKey: adapter.key,
-              cursor: cursor ?? "",
-              httpStatus: String(
-                observedPageResult.value.error.httpStatus ?? "",
-              ),
-              reason,
-              stopKind: pageStopKind,
-              inserted,
-              skipped,
+          return {
+            observationOrder: await allocateSourceObservationOrder({
+              leaseToken: sourceLease.leaseToken,
+              scopedDb,
+              sourceId: source.id,
             }),
-          );
-          return { type: "halt", reason, stopKind: pageStopKind } as const;
-        }
-        return observedPageResult.value;
-      };
+            page: pageResult.value,
+            type: "fetched",
+          } as const;
+        }),
+      catch: (cause) => cause,
+    });
 
-      /**
-       * Write a page's supplement failures in one insert. Returns a halt reason
-       * when the write meets a timeout or a transient database condition.
-       */
-      const flushIngestionFailures = async (
-        failures: readonly IngestionFailureRow[],
-      ): Promise<string | null> =>
-        failureLedgerHaltReason(
-          await recordIngestionFailures({
-            scopedDb,
-            failures,
-            adapterKey: adapter.key,
-          }),
-        );
+  const cycleTimeoutHalt = () => {
+    logger.warn("case_law.ingestion.cycle_timeout", {
+      adapterKey: adapter.key,
+      cursor: cursor ?? "",
+      pagesProcessed,
+      inserted,
+      skipped,
+      remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
+      pageTimeoutMs: pageTimeout,
+    });
+    return {
+      type: "halt",
+      reason: CYCLE_HALT_REASON.TIMEOUT,
+      stopKind: INGESTION_STOP_KIND.DEADLINE,
+    } as const;
+  };
 
-      const reparseStoredRaw = adapter.reparseStoredRaw;
-      const nextObservationOrder = async (): Promise<bigint> => {
-        await sourceLease.beforeDatabaseMark();
-        return await allocateSourceObservationOrder({
-          leaseToken: sourceLease.leaseToken,
-          scopedDb,
-          sourceId: source.id,
+  const fetchNextObservedPage = async () => {
+    // Starting a page the remaining budget cannot cover buys nothing: the
+    // cycle deadline aborts it mid-flight, its work is discarded and the
+    // cycle is reported as an adapter failure instead of a timeout. Stop on
+    // the last completed page, which is where the cursor already stands, and
+    // spend no lease renewal on the attempt.
+    if (deadline && !canStartCyclePage(deadline, pageTimeout)) {
+      return cycleTimeoutHalt();
+    }
+    const pageSignal = deadline
+      ? AbortSignal.any([deadline.signal, AbortSignal.timeout(pageTimeout)])
+      : AbortSignal.timeout(pageTimeout);
+    recentCursors.add(cursor);
+    const observedPageResult = await fetchObservedPage(cursor, pageSignal);
+    if (Result.isError(observedPageResult)) {
+      if (observedPageResult.error instanceof TimeoutError) {
+        return {
+          type: "halt",
+          reason: databaseTimeoutHaltReason(observedPageResult.error),
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
+        } as const;
+      }
+      if (observedPageResult.error instanceof Error) {
+        throw observedPageResult.error;
+      }
+      throw new ConcurrentModificationError({
+        message: "Case-law source observation failed",
+      });
+    }
+    if (observedPageResult.value.type === "budget-exhausted") {
+      return cycleTimeoutHalt();
+    }
+    if (observedPageResult.value.type === "fetch-error") {
+      // Expected operational failure: record one halt in the event/log path;
+      // the runner, rather than every attempt, captures sustained stalls.
+      const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
+      const pageStopKind =
+        deadline?.signal.aborted || pageSignal.aborted
+          ? INGESTION_STOP_KIND.DEADLINE
+          : observedPageResult.value.error.stopKind;
+      logger.error(
+        "case_law.ingestion.adapter_halted",
+        sanitizeErrorAttributesForOutput({
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
+          reason,
+          stopKind: pageStopKind,
+          inserted,
+          skipped,
+        }),
+      );
+      return { type: "halt", reason, stopKind: pageStopKind } as const;
+    }
+    return observedPageResult.value;
+  };
+
+  /**
+   * Write a page's supplement failures in one insert. Returns a halt reason
+   * when the write meets a timeout or a transient database condition.
+   */
+  const flushIngestionFailures = async (
+    failures: readonly IngestionFailureRow[],
+  ): Promise<string | null> =>
+    failureLedgerHaltReason(
+      await recordIngestionFailures({
+        scopedDb,
+        failures,
+        adapterKey: adapter.key,
+      }),
+    );
+
+  const reparseStoredRaw = adapter.reparseStoredRaw;
+  const nextObservationOrder = async (): Promise<bigint> => {
+    await sourceLease.beforeDatabaseMark();
+    return await allocateSourceObservationOrder({
+      leaseToken: sourceLease.leaseToken,
+      scopedDb,
+      sourceId: source.id,
+    });
+  };
+
+  /**
+   * Acquire the DB slot before processing a page's items (DB-heavy: insert,
+   * search index, citation extraction).
+   *
+   * A page with no decisions never touches the slot: it has no DB
+   * work, and acquiring anyway let a cycle-timeout abort land in
+   * the gap between the fetch returning and the acquire — breaking
+   * out before the cursor advance below ever ran, silently
+   * discarding the forward progress the fetch had already made and
+   * pinning the adapter to the same cursor on every later cycle.
+   */
+  const acquirePageSlot = async (page: SyncPage): Promise<PageSlot> => {
+    if (!dbSlot || pageItemCount(page) === 0) {
+      return PAGE_SLOT.NOT_NEEDED;
+    }
+    try {
+      await dbSlot.acquire(deadline?.signal);
+      return PAGE_SLOT.HELD;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return PAGE_SLOT.CYCLE_ENDED;
+      }
+      throw error;
+    }
+  };
+
+  /**
+   * Apply a page's decisions in admitted parts, each settled before the
+   * next starts. Every part carries the page's one observation; the first
+   * that stops ends the page with its halt reason, and the cursor holds.
+   *
+   * The crawl reads a part's stop and its ledger write, not each record's
+   * settlement: a record the ledger holds is stepped over, whether it was
+   * rejected or met a transient database condition, and the reconciliation
+   * lists it again. An unsettled payload holds the cursor through the page's
+   * write-failure count.
+   */
+  const applyPageDecisions = async ({
+    decisions,
+    observation,
+  }: {
+    decisions: SyncPage["decisions"];
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
+      if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
+        // A page's records are applied whatever their size; one over the
+        // byte bound goes alone, and is reported.
+        logger.warn("case_law.ingestion.oversized_record", {
+          adapterKey: adapter.key,
+          caseNumber: (
+            batch.decisions.at(0) ??
+            panic("An admitted page batch contains a decision")
+          ).caseNumber,
+          cursor: cursor ?? "",
+          encodedBytes: batch.encodedBytes,
+          limitBytes: CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes,
         });
-      };
+      }
+      // db-await-in-loop: one admitted part at a time, each settled before the next, ordered per observation
+      const applied = await applyDecisionBatch(
+        {
+          batch,
+          sourceId: source.id,
+          scopedDb,
+          observation,
+          refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          corpus,
+          polarityRules,
+          context: { adapterKey: adapter.key, cursor },
+          failureStreak: consecutiveFailures,
+          insertLimit:
+            maxDecisions === undefined ? undefined : maxDecisions - inserted,
+        },
+        resolveSourceContract,
+      );
+      inserted += applied.inserted;
+      skipped += applied.skipped;
+      searchVectorFailures += applied.searchVectorFailures;
+      s3UploadFailures += applied.corpusWriteFailures;
+      consecutiveFailures = applied.failureStreak;
+      // A reason the batch stopped for wins over the ledger write's own.
+      const batchHalt =
+        (applied.halt === null
+          ? null
+          : batchHaltReason(applied.halt, maxDecisions)) ??
+        failureLedgerHaltReason(applied.failureLedger);
+      if (batchHalt !== null) {
+        stopKind =
+          applied.halt === null
+            ? INGESTION_STOP_KIND.INTERNAL_ERROR
+            : batchStopKind(applied.halt);
+        return batchHalt;
+      }
+    }
+    return null;
+  };
 
-      /**
-       * Acquire the DB slot before processing a page's items (DB-heavy: insert,
-       * search index, citation extraction).
-       *
-       * A page with no decisions never touches the slot: it has no DB
-       * work, and acquiring anyway let a cycle-timeout abort land in
-       * the gap between the fetch returning and the acquire — breaking
-       * out before the cursor advance below ever ran, silently
-       * discarding the forward progress the fetch had already made and
-       * pinning the adapter to the same cursor on every later cycle.
-       */
-      const acquirePageSlot = async (page: SyncPage): Promise<PageSlot> => {
-        if (!dbSlot || pageItemCount(page) === 0) {
-          return PAGE_SLOT.NOT_NEEDED;
-        }
-        try {
-          await dbSlot.acquire(deadline?.signal);
-          return PAGE_SLOT.HELD;
-        } catch (error) {
-          if (error instanceof DOMException && error.name === "AbortError") {
-            return PAGE_SLOT.CYCLE_ENDED;
-          }
-          throw error;
-        }
-      };
-
-      /**
-       * Apply a page's decisions in admitted parts, each settled before the
-       * next starts. Every part carries the page's one observation; the first
-       * that stops ends the page with its halt reason, and the cursor holds.
-       *
-       * The crawl reads a part's stop and its ledger write, not each record's
-       * settlement: a record the ledger holds is stepped over, whether it was
-       * rejected or met a transient database condition, and the reconciliation
-       * lists it again. An unsettled payload holds the cursor through the page's
-       * write-failure count.
-       */
-      const applyPageDecisions = async ({
-        decisions,
-        observation,
-      }: {
-        decisions: SyncPage["decisions"];
-        observation: { order: bigint; observedAt: Date };
-      }): Promise<string | null> => {
-        for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
-          if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
-            // A page's records are applied whatever their size; one over the
-            // byte bound goes alone, and is reported.
-            logger.warn("case_law.ingestion.oversized_record", {
-              adapterKey: adapter.key,
-              caseNumber: (
-                batch.decisions.at(0) ??
-                panic("An admitted page batch contains a decision")
-              ).caseNumber,
-              cursor: cursor ?? "",
-              encodedBytes: batch.encodedBytes,
-              limitBytes: CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes,
-            });
-          }
-          // db-await-in-loop: one admitted part at a time, each settled before the next, ordered per observation
-          const applied = await applyDecisionBatch(
+  /**
+   * Place a page's supplements, one at a time, unless the page already
+   * halted. Returns the page's halt reason: the one it came with, or one
+   * naming a supplement that could not be placed, so the cursor holds and the
+   * page is read again.
+   */
+  const placePageSupplements = async ({
+    supplements,
+    halted,
+  }: {
+    supplements: SyncPage["supplements"];
+    halted: string | null;
+  }): Promise<string | null> => {
+    if (halted !== null || supplements === undefined) {
+      return halted;
+    }
+    if (reparseStoredRaw === undefined) {
+      return panic(
+        `Adapter ${adapter.key} emits supplements but cannot rebuild the judgments they join`,
+      );
+    }
+    const failures: IngestionFailureRow[] = [];
+    for (const supplement of supplements) {
+      const placed = await Result.tryPromise({
+        try: async () =>
+          // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
+          await processSupplement(
             {
-              batch,
+              supplement,
               sourceId: source.id,
               scopedDb,
-              observation,
-              refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+              observedAt: new Date(),
+              nextObservationOrder,
+              reparseStoredRaw,
+              readStoredRaw: readStoredRawFromS3,
               corpus,
               polarityRules,
-              context: { adapterKey: adapter.key, cursor },
-              failureStreak: consecutiveFailures,
-              insertLimit:
-                maxDecisions === undefined
-                  ? undefined
-                  : maxDecisions - inserted,
             },
             resolveSourceContract,
-          );
-          inserted += applied.inserted;
-          skipped += applied.skipped;
-          searchVectorFailures += applied.searchVectorFailures;
-          s3UploadFailures += applied.corpusWriteFailures;
-          consecutiveFailures = applied.failureStreak;
-          // A reason the batch stopped for wins over the ledger write's own.
-          const batchHalt =
-            (applied.halt === null
-              ? null
-              : batchHaltReason(applied.halt, maxDecisions)) ??
-            failureLedgerHaltReason(applied.failureLedger);
-          if (batchHalt !== null) {
-            stopKind =
-              applied.halt === null
-                ? INGESTION_STOP_KIND.INTERNAL_ERROR
-                : batchStopKind(applied.halt);
-            return batchHalt;
-          }
-        }
-        return null;
-      };
-
-      /**
-       * Place a page's supplements, one at a time, unless the page already
-       * halted. Returns the page's halt reason: the one it came with, or one
-       * naming a supplement that could not be placed, so the cursor holds and the
-       * page is read again.
-       */
-      const placePageSupplements = async ({
-        supplements,
-        halted,
-      }: {
-        supplements: SyncPage["supplements"];
-        halted: string | null;
-      }): Promise<string | null> => {
-        if (halted !== null || supplements === undefined) {
-          return halted;
-        }
-        if (reparseStoredRaw === undefined) {
-          return panic(
-            `Adapter ${adapter.key} emits supplements but cannot rebuild the judgments they join`,
-          );
-        }
-        const failures: IngestionFailureRow[] = [];
-        for (const supplement of supplements) {
-          const placed = await Result.tryPromise({
-            try: async () =>
-              // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-              await processSupplement(
-                {
-                  supplement,
-                  sourceId: source.id,
-                  scopedDb,
-                  observedAt: new Date(),
-                  nextObservationOrder,
-                  reparseStoredRaw,
-                  readStoredRaw: readStoredRawFromS3,
-                  corpus,
-                  polarityRules,
-                },
-                resolveSourceContract,
-              ),
-            catch: (cause) => cause,
-          });
-          if (Result.isError(placed)) {
-            // As a decision's failure is: recorded and stepped over, so one
-            // poison supplement cannot pin the source. It is not lost: nothing
-            // holds its identity, so the reconciliation lists it again.
-            const { error } = placed;
-            const { document } = supplement;
-            logger.error("case_law.ingestion.supplement_failed", {
-              adapterKey: adapter.key,
-              caseNumber: document.caseNumber,
-              sourceDocumentId: document.sourceDocumentId,
-              ...errorSystemFields(error),
-              ...pgErrorFields(error),
-              "error.detail": wrappedErrorDetail(error),
-            });
-            captureError(
-              error,
-              handlerErrorContext("ingestion.placePageSupplements", {
-                adapterKey: adapter.key,
-                step: "runIngestionPipeline.processSupplement",
-              }),
-            );
-            if (error instanceof TimeoutError) {
-              await flushIngestionFailures(failures);
-              return databaseTimeoutHaltReason(error);
-            }
-            failures.push({
-              sourceId: source.id,
-              caseNumber: document.caseNumber,
-              language: document.language,
-              errorType: errorTag(error).slice(0, 128),
-              errorMessage: wrappedErrorDetail(error).slice(0, 2048),
-              cursor,
-            });
-            continue;
-          }
-          if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-            await flushIngestionFailures(failures);
-            return `Supplement ${supplement.document.sourceDocumentId} not placed (${placed.value.reason}); cursor held for retry`;
-          }
-        }
-        return await flushIngestionFailures(failures);
-      };
-
-      /**
-       * Settle a page's unread items once everything else on it is settled.
-       * Items whose read stays unavailable hold the cursor until their bound is
-       * spent; refusals and spent items are stored typed. The counts are written
-       * only from a cycle in which nothing else held the page, so a cycle that
-       * failed for another reason does not count against an item.
-       */
-      const settlePageUnreadItems = async ({
-        unreadItems,
-        observation,
-      }: {
-        unreadItems: SyncPage["unreadItems"];
-        observation: { order: bigint; observedAt: Date };
-      }): Promise<string | null> => {
-        if (
-          unreadItems === undefined &&
-          Object.keys(unavailableStreaks).length === 0
-        ) {
-          return null;
-        }
-        const plan = planUnreadItems(unreadItems, unavailableStreaks);
-        if (plan.terminal.length > 0) {
-          const s3FailuresBefore = s3UploadFailures;
-          const halted = await applyPageDecisions({
-            decisions: plan.terminal,
-            observation,
-          });
-          if (halted !== null) {
-            return halted;
-          }
-          if (s3UploadFailures > s3FailuresBefore) {
-            // The page's corpus-write hold reports this cycle; the counts stay.
-            return null;
-          }
-        }
-        if (!sameStreaks(plan.streaks, unavailableStreaks)) {
-          await sourceLease.beforeDatabaseMark();
-          const written = await writeUnavailableStreaks({
-            scopedDb,
-            sourceId: source.id,
-            leaseToken: sourceLease.leaseToken,
-            streaks: plan.streaks,
-          });
-          if (!written) {
-            stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
-            return "Source ingestion lease was lost; cursor held for retry";
-          }
-          unavailableStreaks = plan.streaks;
-        }
-        if (plan.holding === 0) {
-          if (plan.terminal.length > 0) {
-            logger.warn("case_law.ingestion.unread_items_stored", {
-              adapterKey: adapter.key,
-              cursor: cursor ?? "",
-              stored: plan.terminal.length,
-            });
-          }
-          return null;
-        }
-        stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
-        return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
-      };
-
-      /**
-       * Apply a page's decisions, place its supplements, then settle its unread
-       * items. A page with failed corpus writes stops before the unread items:
-       * the cycle is held for those writes and does not count against an item.
-       */
-      const applyPage = async ({
-        page,
-        observation,
-      }: {
-        page: SyncPage;
-        observation: { order: bigint; observedAt: Date };
-      }): Promise<string | null> => {
-        const s3FailuresBefore = s3UploadFailures;
-        const halted = await applyPageDecisions({
-          decisions: page.decisions,
-          observation,
+          ),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(placed)) {
+        // As a decision's failure is: recorded and stepped over, so one
+        // poison supplement cannot pin the source. It is not lost: nothing
+        // holds its identity, so the reconciliation lists it again.
+        const { error } = placed;
+        const { document } = supplement;
+        logger.error("case_law.ingestion.supplement_failed", {
+          adapterKey: adapter.key,
+          caseNumber: document.caseNumber,
+          sourceDocumentId: document.sourceDocumentId,
+          ...errorSystemFields(error),
+          ...pgErrorFields(error),
+          "error.detail": wrappedErrorDetail(error),
         });
-        // After the page's packs are flushed, so a judgment written on this page
-        // is settled before its supplement writes it again, and before the
-        // cursor moves, so a supplement that could not be placed holds it.
-        const placed = await placePageSupplements({
-          supplements: page.supplements,
-          halted,
-        });
-        if (placed !== null || s3UploadFailures > s3FailuresBefore) {
-          return placed;
-        }
-        return await settlePageUnreadItems({
-          unreadItems: page.unreadItems,
-          observation,
-        });
-      };
-
-      while (pagesProcessed < maxPages) {
-        const observedPage = await fetchNextObservedPage();
-        if (observedPage.type === "halt") {
-          haltReason = observedPage.reason;
-          stopKind = observedPage.stopKind;
-          break;
-        }
-
-        // Order the observation after the source response exists. A request-start
-        // token can invert two overlapping responses and make an older payload
-        // dominate a newer one. The source lease prevents those fetches from
-        // overlapping; this durable token orders the resulting database writes.
-        const { observationOrder, page } = observedPage;
-        checkpointObservationOrder = observationOrder;
-        const observedAt = new Date();
-
-        // Released before the next page fetch so external API calls don't hold
-        // the slot. try-finally ensures no slot leak on unexpected exceptions.
-        const pageSlot = await acquirePageSlot(page);
-        if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
-          haltReason = CYCLE_HALT_REASON.TIMEOUT;
-          stopKind = INGESTION_STOP_KIND.DEADLINE;
-          break;
-        }
-        const pageT0 = performance.now();
-        const insertedBefore = inserted;
-        const skippedBefore = skipped;
-        const s3FailuresBefore = s3UploadFailures;
-        try {
-          // db-await-in-loop: one application pass per page, its decisions and then its supplements, before the cursor moves
-          haltReason = await applyPage({
-            page,
-            observation: { order: observationOrder, observedAt },
-          });
-
-          const pageInserted = inserted - insertedBefore;
-          const pageSkipped = skipped - skippedBefore;
-          const pageS3Failures = s3UploadFailures - s3FailuresBefore;
-          if (pageS3Failures > 0 && haltReason === null) {
-            // Hold the cursor on a page with failed corpus writes: cursor
-            // sources do not re-emit consumed pages, so advancing would leave
-            // the preserved source-hash retry unreachable until the source
-            // changes again.
-            haltReason = `${pageS3Failures} corpus write failure(s); cursor held for retry`;
-          }
-          logger.info("case_law.ingestion.pipeline_page_done", {
+        captureError(
+          error,
+          handlerErrorContext("ingestion.placePageSupplements", {
             adapterKey: adapter.key,
-            cursor: cursor ?? "",
-            nextCursor: page.nextCursor ?? "",
-            page: pagesProcessed + 1,
-            decisions: page.decisions.length,
-            itemBuildFailures: page.itemBuildFailures?.count ?? 0,
-            inserted: pageInserted,
-            skipped: pageSkipped,
-            durationMs: Math.round(performance.now() - pageT0),
-            halted: haltReason !== null,
-          });
-
-          if (haltReason) {
-            stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-            logger.error("case_law.ingestion.adapter_halted", {
-              adapterKey: adapter.key,
-              cursor: cursor ?? "",
-              reason: haltReason,
-              stopKind,
-              inserted,
-              skipped,
-            });
-            break;
-          }
-
-          cursor = page.nextCursor;
-          pagesProcessed++;
-        } finally {
-          if (dbSlot && pageSlot === PAGE_SLOT.HELD) {
-            dbSlot.release();
-          }
+            step: "runIngestionPipeline.processSupplement",
+          }),
+        );
+        if (error instanceof TimeoutError) {
+          await flushIngestionFailures(failures);
+          return databaseTimeoutHaltReason(error);
         }
-
-        // Stop when the adapter signals exhaustion: null cursor
-        // or a cursor we've already visited (stagnation / ping-pong
-        // between two parked positions).
-        if (!page.nextCursor || recentCursors.has(page.nextCursor)) {
-          break;
-        }
-
-        if (adapter.minRequestIntervalMs > 0) {
-          await Bun.sleep(adapter.minRequestIntervalMs);
-        }
-      }
-
-      await sourceLease.beforeDatabaseMark();
-      const checkpoint = await advanceCorpusIngestionCheckpoint({
-        expectedCursor: source.syncCursor,
-        nextCursor: cursor,
-        scopedDb,
-        source: {
-          id: source.id,
-          leaseToken: sourceLease.leaseToken,
-          observationOrder: checkpointObservationOrder,
-          type: CORPUS_SOURCE_TYPE.CASE_LAW,
-        },
-      });
-      if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.MISSING) {
-        return panic("Case-law ingestion source disappeared before checkpoint");
-      }
-      if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.SUPERSEDED) {
-        logger.warn("case_law.ingestion.checkpoint_superseded", {
-          adapterKey: source.adapterKey,
+        failures.push({
           sourceId: source.id,
+          caseNumber: document.caseNumber,
+          language: document.language,
+          errorType: errorTag(error).slice(0, 128),
+          errorMessage: wrappedErrorDetail(error).slice(0, 2048),
+          cursor,
+        });
+        continue;
+      }
+      if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+        await flushIngestionFailures(failures);
+        return `Supplement ${supplement.document.sourceDocumentId} not placed (${placed.value.reason}); cursor held for retry`;
+      }
+    }
+    return await flushIngestionFailures(failures);
+  };
+
+  /**
+   * Settle a page's unread items once everything else on it is settled.
+   * Items whose read stays unavailable hold the cursor until their bound is
+   * spent; refusals and spent items are stored typed. The counts are written
+   * only from a cycle in which nothing else held the page, so a cycle that
+   * failed for another reason does not count against an item.
+   */
+  const settlePageUnreadItems = async ({
+    unreadItems,
+    observation,
+  }: {
+    unreadItems: SyncPage["unreadItems"];
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    if (
+      unreadItems === undefined &&
+      Object.keys(unavailableStreaks).length === 0
+    ) {
+      return null;
+    }
+    const plan = planUnreadItems(unreadItems, unavailableStreaks);
+    if (plan.terminal.length > 0) {
+      const s3FailuresBefore = s3UploadFailures;
+      const halted = await applyPageDecisions({
+        decisions: plan.terminal,
+        observation,
+      });
+      if (halted !== null) {
+        return halted;
+      }
+      if (s3UploadFailures > s3FailuresBefore) {
+        // The page's corpus-write hold reports this cycle; the counts stay.
+        return null;
+      }
+    }
+    if (!sameStreaks(plan.streaks, unavailableStreaks)) {
+      await sourceLease.beforeDatabaseMark();
+      const written = await writeUnavailableStreaks({
+        scopedDb,
+        sourceId: source.id,
+        leaseToken: sourceLease.leaseToken,
+        streaks: plan.streaks,
+      });
+      if (!written) {
+        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        return "Source ingestion lease was lost; cursor held for retry";
+      }
+      unavailableStreaks = plan.streaks;
+    }
+    if (plan.holding === 0) {
+      if (plan.terminal.length > 0) {
+        logger.warn("case_law.ingestion.unread_items_stored", {
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          stored: plan.terminal.length,
         });
       }
-      cursor = checkpoint.cursor;
+      return null;
+    }
+    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
+  };
 
-      // Outside the checkpoint transaction: a durable refresh claim bounds
-      // daily counts, including failed attempts, through separate admission.
-      await refreshNextSourceStoredTotal({
-        scopedDb,
-        ...(countStoredTotalSource === undefined
-          ? {}
-          : { countSource: countStoredTotalSource }),
-        ...(deadline === undefined ? {} : { deadline }),
-        acquireAdmission: async (phase) =>
-          await acquireStoredTotalAdmission({
-            deadline,
-            ...(phase === undefined ? {} : { phase }),
-          }),
+  /**
+   * Apply a page's decisions, place its supplements, then settle its unread
+   * items. A page with failed corpus writes stops before the unread items:
+   * the cycle is held for those writes and does not count against an item.
+   */
+  const applyPage = async ({
+    page,
+    observation,
+  }: {
+    page: SyncPage;
+    observation: { order: bigint; observedAt: Date };
+  }): Promise<string | null> => {
+    const s3FailuresBefore = s3UploadFailures;
+    const halted = await applyPageDecisions({
+      decisions: page.decisions,
+      observation,
+    });
+    // After the page's packs are flushed, so a judgment written on this page
+    // is settled before its supplement writes it again, and before the
+    // cursor moves, so a supplement that could not be placed holds it.
+    const placed = await placePageSupplements({
+      supplements: page.supplements,
+      halted,
+    });
+    if (placed !== null || s3UploadFailures > s3FailuresBefore) {
+      return placed;
+    }
+    return await settlePageUnreadItems({
+      unreadItems: page.unreadItems,
+      observation,
+    });
+  };
+
+  while (pagesProcessed < maxPages) {
+    const observedPage = await fetchNextObservedPage();
+    if (observedPage.type === "halt") {
+      haltReason = observedPage.reason;
+      stopKind = observedPage.stopKind;
+      break;
+    }
+
+    // Order the observation after the source response exists. A request-start
+    // token can invert two overlapping responses and make an older payload
+    // dominate a newer one. The source lease prevents those fetches from
+    // overlapping; this durable token orders the resulting database writes.
+    const { observationOrder, page } = observedPage;
+    checkpointObservationOrder = observationOrder;
+    const observedAt = new Date();
+
+    // Released before the next page fetch so external API calls don't hold
+    // the slot. try-finally ensures no slot leak on unexpected exceptions.
+    const pageSlot = await acquirePageSlot(page);
+    if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
+      haltReason = CYCLE_HALT_REASON.TIMEOUT;
+      stopKind = INGESTION_STOP_KIND.DEADLINE;
+      break;
+    }
+    const pageT0 = performance.now();
+    const insertedBefore = inserted;
+    const skippedBefore = skipped;
+    const s3FailuresBefore = s3UploadFailures;
+    try {
+      // db-await-in-loop: one application pass per page, its decisions and then its supplements, before the cursor moves
+      haltReason = await applyPage({
+        page,
+        observation: { order: observationOrder, observedAt },
       });
 
-      return {
-        inserted,
-        skipped,
-        searchVectorFailures,
-        s3UploadFailures,
-        pagesProcessed,
-        nextCursor: cursor,
-        haltReason,
-        ...(stopKind === undefined ? {} : { stopKind }),
-      };
+      const pageInserted = inserted - insertedBefore;
+      const pageSkipped = skipped - skippedBefore;
+      const pageS3Failures = s3UploadFailures - s3FailuresBefore;
+      if (pageS3Failures > 0 && haltReason === null) {
+        // Hold the cursor on a page with failed corpus writes: cursor
+        // sources do not re-emit consumed pages, so advancing would leave
+        // the preserved source-hash retry unreachable until the source
+        // changes again.
+        haltReason = `${pageS3Failures} corpus write failure(s); cursor held for retry`;
+      }
+      logger.info("case_law.ingestion.pipeline_page_done", {
+        adapterKey: adapter.key,
+        cursor: cursor ?? "",
+        nextCursor: page.nextCursor ?? "",
+        page: pagesProcessed + 1,
+        decisions: page.decisions.length,
+        itemBuildFailures: page.itemBuildFailures?.count ?? 0,
+        inserted: pageInserted,
+        skipped: pageSkipped,
+        durationMs: Math.round(performance.now() - pageT0),
+        halted: haltReason !== null,
+      });
+
+      if (haltReason) {
+        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
+        logger.error("case_law.ingestion.adapter_halted", {
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          reason: haltReason,
+          stopKind,
+          inserted,
+          skipped,
+        });
+        break;
+      }
+
+      cursor = page.nextCursor;
+      pagesProcessed++;
+    } finally {
+      if (dbSlot && pageSlot === PAGE_SLOT.HELD) {
+        dbSlot.release();
+      }
+    }
+
+    // Stop when the adapter signals exhaustion: null cursor
+    // or a cursor we've already visited (stagnation / ping-pong
+    // between two parked positions).
+    if (!page.nextCursor || recentCursors.has(page.nextCursor)) {
+      break;
+    }
+
+    if (adapter.minRequestIntervalMs > 0) {
+      await Bun.sleep(adapter.minRequestIntervalMs);
+    }
+  }
+
+  await sourceLease.beforeDatabaseMark();
+  const checkpoint = await advanceCorpusIngestionCheckpoint({
+    expectedCursor: source.syncCursor,
+    nextCursor: cursor,
+    scopedDb,
+    source: {
+      id: source.id,
+      leaseToken: sourceLease.leaseToken,
+      observationOrder: checkpointObservationOrder,
+      type: CORPUS_SOURCE_TYPE.CASE_LAW,
     },
+  });
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.MISSING) {
+    return panic("Case-law ingestion source disappeared before checkpoint");
+  }
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.SUPERSEDED) {
+    logger.warn("case_law.ingestion.checkpoint_superseded", {
+      adapterKey: source.adapterKey,
+      sourceId: source.id,
+    });
+  }
+  cursor = checkpoint.cursor;
+
+  // Outside the checkpoint transaction: a durable refresh claim bounds
+  // daily counts, including failed attempts, through separate admission.
+  await refreshNextSourceStoredTotal({
+    scopedDb,
+    ...(countStoredTotalSource === undefined
+      ? {}
+      : { countSource: countStoredTotalSource }),
+    ...(deadline === undefined ? {} : { deadline }),
+    acquireAdmission: async (phase) =>
+      await acquireStoredTotalAdmission({
+        deadline,
+        ...(phase === undefined ? {} : { phase }),
+      }),
+  });
+
+  return {
+    inserted,
+    skipped,
+    searchVectorFailures,
+    s3UploadFailures,
+    pagesProcessed,
+    nextCursor: cursor,
+    haltReason,
+    ...(stopKind === undefined ? {} : { stopKind }),
+  };
+};
+
+/**
+ * Run the ingestion pipeline for a configured source.
+ *
+ * Fetches pages from the source adapter, processes each
+ * decision (segment, extract citations, dedup), and stores
+ * results in the database.
+ */
+export const runIngestionPipeline = async (
+  input: PipelineInput,
+): Promise<IngestionPipelineResult> =>
+  await withExceptionScope(
+    { type: "ingestion", adapterKey: input.source.adapterKey },
+    async () => await runScopedIngestionPipeline(input),
   );
