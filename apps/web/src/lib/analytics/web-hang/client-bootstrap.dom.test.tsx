@@ -5,7 +5,18 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://app.example.test/chat" });
 const { bootClientRuntime } = await import("./client-bootstrap");
-const { getWebHangDetector } = await import("./web-hang-detector");
+const {
+  createWebHangDetector,
+  getWebHangDetector,
+  HANG_MARKER_PREFIX,
+  HANG_STALE_MS,
+} = await import("./web-hang-detector");
+const { browserStorage } = await import("@/lib/account/browser-storage");
+const local = browserStorage("local");
+const hangMarkerKeys = () =>
+  Array.from({ length: local?.length ?? 0 }, (_, index) =>
+    local?.key(index),
+  ).filter((name) => name?.startsWith(HANG_MARKER_PREFIX) === true);
 const previousBuild = Object.getOwnPropertyDescriptor(
   globalThis,
   "__APP_VERSION__",
@@ -51,4 +62,27 @@ test("a detector timer failure still loads the runtime before reporting the erro
   expect(captured.at(0)).toMatchObject({ cause: failure });
   expect(getWebHangDetector()).toBeUndefined();
   timer.mockRestore();
+
+  // The failed start leaves no boot evidence, so a later document neither
+  // enters recovery nor reports a hang.
+  expect(hangMarkerKeys()).toEqual([]);
+  const reports: unknown[] = [];
+  const later = createWebHangDetector({
+    window,
+    build: "test",
+    now: () => Date.now() + HANG_STALE_MS * 2,
+    random: () => 1,
+  });
+  later.attach({
+    analytics: {
+      capturePageHangSuspected: (properties) => {
+        reports.push(properties);
+      },
+      captureLongAnimationFrame: () => undefined,
+    },
+    routeTemplates: new Set(),
+  });
+  expect(later.safeMode).toBe(false);
+  expect(reports).toEqual([]);
+  later.dispose();
 });

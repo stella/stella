@@ -237,15 +237,36 @@ export const createWebHangDetector = ({
     stopped = false;
     onVisibility();
   };
-  const timer = browser.setInterval(pulse, HANG_HEARTBEAT_MS);
-  browser.document.addEventListener("visibilitychange", onVisibility);
-  browser.addEventListener("pagehide", onHide);
-  browser.addEventListener("pageshow", onShow);
-  const observer = observeLongAnimationFrames({
-    browser,
-    sampled: random() < LOAF_SAMPLE_RATE,
-    readAnalytics: () => analytics,
+  let timer: ReturnType<typeof browser.setInterval> | undefined;
+  let observer: ReturnType<typeof observeLongAnimationFrames> = undefined;
+  const uninstall = () => {
+    if (timer !== undefined) {
+      browser.clearInterval(timer);
+    }
+    observer?.disconnect();
+    browser.document.removeEventListener("visibilitychange", onVisibility);
+    browser.removeEventListener("pagehide", onHide);
+    browser.removeEventListener("pageshow", onShow);
+  };
+  const installed = Result.try(() => {
+    timer = browser.setInterval(pulse, HANG_HEARTBEAT_MS);
+    browser.document.addEventListener("visibilitychange", onVisibility);
+    browser.addEventListener("pagehide", onHide);
+    browser.addEventListener("pageshow", onShow);
+    observer = observeLongAnimationFrames({
+      browser,
+      sampled: random() < LOAF_SAMPLE_RATE,
+      readAnalytics: () => analytics,
+    });
   });
+  if (Result.isError(installed)) {
+    // Without its heartbeat and pagehide cleanup this document's boot marker
+    // could only ever read as a hung boot later, so it goes with the rest.
+    stopped = true;
+    uninstall();
+    Result.try(() => local?.removeItem(key)).unwrapOr(undefined);
+    throw installed.error.cause;
+  }
   return {
     safeMode,
     attach: (options: {
@@ -309,11 +330,7 @@ export const createWebHangDetector = ({
     },
     dispose: () => {
       stopped = true;
-      browser.clearInterval(timer);
-      observer?.disconnect();
-      browser.document.removeEventListener("visibilitychange", onVisibility);
-      browser.removeEventListener("pagehide", onHide);
-      browser.removeEventListener("pageshow", onShow);
+      uninstall();
     },
   };
 };
