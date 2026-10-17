@@ -12,8 +12,8 @@ import type {
 } from "./entry";
 import {
   matchNames,
-  MAX_SCREENING_WORK,
   nameIndexSteps,
+  nameWorkBound,
   runSteps,
   spendScreeningWork,
 } from "./name-match";
@@ -59,6 +59,8 @@ const ENTITY_TYPE_MISMATCH_FACTOR = 0.6;
 const STRONG_NAME_SCORE = 0.95;
 // A date the list marks "circa" is trusted to within this many years.
 const CIRCA_YEARS = 1;
+// Below the exact inverse, so cross-language float error cannot drop a name.
+const NAME_SCORE_FLOOR_SLACK = 1e-9;
 
 /** Built once per set of list editions and reused for every screening. */
 export type ScreeningIndex = {
@@ -69,20 +71,37 @@ export type ScreeningIndex = {
   readonly versions: readonly ListVersion[];
   readonly names: NameIndex;
   readonly identifierEntries: Pick<IdentifierPostings, "get">;
+  /** Sum over entries of their identity-field comparison work. */
+  readonly identityWork: number;
 };
+
+const entryIdentityWork = (
+  entry: Pick<SanctionsEntry, "birthDates" | "nationalities" | "identifiers">,
+) =>
+  entry.birthDates.length +
+  entry.nationalities.length +
+  entry.identifiers.length +
+  1;
 
 const identifierKey = (value: string): string =>
   value.toUpperCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
 
+type PendingScreeningIndex = {
+  finish: () => ScreeningIndex;
+  finishAsync: () => Promise<ScreeningIndex>;
+};
+
 function* screeningIndexSteps(
   lists: readonly ParsedList[],
-): Generator<void, ScreeningIndex, void> {
+): Generator<void, PendingScreeningIndex, void> {
   const sourceEntries = new ObjectColumn<SanctionsEntry>();
   const entries = new ScreeningEntries();
   const identifierEntries = new IdentifierPostings();
+  let identityWork = 0;
   for (const list of lists) {
     for (const entry of list.entries) {
       const entryIndex = entries.push(entry);
+      identityWork += entryIdentityWork(entry);
       sourceEntries.push(entry);
       const entryKeys = new Set<string>();
       for (const { number, status, kind } of entry.identifiers) {
@@ -100,18 +119,24 @@ function* screeningIndexSteps(
       yield;
     }
   }
-  return {
+  const names = yield* nameIndexSteps(sourceEntries);
+  const complete = (built: NameIndex): ScreeningIndex => ({
     entries: entries.entries,
     entryStorage: entries,
     versions: lists.map((list) => list.version),
-    names: yield* nameIndexSteps(sourceEntries),
+    names: built,
     identifierEntries,
+    identityWork,
+  });
+  return {
+    finish: () => complete(names.finish()),
+    finishAsync: async () => complete(await names.finishAsync()),
   };
 }
 
 export const buildScreeningIndex = (
   lists: readonly ParsedList[],
-): ScreeningIndex => runSteps(screeningIndexSteps(lists));
+): ScreeningIndex => runSteps(screeningIndexSteps(lists)).finish();
 
 /**
  * The same index as {@link buildScreeningIndex}, built one entry at a time:
@@ -126,7 +151,7 @@ export const buildScreeningIndexCooperatively = async (
   for (;;) {
     const step = steps.next();
     if (step.done === true) {
-      return step.value;
+      return await step.value.finishAsync();
     }
     await pause();
   }
@@ -261,8 +286,9 @@ export type ScreeningResult = {
   versions: readonly ListVersion[];
   /** The best `limit` of the entries at or above the cutoff. */
   possibleMatches: PossibleMatch[];
-  /** Count found at or above the cutoff; a lower bound when candidate scoring is truncated. */
+  /** Exact count found at or above the cutoff. */
   totalMatches: number;
+  /** Whether `limit` left out matches; screening itself is never partial. */
   truncated: boolean;
 };
 
@@ -293,7 +319,10 @@ type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
   cutoff: number;
   limit?: number;
-  /** Optional tighter budget; callers cannot exceed the global work bound. */
+  /**
+   * Optional tighter budget than the static bound derived from the index and
+   * the query; exceeding either is a defect and returns `work-limit`.
+   */
   maxWork?: number;
   /** Receives the work a completed screening spent, for headroom monitoring. */
   onWork?: (usage: ScreeningWorkUsage) => void;
@@ -489,45 +518,34 @@ const scoreEntry = ({
 type ScreenNameReadingsOptions = {
   index: NameIndex;
   readings: readonly NameReading[];
-  ceiling: (queryShare: number) => number;
-  rankEntry: (entry: number, nameScore: number) => number | undefined;
-  cutoff: number;
+  tau: number;
   work: ScreeningWorkBudget;
 };
+
+const distinctReadings = (readings: readonly NameReading[]) =>
+  new Map(
+    readings.map((reading) => [
+      `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
+      reading,
+    ]),
+  ).values();
 
 // Both interpretations of an unknown party share a budget and their best evidence.
 const screenNameReadings = ({
   index,
   readings,
-  ceiling,
-  rankEntry,
-  cutoff,
+  tau,
   work,
 }: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
   const nameMatches = new Map<number, NameMatch>();
-  let truncated = false;
-  const distinctReadings = new Map(
-    readings.map((reading) => [
-      `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
-      reading,
-    ]),
-  );
-  for (const reading of distinctReadings.values()) {
+  for (const reading of distinctReadings(readings)) {
     if (reading.tokens.length === 0) {
       continue;
     }
-    const matched = matchNames({
-      index,
-      reading,
-      ceiling,
-      rankEntry,
-      cutoff,
-      work,
-    });
+    const matched = matchNames({ index, reading, tau, work });
     if (matched === undefined) {
       return workLimit();
     }
-    truncated ||= matched.truncated;
     for (const [entryIndex, match] of matched.matches) {
       const known = nameMatches.get(entryIndex);
       if (known === undefined || match.score > known.score) {
@@ -535,7 +553,7 @@ const screenNameReadings = ({
       }
     }
   }
-  return Result.ok({ matches: nameMatches, truncated });
+  return Result.ok({ matches: nameMatches });
 };
 
 type PreparedScreeningQuery = {
@@ -594,6 +612,53 @@ const prepareScreeningQuery = (
   return Result.ok({ readings, identifierKeys });
 };
 
+const sortingWork = (count: number) => count * Math.ceil(Math.log2(count + 1));
+
+type NameScoreFloorOptions = { cutoff: number; query: ScreeningQuery };
+
+/**
+ * Agreeing identity fields lift a name score s to at most a + (1 - a) s, with
+ * a the lift of a zero score; a name below the inverse at the cutoff cannot
+ * reach it. Rounded down, so float error only widens the candidate set.
+ */
+const nameScoreFloor = ({ cutoff, query }: NameScoreFloorOptions): number => {
+  let lift = 0;
+  if (query.birthDate !== undefined) {
+    lift = moveToward(lift, BIRTH_DATE_EXACT_BOOST);
+  }
+  if (query.nationality !== undefined && query.nationality.length > 0) {
+    lift = moveToward(lift, NATIONALITY_MATCH_BOOST);
+  }
+  const floor = (cutoff - lift) / (1 - lift);
+  return Math.max(0, Math.floor((floor - NAME_SCORE_FLOOR_SLACK) * 1e6) / 1e6);
+};
+
+type ScreeningWorkBoundOptions = {
+  index: ScreeningIndex;
+  readings: readonly NameReading[];
+  identifierCount: number;
+};
+
+/** Worst-case work of one screening, so a correct one always completes. */
+export const screeningWorkBound = ({
+  index,
+  readings,
+  identifierCount,
+}: ScreeningWorkBoundOptions): number => {
+  let bound = 1;
+  for (const reading of distinctReadings(readings)) {
+    bound += nameWorkBound(index.names.stats, reading);
+  }
+  bound +=
+    identifierCount * index.entries.length +
+    index.identityWork +
+    sortingWork(index.entries.length);
+  if (!Number.isSafeInteger(bound)) {
+    panic("Screening work bound exceeds safe integer arithmetic");
+  }
+  return bound;
+};
+
 /**
  * Screens one party against the index and returns every entry scoring at or
  * above `cutoff`, best first. Each result is a possible match for review.
@@ -601,12 +666,7 @@ const prepareScreeningQuery = (
 export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
-  {
-    cutoff,
-    limit = DEFAULT_LIMIT,
-    maxWork = MAX_SCREENING_WORK,
-    onWork,
-  }: ScreenOptions,
+  { cutoff, limit = DEFAULT_LIMIT, maxWork, onWork }: ScreenOptions,
 ): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
@@ -615,62 +675,27 @@ export const screen = (
     panic(`limit must be a positive integer, got ${limit}`);
   }
   if (
-    !Number.isInteger(maxWork) ||
-    maxWork < 1 ||
-    maxWork > MAX_SCREENING_WORK
+    maxWork !== undefined &&
+    (!Number.isSafeInteger(maxWork) || maxWork < 1)
   ) {
-    panic(`maxWork must be within 1..${MAX_SCREENING_WORK}, got ${maxWork}`);
+    panic(`maxWork must be a positive safe integer, got ${maxWork}`);
   }
   const prepared = prepareScreeningQuery(query);
   if (prepared.isErr()) {
     return prepared;
   }
   const { readings, identifierKeys } = prepared.value;
-
-  // The best final score a name could reach if every identity field matched,
-  // given the share of the query it explains; the geometric mean with the
-  // listed side's share is at most the square root.
-  const ceiling = (queryShare: number) => {
-    let score = Math.sqrt(queryShare);
-    if (query.birthDate !== undefined) {
-      score = moveToward(score, BIRTH_DATE_EXACT_BOOST);
-    }
-    if (query.nationality !== undefined && query.nationality.length > 0) {
-      score = moveToward(score, NATIONALITY_MATCH_BOOST);
-    }
-    return score;
-  };
-  const work = {
-    remaining: maxWork,
-    exhausted: false,
-    selection: "complete" as const,
-  };
+  const bound = screeningWorkBound({
+    index,
+    readings,
+    identifierCount: identifierKeys.size,
+  });
+  const limitWork = Math.min(maxWork ?? bound, bound);
+  const work = { remaining: limitWork, exhausted: false };
   const matched = screenNameReadings({
     index: index.names,
     readings,
-    ceiling,
-    rankEntry: (entryIndex, nameScore) => {
-      const entry = index.entries.get(entryIndex);
-      if (
-        !spendScreeningWork(
-          work,
-          entry.birthDates.length +
-            entry.nationalities.length +
-            entry.identifiers.length +
-            1,
-        )
-      ) {
-        return undefined;
-      }
-      return scoreNameEvidence({
-        cutoff,
-        nameScore,
-        birth: compareBirthDates(query.birthDate, entry.birthDates),
-        nationality: nationalityComparison(query.nationality, entry),
-        entityType: entityTypeComparison(query.entityType, entry),
-      });
-    },
-    cutoff,
+    tau: nameScoreFloor({ cutoff, query }),
     work,
   });
   if (matched.isErr()) {
@@ -693,12 +718,7 @@ export const screen = (
     ...identifierMatches,
   ])) {
     const entry = index.entries.get(entryIndex);
-    const cost =
-      entry.birthDates.length +
-      entry.nationalities.length +
-      entry.identifiers.length +
-      1;
-    if (!spendScreeningWork(work, cost)) {
+    if (!spendScreeningWork(work, entryIdentityWork(entry))) {
       return workLimit();
     }
     const best = nameMatches.get(entryIndex);
@@ -715,9 +735,7 @@ export const screen = (
       possibleMatches.push(match);
     }
   }
-  const sortingWork =
-    possibleMatches.length * Math.ceil(Math.log2(possibleMatches.length + 1));
-  if (!spendScreeningWork(work, sortingWork)) {
+  if (!spendScreeningWork(work, sortingWork(possibleMatches.length))) {
     return workLimit();
   }
   possibleMatches.sort(
@@ -731,12 +749,12 @@ export const screen = (
     evidence: match.evidence,
     entry: index.entryStorage.hydrate(match.entryIndex),
   }));
-  onWork?.({ spent: maxWork - work.remaining, limit: maxWork });
+  onWork?.({ spent: limitWork - work.remaining, limit: limitWork });
   return Result.ok({
     cutoff,
     versions: index.versions,
     possibleMatches: selectedMatches,
     totalMatches: possibleMatches.length,
-    truncated: matched.value.truncated || possibleMatches.length > limit,
+    truncated: possibleMatches.length > limit,
   });
 };

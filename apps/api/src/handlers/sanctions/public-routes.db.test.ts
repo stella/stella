@@ -1103,17 +1103,17 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      const partialAliases = Array.from({ length: 100 }, (_, index) =>
+      const commonAliases = Array.from({ length: 100 }, (_, index) =>
         entry({
           source: "eu",
-          sourceId: `partial-${index}`,
+          sourceId: `common-${index}`,
           overrides: {
             entityType: "person",
             names: [{ name: `Mohammed${index} Ali`, quality: "weak" }],
           },
         }),
       );
-      await seedEntries("eu", [...costly, ...partialAliases]);
+      await seedEntries("eu", [...costly, ...commonAliases]);
       await db
         .update(sanctionsEditions)
         .set({
@@ -1121,7 +1121,7 @@ describe("public sanctions search parity", () => {
             entriesFor("eu").length +
             BENCHMARK_ENTRY_COUNT +
             costly.length +
-            partialAliases.length,
+            commonAliases.length,
         })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
       const inputDigests = new Map<SanctionsSource, string>();
@@ -1377,20 +1377,16 @@ describe("public sanctions search parity", () => {
           ),
         ).toEqual(Array.from({ length: 8 }, (_, index) => `costly-${index}`));
         expect(expensive.status).toBe("possible-match");
-        const partial = await parity({
+        // Many weak aliases sharing both tokens are all scored, not sampled.
+        const common = await parity({
           type: "organization",
           name: "Mohammed Ali",
           companyId: null,
         });
-        expect(
-          partial.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
-          status: "incomplete",
-          reason: null,
-          truncated: true,
-          possibleMatches: [],
-        });
-        expect(partial.status).toBe("incomplete");
+        const commonList = common.lists.find(({ source }) => source === "eu");
+        expect(commonList?.reason).toBeNull();
+        expect(commonList?.status).not.toBe("incomplete");
+        expect(common.status).not.toBe("incomplete");
       } finally {
         context.kill();
         await pool.close();

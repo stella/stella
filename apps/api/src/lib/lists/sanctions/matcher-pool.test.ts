@@ -775,7 +775,7 @@ test("lease settlement callbacks fire exactly once after work, including acquisi
   }
 });
 
-test("real worker work exhaustion retains its edition and screens the next cached query without reload", async () => {
+test("a real worker completes a broad common-token query and screens the next cached query without reload", async () => {
   const template = list("Acme").entries.at(0);
   if (template === undefined) {
     throw new TypeError("Missing work-limit fixture entry");
@@ -800,8 +800,7 @@ test("real worker work exhaustion retains its edition and screens the next cache
   const direct = screen(buildScreeningIndex([corpus]), query, {
     cutoff: DEFAULT_CUTOFF,
     limit: 10,
-  });
-  expect(direct.isErr() && direct.error.code).toBe("work-limit");
+  }).unwrap();
   const recorded = recordingMatcherWorker();
   const reports: Parameters<typeof reportSanctionsScreeningFailure>[0][] = [];
   let spawned = 0;
@@ -827,10 +826,13 @@ test("real worker work exhaustion retains its edition and screens the next cache
         async (session) =>
           await session.match({ ...requestBase, list: corpus, query }),
       ),
-    ).toEqual({ status: "completed", value: { status: "work-limit" } });
+    ).toEqual({
+      status: "completed",
+      value: { status: "screened", result: direct, work: SCREENED_WORK },
+    });
     const transferred = { ...recorded.work };
     const safeQuery = {
-      name: "Registered Entity 42 Holdings",
+      name: "Registered Entity",
       entityType: "organisation" as const,
     };
     const expected = screen(buildScreeningIndex([corpus]), safeQuery, {

@@ -121,6 +121,12 @@ const assertLegacyEquivalence = ({
     const legacyResult =
       expected.at(queryIndex) ?? panic("Missing legacy screening result");
     const actual = screen(index, query, options);
+    // The legacy matcher stopped at a fixed work cap; the index completes.
+    if ("error" in legacyResult) {
+      expect(legacyResult.error.code).toBe("work-limit");
+      expect(actual.isOk()).toBe(true);
+      continue;
+    }
     expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
   }
 };
@@ -236,35 +242,34 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings replay uncached results at every work-budget boundary", () => {
+test("every work budget either completes the screening or reports work-limit", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
-  expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  let spent = 0;
+  const complete = screen(compact, query, {
+    cutoff: 0.65,
+    onWork: (usage) => {
+      spent = usage.spent;
+    },
+  }).unwrap();
   expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  // Fuzzy selection spends less work than the legacy scan, so the legacy
-  // index cannot place the boundaries; an uncached index is the oracle.
-  let failures = 0;
-  let successes = 0;
-  for (let maxWork = 1; maxWork <= 3000; maxWork += 25) {
-    const options = { cutoff: 0.65, maxWork };
-    const expected = screen(buildScreeningIndex(lists), query, options);
-    const actual = screen(compact, query, options);
-    expect(legacyScreenOutcome(actual)).toEqual(legacyScreenOutcome(expected));
-    if (expected.isErr()) {
-      expect(expected.error.code).toBe("work-limit");
-      failures += 1;
+  // Repeated screenings spend identical work, so the boundary is exact.
+  const step = Math.max(1, Math.floor(spent / 97));
+  for (let maxWork = 1; maxWork <= spent + step; maxWork += step) {
+    const actual = screen(compact, query, { cutoff: 0.65, maxWork });
+    if (maxWork < spent) {
+      expect(actual.isErr() && actual.error.code).toBe("work-limit");
     } else {
-      expect(expected.value).toEqual(complete);
-      successes += 1;
+      expect(actual.unwrap()).toEqual(complete);
     }
   }
-  expect(failures).toBeGreaterThan(0);
-  expect(successes).toBeGreaterThan(0);
+  expect(
+    screen(compact, query, { cutoff: 0.65, maxWork: spent }).unwrap(),
+  ).toEqual(complete);
 });
 
 test("identifier-only screening preserves shared postings and legacy work limits", () => {

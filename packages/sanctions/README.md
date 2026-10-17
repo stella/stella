@@ -77,34 +77,33 @@ deduplication. Excess input returns `excess-query-tokens`; register-resolved
 names bypass this input cap because callers cannot correct a publisher's name.
 Repeated query and alias spellings retain their original adjacency graph.
 
-A cheap optimistic score filters candidates that cannot reach the cutoff and
-ranks the rest using the entry's birth-date, nationality and entity-type
-evidence, with exact names first. Equivalent aliases share a score; their
-group uses its best entry's evidence for selection, so
-a frequent spelling never consumes the candidate allowance repeatedly. Each
-query unit retains its exact vocabulary token and at most 64 fuzzy spellings,
-ranked by shared bigrams before edit distance. Exact name patterns bypass the
-full-alignment cap. At
-most 256 distinct name patterns receive full alignment per reading. A
-2,000,000-unit screening budget covers vocabulary expansion, postings, ranking,
-scoring, identifiers and sorting across both readings of an unknown party.
-Exhaustion returns `ScreeningWorkLimitError` (`work-limit`); both API paths
-report the affected list unavailable with the existing `load-failed` reason.
+Candidates come from the `@stll/fuzzy-search` entity index, built with the
+edition: folded and raw spellings are its two forms, joined adjacent names its
+joins, and the Damerau-Levenshtein (optimal string alignment) edit budget its
+length table. The index returns every alias whose bound on the name score
+reaches the floor implied by the cutoff and the query's identity fields; each
+distinct alias pattern is then scored in full. Nothing is sampled or capped.
 
-`truncated` also marks candidate selection that omitted viable patterns;
-`totalMatches` is then the number found, a lower bound. Partial results retain
-possible matches for review. A truncated search with no possible matches is
-unavailable, never clear. Index construction remains cached separately.
+Each screening's work budget is derived from the edition and the validated
+query, as an upper bound on everything a complete screening can spend across
+both readings of an unknown party. Exceeding it is a defect: `screen` returns
+`ScreeningWorkLimitError` (`work-limit`), never a partial result, and the API
+reports the list `incomplete` and records the failure. `truncated` means only
+that `limit` left out matches; `totalMatches` is exact. Index construction
+remains cached separately; a cooperative build finishes the entity index on
+the native worker pool. `bun run prove:editions` proves complete common-name
+screening on every edition fixture (or local publisher files) and measures
+index build time, serialized size and peak memory.
 The shared API service yields to the event loop between list screenings;
 anonymous screenings additionally allow at most two active requests per API
 process and reject excess work before database reads. The work budget is a
-backstop, not a wall-clock deadline. Public matching uses a bounded worker-thread
+completeness bound, not a wall-clock deadline. Public matching uses a bounded worker-thread
 pool (one worker by default, at most two), with indexes built and cached in the
 worker. Its 250 ms total screening deadline includes queueing and database reads;
 expiry or a worker crash reports unavailable and recycles the worker. Large cold
 editions are rebuilt without identity input in a bounded 10-second background
 lease after expiry. Edition changes replace the worker cache on the next check.
-The product path retains its existing cache and work-budget behavior.
+The product path keeps its own index cache and has no matcher deadline.
 
 ## Evaluation
 
