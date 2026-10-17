@@ -6013,6 +6013,11 @@ jobs:
           bun scripts/bundle-baseline.ts --self-test
           bun scripts/bundle-baseline.ts --check
 
+      - name: Bundle duplicate content guard
+        # Blocking, unlike the warning-only size report above: a chunk that
+        # repeats a large block of identical content is a build defect.
+        run: bun scripts/bundle-baseline.ts --check-duplicates
+
       - name: Prod-deps web boot smoke
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot dist/runtime.js: a

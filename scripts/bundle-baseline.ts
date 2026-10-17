@@ -13,11 +13,17 @@
 // annotates the grown groups and writes them to the job summary, and a nightly
 // run lists every group over budget. An improvement prompts a ratchet down.
 //
+// Policy: the size budget (--check) is warning-only. The duplicate-content
+// guard (--check-duplicates) is a separate, blocking check: a chunk that
+// carries the same large block twice is a build defect with a known fix, not
+// growth to weigh against a budget. Neither path changes the other's exit code.
+//
 // Modes:
-//   bun scripts/bundle-baseline.ts                 report groups + gzip sizes
-//   bun scripts/bundle-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check          CI report (warns on growth; fails when it cannot measure or a chunk repeats a large block)
-//   bun scripts/bundle-baseline.ts --self-test      prove the comparison logic fires
+//   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
+//   bun scripts/bundle-baseline.ts --write-baseline    regenerate the baseline
+//   bun scripts/bundle-baseline.ts --check             size budget (warns on growth; fails only when it cannot measure)
+//   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
+//   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
 //
 // CI-only by design: it needs a completed `bun --filter @stll/web build` first,
 // so it is too slow for the local lint/pre-commit loop. Wired into
@@ -418,16 +424,28 @@ const runCheck = (): number => {
     );
     return 1;
   }
+  return checkSizeBudget(
+    measured.sizes,
+    readBaseline(),
+    process.env["GITHUB_STEP_SUMMARY"],
+    console.log,
+  );
+};
 
-  const duplicateExit = reportDuplicated(measured.duplicated, console.log);
-
-  const baseline = readBaseline();
-  const diffs = diffAll(measured.sizes, baseline);
+// The warning-only size budget. It sees only sizes, so nothing else measured
+// about the build can turn growth into a failure.
+const checkSizeBudget = (
+  sizes: Sizes,
+  baseline: Sizes,
+  summaryPath: string | undefined,
+  log: (line: string) => void,
+): number => {
+  const diffs = diffAll(sizes, baseline);
   const regressions = diffs.filter((d) => d.status === "regressed");
   const drops = diffs.filter((d) => d.status === "dropped");
 
   for (const d of drops) {
-    console.log(
+    log(
       `bundle: ${d.key} shrank ${kib(d.baseline)} -> ${kib(d.current)} ` +
         `(${pct(d.current, d.baseline)}). Nice — run \`${WRITE_HINT}\` and ` +
         `commit ${BASELINE_REL} to ratchet it down.`,
@@ -435,34 +453,40 @@ const runCheck = (): number => {
   }
 
   if (regressions.length === 0) {
-    console.log(
+    log(
       `bundle --check: OK. ${GROUP_KEYS.length} group(s) within ` +
         `${Math.round((HEADROOM - 1) * 100)}% of baseline.`,
     );
-    return duplicateExit;
+    return 0;
   }
 
-  return Math.max(
-    duplicateExit,
-    reportRegressions(
-      regressions,
-      process.env["GITHUB_STEP_SUMMARY"],
-      console.log,
-    ),
-  );
+  return reportRegressions(regressions, summaryPath, log);
 };
 
-// A chunk that repeats a large block is a build defect, not growth to budget
-// for, so it fails the check.
-const reportDuplicated = (
+const runCheckDuplicates = (): number => {
+  const measured = measure(ASSETS_DIR);
+  if (!measured.ok) {
+    console.error(measured.error);
+    return 1;
+  }
+  return checkDuplicates(measured.duplicated, console.log);
+};
+
+// The blocking duplicate-content guard. A chunk that repeats a large block is
+// a build defect, not growth to budget for, so it fails on its own exit path.
+const checkDuplicates = (
   duplicated: readonly DuplicatedChunk[],
   log: (line: string) => void,
 ): number => {
   if (duplicated.length === 0) {
+    log(
+      `bundle --check-duplicates: OK. No chunk repeats more than ` +
+        `${kib(DUPLICATE_LIMIT_BYTES)} of identical content.`,
+    );
     return 0;
   }
   log(
-    `\nbundle --check: chunk(s) repeat more than ${kib(DUPLICATE_LIMIT_BYTES)} of identical content:\n`,
+    `\nbundle --check-duplicates: chunk(s) repeat more than ${kib(DUPLICATE_LIMIT_BYTES)} of identical content:\n`,
   );
   for (const { file, bytes } of duplicated) {
     log(`  ${file}: ${kib(bytes)} repeated`);
@@ -665,14 +689,42 @@ const runSelfTest = (): number => {
   }
   const flagged: string[] = [];
   if (
-    reportDuplicated([{ file: "link-Ds-2pgSG.js", bytes: 65_536 }], (line) => {
+    checkDuplicates([{ file: "link-Ds-2pgSG.js", bytes: 65_536 }], (line) => {
       flagged.push(line);
     }) !== 1 ||
     !flagged.some((line) =>
       line.startsWith("::error title=Bundle duplicate: link-Ds-2pgSG.js::"),
     )
   ) {
-    failures.push("reportDuplicated did not fail on a repeated block");
+    failures.push("checkDuplicates did not fail on a repeated block");
+  }
+  if (checkDuplicates([], (line) => flagged.push(line)) !== 0) {
+    failures.push("checkDuplicates failed without a repeated block");
+  }
+
+  // Size overage alone only warns: the size budget exits 0 however far a
+  // group is over, and says so as a warning, never an error.
+  const overSizes: Sizes = { ...emptySizes(), entry: 100_000, total: 500_000 };
+  const overCurrent: Sizes = { ...overSizes, entry: 300_000, total: 900_000 };
+  const budgetLines: string[] = [];
+  const budgetExit = checkSizeBudget(
+    overCurrent,
+    overSizes,
+    undefined,
+    (line) => {
+      budgetLines.push(line);
+    },
+  );
+  if (budgetExit !== 0) {
+    failures.push(`checkSizeBudget exited ${budgetExit} on overage, want 0`);
+  }
+  if (
+    !budgetLines.some((line) =>
+      line.startsWith("::warning title=Bundle size: total::"),
+    ) ||
+    budgetLines.some((line) => line.startsWith("::error"))
+  ) {
+    failures.push("checkSizeBudget did not report overage as a warning only");
   }
 
   if (failures.length > 0) {
@@ -770,6 +822,9 @@ const main = (): number => {
   }
   if (process.argv.includes("--write-baseline")) {
     return runWrite();
+  }
+  if (process.argv.includes("--check-duplicates")) {
+    return runCheckDuplicates();
   }
   if (process.argv.includes("--check")) {
     return runCheck();
