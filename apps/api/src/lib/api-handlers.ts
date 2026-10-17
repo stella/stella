@@ -1348,7 +1348,7 @@ export const runCheckedScopedHandler = async <
             }),
         ),
       );
-      return Result.ok(result);
+      return result;
     },
   });
 };

@@ -16,7 +16,6 @@ import {
   claimRequestReceipt,
   completeRequestReceipt,
   fingerprintRequest,
-  releaseRequestReceipt,
   runWithRequestReceipt,
   sweepExpiredRequestReceipts,
 } from "@/api/lib/idempotency/request-receipts";
@@ -72,6 +71,8 @@ const withFixture = async (
   });
 };
 
+type SubmitOptions = { status?: number; now?: Date };
+
 const receiptFixture = ({ openClient }: Fixture) => {
   const { db } = openClient({ max: 4 });
   const organizationId = mintAuthProviderId<"organization">();
@@ -93,9 +94,12 @@ const receiptFixture = ({ openClient }: Fixture) => {
       key: "submit-intent",
       route: "/test/create",
       fingerprint: fingerprint(body),
-      now,
+      ...(now === undefined ? {} : { now }),
     });
-  const submit = <T>(run: () => Promise<T>, status = 201) =>
+  const submit = <T>(
+    run: () => Promise<T>,
+    { status = 201, now }: SubmitOptions = {},
+  ) =>
     runWithRequestReceipt({
       scopedDb,
       organizationId,
@@ -105,6 +109,20 @@ const receiptFixture = ({ openClient }: Fixture) => {
       fingerprint: fingerprint({ name: "Original" }),
       run,
       responseStatus: () => status,
+      ...(now === undefined ? {} : { now }),
+    });
+  const createContact = async () =>
+    await scopedDb(async (tx) => {
+      const rows = await tx
+        .insert(contacts)
+        .values({
+          id: createSafeId<"contact">(),
+          organizationId,
+          type: "person",
+          displayName: "Idempotent create",
+        })
+        .returning({ id: contacts.id });
+      return rows.at(0) ?? panic("Create must return its resource");
     });
   return {
     db,
@@ -115,6 +133,7 @@ const receiptFixture = ({ openClient }: Fixture) => {
     otherScopedDb,
     claim,
     submit,
+    createContact,
   };
 };
 
@@ -143,22 +162,9 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
   });
 
   test("double submit creates one resource and replays the original transport response", async () => {
-    await withFixture(async ({ submit, scopedDb, organizationId }) => {
-      const create = async () =>
-        await scopedDb(async (tx) => {
-          const rows = await tx
-            .insert(contacts)
-            .values({
-              id: createSafeId<"contact">(),
-              organizationId,
-              type: "person",
-              displayName: "Idempotent create",
-            })
-            .returning({ id: contacts.id });
-          return rows.at(0) ?? panic("Create must return its resource");
-        });
-      const first = await submit(create);
-      const second = await submit(create);
+    await withFixture(async ({ submit, scopedDb, createContact }) => {
+      const first = (await submit(createContact)).unwrap();
+      const second = (await submit(createContact)).unwrap();
       expect(second).toBeInstanceOf(Response);
       if (!(second instanceof Response)) {
         panic("Replay must use the stored response");
@@ -174,7 +180,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
     });
   });
 
-  test("handler failures release the pending key before propagating", async () => {
+  test("handler failures retain the execution fence before propagating", async () => {
     await withFixture(async ({ submit, claim }) => {
       expect(
         await rejectionOf(
@@ -186,7 +192,7 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           }),
         ),
       ).toMatchObject({ status: 503, message: "Injected failure" });
-      expect((await claim()).type).toBe("claimed");
+      expect((await claim()).type).toBe("in_progress");
     });
   });
 
@@ -252,47 +258,89 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
   });
 
   test("receipt persistence failure retains the claim after the handler succeeds", async () => {
-    await withFixture(async ({ scopedDb, organizationId, userId, claim }) => {
-      let transactions = 0;
-      const unavailableOnCompletion: ScopedDb = async (fn) => {
-        transactions += 1;
-        if (transactions === 2) {
-          throw new HandlerError({
-            status: 503,
-            message: "Receipt persistence unavailable",
-          });
+    await withFixture(
+      async ({
+        db,
+        scopedDb,
+        organizationId,
+        userId,
+        submit,
+        createContact,
+      }) => {
+        const startedAt = new Date("2026-10-15T10:00:00Z");
+        const retryAt = new Date("2026-10-15T10:02:01Z");
+        let transactions = 0;
+        const unavailableOnCompletion: ScopedDb = async (fn) => {
+          transactions += 1;
+          if (transactions === 2) {
+            throw new HandlerError({
+              status: 503,
+              message: "Receipt persistence unavailable",
+            });
+          }
+          return await scopedDb(fn);
+        };
+        let effects = 0;
+        expect(
+          await rejectionOf(
+            runWithRequestReceipt({
+              scopedDb: unavailableOnCompletion,
+              organizationId,
+              userId,
+              key: "submit-intent",
+              route: "/test/create",
+              fingerprint: fingerprint({ name: "Original" }),
+              now: startedAt,
+              run: async () => {
+                effects += 1;
+                return await createContact();
+              },
+              responseStatus: () => 201,
+            }),
+          ),
+        ).toMatchObject({ message: "Receipt persistence unavailable" });
+        expect(effects).toBe(1);
+        const retry = await submit(
+          async () => {
+            effects += 1;
+            return await createContact();
+          },
+          { now: retryAt },
+        );
+        expect(retry.isErr()).toBe(true);
+        if (retry.isErr()) {
+          expect(retry.error.code).toBe("idempotency_in_progress");
         }
-        return await scopedDb(fn);
-      };
-      let effects = 0;
-      expect(
-        await rejectionOf(
-          runWithRequestReceipt({
-            scopedDb: unavailableOnCompletion,
-            organizationId,
-            userId,
-            key: "submit-intent",
-            route: "/test/create",
-            fingerprint: fingerprint({ name: "Original" }),
-            run: async () => {
-              effects += 1;
-              return { id: "created" };
-            },
-            responseStatus: () => 201,
+        expect(effects).toBe(1);
+        // Retention must not erase an ambiguous execution fence either.
+        expect(
+          await sweepExpiredRequestReceipts({
+            db,
+            now: new Date("2026-10-17T10:00:00Z"),
+            signal: new AbortController().signal,
+            deadline: performance.now() + 30_000,
           }),
-        ),
-      ).toMatchObject({ message: "Receipt persistence unavailable" });
-      expect(effects).toBe(1);
-      expect(await claim()).toEqual({ type: "in_progress" });
-    });
+        ).toEqual({ deleted: 0, hasMore: false });
+
+        expect(
+          await scopedDb(
+            async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+          ),
+        ).toHaveLength(1);
+      },
+    );
   });
 
-  test("non-success JSON responses release the pending key", async () => {
+  test("non-success JSON responses retain the execution fence", async () => {
     await withFixture(async ({ submit, claim }) => {
-      expect(await submit(async () => ({ error: "retry" }), 503)).toEqual({
+      expect(
+        (
+          await submit(async () => ({ error: "retry" }), { status: 503 })
+        ).unwrap(),
+      ).toEqual({
         error: "retry",
       });
-      expect((await claim()).type).toBe("claimed");
+      expect((await claim()).type).toBe("in_progress");
     });
   });
 
@@ -327,57 +375,50 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
     });
   });
 
-  test("releases a failed request so the same intent can claim again", async () => {
-    await withFixture(async ({ claim, scopedDb }) => {
-      const first = await claim();
-      if (first.type !== "claimed") {
-        panic("Initial request must claim the receipt");
+  test("a slow original handler keeps exclusive execution after the pending timeout", async () => {
+    await withFixture(async ({ submit, claim, createContact, scopedDb }) => {
+      const startedAt = new Date("2026-10-15T10:00:00Z");
+      const retryAt = new Date("2026-10-15T10:02:01Z");
+      const entered = Promise.withResolvers<undefined>();
+      const finish = Promise.withResolvers<undefined>();
+      let effects = 0;
+      const original = submit(
+        async () => {
+          entered.resolve(undefined);
+          await finish.promise;
+          effects += 1;
+          return await createContact();
+        },
+        { now: startedAt },
+      );
+      await entered.promise;
+      try {
+        const retry = await submit(
+          async () => {
+            effects += 1;
+            return await createContact();
+          },
+          { now: retryAt },
+        );
+        expect(retry.isErr()).toBe(true);
+        if (retry.isErr()) {
+          expect(retry.error.code).toBe("idempotency_in_progress");
+        }
+        expect(effects).toBe(0);
+      } finally {
+        finish.resolve(undefined);
       }
-      await releaseRequestReceipt({ scopedDb, id: first.id });
-      const retry = await claim();
-      expect(retry.type).toBe("claimed");
-      if (retry.type !== "claimed") {
-        panic("Released request must be claimable");
-      }
-      expect(retry.id).not.toBe(first.id);
-    });
-  });
-
-  test("takes over stale pending work and fences the expired owner", async () => {
-    await withFixture(async ({ claim, scopedDb }) => {
-      const first = await claim(undefined, new Date("2026-10-15T10:00:00Z"));
-      if (first.type !== "claimed") {
-        panic("Initial request must claim the receipt");
-      }
-      expect(await claim(undefined, new Date("2026-10-15T10:01:59Z"))).toEqual({
-        type: "in_progress",
-      });
-      const takeover = await claim(undefined, new Date("2026-10-15T10:02:01Z"));
-      expect(takeover.type).toBe("claimed");
-      if (takeover.type !== "claimed") {
-        panic("Expired request must be claimable");
-      }
-      expect(takeover.id).not.toBe(first.id);
-      await releaseRequestReceipt({ scopedDb, id: first.id });
-      await completeRequestReceipt({
-        scopedDb,
-        id: first.id,
-        status: 201,
-        body: { id: "expired" },
-      });
-      expect(await claim(undefined, new Date("2026-10-15T10:02:02Z"))).toEqual({
-        type: "in_progress",
-      });
-      await completeRequestReceipt({
-        scopedDb,
-        id: takeover.id,
-        status: 201,
-        body: { id: "winner" },
-      });
-      expect(await claim()).toEqual({
+      const first = (await original).unwrap();
+      expect(effects).toBe(1);
+      expect(
+        await scopedDb(
+          async (tx) => await tx.select({ id: contacts.id }).from(contacts),
+        ),
+      ).toEqual([first]);
+      expect(await claim(undefined, retryAt)).toEqual({
         type: "replay",
         status: 201,
-        body: { id: "winner" },
+        body: first,
       });
     });
   });
@@ -389,6 +430,12 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
       if (old.type !== "claimed") {
         panic("Initial request must claim the receipt");
       }
+      await completeRequestReceipt({
+        scopedDb,
+        id: old.id,
+        status: 201,
+        body: {},
+      });
       expect(
         await sweepExpiredRequestReceipts({
           deadline: performance.now() + 30_000,
@@ -403,7 +450,16 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
             await tx.execute(sql`SELECT id FROM request_idempotency_receipts`),
         ),
       ).toEqual([]);
-      await claim(undefined, new Date("2026-10-14T10:00:00Z"));
+      const recent = await claim(undefined, new Date("2026-10-14T10:00:00Z"));
+      if (recent.type !== "claimed") {
+        panic("Recent request must claim the receipt");
+      }
+      await completeRequestReceipt({
+        scopedDb,
+        id: recent.id,
+        status: 201,
+        body: {},
+      });
       expect(
         await sweepExpiredRequestReceipts({
           deadline: performance.now() + 30_000,
@@ -423,10 +479,26 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
 
   test("retention resumes partially swept organization groups after the deadline", async () => {
     await withFixture(
-      async ({ db, claim, otherScopedDb, otherOrganizationId, userId }) => {
+      async ({
+        db,
+        claim,
+        scopedDb,
+        otherScopedDb,
+        otherOrganizationId,
+        userId,
+      }) => {
         const old = new Date("2026-10-14T09:59:59Z");
-        await claim(undefined, old);
-        await claimRequestReceipt({
+        const first = await claim(undefined, old);
+        if (first.type !== "claimed") {
+          panic("Initial request must claim the receipt");
+        }
+        await completeRequestReceipt({
+          scopedDb,
+          id: first.id,
+          status: 201,
+          body: {},
+        });
+        const second = await claimRequestReceipt({
           scopedDb: otherScopedDb,
           organizationId: otherOrganizationId,
           userId,
@@ -434,6 +506,15 @@ describe.skipIf(!enabled)("request receipt state machine (postgres)", () => {
           route: "/test/create",
           fingerprint: fingerprint(ORIGINAL_BODY),
           now: old,
+        });
+        if (second.type !== "claimed") {
+          panic("Other request must claim the receipt");
+        }
+        await completeRequestReceipt({
+          scopedDb: otherScopedDb,
+          id: second.id,
+          status: 201,
+          body: {},
         });
         let clockReads = 0;
         const interrupted = await sweepExpiredRequestReceipts({

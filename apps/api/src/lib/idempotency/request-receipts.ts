@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia";
 
@@ -24,8 +24,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toJsonValue } from "@/api/lib/json-value";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-
-export const REQUEST_RECEIPT_PENDING_MS = 2 * 60 * 1000;
 
 type FingerprintRequestOptions = {
   method: string;
@@ -109,7 +107,8 @@ export type RequestReceiptClaim =
   | { type: "claimed"; id: SafeId<"requestIdempotencyReceipt"> }
   | { type: "replay"; status: number; body: unknown }
   | { type: "in_progress" }
-  | { type: "key_reused" };
+  | { type: "key_reused" }
+  | { type: "invalid_key" };
 
 export const claimRequestReceipt = async ({
   scopedDb,
@@ -121,10 +120,7 @@ export const claimRequestReceipt = async ({
   now = new Date(),
 }: ClaimRequestReceiptOptions): Promise<RequestReceiptClaim> => {
   if (key.length === 0 || key.length > 128) {
-    throw new HandlerError({
-      status: 400,
-      message: "Idempotency-Key must contain 1 to 128 characters.",
-    });
+    return { type: "invalid_key" };
   }
   return await scopedDb(async (tx) => {
     // audit: skip - Ephemeral request coordination; the create handler audits its resource mutation.
@@ -158,8 +154,8 @@ export const claimRequestReceipt = async ({
       eq(receipts.userId, userId),
       eq(receipts.idempotencyKey, key),
     );
-    // A release can race the conflicting insert; taking the key again on the
-    // next request is safe, while running without an owned receipt is not.
+    // Never run without observing ownership, even if the conflicting row
+    // disappears between insertion and readback.
     const existing = (
       await tx.select().from(receipts).where(match).limit(1)
     ).at(0);
@@ -179,23 +175,10 @@ export const claimRequestReceipt = async ({
         body: existing.responseBody,
       };
     }
-    const staleBefore = new Date(now.getTime() - REQUEST_RECEIPT_PENDING_MS);
-    const taken = await tx
-      .update(receipts)
-      .set({ id, claimedAt: now })
-      .where(
-        and(
-          match,
-          eq(receipts.id, existing.id),
-          eq(receipts.state, "pending"),
-          lt(
-            receipts.claimedAt,
-            sql`${staleBefore.toISOString()}::timestamptz`,
-          ),
-        ),
-      )
-      .returning({ id: receipts.id });
-    return taken.length > 0 ? { type: "claimed", id } : { type: "in_progress" };
+    // A pending handler may still be running or may have committed before
+    // response persistence failed. Neither age nor a new receipt id fences
+    // its resource mutation, so ambiguous work must never be executed again.
+    return { type: "in_progress" };
   });
 };
 
@@ -229,18 +212,6 @@ export const completeRequestReceipt = async ({
   });
 };
 
-export const releaseRequestReceipt = async ({
-  scopedDb,
-  id,
-}: ReceiptIdentity): Promise<void> => {
-  await scopedDb(async (tx) => {
-    // audit: skip - Releasing failed ephemeral request coordination does not mutate a resource.
-    await tx
-      .delete(receipts)
-      .where(and(eq(receipts.id, id), eq(receipts.state, "pending")));
-  });
-};
-
 type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
   run: () => Promise<T>;
   responseStatus: () => number;
@@ -251,77 +222,79 @@ type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
 // of replaying that same JSON through Elysia, not another payload schema.
 export function runWithRequestReceipt<T>(
   options: ReplayRequestOptions<T>,
-): Promise<T>;
+): Promise<Result<T, HandlerError>>;
 export async function runWithRequestReceipt<T>({
   run,
   responseStatus,
   ...options
-}: ReplayRequestOptions<T>): Promise<unknown> {
+}: ReplayRequestOptions<T>): Promise<Result<unknown, HandlerError>> {
   const claim = await claimRequestReceipt(options);
   switch (claim.type) {
     case "replay":
-      return new Response(
-        claim.status === 204 || claim.status === 205
-          ? null
-          : JSON.stringify(claim.body),
-        {
-          status: claim.status,
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Replayed": "true",
+      return Result.ok(
+        new Response(
+          claim.status === 204 || claim.status === 205
+            ? null
+            : JSON.stringify(claim.body),
+          {
+            status: claim.status,
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Replayed": "true",
+            },
           },
-        },
+        ),
+      );
+    case "invalid_key":
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Idempotency-Key must contain 1 to 128 characters.",
+        }),
       );
     case "in_progress":
-      throw new HandlerError({
-        status: 409,
-        code: IDEMPOTENCY_IN_PROGRESS_CODE,
-        message: "This request is still in progress.",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: IDEMPOTENCY_IN_PROGRESS_CODE,
+          message: "This request is still in progress.",
+        }),
+      );
     case "key_reused":
-      throw new HandlerError({
-        status: 422,
-        code: IDEMPOTENCY_KEY_REUSED_CODE,
-        message: "This key was already used for a different request.",
-      });
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: IDEMPOTENCY_KEY_REUSED_CODE,
+          message: "This key was already used for a different request.",
+        }),
+      );
     case "claimed": {
-      let settled = false;
-      try {
-        const result = await run();
-        let body: unknown = result;
-        let status = responseStatus();
-        while (body instanceof ElysiaCustomStatusResponse) {
-          status = body.code;
-          body = body.response;
-        }
-        if (status < 200 || status >= 300) {
-          return result;
-        }
-        if (
-          body instanceof Response ||
-          body instanceof ReadableStream ||
-          body instanceof Blob ||
-          body instanceof ArrayBuffer ||
-          ArrayBuffer.isView(body)
-        ) {
-          panic("Idempotency replay requires a JSON handler");
-        }
-        settled = true;
-        await completeRequestReceipt({
-          scopedDb: options.scopedDb,
-          id: claim.id,
-          status,
-          body,
-        });
-        return result;
-      } finally {
-        if (!settled) {
-          await releaseRequestReceipt({
-            scopedDb: options.scopedDb,
-            id: claim.id,
-          });
-        }
+      const result = await run();
+      let body: unknown = result;
+      let status = responseStatus();
+      while (body instanceof ElysiaCustomStatusResponse) {
+        status = body.code;
+        body = body.response;
       }
+      if (status < 200 || status >= 300) {
+        return Result.ok(result);
+      }
+      if (
+        body instanceof Response ||
+        body instanceof ReadableStream ||
+        body instanceof Blob ||
+        body instanceof ArrayBuffer ||
+        ArrayBuffer.isView(body)
+      ) {
+        panic("Idempotency replay requires a JSON handler");
+      }
+      await completeRequestReceipt({
+        scopedDb: options.scopedDb,
+        id: claim.id,
+        status,
+        body,
+      });
+      return Result.ok(result);
     }
     default: {
       claim satisfies never;
@@ -362,6 +335,7 @@ export const sweepExpiredRequestReceipts = async ({
   const cutoff = new Date(now.getTime() - REQUEST_RECEIPT_RETENTION_MS);
   // The scheduler reads ownership globally; every delete runs under the row's
   // organization and user policies, even when the supplied connection bypasses RLS.
+  // Pending receipts are durable execution fences and cannot expire safely.
   const candidates = await withAggregateTransaction(db, async (tx) => {
     await setSharedStatementTimeout(
       tx,
@@ -378,7 +352,12 @@ export const sweepExpiredRequestReceipts = async ({
         userId: receipts.userId,
       })
       .from(receipts)
-      .where(lt(receipts.claimedAt, sql`${cutoff.toISOString()}::timestamptz`))
+      .where(
+        and(
+          eq(receipts.state, "completed"),
+          lt(receipts.claimedAt, sql`${cutoff.toISOString()}::timestamptz`),
+        ),
+      )
       .orderBy(asc(receipts.claimedAt), asc(receipts.id))
       .limit(REQUEST_RECEIPT_RETENTION_BATCH_SIZE);
   });
@@ -421,6 +400,7 @@ export const sweepExpiredRequestReceipts = async ({
         .delete(receipts)
         .where(
           and(
+            eq(receipts.state, "completed"),
             eq(receipts.organizationId, first.organizationId),
             eq(receipts.userId, first.userId),
             inArray(

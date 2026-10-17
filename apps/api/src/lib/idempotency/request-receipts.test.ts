@@ -1,6 +1,13 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
-import { fingerprintHttpRequest, fingerprintRequest } from "./request-receipts";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+
+import {
+  fingerprintHttpRequest,
+  fingerprintRequest,
+  runWithRequestReceipt,
+} from "./request-receipts";
 
 const request = {
   method: "POST",
@@ -111,4 +118,23 @@ test("HTTP fingerprint normalization preserves JSON dates and binds blob bytes",
       body: { attachment: new Blob(["other"]) },
     }),
   );
+});
+
+test("invalid idempotency keys return typed failures before claiming or creating", async () => {
+  for (const key of ["", "x".repeat(129)]) {
+    const result = await runWithRequestReceipt({
+      scopedDb: async () => panic("Invalid keys must not reach the database"),
+      organizationId: mintAuthProviderId<"organization">(),
+      userId: mintAuthProviderId<"user">(),
+      key,
+      route: "/test/create",
+      fingerprint: "a".repeat(64),
+      run: async () => panic("Invalid keys must not execute the handler"),
+      responseStatus: () => 201,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({ status: 400 });
+    }
+  }
 });
