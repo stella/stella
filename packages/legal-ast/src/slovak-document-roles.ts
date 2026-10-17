@@ -1,3 +1,4 @@
+import { AhoCorasick } from "@stll/aho-corasick";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { caseLawSectionHeading } from "./case-law-heading";
@@ -34,7 +35,7 @@ const DECISION_TITLES = new Set([
   "uzneseniebezodôvodnenia",
 ]);
 
-const HOLDING_MARKERS = ["rozhodol:", "rozhodla:", "rozhodlo:"];
+const holdingMarkers = new AhoCorasick(["rozhodol:", "rozhodla:", "rozhodlo:"]);
 
 const REASONING_MARKER = "odôvodnenie:";
 
@@ -59,8 +60,8 @@ export const isSkHoldingMarker = (text: string): boolean => {
   if (text.trim().length > MARKER_LINE_MAX_CHARS) {
     return false;
   }
-  const norm = normalized(text);
-  return HOLDING_MARKERS.some((marker) => norm.endsWith(marker));
+  const norm = normalized(text.toWellFormed());
+  return holdingMarkers.findIter(norm).some(({ end }) => end === norm.length);
 };
 
 export const isSkReasoningMarker = (text: string): boolean =>
