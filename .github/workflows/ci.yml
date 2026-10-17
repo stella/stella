@@ -3060,6 +3060,10 @@ jobs:
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
           API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
           API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
+          # Quarantined tests (scripts/flaky-test-quarantine.json) still run;
+          # the preload records their failures instead of failing the run.
+          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
+          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3077,6 +3081,9 @@ jobs:
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
+          # A cached pass replays only under the quarantine that produced it.
+          FLAKY_TEST_QUARANTINE_DIGEST=$(bun scripts/flaky-test-quarantine.ts digest)
+          export FLAKY_TEST_QUARANTINE_DIGEST
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
@@ -3107,6 +3114,8 @@ jobs:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: web
+          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
+          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
@@ -3115,6 +3124,9 @@ jobs:
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
+          # A cached pass replays only under the quarantine that produced it.
+          FLAKY_TEST_QUARANTINE_DIGEST=$(bun scripts/flaky-test-quarantine.ts digest)
+          export FLAKY_TEST_QUARANTINE_DIGEST
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
@@ -3136,6 +3148,28 @@ jobs:
         env:
           CHANGED_FILES_JSON: ${{ needs.ci-plan.outputs.changed_files }}
         run: bun scripts/flake-gate.ts --blocking
+
+      # Annotates each quarantined outcome and writes its recent history to the
+      # job summary; reporting only, so it never changes the job's verdict.
+      - name: Report quarantined tests
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/flaky-test-history.ts job-summary --reports "$RUNNER_TEMP/flaky-test-quarantine" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload quarantined test outcomes
+        if: >-
+          !cancelled()
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flaky-test-quarantine-${{ matrix.shard }}
+          path: ${{ runner.temp }}/flaky-test-quarantine/*.jsonl
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload test diagnostics
         if: always()
