@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import {
   coerceSkillAvailability,
   skillAvailabilityOptions,
   skillBindingBody,
 } from "@/routes/knowledge/-components/skill-availability.logic";
 
-const MATTER_ID = "00000000-0000-7000-8000-0000000000a1";
-const CLIENT_ID = "00000000-0000-7000-8000-0000000000c1";
+const MATTER_ID = toSafeId<"workspace">("00000000-0000-7000-8000-0000000000a1");
+const CLIENT_ID = toSafeId<"contact">("00000000-0000-7000-8000-0000000000c1");
 
 describe("skillAvailabilityOptions", () => {
   test("only admins and owners may bind a skill to a client", () => {

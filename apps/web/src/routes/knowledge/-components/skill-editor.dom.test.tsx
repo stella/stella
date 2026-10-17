@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import type { WebApiRoutes } from "@/lib/eden-client";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -34,14 +35,15 @@ const user = {
   wordEditShortcut: null,
 };
 
-type Invocation = "auto" | "manual";
+type SkillDetail = WebApiRoutes["skills"][":skillId"]["get"]["response"][200];
 
-const BOUND_MATTER_ID = "00000000-0000-7000-8000-0000000000a1";
+type Invocation = SkillDetail["invocation"];
 
-type Binding = {
-  boundClientId: string | null;
-  boundWorkspaceId: string | null;
-};
+const BOUND_MATTER_ID = toSafeId<"workspace">(
+  "00000000-0000-7000-8000-0000000000a1",
+);
+
+type Binding = Pick<SkillDetail, "boundClientId" | "boundWorkspaceId">;
 
 const UNBOUND: Binding = { boundClientId: null, boundWorkspaceId: null };
 
@@ -49,27 +51,28 @@ const skillDetail = (
   ownerUserId: string,
   invocation: Invocation,
   binding: Binding = UNBOUND,
-) => ({
-  id: toSafeId<"agentSkill">(SKILL_ID),
-  scope: "private" as const,
-  origin: "authored" as const,
-  userId: ownerUserId,
-  slug: "clause-review",
-  name: "Clause review",
-  description: "Checks clauses against the house rules.",
-  version: null,
-  license: null,
-  compatibility: null,
-  sourceUrl: null,
-  contentHash: "hash",
-  enabled: true,
-  invocation,
-  ...binding,
-  body: "Instructions",
-  command: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  resources: [],
-});
+) =>
+  ({
+    id: toSafeId<"agentSkill">(SKILL_ID),
+    scope: "private",
+    origin: "authored",
+    userId: ownerUserId,
+    slug: "clause-review",
+    name: "Clause review",
+    description: "Checks clauses against the house rules.",
+    version: null,
+    license: null,
+    compatibility: null,
+    sourceUrl: null,
+    contentHash: "hash",
+    enabled: true,
+    invocation,
+    ...binding,
+    body: "Instructions",
+    command: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    resources: [],
+  }) satisfies SkillDetail;
 
 type PatchRequest = { method: string; pathname: string; body: unknown };
 

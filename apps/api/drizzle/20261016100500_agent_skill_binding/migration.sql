@@ -13,22 +13,22 @@ ALTER TABLE "agent_skills" ADD COLUMN IF NOT EXISTS "bound_client_id" uuid;--> s
 ALTER TABLE "agent_skills" DROP CONSTRAINT IF EXISTS "agent_skills_single_binding_check";--> statement-breakpoint
 ALTER TABLE "agent_skills"
   ADD CONSTRAINT "agent_skills_single_binding_check"
-  CHECK (num_nonnulls("bound_workspace_id", "bound_client_id") <= 1);--> statement-breakpoint
+  CHECK (num_nonnulls("bound_workspace_id", "bound_client_id") <= 1) NOT VALID;--> statement-breakpoint
 
--- Composite references keep a binding inside the skill's organization. Both
--- columns are new and null on every row, so the constraints validate nothing.
+-- Composite references keep a binding inside the skill's organization.
+-- Validate after releasing the DDL locks at the end of this migration.
 -- stella-migration-safety: reviewed drop-constraint - the constraint is new in this migration, so the guarded drop only makes a replay idempotent; rollback drops the binding columns, which drops the constraint with them
 ALTER TABLE "agent_skills" DROP CONSTRAINT IF EXISTS "agent_skills_bound_workspace_fk";--> statement-breakpoint
 ALTER TABLE "agent_skills"
   ADD CONSTRAINT "agent_skills_bound_workspace_fk"
   FOREIGN KEY ("bound_workspace_id", "organization_id")
-  REFERENCES "workspaces"("id", "organization_id") ON DELETE CASCADE;--> statement-breakpoint
+  REFERENCES "workspaces"("id", "organization_id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
 -- stella-migration-safety: reviewed drop-constraint - the constraint is new in this migration, so the guarded drop only makes a replay idempotent; rollback drops the binding columns, which drops the constraint with them
 ALTER TABLE "agent_skills" DROP CONSTRAINT IF EXISTS "agent_skills_bound_client_fk";--> statement-breakpoint
 ALTER TABLE "agent_skills"
   ADD CONSTRAINT "agent_skills_bound_client_fk"
   FOREIGN KEY ("organization_id", "bound_client_id")
-  REFERENCES "contacts"("organization_id", "id") ON DELETE CASCADE;--> statement-breakpoint
+  REFERENCES "contacts"("organization_id", "id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
 
 -- squawk-ignore require-concurrent-index-creation -- agent_skills is bounded by the per-organization and per-user skill limits
 CREATE INDEX IF NOT EXISTS "agent_skills_bound_workspace_idx" ON "agent_skills" ("bound_workspace_id") WHERE bound_workspace_id IS NOT NULL;--> statement-breakpoint
@@ -365,3 +365,32 @@ CREATE POLICY "agent_skill_resource_delete" ON "agent_skill_resources" AS PERMIS
       )
   )
 ));
+
+--> statement-breakpoint
+-- Release the additive DDL locks before validating the binding references.
+-- Reopen a transaction afterwards for the migrator's bookkeeping row.
+-- squawk-ignore transaction-nesting
+COMMIT;
+--> statement-breakpoint
+SET statement_timeout = 0;
+--> statement-breakpoint
+SET lock_timeout = 0;
+--> statement-breakpoint
+ALTER TABLE "agent_skills"
+  -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check outside the additive DDL transaction.
+  VALIDATE CONSTRAINT "agent_skills_single_binding_check";
+--> statement-breakpoint
+ALTER TABLE "agent_skills"
+  -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID foreign key outside the additive DDL transaction.
+  VALIDATE CONSTRAINT "agent_skills_bound_workspace_fk";
+--> statement-breakpoint
+ALTER TABLE "agent_skills"
+  -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID foreign key outside the additive DDL transaction.
+  VALIDATE CONSTRAINT "agent_skills_bound_client_fk";
+--> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
+SET lock_timeout = '1s';
+--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
