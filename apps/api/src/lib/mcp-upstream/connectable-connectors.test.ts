@@ -11,10 +11,10 @@ const userId = createSafeId<"user">();
 
 describe("connectable connector catalog", () => {
   test.each([0, 1, 20, 21])(
-    "returns a complete catalog or an explicit overflow for %s entries",
+    "returns a deterministic bounded catalog for %s entries",
     async (count) => {
       const rows = Array.from({ length: count }, (_, index) => ({
-        slug: `source-${index}`,
+        slug: `source-${String(index).padStart(2, "0")}`,
         displayName: `Source ${index}`,
       }));
       const query = {
@@ -38,14 +38,22 @@ describe("connectable connector catalog", () => {
         safeDb,
         userId,
       });
-      if (count <= 20) {
-        expect(result).toEqual(Result.ok(rows));
-        return;
-      }
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error).toMatchObject({ status: 503 });
-      }
+      expect(result).toEqual(
+        Result.ok({
+          connectors: rows.slice(0, 20),
+          continuation:
+            count > 20
+              ? { type: "more-available", afterSlug: rows.at(19)?.slug }
+              : { type: "complete" },
+        }),
+      );
+      expect(
+        await loadConnectableMcpConnectorsForUser({
+          organizationId,
+          safeDb,
+          userId,
+        }),
+      ).toEqual(result);
     },
   );
 });

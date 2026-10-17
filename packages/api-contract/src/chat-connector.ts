@@ -1,10 +1,33 @@
 import * as v from "valibot";
 
 export const CONNECT_CONNECTOR_TOOL_NAME = "connect_connector";
+export const LIST_CONNECTABLE_CONNECTORS_TOOL_NAME =
+  "list_connectable_connectors";
+export const CONNECTABLE_CONNECTORS_PAGE_SIZE = 20;
 export const CONNECT_CONNECTOR_NOT_CONNECTED_CODE =
   "CHAT_CONNECTOR_NOT_CONNECTED";
 
 const connectorSlugSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(80));
+
+export const connectableConnectorCatalogSchema = v.strictObject({
+  connectors: v.array(
+    v.strictObject({
+      slug: connectorSlugSchema,
+      displayName: v.pipe(v.string(), v.maxLength(160)),
+    }),
+  ),
+  continuation: v.variant("type", [
+    v.strictObject({ type: v.literal("complete") }),
+    v.strictObject({
+      type: v.literal("more-available"),
+      afterSlug: connectorSlugSchema,
+    }),
+  ]),
+});
+
+export type ConnectableMcpConnectorCatalog = v.InferOutput<
+  typeof connectableConnectorCatalogSchema
+>;
 
 export const connectConnectorInputSchema = v.strictObject({
   connectorSlug: connectorSlugSchema,

@@ -46,6 +46,11 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     reason:
       "The client submits private input through a dedicated authenticated endpoint.",
   },
+  list_connectable_connectors: {
+    type: "waiver",
+    reason:
+      "Reads the same user-scoped connector catalog as the optional chat prompt hint.",
+  },
   connect_connector: {
     type: "waiver",
     reason:

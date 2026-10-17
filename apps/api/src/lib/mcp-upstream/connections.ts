@@ -3,8 +3,21 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
+import { CONNECTABLE_CONNECTORS_PAGE_SIZE } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
@@ -23,7 +36,7 @@ import type {
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
-import { readBounded } from "@/api/lib/db/read-bounded";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -408,14 +421,6 @@ export const loadMcpConnectionById = async ({
   return normalized.at(0) ?? null;
 };
 
-/** At most this many connectors are offered to the model as connectable. */
-const CONNECTABLE_MCP_CONNECTORS_MAX = 20;
-
-export type ConnectableMcpConnector = {
-  slug: string;
-  displayName: string;
-};
-
 /**
  * Connectors the organization offers whose tools would not load for this
  * user: no connection yet, or an enabled one that is not connected (it needs
@@ -424,18 +429,18 @@ export type ConnectableMcpConnector = {
  * {@link loadActiveMcpConnectionsForUser}.
  */
 export const loadConnectableMcpConnectorsForUser = async ({
+  afterSlug,
   organizationId,
   safeDb,
   userId,
 }: {
+  afterSlug?: string | undefined;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<
-  Result<ConnectableMcpConnector[], SafeDbError | HandlerError<503>>
-> => {
+}): Promise<Result<ConnectableMcpConnectorCatalog, SafeDbError>> => {
   const result = await safeDb((tx) =>
-    readBounded(
+    readCursorPage(
       tx
         .selectDistinctOn([mcpConnectors.slug], {
           slug: mcpConnectors.slug,
@@ -464,6 +469,9 @@ export const loadConnectableMcpConnectorsForUser = async ({
               eq(mcpConnectors.organizationId, organizationId),
             ),
             approvedMcpAuthorizationReview,
+            afterSlug === undefined
+              ? undefined
+              : gt(mcpConnectors.slug, afterSlug),
             or(
               isNull(mcpUserConnections.id),
               and(
@@ -479,21 +487,20 @@ export const loadConnectableMcpConnectorsForUser = async ({
             ),
           ),
         )
-        .orderBy(asc(mcpConnectors.slug)),
-      CONNECTABLE_MCP_CONNECTORS_MAX,
+        .orderBy(asc(mcpConnectors.slug), asc(mcpConnectors.id)),
+      {
+        limit: CONNECTABLE_CONNECTORS_PAGE_SIZE,
+        cursorForItem: ({ slug }) => slug,
+      },
     ),
   );
-  return result.andThen((read) => {
-    if (read.type === "overflow") {
-      return Result.err(
-        new HandlerError({
-          status: 503,
-          message: "Connectable connector catalog exceeds its supported size",
-        }),
-      );
-    }
-    return Result.ok(read.rows);
-  });
+  return result.map((page) => ({
+    connectors: page.items,
+    continuation:
+      page.nextCursor === null
+        ? { type: "complete" }
+        : { type: "more-available", afterSlug: page.nextCursor },
+  }));
 };
 
 /**

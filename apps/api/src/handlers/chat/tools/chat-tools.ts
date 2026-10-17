@@ -817,7 +817,12 @@ const createSecretToolsForTurn = ({
 
 type CreateConnectorToolsForTurnProps = Pick<
   GetChatToolsProps,
-  "delegationDepth" | "memberRole" | "purpose"
+  | "delegationDepth"
+  | "memberRole"
+  | "purpose"
+  | "safeDb"
+  | "organizationId"
+  | "userId"
 >;
 
 /**
@@ -829,17 +834,20 @@ const createConnectorToolsForTurn = ({
   delegationDepth,
   memberRole,
   purpose,
+  safeDb,
+  organizationId,
+  userId,
 }: CreateConnectorToolsForTurnProps): ChatToolMap => {
   if ((delegationDepth ?? 0) > 0) {
     return {};
   }
   if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
-    return createConnectorTools();
+    return createConnectorTools({ safeDb, organizationId, userId });
   }
   if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
     return {};
   }
-  return createConnectorTools();
+  return createConnectorTools({ safeDb, organizationId, userId });
 };
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
@@ -911,6 +919,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     userId,
   });
   const connectorTools = createConnectorToolsForTurn({
+    safeDb,
+    organizationId,
+    userId,
     delegationDepth: props.delegationDepth,
     memberRole,
     purpose,

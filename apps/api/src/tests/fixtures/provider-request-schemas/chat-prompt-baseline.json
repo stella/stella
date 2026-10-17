@@ -44,6 +44,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 33274
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33477
       }
     ],
     "anthropic/extended": [
@@ -90,6 +94,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 33765
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33967
       }
     ],
     "bedrock/default": [
@@ -136,6 +144,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 33523
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33732
       }
     ],
     "bedrock/extended": [
@@ -182,6 +194,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34012
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34220
       }
     ],
     "google/default": [
@@ -224,6 +240,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 32639
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 32841
       }
     ],
     "google/extended": [
@@ -262,6 +282,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 33117
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33320
       }
     ],
     "mistral/default": [
@@ -308,6 +332,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34800
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35026
       }
     ],
     "mistral/extended": [
@@ -354,6 +382,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 35327
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35552
       }
     ],
     "openai/default": [
@@ -400,6 +432,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34387
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34608
       }
     ],
     "openai/extended": [
@@ -446,6 +482,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34903
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35123
       }
     ],
     "openrouter-anthropic/default": [
@@ -488,6 +528,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
       }
     ],
     "openrouter-anthropic/extended": [
@@ -530,6 +574,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
       }
     ],
     "openrouter/default": [
@@ -572,6 +620,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
       }
     ],
     "openrouter/extended": [
@@ -614,6 +666,10 @@
       {
         "reason": "Connect an installed connector through the consent card without exposing credentials",
         "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
       }
     ]
   },
