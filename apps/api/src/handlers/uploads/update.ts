@@ -51,6 +51,7 @@ import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { logger } from "@/api/lib/observability/logger";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
@@ -215,6 +216,10 @@ const finalizeUpload = createSafeHandler(
       );
     }
     try {
+      logger.info("uploads.finalize_admitted", {
+        declaredBytes: pending.declaredSize,
+        inFlightBytes: UPLOAD_FINALIZE_ADMISSION.inUseBytes(),
+      });
       return yield* claimAndFinalize({
         organizationId: session.activeOrganizationId,
         workspaceId,

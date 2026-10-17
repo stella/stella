@@ -993,11 +993,22 @@ const clauseParagraphArgSchema = v.strictObject({
       v.description("List item kind when the paragraph is a list item"),
     ),
   ),
-  list_level: v.optional(
+  numbering: v.optional(
     v.pipe(
-      v.number(),
-      v.integer(),
-      v.description("0-based list nesting depth for a list item"),
+      v.strictObject({
+        kind: v.pipe(
+          v.literal("levelOnly"),
+          v.description("Set only the paragraph's list nesting depth"),
+        ),
+        ilvl: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(LIMITS.clauseNumberingLevelMin),
+          v.maxValue(LIMITS.clauseNumberingLevelMax),
+          v.description("0-based list nesting depth for a list item"),
+        ),
+      }),
+      v.description("List nesting depth for the paragraph"),
     ),
   ),
   is_directive: v.optional(
@@ -1045,9 +1056,9 @@ const toClauseParagraph = (
   ...(paragraph.list_kind === undefined
     ? {}
     : { listKind: paragraph.list_kind }),
-  ...(paragraph.list_level === undefined
+  ...(paragraph.numbering === undefined
     ? {}
-    : { listLevel: paragraph.list_level }),
+    : { numbering: paragraph.numbering }),
   ...(paragraph.is_directive === undefined
     ? {}
     : { isDirective: paragraph.is_directive }),
@@ -2289,15 +2300,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a clause in the organization's clause library. Omit " +
-      "clause_id to create (title and body required); pass clause_id to update. " +
-      "body is an ordered array of paragraphs, each with text and optional " +
-      "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. Use balanced {% ... %} tags. " +
-      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
-      "category_id, language, description, usage_notes, and metadata " +
-      "accept null to clear them on update. Set snapshot_version true on an " +
-      "update to also append a version snapshot of the body. Returns the clause id.",
+      "Create or update a library clause. Omit clause_id to create (title and " +
+      "body required); include it to update. body contains ordered paragraphs. " +
+      "Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) " +
+      "in the template body. Clear category_id, language, description, usage_notes " +
+      "or metadata with null. Set snapshot_version true to append a body version " +
+      "on update. Returns the clause id.",
     inputSchema: saveClauseArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],

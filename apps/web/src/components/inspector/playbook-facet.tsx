@@ -646,6 +646,7 @@ export const PlaybookFacet = ({
         return { type: "failed" } as const;
       }
       const result = editor.applyAIEditOperations({
+        undefinedReferences: "refuse",
         snapshot,
         operations: [
           {

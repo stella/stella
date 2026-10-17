@@ -44,7 +44,9 @@ test("reader scale keeps its default and reports the read when storage is blocke
   const cause = new DOMException("Storage blocked", "SecurityError");
   const options = {
     analytics: {
-      captureError: (error, operation) => failures.push({ error, operation }),
+      captureError: (error, operation) => {
+        failures.push({ error, operation });
+      },
     },
     storage: {
       getItem: () => {
