@@ -1,7 +1,7 @@
 import { type SQL, sql } from "drizzle-orm";
 
 import {
-  caseLawDecisions,
+  publishedCaseLawDecisions,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -21,7 +21,7 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
       FROM ${corpusIndexProjectionStates} projection_state
       WHERE projection_state.family = ${CASE_LAW_FAMILY}
         AND projection_state.generation = ${generation}
-        AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
+        AND projection_state.entity_id = ${publishedCaseLawDecisions}.${sql.identifier(publishedCaseLawDecisions.id.name)}
     )
   ), 0) <> 1`;
 
@@ -36,12 +36,12 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
     FROM ${corpusIndexProjectionStates} projection_state
     WHERE projection_state.family = ${CASE_LAW_FAMILY}
       AND projection_state.generation = ${generation}
-      AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
+      AND projection_state.entity_id = ${publishedCaseLawDecisions}.${sql.identifier(publishedCaseLawDecisions.id.name)}
   )`;
 
 /** The physical index this generation projects a decision's current country into. */
 const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
-  caseLawIndexIdSql(sql`${generation}`, caseLawDecisions.country);
+  caseLawIndexIdSql(sql`${generation}`, publishedCaseLawDecisions.country);
 
 /**
  * Accept a physical hit only when this generation recorded the current
@@ -62,7 +62,7 @@ export const currentCaseLawCorpusProjection = (generation: string): SQL =>
       FROM ${corpusIndexProjectionStates}
       WHERE ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
         AND ${corpusIndexProjectionStates.generation} = ${generation}
-        AND ${corpusIndexProjectionStates.entityId} = ${caseLawDecisions.id}
+        AND ${corpusIndexProjectionStates.entityId} = ${publishedCaseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The root parser-output diff scripts load recorded ECJ HTML with cheerio, as the adapter does; the root devDependency reuses the version apps/api already declares."
+}

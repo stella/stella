@@ -192,7 +192,7 @@
         {
           "path": "apps/api/src/lib/tanstack-ai-models.ts",
           "contains": [
-            "export const requireTanStackAIAvailableForRole",
+            "export const requireTanStackAIAvailableForTask",
             "switch (config.provider)"
           ]
         },

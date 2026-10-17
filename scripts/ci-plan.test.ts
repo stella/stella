@@ -356,7 +356,7 @@ const selectorCase = (
       : {};
   return {
     flags: ["-e"],
-    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=${detectors === DETECTORS.inProcess ? '"$SERVED_E2E_CORE"' : '$(bash scripts/detect-e2e-changes.sh core "$@")'}
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); scope_files=("$@"); e2e_core_required=${detectors === DETECTORS.inProcess ? '"$SERVED_E2E_CORE"' : '$(bash scripts/detect-e2e-changes.sh core "$@")'}
 desktop_rust_checks_required=${detectors === DETECTORS.inProcess ? '"$SERVED_DESKTOP_RUST"' : '$(bash scripts/detect-tauri-rust-changes.sh "$@")'}
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
@@ -2712,7 +2712,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')) }}`,
+    `\${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (inputs.heavy_only != true && ((github.event_name == 'pull_request' && (contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) || github.event.label.name == 'prove-fix')) || github.event_name == 'workflow_dispatch')) }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -2721,6 +2721,70 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     "format('pr-{0}', github.event.pull_request.number || github.ref)",
   );
   expect(concurrency.group).toContain("format('run-{0}', github.run_id)");
+});
+
+test("metadata runs cannot replace the required code result and scope-changing labels still run", () => {
+  const plan = v.parse(
+    v.object({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(v.unknown()),
+    }),
+    ciJobs["ci-plan"],
+  );
+  const result = v.parse(
+    v.object({ name: v.string(), if: v.string() }),
+    ciJobs["ci-result"],
+  );
+  expect(result.if).toBe("always()");
+  expect(result.name).toContain("ci-metadata-result");
+  expect(result.name).toContain("'ci-result'");
+  expect(plan.outputs["metadata_only"]).toBe(
+    `\${{ steps.completed-depth.outputs.metadata_only }}`,
+  );
+
+  const completedDepth = flattenWorkflowSteps(plan.steps).find(
+    (step) => step["name"] === "Check completed suite depth",
+  );
+  const script = v.parse(
+    v.object({ with: v.object({ script: v.string() }) }),
+    completedDepth,
+  ).with.script;
+  expect(script).toContain('context.payload.label?.name === "prove-fix"');
+  expect(script).toContain("if (metadataAction && !proofScopeChanged)");
+  // ready_for_review starts the first code run of a draft and prove-fix
+  // changes scope: neither is metadata, so both report ci-result.
+  expect(script).not.toMatch(/"enqueued", "ready_for_review"\]\.includes/u);
+  expect(script).toContain('context.payload.label?.name !== "prove-fix"');
+  expect(script).toContain('core.setOutput("run_required", "false")');
+});
+
+test("required checks retain PR and merge-group coverage", async () => {
+  const workflowSchema = v.object({
+    on: v.record(v.string(), v.unknown()),
+    jobs: v.record(v.string(), v.unknown()),
+  });
+  const directory = new URL("../.github/workflows/", import.meta.url);
+  const workflows = await Promise.all(
+    [...new Bun.Glob("*.yml").scanSync(directory.pathname)].map(async (file) =>
+      v.parse(
+        workflowSchema,
+        Bun.YAML.parse(await Bun.file(new URL(file, directory)).text()),
+      ),
+    ),
+  );
+  // Each required check is defined by exactly one workflow, wherever it lives.
+  for (const job of ["ci-result", "dependency-review", "verify-signatures"]) {
+    const owners = workflows.filter((candidate) =>
+      Object.hasOwn(candidate.jobs, job),
+    );
+    expect(owners).toHaveLength(1);
+    const [owner] = owners;
+    expect(owner?.on).toHaveProperty("merge_group");
+    expect(
+      Object.hasOwn(owner?.on ?? {}, "pull_request") ||
+        Object.hasOwn(owner?.on ?? {}, "pull_request_target"),
+    ).toBe(true);
+  }
 });
 
 test("full feature-branch dispatch requires an explicit opt-in at planning time", () => {
@@ -2884,7 +2948,7 @@ const packageChecksPlan = (files: readonly string[]) => {
       "-e",
       "-c",
       `${PACKAGE_CHECKS_BUN_SHIM}
-changed_files=("$@"); desktop_rust_checks_required=false
+changed_files=("$@"); scope_files=("$@"); desktop_rust_checks_required=false
 ${packageScope}
 printf "%s\\n" "$package_checks_required"`,
       "ci-plan-test",
@@ -5215,7 +5279,7 @@ test("the production service-scope capture rejects crashed or malformed detector
           "bash",
           "-eu",
           "-c",
-          `changed_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
+          `changed_files=(docs/guide.md)\nscope_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
         ],
         {
           env: {
@@ -6294,12 +6358,25 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
   expect(planner?.run).toContain("api_test_shards=3");
+  expect(planner?.env?.["COMPARISON_BASE"]).toBe(
+    `\${{ steps.changed-files.outputs.comparison_base }}`,
+  );
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
   expect(runner?.env?.["API_TEST_FILES"]).toBe(
     `\${{ needs.ci-plan.outputs.api_test_files }}`,
   );
+  expect(runner?.env?.["TEST_SCOPE"]).toBe(
+    `\${{ needs.ci-plan.outputs.test_scope }}`,
+  );
+  expect(runner?.run).not.toContain("scripts/test-scope.ts");
+  expect(runner?.run).toContain('read -r -a args <<<"$TEST_SCOPE"');
+  expect(
+    v.parse(v.object({ needs: v.array(v.string()) }), ciJobs["ci-result"])
+      .needs,
+  ).toContain("ci-tests");
+  expect(jobIf(ciJobs["ci-result"])).toBe("always()");
 });
 
 test("a crashed API planner widens the real workflow outputs", () => {

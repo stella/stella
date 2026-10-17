@@ -569,7 +569,7 @@
           "question": "¿De dónde vienen los datos?"
         },
         "1": {
-          "answer": "Dos listas, ambas en expansión. Los registros conectados ya incluyen ARES (Chequia), Companies House (Reino Unido), SEC EDGAR (EE. UU.), KRS (Polonia), PRH (Finlandia) y VIES (IVA de la UE). Más allá de los registros, las fuentes oficiales se van conectando jurisdicción por jurisdicción: Chequia, España y Taiwán, por ejemplo, ya tienen fuentes conectadas, y el lector de jurisprudencia está hecho para explorar y filtrar por jurisdicción a medida que se añaden más fuentes oficiales.",
+          "answer": "El lector de jurisprudencia pública ofrece actualmente resoluciones checas. Los registros de sociedades conectados incluyen ARES (Chequia), Companies House (Reino Unido), SEC EDGAR (Estados Unidos), KRS (Polonia), PRH (Finlandia) y VIES (IVA de la UE).",
           "question": "¿Qué jurisdicciones y registros están cubiertos?"
         },
         "2": {
@@ -892,9 +892,11 @@
     "bringWorkspaceToFront": "Traer al frente el espacio de trabajo de stella",
     "controlBody": "stella es software legal de <gh>código abierto</gh> que puedes autoalojar: inspecciona el código, ejecútalo a tu manera y exporta todo en formatos estándar.",
     "controlTitle": "Mantén el control de la infraestructura.",
-    "dataBody": "Jurisprudencia y registros mercantiles cargados directamente en el asunto, en cada jurisdicción donde trabajas. La anonimización mantiene los datos identificativos lejos de la IA.",
+    "dataBody": "Lee jurisprudencia checa con notas de IA sobre cuestiones jurídicas, resaltados, subrayados, comentarios de un abogado y respuestas con citas. Busca sociedades en los registros oficiales conectados y consulta las fuentes desde un asunto.",
+    "dataConstitutionalAlt": "Resolución del Tribunal Constitucional checo IV.ÚS 1394/24 con párrafos numerados, una nota de IA sobre la cuestión jurídica, un resaltado, un subrayado, un comentario de un abogado y una conversación con dos preguntas y respuestas con citas.",
     "dataEyebrow": "Datos jurídicos",
-    "dataMainAlt": "Una resolución judicial oficial abierta en stella",
+    "dataMainAlt": "Resolución del Tribunal Supremo checo 27 Cdo 59/2022 con párrafos numerados, una nota de IA sobre la cuestión jurídica, un resaltado, un subrayado, un comentario de un abogado y una conversación con dos preguntas y respuestas con citas.",
+    "dataSupremeAlt": "Resolución del Tribunal Supremo checo 27 Cdo 1525/2025 con párrafos numerados, una nota de IA sobre la cuestión jurídica, un resaltado, un subrayado, un comentario de un abogado y una conversación con dos preguntas y respuestas con citas.",
     "dataTitle": "Jurisprudencia y registros al alcance.",
     "exploreAgent": "Explorar el agente de IA",
     "exploreAnonymization": "Explorar la anonimización",

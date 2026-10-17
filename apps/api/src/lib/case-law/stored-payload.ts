@@ -11,11 +11,10 @@
  */
 
 import { notInArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { Column, SQL } from "drizzle-orm";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { caseLawDecisions } from "@/api/db/schema";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
@@ -27,19 +26,18 @@ import {
  * `jsonb_array_length` raises on a non-array, and these columns hold
  * `{}` (the empty-AST placeholder) as often as they hold a document.
  */
-const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
+const jsonbArrayLength = (column: SQL | Column) =>
   sql`coalesce(jsonb_array_length(case when jsonb_typeof(${column}) = 'array' then ${column} else '[]'::jsonb end), 0)`;
 
-type DecisionPayloadColumns = Pick<
-  typeof caseLawDecisions,
-  | "fulltext"
-  | "documentAst"
-  | "sections"
-  | "contentHash"
-  | "textS3Key"
-  | "normalizedS3Key"
-  | "astS3Key"
->;
+type DecisionPayloadColumns = {
+  fulltext: Column;
+  documentAst: Column;
+  sections: Column;
+  contentHash: Column;
+  textS3Key: Column;
+  normalizedS3Key: Column;
+  astS3Key: Column;
+};
 
 /**
  * Whether the row's own Postgres columns hold a document.
@@ -48,7 +46,7 @@ type DecisionPayloadColumns = Pick<
  * rather than a document, and `{}` is the placeholder an adapter without
  * a parser emits, so neither counts.
  */
-const pgPayloadCarriesDocumentFor = ({
+export const pgPayloadCarriesDocumentFor = ({
   fulltext,
   documentAst,
   sections,
@@ -61,9 +59,6 @@ const pgPayloadCarriesDocumentFor = ({
   or ${jsonbArrayLength(sections)} > 0
 )`;
 
-export const pgPayloadCarriesDocument =
-  pgPayloadCarriesDocumentFor(caseLawDecisions);
-
 /** Whether either storage location holds a readable decision document. */
 export const rowHoldsDocumentFor = (
   table: DecisionPayloadColumns,
@@ -74,8 +69,6 @@ export const rowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable
@@ -93,9 +86,6 @@ export const publicRowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-export const publicRowHoldsDocument =
-  publicRowHoldsDocumentFor(caseLawDecisions);
 
 /**
  * The same question as `pgPayloadCarriesDocument`, asked of a payload
