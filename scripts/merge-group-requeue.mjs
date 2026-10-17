@@ -146,7 +146,7 @@ export const parseEntries = (data) => {
     "nodes",
   );
   if (!Array.isArray(nodes)) {
-    throw new Error("Merge queue entries are unavailable");
+    throw new TypeError("Merge queue entries are unavailable");
   }
   return nodes.flatMap((node) => {
     const state = field(node, "state");
@@ -262,7 +262,7 @@ export const applyRequeues = async ({
 }) => {
   let failed = 0;
   for (const plan of plans) {
-    const status = (
+    const status = async (
       /** @type {string} */ state,
       /** @type {string} */ description,
     ) =>
