@@ -1599,9 +1599,11 @@ jobs:
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           else
-            bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
-            echo 'test_scope=' >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              bun scripts/api-test-shard-plan.ts
+              echo 'test_scope='
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           fi
 
       # Package checks restore generated sources produced here, after the
