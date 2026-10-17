@@ -202,7 +202,7 @@ const hasReplayConfig = (source: string) => {
     const initializer = declarations.get(expression.text);
     return initializer ? resolve(initializer, seen) : undefined;
   };
-  let constructsNonJson = false;
+  const nonJsonConstructs: ts.Node[] = [];
   walk(tree, (node) => {
     if (
       ts.isNewExpression(node) &&
@@ -211,14 +211,14 @@ const hasReplayConfig = (source: string) => {
         node.expression.text,
       )
     ) {
-      constructsNonJson = true;
+      nonJsonConstructs.push(node);
     }
     if (
       ts.isCallExpression(node) &&
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.name.text === "stream"
     ) {
-      constructsNonJson = true;
+      nonJsonConstructs.push(node);
     }
   });
   const eligible: boolean[] = [];
@@ -239,7 +239,11 @@ const hasReplayConfig = (source: string) => {
       type !== undefined && ts.isStringLiteral(type) && type.text === "replay",
     );
   });
-  return !constructsNonJson && eligible.length > 0 && eligible.every(Boolean);
+  return (
+    nonJsonConstructs.length === 0 &&
+    eligible.length > 0 &&
+    eligible.every(Boolean)
+  );
 };
 
 test("every create route and capability declares JSON request replay or a reasoned exception", () => {

@@ -37,7 +37,7 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
       .varchar("request_fingerprint", { length: 64 })
       .notNull(),
     state: p.text("state", { enum: REQUEST_IDEMPOTENCY_STATES }).notNull(),
-    responseStatus: p.integer("response_status"),
+    responseCode: p.integer("response_status"),
     responseBody: jsonb("response_body").$type<unknown>(),
     claimedAt: timestamptz("claimed_at").notNull().defaultNow(),
     completedAt: timestamptz("completed_at"),
@@ -57,8 +57,8 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
     ),
     p.check(
       "request_idempotency_receipts_state_check",
-      sql`(${table.state} = 'pending' AND ${table.responseStatus} IS NULL AND ${table.completedAt} IS NULL)
-      OR (${table.state} = 'completed' AND ${table.responseStatus} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
+      sql`(${table.state} = 'pending' AND ${table.responseCode} IS NULL AND ${table.completedAt} IS NULL)
+      OR (${table.state} = 'completed' AND ${table.responseCode} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
     ...userOrganizationPolicies(),
     // Retention reads candidates globally and deletes through user scopes.

@@ -82,6 +82,7 @@ export const STATUS_COLUMNS = {
   playbookDefinitions: ["status"],
   properties: ["status"],
   reportExports: ["notificationStatus", "status"],
+  requestIdempotencyReceipts: ["state"],
   sanctionsContactMatches: ["state"],
   sanctionsContactScreenings: ["status"],
   sanctionsEditionFanouts: ["freshnessStatus", "status"],

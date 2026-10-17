@@ -22,14 +22,15 @@ export const drainRequestReceipts = async ({
   now,
   scheduleContinuation,
 }: DrainRequestReceiptsOptions) => {
-  if (paused || signal.aborted) {
+  const isCancelled = () => signal.aborted;
+  if (paused || isCancelled()) {
     return 0;
   }
   const deadline = now() + RUN_BUDGET_MS;
   let deleted = 0;
   let exhausted = true;
   for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
-    if (signal.aborted || now() >= deadline) {
+    if (isCancelled() || now() >= deadline) {
       break;
     }
     const swept = await sweep(deadline);
@@ -39,7 +40,7 @@ export const drainRequestReceipts = async ({
       break;
     }
   }
-  if (exhausted && !signal.aborted) {
+  if (exhausted && !isCancelled()) {
     scheduleContinuation();
   }
   return deleted;

@@ -574,7 +574,7 @@ type SkipLockedBatchOptions<Tx extends object, Row, T> = {
       for: (mode: RowLockMode, config: LockConfig) => PromiseLike<Row[]>;
     };
   };
-  run: (tx: Tx, rows: Row[]) => Promise<T>;
+  run: (tx: Tx, rows: Row[]) => T | Promise<T>;
 };
 
 /** Nonblocking batches own a fresh transaction and forbid later aggregate acquisitions. */

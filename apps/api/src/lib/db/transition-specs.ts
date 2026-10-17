@@ -14,6 +14,7 @@ import {
   workObligations,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
+  requestIdempotencyReceipts,
 } from "@/api/db/schema";
 import {
   FLOW_RUN_TRANSITIONS_V1,
@@ -130,6 +131,15 @@ const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
   stateColumn: "status",
   edges: { committed: [], cancelled: [] },
   initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
+
+const REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS = defineScopedTransitions({
+  table: requestIdempotencyReceipts,
+  key: "id",
+  scope: [],
+  stateColumn: "state",
+  edges: { pending: ["completed"], completed: [] },
+  initial: ["pending"],
 });
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
@@ -358,6 +368,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,

@@ -1332,12 +1332,16 @@ export const runCheckedScopedHandler = async <
       ctx,
       contentDelivery: undefined,
       async *handler() {
-        return yield* Result.err(
-          new HandlerError({
-            status: 400,
-            message:
-              "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
-          }),
+        return yield* Result.await(
+          Promise.resolve(
+            Result.err(
+              new HandlerError({
+                status: 400,
+                message:
+                  "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+              }),
+            ),
+          ),
         );
       },
     });

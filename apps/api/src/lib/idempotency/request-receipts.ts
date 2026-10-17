@@ -33,6 +33,8 @@ import {
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toJsonValue } from "@/api/lib/json-value";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -182,12 +184,12 @@ export const claimRequestReceipt = async ({
       return { type: "key_reused" };
     }
     if (existing.state === "completed") {
-      if (existing.responseStatus === null) {
+      if (existing.responseCode === null) {
         panic("Completed receipt has no response status");
       }
       return {
         type: "replay",
-        status: existing.responseStatus,
+        status: existing.responseCode,
         body: existing.responseBody,
       };
     }
@@ -214,18 +216,23 @@ export const completeRequestReceipt = async ({
   body,
 }: CompleteRequestReceiptOptions): Promise<void> => {
   await scopedDb(async (tx) => {
-    // audit: skip - Completion caches an already audited create response for replay.
-    const completed = await tx
-      .update(receipts)
-      .set({
-        state: "completed",
-        responseStatus: status,
-        responseBody: body,
-        completedAt: new Date(),
-      })
-      .where(and(eq(receipts.id, id), eq(receipts.state, "pending")))
-      .returning({ id: receipts.id });
-    if (completed.length !== 1) {
+    const completed = await transitionScopedCount({
+      tx,
+      spec: TRANSITIONS.requestIdempotencyReceipts,
+      where: eq(receipts.id, id),
+      options: {
+        from: ["pending"],
+        to: "completed",
+        set: {
+          responseCode: status,
+          responseBody: body,
+          completedAt: new Date(),
+        },
+      },
+      // audit: skip - Completion caches an already audited create response for replay.
+      recordTransitionAuditEvent: () => undefined,
+    });
+    if (completed !== 1) {
       panic("Receipt completion must update its owned pending row");
     }
   });
@@ -329,7 +336,11 @@ export async function runWithRequestReceipt<T>({
               let body: unknown = result;
               let status = responseStatus();
               while (body instanceof ElysiaCustomStatusResponse) {
-                status = body.code;
+                const code: unknown = body.code;
+                if (typeof code !== "number") {
+                  panic("Elysia response status must be numeric");
+                }
+                status = code;
                 body = body.response;
               }
               if (status < 200 || status >= 300) {
@@ -412,11 +423,9 @@ export const sweepExpiredRequestReceipts = async ({
   deleted: number;
   hasMore: boolean;
 }> => {
-  if (signal.aborted) {
-    return { deleted: 0, hasMore: false };
-  }
-  if (elapsedMs() >= deadline) {
-    return { deleted: 0, hasMore: true };
+  const shouldStop = () => signal.aborted || elapsedMs() >= deadline;
+  if (shouldStop()) {
+    return { deleted: 0, hasMore: !signal.aborted };
   }
   const completedBefore = new Date(
     now.getTime() - REQUEST_RECEIPT_RETENTION_MS,
@@ -455,7 +464,7 @@ export const sweepExpiredRequestReceipts = async ({
         })
         .from(receipts)
         .where(expired),
-    run: async (_tx, rows) => rows,
+    run: (_tx, rows) => rows,
   });
   const groups = new Map<string, typeof candidates>();
   for (const row of candidates) {
@@ -471,7 +480,7 @@ export const sweepExpiredRequestReceipts = async ({
   let groupsProcessed = 0;
   const database = markRlsDatabase(db);
   for (const group of groups.values()) {
-    if (signal.aborted || elapsedMs() >= deadline) {
+    if (shouldStop()) {
       break;
     }
     const first =
