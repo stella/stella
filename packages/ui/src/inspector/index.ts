@@ -59,7 +59,6 @@ export {
 export {
   INSPECTOR_PANE_KEYBOARD_PAGE_STEP,
   INSPECTOR_PANE_KEYBOARD_STEP,
-  parsePersistedPaneWidth,
   resolveDragWidth,
   resolveKeyboardWidth,
   useInspectorPaneWidth,

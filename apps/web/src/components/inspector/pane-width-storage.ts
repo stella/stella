@@ -1,85 +1,57 @@
-/**
- * The one owner of the docked inspector's remembered width.
- *
- * The width is a display preference of this browser, not workspace state, so
- * it is not scoped to the organization and user the tab state is (see
- * `inspector-broadcast.ts`). It is also one preference, not one per section:
- * a reader moving between matters and case law expects the pane to stay the
- * width they dragged it to. Every dock reads and writes it through
- * `useSharedInspectorPaneWidth`, so no surface can grow a key of its own.
- */
+import * as v from "valibot";
 
-import { useState } from "react";
+/** The one owner of the docked inspector's remembered width. */
+import {
+  INSPECTOR_PANE_MAX_WIDTH,
+  INSPECTOR_PANE_MIN_WIDTH,
+  useInspectorPaneWidth,
+} from "@stll/ui/inspector";
 
-import { useInspectorPaneWidth } from "@stll/ui/inspector";
-
-import { deviceStorage } from "@/lib/account/browser-storage";
+import {
+  definePersistedState,
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 export const INSPECTOR_PANE_WIDTH_STORAGE_KEY =
   "stella:inspector-pane-width:v2";
 
-const INSPECTOR_PANE_SURFACES = ["matter", "public-law"] as const;
+export type InspectorPaneSurface = "matter" | "public-law";
 
-export type InspectorPaneSurface = (typeof INSPECTOR_PANE_SURFACES)[number];
+const inspectorPaneWidthEntry = definePersistedState({
+  key: INSPECTOR_PANE_WIDTH_STORAGE_KEY,
+  area: "local",
+  version: 1,
+  schema: v.pipe(
+    v.number(),
+    v.minValue(INSPECTOR_PANE_MIN_WIDTH),
+    v.maxValue(INSPECTOR_PANE_MAX_WIDTH),
+  ),
+  maxBytes: 128,
+  defaultValue: () => 512,
+  restoredUi: true,
+});
 
-const LEGACY_SURFACE_STORAGE_KEYS: Record<InspectorPaneSurface, string> = {
-  matter: "stella:inspector-pane-width:v1:matter",
-  "public-law": "stella:inspector-pane-width:v1:public-law",
-};
-
-/**
- * Folds the per-surface widths an earlier build stored into the shared one.
- * Stored widths carry no timestamp, so the surface the reader opens first
- * after the update (the one in use now) stands in for the most recent; the
- * other surface's width is the fallback. A shared width already stored wins,
- * and the per-surface keys are removed either way.
- */
-export const migrateInspectorPaneWidth = (
-  openedFrom: InspectorPaneSurface,
-): void => {
-  // Best-effort like every device preference: blocked storage reads as empty
-  // and the pane opens at its default width.
-  const storage = deviceStorage("local");
-  const legacyKeys = [
-    LEGACY_SURFACE_STORAGE_KEYS[openedFrom],
-    ...INSPECTOR_PANE_SURFACES.filter((surface) => surface !== openedFrom).map(
-      (surface) => LEGACY_SURFACE_STORAGE_KEYS[surface],
-    ),
-  ];
-  const legacyWidth = legacyKeys
-    .map((key) => storage.getItem(key))
-    .find((value) => value !== null);
-  if (
-    legacyWidth !== undefined &&
-    storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) === null
-  ) {
-    storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, legacyWidth);
-  }
-  for (const key of legacyKeys) {
-    storage.removeItem(key);
-  }
+const paneWidthPersistence = {
+  read: () => readPersistedState(inspectorPaneWidthEntry, {}),
+  write: (width: number) => {
+    writePersistedState(inspectorPaneWidthEntry, {}, width);
+  },
 };
 
 type UseSharedInspectorPaneWidthOptions = {
-  /** The surface docking the pane; only picks which earlier width migrates. */
   openedFrom: InspectorPaneSurface;
   sidebarWidth: number;
   viewportWidth: number;
 };
 
 export const useSharedInspectorPaneWidth = ({
-  openedFrom,
+  openedFrom: _openedFrom,
   sidebarWidth,
   viewportWidth,
-}: UseSharedInspectorPaneWidthOptions) => {
-  // Runs before the width hook's own initializer reads the shared key.
-  useState(() => {
-    migrateInspectorPaneWidth(openedFrom);
-    return null;
-  });
-  return useInspectorPaneWidth({
+}: UseSharedInspectorPaneWidthOptions) =>
+  useInspectorPaneWidth({
+    persistence: paneWidthPersistence,
     sidebarWidth,
-    storageKey: INSPECTOR_PANE_WIDTH_STORAGE_KEY,
     viewportWidth,
   });
-};

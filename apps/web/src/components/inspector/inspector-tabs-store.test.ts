@@ -2166,7 +2166,7 @@ describe("Inspector tab broadcast", () => {
           userId: "user-storage",
         }),
       ),
-    ).toBe("1");
+    ).toBe(JSON.stringify({ version: 1, value: true }));
   });
 
   test("does not exchange tabs across organization scopes", () => {
@@ -2280,20 +2280,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeLegalKey: statuteChatKey("document-1"),
-            contextMatterIds: [],
-            id: restored,
-            label: "Statute chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeLegalKey: statuteChatKey("document-1"),
+              contextMatterIds: [],
+              id: restored,
+              label: "Statute chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
     const minted = ensureLegalDocumentChatThread({
@@ -2325,20 +2328,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeDecisionId: "decision-1",
-            contextMatterIds: [],
-            id: restored,
-            label: "Decision chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeDecisionId: "decision-1",
+              contextMatterIds: [],
+              id: restored,
+              label: "Decision chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
 
@@ -2381,10 +2387,13 @@ describe("a legal document's chat tab and the reader's composer", () => {
     // Exactly these two: the empty document chat is left out.
     expect(persisted).toEqual(
       expect.objectContaining({
-        tabs: [
-          expect.objectContaining({ id: used, started: true }),
-          expect.objectContaining({ id: "thread-plain" }),
-        ],
+        version: 1,
+        value: expect.objectContaining({
+          tabs: [
+            expect.objectContaining({ id: used, started: true }),
+            expect.objectContaining({ id: "thread-plain" }),
+          ],
+        }),
       }),
     );
   });
@@ -2418,7 +2427,9 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "a",
   });
-  expect(localArea().getItem(keyA)).toBe("1");
+  expect(localArea().getItem(keyA)).toBe(
+    JSON.stringify({ version: 1, value: true }),
+  );
   client.setQueryData(["session"], { user: { id: "b" } });
   expect(useInspectorTabsStore.getState().minimized).toBe(false);
   expect(useInspectorTabsStore.getState().tabs).toEqual([]);
@@ -2431,14 +2442,16 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "b",
   });
-  localArea().setItem(keyB, "1");
+  localArea().setItem(keyB, JSON.stringify({ version: 1, value: true }));
   cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
     organizationId: "org",
     userId: "b",
   });
   expect(useInspectorTabsStore.getState().minimized).toBe(true);
   useInspectorTabsStore.getState().setMinimized(false);
-  expect(localArea().getItem(keyB)).toBe("0");
+  expect(localArea().getItem(keyB)).toBe(
+    JSON.stringify({ version: 1, value: false }),
+  );
   expect(localArea().getItem(keyA)).toBeNull();
   cleanupInspectorBroadcast();
   cleanupInspectorBroadcast = null;

@@ -18,19 +18,13 @@ const { cleanup, fireEvent, render, screen } =
   await import("@testing-library/react");
 const { INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_KEYBOARD_STEP } =
   await import("@stll/ui/inspector");
-const {
-  INSPECTOR_PANE_WIDTH_STORAGE_KEY,
-  migrateInspectorPaneWidth,
-  useSharedInspectorPaneWidth,
-} = await import("@/components/inspector/pane-width-storage");
+const { INSPECTOR_PANE_WIDTH_STORAGE_KEY, useSharedInspectorPaneWidth } =
+  await import("@/components/inspector/pane-width-storage");
 const { deviceStorage } = await import("@/lib/account/browser-storage");
 
 const storage = deviceStorage("local");
 
-type Surface = Parameters<typeof migrateInspectorPaneWidth>[0];
-
-const LEGACY_MATTER_KEY = "stella:inspector-pane-width:v1:matter";
-const LEGACY_PUBLIC_LAW_KEY = "stella:inspector-pane-width:v1:public-law";
+type Surface = "matter" | "public-law";
 
 // A dock as each section mounts it: the matter shell and the public law
 // reader render this same hook, and nothing else.
@@ -48,13 +42,7 @@ const Dock = ({ openedFrom }: { openedFrom: Surface }) => {
 };
 
 beforeEach(() => {
-  for (const key of [
-    INSPECTOR_PANE_WIDTH_STORAGE_KEY,
-    LEGACY_MATTER_KEY,
-    LEGACY_PUBLIC_LAW_KEY,
-  ]) {
-    storage.removeItem(key);
-  }
+  storage.removeItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY);
 });
 
 afterEach(() => {
@@ -88,47 +76,6 @@ describe("one inspector width across sections", () => {
     render(<Dock openedFrom="matter" />);
     expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
       String(grown - INSPECTOR_PANE_KEYBOARD_STEP),
-    );
-  });
-});
-
-describe("migrateInspectorPaneWidth", () => {
-  test("the section opened first keeps its earlier width and the old keys go", () => {
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
-
-    migrateInspectorPaneWidth("public-law");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
-    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
-    expect(storage.getItem(LEGACY_PUBLIC_LAW_KEY)).toBeNull();
-  });
-
-  test("falls back to the other section's earlier width", () => {
-    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
-
-    migrateInspectorPaneWidth("matter");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
-  });
-
-  test("a shared width already stored is never overwritten", () => {
-    storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "480");
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-
-    migrateInspectorPaneWidth("matter");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("480");
-    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
-  });
-
-  test("a dock mounted on migrated storage opens at the migrated width", () => {
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-
-    render(<Dock openedFrom="matter" />);
-
-    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-      "520",
     );
   });
 });

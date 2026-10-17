@@ -944,10 +944,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/pane-width-storage.ts::INSPECTOR_PANE_SURFACES::domain:[\"matter\",\"public-law\"]::1",
-    "reason": "Existing INSPECTOR_PANE_SURFACES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/playbook-facet.tsx::CounterpartyNotePopover::maxLength:2000::1",
     "reason": "Existing CounterpartyNotePopover UI validation or presentation bound; contract migration pending."
   },
