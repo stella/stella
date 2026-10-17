@@ -1,13 +1,19 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
+
+import type { CorrespondenceChannel } from "@stll/api-contract/correspondence";
 
 import { correspondence } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
+import {
+  readCorrespondenceChannel,
+  readCorrespondenceProvenance,
+} from "@/api/lib/email/correspondence/provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
@@ -29,6 +35,8 @@ const CORRESPONDENCE_LIST_COLUMNS = {
   sentAt: correspondence.sentAt,
   handlingState: correspondence.handlingState,
   assigneeId: correspondence.assigneeId,
+  channel: correspondence.channel,
+  dataBox: correspondence.dataBox,
   source: correspondence.source,
   sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
@@ -47,7 +55,6 @@ const UNPROJECTED_LIST_COLUMNS = [
   "contentHash", // Internal content fingerprint for ingestion.
   "dedupKey", // Internal replay identity.
   "direction", // The compact list uses the detail route for direction metadata.
-  "channel", // The compact list uses the detail route for channel metadata.
   "messageId", // Transport identifiers belong to detail.
   "inReplyTo", // Reply linkage belongs to detail.
   "references", // Thread references belong to detail.
@@ -70,6 +77,12 @@ type UnexpectedListColumn = UnbackedProjectionKeys<
 true satisfies MissingListColumn extends never ? true : never;
 true satisfies UnexpectedListColumn extends never ? true : never;
 
+// Every channel is filterable; the check fails when a channel is added.
+const CHANNEL_FILTER = t.Union([t.Literal("email"), t.Literal("data_box")]);
+true satisfies [CorrespondenceChannel] extends [Static<typeof CHANNEL_FILTER>]
+  ? true
+  : never;
+
 const PAGE_SIZE = 30;
 const PAGE_SIZE_MAX = 100;
 const cursorCodec = createTimestampIdCursorCodec({
@@ -80,7 +93,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 const config = {
   contract: "patch",
   description:
-    "List correspondence filed in a matter, newest received first. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the email file sourceEntityId in the matter; its headers are as stated in that file and are not verified.",
+    "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -93,6 +106,7 @@ const config = {
   query: t.Object({
     cursor: t.Optional(tPaginationCursor()),
     limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGE_SIZE_MAX })),
+    channel: t.Optional(CHANNEL_FILTER),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -122,6 +136,9 @@ const listCorrespondence = createSafeHandler(
             .where(
               and(
                 eq(correspondence.workspaceId, workspaceId),
+                query.channel === undefined
+                  ? undefined
+                  : eq(correspondence.channel, query.channel),
                 cursor === null
                   ? undefined
                   : cursorCodec.keysetAfter({
@@ -144,6 +161,8 @@ const listCorrespondence = createSafeHandler(
       items: page.items.map(
         ({
           cursorTimestamp: _cursorTimestamp,
+          channel,
+          dataBox,
           source,
           sourceEntityId,
           intake,
@@ -156,6 +175,7 @@ const listCorrespondence = createSafeHandler(
           ...record
         }) => ({
           ...record,
+          ...readCorrespondenceChannel({ channel, dataBox }),
           ...readCorrespondenceProvenance({
             source,
             sourceEntityId,

@@ -120,6 +120,7 @@ const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",
+    dataBox: null,
     messageId: `<${Bun.randomUUIDv7()}@example.test>`,
     contentHash: "a".repeat(64),
     from: { address: "sender@example.test", name: null },

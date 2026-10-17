@@ -15,6 +15,10 @@ import {
 } from "@/api/db/entity-feature-policies";
 import { wsPolicies } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
+import {
+  latestEntityFeaturePolicies,
+  readEntityFeatureMigrations,
+} from "@/api/tests/fixtures/entity-feature-migrations";
 
 test("every app-readable entity relation inherits feature visibility", () => {
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
@@ -185,16 +189,12 @@ test("a record owned by an unfenced parent needs no fence", () => {
   expect(entityFeatureCoverageViolations([reader])).toEqual([]);
 });
 
-test("the committed migration matches every schema-owned visibility policy", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
-  const statements = [
-    ...migration.matchAll(/CREATE POLICY "workspace_entity_feature"[^\n]+/gu),
-  ].map((match) => match[0].trim());
+test("the committed migration matches every schema-owned visibility policy", () => {
+  const migration = readEntityFeatureMigrations();
+  const statements = latestEntityFeaturePolicies(
+    migration,
+    "workspace_entity_feature",
+  );
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   expect(statements).toEqual(entityFeaturePolicyStatements(tables));
   expect(

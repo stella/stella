@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 
-import type { CorrespondenceProvenance } from "@stll/api-contract/correspondence";
+import type {
+  CorrespondenceChannelContent,
+  CorrespondenceProvenance,
+} from "@stll/api-contract/correspondence";
 
 import type { correspondence } from "@/api/db/schema";
 
@@ -98,5 +101,32 @@ export const readCorrespondenceProvenance = (
     default:
       stored.source satisfies never;
       return panic("Unhandled correspondence source");
+  }
+};
+
+type StoredCorrespondenceChannel = Pick<
+  typeof correspondence.$inferSelect,
+  "channel" | "dataBox"
+>;
+
+/** correspondence_data_box_check binds the envelope to the channel. */
+export const readCorrespondenceChannel = ({
+  channel,
+  dataBox,
+}: StoredCorrespondenceChannel): CorrespondenceChannelContent => {
+  switch (channel) {
+    case "email":
+      if (dataBox !== null) {
+        return panic("Email correspondence has a data-box envelope");
+      }
+      return { channel, dataBox };
+    case "data_box":
+      if (dataBox === null) {
+        return panic("Data-box correspondence has no envelope");
+      }
+      return { channel, dataBox };
+    default:
+      channel satisfies never;
+      return panic("Unhandled correspondence channel");
   }
 };
