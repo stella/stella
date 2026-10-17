@@ -20,7 +20,8 @@ const eliCountrySegment = (country: string): string | null => {
 export const resolveAmendmentHref = (
   identifier: string,
 ): string | undefined => {
-  const normalized = identifier.trim().toLowerCase();
+  // Publishers print the same ELI with or without a leading slash.
+  const normalized = identifier.trim().toLowerCase().replace(/^\//u, "");
   const country = /^eli\/([a-z]{2})\//u.exec(normalized)?.at(1);
   const countrySegment =
     country === undefined ? null : eliCountrySegment(country);
