@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
@@ -44,7 +45,9 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
   const message = getErrorMessage(error);
   return (
     message !== undefined &&
-    STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) => message.startsWith(prefix))
+    STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) =>
+      containsSearchMatchKey(message.slice(0, prefix.length), prefix),
+    )
   );
 };
 
