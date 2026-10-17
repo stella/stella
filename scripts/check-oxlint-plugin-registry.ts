@@ -20,6 +20,8 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "public-law-decision-surface-modules.ts",
   "restricted-import.ts",
   "utils.ts",
+  "test-determinism-rule.ts",
+  "test-time-resolver.ts",
 ]);
 const TYPEBOX_UNSAFE_RULE_ID =
   "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";

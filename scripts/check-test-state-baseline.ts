@@ -5,7 +5,16 @@ import path from "node:path";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { runLedgerMembershipGuard } from "./ledger-membership.ts";
 
-const BASELINE_REL = BASELINE_PATHS.testState;
+const BASELINES = {
+  state: BASELINE_PATHS.testState,
+  "wallclock-assertion": BASELINE_PATHS.testWallclockAssertion,
+  "real-timers": BASELINE_PATHS.testRealTimers,
+  "ambient-time": BASELINE_PATHS.testAmbientTime,
+} as const;
+
+type BaselineKind = keyof typeof BASELINES;
+const isBaselineKind = (value: string): value is BaselineKind =>
+  Object.hasOwn(BASELINES, value);
 
 export const parseTestBaseline = (text: string, label: string): string[] => {
   const parsed: unknown = JSON.parse(text);
@@ -87,6 +96,18 @@ export const validateTestBaselineFiles = ({
 };
 
 if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const kindIndex = args.indexOf("--kind");
+  const kind = kindIndex === -1 ? "state" : args.at(kindIndex + 1);
+  if (kind === undefined || !isBaselineKind(kind)) {
+    panic(
+      "--kind requires state, ambient-time, real-timers or wallclock-assertion",
+    );
+  }
+  if (kindIndex !== -1) {
+    args.splice(kindIndex, 2);
+  }
+  const baselineRel = BASELINES[kind];
   const repoRoot = path.resolve(import.meta.dir, "..");
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {
     cwd: repoRoot,
@@ -100,23 +121,26 @@ if (import.meta.main) {
   const trackedFiles = new Set(tracked.stdout.toString().split("\0"));
   process.exit(
     runLedgerMembershipGuard({
-      ledgerRel: BASELINE_REL,
+      ledgerRel: baselineRel,
       repoRoot,
       parseLedger: (text, label) => {
         const members = parseTestBaseline(text, label);
-        if (label === BASELINE_REL) {
+        if (label === baselineRel) {
           validateTestBaselineFiles({
             members,
             repoRoot,
             trackedFiles,
-            baselineRel: BASELINE_REL,
+            baselineRel,
           });
         }
         return members;
       },
-      label: "test-state",
+      args,
+      label: `test-${kind}`,
       remediation:
-        "use an auto-restoring fixture instead of adding state access",
+        kind === "state"
+          ? "use an auto-restoring fixture instead of adding state access"
+          : "migrate nondeterministic test work to @stll/test-kit",
     }),
   );
 }

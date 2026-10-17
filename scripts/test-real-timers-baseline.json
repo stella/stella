@@ -1,0 +1,987 @@
+{
+  ".claude/mcp/stella-docs-http.test.ts": {
+    "count": 3,
+    "owner": ".claude",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/evals/lib/model-turn.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/scripts/test-db-snapshot-cache.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/scripts/test-lanes.test.ts": {
+    "count": 6,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/scripts/test-process-supervisor.test.ts": {
+    "count": 5,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/backfill-runtime-load-reader.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/migration-rehearsal-writer-gap.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/migration-runner.db.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/online-index-gate.postgres.test.ts": {
+    "count": 6,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/online-repair-holds.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/pool-idle-timeout.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/db/root.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/adapters/publisher-backoff.valkey.test.ts": {
+    "count": 10,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/background-replay.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/pipeline-identity.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/case-law/ingestion/source-totals.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/chat-turn-run-ownership.integration.test.ts": {
+    "count": 10,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/send-message-turn-settlement.integration.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/send-message.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/tools/external-mcp-tools-discovery.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/chat/turns/cancel.integration.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/entities/desktop-edit-session-events.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/expenses/immutability.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/invoices/pdf/typst/session.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/legal-reader/answers/runtime.db.test.ts": {
+    "count": 5,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/legal-reader/answers/stream-deadline.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/legislation/work-name-backfill.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/lists/columns/create.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/rates/default-concurrency.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/sanctions/public-routes.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/search-history/import-clock.integration.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/handlers/workspaces/workspace-events-access.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/auth/email-otp-response-parity.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/bullmq-requeue.valkey.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/case-law/analysis-failure-sweep.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/case-law/maintenance-lane.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/chat/managed-provider-checks.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/chat/run-log.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/chat/run-log.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/chat/tanstack-chat-runtime.test.ts": {
+    "count": 5,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/corpus-index/core.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db-query-counter.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db/caller-async-context.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db/member-access-hold.postgres.test.ts": {
+    "count": 3,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db/rls-role-posture.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/db/tree-parent-guard.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/document-processing-idle-exit.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/document-processing-queue.test.ts": {
+    "count": 8,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/email/correspondence/account-erasure-lock.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/email/inbound/sender.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/browse-facets-cache.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-pagination.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-reissue.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-projection-multipart.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-projection-request-size.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-index-projection-revision.postgres.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-passage-reader.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/legal-search/corpus-storage-cancellation.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/lists/sanctions/matcher-pool.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-claims.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/lists/sanctions/monitoring-opt-out.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/machine-api-keys/personal-lifecycle.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/member-removal-locks.postgres.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/member-role-invariants.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/observability/event-loop-delay.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/observability/request-context.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/queue-worker-error-log.test.ts": {
+    "count": 4,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/action-admission.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/action-period-budget.valkey.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/auth-storage.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/mcp-read-fence.valkey.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/public-corpus-admission.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/public-corpus-concurrency.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/rate-limit.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/rate-limit/redis-context.cold-start.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/redis-outage.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/review-organization/membership-fence.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/safe-outbound-fetch.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/scheduler/runner.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.db.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/skills/skill-package-discovery.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/sse-publish-timeout.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/sse.test.ts": {
+    "count": 7,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/subprocess.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/uploads/finalize-admission.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/usage/member-capacity.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/workflow-queue.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/workflow/root-run-state-store.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/mcp/server.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/scripts/corpus-generation.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/scripts/eu-completion-tick.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/scripts/eu-ecj-formex-refresh.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/scripts/script-success-exit.contract.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/server-shutdown.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/tests/helpers/chat-live-response.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/tests/helpers/event-loop-lag-probe.test.ts": {
+    "count": 5,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/collab/src/server.test.ts": {
+    "count": 10,
+    "owner": "collab",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts": {
+    "count": 1,
+    "owner": "desktop",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/desktop/tests/desktop-events.test.ts": {
+    "count": 1,
+    "owner": "desktop",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/e2e/containment.spec.ts": {
+    "count": 1,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/src/lib/download-guard.test.ts": {
+    "count": 3,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/src/lib/download-scope.test.ts": {
+    "count": 1,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/src/lib/tab-containment.test.ts": {
+    "count": 2,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/extension/src/lib/tab-executor.test.ts": {
+    "count": 4,
+    "owner": "extension",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/e2e/specs/guides.spec.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/action-admission-outcome.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/ai-suggestions/docx-suggestion-cache.test.ts": {
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/auth/last-used-sign-in.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/auth/password-sign-in-option.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/auth/sign-in-query-state.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/breadcrumbs/breadcrumb-query-state.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/chat/recorded-conversations.dom.test.tsx": {
+    "count": 5,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/docx/docx-edit-mode.logic.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/inspector/inspector-find.dom.test.tsx": {
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/inspector/inspector-tabs-store.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/inspector/maximize-tab.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/provider-diagnostic-message.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/provision-version-basis.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/workspaces/table/use-table-state.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/avt/document-verification-status.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/avt/document-verifications.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/analysis/decision-inspector-outline.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/decision-citation-box.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/decision-reader-toggles.dom.test.tsx": {
+    "count": 7,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/decision-text.provisions.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/provisions-cited.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
+    "count": 4,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/chat-runtime-emit.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/chat-runtime-rejoin.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/chat-runtime-stop.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/queries.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx": {
+    "count": 4,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/knowledge/playbook-editor/playbook-editor.logic.test.ts": {
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/statutes/components/citing-decision-item.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/statutes/components/provision-citing-decisions.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/features/statutes/components/statute-page-search.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/hooks/use-latest-callback.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/hooks/use-sign-out.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/hooks/use-time-billing-preview.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/account/session-change-listener.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/account/session-signal.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/account/user-scoped-storage.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/errors/user-toast.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/files/attached-template-upload.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/react-query.test.ts": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/session-cache-guard.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/lib/workspace-sse-connection.logic.test.ts": {
+    "count": 3,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/-app-frame-transition.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/-protected-app/-components/payment-retry-banner.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.chat/-components/chat-thread-page.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.settings/-components/organization/ai-config-navigation.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.settings/-components/organization/ai-provider-rows.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.settings/-hooks/use-settings-mutation.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/list-source-action.dom.test.tsx": {
+    "count": 2,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-refusal.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/routes/auth/-components/social-recovery-panel.dom.test.tsx": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/ssr-response-stream.test.ts": {
+    "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/business-registries/src/ares/client.test.ts": {
+    "count": 1,
+    "owner": "business-registries",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/mcp-client.test.ts": {
+    "count": 3,
+    "owner": "cli",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/concurrency/src/index.test.ts": {
+    "count": 15,
+    "owner": "concurrency",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/concurrency/src/sleep.test.ts": {
+    "count": 3,
+    "owner": "concurrency",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/concurrency/src/with-timeout.test.ts": {
+    "count": 5,
+    "owner": "concurrency",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/errors/src/detached.test.ts": {
+    "count": 1,
+    "owner": "errors",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/infosoud/src/client.test.ts": {
+    "count": 1,
+    "owner": "infosoud",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/legal-atlas/src/document-stage-observer.test.ts": {
+    "count": 1,
+    "owner": "legal-atlas",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/property-testing/src/assert-property.test.ts": {
+    "count": 2,
+    "owner": "property-testing",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/dev-process-groups.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/generation-lock.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-memory.test.ts": {
+    "count": 3,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-shutdown.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-spawn.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/process-stderr.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/scripts/src/windows-process-ownership.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/check-journeys.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/check-lockfile-release-ages.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/check-published-versions.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/gh-retry-processes.test.ts": {
+    "count": 2,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/pre-push-affected.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  }
+}
