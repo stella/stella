@@ -229,7 +229,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/document-version-upload-transport.ts",
       "packages/cli/src/generated/mcp-contract.ts",
       "packages/cli/src/generated/registry-snapshot.json",
-      "apps/api/mcp-connect-tool-weights.json",
+      ...CI_GENERATED_OUTPUTS.cliRegistry,
       "packages/cli/src/generated/resource-tree.ts",
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",

@@ -1046,7 +1046,10 @@ const summarizeEntry = (entry: CatalogEntry): string =>
 const capabilityTitle = (id: string): string => id.replaceAll(/[.-]/gu, " ");
 
 const queryWords = (value: string): string[] =>
-  value.toLocaleLowerCase("en-US").match(/[\p{L}\p{N}]+/gu) ?? [];
+  Array.from(
+    value.toLocaleLowerCase("en-US").matchAll(/[\p{L}\p{N}]+/gu),
+    ([word]) => word,
+  );
 
 const wordMatches = (candidate: string, query: string): boolean =>
   candidate === query ||

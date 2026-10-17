@@ -2588,9 +2588,9 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     consumesServices: false,
     description:
       "Set a document property cell. Pass entity_id, property_id from " +
-      "list_properties, and content matching the property's type: text string; " +
-      "single-select string or null; multi-select string array; ISO date or null; " +
-      "or integer with optional 3-letter currency. An empty value clears the cell.",
+      "list_properties, and content matching the property's type: 'text' string; " +
+      "'single-select' string or null; 'multi-select' string array; 'date' ISO value " +
+      "or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     inputSchema: setFieldValueArgsSchema,
     // Not idempotent: writeFieldValue unconditionally deletes/reinserts and
     // reindexes the cell and records a fresh audit event + updatedAt bump on

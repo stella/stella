@@ -440,7 +440,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns positioned matches, neighbours and deep links. Page 1 adds reader/publisher URLs, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -2587,7 +2587,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Compare document versions is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Compare document versions is confined to the private workspace or a bounded computation."
     },
-    "description": "Create a tracked-changes DOCX redline. source versions compares a stored base with up to 8 targets; previous uses its predecessor; uploads compares two staged .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; accept compares final text. output_mode preview does not write, download returns an expiring link, and version saves a derived version from a stored source. Read every independent status and show each openUrl or download link.",
+    "description": "Create a tracked-changes DOCX redline. source 'versions' compares a stored base with up to 8 targets; 'previous' uses its predecessor; 'uploads' compares two .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' compares final text. output_mode 'preview' does not write, 'download' returns an expiring link, and 'version' saves a derived version from a stored source. Show every openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
       "destructiveHint": false,
@@ -3035,7 +3035,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Set field value can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Set field value is confined to the private workspace or a bounded computation."
     },
-    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: text string; single-select string or null; multi-select string array; ISO date or null; or integer with optional 3-letter currency. An empty value clears the cell.",
+    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: 'text' string; 'single-select' string or null; 'multi-select' string array; 'date' ISO value or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
       "destructiveHint": true,
@@ -6366,7 +6366,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "query": {
           "type": "string",
-          "minLength": 1,
           "description": "Search capability ids, generated titles, and descriptions. Results are ranked by relevance."
         },
         "access": {
@@ -6994,7 +6993,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns positioned matches, neighbours and deep links. Page 1 adds reader/publisher URLs, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -9141,7 +9140,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Compare document versions is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Compare document versions is confined to the private workspace or a bounded computation."
     },
-    "description": "Create a tracked-changes DOCX redline. source versions compares a stored base with up to 8 targets; previous uses its predecessor; uploads compares two staged .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; accept compares final text. output_mode preview does not write, download returns an expiring link, and version saves a derived version from a stored source. Read every independent status and show each openUrl or download link.",
+    "description": "Create a tracked-changes DOCX redline. source 'versions' compares a stored base with up to 8 targets; 'previous' uses its predecessor; 'uploads' compares two .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' compares final text. output_mode 'preview' does not write, 'download' returns an expiring link, and 'version' saves a derived version from a stored source. Show every openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
       "destructiveHint": false,
@@ -9589,7 +9588,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Set field value can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Set field value is confined to the private workspace or a bounded computation."
     },
-    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: text string; single-select string or null; multi-select string array; ISO date or null; or integer with optional 3-letter currency. An empty value clears the cell.",
+    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: 'text' string; 'single-select' string or null; 'multi-select' string array; 'date' ISO value or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
       "destructiveHint": true,
@@ -13199,7 +13198,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
       "destructiveHint": "Compare document versions is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Compare document versions is confined to the private workspace or a bounded computation."
     },
-    "description": "Create a tracked-changes DOCX redline. source versions compares a stored base with up to 8 targets; previous uses its predecessor; uploads compares two staged .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; accept compares final text. output_mode preview does not write, download returns an expiring link, and version saves a derived version from a stored source. Read every independent status and show each openUrl or download link.",
+    "description": "Create a tracked-changes DOCX redline. source 'versions' compares a stored base with up to 8 targets; 'previous' uses its predecessor; 'uploads' compares two .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' compares final text. output_mode 'preview' does not write, 'download' returns an expiring link, and 'version' saves a derived version from a stored source. Show every openUrl or download link.",
     "annotations": {
       "title": "Compare document versions",
       "destructiveHint": false,
@@ -13647,7 +13646,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
       "destructiveHint": "Set field value can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Set field value is confined to the private workspace or a bounded computation."
     },
-    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: text string; single-select string or null; multi-select string array; ISO date or null; or integer with optional 3-letter currency. An empty value clears the cell.",
+    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: 'text' string; 'single-select' string or null; 'multi-select' string array; 'date' ISO value or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     "annotations": {
       "title": "Set field value",
       "destructiveHint": true,
@@ -14325,7 +14324,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns positioned matches, neighbours and deep links. Page 1 adds reader/publisher URLs, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,
@@ -16272,7 +16271,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law decision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns positioned matches, neighbours and deep links. Page 1 adds reader/publisher URLs, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
+    "description": "Read \`decision_ids[]\` in order. \`page\` selects a \`max_chars\` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. \`full: true\` returns whole text up to 200000 chars. \`query\` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. \`include\` picks fields; [] returns text and identity only.",
     "annotations": {
       "title": "Read case-law decision",
       "destructiveHint": false,

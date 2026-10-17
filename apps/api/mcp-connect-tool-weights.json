@@ -32,10 +32,10 @@
     {
       "name": "compare_documents",
       "nameChars": 17,
-      "descriptionChars": 532,
+      "descriptionChars": 506,
       "inputSchemaChars": 3326,
-      "totalChars": 3875,
-      "estimatedTokens": 1569
+      "totalChars": 3849,
+      "estimatedTokens": 1561
     },
     {
       "name": "configure_template_fields",
@@ -352,10 +352,10 @@
     {
       "name": "read_case_law_decision",
       "nameChars": 22,
-      "descriptionChars": 553,
+      "descriptionChars": 558,
       "inputSchemaChars": 2623,
-      "totalChars": 3198,
-      "estimatedTokens": 1285
+      "totalChars": 3203,
+      "estimatedTokens": 1287
     },
     {
       "name": "read_case_law_decision_blocks",
@@ -560,10 +560,10 @@
     {
       "name": "set_field_value",
       "nameChars": 15,
-      "descriptionChars": 285,
+      "descriptionChars": 297,
       "inputSchemaChars": 2771,
-      "totalChars": 3071,
-      "estimatedTokens": 1255
+      "totalChars": 3083,
+      "estimatedTokens": 1259
     },
     {
       "name": "set_practice_jurisdictions",
@@ -615,7 +615,7 @@
     }
   ],
   "totals": {
-    "characters": 125961,
-    "estimatedTokens": 49906
+    "characters": 125952,
+    "estimatedTokens": 49904
   }
 }

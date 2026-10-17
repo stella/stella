@@ -306,14 +306,14 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   description:
-    "Create a tracked-changes DOCX redline. source versions compares a stored " +
-    `base with up to ${TARGET_LIMIT_TEXT} targets; previous uses its predecessor; ` +
-    "uploads compares two staged .docx files from " +
+    "Create a tracked-changes DOCX redline. source 'versions' compares a stored " +
+    `base with up to ${TARGET_LIMIT_TEXT} targets; 'previous' uses its predecessor; ` +
+    "'uploads' compares two .docx files from " +
     "open_file_comparison, prepare_file_comparison_from_links or " +
-    "prepare_file_comparison. *_tracked_changes controls existing changes; accept " +
-    "compares final text. output_mode preview does not write, download returns an " +
-    "expiring link, and version saves a derived version from a stored source. " +
-    "Read every independent status and show each openUrl or download link.",
+    "prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' " +
+    "compares final text. output_mode 'preview' does not write, 'download' returns an " +
+    "expiring link, and 'version' saves a derived version from a stored source. " +
+    "Show every openUrl or download link.",
   inputSchema: COMPARE_DOCUMENTS_INPUT_SCHEMA,
   access: "write",
   accountAccess: "sandbox",
