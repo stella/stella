@@ -76,7 +76,9 @@ test.each(["ar-SA", "ar-AE"])(
       const hydrationErrors: unknown[] = [];
       const root = await act(async () =>
         hydrateRoot(container, <RouterProvider router={router} />, {
-          onRecoverableError: (error) => hydrationErrors.push(error),
+          onRecoverableError: (error) => {
+            hydrationErrors.push(error);
+          },
         }),
       );
       try {
