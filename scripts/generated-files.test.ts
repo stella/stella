@@ -575,11 +575,18 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
       ({ id }) => id,
     ),
   ).toEqual(["module-ownership", "route-tree"]);
+  // api-typecheck-projects declares the derived CLI and capability runtimes,
+  // which a clean checkout lacks, so they are planned with it.
   expect(
     generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["api-typecheck-projects", "module-ownership"]);
+  ).toEqual([
+    "capability-runtime",
+    "cli-runtime",
+    "api-typecheck-projects",
+    "module-ownership",
+  ]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );
