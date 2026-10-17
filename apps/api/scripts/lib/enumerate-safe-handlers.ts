@@ -1,6 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 
+import { AhoCorasick } from "@stll/aho-corasick";
 import { compareCodeUnit } from "@stll/collation";
 import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
@@ -38,6 +39,10 @@ const LIB_DIR = import.meta.dir;
 export const REPO_ROOT = path.resolve(LIB_DIR, "../../../..");
 export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
 
+const SAFE_HANDLER_FACTORY_MATCHER = new AhoCorasick([
+  ...SAFE_HANDLER_FACTORY_NAMES,
+]);
+
 /**
  * Only import files that contain a safe-handler factory call. The
  * handlers tree also holds pure helpers and standalone CLI scripts (e.g.
@@ -52,7 +57,7 @@ export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
 export const inspectSafeHandlerCalls = (source: string) => {
   const kinds = new Set<HandlerKind>();
   let callCount = 0;
-  if (!SAFE_HANDLER_FACTORY_NAMES.some((name) => source.includes(name))) {
+  if (!SAFE_HANDLER_FACTORY_MATCHER.isMatch(source)) {
     return { callCount, kinds: [...kinds] };
   }
   const file = ts.createSourceFile(

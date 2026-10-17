@@ -26,3 +26,22 @@ test("enumerates factory calls while excluding types and inert source text", () 
     ).toEqual({ callCount: 3, kinds: [kind] });
   }
 });
+
+test("factory discovery is case-sensitive and AST-aware", () => {
+  const source = `
+    const createSafeHandlercreateSafeTokenHandler = 1;
+    const upperCase = CreateSafeHandler(config, handler);
+    const text = "createSafePublicHandler(config, handler)";
+    // createSafeRootHandler(config, handler)
+    const actual = createSafeHandler /* call boundary */ (config, handler);
+  `;
+
+  expect(inspectSafeHandlerCalls(source)).toEqual({
+    callCount: 1,
+    kinds: ["workspace"],
+  });
+});
+
+test("returns no calls for empty source", () => {
+  expect(inspectSafeHandlerCalls("")).toEqual({ callCount: 0, kinds: [] });
+});
