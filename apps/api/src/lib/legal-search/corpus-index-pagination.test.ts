@@ -225,7 +225,7 @@ const readPage = async (
     order,
     parsedCursor,
     snippetFields: ["text"],
-    projectionRevisionField: "projection_revision",
+    revisionRetrieval: { type: "stored", field: "projection_revision" },
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -407,7 +407,7 @@ describe("a page settles within one scan round", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -539,7 +539,7 @@ describe("the scan is bounded by engine round trips", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -707,7 +707,7 @@ describe("a passage flood does not strand the reader", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -814,7 +814,7 @@ describe("residual filters preserve progress past empty scan windows", () => {
       order,
       parsedCursor,
       snippetFields: [],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -949,7 +949,7 @@ describe("split legislation stays one hit across cursor pages", () => {
         order: RELEVANCE_ORDER,
         parsedCursor,
         snippetFields: [],
-        projectionRevisionField: "projection_revision",
+        revisionRetrieval: { type: "stored", field: "projection_revision" },
         extractId: (hit: CorpusIndexHit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
@@ -1017,7 +1017,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1808,7 +1808,7 @@ describe("folded acts stay folded across capped windows", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -2018,7 +2018,7 @@ describe("a page addressed by offset", () => {
       parsedCursor,
       skip,
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,

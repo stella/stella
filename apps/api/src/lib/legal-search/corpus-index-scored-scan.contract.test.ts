@@ -19,6 +19,7 @@ import {
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexRevisionRetrieval,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CorpusIndexScanTransport,
@@ -456,7 +457,7 @@ const readScanPage = async ({
     scanTransport,
     rankingMode,
     snippetFields: ["text"],
-    projectionRevisionField: "projection_revision",
+    revisionRetrieval: corpusIndexRevisionRetrieval(MANIFEST),
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {

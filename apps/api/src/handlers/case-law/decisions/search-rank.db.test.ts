@@ -377,7 +377,7 @@ test.each(
         parsedCursor,
         order: RELEVANCE_ORDER,
         snippetFields: [],
-        projectionRevisionField: "projection_revision",
+        revisionRetrieval: { type: "stored", field: "projection_revision" },
         extractId: (hit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,

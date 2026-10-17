@@ -48,7 +48,10 @@ import type {
   CorpusServingGenerationAbsentError,
   ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexRevisionRetrieval,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type SearchCursor,
   readCorpusIndexSearchPage,
@@ -1108,10 +1111,9 @@ const corpusIndexSearch = async ({
           }
         : {}),
       snippetFields: ["text"],
-      projectionRevisionField: requireCorpusIndexManifest(
-        "legislation",
-        generation,
-      ).projection.projectionRevisionField,
+      revisionRetrieval: corpusIndexRevisionRetrieval(
+        requireCorpusIndexManifest("legislation", generation),
+      ),
       extractId: (hit) => {
         const id = hit["document_id"];
         return typeof id === "string" && isUuid(id) ? id : null;

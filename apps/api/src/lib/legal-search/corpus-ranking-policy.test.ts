@@ -42,7 +42,7 @@ const rankingTestOptions = {
   limit: 40,
   parsedCursor: null,
   snippetFields: [],
-  projectionRevisionField: "projection_revision",
+  revisionRetrieval: { type: "stored", field: "projection_revision" },
   extractId: (hit) =>
     typeof hit["document_id"] === "string" ? hit["document_id"] : null,
   extractSnippet: () => null,
@@ -330,7 +330,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       limit: 10,
       parsedCursor,
       snippetFields: [],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,

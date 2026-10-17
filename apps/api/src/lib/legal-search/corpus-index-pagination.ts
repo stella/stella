@@ -28,6 +28,7 @@ import {
   getCorpusIndexClient,
   isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusRevisionRetrieval } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CorpusProjectionRevision,
   type CorpusProjectionRevisionField,
@@ -227,8 +228,8 @@ type CorpusIndexSearchPageInput<TContext> = {
    * a couple of hundred passages to answer with ten.
    */
   snippetFields: string[];
-  /** The manifest's `projection.projectionRevisionField`. */
-  projectionRevisionField: CorpusProjectionRevisionField;
+  /** Whether the manifest returns revision identity with each physical hit. */
+  revisionRetrieval: CorpusRevisionRetrieval;
   extractId: (hit: CorpusIndexHit) => string | null;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
@@ -935,11 +936,15 @@ type ScannedPassage = {
   clause: string | null;
 };
 
-/** Keep revisions separate until the batched SQL read binds the applied copy. */
-const appliedPassages = () => {
+/**
+ * Stored revisions stay separate until SQL binds the applied copy. Legacy
+ * mappings expose no revision in hits; they retain document-level ranking and
+ * constrain hydration to the applied revision through `pageRevisionClauses`.
+ */
+const appliedPassages = (retrieval: CorpusRevisionRetrieval) => {
   const passages = new Map<
     string,
-    Map<string, { best: ScannedPassage; count: number }>
+    Map<string | null, { best: ScannedPassage; count: number }>
   >();
   const candidates: { id: string }[] = [];
   const passageClauseById = new Map<string, string>();
@@ -950,7 +955,9 @@ const appliedPassages = () => {
     [...passages]
       .flatMap(([id, revisions]) =>
         [...revisions].flatMap(([revision, passage]) =>
-          revision === revisionById.get(id) ? [{ id, ...passage }] : [],
+          retrieval.type === "query_only" || revision === revisionById.get(id)
+            ? [{ id, ...passage }]
+            : [],
         ),
       )
       .toSorted((a, b) => a.best.position - b.best.position);
@@ -959,9 +966,21 @@ const appliedPassages = () => {
     passageClauseById,
     bestScoreById,
     record: (passage: ScannedPassage): boolean => {
-      const { id, revision } = passage;
-      if (typeof revision !== "string") {
-        return false;
+      const { id } = passage;
+      let revision: string | null;
+      switch (retrieval.type) {
+        case "stored":
+          if (typeof passage.revision !== "string") {
+            return false;
+          }
+          revision = passage.revision;
+          break;
+        case "query_only":
+          revision = null;
+          break;
+        default:
+          retrieval satisfies never;
+          return panic("Unhandled revision retrieval capability");
       }
       let revisions = passages.get(id);
       if (revisions === undefined) {
@@ -1014,7 +1033,7 @@ const readWindowPage = async <TContext>({
   scanTransport = NATIVE_SCAN_TRANSPORT,
   maxRounds = LIMITS.corpusIndexSearchMaxRounds,
   snippetFields,
-  projectionRevisionField,
+  revisionRetrieval,
   extractId,
   extractSnippet,
   rankCandidates,
@@ -1022,7 +1041,7 @@ const readWindowPage = async <TContext>({
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
-  const passages = appliedPassages();
+  const passages = appliedPassages(revisionRetrieval);
   const { candidates, passageClauseById, bestScoreById } = passages;
   const rankingScope = rankingScopeOf(parsedCursor, passages.selectCandidates);
   const scores = scanScoreRecorder(bestScoreById);
@@ -1117,7 +1136,7 @@ const readWindowPage = async <TContext>({
           if (
             !passages.record({
               id,
-              revision: hit[projectionRevisionField],
+              revision: hit[revisionRetrieval.field],
               score: corpusIndexLexicalScore(startOffset + index),
               position: startOffset + index,
               bm25: round.scores?.[index],
@@ -1183,7 +1202,7 @@ const readWindowPage = async <TContext>({
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
-      field: projectionRevisionField,
+      field: revisionRetrieval.field,
       passageClauseById,
     }),
     cluster,
@@ -1317,7 +1336,7 @@ const readOffsetChainPage = async <TContext>(
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById,
-      field: options.projectionRevisionField,
+      field: options.revisionRetrieval.field,
       passageClauseById,
     }),
     cluster: options.cluster,
@@ -1416,7 +1435,7 @@ const readBm25SearchPage = async <TContext>(
     skip = 0,
     scanTransport,
     snippetFields,
-    projectionRevisionField,
+    revisionRetrieval,
     extractId,
     extractSnippet,
     rankCandidates,
@@ -1464,7 +1483,7 @@ const readBm25SearchPage = async <TContext>(
   const hits = round.hits
     .slice(0, CORPUS_BM25_PASSAGE_LIMIT)
     .toSorted(compareBm25Passages);
-  const passages = appliedPassages();
+  const passages = appliedPassages(revisionRetrieval);
   const { candidates, bestScoreById, passageClauseById } = passages;
   let malformed = 0;
   for (const [position, { fields: hit, score }] of hits.entries()) {
@@ -1481,7 +1500,7 @@ const readBm25SearchPage = async <TContext>(
         if (
           !passages.record({
             id,
-            revision: hit[projectionRevisionField],
+            revision: hit[revisionRetrieval.field],
             score:
               topScore === 0
                 ? 0
@@ -1537,7 +1556,7 @@ const readBm25SearchPage = async <TContext>(
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
-      field: projectionRevisionField,
+      field: revisionRetrieval.field,
       passageClauseById,
     }),
     cluster,

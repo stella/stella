@@ -106,7 +106,7 @@ const readDispositionPage = async (
     scanTransport: mode === "native" ? { type: "native" } : { type: "scored" },
     rankingMode: mode === "bm25" ? "bm25-ratio" : "off",
     snippetFields: ["text"],
-    projectionRevisionField: "projection_revision",
+    revisionRetrieval: { type: "stored", field: "projection_revision" },
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {

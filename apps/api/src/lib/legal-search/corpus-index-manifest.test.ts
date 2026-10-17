@@ -16,6 +16,7 @@ import {
   corpusIndexManifestScopeJurisdictions,
   corpusIndexPositionalFields,
   corpusIndexPublisherFields,
+  corpusIndexRevisionRetrieval,
   corpusIndexRoute,
   corpusIndexStemFields,
   requireCorpusIndexIdForManifest,
@@ -37,14 +38,13 @@ const EXPECTED_DIGESTS = {
     "ca567a8f26fc3c4af987db655943ac46bbde12af27379b927239e795eb16d2d0",
   case_law_v8:
     "f86d63a815b35dbc8dd9de16ad84355ccbf61e5faad64483ca884bb5a9994b65",
+  case_law_v9:
+    "585fc8701308977a4154ad33cf46e2b68f2f3836c5500ef89fd24d4a73cc23b7",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
   legislation_v3:
     "a3a9c8005b8475abc0565d4c9ff7aa41b2e9882a86e7202217789ea02c6aa8d0",
-} as const satisfies Record<
-  Exclude<keyof typeof CORPUS_INDEX_MANIFESTS, "case_law_v9">,
-  string
->;
+} as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, string>;
 
 /** The case-law generations that hold every jurisdiction. */
 type CaseLawManifestGeneration = Exclude<
@@ -154,6 +154,54 @@ test("the final-generation registry is exact and fails closed", () => {
   ).toThrow("Unknown legislation index manifest: legislation_v1");
 });
 
+test("revision retrieval capability follows each manifest mapping", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const field = manifest.projection.projectionRevisionField;
+    const mapping = manifest.engine.indexConfig.doc_mapping.field_mappings.find(
+      (entry) => entry.name === field,
+    );
+    expect(mapping).toBeDefined();
+    expect(corpusIndexRevisionRetrieval(manifest)).toEqual({
+      type: mapping?.stored === true ? "stored" : "query_only",
+      field,
+    });
+  }
+  expect(
+    corpusIndexRevisionRetrieval(CORPUS_INDEX_MANIFESTS.case_law_v9),
+  ).toEqual({ type: "stored", field: "projection_revision" });
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "legislation_v2",
+    "legislation_v3",
+  ] as const) {
+    expect(
+      corpusIndexRevisionRetrieval(CORPUS_INDEX_MANIFESTS[generation]),
+    ).toEqual({ type: "query_only", field: "projection_revision" });
+  }
+  const malformed = {
+    ...CORPUS_INDEX_MANIFESTS.case_law_v9,
+    engine: {
+      ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine,
+      indexConfig: {
+        ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig,
+        doc_mapping: {
+          ...CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig.doc_mapping,
+          field_mappings:
+            CORPUS_INDEX_MANIFESTS.case_law_v9.engine.indexConfig.doc_mapping.field_mappings.filter(
+              (entry) => entry.name !== "projection_revision",
+            ),
+        },
+      },
+    },
+  } satisfies typeof CORPUS_INDEX_MANIFESTS.case_law_v9;
+  expect(() => corpusIndexRevisionRetrieval(malformed)).toThrow(
+    "Corpus manifest does not map its projection revision field",
+  );
+});
+
 test("manifest digests pin every semantic array and ignore object key order", () => {
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v5)).toBe(
     EXPECTED_DIGESTS.case_law_v5,
@@ -166,6 +214,9 @@ test("manifest digests pin every semantic array and ignore object key order", ()
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v8)).toBe(
     EXPECTED_DIGESTS.case_law_v8,
+  );
+  expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.case_law_v9)).toBe(
+    EXPECTED_DIGESTS.case_law_v9,
   );
   expect(corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)).toBe(
     EXPECTED_DIGESTS.legislation_v2,
@@ -341,9 +392,10 @@ test("a query routes where the projection writes", () => {
     indexId: "case_law_v7_cs_sk",
     jurisdictionClause: "CZE",
   });
-  expect(() =>
-    corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze"),
-  ).toThrow("Undeclared case-law jurisdiction");
+  expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "cze")).toEqual({
+    indexId: "case_law_v7_cs_sk",
+    jurisdictionClause: "CZE",
+  });
   // A single-jurisdiction index is bounded by the index alone.
   expect(corpusIndexRoute(CORPUS_INDEX_MANIFESTS.case_law_v7, "POL")).toEqual({
     indexId: "case_law_v7_pol",
@@ -999,6 +1051,11 @@ test("case_law_v9 is a partial generation: Czech decisions in a group of their o
   expect(corpusIndexManifestDigest(v9)).toMatch(/^[0-9a-f]{64}$/u);
   expect(corpusIndexManifestDigest(v9)).not.toBe(EXPECTED_DIGESTS.case_law_v8);
   expect(corpusIndexManifestDigest(v8)).toBe(EXPECTED_DIGESTS.case_law_v8);
-  // The same mapping as v8: the group's contract adds the provision keys field.
-  expect(v9.engine.indexConfig).toEqual(v8.engine.indexConfig);
+  const v8Fields = v8.engine.indexConfig.doc_mapping.field_mappings;
+  const v9Fields = v9.engine.indexConfig.doc_mapping.field_mappings;
+  expect(v9Fields).toEqual(
+    v8Fields.map((field) =>
+      field.name === "projection_revision" ? { ...field, stored: true } : field,
+    ),
+  );
 });

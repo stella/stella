@@ -316,6 +316,33 @@ export type CorpusIndexManifest =
   | LegislationV3Manifest;
 export type CorpusIndexManifestGeneration = CorpusIndexManifest["generation"];
 
+export type CorpusRevisionRetrieval =
+  | {
+      type: "stored";
+      field: CorpusIndexProjectionContract["projectionRevisionField"];
+    }
+  | {
+      type: "query_only";
+      field: CorpusIndexProjectionContract["projectionRevisionField"];
+    };
+
+export const corpusIndexRevisionRetrieval = (
+  manifest: CorpusIndexManifest,
+): CorpusRevisionRetrieval => {
+  const field = manifest.projection.projectionRevisionField;
+  const mapping = manifest.engine.indexConfig.doc_mapping.field_mappings.find(
+    (entry) => entry.name === field,
+  );
+  if (mapping === undefined) {
+    return panic(
+      `Corpus manifest does not map its projection revision field: ${manifest.generation}/${field}`,
+    );
+  }
+  return mapping.stored
+    ? { type: "stored", field }
+    : { type: "query_only", field };
+};
+
 type CorpusIndexFieldMapping =
   CorpusIndexConfig["doc_mapping"]["field_mappings"][number];
 
@@ -637,6 +664,23 @@ const CASE_LAW_V8_INDEX_CONFIG = deepFreeze(
   ),
 );
 
+const CASE_LAW_V9_INDEX_CONFIG = deepFreeze(
+  structuredClone(
+    indexConfig({
+      fieldMappings: caseLawV8Fields().map((field) =>
+        field.name === "projection_revision"
+          ? { ...field, stored: true }
+          : field,
+      ),
+      tagFields: [...CASE_LAW_TAG_FIELDS],
+      timestampField: DECISION_TIMESTAMP_FIELD,
+      docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
+      indexing: CORPUS_FINAL_INDEX_INDEXING_V8,
+      defaultSearchFields: ["title", "text"],
+    }),
+  ),
+);
+
 const legislationFields = (): CorpusIndexFieldMapping[] => [
   ...commonFields(),
   rawField("status", { stored: false, fast: true }),
@@ -779,7 +823,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     cluster: "q09",
     engine: {
       binaryVersion: QUICKWIT_V09_BUILD_VERSION,
-      indexConfig: CASE_LAW_V8_INDEX_CONFIG,
+      indexConfig: CASE_LAW_V9_INDEX_CONFIG,
     },
     projection: {
       layout: "passage",

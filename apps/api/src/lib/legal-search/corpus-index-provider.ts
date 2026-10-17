@@ -34,7 +34,10 @@ import {
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexRevisionRetrieval,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   readCorpusIndexSearchPage,
   type CorpusCandidateRankingInput,
@@ -451,8 +454,9 @@ const searchResult = async (
     scanTransport:
       rankingMode === "bm25-ratio" ? { type: "scored" } : { type: "native" },
     snippetFields: ["text"],
-    projectionRevisionField: requireCorpusIndexManifest(family, generation)
-      .projection.projectionRevisionField,
+    revisionRetrieval: corpusIndexRevisionRetrieval(
+      requireCorpusIndexManifest(family, generation),
+    ),
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;

@@ -1361,7 +1361,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
       hitDispositions,
       rankingMode: "off",
       snippetFields: ["text"],
-      projectionRevisionField: "projection_revision",
+      revisionRetrieval: { type: "stored", field: "projection_revision" },
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -1504,7 +1504,7 @@ test.each(["off", "bm25-ratio"] as const)(
               ? { type: "scored" }
               : { type: "native" },
           snippetFields: ["text"],
-          projectionRevisionField: "projection_revision",
+          revisionRetrieval: { type: "stored", field: "projection_revision" },
           extractId: (hit) =>
             typeof hit["document_id"] === "string" ? hit["document_id"] : null,
           extractSnippet: () => null,

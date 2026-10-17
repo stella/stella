@@ -191,7 +191,10 @@ import {
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexRevisionRetrieval,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -2703,8 +2706,9 @@ export const searchCorpusIndexDecisions = async ({
     scanTransport: caseLawScanTransport(sort),
     rankingMode,
     snippetFields: ["text"],
-    projectionRevisionField: requireCorpusIndexManifest("case_law", generation)
-      .projection.projectionRevisionField,
+    revisionRetrieval: corpusIndexRevisionRetrieval(
+      requireCorpusIndexManifest("case_law", generation),
+    ),
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
