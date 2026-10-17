@@ -75,7 +75,7 @@ export const LeadingCitations = ({
 }: LeadingCitationsProps) => {
   const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
   const summaryView = useQueryView(summaryQuery);
-  useQueryViewError(summaryView);
+  useQueryViewError(summaryView, "LeadingCitations:query");
   const summary = summaryView.type === "items" ? summaryView.items : undefined;
   if (summary === undefined) {
     return <QueryViewFeedback view={summaryView} />;
@@ -157,7 +157,7 @@ const DirectionSection = ({
     decisionLeadingCitationsOptions(decisionId, direction),
   );
   const leadingView = useQueryView(leadingQuery);
-  useQueryViewError(leadingView);
+  useQueryViewError(leadingView, "DirectionSection:query");
   const leading = leadingView.type === "items" ? leadingView.items : undefined;
   const [showingAll, setShowingAll] = useState(false);
   const total = totalCitations(counts);

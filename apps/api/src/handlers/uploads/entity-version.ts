@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -135,6 +136,11 @@ const versionWriteRejection = (
   });
 };
 
+const EXTRACTION_KEY = "entityVersion.processExtraction";
+const THUMBNAIL_KEY = "entityVersion.enqueueThumbnail";
+const PDF_KEY = "entityVersion.enqueuePdfDerivative";
+const DIFF_KEY = "entityVersion.computeVersionDiff";
+
 /**
  * Promote the staged object, then join the canonical version transaction. The
  * pending-upload FSM transition is supplied as writeFileVersion's afterWrite
@@ -166,7 +172,10 @@ export const finalizeEntityVersion = async function* ({
   // the one it replaces, and may be encrypted when that one was not.
   const encryption = uploadFileEncryption(
     await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
+    handlerErrorContext("entityVersion.detectEncryption", {
+      mimeType: declaredMime,
+      sizeBytes: String(declaredSize),
+    }),
   );
   if (encryption === null) {
     return finalizeErr({
@@ -300,7 +309,8 @@ export const finalizeEntityVersion = async function* ({
       panic("Entity version write completed without finalize result");
     const afterPromote = () => {
       processExtraction(entityId).catch((error: unknown) => {
-        captureError(error, { entityId });
+        const context = { entityId };
+        captureError(error, handlerErrorContext(EXTRACTION_KEY, context));
       });
       enqueuePdfDerivativeOrMarkFailed({
         encrypted: encryption.encrypted,
@@ -311,7 +321,8 @@ export const finalizeEntityVersion = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        const context = { entityId, fieldId, mimeType: declaredMime };
+        captureError(error, handlerErrorContext(PDF_KEY, context));
       });
       enqueueImageThumbnailOrMarkFailed({
         encrypted: encryption.encrypted,
@@ -322,7 +333,8 @@ export const finalizeEntityVersion = async function* ({
         userId,
         workspaceId,
       }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
+        const context = { entityId, fieldId, mimeType: declaredMime };
+        captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
       });
       computeVersionDiffStats({
         versionId: entityVersionId,
@@ -335,7 +347,8 @@ export const finalizeEntityVersion = async function* ({
         workspaceId,
         organizationId,
       }).catch((error: unknown) => {
-        captureError(error, { versionId: entityVersionId });
+        const context = { versionId: entityVersionId };
+        captureError(error, handlerErrorContext(DIFF_KEY, context));
       });
       broadcastWorkspaceResourceUpdated(
         workspaceId,

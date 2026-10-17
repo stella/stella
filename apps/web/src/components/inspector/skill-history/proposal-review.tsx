@@ -42,7 +42,7 @@ export const ProposalReview = ({
     skillProposalOptions(organizationId, userId, skillId, proposalId),
   );
   const proposalView = useQueryView(proposalQuery);
-  useQueryViewError(proposalView);
+  useQueryViewError(proposalView, "ProposalReview:query");
   const proposal =
     proposalView.type === "items" ? proposalView.items : undefined;
 

@@ -20,13 +20,14 @@ import {
   SIGNAL_EVENT_TYPE,
   transitionSignal,
 } from "@/api/handlers/signals/transition";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -244,7 +245,11 @@ export const createAcceptSignal = (
           );
           dependencies
             .flushEntitySearchRepairs([created.entityId])
-            .catch(captureError);
+            .catch(
+              createErrorCapture(
+                handlerErrorContext("createAcceptSignal.rejection"),
+              ),
+            );
 
           const row = yield* yield* loadVisibleSignal({
             safeDb,

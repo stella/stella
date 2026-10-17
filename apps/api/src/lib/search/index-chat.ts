@@ -9,6 +9,7 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
@@ -469,10 +470,13 @@ export const backfillChatThreadSearchIndex = async ({
         // db-await-in-loop: per-thread rebuild so one failing thread is logged and skipped without failing its page; each rebuild reads the thread's messages in bounded pages, and the repair page bounds the threads per pass
         await upsertChatThreadSearchDocument(row.id, database);
       } catch (error) {
-        captureError(error, {
-          feature: "chat_search.backfill",
-          threadId: row.id,
-        });
+        captureError(
+          error,
+          handlerErrorContext("search.backfillChatThreadSearchIndex", {
+            feature: "chat_search.backfill",
+            threadId: row.id,
+          }),
+        );
         logger.error("chat_search.backfill_failed", {
           threadId: row.id,
           ...errorSystemFields(error),

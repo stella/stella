@@ -80,6 +80,7 @@ const ChatThreadDomPage = ({
     key: threadRef,
   });
   const session = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.dom-page" },
     chat,
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,

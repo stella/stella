@@ -32,8 +32,9 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      type: "detached",
-      operation: "test.press",
+      fingerprintKey: "detachedUserAction:test.press",
+      scope: { type: "handler", handlerId: "detachedUserAction:test.press" },
+      context: { type: "detached", operation: "test.press" },
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });

@@ -22,6 +22,7 @@
 import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { omitSourceBoundValues } from "./ai-visible-values";
@@ -390,7 +391,7 @@ const draftRow = async ({
       maxLength,
     });
   } catch (error) {
-    captureError(error);
+    captureError(error, handlerErrorContext("docx.draftRow"));
     return {
       type: "failed",
       reason: "generation-failed",

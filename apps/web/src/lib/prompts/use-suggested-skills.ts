@@ -39,7 +39,7 @@ export const useSuggestedSkills = (): SuggestedSkill[] => {
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = skillPagesQuery;
   const skillPagesView = useQueryView(skillPagesQuery);
-  useQueryViewError(skillPagesView);
+  useQueryViewError(skillPagesView, "useSuggestedSkills:query");
   const skillPages =
     skillPagesView.type === "items" ? skillPagesView.items : undefined;
   const canLoadSkillPages =

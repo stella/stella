@@ -53,7 +53,10 @@ import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
-import { createUnrecognizedSourceReporter } from "@/api/lib/legal-search/source-registry-membership";
+import {
+  SOURCE_REPORT_FEATURE,
+  createUnrecognizedSourceReporter,
+} from "@/api/lib/legal-search/source-registry-membership";
 import type {
   LegalBrowseFacets,
   LegalSearchEngine,
@@ -392,8 +395,9 @@ export const loadCaseLawCoverage = async ({
   const admitted = sources.value.filter(({ id }) => !withheld.has(String(id)));
   const arrivals = await readArrivals(admitted.map(({ id }) => id));
 
-  const reportUnrecognizedSource =
-    createUnrecognizedSourceReporter("case_law.coverage");
+  const reportUnrecognizedSource = createUnrecognizedSourceReporter(
+    SOURCE_REPORT_FEATURE.coverage,
+  );
   const byCountry = new Map<
     CaseLawJurisdiction,
     {

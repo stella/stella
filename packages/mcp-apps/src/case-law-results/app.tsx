@@ -17,4 +17,4 @@ if (root === null) {
   panic("Case-law app mount is missing");
 }
 createRoot(root).render(<CaseLawApp bridge={bridge} />);
-bridge.detached(bridge.connect(), "connect case-law app");
+bridge.detached(bridge.connect(), "caseLawResults.connect");

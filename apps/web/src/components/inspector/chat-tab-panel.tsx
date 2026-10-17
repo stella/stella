@@ -170,7 +170,10 @@ export const ChatTabPanel = ({
       if (ChatSubmitPreservedError.is(error)) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatTabPanel:failure",
+        scope: { type: "handler", handlerId: "ChatTabPanel:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
@@ -283,6 +286,7 @@ export const ChatTabPanel = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
     conversationId: threadRef.threadId,
     getContextMatterIds,
@@ -760,7 +764,7 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useChatContextLabel:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];

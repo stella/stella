@@ -13,6 +13,7 @@ import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplem
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /** Emitted when a supplement's standalone row could not be absorbed. */
@@ -101,10 +102,13 @@ export const absorbComposedSupplementRows = async ({
           ...errorSystemFields(absorbed.error),
           "error.detail": wrappedErrorDetail(safeError),
         });
-        captureError(safeError, {
-          sourceId,
-          step: "absorbComposedSupplementRows",
-        });
+        captureError(
+          safeError,
+          handlerErrorContext("pipeline.standing.safeError", {
+            sourceId,
+            step: "absorbComposedSupplementRows",
+          }),
+        );
         return [sourceDocumentId];
       }
       if (absorbed.value.type === "withdraw-incomplete") {

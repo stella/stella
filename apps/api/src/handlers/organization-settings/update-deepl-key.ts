@@ -17,6 +17,7 @@ import {
   resolveDeepLBaseUrl,
 } from "@/api/lib/deepl/deepl";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const FREE_BASE_URL = "https://api-free.deepl.com";
 
@@ -89,7 +90,10 @@ const updateDeepLKey = createSafeRootHandler(
           }),
         );
       }
-      captureError(error);
+      captureError(
+        error,
+        handlerErrorContext("organizationsettings.updateDeepLKey"),
+      );
       return Result.err(
         new HandlerError({
           status: 502,

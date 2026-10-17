@@ -24,7 +24,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -38,6 +38,7 @@ import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persist
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -567,10 +568,13 @@ export const summarizeSearchResults = async ({
 
   if (result.isErr()) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "search.summary",
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("search.summarizeSearchResults.result_error", {
+        feature: "search.summary",
+        organizationId,
+      }),
+    );
     const mapped = aiErrorStatusBody(result.error, {
       status: 502,
       message: "Failed to summarize search results",
@@ -797,16 +801,26 @@ export const createSearchSummaryChatThread = async ({
   });
 
   if (insertResult.isErr()) {
-    captureError(insertResult.error, {
-      feature: "search.summary.chat",
-      organizationId,
-    });
+    captureError(
+      insertResult.error,
+      handlerErrorContext(
+        "search.createSearchSummaryChatThread.insertResult_error",
+        {
+          feature: "search.summary.chat",
+          organizationId,
+        },
+      ),
+    );
     return status(500, { message: "Failed to create chat thread" });
   }
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertSearchDocument(threadId).catch(captureError);
+  upsertSearchDocument(threadId).catch(
+    createErrorCapture(
+      handlerErrorContext("createSearchSummaryChatThread.upsertSearchDocument"),
+    ),
+  );
 
   return { threadId };
 };

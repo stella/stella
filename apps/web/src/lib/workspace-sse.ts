@@ -121,6 +121,10 @@ export const useWorkspaceSSE = (
       // Stable message: the workspace id adds nothing to grouping and the
       // failure is the same defect regardless of workspace.
       new Error("SSE connection failed to re-establish"),
+      {
+        fingerprintKey: "useWorkspaceSSE:Error",
+        scope: { type: "handler", handlerId: "useWorkspaceSSE:Error" },
+      },
     );
   });
   const leaveEndedMatter = useLatestCallback(async () => {

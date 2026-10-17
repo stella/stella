@@ -129,6 +129,7 @@ const createContext = ({
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},
     request: new Request("http://localhost/v1/chat/threads/title/suggest"),
+    route: "/v1/chat/threads/:threadId/title/suggest",
     safeDb,
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },

@@ -22,6 +22,7 @@ import {
   MCP_TOOL_EXECUTION_REQUEST_TIMEOUT_MS,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -351,10 +352,13 @@ const loadConnectorTools = async ({
       await closeAbandonedClient({ client, connectorSlug: row.slug });
     }
 
-    captureError(error, {
-      source: "external-mcp-tools",
-      connectorSlug: row.slug,
-    });
+    captureError(
+      error,
+      handlerErrorContext("tools.loadConnectorTools", {
+        source: "external-mcp-tools",
+        connectorSlug: row.slug,
+      }),
+    );
     return null;
   }
 };
@@ -372,10 +376,13 @@ const closeAbandonedClient = async ({
   try {
     await client.close();
   } catch (closeError) {
-    captureError(closeError, {
-      source: "external-mcp-tools-close",
-      connectorSlug,
-    });
+    captureError(
+      closeError,
+      handlerErrorContext("tools.closeAbandonedClient.closeError", {
+        source: "external-mcp-tools-close",
+        connectorSlug,
+      }),
+    );
   }
 };
 

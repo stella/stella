@@ -52,6 +52,14 @@ type PersistAIConfigOptions = {
   nextRoles: RoleModelOverrides;
 };
 
+const AI_CONFIG_MUTATION_OPTIONS = {
+  exceptionScope: {
+    type: "handler",
+    handlerId: "useAIConfigForm.aiMutation.useSettingsMutation",
+  },
+  invalidate: aiConfigKeys.all,
+} as const;
+
 /**
  * Sole owner of the AI settings page's edit, dirty and save model: the
  * provider/model/decision state and the auxiliary key and toggle sections all
@@ -190,7 +198,7 @@ export const useAIConfigForm = ({
   };
 
   const aiMutation = useSettingsMutation({
-    invalidate: aiConfigKeys.all,
+    ...AI_CONFIG_MUTATION_OPTIONS,
     mutationFn: async () => {
       if (providers.length === 0 || recoveryAction === "remove") {
         unwrapEden(await api["organization-settings"]["ai-config"].delete({}));

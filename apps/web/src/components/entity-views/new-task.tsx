@@ -49,7 +49,7 @@ export const NewEntityViewTask = ({
     workspacesNavigationOptions({ organizationId, userId }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "NewEntityViewTask:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
@@ -79,7 +79,13 @@ export const NewEntityViewTask = ({
       ),
     );
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "NewEntityViewTask.create:failure",
+        scope: {
+          type: "handler",
+          handlerId: "NewEntityViewTask.create:failure",
+        },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     } else {
       await Promise.all([

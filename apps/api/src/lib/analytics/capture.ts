@@ -1,6 +1,12 @@
 import { Result } from "better-result";
 
-import { createDetached, sanitizeErrorForOutput } from "@stll/errors";
+import {
+  createDetached,
+  sanitizeErrorForOutput,
+  type ExceptionScope,
+  type RequestExceptionScope,
+  type HandlerExceptionScope,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -11,6 +17,15 @@ import {
   logServerDevError,
   safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
+import type {
+  CaptureErrorInput,
+  ErrorTelemetryContext,
+} from "@/api/lib/observability/exception-context";
+import {
+  exceptionFingerprint,
+  type StableExceptionKey,
+} from "@/api/lib/observability/exception-fingerprint";
+import { getRequestExceptionScopes } from "@/api/lib/observability/exception-scope";
 import type { FailureGrading } from "@/api/lib/observability/failure";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -40,9 +55,10 @@ import { getRequestContext } from "@/api/lib/observability/request-context";
  * Pass `context` with safe correlation IDs (entity IDs, request
  * IDs) to make errors traceable without leaking content.
  */
-type ErrorTelemetryContext = Record<string, string>;
 
 type CaptureErrorOptions = {
+  scope: ExceptionScope;
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   distinctId?: string | undefined;
   organizationId?: string | undefined;
@@ -56,6 +72,8 @@ type CaptureErrorOptions = {
 };
 
 type CaptureRequestErrorOptions = {
+  scope: RequestExceptionScope | HandlerExceptionScope;
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
   request: Request;
 };
@@ -98,58 +116,6 @@ const CAPTURE_MAX_TRACKED_KEYS = 500;
 type CaptureWindow = { startedAt: number; suppressed: number };
 
 const captureWindows = new Map<string, CaptureWindow>();
-
-/**
- * The components of an error's structural identity, in fixed order.
- *
- * Positions are fixed and a missing component stays empty, so a frameless
- * error's cause frame can never occupy the position another error's primary
- * frame uses.
- *
- * The SQLSTATE earns its place because a database call site fails in ways
- * that are unrelated defects: a missing column and a violated check
- * constraint are raised from the same line, so they share a class, a stable
- * code, and both frames. Without the SQLSTATE they are one identity, which
- * is the opposite of what the identity is for. A wrapper class that carries
- * no `code` of its own makes this worse, because `error.code` then repeats
- * the class name and distinguishes nothing.
- */
-const ERROR_IDENTITY_COMPONENTS = [
-  "error.class",
-  "error.code",
-  "error.frame",
-  "error.cause.frame",
-  "error.cause.pg_code",
-] as const;
-
-/**
- * The grouping fingerprint and the suppression key are the same identity read
- * from two different places, so both derive from `ERROR_IDENTITY_COMPONENTS`
- * rather than repeating it. Listing the components twice lets one list gain a
- * component the other never gets, which silently regroups issues on one path
- * and throttles across defects on the other.
- */
-const errorIdentity = (component: (key: string) => string): string =>
-  ERROR_IDENTITY_COMPONENTS.map(component).join("|");
-
-/**
- * Structural key for repeat suppression: error class, stable code, code
- * location, and SQLSTATE, deliberately excluding the caller's correlation
- * context.
- *
- * A stuck loop re-reports the same defect with a fresh request or entity ID
- * every cycle, so keying on context would defeat the throttle in exactly the
- * case that motivates it. Two call sites that genuinely share every component
- * above are the same defect.
- */
-const captureWindowKey = (properties: ExceptionProperties): string =>
-  errorIdentity((key) => {
-    // `ExceptionProperties` widens every value to include `$exception_list`,
-    // so read each field back as a string rather than stringifying whatever
-    // is there.
-    const value = properties[key];
-    return typeof value === "string" ? value : "";
-  });
 
 /**
  * Drop the key whose window opened longest ago once the map is full, so a
@@ -216,7 +182,13 @@ const captureErrorWithOptions = (
   options: CaptureErrorOptions,
 ) => {
   const tag = errorTag(error);
-  const fingerprint = identityFields(readEvidence(error));
+  const evidence = readEvidence(error);
+  const fingerprint = identityFields(evidence);
+  const stableFingerprint = exceptionFingerprint(evidence, {
+    fingerprintKey: options.fingerprintKey,
+    scope: options.scope,
+    inheritedScopes: getRequestExceptionScopes(),
+  });
   const grading =
     options.observed === undefined
       ? observeShadow({
@@ -259,17 +231,7 @@ const captureErrorWithOptions = (
   // The caller's context goes first: every key after it is owned here.
   const properties: ExceptionProperties = {
     ...context,
-    // PostHog groups issues from `$exception_list` content; with the message
-    // and stack redacted, every event of one error class collapses into a
-    // single issue and first-seen automations never fire for new defects.
-    // Group by the structural fingerprint instead: same non-PII components,
-    // one issue per distinct defect, read from `ERROR_IDENTITY_COMPONENTS` so
-    // it stays the identity `captureWindowKey` throttles on. The production
-    // server and long-running worker embed source maps, so the frames are
-    // source positions rather than bundle positions; the artifact test guards
-    // that build contract. Stack symbols are deliberately absent: engines can
-    // infer one from a data-derived computed property key.
-    $exception_fingerprint: errorIdentity((key) => fingerprint[key] ?? ""),
+    $exception_fingerprint: stableFingerprint,
     $exception_level: "error",
     $exception_list: [
       {
@@ -279,11 +241,7 @@ const captureErrorWithOptions = (
       },
     ],
     $exception_type: tag,
-    // Non-PII structural fingerprint (class, stable code, top
-    // `file:line:col` frames). The redaction contract above still
-    // forbids the message and stack; a code location and class name
-    // carry no client data, so they make the exception actionable in
-    // the dashboard without violating it.
+    // Source positions remain diagnostic properties, separate from grouping.
     ...fingerprint,
     ...safeErrorTelemetryFields(error),
     ...(options.organizationId
@@ -299,7 +257,7 @@ const captureErrorWithOptions = (
   logServerDevError(safeError, properties);
 
   const suppressed = admitCapture(
-    captureWindowKey(properties),
+    stableFingerprint,
     Temporal.Now.instant().epochMilliseconds,
   );
   if (suppressed === null) {
@@ -328,10 +286,15 @@ const captureErrorWithOptions = (
 
 export const captureError = (
   error: unknown,
-  context?: ErrorTelemetryContext,
+  { fingerprintKey, context, scope }: CaptureErrorInput & { request?: never },
 ) => {
-  captureErrorWithOptions(error, { context });
+  captureErrorWithOptions(error, { fingerprintKey, context, scope });
 };
+
+/** Bind a callback's declared identity at the shared capture boundary. */
+export const createErrorCapture =
+  (options: Parameters<typeof captureError>[1]) => (error: unknown) =>
+    captureError(error, options);
 
 const requestCaptureOptions = (request: Request) => {
   const reqCtx = getRequestContext(request);
@@ -345,19 +308,24 @@ const requestCaptureOptions = (request: Request) => {
 
 export const captureRequestError = (
   error: unknown,
-  { context, request }: CaptureRequestErrorOptions,
+  { context, request, fingerprintKey, scope }: CaptureRequestErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
+    fingerprintKey,
     context,
     ...requestCaptureOptions(request),
+    scope,
   });
 };
 
 type CaptureObservedErrorOptions = {
+  fingerprintKey: StableExceptionKey;
   context?: ErrorTelemetryContext | undefined;
-  request?: Request | undefined;
   observation: FailureGrading | undefined;
-};
+} & (
+  | { request: Request; scope: RequestExceptionScope | HandlerExceptionScope }
+  | { request?: undefined; scope: ExceptionScope }
+);
 
 /**
  * Capture a failure its caller has already graded and counted, so the capture
@@ -365,12 +333,20 @@ type CaptureObservedErrorOptions = {
  */
 export const captureObservedError = (
   error: unknown,
-  { context, request, observation }: CaptureObservedErrorOptions,
+  {
+    context,
+    request,
+    observation,
+    fingerprintKey,
+    scope,
+  }: CaptureObservedErrorOptions,
 ) => {
   captureErrorWithOptions(error, {
+    fingerprintKey,
     context,
     ...(request === undefined ? {} : requestCaptureOptions(request)),
     observed: { grading: observation },
+    scope,
   });
 };
 
@@ -386,5 +362,9 @@ export const captureObservedError = (
  * identifiers, so it stays a safe correlation tag in telemetry.
  */
 export const detached = createDetached((error, context) => {
-  captureError(error, { detached: context });
+  captureError(error, {
+    fingerprintKey: `detached.${context}`,
+    scope: { type: "handler", handlerId: `detached.${context}` },
+    context: { detached: context },
+  });
 });

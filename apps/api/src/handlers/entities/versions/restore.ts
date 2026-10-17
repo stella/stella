@@ -16,6 +16,7 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
@@ -235,10 +236,13 @@ export default createSafeHandler(
     // metadata-only index for entities without an extractable file) so the
     // search freshness fence does not hide the restored entity indefinitely.
     await processExtraction(params.entityId).catch((error: unknown) =>
-      captureError(error, {
-        entityId: params.entityId,
-        versionId: nextVersionId,
-      }),
+      captureError(
+        error,
+        handlerErrorContext("versions.capture", {
+          entityId: params.entityId,
+          versionId: nextVersionId,
+        }),
+      ),
     );
 
     broadcastWorkspaceResourceUpdated(

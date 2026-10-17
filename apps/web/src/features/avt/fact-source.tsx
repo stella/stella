@@ -58,7 +58,7 @@ export const EvidenceFactSource = ({
 }: EvidenceFactSourceProps) => {
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  useQueryViewError(filesView, "EvidenceFactSource:query");
   const files =
     (filesView.type === "items" ? filesView.items : undefined) ?? [];
   if (source === undefined) {

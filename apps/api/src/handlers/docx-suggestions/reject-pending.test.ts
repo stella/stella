@@ -13,6 +13,7 @@ import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 import { docxSuggestions, entities } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import rejectPendingDocxSuggestions from "@/api/handlers/docx-suggestions/reject-pending";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -238,7 +239,7 @@ const createWorkspaceContext = ({
   };
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: { handler: (context: TContext) => Promise<unknown> },
   context: WorkspaceTestContext,
   requestShape: Partial<TContext> & Record<string, unknown>,

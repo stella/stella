@@ -37,6 +37,7 @@ import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organiz
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
@@ -214,7 +215,13 @@ const cleanupPublicationSource = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, { roomId, storageKey: source.key });
+    captureError(
+      cleanup.error,
+      handlerErrorContext("entities.cleanupPublicationSource.cleanup_error", {
+        roomId,
+        storageKey: source.key,
+      }),
+    );
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [source.cleanupIntentId],
@@ -225,7 +232,13 @@ const cleanupPublicationSource = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, { roomId, storageKey: source.key });
+    captureError(
+      settlement.error,
+      handlerErrorContext(
+        "entities.cleanupPublicationSource.settlement_error",
+        { roomId, storageKey: source.key },
+      ),
+    );
   }
 };
 
@@ -331,7 +344,12 @@ const startPublicationFollowUps = async ({
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: publication.entityId }),
   );
   await processExtraction(publication.entityId).catch((error: unknown) => {
-    captureError(error, { entityId: publication.entityId });
+    captureError(
+      error,
+      handlerErrorContext("publication.processExtraction", {
+        entityId: publication.entityId,
+      }),
+    );
   });
   enqueuePdfDerivativeOrMarkFailed({
     encrypted: PUBLISHED_FILE_ENCRYPTION.encrypted,
@@ -342,10 +360,13 @@ const startPublicationFollowUps = async ({
     userId: brandPersistedUserId(userId),
     workspaceId,
   }).catch((error: unknown) => {
-    captureError(error, {
-      entityId: publication.entityId,
-      fieldId: publication.fieldId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("publication.enqueuePdfDerivative", {
+        entityId: publication.entityId,
+        fieldId: publication.fieldId,
+      }),
+    );
   });
   computeVersionDiffStats({
     entityId: publication.entityId,
@@ -359,7 +380,12 @@ const startPublicationFollowUps = async ({
     versionId: publication.versionId,
     workspaceId,
   }).catch((error: unknown) => {
-    captureError(error, { versionId: publication.versionId });
+    captureError(
+      error,
+      handlerErrorContext("publication.computeVersionDiff", {
+        versionId: publication.versionId,
+      }),
+    );
   });
 };
 

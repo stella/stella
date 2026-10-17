@@ -9,7 +9,7 @@ import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-conta
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,6 +19,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -206,7 +207,15 @@ export const createWorkspaceContactHandler = async function* ({
     );
   }
 
-  dependencies.flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  dependencies
+    .flushWorkspaceSearchRepairs([workspaceId])
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "createWorkspaceContactHandler.dependencies_flushWorkspaceSearchRepairs",
+        ),
+      ),
+    );
 
   const created = txResult.value.created;
   if (!created) {

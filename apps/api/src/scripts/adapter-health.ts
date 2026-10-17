@@ -30,6 +30,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import {
+  SOURCE_REPORT_FEATURE,
   createUnrecognizedSourceReporter,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
@@ -298,7 +299,7 @@ const buildReport = async (
 
   const adapters: AdapterReport[] = [];
   const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-    "case_law.adapter_health",
+    SOURCE_REPORT_FEATURE.adapterHealth,
   );
 
   // Finish a source's local metrics and remote probe before the next source.

@@ -26,6 +26,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const PREPARE_TIMEOUT_MS = 150_000;
 
@@ -86,7 +87,13 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {
-      captureError(manifest.error, { source: "bilingual-prepare" });
+      captureError(
+        manifest.error,
+        handlerErrorContext(
+          "bilingualtranslations.prepareBilingualTranslation.manifest_error",
+          { source: "bilingual-prepare" },
+        ),
+      );
       return Result.err(
         new HandlerError({
           status: 422,
@@ -159,7 +166,13 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(prepared)) {
-      captureError(prepared.error, { source: "bilingual-prepare" });
+      captureError(
+        prepared.error,
+        handlerErrorContext(
+          "bilingualtranslations.prepareBilingualTranslation.prepared_error",
+          { source: "bilingual-prepare" },
+        ),
+      );
       return Result.err(
         new HandlerError({
           status: 502,

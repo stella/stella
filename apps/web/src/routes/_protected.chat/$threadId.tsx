@@ -28,7 +28,14 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     const { queryClient } = context;
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.threadId.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/$threadId",
+        },
+      });
     };
     const prefetchManagerEntitlement = async () => {
       // Parent and child loaders can run together; share the role query

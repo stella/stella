@@ -135,6 +135,7 @@
   },
   "dependencies": {
     "@stll/anonymize-chat": "workspace:*",
+    "@stll/errors": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",

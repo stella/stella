@@ -75,6 +75,10 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
   const query = useInfiniteQuery(vatRatesOptions(organizationId));
   const [dialog, setDialog] = useState<RateDialog>({ type: "closed" });
   const mutation = useSettingsMutation({
+    exceptionScope: (command) => ({
+      type: "handler",
+      handlerId: `settings.vat-rate.${command.type}`,
+    }),
     mutationFn: sendVatRateCommand,
     invalidate: vatRatesKeys.all(organizationId),
   });

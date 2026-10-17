@@ -1304,6 +1304,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
+        "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/template-conditions/**",

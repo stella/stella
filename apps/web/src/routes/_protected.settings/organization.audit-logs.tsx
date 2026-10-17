@@ -57,7 +57,14 @@ export const Route = createFileRoute(
         key: { limit: AUDIT_LOG_PAGE_LIMIT },
       }),
       (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "settings.organization.audit-logs.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: "/_protected/settings/organization/audit-logs",
+          },
+        });
       },
     );
   },
@@ -178,7 +185,13 @@ function AuditLogsPage() {
   const handleExportClick = () => {
     detached(
       handleExport().catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "AuditLogsPage.handleExportClick:failure",
+          scope: {
+            type: "handler",
+            handlerId: "AuditLogsPage.handleExportClick:failure",
+          },
+        });
         notifyUserError(
           error,
           t("settings.organization.auditLogsExportFailed"),

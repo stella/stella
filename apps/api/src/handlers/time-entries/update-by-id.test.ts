@@ -34,6 +34,8 @@ const createContext = ({
 }): UpdateTimeEntryCtx =>
   withTimeBillingEnrolment(
     asTestRaw<UpdateTimeEntryCtx>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/workspaces/:workspaceId/time-entries/:timeEntryId",
       body,
       safeDb,
       scopedDb,

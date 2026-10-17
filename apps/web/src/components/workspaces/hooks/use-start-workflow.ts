@@ -42,7 +42,7 @@ export const useStartWorkflow = (workspaceId: string) => {
   });
   const aiAvailabilityQuery = useQuery(aiAvailabilityQueryOptions);
   const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  useQueryViewError(aiAvailabilityView, "useStartWorkflow:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -85,7 +85,10 @@ export const useStartWorkflow = (workspaceId: string) => {
 
       return await performWorkflowStart({
         captureError: (error) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "useStartWorkflow:failure",
+            scope: { type: "handler", handlerId: "useStartWorkflow:failure" },
+          });
         },
         notifyFailure: notifyStartFailed,
         // Invalidate workflow status so UI shows "running"
@@ -124,7 +127,10 @@ export const useStartWorkflow = (workspaceId: string) => {
     } catch (error) {
       // The prompts and the target-count estimate run before the request; a
       // failure here means nothing was started either.
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useStartWorkflow:failure-2",
+        scope: { type: "handler", handlerId: "useStartWorkflow:failure-2" },
+      });
       notifyStartFailed(error);
       return WORKFLOW_START_FAILED;
     }

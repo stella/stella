@@ -609,8 +609,9 @@ describe("confirmed file rename state", () => {
     expect(result.current.first.isSuccess).toBe(true);
     expect(toast).not.toHaveBeenCalled();
     expect(capture).toHaveBeenCalledWith(expect.any(Error), {
-      type: "detached",
-      operation: "entity-rename.refresh",
+      fingerprintKey: "detached:entity-rename.refresh",
+      scope: { type: "handler", handlerId: "detached:entity-rename.refresh" },
+      context: { type: "detached", operation: "entity-rename.refresh" },
     });
     capture.mockRestore();
     toast.mockRestore();

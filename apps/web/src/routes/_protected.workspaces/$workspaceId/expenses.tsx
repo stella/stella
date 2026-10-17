@@ -58,7 +58,14 @@ export const Route = createFileRoute(
         context.queryClient,
         expensesOptions(params.workspaceId, { dateFrom, dateTo }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "workspaces.workspaceId.expenses.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/workspaces/$workspaceId/expenses",
+            },
+          });
         },
       ),
       "expenses.prefetch",

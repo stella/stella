@@ -162,6 +162,7 @@ import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
@@ -688,37 +689,48 @@ const decorateActionSizeRefusal = (
 };
 
 const scopeRequestAsyncStores = (): void => {
-  const isTenantAction = createTenantActionClassifier({
+  const classifyRoute = createTenantActionClassifier({
     routes: api.routes,
     staticRoutes: api.router.static,
     strictPath: api.config.strictPath,
     aot: api.config.aot,
   });
-  api.wrap(
-    (handleRequest) => async (request: Request) =>
-      runWithRequestScope(async () => {
-        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-          return handleRequest(request);
-        }
-        return withFinalResponseCompletion(request, async () =>
-          runTenantHttpAction(request, {
-            handleRequest: async (bounded) => {
-              // The private HOC types erase the response type; validate the
-              // framework boundary before applying serialized JSON limits.
-              const response: unknown = await Promise.resolve(
-                handleRequest(bounded),
-              );
-              if (!(response instanceof Response)) {
-                return panic("The HTTP framework returned an invalid response");
-              }
-              return response;
-            },
-            isTenantAction,
-            decorateRefusal: decorateActionSizeRefusal,
-          }),
-        );
-      }),
-  );
+  api.wrap((handleRequest) => async (request: Request) => {
+    const route = classifyRoute(request);
+    return runWithRequestScope(async () =>
+      withExceptionScope(
+        {
+          type: "request",
+          method: request.method,
+          routeTemplate: route.routeTemplate,
+        },
+        async () => {
+          if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
+            return handleRequest(request);
+          }
+          return withFinalResponseCompletion(request, async () =>
+            runTenantHttpAction(request, {
+              handleRequest: async (bounded) => {
+                // The private HOC types erase the response type; validate the
+                // framework boundary before applying serialized JSON limits.
+                const response: unknown = await Promise.resolve(
+                  handleRequest(bounded),
+                );
+                if (!(response instanceof Response)) {
+                  return panic(
+                    "The HTTP framework returned an invalid response",
+                  );
+                }
+                return response;
+              },
+              isTenantAction: () => route.type === "tenant",
+              decorateRefusal: decorateActionSizeRefusal,
+            }),
+          );
+        },
+      ),
+    );
+  });
 };
 
 const startS3RefreshLoop = () => {

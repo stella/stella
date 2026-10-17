@@ -38,7 +38,10 @@ export const useAddWorkspaceMember = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddWorkspaceMember:failure",
+        scope: { type: "handler", handlerId: "useAddWorkspaceMember:failure" },
+      });
     },
   });
 };

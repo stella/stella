@@ -511,7 +511,10 @@ const AddSkillForm = () => {
           onRepoChange={setRepo}
           onResolveLatestCommit={() => {
             resolveLatestCommit().catch((error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "AddSkillForm:failure",
+                scope: { type: "handler", handlerId: "AddSkillForm:failure" },
+              });
             });
           }}
           setForm={setForm}

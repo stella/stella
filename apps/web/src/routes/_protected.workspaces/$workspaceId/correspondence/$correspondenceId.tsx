@@ -340,7 +340,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
   const viewIdView = useQueryView(viewIdQuery);
-  useQueryViewError(viewIdView);
+  useQueryViewError(viewIdView, "BackToCorrespondenceLink:query");
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (
     <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">

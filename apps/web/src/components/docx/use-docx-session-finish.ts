@@ -155,7 +155,10 @@ export const useDocxSessionFinish = ({
         async () => await collaborationSession.flushSnapshot(),
       );
       if (Result.isError(flushResult)) {
-        getAnalytics().captureError(flushResult.error);
+        getAnalytics().captureError(flushResult.error, {
+          fingerprintKey: "useDocxSessionFinish:failure",
+          scope: { type: "handler", handlerId: "useDocxSessionFinish:failure" },
+        });
         notifyUserError(flushResult.error, t("folio.networkError"));
         throw flushResult.error;
       }
@@ -166,7 +169,13 @@ export const useDocxSessionFinish = ({
         const error = new CollaborationCloseCutError({
           message: "The local collaboration state changed during close.",
         });
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "useDocxSessionFinish:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "useDocxSessionFinish:failure-2",
+          },
+        });
         notifyUserError(error, t("folio.networkError"));
         throw error;
       }

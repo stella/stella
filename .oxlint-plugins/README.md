@@ -22,6 +22,8 @@ restricted exports (or the whole module), the owner files, and the message. The
 plugin files named after each rule are entry points that keep rule IDs stable; add a
 row there instead of writing a new import detector.
 
+- [`require-fingerprint-fields`](./require-fingerprint-fields.ts) (`require-fingerprint-fields`): requires inline TaggedError reason, phase and stage fields in API code to register each dimension in a class static block; import aliases are resolved, unrestricted strings and named prop types are outside this syntactic guard.
+
 ## Automatic fixes
 
 `oxlint --fix` repairs violations only when the rule can derive one local,

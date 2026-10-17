@@ -61,7 +61,10 @@ const searchCaseLawMentions = async ({
     // not a defect to report on every keystroke; the picker simply has no
     // decisions to offer.
     if (!PublicLawUnavailableError.is(error)) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "searchCaseLawMentions:failure",
+        scope: { type: "handler", handlerId: "searchCaseLawMentions:failure" },
+      });
     }
     return [];
   }

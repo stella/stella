@@ -34,7 +34,7 @@ const useRecentPlaybooks = (organizationId: string) => {
   });
   const { isLoading } = dataQuery;
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useRecentPlaybooks:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),
@@ -50,7 +50,7 @@ const usePlaybookStarters = (organizationId: string, enabled: boolean) => {
   });
   const { isLoading } = dataQuery;
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "usePlaybookStarters:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),

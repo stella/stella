@@ -437,7 +437,10 @@ async function copySelectedText({
 }: CopySelectedTextOptions) {
   const result = await copyToClipboard(quote);
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
+    getAnalytics().captureError(result.error, {
+      fingerprintKey: "copySelectedText:failure",
+      scope: { type: "handler", handlerId: "copySelectedText:failure" },
+    });
     notifyUserError(result.error, errorMessage);
     return;
   }

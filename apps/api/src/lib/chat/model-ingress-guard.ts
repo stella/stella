@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -57,7 +58,13 @@ export const assertModelSurfaceFreeOfTenantIds = ({
   const error = new TelemetryError({
     message: `Model-bound ${surface} embeds a tenant workspace id`,
   });
-  captureError(error, { source: "model-ingress-guard", surface });
+  captureError(
+    error,
+    handlerErrorContext(`chat.assertModelSurfaceFreeOfTenantIds.${surface}`, {
+      source: "model-ingress-guard",
+      surface,
+    }),
+  );
   if (surface === "system-prompt") {
     panic(error.message);
   }

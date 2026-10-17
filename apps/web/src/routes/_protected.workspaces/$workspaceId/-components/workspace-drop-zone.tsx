@@ -40,6 +40,7 @@ export const WorkspaceDropZone = ({
 
   return (
     <FileDropZone
+      exceptionScope={{ type: "handler", handlerId: "workspace.files.drop" }}
       coverage="viewport"
       label={t("workspaces.dropToUploadFiles")}
       onDrop={(files) => {

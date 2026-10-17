@@ -411,7 +411,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveMatterTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_MATTER_PROJECTION, {
@@ -481,7 +484,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveMatterTool.updated_error",
+      );
     }
   }
 
@@ -494,7 +500,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(archived)) {
-      return internalFailureResult(archived.error);
+      return internalFailureResult(
+        archived.error,
+        "mcp.handleSaveMatterTool.archived_error",
+      );
     }
   } else if (input.status === "active") {
     const unarchived = await Result.gen(() =>
@@ -505,7 +514,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unarchived)) {
-      return internalFailureResult(unarchived.error);
+      return internalFailureResult(
+        unarchived.error,
+        "mcp.handleSaveMatterTool.unarchived_error",
+      );
     }
   }
 
@@ -565,7 +577,10 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteMatterTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -631,7 +646,10 @@ const handleListContactsTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListContactsTool.listed_error",
+    );
   }
   const page = projectionPayload(LIST_CONTACTS_PROJECTION, {
     ...listed.value,
@@ -853,7 +871,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       nationalityCodes: input.nationality_codes,
     });
     if (detailsError) {
-      return internalFailureResult(detailsError);
+      return internalFailureResult(
+        detailsError,
+        "mcp.handleSaveContactTool.detailsError",
+      );
     }
     const created = await Result.gen(() =>
       createContactHandler({
@@ -888,7 +909,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveContactTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -931,7 +955,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveContactTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -978,7 +1005,10 @@ const handleDeleteContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteContactTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -1039,7 +1069,10 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     executeLookup: context.testDependencies?.executeRegistryLookup,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleLookupBusinessRegistryTool.result_error",
+    );
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
@@ -1237,7 +1270,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
 
   const subject = toCounterpartyCheckSubject(parsed.output.subject);
   if (Result.isError(subject)) {
-    return internalFailureResult(subject.error);
+    return internalFailureResult(
+      subject.error,
+      "mcp.handleCheckCounterpartyTool.subject_error",
+    );
   }
   const observer = actionRequestObserver(
     context.organizationId,
@@ -1257,7 +1293,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
     },
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleCheckCounterpartyTool.result_error",
+    );
   }
   // Passthrough: public-register and public-list data about a subject the
   // caller named.
@@ -1572,7 +1611,10 @@ const handleListTasksTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListTasksTool.listed_error",
+    );
   }
 
   const tasks = listed.value.items;
@@ -1944,6 +1986,8 @@ const validateSaveTaskTargets = async ({
   return null;
 };
 
+const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
+
 const handleSaveTaskTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TASK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1996,7 +2040,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(created.error, SAVE_TASK_CREATE_KEY);
     }
     return toolDataResult(
       projectionPayload(SAVE_TASK_PROJECTION, {
@@ -2066,7 +2110,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveTaskTool.updated_error",
+      );
     }
   }
 
@@ -2081,7 +2128,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(added)) {
-      return internalFailureResult(added.error);
+      return internalFailureResult(
+        added.error,
+        "mcp.handleSaveTaskTool.added_error",
+      );
     }
   }
 
@@ -2096,7 +2146,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleSaveTaskTool.removed_error",
+      );
     }
   }
 
@@ -2117,7 +2170,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(linked)) {
-      return internalFailureResult(linked.error);
+      return internalFailureResult(
+        linked.error,
+        "mcp.handleSaveTaskTool.linked_error",
+      );
     }
   }
 
@@ -2132,7 +2188,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unlinked)) {
-      return internalFailureResult(unlinked.error);
+      return internalFailureResult(
+        unlinked.error,
+        "mcp.handleSaveTaskTool.unlinked_error",
+      );
     }
   }
 
@@ -2195,7 +2254,10 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTaskTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -2338,7 +2400,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleLinkMatterContactTool.removed_error",
+      );
     }
     return toolDataResult(
       projectionPayload(LINK_MATTER_CONTACT_UNLINK_PROJECTION, {
@@ -2364,7 +2429,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleLinkMatterContactTool.created_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LINK_MATTER_CONTACT_LINK_PROJECTION, {

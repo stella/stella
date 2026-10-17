@@ -204,6 +204,8 @@ test.each([
           expect(page.value.items.map(({ id }) => id)).toContain(taskId);
           const calendar = await calendarTasks.handler(
             asTestRaw<Parameters<typeof calendarTasks.handler>[0]>({
+              request: new Request("https://api.example.test/handler"),
+              route: "/v1/workspaces/:workspaceId/calendar/tasks",
               safeDb,
               workspaceId: ids.wsA2,
               user: { id: ids.userA2 },

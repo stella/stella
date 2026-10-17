@@ -20,6 +20,7 @@ import {
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
@@ -206,7 +207,10 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: run.id });
+      captureError(
+        outcome.error,
+        handlerErrorContext("lib.handle.outcome_error", { runId: run.id }),
+      );
       return false;
     }
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;

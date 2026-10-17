@@ -69,7 +69,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
-                "open cited decision",
+                "decisionReader.openCitedDecision",
               )
             }
           >
@@ -93,7 +93,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
-                "preview cited provision",
+                "decisionReader.previewCitedProvision",
               )
             }
           >
@@ -138,7 +138,7 @@ const McpDecisionMetadata = ({
               onClick={() =>
                 host.bridge.detached(
                   host.bridge.openLink(webUrl),
-                  "open decision in stella",
+                  "decisionReader.openDecisionInStella",
                 )
               }
             >
@@ -181,7 +181,7 @@ const McpProvisionPreview = ({
           onClick={() =>
             host.bridge.detached(
               host.bridge.openLink(previewUrl),
-              "open provision in stella",
+              "decisionReader.openProvisionInStella",
             )
           }
         >
@@ -331,7 +331,7 @@ export const ReaderView = ({
                 <Button
                   variant="outline"
                   onClick={() =>
-                    host.bridge.detached(host.retry(), "retry decision read")
+                    host.bridge.detached(host.retry(), "decisionReader.retry")
                   }
                 >
                   {messages.retry}
@@ -398,7 +398,7 @@ export const ReaderView = ({
                   onClick={() =>
                     host.bridge.detached(
                       host.loadNext(),
-                      "load next decision page",
+                      "decisionReader.loadNextPage",
                     )
                   }
                 >

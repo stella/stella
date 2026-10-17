@@ -15,6 +15,7 @@ import {
   startAutomatedFlowRun,
 } from "@/api/lib/flows/start-automated-flow-run";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -77,7 +78,13 @@ export const maybeStartUploadTriggeredFlows = async ({
   });
 
   if (Result.isError(definitionsResult)) {
-    captureError(definitionsResult.error, { entityId, workspaceId });
+    captureError(
+      definitionsResult.error,
+      handlerErrorContext(
+        "flows.maybeStartUploadTriggeredFlows.definitionsResult_error",
+        { entityId, workspaceId },
+      ),
+    );
     logger.error("flow.upload_trigger_scan_failed", {
       entityId,
       workspaceId,

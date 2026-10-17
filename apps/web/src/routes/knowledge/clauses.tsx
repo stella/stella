@@ -64,7 +64,14 @@ export const Route = createFileRoute("/knowledge/clauses")({
     }
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "knowledge.clauses.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/knowledge/clauses",
+        },
+      });
     };
 
     detached(
@@ -156,7 +163,7 @@ function RouteComponent() {
     clauseCategoriesOptions(activeOrganizationId),
   );
   const categoriesDataView = useQueryView(categoriesDataQuery);
-  useQueryViewError(categoriesDataView);
+  useQueryViewError(categoriesDataView, "RouteComponent:query");
   const categoriesData =
     categoriesDataView.type === "items" ? categoriesDataView.items : undefined;
   const {

@@ -63,6 +63,7 @@ const createContext = ({
     managedAIResidency: "eu" as const,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
+    route: "/v1/workspaces/:workspaceId/members/:userId",
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },

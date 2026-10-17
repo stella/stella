@@ -29,6 +29,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const config = {
   contract: "patch",
@@ -85,7 +86,13 @@ const createBilingualRun = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {
-      captureError(manifest.error, { source: "bilingual-create-run" });
+      captureError(
+        manifest.error,
+        handlerErrorContext(
+          "bilingualtranslations.createBilingualRun.manifest_error",
+          { source: "bilingual-create-run" },
+        ),
+      );
       return Result.err(
         new HandlerError({
           status: 422,

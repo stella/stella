@@ -61,7 +61,7 @@ export const useInspectorGroups = () => {
     }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useInspectorGroups:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const state = useInspectorTabsStore(
     useShallow((s) => ({
@@ -341,7 +341,7 @@ const InspectorGroupDestinations = ({
   const { activeOrganizationId } = useAuthenticatedUser();
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "InspectorGroupDestinations:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const customGroups = useInspectorTabsStore((state) => state.groups);
   const destinations: InspectorGroupPresentation[] = [];

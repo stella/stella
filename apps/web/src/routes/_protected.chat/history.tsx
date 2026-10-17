@@ -18,7 +18,14 @@ export const Route = createFileRoute("/_protected/chat/history")({
   loaderDeps: ({ search }) => ({ matter: search.matter, q: search.q }),
   loader: ({ context, deps }) => {
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.history.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/history",
+        },
+      });
     };
     detached(
       Promise.all([

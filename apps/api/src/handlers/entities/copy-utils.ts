@@ -49,6 +49,7 @@ import type {
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
@@ -546,7 +547,12 @@ export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
     }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "entity-copy-rollback" });
+    captureError(
+      result.error,
+      handlerErrorContext("entities.rollbackS3Copies.result_error", {
+        source: "entity-copy-rollback",
+      }),
+    );
   }
 };
 

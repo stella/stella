@@ -92,7 +92,13 @@ export const loadProtectedContext = async ({
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
   const onPrefetchError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "loadProtectedContext.onPrefetchError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "loadProtectedContext.onPrefetchError:failure",
+      },
+    });
   };
   if (location.pathname === "/settings/organization/time-policy") {
     detached(
@@ -162,5 +168,8 @@ export const prefetchProtectedShell = async ({
   context: { queryClient: QueryClient };
 }) =>
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "prefetchProtectedShell:failure",
+      scope: { type: "handler", handlerId: "prefetchProtectedShell:failure" },
+    });
   });

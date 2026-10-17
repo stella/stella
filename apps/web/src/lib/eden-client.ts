@@ -48,11 +48,14 @@ const clientOptions = {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
-  async onResponse(response) {
+  async onScopedResponse({ response, scope }) {
     await observeActionAdmissionResponse(response, {
       notifyRefusal: notifyActionAdmissionRefusal,
       captureError: (error) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "onResponse:failure",
+          scope,
+        });
       },
     });
   },
@@ -67,7 +70,6 @@ const linkIconsEden = createStellaEdenClient<EdenRoutesApp<WebRoutes>>(
   {
     ...clientOptions,
     async onResponse(response) {
-      await clientOptions.onResponse(response);
       const mime = response.headers.get("content-type")?.split(";").at(0);
       if (response.ok && (mime === "image/png" || mime === "image/x-icon")) {
         return await response.blob();

@@ -1,9 +1,51 @@
 import { describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { sourceRegistryMembership } from "@/api/lib/legal-search/source-registry-membership";
+import {
+  createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
+  sourceRegistryMembership,
+} from "@/api/lib/legal-search/source-registry-membership";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 describe("sourceRegistryMembership", () => {
+  test("shared source reporters retain their caller feature", () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      for (const feature of [
+        SOURCE_REPORT_FEATURE.coverage,
+        SOURCE_REPORT_FEATURE.ingestionStatus,
+      ]) {
+        createUnrecognizedSourceReporter(feature)("unknown-adapter");
+      }
+      const captures = analytics.exceptions();
+      expect(captures).toHaveLength(2);
+      expect(captures.at(0)?.properties["$exception_fingerprint"]).toContain(
+        SOURCE_REPORT_FEATURE.coverage,
+      );
+      expect(captures.at(1)?.properties["$exception_fingerprint"]).toContain(
+        SOURCE_REPORT_FEATURE.ingestionStatus,
+      );
+      expect(captures.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+        captures.at(1)?.properties["$exception_fingerprint"],
+      );
+      expect(
+        JSON.stringify(
+          captures.map(
+            ({ properties }) => properties["$exception_fingerprint"],
+          ),
+        ),
+      ).not.toContain("unknown-adapter");
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
+  });
+
   test("every registry key resolves to itself, in both directions", () => {
     const keys = Object.values(ADAPTER_KEYS);
 

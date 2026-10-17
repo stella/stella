@@ -7,7 +7,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -19,6 +19,7 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
@@ -151,7 +152,11 @@ export const createEntitiesHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+  flushEntitySearchRepairs([txResult.entityId]).catch(
+    createErrorCapture(
+      handlerErrorContext("createEntitiesHandler.flushEntitySearchRepairs"),
+    ),
+  );
 
   return Result.ok({ entityId: txResult.entityId });
 };

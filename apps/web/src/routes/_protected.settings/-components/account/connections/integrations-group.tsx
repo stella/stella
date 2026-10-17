@@ -299,7 +299,13 @@ const ApproveAuthorizationButton = ({
       setOpen(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ApproveAuthorizationButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ApproveAuthorizationButton:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

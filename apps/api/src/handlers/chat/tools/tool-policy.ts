@@ -7,6 +7,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 export { CHAT_TOOL_POLICY_KIND };
 export type { ChatToolPolicyKind };
@@ -92,7 +93,10 @@ const missingChatToolPolicy = (toolDefinition: ChatTool): never => {
       new TelemetryError({
         message: "Chat tool policy lookup missed; refusing to execute tool",
       }),
-      { source: "chat-tool-policy", toolName: toolDefinition.name },
+      handlerErrorContext("tools.missingChatToolPolicy", {
+        source: "chat-tool-policy",
+        toolName: toolDefinition.name,
+      }),
     );
   }
 

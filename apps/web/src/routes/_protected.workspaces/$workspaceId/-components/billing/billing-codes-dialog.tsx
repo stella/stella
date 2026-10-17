@@ -70,7 +70,10 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure" },
+      });
     },
   });
   const deleteCode = useMutation({
@@ -90,7 +93,10 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-2",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-2" },
+      });
     },
   });
   type UpdateBillingCodeVars = {
@@ -115,7 +121,10 @@ export const BillingCodesDialog = ({
       return unwrapEden(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-3",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-3" },
+      });
     },
   });
 

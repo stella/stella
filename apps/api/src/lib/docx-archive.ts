@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 
-import { loadDocx } from "@stll/docx-utils";
+import { DocxArchiveError, loadDocx } from "@stll/docx-utils";
 import type { ArchiveOptions } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -13,6 +14,9 @@ export {
   loadDocxArchive,
   type DocxArchive,
 } from "@stll/docx-utils";
+
+// Register the published archive contract at its application boundary.
+declareFingerprintFields(DocxArchiveError, ["reason"]);
 
 /** Validate archive bytes before handing them to a document parser. */
 export const validateDocxArchive = async (

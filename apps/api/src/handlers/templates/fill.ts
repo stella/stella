@@ -11,6 +11,7 @@ import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
@@ -189,11 +190,14 @@ export const fillHandler = async ({
         diagnostics,
       }),
   ).catch((error: unknown) => {
-    captureError(error, {
-      operation: "template_fill_analytics",
-      organizationId,
-      userId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("templates.fillHandler", {
+        operation: "template_fill_analytics",
+        organizationId,
+        userId,
+      }),
+    );
   });
 
   const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });

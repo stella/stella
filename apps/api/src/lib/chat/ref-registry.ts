@@ -109,17 +109,25 @@ const describeUnresolvedRef = (ref: string) => ({
 
 const reportRefTelemetry = ({
   kind,
+  fingerprintKey,
+  scope,
   message,
   ref,
 }: {
+  fingerprintKey: `chat.${string}`;
+  scope: Parameters<typeof captureError>[1]["scope"];
   kind: string;
   message: string;
   ref: string;
 }) => {
   captureError(new TelemetryError({ message }), {
-    source: "chat-ref-registry",
-    kind,
-    ...describeUnresolvedRef(ref),
+    fingerprintKey,
+    scope,
+    context: {
+      source: "chat-ref-registry",
+      kind,
+      ...describeUnresolvedRef(ref),
+    },
   });
 };
 
@@ -593,8 +601,16 @@ export const createChatRefRegistry = (
   const toSourceCitationRefHref = (target: ChatSourceCitationTarget) =>
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
-  const reportUnknownAssistantRef = (kind: string, ref: string) => {
+  const reportUnknownAssistantRef = (
+    kind: "source-citation" | "matter" | "entity",
+    ref: string,
+  ) => {
     reportRefTelemetry({
+      scope: {
+        type: "handler",
+        handlerId: `chat.resolveAssistantTextRefs.${kind}`,
+      },
+      fingerprintKey: `chat.resolveAssistantTextRefs.${kind}`,
       kind,
       message: "Assistant text cited a chat ref this turn never minted",
       ref,
@@ -885,6 +901,11 @@ export const createChatRefRegistry = (
     outcome: Exclude<RestoreRefOutcome, "restored">,
   ) => {
     reportRefTelemetry({
+      scope: {
+        type: "handler",
+        handlerId: `chat.restoreRefBinding.${binding.kind}.${outcome}`,
+      },
+      fingerprintKey: `chat.restoreRefBinding.${binding.kind}.${outcome}`,
       kind: binding.kind,
       message:
         outcome === "conflict"

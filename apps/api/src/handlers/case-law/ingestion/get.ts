@@ -24,6 +24,7 @@ import {
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  SOURCE_REPORT_FEATURE,
   createUnrecognizedSourceReporter,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
@@ -422,7 +423,7 @@ export const getIngestionStatus = async (
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-      "case_law.ingestion_status",
+      SOURCE_REPORT_FEATURE.ingestionStatus,
     );
 
     for (const source of sources) {

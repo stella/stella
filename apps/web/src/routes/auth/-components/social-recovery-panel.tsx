@@ -66,7 +66,10 @@ export const SocialRecoveryPanel = ({
   const [email, setEmail] = useState("");
   const finish = async () => await navigate(afterSignInNavigation(redirectTo));
   const onError = (cause: unknown) => {
-    analytics.captureError(cause);
+    analytics.captureError(cause, {
+      fingerprintKey: "SocialRecoveryPanel:cause",
+      scope: { type: "handler", handlerId: "SocialRecoveryPanel:cause" },
+    });
     notifyUserError(cause, t("errors.actionFailed"));
   };
   const sendCode = useMutation({

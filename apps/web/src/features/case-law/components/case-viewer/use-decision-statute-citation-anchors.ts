@@ -33,7 +33,7 @@ export const useDecisionStatuteCitationAnchors = (
     ),
   );
   const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  useQueryViewError(resolvedView, "useDecisionStatuteCitationAnchors:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);

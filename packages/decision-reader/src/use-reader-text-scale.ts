@@ -27,7 +27,9 @@ export type ReaderTextScaleStorage = {
 
 export type ReaderTextScaleOptions = {
   storage?: ReaderTextScaleStorage | null | undefined;
-  analytics?: { captureError: (error: unknown) => void } | undefined;
+  analytics?:
+    | { captureError: (error: unknown, operation: "read" | "write") => void }
+    | undefined;
 };
 
 /**
@@ -102,9 +104,11 @@ export const useReaderTextScale = ({
   const [readFrom, setReadFrom] = useState<ReaderTextScaleStorage | null>(null);
   if (storage !== null && readFrom !== storage) {
     setReadFrom(storage);
-    setStoredScale(
-      readStoredScale(storage).unwrapOr(READER_TEXT_SCALE_DEFAULT),
-    );
+    const read = readStoredScale(storage);
+    if (Result.isError(read)) {
+      analytics?.captureError(read.error, "read");
+    }
+    setStoredScale(read.unwrapOr(READER_TEXT_SCALE_DEFAULT));
   }
 
   const scale = storedScale ?? READER_TEXT_SCALE_DEFAULT;
@@ -117,7 +121,7 @@ export const useReaderTextScale = ({
     // visit. Hosts with analytics receive the storage failure.
     const written = writeStoredScale(storage, next);
     if (Result.isError(written)) {
-      analytics?.captureError(written.error);
+      analytics?.captureError(written.error, "write");
     }
   };
 

@@ -5,6 +5,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY = 4;
@@ -44,7 +45,10 @@ export const handoffCommittedDocumentProcessingRuns = async ({
           catch: (cause) => cause,
         });
         if (Result.isError(result)) {
-          captureEnqueueError(result.error, { runId });
+          captureEnqueueError(
+            result.error,
+            handlerErrorContext("documentProcessing.handoff", { runId }),
+          );
         }
       }),
     );

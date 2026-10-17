@@ -206,7 +206,7 @@ export const ProtectedAppFrame = ({
       }),
     ),
   );
-  useQueryViewError(workspaceNavigationView);
+  useQueryViewError(workspaceNavigationView, "ProtectedAppFrame:query");
   const workspaceNavigation =
     workspaceNavigationView.type === "items"
       ? workspaceNavigationView.items
@@ -393,7 +393,7 @@ function ProtectedContent() {
       enabled: !!workspaceId,
     }),
   );
-  useQueryViewError(workspaceView);
+  useQueryViewError(workspaceView, "ProtectedContent:query");
   const workspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (

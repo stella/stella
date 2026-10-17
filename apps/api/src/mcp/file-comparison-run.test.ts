@@ -16,6 +16,7 @@ import type {
   ScanVerdict,
 } from "@/api/lib/file-scan/types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
+import { S3PresignError } from "@/api/lib/s3-presign";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { runFileComparison } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunDependencies } from "@/api/mcp/file-comparison-run";
@@ -174,7 +175,7 @@ const createHarness = ({
       const stored = bytes[key];
       if (stored === undefined) {
         return await Promise.resolve(
-          Result.err(asTestRaw<never>({ message: "missing" })),
+          Result.err(new S3PresignError({ message: "missing" })),
         );
       }
       const declared = sha256Of(stored);

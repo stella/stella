@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { declareFailureClass } from "@stll/errors";
+import { declareFingerprintFields, declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import type { SanctionsSource } from "@stll/sanctions";
 
@@ -79,6 +79,10 @@ export class SanctionsScreeningFailure extends TaggedError(
   reason: SanctionsScreeningFailureCause;
   cause?: unknown;
 }> {
+  static {
+    declareFingerprintFields(this, ["stage", "reason"]);
+  }
+
   static {
     declareFailureClass(this, ({ reason, cause }) => {
       const declared = SCREENING_FAILURE_REASON[reason];

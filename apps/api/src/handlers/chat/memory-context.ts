@@ -16,6 +16,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { aiMemories } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 
@@ -156,7 +157,12 @@ export const buildMemoryPromptParts = async ({
       });
       if (Result.isError(stampResult)) {
         // Recency bookkeeping must never make an otherwise valid chat fail.
-        captureError(stampResult.error, { feature: "memory.last_used_stamp" });
+        captureError(
+          stampResult.error,
+          handlerErrorContext("chat.buildMemoryPromptParts.stampResult_error", {
+            feature: "memory.last_used_stamp",
+          }),
+        );
       }
     }
 

@@ -788,7 +788,14 @@ export const useCreateFileEntities = (workspaceId: string) => {
             await abortUpload(workspaceId, preparedUpload.uploadId);
           },
           labels,
-          onError: (error) => analytics.captureError(error),
+          onError: (error) =>
+            analytics.captureError(error, {
+              fingerprintKey: "useCreateFileEntities.mutationFn:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useCreateFileEntities.mutationFn:failure",
+              },
+            }),
         });
         startWorkflowForUploadedFiles(uploaded);
         return;
@@ -800,12 +807,22 @@ export const useCreateFileEntities = (workspaceId: string) => {
         propertyId: await ensureFileProperty(),
         parentId,
         labels,
-        onError: (error) => analytics.captureError(error),
+        onError: (error) =>
+          analytics.captureError(error, {
+            fingerprintKey: "useCreateFileEntities.mutationFn:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "useCreateFileEntities.mutationFn:failure-2",
+            },
+          }),
       });
       startWorkflowForUploadedFiles(uploaded);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateFileEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateFileEntities:failure" },
+      });
     },
     onSettled: () => {
       detached(
@@ -836,7 +853,16 @@ export const useCreateFileEntities = (workspaceId: string) => {
       queryClient,
       files: uploadInputFiles(input),
       organizationId: activeOrganizationId,
-      onError: (error) => analytics.captureError(error),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey:
+            "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          scope: {
+            type: "handler",
+            handlerId:
+              "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+          },
+        }),
     });
 
     if (referenced.length === 0) {

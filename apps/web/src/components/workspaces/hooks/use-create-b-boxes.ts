@@ -39,7 +39,7 @@ export const useCreateBBoxes = ({
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  useQueryViewError(aiAvailabilityView, "useCreateBBoxes:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -84,7 +84,10 @@ export const useCreateBBoxes = ({
       inflight.delete(justification.id);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateBBoxes:failure",
+        scope: { type: "handler", handlerId: "useCreateBBoxes:failure" },
+      });
     },
   });
 

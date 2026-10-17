@@ -5,6 +5,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type DecisionSourceAttributionInput = {
   /** The `case_law_sources.adapter_key` the decision was ingested under. */
@@ -62,7 +63,10 @@ export const decisionSourceAttributionUrl = ({
     new DatabaseError({
       message: "Case-law source names an unregistered adapter key",
     }),
-    { source: "case-law-source-attribution", adapterKey },
+    handlerErrorContext("caselaw.decisionSourceAttributionUrl", {
+      source: "case-law-source-attribution",
+      adapterKey,
+    }),
   );
   return null;
 };

@@ -10,6 +10,7 @@ import { notifyActionAdmissionRefusal } from "@/components/action-admission-outc
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
+import type { DetachedOperationId } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -45,7 +46,13 @@ export const notifyUserError = (
                 `${diagnostic.provider}: ${diagnostic.message}`,
               );
               if (Result.isError(copied)) {
-                getAnalytics().captureError(copied.error);
+                getAnalytics().captureError(copied.error, {
+                  fingerprintKey: "notifyUserError.onCopy:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "notifyUserError.onCopy:failure",
+                  },
+                });
                 notifyUserError(
                   copied.error,
                   getTranslator()("errors.actionFailed"),
@@ -80,7 +87,7 @@ export const notifyAuthClientError = (
 
 type DetachedUserActionOptions = {
   /** A fixed label for telemetry, as `detached` takes. */
-  context: string;
+  context: DetachedOperationId;
   /** What the person is told when the action fails. */
   failureMessage: string;
 };
@@ -95,7 +102,11 @@ export const detachedUserAction = (
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
   createDetached((error, label) => {
-    getAnalytics().captureError(error, { type: "detached", operation: label });
+    getAnalytics().captureError(error, {
+      fingerprintKey: `detachedUserAction:${context}`,
+      scope: { type: "handler", handlerId: `detachedUserAction:${context}` },
+      context: { type: "detached", operation: label },
+    });
     notifyUserError(error, failureMessage);
   })(operation, context);
 };

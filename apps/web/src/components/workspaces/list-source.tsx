@@ -85,7 +85,13 @@ export const useOpenSourceDocument = (workspaceId: string) => {
           },
         });
         if (Result.isError(result)) {
-          getAnalytics().captureError(result.error);
+          getAnalytics().captureError(result.error, {
+            fingerprintKey: "useOpenSourceDocument:failure",
+            scope: {
+              type: "handler",
+              handlerId: "useOpenSourceDocument:failure",
+            },
+          });
           notifyUserError(result.error, t("errors.actionFailed"));
         }
       })(),

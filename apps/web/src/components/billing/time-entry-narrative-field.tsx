@@ -91,7 +91,13 @@ export const TimeEntryNarrativeField = ({
     setIsPolishing(false);
 
     if (Result.isError(requestResult)) {
-      analytics.captureError(requestResult.error);
+      analytics.captureError(requestResult.error, {
+        fingerprintKey: "TimeEntryNarrativeField.polishNarrative:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TimeEntryNarrativeField.polishNarrative:failure",
+        },
+      });
       notifyUserError(requestResult.error, tAi("editWithAI"), {
         description: userErrorFromThrown(
           requestResult.error,

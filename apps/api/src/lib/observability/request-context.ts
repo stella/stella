@@ -1,6 +1,13 @@
+// parser-output-unchanged: records declared request scopes for exception capture only; parser inputs and outputs are unchanged.
+import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { FailureGrade, FailureReason } from "@stll/errors";
+import type {
+  FailureGrade,
+  FailureReason,
+  HandlerExceptionScope,
+  RequestExceptionScope,
+} from "@stll/errors";
 
 import type { ClientAddressSource } from "@/api/lib/client-ip";
 
@@ -27,6 +34,24 @@ type RequestFailureObservation = {
 };
 
 const requestContextStore = new WeakMap<Request, RequestContext>();
+
+type RequestCaptureScope = RequestExceptionScope | HandlerExceptionScope;
+const requestCaptureScopes = new WeakMap<Request, RequestCaptureScope>();
+
+/** Bound only from declared framework routes or canonical capability identities. */
+export const recordRequestExceptionScope = (
+  request: Request,
+  scope: RequestCaptureScope,
+): void => {
+  requestCaptureScopes.set(request, scope);
+};
+
+/** A request-bearing observer must cross its framework boundary first. */
+export const requireRequestExceptionScope = (
+  request: Request,
+): RequestCaptureScope =>
+  requestCaptureScopes.get(request) ??
+  panic("Request exception scope was not bound");
 
 /**
  * Ambient current-request id, so code that has no `Request` in hand — the MCP

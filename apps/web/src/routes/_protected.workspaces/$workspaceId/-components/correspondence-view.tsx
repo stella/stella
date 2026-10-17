@@ -89,7 +89,13 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     }
     const copied = await copyToClipboard(address);
     if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
+      analytics.captureError(copied.error, {
+        fingerprintKey: "AddressCard.copyAddress:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AddressCard.copyAddress:failure",
+        },
+      });
       notifyUserError(copied.error, t("common.error"));
       return;
     }

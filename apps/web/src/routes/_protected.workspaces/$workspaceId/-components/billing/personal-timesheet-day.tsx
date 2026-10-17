@@ -29,6 +29,7 @@ import {
 } from "@/components/billing/manual-time-entry-form";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -109,8 +110,14 @@ export const PersonalTimesheetDay = ({
   const deleteEntry = useDeleteTimeEntry();
   const decideSuggestion = useDecideTimeSuggestion();
 
-  const reportFailure = (error: unknown) => {
-    getAnalytics().captureError(error);
+  const reportFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    getAnalytics().captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, tErrors("actionFailed"));
   };
 
@@ -187,7 +194,7 @@ export const PersonalTimesheetDay = ({
       }
       setDialog({ type: "closed" });
     } catch (error) {
-      reportFailure(error);
+      reportFailure(error, "PersonalTimesheetDay:submit");
     }
   };
 
@@ -262,13 +269,17 @@ export const PersonalTimesheetDay = ({
                 narrative,
                 narrativeLanguage: null,
                 billable: false,
-              }).catch(reportFailure),
+              }).catch((error: unknown) =>
+                reportFailure(error, "PersonalTimesheetDay:accept-suggestion"),
+              ),
               "personal-timesheet-day.accept-suggestion",
             );
           }}
           onDismiss={(suggestion) => {
             detached(
-              dismissSuggestion(suggestion).catch(reportFailure),
+              dismissSuggestion(suggestion).catch((error: unknown) =>
+                reportFailure(error, "PersonalTimesheetDay:dismiss-suggestion"),
+              ),
               "personal-timesheet-day.dismiss-suggestion",
             );
           }}
@@ -425,7 +436,7 @@ export const PersonalTimesheetDay = ({
                     .mutateAsync({ workspaceId, id: deletingId })
                     .then(() => setDeletingId(null))
                     .catch((error: unknown) => {
-                      reportFailure(error);
+                      reportFailure(error, "PersonalTimesheetDay:delete-entry");
                     }),
                   "personal-timesheet-day.delete-entry",
                 );

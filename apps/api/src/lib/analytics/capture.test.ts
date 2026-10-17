@@ -1,7 +1,9 @@
+import { UnhandledException } from "better-result";
 import { beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import {
   captureError,
+  createErrorCapture,
   captureRequestError,
   resetCaptureWindows,
 } from "@/api/lib/analytics/capture";
@@ -12,12 +14,14 @@ import {
   type ExtractionWorkerTermination,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
   enrichRequestContext,
   getRequestFailure,
   initRequestContext,
 } from "@/api/lib/observability/request-context";
-import * as legacy from "@/api/tests/helpers/legacy-error-fields";
 
 const captured: {
   groups?: Record<string, string>;
@@ -39,17 +43,21 @@ setAnalyticsForTesting({
 });
 
 /**
- * Both helpers construct their error on a single source line, so every
- * occurrence from one helper shares a `error.frame` and therefore a
- * suppression key — the shape of a loop that keeps failing at the same site.
- * The two helpers sit on different lines, so they are different defects.
+ * Each helper supplies its own symbolic owner, so line moves cannot change
+ * grouping while failures from distinct paths remain separate.
  */
 const captureFromSiteA = (context?: Record<string, string>): void => {
-  captureError(new Error("boom"), context);
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteA", context),
+  );
 };
 
 const captureFromSiteB = (): void => {
-  captureError(new Error("boom"));
+  captureError(
+    new Error("boom"),
+    handlerErrorContext("analytics.captureFromSiteB"),
+  );
 };
 
 /**
@@ -62,7 +70,10 @@ const captureFromSiteB = (): void => {
 const captureQueryFailure = (sqlState: string): void => {
   const driverError = new Error("driver rejected the statement");
   Reflect.set(driverError, "errno", sqlState);
-  captureError(new Error("query failed", { cause: driverError }));
+  captureError(
+    new Error("query failed", { cause: driverError }),
+    handlerErrorContext("analytics.captureQueryFailure"),
+  );
 };
 
 const extractionError = ({
@@ -86,6 +97,32 @@ const extractionError = ({
 beforeEach(() => {
   captured.length = 0;
   resetCaptureWindows();
+});
+
+test("bound capture callbacks preserve each caller identity and context", () => {
+  const error = new TypeError("callback unavailable");
+  const firstOptions = handlerErrorContext("callbacks.first", {
+    phase: "read",
+  });
+  const secondOptions = handlerErrorContext("callbacks.second", {
+    phase: "write",
+  });
+  const first = createErrorCapture(firstOptions);
+  const second = createErrorCapture(secondOptions);
+  first(error);
+  first(error);
+  second(error);
+  expect(captured).toHaveLength(2);
+  expect(
+    captured.map(({ properties }) => properties["$exception_fingerprint"]),
+  ).toEqual([
+    exceptionFingerprint(readEvidence(error), firstOptions),
+    exceptionFingerprint(readEvidence(error), secondOptions),
+  ]);
+  expect(captured.map(({ properties }) => properties["phase"])).toEqual([
+    "read",
+    "write",
+  ]);
 });
 
 describe("captureError repeat suppression", () => {
@@ -154,6 +191,22 @@ describe("captureError repeat suppression", () => {
 });
 
 describe("captureError issue grouping", () => {
+  test("UnhandledException preserves distinct cause classes before repeat suppression", () => {
+    const options = handlerErrorContext("analytics.captureWrappedFailure");
+    captureError(
+      new UnhandledException({ cause: new TypeError("failure") }),
+      options,
+    );
+    captureError(
+      new UnhandledException({ cause: new ReferenceError("failure") }),
+      options,
+    );
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
+  });
+
   // PostHog groups issues from `$exception_list`; with the message and stack
   // redacted, every event of one class would collapse into a single issue and
   // first-seen automations would never fire again for that class. The
@@ -190,7 +243,10 @@ describe("captureError issue grouping", () => {
   });
 
   test("the grouping fingerprint never carries the error message", () => {
-    captureError(new Error("Privileged client matter detail"));
+    captureError(
+      new Error("Privileged client matter detail"),
+      handlerErrorContext("analytics.capture"),
+    );
 
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
@@ -205,7 +261,15 @@ describe("captureRequestError organization attribution", () => {
     initRequestContext(request);
     enrichRequestContext(request, { organizationId });
 
-    captureRequestError(new Error("boom"), { request });
+    captureRequestError(new Error("boom"), {
+      scope: {
+        type: "request",
+        method: request.method,
+        routeTemplate: "/capture-test",
+      },
+      fingerprintKey: "analytics.capture",
+      request,
+    });
 
     // The group is what PostHog's organization breakdown reads; losing it
     // while organization_id survives as a plain property would go unnoticed.
@@ -216,7 +280,15 @@ describe("captureRequestError organization attribution", () => {
     const request = new Request("https://api.test/internal");
     initRequestContext(request);
 
-    captureRequestError(new Error("boom"), { request });
+    captureRequestError(new Error("boom"), {
+      scope: {
+        type: "request",
+        method: request.method,
+        routeTemplate: "/capture-test",
+      },
+      fingerprintKey: "analytics.capture",
+      request,
+    });
 
     expect(captured.at(0)?.groups).toBeUndefined();
   });
@@ -233,7 +305,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
-      { runId: "run-1" },
+      handlerErrorContext("analytics.capture", { runId: "run-1" }),
     );
 
     const properties = captured.at(0)?.properties;
@@ -255,6 +327,7 @@ describe("captureError extraction diagnostics", () => {
         message: "parser failed",
         termination: null,
       }),
+      handlerErrorContext("analytics.capture"),
     );
     captureError(
       extractionError({
@@ -265,6 +338,7 @@ describe("captureError extraction diagnostics", () => {
           signalCode: "SIGTERM",
         },
       }),
+      handlerErrorContext("analytics.capture"),
     );
 
     expect(captured).toHaveLength(2);
@@ -279,17 +353,20 @@ describe("captureError extraction diagnostics", () => {
 });
 
 describe("captureError owned fields", () => {
-  test("groups by the identity the legacy fields produced", () => {
+  test("groups and suppresses by the stable identity", () => {
     const driverError = Object.assign(new Error("driver"), {
       errno: "23505",
       constraint: "users_email_key",
     });
     const error = new Error("query failed", { cause: driverError });
 
-    captureError(error);
+    captureError(error, handlerErrorContext("analytics.capture"));
 
     expect(captured.at(0)?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "analytics.capture",
+        scope: { type: "handler", handlerId: "analytics.capture" },
+      }),
     );
   });
 
@@ -326,7 +403,15 @@ describe("captureError owned fields", () => {
 
     captureRequestError(
       Object.assign(new Error("reset"), { code: "ECONNRESET" }),
-      { request },
+      {
+        scope: {
+          type: "request",
+          method: request.method,
+          routeTemplate: "/capture-test",
+        },
+        fingerprintKey: "analytics.capture",
+        request,
+      },
     );
 
     expect(getRequestFailure(request)).toEqual({

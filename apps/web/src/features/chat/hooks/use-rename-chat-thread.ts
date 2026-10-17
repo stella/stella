@@ -99,7 +99,10 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
         // remove it, not leave the rejected title behind.
         queryClient.removeQueries({ queryKey: titleKey, exact: true });
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useRenameChatThread:failure",
+        scope: { type: "handler", handlerId: "useRenameChatThread:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: () => {

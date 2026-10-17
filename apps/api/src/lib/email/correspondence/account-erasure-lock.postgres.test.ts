@@ -100,6 +100,8 @@ if (!databaseUrl || !runPostgresTests) {
               const result = await createAllowedSender.handler(
                 asTestRaw<Parameters<typeof createAllowedSender.handler>[0]>({
                   safeDb: database,
+                  route:
+                    "/organization-settings/correspondence/allowed-senders",
                   memberRole: sessionMemberRole("owner"),
                   session: { activeOrganizationId: organizationId },
                   user: { id: userId },

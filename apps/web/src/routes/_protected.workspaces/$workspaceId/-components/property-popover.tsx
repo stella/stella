@@ -288,7 +288,13 @@ export const PropertyPopover = ({
         });
         detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "PropertyPopover.replaceDependency:failure",
+          scope: {
+            type: "handler",
+            handlerId: "PropertyPopover.replaceDependency:failure",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"));
       } finally {
         if (dependencyGenerationRef.current === generation) {

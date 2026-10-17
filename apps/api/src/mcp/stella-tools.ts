@@ -1520,7 +1520,10 @@ const readMatterOverview = async ({
   }
 
   if (contacts.isErr()) {
-    return internalFailureResult(contacts.error);
+    return internalFailureResult(
+      contacts.error,
+      "mcp.readMatterOverview.contacts_error",
+    );
   }
 
   const matter = {

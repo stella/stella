@@ -128,7 +128,10 @@ export const useCompanyFormatLibrary = ({
     }
   };
   const onError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useCompanyFormatLibrary:failure",
+      scope: { type: "handler", handlerId: "useCompanyFormatLibrary:failure" },
+    });
     notifyUserError(error, t("templates.saveFailed"));
   };
   const create = useMutation({

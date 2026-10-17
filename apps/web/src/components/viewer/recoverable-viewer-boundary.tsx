@@ -201,6 +201,13 @@ class ViewerErrorBoundary extends Component<
         message: `[${area}] ${recovery.type} after attempt ${String(attempt)}: ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        scope: {
+          type: "handler",
+          handlerId: `RecoverableViewerBoundary:${this.props.surface}.${recovery.type}`,
+        },
+      },
     );
   }
 

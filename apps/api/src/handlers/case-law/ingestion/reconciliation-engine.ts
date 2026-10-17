@@ -123,6 +123,7 @@ import {
   selectDueReconciliationItems,
   refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -2051,179 +2052,180 @@ export const runReconciliationWorkUnit = async ({
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
   sliceRetries,
   sourceId,
-}: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
-  if (
-    !Number.isInteger(sliceIngestBudget) ||
-    sliceIngestBudget < 1 ||
-    sliceIngestBudget > MAX_SLICE_INGEST_BUDGET
-  ) {
-    panic(
-      `reconciliation slice ingest budget must be an integer in 1..${MAX_SLICE_INGEST_BUDGET}: ${sliceIngestBudget}`,
-    );
-  }
-  const startedAt = now();
-
-  // Everything below reads the floored walk, so the configured floor is
-  // applied here rather than at each place that would otherwise have to
-  // remember it: the tip window, the sweep, and the frontier between them.
-  const floored = floorSliceWalk({
-    adapterKey,
-    config: await selectSourceConfig(scopedDb, sourceId),
-    now: startedAt,
-    walk: adapterReconciliation,
-  });
-  if (Result.isError(floored)) {
-    // Logged here because the loop's window tally counts these turns without
-    // saying what cannot be used: the value an operator has to fix leaves
-    // the process only through this record.
-    logger.error("case_law.reconciliation.floor_rejected", {
-      adapterKey,
-      reason: sanitizeQueryErrorText(floored.error.message),
-    });
-    return { type: "misconfigured" };
-  }
-  const reconciliation = floored.value;
-
-  const tipSlices = tipWindowSlices(reconciliation, startedAt);
-  const staleBefore = new Date(
-    startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
-  );
-  // The tip window's own start, which is also the ceiling on everything the
-  // sweep and the recheck may reach for: the tip is re-walked on its own
-  // cadence and needs neither.
-  const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
-  // The floor under every read of the ledger below, so the backlog, the retry
-  // arm, the recheck and the sweep's frontier all describe the same range.
-  // Rows below it are history the source once swept and no longer covers:
-  // left selectable, a short one among them can never settle and would be
-  // re-listed on every turn.
-  const fromSlice = reconciliation.firstSlice;
-
-  // Dropped as they come due rather than left to accumulate: the map is the
-  // process's memory of what it has just failed to walk, and an expired entry
-  // is a slice the selection is free to pick again. Before the reads, because
-  // the backlog query excludes the held ones and must not exclude a slice
-  // whose hold ended.
-  for (const [slice, retryAtMs] of sliceRetries) {
-    if (retryAtMs <= startedAt.getTime()) {
-      sliceRetries.delete(slice);
+}: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> =>
+  await withExceptionScope({ type: "ingestion", adapterKey }, async () => {
+    if (
+      !Number.isInteger(sliceIngestBudget) ||
+      sliceIngestBudget < 1 ||
+      sliceIngestBudget > MAX_SLICE_INGEST_BUDGET
+    ) {
+      panic(
+        `reconciliation slice ingest budget must be an integer in 1..${MAX_SLICE_INGEST_BUDGET}: ${sliceIngestBudget}`,
+      );
     }
-  }
-  const heldSlices = [...sliceRetries.keys()];
+    const startedAt = now();
 
-  const [
-    tipCheckedAt,
-    shortRows,
-    oldestLedgerSlice,
-    dueParked,
-    recheckCandidate,
-    failedCandidate,
-    dueTextlessHeldRechecks,
-  ] = await Promise.all([
-    selectTipCheckedAt(scopedDb, sourceId, tipSlices),
-    selectStaleShortSlices(scopedDb, {
+    // Everything below reads the floored walk, so the configured floor is
+    // applied here rather than at each place that would otherwise have to
+    // remember it: the tip window, the sweep, and the frontier between them.
+    const floored = floorSliceWalk({
+      adapterKey,
+      config: await selectSourceConfig(scopedDb, sourceId),
+      now: startedAt,
+      walk: adapterReconciliation,
+    });
+    if (Result.isError(floored)) {
+      // Logged here because the loop's window tally counts these turns without
+      // saying what cannot be used: the value an operator has to fix leaves
+      // the process only through this record.
+      logger.error("case_law.reconciliation.floor_rejected", {
+        adapterKey,
+        reason: sanitizeQueryErrorText(floored.error.message),
+      });
+      return { type: "misconfigured" };
+    }
+    const reconciliation = floored.value;
+
+    const tipSlices = tipWindowSlices(reconciliation, startedAt);
+    const staleBefore = new Date(
+      startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
+    );
+    // The tip window's own start, which is also the ceiling on everything the
+    // sweep and the recheck may reach for: the tip is re-walked on its own
+    // cadence and needs neither.
+    const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
+    // The floor under every read of the ledger below, so the backlog, the retry
+    // arm, the recheck and the sweep's frontier all describe the same range.
+    // Rows below it are history the source once swept and no longer covers:
+    // left selectable, a short one among them can never settle and would be
+    // re-listed on every turn.
+    const fromSlice = reconciliation.firstSlice;
+
+    // Dropped as they come due rather than left to accumulate: the map is the
+    // process's memory of what it has just failed to walk, and an expired entry
+    // is a slice the selection is free to pick again. Before the reads, because
+    // the backlog query excludes the held ones and must not exclude a slice
+    // whose hold ended.
+    for (const [slice, retryAtMs] of sliceRetries) {
+      if (retryAtMs <= startedAt.getTime()) {
+        sliceRetries.delete(slice);
+      }
+    }
+    const heldSlices = [...sliceRetries.keys()];
+
+    const [
+      tipCheckedAt,
+      shortRows,
+      oldestLedgerSlice,
+      dueParked,
+      recheckCandidate,
+      failedCandidate,
+      dueTextlessHeldRechecks,
+    ] = await Promise.all([
+      selectTipCheckedAt(scopedDb, sourceId, tipSlices),
+      selectStaleShortSlices(scopedDb, {
+        sourceId,
+        staleBefore,
+        heldSlices,
+        fromSlice,
+      }),
+      selectOldestLedgerSlice(scopedDb, { sourceId, fromSlice }),
+      hasDueParkedItems(scopedDb, sourceId, startedAt),
+      // Asked every turn rather than only once the higher priorities come up
+      // empty: idle is the steady state of a surveyed source, so the branch
+      // that skipped it would almost never be taken, and one more bounded read
+      // in the batch already in flight costs no extra round trip.
+      selectRecheckCandidate(scopedDb, {
+        sourceId,
+        belowSlice: tipStart,
+        heldSlices,
+        fromSlice,
+      }),
+      selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices, fromSlice }),
+      reconciliation.textlessHeldRecheck === undefined
+        ? Promise.resolve(false)
+        : hasDueTextlessHeldRecheck({
+            scopedDb,
+            sourceId,
+            now: startedAt,
+            recheck: reconciliation.textlessHeldRecheck,
+          }),
+    ]);
+
+    const terminalBySlice = await countTerminalReconciliationItemsBySlice(
+      scopedDb,
+      { sourceId, slices: shortRows.map(({ slice }) => slice) },
+    );
+    const { settled, unsettled } = partitionShortSliceCandidates(
+      shortRows.map(({ checkedAt, collected, reported, slice }) => ({
+        slice,
+        reported,
+        collected,
+        checkedAt,
+        terminal: terminalBySlice.get(slice) ?? 0,
+      })),
+    );
+
+    // Touch the settled rows so they leave the stale window.
+    //
+    // A settled slice stays short by definition, so it is never re-walked and
+    // its `checkedAt` never moves on its own — which makes it the oldest-checked
+    // row forever. The candidate read is a bounded oldest-first window, so
+    // enough settled rows fill it completely and the unsettled slices behind
+    // them are never selected again: priority 3 dies silently while the loop
+    // still looks busy. Every settled row takes the same stamp, so the whole
+    // window costs one update and lands back at its young end, and a settled
+    // backlog is paged through a window at a time instead of blocking the queue.
+    //
+    // Not a work unit: touching is bookkeeping, and selection continues over
+    // whatever is genuinely owed in the same iteration. Outside the lease, like
+    // the crawl's own ledger writes.
+    await touchSliceCoverages(scopedDb, {
       sourceId,
-      staleBefore,
-      heldSlices,
-      fromSlice,
-    }),
-    selectOldestLedgerSlice(scopedDb, { sourceId, fromSlice }),
-    hasDueParkedItems(scopedDb, sourceId, startedAt),
-    // Asked every turn rather than only once the higher priorities come up
-    // empty: idle is the steady state of a surveyed source, so the branch
-    // that skipped it would almost never be taken, and one more bounded read
-    // in the batch already in flight costs no extra round trip.
-    selectRecheckCandidate(scopedDb, {
+      slices: settled.map(({ slice }) => slice),
+    });
+
+    // The sweep frontier: the oldest slice with any row, bounded above by the
+    // tip window's own start so a source with only tip rows still sweeps.
+    const frontier =
+      oldestLedgerSlice === null || oldestLedgerSlice > tipStart
+        ? tipStart
+        : oldestLedgerSlice;
+
+    const unit = selectReconciliationWorkUnit({
+      now: startedAt,
+      hasDueParkedItems: dueParked,
+      hasDueTextlessDetailRechecks: dueTextlessHeldRechecks,
+      tipSlices,
+      tipCheckedAt: new Map(
+        tipCheckedAt.map(({ slice, checkedAt }) => [slice, checkedAt]),
+      ),
+      unsettledShortSlices: unsettled,
+      failedCandidate,
+      sweepSlice: reconciliation.previousSlice(frontier),
+      recheckCandidate,
+      slicesHeldForRetry: new Set(heldSlices),
+      staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
+      recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
+      failedRetryAfterMs: RECONCILIATION_FAILED_SLICE_RETRY_MS,
+    });
+
+    if (unit.type === "idle") {
+      return { type: "idle" };
+    }
+
+    return await executeReconciliationUnit({
+      adapterKey,
+      fetchDelayMs,
+      now,
+      reparseStoredRaw,
+      readStoredRaw,
+      reconciliation,
+      scopedDb,
+      sliceIngestBudget,
+      sliceRetries,
+      sleep,
       sourceId,
-      belowSlice: tipStart,
-      heldSlices,
-      fromSlice,
-    }),
-    selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices, fromSlice }),
-    reconciliation.textlessHeldRecheck === undefined
-      ? Promise.resolve(false)
-      : hasDueTextlessHeldRecheck({
-          scopedDb,
-          sourceId,
-          now: startedAt,
-          recheck: reconciliation.textlessHeldRecheck,
-        }),
-  ]);
-
-  const terminalBySlice = await countTerminalReconciliationItemsBySlice(
-    scopedDb,
-    { sourceId, slices: shortRows.map(({ slice }) => slice) },
-  );
-  const { settled, unsettled } = partitionShortSliceCandidates(
-    shortRows.map(({ checkedAt, collected, reported, slice }) => ({
-      slice,
-      reported,
-      collected,
-      checkedAt,
-      terminal: terminalBySlice.get(slice) ?? 0,
-    })),
-  );
-
-  // Touch the settled rows so they leave the stale window.
-  //
-  // A settled slice stays short by definition, so it is never re-walked and
-  // its `checkedAt` never moves on its own — which makes it the oldest-checked
-  // row forever. The candidate read is a bounded oldest-first window, so
-  // enough settled rows fill it completely and the unsettled slices behind
-  // them are never selected again: priority 3 dies silently while the loop
-  // still looks busy. Every settled row takes the same stamp, so the whole
-  // window costs one update and lands back at its young end, and a settled
-  // backlog is paged through a window at a time instead of blocking the queue.
-  //
-  // Not a work unit: touching is bookkeeping, and selection continues over
-  // whatever is genuinely owed in the same iteration. Outside the lease, like
-  // the crawl's own ledger writes.
-  await touchSliceCoverages(scopedDb, {
-    sourceId,
-    slices: settled.map(({ slice }) => slice),
+      unit,
+    });
   });
-
-  // The sweep frontier: the oldest slice with any row, bounded above by the
-  // tip window's own start so a source with only tip rows still sweeps.
-  const frontier =
-    oldestLedgerSlice === null || oldestLedgerSlice > tipStart
-      ? tipStart
-      : oldestLedgerSlice;
-
-  const unit = selectReconciliationWorkUnit({
-    now: startedAt,
-    hasDueParkedItems: dueParked,
-    hasDueTextlessDetailRechecks: dueTextlessHeldRechecks,
-    tipSlices,
-    tipCheckedAt: new Map(
-      tipCheckedAt.map(({ slice, checkedAt }) => [slice, checkedAt]),
-    ),
-    unsettledShortSlices: unsettled,
-    failedCandidate,
-    sweepSlice: reconciliation.previousSlice(frontier),
-    recheckCandidate,
-    slicesHeldForRetry: new Set(heldSlices),
-    staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
-    recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
-    failedRetryAfterMs: RECONCILIATION_FAILED_SLICE_RETRY_MS,
-  });
-
-  if (unit.type === "idle") {
-    return { type: "idle" };
-  }
-
-  return await executeReconciliationUnit({
-    adapterKey,
-    fetchDelayMs,
-    now,
-    reparseStoredRaw,
-    readStoredRaw,
-    reconciliation,
-    scopedDb,
-    sliceIngestBudget,
-    sliceRetries,
-    sleep,
-    sourceId,
-    unit,
-  });
-};

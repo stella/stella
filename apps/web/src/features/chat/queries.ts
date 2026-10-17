@@ -928,7 +928,10 @@ const fetchThreadRecap = async (
   if (response.error) {
     // A recap is a non-critical nicety: surface nothing on failure,
     // but keep the error in telemetry.
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadRecap:failure",
+      scope: { type: "handler", handlerId: "fetchThreadRecap:failure" },
+    });
     return { recap: null };
   }
 
@@ -975,7 +978,13 @@ const fetchThreadSuggestedPrompts = async (
     });
 
   if (response.error) {
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadSuggestedPrompts:failure",
+      scope: {
+        type: "handler",
+        handlerId: "fetchThreadSuggestedPrompts:failure",
+      },
+    });
     return { prompts: [] };
   }
 

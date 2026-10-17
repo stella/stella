@@ -127,11 +127,21 @@ export const resolveRequestMethod = (
 /** Structural fetch subset so the unit test can pass a plain function
  *  without casting to the full (Bun-extended) fetch type. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-type ReportPrefetchError = (error: unknown) => Promise<void>;
+type ReportPrefetchError = (
+  error: unknown,
+  path: BootPrefetchPath,
+) => Promise<void>;
 
-const reportPrefetchError: ReportPrefetchError = async (error) => {
+const reportPrefetchError: ReportPrefetchError = async (error, path) => {
   const { getAnalytics } = await import("@/lib/analytics/provider");
-  getAnalytics().captureError(error);
+  getAnalytics().captureError(error, {
+    fingerprintKey: "reportPrefetchError:failure",
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: `/api/auth${path}`,
+    },
+  });
 };
 
 type StartBootPrefetchOptions = {
@@ -165,12 +175,15 @@ export const startBootPrefetch = ({
   // analytics graph never rides in this deliberately tiny boot chunk; it
   // only loads on the failure path. Reporting stays best-effort: a telemetry
   // failure must never prevent the normal bounded auth request fallback.
-  const reportAndDrop = async (error: unknown): Promise<null> => {
+  const reportAndDrop = async (
+    error: unknown,
+    path: BootPrefetchPath,
+  ): Promise<null> => {
     if (controller.signal.aborted) {
       return null;
     }
     try {
-      await reportError(error);
+      await reportError(error, path);
     } catch {
       // The reporting path itself failed; the auth client must still perform
       // its normal fallback request instead of inheriting telemetry failure.
@@ -192,7 +205,7 @@ export const startBootPrefetch = ({
       },
       signal: requestSignal(),
     },
-  ).catch(reportAndDrop);
+  ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
   slots["/get-session"] = {
     controller,
     generation,
@@ -236,6 +249,9 @@ export const startBootPrefetch = ({
           signal: requestSignal(),
         });
       })
-      .catch(reportAndDrop),
+      .catch(
+        async (error: unknown) =>
+          await reportAndDrop(error, "/organization/get-active-member-role"),
+      ),
   };
 };

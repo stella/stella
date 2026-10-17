@@ -155,7 +155,10 @@ const CopyTextButton = ({
   const copy = async () => {
     const result = await copyToClipboard(text);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "CopyTextButton.copy:failure",
+        scope: { type: "handler", handlerId: "CopyTextButton.copy:failure" },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }

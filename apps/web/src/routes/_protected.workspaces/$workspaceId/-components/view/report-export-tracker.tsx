@@ -80,7 +80,12 @@ export const ReportExportTracker = ({
       .invalidateQueries({
         queryKey: reportExportsKeys.all(settledExport.workspaceId),
       })
-      .catch((error: unknown) => analytics.captureError(error));
+      .catch((error: unknown) =>
+        analytics.captureError(error, {
+          fingerprintKey: "ReportExportTracker:failure",
+          scope: { type: "handler", handlerId: "ReportExportTracker:failure" },
+        }),
+      );
 
     if (settledDetail === undefined) {
       notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
@@ -112,7 +117,13 @@ export const ReportExportTracker = ({
           });
         });
         if (Result.isError(result)) {
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "ReportExportTracker.handleDownload:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker.handleDownload:failure",
+            },
+          });
           notifyUserError(
             result.error,
             t("workspaces.views.reportExport.failed"),
@@ -127,7 +138,13 @@ export const ReportExportTracker = ({
           label: t("common.download"),
           onClick: () => {
             handleDownload().catch((error: unknown) =>
-              analytics.captureError(error),
+              analytics.captureError(error, {
+                fingerprintKey: "ReportExportTracker.onClick:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure",
+                },
+              }),
             );
           },
         },
@@ -145,7 +162,15 @@ export const ReportExportTracker = ({
         .invalidateQueries({
           queryKey: entitiesKeys.all(settledExport.workspaceId),
         })
-        .catch((error: unknown) => analytics.captureError(error));
+        .catch((error: unknown) =>
+          analytics.captureError(error, {
+            fingerprintKey: "ReportExportTracker:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "ReportExportTracker:failure-2",
+            },
+          }),
+        );
       const handleOpen = async () => {
         const result = await Result.tryPromise(async () => {
           const destination = await resolveReportExportDestinationQuery({
@@ -172,7 +197,13 @@ export const ReportExportTracker = ({
         });
         if (Result.isError(result) || result.value === null) {
           if (Result.isError(result)) {
-            analytics.captureError(result.error);
+            analytics.captureError(result.error, {
+              fingerprintKey: "ReportExportTracker.handleOpen:failure",
+              scope: {
+                type: "handler",
+                handlerId: "ReportExportTracker.handleOpen:failure",
+              },
+            });
           }
           notifyUserError(
             Result.isError(result) ? result.error : undefined,
@@ -187,7 +218,13 @@ export const ReportExportTracker = ({
           label: t("workspaces.views.reportExport.openReport"),
           onClick: () => {
             handleOpen().catch((error: unknown) =>
-              analytics.captureError(error),
+              analytics.captureError(error, {
+                fingerprintKey: "ReportExportTracker.onClick:failure-2",
+                scope: {
+                  type: "handler",
+                  handlerId: "ReportExportTracker.onClick:failure-2",
+                },
+              }),
             );
           },
         },

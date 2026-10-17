@@ -41,6 +41,7 @@ import {
   detectFileEncryption,
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
@@ -209,10 +210,13 @@ const discardInput = async ({
   );
   if (Result.isError(removed)) {
     // The object is gone and the row is expired, so the sweep removes it.
-    captureError(removed.error, {
-      fileComparisonUploadId: uploadId,
-      stage: "file-comparison.discard-row",
-    });
+    captureError(
+      removed.error,
+      handlerErrorContext("mcp.discardInput.removed_error", {
+        fileComparisonUploadId: uploadId,
+        stage: "file-comparison.discard-row",
+      }),
+    );
   }
 };
 
@@ -432,10 +436,13 @@ const deliver = async ({
     dependencies,
   );
   if (Result.isError(delivered)) {
-    captureError(delivered.error.cause, {
-      stage: "file-comparison.deliver",
-      step: delivered.error.step,
-    });
+    captureError(
+      delivered.error.cause,
+      handlerErrorContext("mcp.deliver.delivered_error_cause", {
+        stage: "file-comparison.deliver",
+        step: delivered.error.step,
+      }),
+    );
     return {
       status: "error",
       response: structuredErrorResult({
@@ -485,10 +492,13 @@ const recordComparisonAudit = async ({
       }),
   );
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      fileComparisonUploadId: base.id,
-      stage: "file-comparison.audit",
-    });
+    captureError(
+      recorded.error,
+      handlerErrorContext("mcp.recordComparisonAudit.recorded_error", {
+        fileComparisonUploadId: base.id,
+        stage: "file-comparison.audit",
+      }),
+    );
   }
 };
 

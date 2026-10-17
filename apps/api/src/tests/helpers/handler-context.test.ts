@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import type getMessages from "@/api/handlers/chat/messages/list";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
@@ -46,6 +48,36 @@ const checkRequiredCollaborators = () => {
   });
 };
 void checkRequiredCollaborators;
+
+// Never executed: raw fixture casts cannot erase a handler's scope contract.
+const checkRequiredInvocationScope = (request: Request) => {
+  type Invocation = Parameters<typeof getMessages.handler>[0];
+  const withoutRoute = { request };
+  // @ts-expect-error Raw handler fixtures must supply a declared route.
+  asTestRaw<Invocation>(withoutRoute);
+  // @ts-expect-error Raw handler fixtures must supply their request too.
+  asTestRaw<Invocation>({ route: "/v1/chat/threads/:threadId/messages" });
+  asTestRaw<Invocation>({
+    request,
+    route: "/v1/chat/threads/:threadId/messages",
+  });
+  // @ts-expect-error A never target cannot forge a handler context either.
+  asTestRaw<never>({});
+  const generated = createTestHandlerContext<Record<string, unknown>>({
+    audit: NO_AUDIT,
+    safeDb: NO_DB,
+    scopedDb: NO_DB,
+  });
+  const identity = {
+    request: generated.request,
+    route: generated.route,
+  } satisfies SafeHandlerLogContext;
+  void identity;
+  const invoke = (_context: Invocation) => undefined;
+  // @ts-expect-error Contextual inference cannot bypass the scope requirement.
+  invoke(asTestRaw(withoutRoute));
+};
+void checkRequiredInvocationScope;
 
 describe("handler contexts require explicit collaborators", () => {
   test.each(["direct", "scoped"] as const)(

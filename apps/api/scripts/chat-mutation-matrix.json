@@ -35,7 +35,7 @@
       "id": "unknown-activities-are-observed",
       "behaviour": "Unknown activity renderers report one structural client telemetry error without displaying internal data.",
       "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n    );",
+      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n      {\n        fingerprintKey: \"UnknownChatActivity:ClientTelemetryError\",\n        scope: {\n          type: \"handler\",\n          handlerId: \"UnknownChatActivity:ClientTelemetryError\",\n        },\n      },\n    );",
       "replace": "    return;",
       "scenario": {
         "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",

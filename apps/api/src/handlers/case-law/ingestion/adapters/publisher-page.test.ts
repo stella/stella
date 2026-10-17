@@ -3,6 +3,8 @@ import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
 
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+
 import { PublisherPageError, validatePublisherPage } from "./publisher-page";
 
 const context = { adapterKey: "cz-regional", cursor: "2026-01-01:0" };
@@ -204,4 +206,11 @@ describe("publisher response contracts", () => {
       }).unwrap(),
     ).toBe(bytes);
   });
+});
+
+test("inherited publisher failures preserve their finite rejection reason", () => {
+  for (const reason of ["too-small", "invalid-shape"] as const) {
+    const error = new PublisherPageError({ ...context, reason });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({ reason });
+  }
 });
