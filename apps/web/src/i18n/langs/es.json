@@ -1215,6 +1215,11 @@
       "stale": "Esta respuesta ha cambiado. Vuelva a seleccionar el texto.",
       "submit": "Solicitar cambio"
     },
+    "answerQuote": {
+      "showInDecision": "Ver en la resolución",
+      "verified": "Cita verificada",
+      "verifiedHint": "Palabra por palabra en {source}"
+    },
     "applyMode": {
       "description": "Word registra quién hizo cada cambio. Recordaremos tu elección.",
       "direct": "No, aplicar directamente",
@@ -1458,6 +1463,12 @@
       "title": "Texto pegado"
     },
     "placeholder": "Escriba su pregunta aquí, / para habilidades, @ para añadir contexto",
+    "processSummary": {
+      "analyses": "{count, plural, one {# análisis} other {# análisis}}",
+      "changesSaved": "{count, plural, one {# cambio guardado} other {# cambios guardados}}",
+      "documentEdits": "{count, plural, one {# edición del documento} other {# ediciones del documento}}",
+      "sourcesChecked": "{count, plural, one {# fuente consultada} other {# fuentes consultadas}}"
+    },
     "promptImprovementStrategies": {
       "decompose": {
         "description": "Convierte el trabajo complejo en subtareas ordenadas.",
@@ -1703,6 +1714,7 @@
       "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
+      "statusWaiting": "En espera",
       "toggleDetails": "Mostrar detalles",
       "unrestoredFields": "{count, plural, one {# campo no se pudo} other {# campos no se pudieron}} rellenar con valores reales en el modo anonimizado. Revise: {fields}"
     },
