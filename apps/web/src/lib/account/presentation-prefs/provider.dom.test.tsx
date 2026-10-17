@@ -134,7 +134,11 @@ test("a deserialized store and peer updates preserve a boundary still hydrating"
   const tree = (hydrationGate?: Promise<undefined>) => (
     <PresentationPrefsProvider initialPrefs={initialPrefs} sync={sync}>
       <Suspense fallback={null}>
-        <Reader hydrationGate={hydrationGate} />
+        {hydrationGate === undefined ? (
+          <Reader />
+        ) : (
+          <Reader hydrationGate={hydrationGate} />
+        )}
       </Suspense>
     </PresentationPrefsProvider>
   );
