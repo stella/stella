@@ -275,5 +275,15 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"]
+  "ignoreDependencies": [
+    "@stll/typescript-config",
+    // Declared ahead of the text-search engine migration so its PRs share one
+    // dependency set. Each migration PR imports these in its workspace; the
+    // last one removes these entries (knip then flags any unused declaration).
+    "@stll/aho-corasick",
+    "@stll/aho-corasick-wasm",
+    "@stll/fuzzy-search",
+    "@stll/regex-set",
+    "@stll/regex-set-wasm"
+  ]
 }
