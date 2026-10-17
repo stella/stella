@@ -1,14 +1,31 @@
 import { useSyncExternalStore } from "react";
 
-import { browserStorage } from "@/lib/account/browser-storage";
+import type * as v from "valibot";
+
+import {
+  persistedStorageAdapter,
+  type PersistedStateDefinition,
+  type PersistedStorageAdapter,
+} from "@/hooks/persisted-storage-adapter";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
-
-const browserSessionStorage = (): Storage | null => browserStorage("session");
 
 /**
  * The tab's storage after hydration. The server and hydration pass both see
  * null, so public pages never render browser state into their server markup.
  */
-export const useSessionStorage = (): Storage | null =>
-  useSyncExternalStore(noopSubscribe, browserSessionStorage, () => null);
+export const useSessionStorage = <
+  TSchema extends v.BaseSchema<unknown, string | null, v.BaseIssue<unknown>>,
+  TScope extends {
+    organizationId?: string | undefined;
+    workspaceId?: string | undefined;
+  },
+>(
+  entry: PersistedStateDefinition<TSchema, TScope>,
+  scope: TScope,
+): PersistedStorageAdapter | null =>
+  useSyncExternalStore(
+    noopSubscribe,
+    () => persistedStorageAdapter(entry, scope),
+    () => null,
+  );

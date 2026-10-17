@@ -5,10 +5,7 @@ import type {
   DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
 
-import {
-  defaultTargetLanguage,
-  isDocumentTranslationTargetCode,
-} from "@/components/document-language-picker.logic";
+import { defaultTargetLanguage } from "@/components/document-language-picker.logic";
 import type { TranslationKey } from "@/i18n/types";
 
 const DOCUMENT_TRANSLATION_RUN_FAILURE_KEYS = {
@@ -93,15 +90,6 @@ export const activeTranslationChoice = ({
     }
   }
 };
-
-/** One remembered choice per browser; not per document, not per matter. */
-export const LAST_TRANSLATION_TARGET_STORAGE_KEY =
-  "document_translation_last_target";
-
-export const parseLastTranslationTarget = (
-  raw: string | null,
-): DocumentTranslationTargetLanguageCode | null =>
-  raw !== null && isDocumentTranslationTargetCode(raw) ? raw : null;
 
 type DefaultDocumentTranslationTargetOptions = {
   /** This browser's last successful choice, or null before the first run. */

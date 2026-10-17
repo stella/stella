@@ -12,7 +12,6 @@ import {
   defaultDocumentTranslationTarget,
   documentTranslationRunFailureKey,
   openDocumentTranslationOutput,
-  parseLastTranslationTarget,
 } from "./translate-document-dialog.logic";
 
 describe("document translation availability", () => {
@@ -275,16 +274,5 @@ describe("active translation choice", () => {
         isDocx: false,
       }),
     ).toBe("translated:ai");
-  });
-});
-
-describe("remembered translation target", () => {
-  test("keeps a code the catalog still names", () => {
-    expect(parseLastTranslationTarget("PT-BR")).toBe("PT-BR");
-  });
-
-  test("forgets an absent or retired code", () => {
-    expect(parseLastTranslationTarget(null)).toBeNull();
-    expect(parseLastTranslationTarget("KL")).toBeNull();
   });
 });

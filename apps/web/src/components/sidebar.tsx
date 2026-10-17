@@ -2,6 +2,7 @@ import type * as React from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import {
   Sidebar as SidebarShell,
@@ -28,9 +29,23 @@ import {
 } from "@stll/ui/sidebar";
 
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const DEFAULT_SIDEBAR_OPEN = true;
+const sidebarOpenEntry = definePersistedState({
+  key: "sidebar_state",
+  area: "local",
+  version: 1,
+  schema: v.nullable(v.boolean()),
+  maxBytes: 128,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
@@ -54,7 +69,9 @@ const SidebarProvider = ({
     setOpen: setPersistedOpen,
   } = usePersistedSidebarOpen({
     defaultOpen: defaultOpen ?? DEFAULT_SIDEBAR_OPEN,
+    entry: sidebarOpenEntry,
     hydrateFromStorage: defaultOpen === undefined && openProp === undefined,
+    scope: {},
   });
 
   const open = openProp ?? persistedOpen;

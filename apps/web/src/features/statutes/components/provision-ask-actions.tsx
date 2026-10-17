@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import { ArrowUpIcon, AiActionIcon } from "@stll/ui/icons";
@@ -26,9 +27,24 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 const QUESTION_MAX_LENGTH = 2000;
+const provisionQuestionDraftEntry = definePersistedState({
+  key: ({ workspaceId }: { workspaceId?: string | undefined }) =>
+    workspaceId ?? "",
+  area: "session",
+  version: 1,
+  schema: v.nullable(v.string()),
+  maxBytes: 4096,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 type AskPassage = {
   caseNumber: string;
@@ -74,8 +90,10 @@ export const ProvisionAskActions = ({
   const user = useMaybeAuthenticatedUser();
   const aiCapability = useActionCapabilities(user === null ? null : "ai")
     .capabilities.ai;
-  const storage = useSessionStorage();
   const draftKey = provisionQuestionDraftKey(payload);
+  const storage = useSessionStorage(provisionQuestionDraftEntry, {
+    workspaceId: draftKey,
+  });
   const [question, setQuestion] = useState("");
   // Storage reads null through the server and hydration passes, so the saved
   // draft is adopted on the first render that can see it rather than in an

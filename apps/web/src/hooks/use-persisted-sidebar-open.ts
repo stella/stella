@@ -1,34 +1,44 @@
 import { useState, useSyncExternalStore } from "react";
 
-import { deviceStorage } from "@/lib/account/browser-storage";
+import type * as v from "valibot";
 
-const SIDEBAR_STORAGE_KEY = "sidebar_state";
-
-export const parsePersistedSidebarOpen = (
-  storedState: string | null,
-): boolean | null => {
-  if (storedState === null) {
-    return null;
-  }
-  return storedState === "expanded";
-};
+import type { PersistedStateDefinition } from "@/hooks/persisted-storage-adapter";
+import {
+  readPersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
+type SidebarScope = {
+  organizationId?: string | undefined;
+  workspaceId?: string | undefined;
+};
 
-export const usePersistedSidebarOpen = ({
+export const readPersistedSidebarOpen = <
+  TSchema extends v.BaseSchema<unknown, boolean | null, v.BaseIssue<unknown>>,
+>(
+  entry: PersistedStateDefinition<TSchema, SidebarScope>,
+  scope: SidebarScope,
+) => readPersistedState(entry, scope);
+
+export const usePersistedSidebarOpen = <
+  TSchema extends v.BaseSchema<unknown, boolean | null, v.BaseIssue<unknown>>,
+>({
   defaultOpen,
+  entry,
   hydrateFromStorage,
+  scope,
 }: {
   defaultOpen: boolean;
+  entry: PersistedStateDefinition<TSchema, SidebarScope>;
   hydrateFromStorage: boolean;
+  scope: SidebarScope;
 }) => {
   const storedOpen = useSyncExternalStore(
     noopSubscribe,
     () =>
       hydrateFromStorage
-        ? (parsePersistedSidebarOpen(
-            deviceStorage("local").getItem(SIDEBAR_STORAGE_KEY),
-          ) ?? defaultOpen)
+        ? (readPersistedSidebarOpen(entry, scope) ?? defaultOpen)
         : defaultOpen,
     () => defaultOpen,
   );
@@ -36,10 +46,7 @@ export const usePersistedSidebarOpen = ({
   const open = openOverride ?? storedOpen;
 
   const persistOpen = (nextOpen: boolean) => {
-    deviceStorage("local").setItem(
-      SIDEBAR_STORAGE_KEY,
-      nextOpen ? "expanded" : "collapsed",
-    );
+    writePersistedState(entry, scope, nextOpen);
   };
 
   return { open, persistOpen, setOpen: setOpenOverride };

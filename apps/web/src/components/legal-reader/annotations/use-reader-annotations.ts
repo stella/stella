@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
@@ -41,9 +42,24 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
+
+const guestAnnotationsEntry = definePersistedState({
+  key: "legal-reader-guest-annotations:v2",
+  area: "session",
+  version: 1,
+  schema: v.nullable(v.string()),
+  maxBytes: 512_000,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 /** A mark not yet acknowledged by the server, keyed so it can be told apart. */
 const PENDING_ID_PREFIX = "pending:";
@@ -161,7 +177,7 @@ export const useReaderAnnotations = (
   const t = useTranslations();
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
-  const storage = useSessionStorage();
+  const storage = useSessionStorage(guestAnnotationsEntry, {});
   const [localStore, setStore] = useState(EMPTY_GUEST_ANNOTATION_STORE);
   const pendingSequence = useRef(0);
   const targetKey = readerAnnotationTargetKey(target);

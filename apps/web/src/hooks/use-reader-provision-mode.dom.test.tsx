@@ -10,6 +10,8 @@ const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
 const sessionArea = () =>
   browserStorage("session") ?? panic("Test requires session browser storage");
+const storedMode = (mode: string) =>
+  JSON.stringify({ version: 1, value: JSON.stringify(mode) });
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -67,7 +69,7 @@ describe("remembered provision reading mode", () => {
   test("keeps server markup collapsed while the client restores a stored choice", () => {
     localArea().setItem(
       userStorageKey(READER_PROVISION_MODE_STORAGE_KEY),
-      '"expanded"',
+      storedMode("expanded"),
     );
     expect(renderToString(<Reader label="server" />)).toContain(
       'aria-pressed="false"',
@@ -93,7 +95,7 @@ describe("remembered provision reading mode", () => {
     ).toBe("true");
     expect(
       localArea().getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
-    ).toBe('"expanded"');
+    ).toBe(storedMode("expanded"));
     readers.unmount();
     const remounted = render(<Reader label="next decision" />);
     expect(remounted.getByRole("button").getAttribute("aria-pressed")).toBe(
@@ -102,18 +104,18 @@ describe("remembered provision reading mode", () => {
     fireEvent.click(remounted.getByRole("button"));
     expect(
       localArea().getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
-    ).toBe('"collapsed"');
+    ).toBe(storedMode("collapsed"));
   });
 
   test("reads only valid stored modes and follows another tab's changes", () => {
     const key = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-    localArea().setItem(key, '"unexpected"');
+    localArea().setItem(key, storedMode("unexpected"));
     const reader = render(<Reader label="reader" />);
     expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
       "false",
     );
     act(() => {
-      localArea().setItem(key, '"expanded"');
+      localArea().setItem(key, storedMode("expanded"));
       window.dispatchEvent(
         new StorageEvent("storage", { key, storageArea: localArea() }),
       );
@@ -139,14 +141,14 @@ describe("remembered provision reading mode", () => {
       "false",
     );
     fireEvent.click(reader.getByRole("button"));
-    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
+    expect(localArea().getItem(accountAKey)).toBe(storedMode("expanded"));
     await act(() =>
       client.setQueryData(rootKeys.session, { user: { id: "account-b" } }),
     );
     expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
       accountAKey,
     );
-    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
+    expect(localArea().getItem(accountAKey)).toBe(storedMode("expanded"));
     expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
       "false",
     );

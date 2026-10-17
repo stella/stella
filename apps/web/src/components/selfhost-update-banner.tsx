@@ -14,9 +14,13 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
-import { deviceStorage } from "@/lib/account/browser-storage";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
 import { compareSemver } from "@/lib/semver-compare";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -85,7 +89,17 @@ export const SelfhostUpdateBanner = () => {
   const release = releaseView.type === "items" ? releaseView.items : undefined;
   const latestVersion = release ? stripPrefix(release.tag_name) : "";
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;
-  const isPersistedDismissal = useLocalStorageFlag(dismissedKey);
+  const dismissalEntry = definePersistedState({
+    key: dismissedKey,
+    area: "local",
+    version: 1,
+    schema: v.boolean(),
+    maxBytes: 128,
+    defaultValue: () => false,
+    scopeCheck: keepInAnyScope,
+    restoredUi: false,
+  });
+  const isPersistedDismissal = useLocalStorageFlag(dismissalEntry, {});
 
   if (!enabled || !release || release.draft) {
     return null;
@@ -106,7 +120,7 @@ export const SelfhostUpdateBanner = () => {
   }
 
   const handleDismiss = () => {
-    deviceStorage("local").setItem(dismissedKey, "1");
+    writePersistedState(dismissalEntry, {}, true);
     setDismissedVersion(latestVersion);
   };
 

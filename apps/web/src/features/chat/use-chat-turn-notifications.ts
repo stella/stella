@@ -2,6 +2,7 @@ import { useRef } from "react";
 
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import {
   CHAT_TURN_NOTIFICATIONS_STORAGE_KEY,
@@ -14,11 +15,24 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import type { TranslationKey } from "@/i18n/types";
-import {
-  browserStorage,
-  requireBrowserStorage,
-} from "@/lib/account/browser-storage";
 import { logDevError } from "@/lib/errors/telemetry";
+import {
+  definePersistedState,
+  keepInAnyScope,
+  removePersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
+
+const chatTurnNotificationsEntry = definePersistedState({
+  key: CHAT_TURN_NOTIFICATIONS_STORAGE_KEY,
+  area: "local",
+  version: 1,
+  schema: v.boolean(),
+  maxBytes: 128,
+  defaultValue: () => false,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 const NOTIFICATION_TEXT = {
   failed: {
@@ -59,23 +73,16 @@ export const setChatTurnNotificationsEnabled = async (
       return "denied";
     }
   }
-  const written = requireBrowserStorage("local").andThen((storage) =>
-    Result.try(() => {
-      if (enabled) {
-        storage.setItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY, "1");
-      } else {
-        storage.removeItem(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY);
-      }
-    }),
-  );
-  if (Result.isError(written)) {
+  const written = enabled
+    ? writePersistedState(chatTurnNotificationsEntry, {}, true)
+    : removePersistedState(chatTurnNotificationsEntry, {});
+  if (written.status === "error") {
     return "unsupported";
   }
   // `storage` events reach other tabs only; this tab's readers listen too.
   window.dispatchEvent(
     new StorageEvent("storage", {
       key: CHAT_TURN_NOTIFICATIONS_STORAGE_KEY,
-      storageArea: browserStorage("local"),
     }),
   );
   return enabled ? "on" : "off";
@@ -83,7 +90,7 @@ export const setChatTurnNotificationsEnabled = async (
 
 /** The opt-in as stored in this browser, with the permission still held. */
 export const useChatTurnNotificationsEnabled = (): boolean => {
-  const stored = useLocalStorageFlag(CHAT_TURN_NOTIFICATIONS_STORAGE_KEY);
+  const stored = useLocalStorageFlag(chatTurnNotificationsEntry, {});
   return (
     stored &&
     supportsChatTurnNotifications() &&

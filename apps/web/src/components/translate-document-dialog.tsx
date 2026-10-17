@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import {
@@ -67,9 +68,24 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
+
+const lastTranslationTargetEntry = definePersistedState({
+  key: "document_translation_last_target",
+  area: "local",
+  version: 1,
+  schema: v.nullable(v.picklist(DOCUMENT_TRANSLATION_TARGET_CODES)),
+  maxBytes: 128,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: false,
+});
 
 type TranslateDocumentDialogCommonProps = {
   workspaceId: string;
@@ -117,7 +133,9 @@ export const TranslateDocumentDialog = (
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { lastTarget, rememberTarget } = useLastTranslationTarget();
+  const { lastTarget, rememberTarget } = useLastTranslationTarget(
+    lastTranslationTargetEntry,
+  );
 
   const [triggerOpen, setTriggerOpen] = useState(false);
   const open = props.mode === "controlled" ? props.open : triggerOpen;

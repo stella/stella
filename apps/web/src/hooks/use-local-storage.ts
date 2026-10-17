@@ -1,10 +1,14 @@
 import { useSyncExternalStore } from "react";
 
-import { browserStorage } from "@/lib/account/browser-storage";
+import type * as v from "valibot";
+
+import {
+  persistedStorageAdapter,
+  type PersistedStateDefinition,
+  type PersistedStorageAdapter,
+} from "@/hooks/persisted-storage-adapter";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
-
-const browserLocalStorage = (): Storage | null => browserStorage("local");
 
 /**
  * The browser's storage after hydration, or null where there is none: the
@@ -15,5 +19,18 @@ const browserLocalStorage = (): Storage | null => browserStorage("local");
  * themselves, so the storage is handed to them instead, and a module that
  * takes it as an argument is also one a test can drive with a fake.
  */
-export const useLocalStorage = (): Storage | null =>
-  useSyncExternalStore(noopSubscribe, browserLocalStorage, () => null);
+export const useLocalStorage = <
+  TSchema extends v.BaseSchema<unknown, string | null, v.BaseIssue<unknown>>,
+  TScope extends {
+    organizationId?: string | undefined;
+    workspaceId?: string | undefined;
+  },
+>(
+  entry: PersistedStateDefinition<TSchema, TScope>,
+  scope: TScope,
+): PersistedStorageAdapter | null =>
+  useSyncExternalStore(
+    noopSubscribe,
+    () => persistedStorageAdapter(entry, scope),
+    () => null,
+  );

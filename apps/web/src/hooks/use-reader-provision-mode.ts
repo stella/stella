@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { RefObject } from "react";
 
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { keepReadingPosition } from "@/components/legal-reader/reader-position";
 import {
@@ -19,8 +20,23 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
+import {
+  definePersistedState,
+  keepInAnyScope,
+} from "@/lib/persisted-state/registry";
 
 const MODE_CHANGED_EVENT = "reader-provision-mode-changed";
+const readerProvisionModeEntry = definePersistedState({
+  key: ({ workspaceId }: { workspaceId?: string | undefined }) =>
+    workspaceId ?? "",
+  area: "local",
+  version: 1,
+  schema: v.nullable(v.string()),
+  maxBytes: 128,
+  defaultValue: () => null,
+  scopeCheck: keepInAnyScope,
+  restoredUi: true,
+});
 
 type StoredMode = {
   key: string;
@@ -51,10 +67,12 @@ const readMode = (storage: Storage, key: string) =>
 export const useReaderProvisionMode = (
   scrollContainerRef: RefObject<HTMLElement | null>,
 ) => {
-  const storage = useLocalStorage();
   const analytics = useAnalytics();
   const owner = useStorageOwner();
   const key = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY, owner);
+  const storage = useLocalStorage(readerProvisionModeEntry, {
+    workspaceId: key,
+  });
   const [stored, setStored] = useState<StoredMode | null>(null);
 
   // Like text size, the stored choice is read after hydration. An owner
@@ -98,10 +116,7 @@ export const useReaderProvisionMode = (
       });
     };
     const onStorage = (event: StorageEvent) => {
-      if (
-        event.storageArea === storage &&
-        (event.key === key || event.key === null)
-      ) {
+      if (event.key === key || event.key === null) {
         refresh();
       }
     };
