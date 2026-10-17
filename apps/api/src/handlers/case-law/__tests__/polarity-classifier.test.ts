@@ -8,6 +8,7 @@ import {
   POLARITIES,
   POLARITY,
   POLARITY_PRECEDENCE,
+  POLARITY_RULE_KIND,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
@@ -234,18 +235,17 @@ describe("seed rules", () => {
   });
 
   /**
-   * A case recited with "srov." and rejected a page later: the rule tier
-   * reads both windows and records that they disagree. Reading the first
-   * window alone is what filed the overruled case as supported; reading only
-   * the severest of the two lost the reliance the court also expressed.
+   * A citation-form marker says nothing about treatment. A rejection in a
+   * later mention therefore remains the citation's only stance.
    */
-  test("mentions that disagree are stored as one mixed reading", () => {
+  test("a form-only mention cannot dilute a later rejection", () => {
     const rules = compileRules(
       SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
         id: createSafeId<"caseLawPolarityRule">(),
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const recital =
@@ -261,28 +261,27 @@ describe("seed rules", () => {
     expect(windows?.mentions).toHaveLength(2);
     expect(
       selectCitationPolarity(rules, windows?.mentions[0] ?? "")?.polarity,
-    ).toBe(POLARITY.SUPPORTIVE);
+    ).toBe(POLARITY.NEUTRAL);
     expect(
       selectCitationPolarity(rules, windows?.mentions[1] ?? "")?.polarity,
     ).toBe(POLARITY.NEGATIVE);
     expect(
       selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
-    ).toBe(POLARITY.MIXED);
+    ).toBe(POLARITY.NEGATIVE);
   });
 
   /**
-   * The same disagreement a paragraph closer. The mentions sit within one
-   * window of each other, so the excerpt the model tiers read is a single
-   * merged window carrying both cues; reading the rule tier off that window
-   * returned one match and filed the departure as the whole citation.
+   * The same form and stance within one composed context retain the negative
+   * precedence used everywhere else in the rule tier.
    */
-  test("mentions that disagree are mixed even where their windows merge", () => {
+  test("a nearby form marker cannot dilute a rejection", () => {
     const rules = compileRules(
       SEED_RULES.filter((r) => r.language === "cs").map((r) => ({
         id: createSafeId<"caseLawPolarityRule">(),
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const recital =
@@ -299,7 +298,7 @@ describe("seed rules", () => {
     expect(windows?.mentions).toHaveLength(2);
     expect(
       selectCitationPolarity(rules, windows?.mentions ?? [])?.polarity,
-    ).toBe(POLARITY.MIXED);
+    ).toBe(POLARITY.NEGATIVE);
   });
 
   /**
@@ -355,6 +354,7 @@ describe("seed rules", () => {
         pattern: r.pattern,
         polarity: r.polarity,
         confidence: 1,
+        kind: r.kind,
       })),
     );
     const context =
@@ -370,9 +370,6 @@ describe("seed rules", () => {
     );
 
     const testCases = [
-      "srov. rozhodnutí",
-      "viz nález",
-      "srovnej usnesení",
       "Nejvyšší soud judikoval",
       "lze odkázat na precedenční",
       "má oporu v rozhodovací činnosti",
@@ -477,6 +474,7 @@ describe("rule precedence", () => {
     pattern,
     polarity,
     confidence: 1,
+    kind: POLARITY_RULE_KIND.STANCE,
   });
 
   test("a quashed judgment under review does not turn a compare-cue negative", () => {
@@ -499,7 +497,7 @@ describe("rule precedence", () => {
       POLARITY.NEGATIVE,
     );
     expect(selectCitationPolarity(rules, context)?.polarity).toBe(
-      POLARITY.SUPPORTIVE,
+      POLARITY.NEUTRAL,
     );
   });
 
@@ -615,6 +613,7 @@ describe("rule precedence", () => {
         pattern: "viz",
         polarity: POLARITY.SUPPORTIVE,
         confidence: 0.8,
+        kind: POLARITY_RULE_KIND.STANCE,
       },
     ]);
 

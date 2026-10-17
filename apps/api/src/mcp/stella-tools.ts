@@ -1208,19 +1208,18 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read one page of citations with their citing passages. `cited_by` " +
-      "reads decisions citing this one, `cites` what it cites. `polarity` " +
-      "is a stance: 'unclassified' means none was read, 'mixed' that " +
-      "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
-      "where a reviewed reading found the court doing so in its own words; " +
-      "'not_stated' does not mean followed; 'unread' means none " +
-      "was read; null when `doctrineAvailability` is 'unavailable'. " +
-      "`passage.evidenceQuote` is the verbatim evidence when text is " +
-      `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
-      "characters, cut when `passage.truncated`; `passage.mention` is " +
-      "'sole', 'classified_section' (the mention polarity came from) or " +
-      "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
-      "`url` for the reader and `source_url` for the publisher.",
+      "Read citation passages: `cited_by` reads decisions citing this one; " +
+      "`cites` reads what it cites. `polarity` is stance; 'unclassified' means " +
+      "unread, 'mixed' conflicting mentions. `polarityEvidence` attributes its " +
+      "exact excerpt; `citedPart` names the opinion part. Incomplete reasons " +
+      "explain missing evidence or text. `doctrine` is reviewed 'distinguishes', " +
+      "'limits', 'not_stated' (not followed), or 'unread'; null when " +
+      "`doctrineAvailability` is 'unavailable'. `passage.evidenceQuote` supports " +
+      "doctrine. " +
+      `\`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} characters; ` +
+      "`truncated` marks cuts. `mention` is 'sole', 'classified_section', or " +
+      "'latest_of_several'. Pass nextCursor as cursor. Use `url` for the reader, " +
+      "`source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
@@ -3621,6 +3620,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationId: item.id,
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
+        textIncompleteReason: item.textIncompleteReason,
+        evidenceIncompleteReason: item.evidenceIncompleteReason,
+        polarityEvidence: item.polarityEvidence,
+        citedPart: item.citedPart,
         polarity: item.treatment,
         doctrine: item.doctrine,
         decision:

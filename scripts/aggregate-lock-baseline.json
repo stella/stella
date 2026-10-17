@@ -12,18 +12,6 @@
     "reason": "transaction-boundary in apps/api/scripts/backfill-image-thumbnails.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/scripts/classify-citations.ts",
-    "fingerprint": "46ec935e1725484ca4eb4f5cbe1ef171b29e756209b23fca64c1a363c7c9e381",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/classify-citations.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/classify-citations.ts",
-    "fingerprint": "81100dac781780abc97b5c17fd6559d7e4bfed90fbeee9df18b2531d20b510f5",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/classify-citations.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/scripts/ingestion-status.ts",
     "fingerprint": "12ff525534827e6faa7be2d94a593027df89056e80bf28ae869812f1c93f55ca",
     "count": 1,
@@ -1006,12 +994,6 @@
     "fingerprint": "5767a7afb70117a75d32c9948a3ab7100df85adeed5311425cea96b09937ba26",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/handlers/case-law/matter-links/link-writes.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/polarity/rule-retirement.ts",
-    "fingerprint": "9148acf7c1b5665e158dc21ed1c6413c60dfa2a47b442da1a1e6de30a6785c79",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/polarity/rule-retirement.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts",
@@ -4468,18 +4450,6 @@
     "fingerprint": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/scripts/replay-tick.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/seed-polarity-rules.ts",
-    "fingerprint": "6233b829cf8c6b607855d4f015a9af41f3653d23737a00358ee082ac5cd56438",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/seed-polarity-rules.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/seed-polarity-rules.ts",
-    "fingerprint": "e8f49bca889e436cf8dfbd1a6363ccdfd9fc2fc2f0f2b6f5d85b8eae67eff3ad",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/seed-polarity-rules.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "packages/db-load-gate/src/heavy-work-slot.ts",

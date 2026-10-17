@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 
+import { READ_CASE_LAW_CITATIONS_PROJECTION } from "../lib/chat/case-law-citation-projection";
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
 
 const search = SEARCH_CASE_LAW_PROJECTION.options[1].pipe[0];
@@ -87,4 +88,8 @@ export {
 
 export { READ_PROVISION_HISTORY_PROJECTION as APP_PROVISION_HISTORY_SCHEMA } from "../lib/chat/legislation-result-projections";
 
-export { READ_CASE_LAW_CITATIONS_PROJECTION as APP_CITATION_PAGE_SCHEMA } from "../lib/chat/case-law-citation-projection";
+export { READ_CASE_LAW_CITATIONS_PROJECTION as APP_CITATION_PAGE_SCHEMA };
+
+export const APP_CITATION_TREATMENTS =
+  READ_CASE_LAW_CITATIONS_PROJECTION.entries.citations.item.entries.polarity
+    .options;

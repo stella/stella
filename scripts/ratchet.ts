@@ -4955,6 +4955,7 @@ const EXPECTED_BARE_FIXTURE_DIRECTIVES = 3;
 // plus one in the operational-script fixture, which also proves the budgets
 // reach beyond `apps/*/src`.
 const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
+  "citation-evidence-text-fence/citation-evidence-text-fence": 0,
   "no-body-ownership-ids/no-body-ownership-ids": 0,
   "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": 0,
   "require-search-scope/require-search-scope": 0,

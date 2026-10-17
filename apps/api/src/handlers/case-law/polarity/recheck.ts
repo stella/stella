@@ -9,27 +9,45 @@ import { and, asc, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
+import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import {
   POLARITY,
+  POLARITY_CLASSIFIER_VERSION,
   POLARITY_PRECEDENCE,
   isValidPolarity,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 import { extractContexts } from "@/api/handlers/case-law/polarity/context";
 import { unreviewedCitationSql } from "@/api/handlers/case-law/polarity/reviews";
-import { selectCitationPolarity } from "@/api/handlers/case-law/polarity/rule-engine";
+import {
+  ACTIVE_RULE_SOURCES,
+  selectCitationPolarity,
+} from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
+import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
+import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
+import { numericColumnParam } from "@/api/lib/db/column-storage";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per statement on a recheck walk. */
 const RECHECK_BATCH = 1000;
 
 type Tightened = {
+  citingDecisionId: SafeId<"caseLawDecision">;
+  textRevision: CitationTextRevision;
   id: SafeId<"caseLawCitation">;
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule">;
+  previousPolarity: Polarity;
+  evidenceWindows: CitationEvidenceWindows;
+  confidence: number;
+  citedPart: CitedPart;
 };
 
 /**
@@ -39,35 +57,61 @@ type Tightened = {
 export const persistTightened = async (
   scopedDb: ScopedDb,
   rows: readonly Tightened[],
-): Promise<void> => {
+) => {
   if (rows.length === 0) {
-    return;
+    return { applied: 0, skipped: 0 };
   }
-  await scopedDb(async (tx) => {
-    // audit: skip — background polarity classification pipeline; no user-facing state change
-    await tx.execute(sql`
+  const changed = await runCitationGraphTransaction(
+    scopedDb,
+    async (tx) =>
+      // audit: skip — background polarity classification pipeline; no user-facing state change
+      await tx.execute(sql`
       UPDATE ${caseLawCitations} AS c
          SET polarity = v.polarity,
-             polarity_rule_id = v.rule_id
+             polarity_rule_id = v.rule_id,
+             polarity_source = 'rule',
+             polarity_classifier_version = ${POLARITY_CLASSIFIER_VERSION},
+             polarity_evidence_windows = v.evidence_windows,
+             polarity_confidence = v.confidence,
+             cited_part = v.cited_part
         FROM (VALUES ${sql.join(
           rows.map(
             (row) =>
-              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid)`,
+              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${JSON.stringify(row.evidenceWindows)}::text::jsonb, ${numericColumnParam(caseLawCitations.polarityConfidence, row.confidence)}, ${row.citedPart}::text, ${row.citingDecisionId}::uuid, ${row.textRevision.contentHash}::text, ${row.textRevision.sections === null ? null : JSON.stringify(row.textRevision.sections)}::text::jsonb)`,
           ),
           sql.raw(","),
-        )}) AS v(id, polarity, rule_id)
+        )}) AS v(id, polarity, rule_id, previous_polarity, evidence_windows, confidence, cited_part, citing_decision_id, content_hash, sections)
        WHERE c.id = v.id
+         AND c.citing_decision_id = v.citing_decision_id
+         AND ${citationTextRevisionFence({
+           citingDecisionId: sql.raw("v.citing_decision_id"),
+           expectedContentHash: sql.raw("v.content_hash"),
+           expectedSections: sql.raw("v.sections"),
+         })}
+         AND c.polarity = v.previous_polarity
+         AND EXISTS (
+           SELECT 1 FROM case_law_polarity_rules r
+            WHERE r.id = v.rule_id
+              AND r.source IN (${sql.join(
+                ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),
+                sql.raw(","),
+              )})
+         )
          AND ${unreviewedCitationSql({
            citingDecisionId: sql.raw("c.citing_decision_id"),
            citationKey: sql.raw("c.citation_key"),
          })}
-    `);
-  });
+      RETURNING c.id
+    `),
+  );
+  const applied = executedRows(changed).length;
+  return { applied, skipped: rows.length - applied };
 };
 
 type RecheckTotals = {
   read: number;
   tightened: number;
+  skipped: number;
   noContext: number;
 };
 
@@ -125,6 +169,8 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
           sectionIndex: caseLawCitations.sectionIndex,
           polarity: caseLawCitations.polarity,
           sections: caseLawDecisions.sections,
+          contentHash: caseLawDecisions.contentHash,
+          citingDecisionId: caseLawDecisions.id,
         })
         .from(caseLawCitations)
         .innerJoin(
@@ -173,18 +219,32 @@ const recheckPage = async (args: RecheckPageArgs): Promise<RecheckResult> => {
     }
     tightened.push({
       id: citation.id,
+      citingDecisionId: citation.citingDecisionId,
+      textRevision: {
+        contentHash: citation.contentHash,
+        sections: citation.sections,
+      },
       polarity: match.polarity,
       ruleId: match.ruleId,
+      previousPolarity: current,
+      evidenceWindows: windows.evidenceWindows,
+      confidence: match.confidence,
+      citedPart: classifyCitedPart({
+        contexts: windows.contexts,
+        citationText: citation.citationText,
+        language,
+      }),
     });
   }
-  if (!dryRun) {
-    await persistTightened(scopedDb, tightened);
-  }
+  const persisted = dryRun
+    ? { applied: tightened.length, skipped: 0 }
+    : await persistTightened(scopedDb, tightened);
 
   const last = page.at(-1)?.id ?? after;
   const next = {
     read: totals.read + page.length,
-    tightened: totals.tightened + tightened.length,
+    tightened: totals.tightened + persisted.applied,
+    skipped: totals.skipped + persisted.skipped,
     noContext: totals.noContext + noContext,
   };
   if (page.length < pageSize) {
@@ -206,5 +266,5 @@ export const recheckCitationPolarity = async (
 ): Promise<RecheckResult> =>
   await recheckPage({
     ...options,
-    totals: { read: 0, tightened: 0, noContext: 0 },
+    totals: { read: 0, tightened: 0, skipped: 0, noContext: 0 },
   });

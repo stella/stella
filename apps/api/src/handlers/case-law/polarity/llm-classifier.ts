@@ -12,23 +12,24 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { DecisionGenerationOptions } from "@/api/lib/workflow/decisions/decide";
 
-import { CLASSIFIABLE_POLARITIES } from "./consts";
-import { POLARITY_GUIDANCE } from "./guidance";
+import { MODEL_READING_GUIDANCE } from "./model-readings";
 
 const SYSTEM_PROMPT = `You are a legal citation polarity classifier.
 
 Given a text excerpt from a court decision that contains a citation
-reference, classify the relationship between the citing decision and
-the cited decision.
+reference, choose one reading of the citing court's use of the cited decision.
+A form reading describes citation typography or a reference marker rather
+than the court's treatment, and has neutral polarity.
 
 Classifications:
-${CLASSIFIABLE_POLARITIES.map(
-  (polarity) => `- "${polarity}": ${POLARITY_GUIDANCE[polarity]}`,
-).join("\n")}
+${Object.entries(MODEL_READING_GUIDANCE)
+  .map(([reading, guidance]) => `- "${reading}": ${guidance}`)
+  .join("\n")}
 
-Extract the specific phrase (2-5 words) from the text that most
-strongly indicates the polarity. This phrase will be used to generate
-regex rules for future classification.
+Extract the specific phrase or marker (at most 100 characters) that most
+strongly supports the chosen reading. For form, extract the form marker,
+not a treatment cue. This phrase will be used to generate regex rules
+for future classification.
 
 Report confidence honestly. A high-confidence answer can be promoted into
 a regex rule that labels later citations without you, so an uncertain one
@@ -75,7 +76,7 @@ export const polarityGeneration = ({
       },
     ],
     evidenceInstruction:
-      "Extract the specific phrase (2-5 words, at most 100 characters) from the excerpt that most strongly indicates polarity; use null when no phrase supports it.",
+      "Extract the specific phrase (at most 100 characters) from the excerpt supporting the chosen reading: a treatment cue for stance, or a citation form marker for form. Use null when no phrase supports it.",
     abortSignal,
     deadlineMs: 15_000,
   }) satisfies Extract<
