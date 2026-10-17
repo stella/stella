@@ -96,14 +96,14 @@ const previousInvalidationFor = (factory: string): PreviousInvalidation => {
         target,
         readers: readers.map((reader) => ({
           queryKey: reader.queryKey,
-          meta: reader.meta,
+          ...(reader.meta ? { meta: reader.meta } : {}),
         })),
       };
     }
     case "timeEntriesKeys.all": {
       const target = timeEntriesKeys.all(WORKSPACE_ID);
       const { queryKey, meta } = timeEntriesOptions(WORKSPACE_ID, USER_ID);
-      return { target, readers: [{ queryKey, meta }] };
+      return { target, readers: [{ queryKey, ...(meta ? { meta } : {}) }] };
     }
     case "entitiesKeys.all": {
       const target = entitiesKeys.all(WORKSPACE_ID);
