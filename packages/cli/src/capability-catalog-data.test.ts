@@ -100,3 +100,11 @@ test("curated capability references fail when the registry snapshot loses their 
     );
   }
 });
+
+test("published capability catalogs exclude API handler metadata", () => {
+  const entries = readCapabilityCatalog();
+  expect(entries.length).toBeGreaterThan(0);
+  for (const entry of entries) {
+    expect(entry).not.toHaveProperty("handler");
+  }
+});
