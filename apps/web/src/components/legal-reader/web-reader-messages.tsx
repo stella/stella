@@ -30,6 +30,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     "statutes.provisionTextUnavailable": t("statutes.provisionTextUnavailable"),
     "statutes.showCitedPartOnly": t("statutes.showCitedPartOnly"),
     "statutes.showFullProvision": t("statutes.showFullProvision"),
+    "aiDisclosure.caseLaw": t("aiDisclosure.caseLaw"),
     // Explicit ReactNode: the inferred `t.rich` result carries React 19's
     // Promise<AwaitedReactNode> member, which promise-function-async flags.
     sourceAttribution: (source, link): ReactNode =>
