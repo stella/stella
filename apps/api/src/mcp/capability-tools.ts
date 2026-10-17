@@ -955,7 +955,10 @@ const listCapabilitiesHandler: McpToolHandler<
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
   // A cursor resumes only the listing that issued it: an id-order cursor
   // carries no query, a relevance cursor carries its query.
-  if (decodedCursor === null || decodedCursor?.query !== query) {
+  if (
+    decodedCursor === null ||
+    (decodedCursor !== undefined && decodedCursor.query !== query)
+  ) {
     return invalidCursorResult({
       cursor: cursor ?? "",
       tool: "list_capabilities",
