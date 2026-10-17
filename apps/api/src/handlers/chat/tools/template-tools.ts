@@ -162,7 +162,7 @@ const buildTemplateAiAnalytics = ({
       workspaceId: null,
     },
     feature,
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig: orgAIConfig ?? null,
     modelTier,
     properties: { organization_id: organizationId },

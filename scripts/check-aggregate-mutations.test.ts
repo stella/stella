@@ -599,7 +599,13 @@ describe("aggregate mutation route coverage", () => {
         `import { Result } from "better-result"; import { withAggregateLock, withAggregateTransaction } from "@/api/lib/db/aggregate-lock"; export const renewExample = async ({ db }) => { const outcome = await Result.tryPromise({ try: async () => await withAggregateTransaction(db, async (tx) => { const lock = ${acquisition} }) }); return outcome; };`,
       );
       expect(enumerate(sources).at(0)?.declared).toBe(true);
+      sources.set(
+        service,
+        `import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db"; ${lockImport} export const renewExample = async ({ value }) => { return await abortableTx(safeDbFromScoped(value.scopedDb), async (tx) => { ${acquisition} }); };`,
+      );
+      expect(enumerate(sources).at(0)?.declared).toBe(true);
       for (const detached of [
+        `await value.scopedDb(async (tx) => { ${acquisition} });`,
         `setTimeout(async () => { ${acquisition} }, 0);`,
         `await setTimeout(async () => { ${acquisition} }, 0);`,
         `await runInTransaction(db, async (tx) => { ${acquisition} });`,

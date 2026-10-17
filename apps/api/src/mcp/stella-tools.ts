@@ -233,6 +233,7 @@ import {
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
+import { searchNotesForCall } from "./search-notes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -2576,14 +2577,17 @@ const listSearchCaseLawProvision = async ({
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: page.facets,
-    searches: [
-      {
-        query: provisionText,
-        queryUsed: page.queryUsed,
-        paginationOutcome: page.paginationOutcome,
-        warnings: [...filterWarnings, ...page.warnings],
-      },
-    ],
+    searches: searchNotesForCall(
+      [
+        {
+          query: provisionText,
+          queryUsed: page.queryUsed,
+          paginationOutcome: page.paginationOutcome,
+          warnings: [...filterWarnings, ...page.warnings],
+        },
+      ],
+      [],
+    ),
     nextCursor: page.nextCursor,
     paginationOutcome: page.paginationOutcome,
     results: merged.map(caseLawSearchResult),
@@ -2760,12 +2764,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const single =
     queries.length === 1 && !first.exhausted ? first.page : undefined;
   const mergedCursor = mergedCaseLawSearchCursor(pages);
-
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.
-  const guidance = mcpCaseLawSearchGuidance(context);
   const searches = requests.map(
     ({ interpretation, query, subCursor }, index) => {
+      const warnings = index === 0 ? filterWarnings : [];
       const outcome = pages.at(index);
       if (outcome === undefined || outcome.exhausted) {
         // Exhausted phrasings echo the prior interpretation without new warnings.
@@ -2773,7 +2776,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           query,
           queryUsed: interpretation.queryUsed,
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-          warnings: [...filterWarnings, ...provisionRead.warnings],
+          warnings: warnings.concat(provisionRead.warnings),
         };
       }
       const values = facetValuesForFilters({
@@ -2791,13 +2794,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         queryUsed: outcome.page.queryUsed,
         paginationOutcome: outcome.page.paginationOutcome,
         warnings: [
-          ...filterWarnings,
+          ...warnings,
           ...provisionRead.warnings,
           ...outcome.page.warnings.map((warning) =>
             withFacetValues(warning, values),
           ),
           ...manyRequiredTermsWarnings({
-            guidance,
+            guidance: mcpCaseLawSearchGuidance(context),
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
@@ -2810,7 +2813,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
     facets: first.exhausted ? null : first.page.facets,
-    searches,
+    searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
     paginationOutcome: pages.some(
       (outcome) =>
