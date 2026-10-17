@@ -13,6 +13,8 @@ import { cn } from "@stll/ui/utils";
 import { useLocale } from "@/i18n/formatting-context";
 import type { Workspace } from "@/lib/workspaces/types";
 
+import { filterClientsBySearch } from "./matters-search.logic";
+
 type ClientFilterPopoverProps = {
   value: string[] | undefined;
   onChange: (value: string[] | undefined) => void;
@@ -41,10 +43,7 @@ export const ClientFilterPopover = ({
     );
   })();
 
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? clients.filter((c) => c.displayName.toLowerCase().includes(q))
-    : clients;
+  const filtered = filterClientsBySearch(clients, search);
 
   const selected: Set<string> = value ? new Set(value) : new Set();
   const toggle = (id: string) => {

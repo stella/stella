@@ -15,6 +15,8 @@ import { useLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
 import type { LeadFilter, Workspace } from "@/lib/workspaces/types";
 
+import { filterTeamMembersBySearch } from "./matters-search.logic";
+
 type TeamFilterPopoverProps = {
   teamValue: string[] | undefined;
   onTeamChange: (value: string[] | undefined) => void;
@@ -63,15 +65,7 @@ export const TeamFilterPopover = ({
     );
   })();
 
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? members.filter(
-        (m) =>
-          m.userName.toLowerCase().includes(q) ||
-          m.userEmail.toLowerCase().includes(q) ||
-          m.userId.toLowerCase().includes(q),
-      )
-    : members;
+  const filtered = filterTeamMembersBySearch(members, search);
 
   const selectedTeam: Set<string> = teamValue ? new Set(teamValue) : new Set();
   const toggleTeam = (id: string) => {

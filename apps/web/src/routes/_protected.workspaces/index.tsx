@@ -60,6 +60,7 @@ import { MattersTable } from "@/routes/_protected.workspaces/-components/matters
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
 import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/active-filter-chips";
 import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
+import { filterWorkspacesBySearch } from "@/routes/_protected.workspaces/-filters/matters-search.logic";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import {
@@ -170,17 +171,7 @@ const MattersContent = ({
   const canOpenCreateMatter =
     canCreateMatter && workspaces.length < WORKSPACES_PER_ORGANIZATION_MAX;
 
-  const searched = workspaces.filter((w) => {
-    if (!search.trim()) {
-      return true;
-    }
-    const q = search.toLowerCase();
-    return (
-      w.name.toLowerCase().includes(q) ||
-      w.reference.toLowerCase().includes(q) ||
-      w.client?.displayName.toLowerCase().includes(q)
-    );
-  });
+  const searched = filterWorkspacesBySearch(workspaces, search);
 
   const filtered = applyMattersFilters(searched, filters);
 
