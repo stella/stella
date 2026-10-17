@@ -524,12 +524,78 @@ test("actual elapsed budget includes probes and stops repeat execution", async (
     run: async ({ timeoutMs }) => {
       timeouts.push(timeoutMs);
       elapsed += Math.min(60, timeoutMs);
-      return { type: "executed", passed: true, status: 0, ranTests: true };
+      return {
+        type: "executed",
+        passed: true,
+        status: 0,
+        ranTests: true,
+        failedTests: [],
+      };
     },
   });
   expect(timeouts).toEqual([100, 40]);
   expect(report.elapsedMs).toBe(100);
   expect(report.results.map(({ runs }) => runs)).toEqual([1, 1]);
+});
+
+test("each test's failing trials are counted for the flaky-test history", async () => {
+  const failing = [["math > adds"], [], ["math > adds", "math > divides"]];
+  let trial = 0;
+  const report = await executeGate({
+    targets: [targetFor("/fixture", "a.test.ts")],
+    skipped: [],
+    run: async () => {
+      const failedTests = failing[trial % failing.length] ?? [];
+      trial += 1;
+      return {
+        type: "executed",
+        passed: failedTests.length === 0,
+        status: failedTests.length === 0 ? 0 : 1,
+        ranTests: true,
+        failedTests,
+      };
+    },
+  });
+  const [result] = report.results;
+  expect(result?.runs).toBe(REPEATS);
+  const expected: Record<string, number> = {};
+  for (let index = 0; index < REPEATS; index += 1) {
+    for (const name of failing[index % failing.length] ?? []) {
+      expected[name] = (expected[name] ?? 0) + 1;
+    }
+  }
+  expect(result?.failedTests).toEqual(expected);
+});
+
+test("a Bun trial reports the names of the tests that failed in it", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-names-"));
+  try {
+    mkdirSync(path.join(root, "packages/unit"), { recursive: true });
+    writeFileSync(
+      path.join(root, "packages/unit/package.json"),
+      JSON.stringify({ name: "unit", scripts: { test: "bun test" } }),
+    );
+    writeFileSync(
+      path.join(root, "packages/unit/unit.test.ts"),
+      'import { describe, expect, test } from "bun:test";\ndescribe("math", () => {\n  test("adds", () => expect(1 + 1).toBe(3));\n  test("subtracts", () => expect(1 - 1).toBe(0));\n});\n',
+    );
+    const target = selectTargets({
+      root,
+      changed: ["packages/unit/unit.test.ts"],
+      hasDb: false,
+    }).targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected selected fixture");
+    }
+    expect(await runOnce({ target, seed: 3, timeoutMs: 10_000 })).toMatchObject(
+      {
+        passed: false,
+        failedTests: ["math > adds"],
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("reports preserve reduced coverage and failures and only blocking mode fails", () => {
@@ -545,6 +611,7 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
         runs: 3,
         failures: 1,
         failedIterations: [2],
+        failedTests: { adds: 1 },
         durationMs: 10,
         planned: 3,
       },
