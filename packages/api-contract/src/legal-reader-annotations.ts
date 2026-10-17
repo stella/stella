@@ -35,3 +35,13 @@ export type ReaderAnnotationStyle = (typeof READER_ANNOTATION_STYLES)[number];
 export const READER_ANNOTATION_MAX_SPANS = 40;
 export const READER_ANNOTATION_QUOTE_MAX_LENGTH = 2000;
 export const READER_ANNOTATION_BODY_MAX_LENGTH = 10_000;
+
+/** How a selected reader passage and its citation are copied. */
+export const READER_COPY_MODES = [
+  "quoteWithCitation",
+  "citationWithQuote",
+  "blockQuoteWithCitation",
+  "textOnly",
+  "citationOnly",
+] as const;
+export type ReaderCopyMode = (typeof READER_COPY_MODES)[number];

@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -12,6 +13,7 @@ const sessionArea = () =>
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
+const { useRef } = await import("react");
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
@@ -33,11 +35,12 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const Reader = ({ label }: { label: string }) => {
-  const mode = useReaderProvisionMode();
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const mode = useReaderProvisionMode(scrollRef);
   return (
     <button
       aria-label={label}

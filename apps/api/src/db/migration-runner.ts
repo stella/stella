@@ -22,6 +22,8 @@ import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
+import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
+import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
@@ -429,6 +431,45 @@ type OnlineMigrationRunner = (
   ...args: Parameters<typeof runOnlineMigrations>
 ) => MaybePromise<Awaited<ReturnType<typeof runOnlineMigrations>>>;
 
+type MigrationPhaseClock = {
+  phase: "schema" | "online" | "done";
+  startedAt: number;
+  laneWaitMs: number | null;
+};
+
+/** The duration of the phase a failed run was in, reported before the error propagates. */
+const emitFailedPhase = (
+  timing: MigrationTiming,
+  clock: MigrationPhaseClock,
+  durationMs: number,
+): void => {
+  switch (clock.phase) {
+    case "schema":
+      timing.emit({
+        event: "migrate.phase_duration",
+        phase: "schema",
+        durationMs,
+        outcome: "failed",
+        laneWaitMs: clock.laneWaitMs,
+        appliedCount: null,
+      });
+      return;
+    case "online":
+      timing.emit({
+        event: "migrate.phase_duration",
+        phase: "online",
+        durationMs,
+        outcome: "failed",
+      });
+      return;
+    case "done":
+      return;
+    default:
+      clock.phase satisfies never;
+      return panic("Migration phase clock is in an unknown phase");
+  }
+};
+
 type RunMigrationsOptions = {
   /** Local test templates replay existing cluster roles without changing source hashes. */
   readMigrations?: typeof readMigrationFiles;
@@ -444,6 +485,8 @@ type RunMigrationsOptions = {
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: the pauses between lock-wait attempts and how to wait them. */
   lockWaitRetry?: LockWaitRetry;
+  /** Where phase and online step durations go; JSON lines on stdout otherwise. */
+  timing?: MigrationTiming;
 };
 
 export const runMigrations = async ({
@@ -457,8 +500,17 @@ export const runMigrations = async ({
   runOnline = runOnlineMigrations,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
+  timing = DEFAULT_MIGRATION_TIMING,
 }: RunMigrationsOptions) => {
   let laneHeld = false;
+  // The phase in flight, so a failure reports the duration of the right one.
+  const clock: MigrationPhaseClock = {
+    phase: "schema",
+    startedAt: timing.clock(),
+    laneWaitMs: null,
+  };
+  const elapsedMs = () =>
+    Math.max(0, Math.round(timing.clock() - clock.startedAt));
   // A terminated session already dropped its advisory locks; unlocking on the
   // closed connection would replace the monitoring error with a close error.
   const session: { state: "open" | "terminated" } = { state: "open" };
@@ -469,6 +521,7 @@ export const runMigrations = async ({
     await connection.unsafe(liftTimeout);
     await connection.unsafe(takeLane);
     laneHeld = true;
+    clock.laneWaitMs = elapsedMs();
     await connection.unsafe(restoreTimeout);
 
     const migrations = readMigrations({ migrationsFolder });
@@ -497,6 +550,15 @@ export const runMigrations = async ({
         );
       }
       process.stdout.write(`${JSON.stringify(event)}\n`);
+      clock.phase = "done";
+      timing.emit({
+        event: "migrate.phase_duration",
+        phase: "schema",
+        durationMs: elapsedMs(),
+        outcome: preflight.status,
+        laneWaitMs: clock.laneWaitMs,
+        appliedCount: 0,
+      });
       return preflight;
     }
 
@@ -560,6 +622,22 @@ export const runMigrations = async ({
         `),
       remedy: "Migration completion requires every bundled migration hash.",
     });
+    // The schema SQL is done. The online phase takes no ACCESS EXCLUSIVE lock
+    // (concurrent index builds, validations, batched repairs), and an index
+    // build on a corpus-sized table runs for many minutes: holding the lane
+    // through it would stop every corpus writer for that long.
+    await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+    laneHeld = false;
+    timing.emit({
+      event: "migrate.phase_duration",
+      phase: "schema",
+      durationMs: elapsedMs(),
+      outcome: "applied",
+      laneWaitMs: clock.laneWaitMs,
+      appliedCount: inserted.length,
+    });
+    clock.phase = "online";
+    clock.startedAt = timing.clock();
     const onlineConnection: OnlineMigrationConnection = {
       terminate: async () => {
         session.state = "terminated";
@@ -577,8 +655,16 @@ export const runMigrations = async ({
       {
         indexGate: { ebs, hold: onlineIndexHold },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
+        timing,
       },
     );
+    clock.phase = "done";
+    timing.emit({
+      event: "migrate.phase_duration",
+      phase: "online",
+      durationMs: elapsedMs(),
+      outcome: online.type,
+    });
     const predictedNames = predicted.map(({ name }) => name);
     const insertedNames = inserted.map(({ name }) => name);
     if (online.type === "deferred") {
@@ -591,6 +677,9 @@ export const runMigrations = async ({
       };
     }
     return { status: "applied" as const, predictedNames, insertedNames };
+  } catch (error: unknown) {
+    emitFailedPhase(timing, clock, elapsedMs());
+    throw error;
   } finally {
     if (laneHeld && session.state === "open") {
       await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
@@ -610,11 +699,12 @@ type RunMigrationsUntilSettledOptions = RunMigrationsOptions & {
 };
 
 /**
- * Runs the migrator until its online phase completes. A deferred index build
- * ends the run, which releases the corpus schema lane, so corpus writers keep
- * running while the build waits for health. The next run takes the lane
- * again, re-reads the ledger (a newer bundle may have moved it meanwhile), and
- * resumes the online phase at the deferred index. The hold spans the runs, so
+ * Runs the migrator until its online phase completes. Every run releases the
+ * corpus schema lane before its online phase, so corpus writers keep running
+ * while an index builds or waits for health. A deferred index build ends the
+ * run; the next run takes the lane again, re-reads the ledger (a newer bundle
+ * may have moved it meanwhile), and resumes the online phase at the deferred
+ * index. The hold spans the runs, so
  * a long one alerts once.
  */
 export const runMigrationsUntilSettled = async ({

@@ -12,11 +12,11 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DOCUMENT_REVIEW_DECISION } from "@/api/lib/document-review/run-contract";
+import { authorizedWorkspaceIdSubquery } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 export type PositionDecisionSummary = {
   accepted: number;
@@ -78,10 +78,7 @@ export const readPositionDecisionOverlay = async ({
     ${documentReviewFindings.payload}->'finding'->>'standardSource' IS DISTINCT FROM 'reference'
     OR NOT EXISTS (
       SELECT 1 FROM ${passageWorkspaceIds} AS source(workspace_id)
-       WHERE source.workspace_id::uuid NOT IN (
-         SELECT aw.authorized_workspace_id
-           FROM ${stellaAuthorizedWorkspaces} aw
-       )
+       WHERE source.workspace_id::uuid NOT IN (${authorizedWorkspaceIdSubquery()})
     )
   )`;
   const fixText = sql`CASE WHEN ${fixReadable}

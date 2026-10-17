@@ -1,10 +1,11 @@
+import { Result } from "better-result";
 import { expect, expectTypeOf, test } from "bun:test";
 
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
-import { toAPIError } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 
 import {
@@ -34,15 +35,29 @@ test("HTTP diagnostics are validated once and retained as typed error data", () 
 });
 
 test("malformed HTTP diagnostic is rejected before it reaches rendering", () => {
-  expect(() =>
-    toAPIError({
-      status: 403,
-      value: {
-        message: "Refused",
-        providerDiagnostic: { ...diagnostic, code: "unregistered-code" },
-      },
-    }),
-  ).toThrow(ClientOperationError);
+  const outcome = Result.try({
+    try: () =>
+      toAPIError({
+        status: 403,
+        value: {
+          message: "Refused",
+          providerDiagnostic: { ...diagnostic, code: "unregistered-code" },
+        },
+      }),
+    catch: (error) => error,
+  });
+  expect(outcome.status).toBe("error");
+  if (outcome.status !== "error") {
+    throw new TypeError("Expected rejected diagnostic");
+  }
+  const rejected = outcome.error;
+  expect(ClientOperationError.is(rejected)).toBe(true);
+  if (!ClientOperationError.is(rejected)) {
+    throw new TypeError("Expected ClientOperationError");
+  }
+  expect(rejected.action).toBe("parse-provider-diagnostic");
+  expect(rejected.message).toBe("Invalid provider diagnostic response");
+  expect(shouldRetryAPIRequest(0, rejected)).toBe(false);
 });
 
 test("unknown provider diagnostics keep the complete reason without a catalogue code", () => {

@@ -8,6 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   ChatEditorController,
@@ -45,7 +46,7 @@ afterEach(() => {
   useChatDraftStore.getState().clearDraft(threadKey);
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ComposerHarness = ({ ref }: { ref: Ref<ChatEditorController> }) => {

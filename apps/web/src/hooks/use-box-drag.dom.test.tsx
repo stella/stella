@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { BoxDragAdjustment } from "@/hooks/use-box-drag";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
@@ -11,7 +12,7 @@ const { useBoxDrag } = await import("@/hooks/use-box-drag");
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const Harness = () => {
