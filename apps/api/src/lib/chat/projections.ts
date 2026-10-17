@@ -1774,9 +1774,7 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
       paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),
       results: v.array(
         v.strictObject({
-          // Null while the public-law surface is off (`FEATURE_PUBLIC_LAW`);
-          // without a stored slug the canonical route uses the document id.
-          appUrl: v.nullable(v.string()),
+          // The reader is primary when served; otherwise use the publisher.
           url: v.nullable(publicUrl()),
           source_url: v.optional(publicUrl()),
           country: v.string(),
@@ -1815,8 +1813,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
   // whole consolidation and do not continue, so only the text pages.
   nextCursor: v.nullable(passthroughId()),
   statute: v.strictObject({
-    // Nullable for the same reasons as search_legislation's `appUrl`.
-    appUrl: v.nullable(v.string()),
+    // Nullable for the same reasons as search_legislation's `url`.
     url: v.nullable(publicUrl()),
     source_url: v.optional(publicUrl()),
     charCount: v.nullable(v.number()),
