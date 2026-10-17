@@ -15,6 +15,7 @@ import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
 import { SIGNAL_VIEW } from "@stll/api-contract/signals";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { linkIconOptions } from "@/features/chat/link-icons";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { fileOptions, textFileOptions } from "@/lib/files/queries";
@@ -27,7 +28,9 @@ import type { ViewLayout } from "@/lib/types";
 import {
   applyResourceQueryActions,
   getWorkspaceRealtimeQueryActions,
+  getWorkspaceReconnectQueryActions,
   resourceMutation,
+  resourceQueryOptions,
   RESOURCE_MUTATION_CONTRACTS,
 } from "@/lib/workspace-realtime";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
@@ -164,6 +167,53 @@ const isQueryKeyPrefix = (prefix: QueryKey, key: QueryKey) =>
   prefix.every(
     (part, index) => JSON.stringify(part) === JSON.stringify(key[index]),
   );
+
+test("independent readers stay fresh across every resource event and reconnect", async () => {
+  const queryClient = new QueryClient();
+  const independent = resourceQueryOptions(
+    queryOptions({
+      queryKey: ["immutable-plan"],
+      queryFn: async () => "plan",
+      staleTime: Infinity,
+    }),
+    { type: "independent" },
+  );
+  const icon = linkIconOptions("example.test");
+  for (const { queryKey, meta } of [independent, icon]) {
+    queryClient.getQueryCache().build(queryClient, {
+      queryKey,
+      meta,
+      queryFn: async () => null,
+    });
+  }
+  try {
+    for (const resourceType of Object.values(RESOURCE_TYPE)) {
+      await applyResourceQueryActions(
+        queryClient,
+        getWorkspaceRealtimeQueryActions(
+          {
+            type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+            resourceType,
+          },
+          { queryClient, workspaceId: WORKSPACE_ID },
+        ),
+      );
+    }
+    await applyResourceQueryActions(
+      queryClient,
+      getWorkspaceReconnectQueryActions({
+        queryClient,
+        workspaceId: WORKSPACE_ID,
+      }),
+    );
+    expect(queryClient.getQueryState(independent.queryKey)?.isInvalidated).toBe(
+      false,
+    );
+    expect(queryClient.getQueryState(icon.queryKey)?.isInvalidated).toBe(false);
+  } finally {
+    queryClient.clear();
+  }
+});
 
 test("each migrated mutation still invalidates every prior cache target", async () => {
   const root = path.resolve(import.meta.dir, "../../../../");

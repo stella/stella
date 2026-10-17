@@ -56,10 +56,12 @@ type ResourceQueryScopeIdentity =
   | { type: "workspace"; workspaceId: string }
   | { type: "organization" };
 
-type ResourceReads = {
-  resources: readonly [ResourceType, ...ResourceType[]];
-  scope: ResourceQueryScopeIdentity;
-};
+type ResourceReads =
+  | {
+      resources: readonly [ResourceType, ...ResourceType[]];
+      scope: ResourceQueryScopeIdentity;
+    }
+  | { type: "independent" };
 
 type ResourceQueryMeta = Record<string, unknown> & {
   resourceReads?: ResourceReads;
@@ -72,12 +74,13 @@ declare module "@tanstack/react-query" {
   }
 }
 
-/** Cache identity remains owned by the existing query factory. */
+/** Declares resource dependencies or independence without changing cache identity. */
 export const resourceQueryOptions = <
   TOptions extends { queryKey: QueryKey; meta?: ResourceQueryMeta },
+  TReads extends ResourceReads,
 >(
   options: TOptions,
-  resourceReads: ResourceReads,
+  resourceReads: TReads,
 ) => ({
   ...options,
   meta: { ...options.meta, resourceReads },
@@ -469,6 +472,7 @@ const registeredResourceQueryActions = ({
         const reads = meta?.resourceReads;
         if (
           !reads ||
+          "type" in reads ||
           !reads.resources.some((resource) => resources.includes(resource))
         ) {
           return false;

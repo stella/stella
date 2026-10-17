@@ -498,11 +498,25 @@ const isValidHelperConfig = (
   module: ModuleIndex,
   config: ts.Expression | undefined,
   names: ReadonlySet<string>,
-): boolean =>
-  config !== undefined &&
-  hasExactProperties(config, ["resources", "scope"]) &&
-  isValidResourceList(module, config, names) &&
-  isValidScopeObject(objectProperty(config, "scope"));
+): boolean => {
+  if (!config) {
+    return false;
+  }
+  const type = objectProperty(config, "type");
+  if (type) {
+    const value = unwrap(type);
+    return (
+      hasExactProperties(config, ["type"]) &&
+      ts.isStringLiteral(value) &&
+      value.text === "independent"
+    );
+  }
+  return (
+    hasExactProperties(config, ["resources", "scope"]) &&
+    isValidResourceList(module, config, names) &&
+    isValidScopeObject(objectProperty(config, "scope"))
+  );
+};
 
 type MutationContract = { resources: string[]; writes: string[] };
 
@@ -1088,7 +1102,7 @@ const inspectMutationExecution = ({
 
 const findCall = (
   module: ModuleIndex,
-  location: { line: number; column: number },
+  location: { line: number; column: number; callee: string },
 ): ts.CallExpression | undefined => {
   if (
     location.line < 1 ||
@@ -1111,7 +1125,12 @@ const findCall = (
   );
   let result: ts.CallExpression | undefined;
   const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && node.getStart(module.source) === start) {
+    if (
+      ts.isCallExpression(node) &&
+      node.getStart(module.source) === start &&
+      node.expression.getText(module.source).replace(/\s+/gu, " ").trim() ===
+        location.callee
+    ) {
       result = node;
     }
     ts.forEachChild(node, visit);
@@ -1697,6 +1716,7 @@ type ReaderStatesArgs = {
     file: string;
     line: number;
     column: number;
+    callee: string;
   }) => ts.CallExpression | undefined;
 };
 const createReaderStates = ({
@@ -1808,7 +1828,7 @@ const invalidReaderHelperFindings = (
           id: `${module.file}:${READER_HELPER}:${line + 1}:${character + 1}:reader-helper`,
           file: module.file,
           reason:
-            "resourceQueryOptions requires exactly valid resources and scope metadata.",
+            "resourceQueryOptions requires valid resources and scope metadata or an explicit independent declaration.",
           disposition: "invalid-declaration",
         });
       }
@@ -1838,6 +1858,7 @@ export const inspectMutationQueryInvalidation = (
     file: string;
     line: number;
     column: number;
+    callee: string;
   }) => {
     const cached = calls.get(entry.id);
     if (cached) {

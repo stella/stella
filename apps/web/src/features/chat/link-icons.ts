@@ -2,8 +2,6 @@ import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
-
 import { getAnalytics } from "@/lib/analytics/provider";
 import { linkIconsApi } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
@@ -74,10 +72,7 @@ export const linkIconOptions = (hostname: string) => {
         return { type: "icon", blob: bytes };
       },
     }),
-    {
-      resources: [RESOURCE_TYPE.CHAT_MESSAGE],
-      scope: { type: "organization" },
-    },
+    { type: "independent" },
   );
   const nextTemporaryOutcome = (client: QueryClient) => {
     const previous = client.getQueryData(options.queryKey);
@@ -123,9 +118,6 @@ export const linkIconOptions = (hostname: string) => {
         }
       },
     }),
-    {
-      resources: [RESOURCE_TYPE.CHAT_MESSAGE],
-      scope: { type: "organization" },
-    },
+    { type: "independent" },
   );
 };

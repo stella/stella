@@ -8,7 +8,6 @@ import { defaultComponents } from "streamdown";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
 import {
   isTableChartPlanUsable,
   TABLE_CHART_KINDS,
@@ -109,10 +108,7 @@ const ChartableTable = ({
             gcTime: Infinity,
             retry: false,
           },
-          {
-            resources: [RESOURCE_TYPE.CHAT_MESSAGE],
-            scope: { type: "organization" },
-          },
+          { type: "independent" },
         ),
       );
     });

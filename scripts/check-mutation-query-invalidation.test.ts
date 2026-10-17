@@ -121,6 +121,64 @@ test("the canonical mutation and reader helpers satisfy the AST guard", () => {
   expect(violations(validSources)).toEqual([]);
 });
 
+test("chained query receivers preserve the executing reader call", () => {
+  for (const receiver of [
+    "useQueryClient()",
+    "getClient()",
+    "getClient().nested()",
+  ]) {
+    for (const method of ["fetchQuery", "ensureQueryData", "prefetchQuery"]) {
+      const sources = [
+        ...validSources.slice(0, 2),
+        {
+          file: "apps/web/src/features.ts",
+          text: `
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+export const read = () => ${receiver}.${method}(resourceQueryOptions(
+  { queryKey: ["reader"], queryFn: async () => [] },
+  { resources: [RESOURCE_TYPE.ENTITY], scope: { type: "organization" } },
+));`,
+        },
+      ];
+      const census = inspectMutationQuerySources(sources);
+      expect(
+        census.readers.some(({ callee }) => callee === `${receiver}.${method}`),
+      ).toBe(true);
+      expect(inspectMutationQueryInvalidation(census, sources)).toEqual([]);
+    }
+  }
+});
+
+test("resource-independent readers require an explicit closed declaration", () => {
+  for (const config of [
+    { text: '{ type: "independent" }', valid: true },
+    { text: "{ type: 'independent' }", valid: true },
+    { text: '{ type: "unknown" }', valid: false },
+    { text: '{ type: "independent", resources: [] }', valid: false },
+    {
+      text: '{ resources: [], scope: { type: "organization" } }',
+      valid: false,
+    },
+  ]) {
+    const sources = [
+      ...validSources.slice(0, 2),
+      {
+        file: "apps/web/src/features.ts",
+        text: `
+import { queryOptions } from "@tanstack/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+export const options = resourceQueryOptions(queryOptions({ queryKey: ["immutable"], queryFn: async () => [] }), ${config.text});`,
+      },
+    ];
+    if (config.valid) {
+      expect(violations(sources)).toEqual([]);
+      continue;
+    }
+    assertInvalidCannotBeBaselined(violations(sources));
+  }
+});
+
 test("an unwrapped mutation fails the guard", () => {
   const wrongFixture = [
     ...validSources.slice(0, 2),
