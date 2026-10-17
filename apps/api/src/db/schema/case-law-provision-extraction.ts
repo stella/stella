@@ -300,6 +300,7 @@ export const caseLawProvisionExtractions = p.pgTable(
     desiredInputDigest: bytea("desired_input_digest").notNull(),
     lane: p.text({ enum: PROVISION_EXTRACTION_LANES }).notNull(),
     dueAt: timestamptz("due_at"),
+    pendingSince: timestamptz("pending_since"),
     enqueueReason: p.text("enqueue_reason", {
       enum: PROVISION_EXTRACTION_ENQUEUE_REASONS,
     }),
@@ -362,6 +363,14 @@ export const caseLawProvisionExtractions = p.pgTable(
       .index("case_law_provision_extractions_jurisdiction_due_idx")
       .on(t.jurisdiction, t.lane, t.dueAt, t.decisionId)
       .where(claimableProvisionExtraction(t)),
+    p
+      .index("case_law_provision_extractions_pending_idx")
+      .on(t.jurisdiction, t.pendingSince, t.decisionId)
+      .where(sql`${t.pendingSince} IS NOT NULL`),
+    p
+      .index("case_law_provision_extractions_clock_seed_idx")
+      .on(t.decisionId)
+      .where(sql`${t.dueAt} IS NOT NULL AND ${t.pendingSince} IS NULL`),
     p
       .index("case_law_provision_extractions_retry_idx")
       .on(t.retryNotBefore, t.decisionId)

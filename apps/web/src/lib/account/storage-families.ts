@@ -205,6 +205,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Restored inspector tabs that have not yet settled in this tab: a
+  // short-lived safety flag, gone when its owner leaves.
+  {
+    area: "session",
+    prefix: "stella:inspector-restore-pending:v1:",
+    owner: "scoped",
+    retention: "cleared",
+  },
   // Whether the inspector is minimized: a layout choice.
   {
     area: "local",
@@ -273,6 +281,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.provision-question:",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // A desktop app's linking challenge, held across the sign-in redirect
+  // until the desktop settings page consumes it once.
+  {
+    area: "session",
+    prefix: "stella.desktop-account-link",
     owner: "carried",
     retention: "cleared",
   },

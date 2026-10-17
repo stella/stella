@@ -7,7 +7,7 @@ import * as v from "valibot";
  * How far a country is open to the public.
  *
  * - `pending_public`: nothing is public.
- * - `pages_public`: the country's decision and statute pages are served,
+ * - `pages_public`: the domain's document pages are served,
  *   listed in the sitemaps and open to crawlers, but the country is not yet
  *   part of search, the API search surfaces or MCP.
  * - `admitted`: pages are public and the country is admitted to search, the
@@ -42,16 +42,28 @@ export const PUBLIC_COUNTRY_SURFACE_OPEN = {
   Record<PublicCountryCapability, boolean>
 >;
 
+// parser-output-unchanged: per-domain publication capabilities only gate public reads; ingestion identities and parsed document output remain unchanged.
+export const PUBLIC_LAW_DOMAIN = {
+  caseLaw: "caseLaw",
+  legislation: "legislation",
+} as const;
+export const PUBLIC_LAW_DOMAINS = Object.values(PUBLIC_LAW_DOMAIN);
+export type PublicLawDomain =
+  (typeof PUBLIC_LAW_DOMAIN)[keyof typeof PUBLIC_LAW_DOMAIN];
+
 /** Public admission, independent of whether ingestion holds rows for a country. */
 export const PUBLIC_COUNTRY_CAPABILITIES = {
-  AUT: "pending_public",
-  CZE: "admitted",
-  EU: "pending_public",
-  HUN: "pending_public",
-  POL: "pending_public",
-  SVK: "pending_public",
-  USA: "pending_public",
-} as const satisfies Record<string, PublicCountryCapability>;
+  AUT: { caseLaw: "pending_public", legislation: "pending_public" },
+  CZE: { caseLaw: "admitted", legislation: "admitted" },
+  EU: { caseLaw: "pending_public", legislation: "pending_public" },
+  HUN: { caseLaw: "pending_public", legislation: "pending_public" },
+  POL: { caseLaw: "pending_public", legislation: "pending_public" },
+  SVK: { caseLaw: "pending_public", legislation: "pending_public" },
+  USA: { caseLaw: "pending_public", legislation: "pending_public" },
+} as const satisfies Record<
+  string,
+  Record<PublicLawDomain, PublicCountryCapability>
+>;
 
 export type PublicCountry = keyof typeof PUBLIC_COUNTRY_CAPABILITIES;
 
@@ -63,32 +75,31 @@ export const PUBLIC_COUNTRIES = Object.keys(PUBLIC_COUNTRY_CAPABILITIES).filter(
   isPublicCountry,
 );
 
-type AdmittedPublicCountry = {
+type PublicCountryOnSurface<
+  Domain extends PublicLawDomain,
+  Surface extends PublicCountrySurface,
+> = {
   [
     Country in PublicCountry
-  ]: (typeof PUBLIC_COUNTRY_CAPABILITIES)[Country] extends "admitted"
+  ]: (typeof PUBLIC_COUNTRY_SURFACE_OPEN)[Surface][(typeof PUBLIC_COUNTRY_CAPABILITIES)[Country][Domain]] extends true
     ? Country
     : never;
 }[PublicCountry];
 
-export const ADMITTED_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
-  (country): country is AdmittedPublicCountry =>
-    PUBLIC_COUNTRY_CAPABILITIES[country] === "admitted",
-);
-
-type PublicCountryOnSurface<Surface extends PublicCountrySurface> = {
-  [
-    Country in PublicCountry
-  ]: (typeof PUBLIC_COUNTRY_SURFACE_OPEN)[Surface][(typeof PUBLIC_COUNTRY_CAPABILITIES)[Country]] extends true
-    ? Country
-    : never;
-}[PublicCountry];
-
-/** Countries whose decision and statute pages are served, listed and crawlable. */
-export const PAGES_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
-  (country): country is PublicCountryOnSurface<"pages"> =>
-    PUBLIC_COUNTRY_SURFACE_OPEN.pages[PUBLIC_COUNTRY_CAPABILITIES[country]],
-);
+/** A caller must choose both its domain and surface; admission never crosses domains. */
+export const publicCountriesFor = <
+  Domain extends PublicLawDomain,
+  Surface extends PublicCountrySurface,
+>(
+  domain: Domain,
+  surface: Surface,
+) =>
+  PUBLIC_COUNTRIES.filter(
+    (country): country is PublicCountryOnSurface<Domain, Surface> =>
+      PUBLIC_COUNTRY_SURFACE_OPEN[surface][
+        PUBLIC_COUNTRY_CAPABILITIES[country][domain]
+      ],
+  );
 
 export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
 
@@ -100,9 +111,11 @@ export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
  */
 export const PUBLIC_COUNTRY_UNAVAILABLE_STATUS = 404;
 
+// parser-output-unchanged: refusal domains and copy affect API answers, not ingestion parsing.
 export const publicCountryUnavailableSchema = v.strictObject({
   code: v.literal(PUBLIC_COUNTRY_UNAVAILABLE_CODE),
   status: v.literal("unavailable"),
+  domain: v.picklist(PUBLIC_LAW_DOMAINS),
   country: v.picklist(PUBLIC_COUNTRIES),
   reason: v.picklist(["pages_public", "pending_public", "withdrawn"]),
   message: v.string(),
@@ -121,11 +134,24 @@ type ClosedCapability = Exclude<PublicCountryCapability, "admitted">;
  * that public law is unavailable.
  */
 const PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE = {
-  pages_public:
-    "Public-law search is not available for this country; its public pages are.",
-  pending_public: "Public law for this country is not available.",
-  withdrawn: "Public law for this country is not available.",
-} as const satisfies Record<ClosedCapability, string>;
+  caseLaw: {
+    pages_public:
+      "Case-law search is not available for this country; its decision pages are.",
+    pending_public: "Case law for this country is not available.",
+    withdrawn: "Case law for this country is not available.",
+  },
+  legislation: {
+    pages_public:
+      "Legislation search is not available for this country; its legislation pages are.",
+    pending_public: "Legislation for this country is not available.",
+    withdrawn: "Legislation for this country is not available.",
+  },
+} as const satisfies Record<PublicLawDomain, Record<ClosedCapability, string>>;
+
+const PUBLIC_COUNTRY_UNAVAILABLE_HINT = {
+  caseLaw: "Choose a country with available case law:",
+  legislation: "Choose a country with available legislation:",
+} as const satisfies Record<PublicLawDomain, string>;
 
 /**
  * Why a capability is closed on a surface, or null when it is open. The table
@@ -156,36 +182,62 @@ const closedReason = (
  * The same answer over an explicit capability map. The default map is the
  * contract; tests inject one to exercise a state no country holds today.
  */
-export const publicCountryUnavailableIn = (
-  capabilities: Readonly<Record<PublicCountry, PublicCountryCapability>>,
-  input: string,
-  surface: PublicCountrySurface,
-): PublicCountryUnavailable | null => {
+export type PublicCountryCapabilities = Readonly<
+  Record<
+    PublicCountry,
+    Readonly<Record<PublicLawDomain, PublicCountryCapability>>
+  >
+>;
+
+type PublicCountryUnavailableOptions = {
+  capabilities: PublicCountryCapabilities;
+  domain: PublicLawDomain;
+  input: string;
+  surface: PublicCountrySurface;
+};
+
+export const publicCountryUnavailableIn = ({
+  capabilities,
+  domain,
+  input,
+  surface,
+}: PublicCountryUnavailableOptions): PublicCountryUnavailable | null => {
   const country = input.trim().toUpperCase();
   if (!isPublicCountry(country)) {
     return null;
   }
-  const reason = closedReason(surface, capabilities[country]);
+  const reason = closedReason(surface, capabilities[country][domain]);
   if (reason === null) {
     return null;
   }
   const available = PUBLIC_COUNTRIES.filter(
     (candidate) =>
-      PUBLIC_COUNTRY_SURFACE_OPEN[surface][capabilities[candidate]],
+      PUBLIC_COUNTRY_SURFACE_OPEN[surface][capabilities[candidate][domain]],
   );
   return {
     code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
     status: "unavailable",
+    domain,
     country,
     reason,
-    message: PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE[reason],
-    hint: `Choose an available country: ${available.join(", ")}.`,
+    message: PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE[domain][reason],
+    hint: `${PUBLIC_COUNTRY_UNAVAILABLE_HINT[domain]} ${available.join(", ")}.`,
   };
 };
 
 /** Unknown countries remain input errors; advertised countries explain admission on the named surface. */
+type PublicCountrySurfaceOptions = {
+  domain: PublicLawDomain;
+  surface: PublicCountrySurface;
+};
+
 export const publicCountryUnavailable = (
   input: string,
-  surface: PublicCountrySurface,
+  { domain, surface }: PublicCountrySurfaceOptions,
 ): PublicCountryUnavailable | null =>
-  publicCountryUnavailableIn(PUBLIC_COUNTRY_CAPABILITIES, input, surface);
+  publicCountryUnavailableIn({
+    capabilities: PUBLIC_COUNTRY_CAPABILITIES,
+    domain,
+    input,
+    surface,
+  });

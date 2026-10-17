@@ -246,6 +246,7 @@ export const readCaseLawCorpusStatusHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const countryRead = readPublicLawCountry(country, {
+    domain: "caseLaw",
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     surface: "search",
   });

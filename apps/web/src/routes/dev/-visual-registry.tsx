@@ -19,6 +19,20 @@ const visualLoaders = {
       return { default: McpReconnectPlayground };
     },
   },
+  "hungarian-decision": {
+    load: async () => {
+      const { HungarianDecisionPlayground } =
+        await import("./-components/hungarian-decision-playground");
+      return { default: HungarianDecisionPlayground };
+    },
+  },
+  "table-chart": {
+    load: async () => {
+      const { TableChartPlayground } =
+        await import("./-components/table-chart-playground");
+      return { default: TableChartPlayground };
+    },
+  },
   "oauth-consent": {
     load: async () => {
       const { OAuthConsentPlayground } =
@@ -38,6 +52,13 @@ const visualLoaders = {
       const { ChatLongPastePlayground } =
         await import("./-components/chat-long-paste-playground");
       return { default: ChatLongPastePlayground };
+    },
+  },
+  "chat-link-icons": {
+    load: async () => {
+      const { ChatLinkIconsPlayground } =
+        await import("./-components/chat-link-icons-playground");
+      return { default: ChatLinkIconsPlayground };
     },
   },
   "reader-answers": {

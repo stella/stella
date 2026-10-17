@@ -28,6 +28,7 @@ import type {
   ReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { sleep } from "@stll/concurrency/sleep";
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
 import { classifyFailure } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -96,6 +97,10 @@ import {
   createProviderCallError,
   providerRequestIdFrom,
 } from "@/api/lib/errors/provider-call-failure";
+import {
+  PROVIDER_RETRY_WAIT_CAP_MS,
+  providerRetryDelayMs,
+} from "@/api/lib/errors/provider-retry-delay";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -294,7 +299,11 @@ export const withGenerationDeadline = async <T>(
     abortSignal,
     deadlineMs,
   }: GenerationDeadlineOption & { abortSignal?: AbortSignal | undefined },
-  run: (abortSignal: AbortSignal | undefined) => Promise<T>,
+  run: (
+    abortSignal: AbortSignal | undefined,
+    /** When the deadline falls, on the `performance.now()` clock. */
+    deadlineAt?: number,
+  ) => Promise<T>,
 ): Promise<T> => {
   if (deadlineMs === undefined) {
     return await run(abortSignal);
@@ -302,6 +311,7 @@ export const withGenerationDeadline = async <T>(
   if (!Number.isInteger(deadlineMs) || deadlineMs <= 0) {
     return panic("A generation deadline must be a positive integer of ms");
   }
+  const deadlineAt = performance.now() + deadlineMs;
   const settled = await Result.tryPromise({
     try: async () =>
       await withTimeout(
@@ -310,6 +320,7 @@ export const withGenerationDeadline = async <T>(
             abortSignal === undefined
               ? deadlineSignal
               : AbortSignal.any([abortSignal, deadlineSignal]),
+            deadlineAt,
           ),
         { label: GENERATION_DEADLINE_LABEL, timeoutMs: deadlineMs },
       ),
@@ -422,13 +433,80 @@ const finishAccepted = (
   }
 };
 
+/**
+ * The provider's retry delay when a call failed for a rate limit or quota,
+ * whether the failure is already a `ProviderCallError` or still the SDK's.
+ */
+const rateLimitRetryDelayMs = (error: unknown): number | undefined => {
+  if (error instanceof ProviderCallError) {
+    return error.kind === "quota_exhausted" ? error.retryAfterMs : undefined;
+  }
+  return classifyAIError(error) === "quota_exhausted"
+    ? providerRetryDelayMs(error)
+    : undefined;
+};
+
+/**
+ * Wait out a short provider retry delay and try once more. A call refused
+ * for a rate limit whose stated delay fits `PROVIDER_RETRY_WAIT_CAP_MS` runs
+ * again after that delay; a longer delay, no stated delay, any other failure
+ * and a second refusal all reach the caller unchanged, the delay still on the
+ * error so the caller can say when to retry. A wait the call's deadline
+ * cannot cover is not started: the refusal reaches the caller with its delay
+ * rather than ending as a timeout that forgot it. The wait also honours the
+ * abort signal.
+ */
+export const withProviderRetryWait = async <T>(
+  abortSignal: AbortSignal | undefined,
+  run: () => Promise<T>,
+  deadlineAt?: number,
+): Promise<T> => {
+  const first = await Result.tryPromise({
+    try: run,
+    catch: (error: unknown) => error,
+  });
+  if (Result.isOk(first)) {
+    return first.value;
+  }
+  const delay = rateLimitRetryDelayMs(first.error);
+  if (
+    delay === undefined ||
+    delay > PROVIDER_RETRY_WAIT_CAP_MS ||
+    (deadlineAt !== undefined && performance.now() + delay >= deadlineAt)
+  ) {
+    throw first.error;
+  }
+  const waited = await Result.tryPromise({
+    try: async () =>
+      await sleep(
+        delay,
+        abortSignal === undefined ? {} : { signal: abortSignal },
+      ),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(waited)) {
+    // A cancellation during the wait ends the run as one during the call
+    // would; a deadline settles in `withGenerationDeadline` either way.
+    if (isAbortRejection({ error: waited.error, signal: abortSignal })) {
+      throw cancelledGenerationError();
+    }
+    throw waited.error;
+  }
+  return await run();
+};
+
 export const generateTanStackTextForRole = async (
   options: GenerateTanStackTextForRoleOptions,
 ): Promise<string> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
-      await generateTanStackTextWithin({ ...options, abortSignal }),
+    async (abortSignal, deadlineAt) =>
+      await withProviderRetryWait(
+        abortSignal,
+        async () =>
+          await generateTanStackTextWithin({ ...options, abortSignal }),
+        deadlineAt,
+      ),
   );
 
 const generateTanStackTextWithin = async (
@@ -1371,8 +1449,13 @@ export const generateTanStackObjectForRole = async <
 ): Promise<v.InferOutput<TSchema>> =>
   await withGenerationDeadline(
     options,
-    async (abortSignal) =>
-      await generateTanStackObjectWithin({ ...options, abortSignal }),
+    async (abortSignal, deadlineAt) =>
+      await withProviderRetryWait(
+        abortSignal,
+        async () =>
+          await generateTanStackObjectWithin({ ...options, abortSignal }),
+        deadlineAt,
+      ),
   );
 
 const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>({
