@@ -596,7 +596,7 @@ describe("resolution across runs", () => {
       expect(planned.allowed).toContain(docs);
       const published = publish(origin, head, out);
       expect(published.exitCode, published.stderr).toBe(0);
-      const manifest = JSON.parse(
+      const manifest: { tree: string } = JSON.parse(
         readFileSync(path.join(out, "manifest.json"), "utf-8"),
       );
       if (operation === "delete") {
