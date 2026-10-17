@@ -892,6 +892,35 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
+export const TAILWIND_DESIGN_SYSTEM_ENTRY_POINTS = [
+  {
+    files: "packages/mcp-apps/**",
+    use: "packages/mcp-apps/src/shared/style.css",
+  },
+  { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
+  {
+    files: "apps/desktop/**",
+    use: "apps/desktop/src/mainview/index.css",
+  },
+  {
+    files: "apps/playground/**",
+    use: "apps/playground/src/styles.css",
+  },
+  {
+    files: "apps/landing/**",
+    use: "apps/landing/src/styles/global.css",
+  },
+  // Shared packages use the web entry point as the canonical complete
+  // @stll/ui theme. Consumer-specific entry points are intentionally
+  // checked above before this shared fallback.
+  { files: "packages/ui/**", use: "apps/web/src/styles/app.css" },
+  { files: "packages/chat/**", use: "apps/web/src/styles/app.css" },
+  {
+    files: "packages/workspace-ui/**",
+    use: "apps/web/src/styles/app.css",
+  },
+] as const;
+
 const config = defineConfig({
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
@@ -915,34 +944,7 @@ const config = defineConfig({
       linkComponents: [{ name: "Link", attributes: ["to"] }],
     },
     tailwindcss: {
-      entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
-        { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
-        {
-          files: "apps/desktop/**",
-          use: "apps/desktop/src/mainview/index.css",
-        },
-        {
-          files: "apps/playground/**",
-          use: "apps/playground/src/styles.css",
-        },
-        {
-          files: "apps/landing/**",
-          use: "apps/landing/src/styles/global.css",
-        },
-        // Shared packages use the web entry point as the canonical complete
-        // @stll/ui theme. Consumer-specific entry points are intentionally
-        // checked above before this shared fallback.
-        { files: "packages/ui/**", use: "apps/web/src/styles/app.css" },
-        { files: "packages/chat/**", use: "apps/web/src/styles/app.css" },
-        {
-          files: "packages/workspace-ui/**",
-          use: "apps/web/src/styles/app.css",
-        },
-      ],
+      entryPoint: TAILWIND_DESIGN_SYSTEM_ENTRY_POINTS,
       // `style` and `styles` commonly hold CSSProperties or unrelated values;
       // Tailwind classes remain covered in JSX attributes and cn/cva calls.
       exclude: { variablePatterns: ["^styles?$"] },
