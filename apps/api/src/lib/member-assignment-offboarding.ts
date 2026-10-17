@@ -32,6 +32,7 @@ import {
   flowDefinitions,
   flowRunSteps,
   mcpUserConnections,
+  outboundActions,
   sharepointConnections,
   sharepointOAuthState,
   mcpOAuthState,
@@ -1572,6 +1573,14 @@ export const removeOrganizationMemberInTransaction = async (
       ),
     );
   await tx
+    .delete(outboundActions)
+    .where(
+      and(
+        eq(outboundActions.organizationId, organizationId),
+        eq(outboundActions.userId, userId),
+      ),
+    );
+  await tx
     .delete(mcpOAuthState)
     .where(
       and(
@@ -1662,6 +1671,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [mcpUserConnections.userId, "cleared"],
   [mcpOAuthState.userId, "cleared"],
   [sharepointConnections.userId, "cleared"],
+  [outboundActions.userId, "cleared"],
   [sharepointOAuthState.userId, "cleared"],
   [invitation.inviterId, "cleared"],
   [correspondence.assigneeId, "cleared"],

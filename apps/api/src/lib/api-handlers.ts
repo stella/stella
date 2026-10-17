@@ -256,6 +256,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `human_confirmation`: the user's own confirmation of an action an agent
+ *   prepared (for example sending an email they reviewed); an agent must never
+ *   be able to confirm for them.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -279,7 +282,8 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "human_confirmation";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
