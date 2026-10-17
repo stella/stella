@@ -326,7 +326,6 @@ export const RESULT_CONVENTION_EXCLUDE_GLOBS = [
   ...RESULT_BOUNDARY_GLOBS,
   "apps/api/evals/**",
   "apps/api/src/tests/**",
-  "apps/api/src/mcp/generated/**",
   "**/*.test.*",
   "**/*.spec.*",
   "**/__tests__/**",

@@ -2584,6 +2584,8 @@ const listSearchCaseLawProvision = async ({
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
+const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2605,7 +2607,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
   } = parsed.output;
   const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
-  const unavailable = publicCountryUnavailable(country, "search");
+  const unavailable = publicCountryUnavailable(country, SEARCH_ADMISSION);
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
