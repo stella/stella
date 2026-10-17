@@ -7,16 +7,17 @@ import {
   queueChatSend,
   settleQueuedChatSend,
 } from "@/features/chat/queued-chat-sends";
+import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
-const thread = (threadId: string): ChatThreadRef => ({
+const thread = (): ChatThreadRef => ({
   scope: "global",
-  threadId,
+  threadId: createChatThreadId(),
 });
 
 describe("queued chat sends", () => {
   test("a message being sent stays discoverable, so a second press joins its thread", () => {
-    const ref = thread("queued-sending");
+    const ref = thread();
     queueChatSend(ref, "<p>Question</p>");
     expect(claimQueuedChatSend(ref)).toBe("<p>Question</p>");
     // Pressed again while the first send is still in flight.
@@ -29,7 +30,7 @@ describe("queued chat sends", () => {
   });
 
   test("a send that did not go through waits again for the next attempt", () => {
-    const ref = thread("queued-retry");
+    const ref = thread();
     queueChatSend(ref, "<p>Retry</p>");
     expect(claimQueuedChatSend(ref)).toBe("<p>Retry</p>");
     settleQueuedChatSend(ref, "not-sent");
