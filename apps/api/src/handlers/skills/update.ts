@@ -259,6 +259,8 @@ const updateSkill = createSafeRootHandler(
             id: agentSkills.id,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
+            boundClientId: agentSkills.boundClientId,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
             slug: agentSkills.slug,

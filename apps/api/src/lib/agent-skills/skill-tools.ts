@@ -7,6 +7,7 @@ import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
 import {
@@ -44,6 +45,8 @@ import {
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveSkillContext | null | undefined;
+  /** Where the conversation may use a bound skill; reads resolve within it. */
+  bindingScope: SkillBindingScope;
   organizationId: SafeId<"organization">;
   /**
    * A `validation` set registers the catalog tools whatever `skills` holds:
@@ -72,6 +75,7 @@ type CreateSkillToolsProps = {
 
 export const createSkillTools = ({
   activeSkillContext,
+  bindingScope,
   organizationId,
   purpose = CHAT_TOOL_SET_PURPOSE.run,
   recordAuditEvent,
@@ -142,6 +146,7 @@ export const createSkillTools = ({
       const skill = unwrapSkillRead(
         await loadAvailableChatSkill({
           activeSkillId,
+          bindingScope,
           organizationId,
           safeDb,
           skillName,
@@ -194,6 +199,7 @@ export const createSkillTools = ({
       const read = unwrapSkillRead(
         await readAvailableChatSkillResource({
           activeSkillId,
+          bindingScope,
           organizationId,
           path,
           safeDb,

@@ -85,6 +85,8 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -546,6 +548,11 @@ export type GetChatToolsProps = {
   disabledNativeToolSlugs?: readonly string[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
+  /**
+   * Where the turn may use a bound skill. Absent (validation and tool-name
+   * sets, which never run a skill read) means unbound skills only.
+   */
+  skillBindingScope?: SkillBindingScope | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /** Records reads that run without an approval, such as `load-skill`. */
@@ -847,6 +854,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     disabledNativeToolSlugs,
     registryDispatch,
     skillMetadata,
+    skillBindingScope = NO_SKILL_BINDING_SCOPE,
     activeSkillContext,
     recordAuditEvent,
     recordReadAuditEvent,
@@ -935,6 +943,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   const skillTools = createSkillTools({
     activeSkillContext,
+    bindingScope: skillBindingScope,
     organizationId,
     purpose,
     recordAuditEvent,

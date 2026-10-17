@@ -6,6 +6,11 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
 import {
+  NO_SKILL_BINDING_SCOPE,
+  resolveSkillBindingScope,
+} from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
+import {
   offerSkillsToModel,
   SKILL_INVOCATION,
 } from "@/api/lib/agent-skills/invocation";
@@ -116,6 +121,60 @@ const catalogOf = (slug: string) =>
     ],
   });
 
+describe("bound skills in the skill tools", () => {
+  test("serve a matter-bound skill only in a conversation of that matter", async () => {
+    const slug = `matter-bound-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    await testDb
+      .update(agentSkills)
+      .set({ boundWorkspaceId: ids.wsA1 })
+      .where(eq(agentSkills.id, skillId));
+    const toolsIn = (bindingScope: SkillBindingScope) =>
+      createSkillTools({
+        bindingScope,
+        organizationId: ids.orgA,
+        safeDb,
+        skills: catalogOf(slug),
+        userId: ids.userA2,
+      });
+    const scopeOf = async (
+      homeWorkspaceId: SafeId<"workspace"> | null,
+      otherWorkspaceIds: SafeId<"workspace">[],
+    ) => {
+      const scope = await resolveSkillBindingScope({
+        homeWorkspaceId,
+        otherWorkspaceIds,
+        safeDb,
+      });
+      if (Result.isError(scope)) {
+        throw scope.error;
+      }
+      return scope.value;
+    };
+
+    // Even a catalog that names the skill cannot load it outside its matter.
+    const otherMatter = await scopeOf(ids.wsA2, []);
+    expectNotFound(
+      await executeTool({
+        input: { skillName: slug },
+        tool: toolsIn(otherMatter)["load-skill"],
+      }),
+    );
+    expectNotFound(
+      await executeTool({
+        input: { path: "references/checklist.md", skillName: slug },
+        tool: toolsIn(otherMatter)["read-skill-resource"],
+      }),
+    );
+
+    const loaded = await executeTool({
+      input: { skillName: slug },
+      tool: toolsIn(await scopeOf(ids.wsA1, [ids.wsA1]))["load-skill"],
+    });
+    expect(Result.isOk(loaded)).toBe(true);
+  });
+});
+
 describe("skill catalog tools", () => {
   test("refuse a manual skill the turn did not invoke, even by its exact slug", async () => {
     const slug = `manual-${Bun.randomUUIDv7()}`;
@@ -132,6 +191,7 @@ describe("skill catalog tools", () => {
     };
 
     const uninvoked = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skills: offerSkillsToModel({
@@ -145,6 +205,7 @@ describe("skill catalog tools", () => {
     // A validation set registers the tools whatever the catalog holds; the
     // name check still refuses the manual skill when the tool runs.
     const validation = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       purpose: CHAT_TOOL_SET_PURPOSE.validation,
       safeDb,
@@ -168,6 +229,7 @@ describe("skill catalog tools", () => {
     );
 
     const invoked = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skills: offerSkillsToModel({
@@ -187,6 +249,7 @@ describe("skill catalog tools", () => {
     const slug = `vanishing-${Bun.randomUUIDv7()}`;
     const skillId = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skills: catalogOf(slug),
@@ -213,6 +276,7 @@ describe("skill catalog tools", () => {
     const slug = `disabled-later-${Bun.randomUUIDv7()}`;
     const skillId: SafeId<"agentSkill"> = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skills: catalogOf(slug),
@@ -236,6 +300,7 @@ describe("skill catalog tools", () => {
     const slug = `audited-${Bun.randomUUIDv7()}`;
     const skillId = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       recordReadAuditEvent: createAuditRecorder({
         organizationId: ids.orgA,

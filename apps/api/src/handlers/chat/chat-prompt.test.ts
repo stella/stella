@@ -19,6 +19,7 @@ import type {
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -882,6 +883,7 @@ describe("chat prompt builders", () => {
 
   test("active skill section anchors this skill and its editable files", () => {
     const activeSkill = {
+      binding: UNBOUND,
       body: "# Skill body\nUse the active workflow.",
       description: "Active workflow description.",
       displayName: "Active Workflow",
@@ -913,6 +915,7 @@ describe("chat prompt builders", () => {
   test("marks long active skill bodies as truncated", () => {
     const hiddenTail = "tail that must not be treated as visible";
     const activeSkill = {
+      binding: UNBOUND,
       body: `${"a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS)}${hiddenTail}`,
       description: "Active workflow description.",
       displayName: "Active Workflow",

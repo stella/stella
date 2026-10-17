@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   canEditActiveSkill,
   loadAvailableChatSkill,
@@ -252,12 +253,14 @@ describe("available active chat skills", () => {
 
     const activeLoadResult = await loadAvailableChatSkill({
       activeSkillId: activeTeamSkillId,
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skillName: slug,
       userId: ids.userA2,
     });
     const fallbackLoadResult = await loadAvailableChatSkill({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
       skillName: slug,
@@ -265,6 +268,7 @@ describe("available active chat skills", () => {
     });
     const activeReadResult = await readAvailableChatSkillResource({
       activeSkillId: activeTeamSkillId,
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       path: "references/shared.md",
       safeDb,

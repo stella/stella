@@ -187,6 +187,12 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
+    "count": 1,
+    "reason": "Existing seed transaction; the condition satisfies check changes its source fingerprint while preserving emitted JavaScript and transaction boundaries."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "3574339da7a6a2fd6b9484d7b820e1a11d0a284004bdf688de7d9755d6380caa",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -206,12 +212,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "46d892dae3ccf484a29dbbfd796ba3e1384185f86a145ae10d627ef1d05d8e04",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -687,7 +687,7 @@
     "file": "apps/api/src/db/scoped.ts",
     "fingerprint": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
     "count": 1,
-    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
+    "reason": "Reuse request feature decisions within the existing scoped transaction; transaction boundary and lock acquisitions are unchanged."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -1725,7 +1725,7 @@
     "file": "apps/api/src/handlers/seller-profiles/update.ts",
     "fingerprint": "5ffac904ba623fc6e5e375de08bef306b4e9c27b22c0de3934b7a0fd55d78c55",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/seller-profiles/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The same row lock now also reads vat_id and vat_payer so the VAT payer rule is checked against the locked row; no new acquisition."
   },
   {
     "file": "apps/api/src/handlers/sharepoint/oauth-callback.ts",
@@ -1771,9 +1771,9 @@
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
-    "fingerprint": "362b7954c5875a3730ec3e485c127c17f540ff820cc646e548ed27b9fefd1476",
+    "fingerprint": "270bd1490b6feb89cea19cc72d7088996750ec56eee035496196bbeb9ee45912",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/skills/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The existing skill row lock also selects the binding fields for management authorization; lock acquisition, tenant predicate, and transaction boundary are unchanged."
   },
   {
     "file": "apps/api/src/handlers/style-sets/delete.ts",
@@ -2029,15 +2029,15 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
-    "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
-    "count": 1,
-    "reason": "The same client contact lock, now keyed on clientId alone after the separate attach-client body field was removed."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/update.ts",
     "fingerprint": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/workspaces/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
+    "count": 1,
+    "reason": "The same client contact lock, now keyed on clientId alone after the separate attach-client body field was removed."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
@@ -2409,7 +2409,7 @@
     "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
     "fingerprint": "ba2c8c81fb5f3b119bd4571a013cab18647f8785e8f936611fcf2ff2921805cf",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing sitemap shard refresh transaction; its loop now walks the pages-public country list instead of the search list, which changes its source fingerprint without changing the acquisition, its order or the count."
   },
   {
     "file": "apps/api/src/lib/cell-lock.ts",
