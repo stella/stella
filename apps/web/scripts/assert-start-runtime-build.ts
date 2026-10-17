@@ -88,6 +88,11 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "RegexSet search WASM",
+    pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
     label: "anonymization WASM glue",
     pattern: "dist/client/native/index.js",
   },

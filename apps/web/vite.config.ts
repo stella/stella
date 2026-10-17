@@ -16,6 +16,7 @@ import {
 } from "vite";
 
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
 import {
   REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
@@ -315,6 +316,7 @@ export default defineConfig(({ mode, command }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
+    stllRegexSetWasm(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
