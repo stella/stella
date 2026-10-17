@@ -327,7 +327,7 @@ const grantedPublicLawColumns = (
 
 // Expansion releases may declare permitted grants before their tables exist.
 // The harness pushes only this checkout's schema, so it cannot grant those yet.
-const schemaTableNames = new Set<string>(
+export const schemaTableNames = new Set<string>(
   Object.values(schema)
     .filter((value) => isTable(value))
     .map((table) => getTableName(table)),

@@ -9,6 +9,7 @@ import {
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
+  schemaTableNames,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
