@@ -42,6 +42,10 @@ import {
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
+import {
+  McpReconnectButton,
+  useMcpConnectionOAuthRefresh,
+} from "@/components/mcp-reconnect-button";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -146,6 +150,7 @@ export const IntegrationsGroup = ({
   integrations: IntegrationsData;
 }) => {
   const t = useTranslations();
+  useMcpConnectionOAuthRefresh();
   const format = useFormatter();
   const canManageOrganizationSettings = usePermissions({
     organizationSettings: ["update"],
@@ -179,6 +184,11 @@ export const IntegrationsGroup = ({
       <List>
         {visible.map((entry) => {
           const connectorSlug = entry.installedConnectorSlug ?? entry.slug;
+          const connection = connectionBySlug.get(connectorSlug);
+          const canReconnect =
+            entry.authType !== "none" &&
+            (connection?.status === "needs_reauth" ||
+              connection?.status === "revoked");
           const review = authorizationReviewBySlug.get(connectorSlug);
           const canApprove =
             canApproveIntegrationAuthorization(
@@ -191,13 +201,13 @@ export const IntegrationsGroup = ({
           const status = integrationStatus({
             authType: entry.authType,
             authorizationStatus: authorizationStatusBySlug.get(connectorSlug),
-            connection: connectionBySlug.get(connectorSlug),
+            connection,
           });
           return (
             <ListItem
               key={entry.slug}
               render={
-                canApprove ? undefined : (
+                canApprove || canReconnect ? undefined : (
                   <Link search={{ slug: entry.slug }} to="/knowledge/tools" />
                 )
               }
@@ -213,7 +223,7 @@ export const IntegrationsGroup = ({
               </ListItemMedia>
               <ListItemContent>
                 <ListItemTitle>
-                  {canApprove ? (
+                  {canApprove || canReconnect ? (
                     <Link search={{ slug: entry.slug }} to="/knowledge/tools">
                       <BidiText>{entry.displayName}</BidiText>
                     </Link>
@@ -226,6 +236,15 @@ export const IntegrationsGroup = ({
                 )}
               </ListItemContent>
               <ListItemActions>
+                {canReconnect && (
+                  <McpReconnectButton
+                    oauthRefresh="owner"
+                    authType={
+                      entry.authType === "oauth" ? "oauth2" : entry.authType
+                    }
+                    slug={connectorSlug}
+                  />
+                )}
                 {canApprove && review.issuer !== null && (
                   <ApproveAuthorizationButton
                     connectorSlug={connectorSlug}

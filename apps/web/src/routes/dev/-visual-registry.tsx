@@ -12,6 +12,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =

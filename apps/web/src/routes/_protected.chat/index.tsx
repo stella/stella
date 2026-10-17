@@ -59,6 +59,7 @@ import {
   useOpenChatThreadDecision,
 } from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -618,6 +619,7 @@ function ChatIndex() {
               ownerKey={getChatThreadKey(threadRef)}
               workspaceId={draftThreadId}
             />
+            <McpReconnectNotice editor={controller.editor} />
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus
