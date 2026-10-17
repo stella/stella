@@ -176,14 +176,26 @@ const rejectedAttempt = (
   count: number,
 ): SoftLawAttempt => {
   if (SoftLawItemError.is(error)) {
-    return { entry, status: "rejected", tag: error.tag, count };
+    return { entry, status: "rejected", tag: error.tag, count, rawObjects: [] };
   }
   if (SoftLawIngestionError.is(error)) {
-    return { entry, status: "rejected", tag: "invalid_document", count };
+    return {
+      entry,
+      status: "rejected",
+      tag: "invalid_document",
+      count,
+      rawObjects: [],
+    };
   }
   return count >= ITEM_ATTEMPT_LIMIT
-    ? { entry, status: "rejected", tag: "retry_exhausted", count }
-    : { entry, status: "retryable", tag: null, count };
+    ? {
+        entry,
+        status: "rejected",
+        tag: "retry_exhausted",
+        count,
+        rawObjects: [],
+      }
+    : { entry, status: "retryable", tag: null, count, rawObjects: [] };
 };
 const fetchSoftLawPage = async ({
   entries,
@@ -222,6 +234,7 @@ const fetchSoftLawPage = async ({
         status: "retryable",
         tag: null,
         count: previous?.count ?? 0,
+        rawObjects: [],
       });
       continue;
     }
@@ -260,6 +273,7 @@ const fetchSoftLawPage = async ({
           status: "retryable",
           tag: null,
           count: previous?.count ?? 0,
+          rawObjects: [],
         });
         continue;
       }
@@ -306,6 +320,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         count,
         status: "rejected",
         tag: "ambiguous_locator",
+        rawObjects: [],
       });
       continue;
     }
@@ -337,6 +352,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         status: "rejected",
         tag: "identity_collision",
         identityKey,
+        rawObjects: [],
       });
       continue;
     }

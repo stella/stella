@@ -289,14 +289,14 @@ const readPublisherDocumentId = ($: CheerioAPI) =>
     const settings = parsed.value;
     if (
       !isRecord(settings) ||
-      !isRecord(settings.path) ||
-      typeof settings.path.currentPath !== "string"
+      !isRecord(settings["path"]) ||
+      typeof settings["path"]["currentPath"] !== "string"
     ) {
       return yield* invalidSource(
         "EDPB publisher settings have no document identity path",
       );
     }
-    const id = settings.path.currentPath;
+    const id = settings["path"]["currentPath"];
     return Result.ok(
       /^(?:documents|node)\/[1-9]\d*$/u.test(id) ? id : undefined,
     );

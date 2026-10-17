@@ -169,7 +169,7 @@ export type SoftLawAttempt = {
   entry: SoftLawEntry;
   count: number;
   /** Exact discovery snapshots are retained even when the instrument's content is unchanged. */
-  rawObjects?: SoftLawObservation["rawObjects"];
+  rawObjects: SoftLawObservation["rawObjects"];
 } & (
   | { status: "applied" | "unchanged" | "retryable"; tag: null }
   | { status: "rejected"; tag: "identity_collision"; identityKey: string }
@@ -627,7 +627,7 @@ const persistSoftLawPage = async (
                   attempt.status === "applied" || attempt.status === "unchanged"
                     ? entryWithoutRaw
                     : attempt.entry,
-                rawObjects: attempt.rawObjects ?? [],
+                rawObjects: attempt.rawObjects,
                 status: attempt.status,
                 tag: attempt.tag,
                 identityKey:

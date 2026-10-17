@@ -26,6 +26,25 @@ const normalizeReference = (value: string) =>
     .trim()
     .replace(/\s+/gu, " ")
     .toLocaleLowerCase("und");
+const normalizeRevisionKey = (value: string) => {
+  if (!value.startsWith("rev")) {
+    return value;
+  }
+
+  const digits = value.slice(value.startsWith("rev.") ? 4 : 3);
+  if (!/^\d+$/u.test(digits)) {
+    return value;
+  }
+
+  let firstSignificantDigit = 0;
+  while (
+    firstSignificantDigit < digits.length - 1 &&
+    digits[firstSignificantDigit] === "0"
+  ) {
+    firstSignificantDigit += 1;
+  }
+  return `rev${digits.slice(firstSignificantDigit)}`;
+};
 const statedValue = <T>(value: SoftLawStated<T>) =>
   value.state === "stated" ? value.value : null;
 const compareCanonicalKeys = (left: string, right: string) => {
@@ -85,9 +104,7 @@ export const softLawIdentityKey = (
         ? normalizeReference(expression.revision.value)
         : null;
     if (wpNumber && revisionKey !== null) {
-      revisionKey = revisionKey
-        .replace(/\s+/gu, "")
-        .replace(/^rev\.?0*(\d+)$/u, "rev$1");
+      revisionKey = normalizeRevisionKey(revisionKey.replace(/\s+/gu, ""));
     }
     expressionKey.push(
       "expression",
@@ -115,9 +132,13 @@ export const softLawIdentityKey = (
           }),
         );
       }
-      reference = reference
-        .replace(/\s+/gu, "")
-        .replace(/rev\.?0*(\d+)$/u, "rev$1");
+      reference = reference.replace(/\s+/gu, "");
+      const revisionStart = reference.lastIndexOf("rev");
+      if (revisionStart !== -1) {
+        reference = `${reference.slice(0, revisionStart)}${normalizeRevisionKey(
+          reference.slice(revisionStart),
+        )}`;
+      }
     }
     return Result.ok(
       JSON.stringify([authority, "reference", reference, ...expressionKey]),

@@ -175,6 +175,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "soft_law_document_versions.metadata",
   "soft_law_document_versions.source_dates",
   "soft_law_ingestion_attempts.entry",
+  "soft_law_ingestion_attempts.raw_objects",
   "system_audit_runs.counts",
   "template_fills.structure_errors",
   "template_persistence_requests.result",

@@ -74,22 +74,20 @@ const entry = (
   },
   sourceDates: {},
 });
-const document = (
-  item: SoftLawEntry,
-  content = "original",
-): SoftLawDocumentInput => ({
-  metadata: item.metadata,
-  raw: [
-    {
-      role: "document",
-      bytes: new TextEncoder().encode(content),
-      contentType: "text/html",
-    },
-  ],
-  text: content,
-  extractionQuality: "html",
-  sourceDates: item.sourceDates,
-});
+const document = (item: SoftLawEntry, content = "original") =>
+  ({
+    metadata: item.metadata,
+    raw: [
+      {
+        role: "document",
+        bytes: new TextEncoder().encode(content),
+        contentType: "text/html",
+      },
+    ],
+    text: content,
+    extractionQuality: "html",
+    sourceDates: item.sourceDates,
+  }) as const satisfies SoftLawDocumentInput;
 const adapter = (entries: readonly SoftLawEntry[], content = "original") =>
   ({
     key: "soft-law-test",
