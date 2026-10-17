@@ -18,6 +18,7 @@ import {
 } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import {
+  type PROJECTION_GENERATION_FIELD,
   PROVISION_KEYS_FIELD,
   UNDATED_DECISION_TIMESTAMP,
 } from "@/api/lib/legal-search/corpus-index-config";
@@ -27,6 +28,7 @@ import {
   requireCourtPartitionIdentity,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
+  corpusIndexGenerationField,
   corpusIndexPublisherFields,
   corpusIndexStemFields,
   type CorpusIndexManifest,
@@ -60,6 +62,7 @@ type SharedProjectionDocument = {
 };
 
 type CaseLawProjectionDocument = SharedProjectionDocument & {
+  [PROJECTION_GENERATION_FIELD]?: string;
   chunk_id?: string;
   anchor_id?: string;
   case_number: string;
@@ -239,8 +242,12 @@ export const buildCaseLawProjectionDocuments = ({
   ) {
     return panic("Case-law projection decision date is not canonical");
   }
+  const generationField = corpusIndexGenerationField(manifest);
   const shared = {
     ...sharedFields(input, revision),
+    ...(generationField === null
+      ? {}
+      : { [generationField]: manifest.generation }),
     ...groupContractFields(manifest, input),
     case_number: input.caseNumber,
     court: input.court,

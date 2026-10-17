@@ -57,6 +57,7 @@ import {
   CORPUS_INDEX_DATE_INPUT_FORMATS,
   DECISION_TIMESTAMP_FIELD,
   FOLDED_TOKENIZER,
+  PROJECTION_GENERATION_FIELD,
   PUBLISHER_KEYWORDS_FIELD,
   PUBLISHER_SUMMARY_FIELD,
   STEM_FIELD_OF,
@@ -342,6 +343,16 @@ export const corpusIndexRevisionRetrieval = (
     ? { type: "stored", field }
     : { type: "query_only", field };
 };
+
+/** The generation marker exists only on mappings that can filter its origin. */
+export const corpusIndexGenerationField = (
+  manifest: CorpusIndexManifest,
+): typeof PROJECTION_GENERATION_FIELD | null =>
+  manifest.engine.indexConfig.doc_mapping.field_mappings.some(
+    ({ name, indexed }) => name === PROJECTION_GENERATION_FIELD && indexed,
+  )
+    ? PROJECTION_GENERATION_FIELD
+    : null;
 
 type CorpusIndexFieldMapping =
   CorpusIndexConfig["doc_mapping"]["field_mappings"][number];
@@ -667,11 +678,14 @@ const CASE_LAW_V8_INDEX_CONFIG = deepFreeze(
 const CASE_LAW_V9_INDEX_CONFIG = deepFreeze(
   structuredClone(
     indexConfig({
-      fieldMappings: caseLawV8Fields().map((field) =>
-        field.name === "projection_revision"
-          ? { ...field, stored: true }
-          : field,
-      ),
+      fieldMappings: [
+        ...caseLawV8Fields().map((field) =>
+          field.name === "projection_revision"
+            ? { ...field, stored: true }
+            : field,
+        ),
+        rawField(PROJECTION_GENERATION_FIELD, { stored: false, fast: false }),
+      ],
       tagFields: [...CASE_LAW_TAG_FIELDS],
       timestampField: DECISION_TIMESTAMP_FIELD,
       docstore: CORPUS_FINAL_INDEX_DOCSTORE_V7,
@@ -1246,6 +1260,8 @@ const manifestIndexJurisdictionCount = (
 };
 
 export type CorpusIndexRoute = {
+  /** Query-level scope that aggregate callers must preserve on merged routes. */
+  aggregationFilter?: string | undefined;
   /** Physical index, or the generation glob when the query is unscoped. */
   indexId: string;
   /**

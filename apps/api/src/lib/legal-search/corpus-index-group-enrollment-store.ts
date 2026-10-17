@@ -43,10 +43,12 @@ import {
 import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexContractDigest,
+  corpusIndexGenerationField,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 
 type CorpusIndexGroupTarget = {
@@ -553,20 +555,45 @@ const readAttachedGenerationTx = async (
  * answers for. The cursor identity binds both, so a cursor minted before a
  * flip cannot continue after it.
  */
-const mergeAttachedTarget = (
-  primary: ServingCorpusIndexTarget,
-  attached: ServingCorpusIndexTarget,
-): ServingCorpusIndexTarget => ({
-  ...primary,
-  route: {
-    ...primary.route,
-    indexId: `${primary.route.indexId},${attached.route.indexId}`,
-  },
-  cursorTarget: corpusIndexContractDigest({
-    primary: primary.cursorTarget,
-    attached: attached.cursorTarget,
-  }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH),
-});
+type MergeAttachedTargetOptions = {
+  primary: ServingCorpusIndexTarget;
+  attached: Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>;
+  manifest: CorpusIndexManifest;
+  jurisdiction: string;
+};
+
+const mergeAttachedTarget = ({
+  primary,
+  attached,
+  manifest,
+  jurisdiction,
+}: MergeAttachedTargetOptions): ServingCorpusIndexTarget => {
+  const field =
+    corpusIndexGenerationField(manifest) ??
+    panic(
+      `Attached generation lacks its query discriminator: ${manifest.generation}`,
+    );
+  const guard = `(NOT jurisdiction:${quoteCorpusValue(jurisdiction)} OR ${field}:${quoteCorpusValue(manifest.generation)})`;
+  const aggregationFilter =
+    primary.route.aggregationFilter === undefined
+      ? guard
+      : `(${primary.route.aggregationFilter}) AND ${guard}`;
+  return {
+    ...primary,
+    route: {
+      ...primary.route,
+      indexId: attached.isOk()
+        ? `${primary.route.indexId},${attached.value.route.indexId}`
+        : primary.route.indexId,
+      aggregationFilter,
+    },
+    cursorTarget: corpusIndexContractDigest({
+      primary: primary.cursorTarget,
+      attached: attached.isOk() ? attached.value.cursorTarget : null,
+      aggregationFilter,
+    }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH),
+  };
+};
 
 /**
  * The generation and indexes a read reaches, resolved through the
@@ -637,12 +664,14 @@ export const readServingCorpusIndexTargetTx = async (
       serving: attachedServing,
       jurisdiction: flippedJurisdiction,
     });
-    // An attached group that is not attested is left out of a generation-wide
-    // read, as any unattested group is; the flip requires it attested, so
-    // this is an attestation withdrawn since.
-    if (attached.isOk()) {
-      merged = mergeAttachedTarget(merged, attached.value);
-    }
+    // A withdrawn attachment leaves the jurisdiction out of the read; its
+    // obsolete copies must not re-enter aggregate counts through the primary.
+    merged = mergeAttachedTarget({
+      primary: merged,
+      attached,
+      manifest: requireCorpusIndexManifest(family, generation),
+      jurisdiction: flippedJurisdiction,
+    });
   }
   return Result.ok(merged);
 };

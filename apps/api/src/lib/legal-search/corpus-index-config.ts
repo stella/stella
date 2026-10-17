@@ -430,6 +430,8 @@ export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
  * a mapping an index was already created with does nothing, so it arrives with
  * a group's index and never before one.
  */
+export const PROJECTION_GENERATION_FIELD = "projection_generation";
+
 export const PROVISION_KEYS_FIELD = "provision_keys";
 
 /**

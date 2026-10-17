@@ -10,7 +10,6 @@ import {
   CorpusIndexError,
   type CorpusIndexAggregations,
 } from "@/api/lib/legal-search/corpus-index-client";
-import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   type CorpusAggregate,
   type CorpusSearchFacetName,
@@ -34,7 +33,9 @@ const testCache = (limits: Partial<CacheLimits> = {}) => {
   return { cache, clock };
 };
 
-type Target = ServingCorpusIndexGeneration & { indexId: string };
+type Target = Parameters<
+  ReturnType<typeof createCorpusAggregateCache>["reader"]
+>[0]["target"];
 
 const TARGET: Target = {
   family: "case_law",
@@ -227,6 +228,52 @@ describe("what an aggregation is keyed by", () => {
 });
 
 describe("what an entry is served for", () => {
+  test("a changed aggregation scope cannot reuse counts for identical physical indexes", async () => {
+    const { cache } = testCache();
+    const engine = countingEngine();
+    const target = {
+      ...TARGET,
+      aggregationFilter: 'jurisdiction:"SVK"',
+    };
+    const first = await read({ cache, load: engine.load, target });
+    const warm = await read({
+      cache,
+      load: engine.load,
+      target: { ...target },
+    });
+    const changedTarget = {
+      ...target,
+      aggregationFilter: 'jurisdiction:"CZE"',
+    };
+    const changed = await read({
+      cache,
+      load: engine.load,
+      target: changedTarget,
+    });
+    const changedWarm = await read({
+      cache,
+      load: engine.load,
+      target: { ...changedTarget },
+    });
+
+    expect(valueOf(first.answer)).toEqual({ value: 1 });
+    expect(valueOf(warm.answer)).toEqual({ value: 1 });
+    expect(warm.outcome).toEqual({ hits: 1, misses: 0, sharedFlights: 0 });
+    expect(valueOf(changed.answer)).toEqual({ value: 2 });
+    expect(changed.outcome).toEqual({ hits: 0, misses: 1, sharedFlights: 0 });
+    expect(valueOf(changedWarm.answer)).toEqual({ value: 2 });
+    expect(changedWarm.outcome).toEqual({
+      hits: 1,
+      misses: 0,
+      sharedFlights: 0,
+    });
+    expect(engine.calls).toHaveLength(2);
+    expect(engine.calls.map(({ query }) => query)).toEqual([
+      "text:promlčení",
+      "text:promlčení",
+    ]);
+  });
+
   test("a new serving generation never reads the previous one's entries", async () => {
     const { cache } = testCache();
     const engine = countingEngine();

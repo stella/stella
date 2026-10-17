@@ -236,6 +236,7 @@ export const corpusIndexBrowseFacets = async (
   const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
     observer,
     indexId,
+    filter: route.aggregationFilter,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
       jurisdictionClause,

@@ -12,6 +12,7 @@ import {
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  CorpusIndexError,
   type CorpusIndexDeleteSettlementRead,
   type CorpusIndexSettlementSplit,
   corpusIndexCommittedIngestTimeoutMs,
@@ -484,7 +485,87 @@ test("aggregation asks the engine for a compact response body", async () => {
   );
   expect(body["format"]).toBe("json");
   expect(body["max_hits"]).toBe(0);
+  expect(requests).toHaveLength(1);
+  expect(requests.at(0)?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
+  expect(requests.at(0)?.body).toBe(
+    JSON.stringify({
+      query: "text:smlouva",
+      max_hits: 0,
+      aggs: { court: { terms: { field: "court" } } },
+      format: "json",
+    }),
+  );
 });
+
+test("generation-scoped aggregation keeps caller exclusions strict in one request", async () => {
+  const aggregations = { court: { buckets: [{ key: "NS", doc_count: 3 }] } };
+  responseBody = { aggregations };
+  const query = '(text:smlouva AND NOT source:"excluded-source")';
+  const filter =
+    '(NOT jurisdiction:"CZE" OR projection_generation:"case_law_v9")';
+  const aggs = { court: { terms: { field: "court" } } };
+
+  const result = await getCorpusIndexClient("q09").aggregate({
+    observer: "unobserved",
+    indexId: "case_law_v8_cs_sk,case_law_v9_cze",
+    query,
+    filter,
+    aggs,
+  });
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value).toEqual(aggregations);
+  }
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request?.host).toBe(hostOf(originalQ09SearchEndpoint));
+  expect(request?.path).toBe(
+    "/api/v1/_elastic/case_law_v8_cs_sk,case_law_v9_cze/_search",
+  );
+  expect(JSON.parse(request?.body ?? "{}")).toEqual({
+    size: 0,
+    track_total_hits: false,
+    query: {
+      bool: {
+        must: [{ query_string: { query, default_operator: "AND" } }],
+        filter: [
+          {
+            query_string: {
+              query: filter,
+              default_operator: "AND",
+              lenient: true,
+            },
+          },
+        ],
+      },
+    },
+    aggs,
+  });
+});
+
+test.each([undefined, 'projection_generation:"case_law_v9"'])(
+  "aggregation rejects malformed engine output with filter %s",
+  async (filter) => {
+    responseBody = { aggregations: [] };
+    const result = await getCorpusIndexClient("q09").aggregate({
+      observer: "unobserved",
+      indexId: "case_law_v9_cze",
+      query: "text:smlouva",
+      filter,
+      aggs: {},
+    });
+
+    expect(requests).toHaveLength(1);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(CorpusIndexError);
+      expect(result.error.message).toBe(
+        "corpus index aggregation returned an invalid response",
+      );
+    }
+  },
+);
 
 test("search accepts a response without snippets", async () => {
   // A count-only search (`maxHits: 0`, no snippet fields) is answered

@@ -2102,6 +2102,7 @@ type ReadCaseLawSearchFacetsOptions = {
   /** The generation's document-id field, already asserted aggregatable. */
   decisionCountField: string;
   indexId: string;
+  aggregationFilter: string | undefined;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
   readSourceRegistry: typeof readCaseLawSourceRegistry;
@@ -2134,6 +2135,7 @@ const readCaseLawSearchFacets = async ({
   courtWeights,
   decisionCountField,
   indexId,
+  aggregationFilter,
   queryFor,
   readSourceRegistry,
   recordCacheOutcome,
@@ -2171,7 +2173,7 @@ const readCaseLawSearchFacets = async ({
   }
 
   const aggregates = caseLawFacetAggregateCache.reader({
-    target: { ...serving, indexId },
+    target: { ...serving, indexId, aggregationFilter },
     scope: {
       type: "public_corpus",
       excludedSourceIds: registry.value.excludedSourceIds,
@@ -2180,6 +2182,7 @@ const readCaseLawSearchFacets = async ({
       await getCorpusIndexClient(serving.cluster).aggregate({
         indexId,
         ...input,
+        filter: aggregationFilter,
         observer,
       }),
   });
@@ -2755,6 +2758,7 @@ export const searchCorpusIndexDecisions = async ({
         courtWeights,
         decisionCountField,
         indexId,
+        aggregationFilter: route.aggregationFilter,
         queryFor: facetQueries(),
         readSourceRegistry,
         recordCacheOutcome: (outcome) => {

@@ -9,7 +9,9 @@ import { Result } from "better-result";
 import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
+import { getCollator } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
@@ -36,6 +38,8 @@ import {
 } from "@/api/lib/legal-search/case-law-serving-flip";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { resolveCorpusIndexGroupContract } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   attestCorpusIndexGroupEnrollmentTx,
@@ -653,6 +657,150 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
   expect(again.isOk() ? again.value.type : again.error._tag).toBe(
     "already_flipped",
   );
+});
+
+test("global browse counts stay unchanged after a jurisdiction flips and before its old copy is purged", async () => {
+  const engine = await buildV9();
+  const documents = [
+    {
+      index: "case_law_v8_cs_sk",
+      jurisdiction: "CZE",
+      court: "Czech court",
+      year: 2024,
+    },
+    {
+      index: "case_law_v8_cs_sk",
+      jurisdiction: "SVK",
+      court: "Slovak court",
+      year: 2023,
+    },
+    {
+      index: "case_law_v9_cze",
+      jurisdiction: "CZE",
+      court: "Czech court",
+      year: 2024,
+      [PROJECTION_GENERATION_FIELD]: V9.generation,
+    },
+  ];
+  let requests = 0;
+  globalThis.fetch = Object.assign(
+    async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      requests += 1;
+      const url = new URL(input instanceof Request ? input.url : input);
+      const body: unknown = JSON.parse(String(init?.body));
+      const elastic = url.pathname.includes("/_elastic/");
+      const indexIds = url.pathname.split("/").at(-2)?.split(",") ?? [];
+      let selected = documents.filter(({ index }) => indexIds.includes(index));
+      if (elastic) {
+        const parsed = v.parse(
+          v.object({
+            query: v.object({
+              bool: v.object({
+                must: v.array(
+                  v.object({ query_string: v.object({ query: v.string() }) }),
+                ),
+                filter: v.array(
+                  v.object({
+                    query_string: v.object({
+                      query: v.string(),
+                      lenient: v.literal(true),
+                    }),
+                  }),
+                ),
+              }),
+            }),
+          }),
+          body,
+        );
+        expect(parsed.query.bool.must.at(0)?.query_string.query).toContain(
+          `${V8.projection.openingField}:true`,
+        );
+        expect(parsed.query.bool.filter.at(0)?.query_string.query).toBe(
+          `(NOT jurisdiction:"CZE" OR ${PROJECTION_GENERATION_FIELD}:"case_law_v9")`,
+        );
+        selected = selected.filter(
+          (document) =>
+            document.jurisdiction !== "CZE" ||
+            document[PROJECTION_GENERATION_FIELD] === V9.generation,
+        );
+      } else {
+        expect(v.parse(v.object({ query: v.string() }), body).query).toContain(
+          `${V8.projection.openingField}:true`,
+        );
+      }
+      const buckets = (field: "jurisdiction" | "court" | "year") => {
+        const counts = new Map<string | number, number>();
+        for (const document of selected) {
+          counts.set(document[field], (counts.get(document[field]) ?? 0) + 1);
+        }
+        return {
+          buckets: [...counts]
+            .map(([key, doc_count]) => ({ key, doc_count }))
+            .toSorted((left, right) =>
+              field === "year"
+                ? Number(right.key) - Number(left.key)
+                : right.doc_count - left.doc_count ||
+                  getCollator("en").compare(
+                    String(left.key),
+                    String(right.key),
+                  ),
+            ),
+          doc_count_error_upper_bound: 0,
+          sum_other_doc_count: 0,
+        };
+      };
+      return Response.json({
+        aggregations: {
+          country: buckets("jurisdiction"),
+          court: buckets("court"),
+          year: buckets("year"),
+        },
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const facets = async () => {
+    const target = await read(undefined);
+    const result = await corpusIndexBrowseFacets(
+      { excludedSourceIds: [], limit: 20 },
+      "unobserved",
+      {
+        readServingTarget: async () => Result.ok(target),
+      },
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+    return result.value;
+  };
+  const before = await facets();
+  expect(requests).toBe(1);
+  expect(before.country).toEqual([
+    { value: "CZE", count: 1 },
+    { value: "SVK", count: 1 },
+  ]);
+  expect((await flip(engine)).isOk()).toBe(true);
+  const target = await read(undefined);
+  expect(target.route.indexId).toContain("case_law_v8_cs_sk");
+  expect(target.route.indexId).toContain("case_law_v9_cze");
+  const after = await facets();
+  expect(requests).toBe(2);
+  expect(after).toEqual(before);
+  // The fixture still contains both Czech copies: no erasure hides an overlap.
+  expect(
+    documents.filter(({ jurisdiction }) => jurisdiction === "CZE"),
+  ).toHaveLength(2);
+  await db.execute(sql`UPDATE corpus_index_group_enrollments
+    SET provisioning_status = 'pending', attested_at = NULL`);
+  const withdrawn = await read(undefined);
+  expect(withdrawn.route.indexId).not.toContain("case_law_v9_cze");
+  const afterWithdrawal = await facets();
+  expect(requests).toBe(3);
+  expect(afterWithdrawal.country).toEqual([{ value: "SVK", count: 1 }]);
+  expect(afterWithdrawal.court).toEqual([{ value: "Slovak court", count: 1 }]);
 });
 
 test.each([

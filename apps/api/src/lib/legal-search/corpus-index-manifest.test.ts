@@ -6,9 +6,11 @@ import {
 } from "@stll/api-contract/case-law-jurisdictions";
 
 import type { CaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
+import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
+  corpusIndexGenerationField,
   corpusIndexIdFromManifest,
   corpusIndexManifestCoversJurisdiction,
   corpusIndexManifestDigest,
@@ -39,7 +41,7 @@ const EXPECTED_DIGESTS = {
   case_law_v8:
     "f86d63a815b35dbc8dd9de16ad84355ccbf61e5faad64483ca884bb5a9994b65",
   case_law_v9:
-    "585fc8701308977a4154ad33cf46e2b68f2f3836c5500ef89fd24d4a73cc23b7",
+    "6c9ecbd88e8026a1f7148a1e45cfca999e4fe94f78c3dab3649c0d5d7dde7db0",
   legislation_v2:
     "dc252d8635081d8037e7f9b1aca6713181a27390e8eb6dda54139ae6a1e68583",
   legislation_v3:
@@ -1053,9 +1055,53 @@ test("case_law_v9 is a partial generation: Czech decisions in a group of their o
   expect(corpusIndexManifestDigest(v8)).toBe(EXPECTED_DIGESTS.case_law_v8);
   const v8Fields = v8.engine.indexConfig.doc_mapping.field_mappings;
   const v9Fields = v9.engine.indexConfig.doc_mapping.field_mappings;
-  expect(v9Fields).toEqual(
-    v8Fields.map((field) =>
+  expect(v9Fields).toEqual([
+    ...v8Fields.map((field) =>
       field.name === "projection_revision" ? { ...field, stored: true } : field,
     ),
-  );
+    {
+      name: PROJECTION_GENERATION_FIELD,
+      type: "text",
+      tokenizer: "raw",
+      indexed: true,
+      stored: false,
+      fast: false,
+      record: "basic",
+      fieldnorms: false,
+    },
+  ]);
+});
+
+test("generation origin filtering follows mapping presence", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const mapped = manifest.engine.indexConfig.doc_mapping.field_mappings.some(
+      ({ name }) => name === PROJECTION_GENERATION_FIELD,
+    );
+    expect(corpusIndexGenerationField(manifest)).toBe(
+      mapped ? PROJECTION_GENERATION_FIELD : null,
+    );
+    expect(mapped).toBe(manifest === CORPUS_INDEX_MANIFESTS.case_law_v9);
+    if (corpusIndexManifestIsPartial(manifest)) {
+      expect(corpusIndexGenerationField(manifest)).not.toBeNull();
+    }
+  }
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  expect(
+    corpusIndexGenerationField({
+      ...manifest,
+      engine: {
+        ...manifest.engine,
+        indexConfig: {
+          ...manifest.engine.indexConfig,
+          doc_mapping: {
+            ...manifest.engine.indexConfig.doc_mapping,
+            field_mappings:
+              manifest.engine.indexConfig.doc_mapping.field_mappings.filter(
+                ({ name }) => name !== PROJECTION_GENERATION_FIELD,
+              ),
+          },
+        },
+      },
+    }),
+  ).toBeNull();
 });

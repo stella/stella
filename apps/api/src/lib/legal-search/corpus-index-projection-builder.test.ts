@@ -9,12 +9,18 @@ import {
   PROVISION_KEYS_MAX_COUNT,
   PROVISION_KEYS_MAX_SERIALIZED_BYTES,
 } from "@/api/lib/case-law/provision-keys";
-import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  PROJECTION_GENERATION_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexGenerationField,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCaseLawProjectionDocuments,
   buildCorpusProjectionDocuments,
@@ -964,6 +970,7 @@ test("the serving generations write the documents they wrote before, whatever ke
       expect(documents).toEqual(plain);
       for (const document of documents) {
         expect("provision_keys" in document).toBe(false);
+        expect(PROJECTION_GENERATION_FIELD in document).toBe(false);
         expect("court_partition" in document).toBe(false);
       }
     }
@@ -1006,4 +1013,29 @@ test("a key set at the cap fits a passage and one past it is refused", () => {
       revision: REVISION,
     }),
   ).toThrow("Provision keys exceed");
+});
+
+test("every passage carries its generation origin exactly when its mapping supports it", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.family !== "case_law") {
+      continue;
+    }
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input: DATED_CASE_LAW_INPUT,
+      payload: {
+        text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+        ast: null,
+      },
+      revision: REVISION,
+    });
+    expect(documents.length).toBeGreaterThan(1);
+    const field = corpusIndexGenerationField(manifest);
+    for (const document of documents) {
+      expect(PROJECTION_GENERATION_FIELD in document).toBe(field !== null);
+      if (field !== null) {
+        expect(document[field]).toBe(manifest.generation);
+      }
+    }
+  }
 });

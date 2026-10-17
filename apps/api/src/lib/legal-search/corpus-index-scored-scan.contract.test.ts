@@ -16,6 +16,8 @@ import {
   CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
+import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -71,6 +73,8 @@ const INDEX_ID = `case_law_v8_contract_${Date.now().toString(36)}`;
 const TIED_INDEX_ID = `${INDEX_ID}_tied`;
 const PROVISION_INDEX_ID = `${INDEX_ID}_provision`;
 const FLOOD_INDEX_ID = `${INDEX_ID}_flood`;
+const FACET_V8_INDEX_ID = `${INDEX_ID}_facets_v8`;
+const FACET_V9_INDEX_ID = `${INDEX_ID}_facets_v9`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
@@ -613,6 +617,21 @@ describe.skipIf(!runEngineTests)(
           reach: "answered",
         });
       }
+      for (const { manifest, indexId } of [
+        { manifest: MANIFEST, indexId: FACET_V8_INDEX_ID },
+        {
+          manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+          indexId: FACET_V9_INDEX_ID,
+        },
+      ]) {
+        const facetIndexCreated = await client.createIndex(
+          corpusIndexConfigFromManifest(manifest, indexId),
+          "unobserved",
+        );
+        if (facetIndexCreated.isErr()) {
+          throw facetIndexCreated.error;
+        }
+      }
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -621,6 +640,8 @@ describe.skipIf(!runEngineTests)(
         TIED_INDEX_ID,
         PROVISION_INDEX_ID,
         FLOOD_INDEX_ID,
+        FACET_V8_INDEX_ID,
+        FACET_V9_INDEX_ID,
       ]) {
         const deleted = await client.deleteIndex(indexId, "unobserved");
         if (deleted.isErr()) {
@@ -628,6 +649,126 @@ describe.skipIf(!runEngineTests)(
         }
       }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "global browse facets exclude a vacated jurisdiction across legacy and marked index mappings before purge",
+      async () => {
+        const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+        const input = {
+          family: "case_law",
+          documentId: PROVISION_ALIAS_DOCUMENT_ID,
+          sourceId: SOURCE_ID,
+          jurisdiction: "CZE",
+          language: "cs",
+          documentType: null,
+          contentHash: null,
+          redistributionEligible: true,
+          redacted: false,
+          listingOnly: false,
+          provisionKeys: [],
+          vacatedFrom: null,
+          caseNumber: "1 Cdo 1/2024",
+          identifiers: [],
+          court: "Czech court",
+          courtId: null,
+          decisionDate: "2024-01-01",
+          ecli: null,
+          metadata: null,
+        } satisfies CaseLawProjectionInput;
+        const oldCzech = buildCaseLawProjectionDocuments({
+          manifest: MANIFEST,
+          input,
+          payload: { text: "Czech decision", ast: null },
+          revision: REVISION,
+        });
+        const oldSlovak = buildCaseLawProjectionDocuments({
+          manifest: MANIFEST,
+          input: {
+            ...input,
+            documentId: PROVISION_OTHER_ACT_DOCUMENT_ID,
+            jurisdiction: "SVK",
+            language: "sk",
+            court: "Slovak court",
+          },
+          payload: { text: "Slovak decision", ast: null },
+          revision: REVISION,
+        });
+        const newCzech = buildCaseLawProjectionDocuments({
+          manifest: v9,
+          input,
+          payload: { text: "Czech decision", ast: null },
+          revision: REVISION,
+        });
+        expect(oldCzech.at(0)?.[PROJECTION_GENERATION_FIELD]).toBeUndefined();
+        expect(newCzech.at(0)?.[PROJECTION_GENERATION_FIELD]).toBe(
+          v9.generation,
+        );
+        for (const { indexId, documents } of [
+          {
+            indexId: FACET_V8_INDEX_ID,
+            documents: [...oldCzech, ...oldSlovak],
+          },
+          { indexId: FACET_V9_INDEX_ID, documents: newCzech },
+        ]) {
+          const base =
+            envBase.CORPUS_INDEX_Q09_ENDPOINT ??
+            envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
+          const response = await fetch(
+            `${String(base)}/api/v1/${indexId}/ingest?commit=force`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/x-ndjson" },
+              body: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+              signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+            },
+          );
+          if (!response.ok) {
+            throw new CorpusIndexError({
+              message: `Facet fixture ingest returned ${String(response.status)}`,
+              reach: "answered",
+            });
+          }
+        }
+        const readFacets = async (flipped: boolean) => {
+          const result = await corpusIndexBrowseFacets(
+            { excludedSourceIds: [], limit: 20 },
+            "unobserved",
+            {
+              readServingTarget: async () =>
+                Result.ok({
+                  serving: {
+                    family: "case_law",
+                    generation: MANIFEST.generation,
+                    cluster: "q09",
+                  },
+                  route: flipped
+                    ? {
+                        indexId: `${FACET_V8_INDEX_ID},${FACET_V9_INDEX_ID}`,
+                        jurisdictionClause: undefined,
+                        aggregationFilter: `(NOT jurisdiction:"CZE" OR ${PROJECTION_GENERATION_FIELD}:"${v9.generation}")`,
+                      }
+                    : {
+                        indexId: FACET_V8_INDEX_ID,
+                        jurisdictionClause: undefined,
+                      },
+                }),
+            },
+          );
+          if (result.isErr()) {
+            throw result.error;
+          }
+          return result.value;
+        };
+        const before = await readFacets(false);
+        expect(before.country).toEqual([
+          { value: "CZE", count: 1 },
+          { value: "SVK", count: 1 },
+        ]);
+        const after = await readFacets(true);
+        expect(after).toEqual(before);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test(
       "a v7 passage flood recovers the missing document with exactly one highlight fallback",
