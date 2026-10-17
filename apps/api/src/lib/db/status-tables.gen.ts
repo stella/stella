@@ -83,6 +83,7 @@ export const STATUS_COLUMNS = {
   properties: ["status"],
   publishedCaseLawDecisions: ["corpusMirrorStatus"],
   reportExports: ["notificationStatus", "status"],
+  requestIdempotencyReceipts: ["state"],
   sanctionsContactMatches: ["state"],
   sanctionsContactScreenings: ["status"],
   sanctionsEditionFanouts: ["freshnessStatus", "status"],
