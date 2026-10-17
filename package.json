@@ -235,6 +235,7 @@
     "@stll/folio-core": "0.58.5",
     "@stll/folio-react": "0.26.0",
     "@stll/fuzzy-search": "1.1.5",
+    "@stll/text-search": "1.0.11",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -297,6 +298,8 @@
     }
   },
   "patchedDependencies": {
+    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
+    "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",
     "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",

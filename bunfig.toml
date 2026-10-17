@@ -66,6 +66,21 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum-linux-x64-gnu", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/stdnum-wasm", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/text-search", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-darwin-arm64", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-darwin-x64", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-linux-arm64-gnu", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-linux-x64-gnu", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-wasm32-wasi", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/aho-corasick-win32-x64-msvc", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-darwin-arm64", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-darwin-x64", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-linux-arm64-gnu", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-linux-x64-gnu", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-wasm32-wasi", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
+  "@stll/regex-set-win32-x64-msvc", # quarantine-excluded-since: 2026-10-14T16:29:50.763Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
 ]
 
