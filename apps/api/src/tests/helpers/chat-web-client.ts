@@ -1,11 +1,11 @@
 import type { ContentPart } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
-import { requestHandler } from "@tanstack/react-start/server";
 import { panic } from "better-result";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { runInRequest } from "@stll/test-kit/request";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -260,13 +260,8 @@ const nextTick = async () => await sleep(0);
 
 // Bun runs the web modules' server branches; give their API header hooks the
 // same request scope a page has when those hooks run during server rendering.
-const inWebRequest = async (action: () => Promise<void>) => {
-  const handle = requestHandler(async () => {
-    await action();
-    return new Response(null);
-  });
-  await handle(new Request(WEB_TEST_API_URL), {});
-};
+const inWebRequest = async (action: () => Promise<void>) =>
+  await runInRequest(action, new Request(WEB_TEST_API_URL));
 
 export type WebChatClient = {
   /** The approval card's Allow or Deny. */

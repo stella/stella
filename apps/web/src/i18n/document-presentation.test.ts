@@ -5,6 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import type { UiLocale } from "@stll/locales";
+import { runInRequest } from "@stll/test-kit/request";
 import { getFirstWeekday } from "@stll/ui/week";
 
 import {
@@ -129,7 +130,6 @@ test("cookie-free Czech requests render Czech HTML while an explicit cookie over
 });
 
 test("server presentation uses the profile locale without adding identity to the hydration cache", async () => {
-  const { requestHandler } = await import("@tanstack/react-start/server");
   const { loadServerDocumentPresentation } =
     await import("./document-presentation");
   const originalFetch = globalThis.fetch;
@@ -140,15 +140,12 @@ test("server presentation uses the profile locale without adding identity to the
   const queryClient = new QueryClient();
   try {
     await withRequestI18n(async () => {
-      const handle = requestHandler(async () => {
-        await loadServerDocumentPresentation(defaultPresentationPrefs);
-        return new Response(null);
-      });
-      await handle(
+      await runInRequest(
+        async () =>
+          await loadServerDocumentPresentation(defaultPresentationPrefs),
         new Request("http://localhost:3000/tools", {
           headers: { "accept-language": "en-US" },
         }),
-        {},
       );
       expect(useI18nStore.getState().loadedLang).toBe("cs");
       expect(queryClient.getQueryCache().getAll()).toEqual([]);

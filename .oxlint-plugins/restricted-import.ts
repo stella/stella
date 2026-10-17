@@ -191,6 +191,18 @@ const RESTRICTED_IMPORT_RULES = {
   // Route code has one approved helper; other exports stay at the boundary.
   "confine-server-reads": [
     {
+      messageId: "confineRequestScenarios",
+      message:
+        "Run server-request scenarios through @stll/test-kit/request so framework HTTP error handling cannot swallow failures.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set(["requestHandler"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["packages/test-kit/src/request.ts"],
+    },
+    {
       messageId: "confineServerReads",
       message: "Use the approved server request helper for this access.",
       modules: [TANSTACK_START_SERVER],

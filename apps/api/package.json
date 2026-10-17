@@ -228,7 +228,6 @@
     "@stll/property-testing": "workspace:*",
     "@stll/test-kit": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tanstack/react-start": "^1.168.60",
     "@types/d3-scale": "catalog:",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",

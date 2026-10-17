@@ -300,6 +300,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // The test kit reports a hung wait or a refused connection to the test
   // runner, and stands in for the platform's throwing socket API.
   "packages/test-kit/src/network.ts",
+  "packages/test-kit/src/request.ts",
   "packages/test-kit/src/wait.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
