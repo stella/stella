@@ -168,7 +168,7 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
     .unwrap()
     .documents.at(0);
   if (!detailUrl) {
-    return panic("Official EDPB listing fixture has no admitted documents");
+    panic("Official EDPB listing fixture has no admitted documents");
   }
   const detail = await fixture("final");
   const requests: string[] = [];
@@ -189,7 +189,7 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
   ).unwrap();
   const entry = discovered.entries.at(0);
   if (!entry) {
-    return panic("Official EDPB detail fixture has no expressions");
+    panic("Official EDPB detail fixture has no expressions");
   }
   const serialized = JSON.stringify(entry);
   const restored: unknown = JSON.parse(serialized);
@@ -206,7 +206,7 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
     fetch,
   });
   if (result.isErr()) {
-    return panic(result.error.message);
+    panic(result.error.message);
   }
   expect(requests).toEqual([entry.url]);
   expect(result.value.raw.map((part) => part.role)).toEqual([
@@ -232,7 +232,7 @@ test("EDPB discovery snapshots survive a retry without refetching mutable metada
   });
   expect(failure.isErr()).toBe(true);
   if (failure.isOk()) {
-    return panic("Missing fixture PDF did not fail");
+    panic("Missing fixture PDF did not fail");
   }
   expect(failure.error).toBeInstanceOf(SoftLawAccessError);
 });
@@ -244,7 +244,7 @@ test("EDPB rejects unknown taxonomy labels and off-publisher document locators",
   );
   expect(taxonomy.isErr()).toBe(true);
   if (taxonomy.isOk()) {
-    return panic("Unknown taxonomy was admitted");
+    panic("Unknown taxonomy was admitted");
   }
   expect(taxonomy.error.message).toContain("Unclassified EDPB document kind");
   const html = await fixture("consent");
@@ -257,7 +257,7 @@ test("EDPB rejects unknown taxonomy labels and off-publisher document locators",
   });
   expect(escaped.isErr()).toBe(true);
   if (escaped.isOk()) {
-    return panic("Off-publisher locator was admitted");
+    panic("Off-publisher locator was admitted");
   }
   expect(escaped.error.message).toContain("publisher boundary");
 });
@@ -270,7 +270,7 @@ test("EDPB empty HTML shells cannot complete a publication inventory", () => {
     );
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
-      return panic("An empty publisher shell was admitted");
+      panic("An empty publisher shell was admitted");
     }
     expect(result.error.message).toContain("expected publication index");
   }
@@ -286,18 +286,18 @@ test("EDPB empty index wrappers fail while explicitly excluded cards remain vali
     ],
   ]) {
     const empty = parseEdpbListing(
-      `<div class="${wrapper}"></div>`,
-      `${ORIGIN}${path}`,
+      `<div class="${String(wrapper)}"></div>`,
+      `${ORIGIN}${String(path)}`,
     );
     expect(empty.isErr()).toBe(true);
     if (empty.isOk()) {
-      return panic("An empty publication index wrapper was admitted");
+      panic("An empty publication index wrapper was admitted");
     }
     expect(SoftLawIngestionError.is(empty.error)).toBe(true);
     expect(empty.error.message).toContain("publication cards");
     const excluded = parseEdpbListing(
-      `<div class="${wrapper}"><article class="${card}"><h3>Internal rules</h3><span class="document-card__document-type">Rules of procedure</span></article></div>`,
-      `${ORIGIN}${path}`,
+      `<div class="${String(wrapper)}"><article class="${String(card)}"><h3>Internal rules</h3><span class="document-card__document-type">Rules of procedure</span></article></div>`,
+      `${ORIGIN}${String(path)}`,
     );
     expect(excluded.unwrap()).toEqual({ documents: [], next: null });
   }
@@ -307,7 +307,7 @@ test("EDPB malformed PDFs retain raw bytes with an explicit extraction failure",
   const html = await fixture("final");
   const entry = parseEdpbDocument({ html, url: FINAL }).unwrap().at(0);
   if (!entry) {
-    return panic("Official detail has no admitted PDF");
+    panic("Official detail has no admitted PDF");
   }
   const pdf = Buffer.from("%PDF-1.7\nmalformed-publisher-response");
   const result = await adapter.fetchDocument(
@@ -337,7 +337,7 @@ test("EDPB malformed PDFs retain raw bytes with an explicit extraction failure",
     },
   );
   if (result.isErr()) {
-    return panic(result.error.message);
+    panic(result.error.message);
   }
   expect(result.value).toMatchObject({
     text: null,
@@ -374,7 +374,7 @@ test("EDPB unnumbered statements retain the publisher identity across title chan
     .unwrap()
     .at(0);
   if (!english || !translated) {
-    return panic("Official EDPB identity fixture lacks an expression");
+    panic("Official EDPB identity fixture lacks an expression");
   }
   expect(english.metadata).toMatchObject({
     sourceDocumentId: "documents/215",

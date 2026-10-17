@@ -568,7 +568,8 @@ export const wp29Adapter = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  getTotalCount: async () => ({ type: "no-count-endpoint" }),
+  getTotalCount: async () =>
+    await Promise.resolve({ type: "no-count-endpoint" as const }),
   sliceWalk: {
     type: "unsupported",
     reason:
@@ -744,7 +745,7 @@ export const wp29Adapter = {
       );
     }
     const pages = entry.sourcePages;
-    if (!pages?.length || pages.length > 3) {
+    if (pages === undefined || pages.length === 0 || pages.length > 3) {
       return Result.err(invalid("WP29 entry has no bounded source pages"));
     }
     const assetUrl = publisherUrl(entry.url, ORIGIN);
@@ -752,7 +753,11 @@ export const wp29Adapter = {
       return assetUrl;
     }
     const retained = entry.sourceRaw;
-    if (!retained?.length || retained.length > 3) {
+    if (
+      retained === undefined ||
+      retained.length === 0 ||
+      retained.length > 3
+    ) {
       return Result.err(invalid("WP29 entry has no discovery raw"));
     }
     for (const page of pages) {
@@ -781,11 +786,7 @@ export const wp29Adapter = {
     let extractionQuality: "text_layer" | "needs_ocr" = "text_layer";
     const extractionFailures: string[] = [];
     for (const [index, url] of assets.entries()) {
-      if (signal.aborted) {
-        return Result.err(
-          new SoftLawIngestionError({ message: "WP29 request aborted" }),
-        );
-      }
+      signal.throwIfAborted();
       const word = /\.doc$/iu.test(new URL(url).pathname);
       const document = await read(url, {
         expectedContentTypes: word
