@@ -109,9 +109,9 @@ import {
   eraseCorrespondenceActorDisplays,
 } from "@/api/lib/email/correspondence/offboarding";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
-import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { LIMITS } from "@/api/lib/limits";
 import {
   clearMemberAssignments,

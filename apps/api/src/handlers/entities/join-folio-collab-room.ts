@@ -36,6 +36,7 @@ import {
   readVersionDocxTarget,
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";
@@ -44,7 +45,6 @@ import {
   issueFolioCollabToken,
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
-import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 

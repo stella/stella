@@ -56,6 +56,7 @@ import {
   loadPersistedFolioSnapshot,
   decideFolioSnapshotRecoveryState,
 } from "@/api/lib/files/folio-collab-snapshot-loader";
+import { retireFolioCollabSnapshot } from "@/api/lib/files/folio-collab-snapshot-retirement";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -66,7 +67,6 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   FOLIO_COLLAB_TOKEN_TTL_MS,
 } from "@/api/lib/folio-collab-room-contract";
-import { retireFolioCollabSnapshot } from "@/api/lib/folio-collab-snapshot-retirement";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {

@@ -45,7 +45,7 @@ describe.serial("folio snapshot retirement ownership", () => {
     expect(
       await lint(
         RETIREMENT_PAYLOAD,
-        "apps/api/src/lib/folio-collab-snapshot-retirement.ts",
+        "apps/api/src/lib/files/folio-collab-snapshot-retirement.ts",
       ),
     ).toEqual([]);
     expect(

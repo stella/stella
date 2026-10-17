@@ -12,7 +12,7 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-direct-folio-snapshot-retirement";
-const OWNER_PATH = "apps/api/src/lib/folio-collab-snapshot-retirement.ts";
+const OWNER_PATH = "apps/api/src/lib/files/folio-collab-snapshot-retirement.ts";
 const FIXTURE_FILE_SUFFIX =
   ".oxlint-plugins/__fixtures__/no-direct-folio-snapshot-retirement.fixture.ts";
 const RETIREMENT_VALUES = new Map([
