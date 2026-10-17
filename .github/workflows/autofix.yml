@@ -562,9 +562,6 @@ jobs:
           path: ${{ runner.temp }}/oxlint-tailwindcss
           key: tailwind-design-systems-${{ runner.os }}-${{ hashFiles('apps/**/*.css', 'packages/**/*.css', 'bun.lock') }}
 
-      - name: Warm Tailwind design systems
-        run: bun run lint:tailwind:warm
-
       - name: Prepare environment
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -638,6 +635,9 @@ jobs:
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation or compiler errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
+            # Only the lint fixer reads the design systems; formatting-only
+            # changes skip the warm-up.
+            bun run lint:tailwind:warm
             bun scripts/typecheck-coverage.ts --autofix "${lint_paths[@]}"
             # --fix applies safe fixes only. CI's lint job reports anything left.
             lint_status=0
