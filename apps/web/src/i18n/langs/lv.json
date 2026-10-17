@@ -361,6 +361,7 @@
         "reading": "Lasīšanas skats"
       },
       "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
+      "pdfTextFailed": "PDF tekstu neizdevās nolasīt, tāpēc apgalvojumi lapās nav atzīmēti.",
       "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
       "showQueue": "Rādīt rindu",
       "stats": {

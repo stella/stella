@@ -361,6 +361,7 @@
         "reading": "Widok do czytania"
       },
       "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
+      "pdfTextFailed": "Nie udało się odczytać tekstu pliku PDF, dlatego twierdzenia nie są zaznaczone na stronach.",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {

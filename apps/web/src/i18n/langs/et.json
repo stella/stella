@@ -361,6 +361,7 @@
         "reading": "Lugemisvaade"
       },
       "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
+      "pdfTextFailed": "PDF-i teksti ei õnnestunud lugeda, seetõttu pole väited lehekülgedel märgitud.",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {

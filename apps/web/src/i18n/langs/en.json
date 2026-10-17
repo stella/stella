@@ -361,6 +361,7 @@
         "reading": "Reading view"
       },
       "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
