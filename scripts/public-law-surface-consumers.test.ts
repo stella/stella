@@ -106,6 +106,7 @@ const CONSUMERS = {
   "apps/api/src/mcp/stella-tools.ts": "mcp",
   "apps/api/src/mcp/legislation-tools.ts": "mcp",
   "apps/api/src/mcp/case-law-search-guidance.ts": "mcp",
+  "apps/api/src/mcp/case-law-search-input.ts": "mcp",
   "apps/api/src/mcp/compat-corpus.ts": "mcp",
   "apps/api/src/mcp/compat-shared.ts": "mcp",
   "packages/mcp-apps/src/case-law-results/view.tsx": "mcp",

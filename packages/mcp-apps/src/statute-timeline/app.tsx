@@ -94,9 +94,9 @@ const Timeline = ({
       },
     });
     const page =
-      result?.isError === true
+      result.isError === true
         ? undefined
-        : parseStatuteTimelineHistory(result?.structuredContent);
+        : parseStatuteTimelineHistory(result.structuredContent);
     if (
       page === undefined ||
       page.eli !== history.eli ||
@@ -105,7 +105,7 @@ const Timeline = ({
       setRead({
         status: "error",
         message:
-          result?.content.find((part) => part.type === "text")?.text ?? null,
+          result.content.find((part) => part.type === "text")?.text ?? null,
       });
       return;
     }
@@ -272,14 +272,16 @@ const App = () => {
           >
             {result.status === "error" ? (
               <>
-                <p>{result.message ?? locale.messages.error}</p>
-                <Button
-                  onClick={() =>
-                    bridge.detached(bridge.retry(), "retry provision history")
-                  }
-                >
-                  {locale.messages.retry}
-                </Button>
+                <p>{result.message}</p>
+                {result.failure.retryable && (
+                  <Button
+                    onClick={() =>
+                      bridge.detached(bridge.retry(), "retry provision history")
+                    }
+                  >
+                    {locale.messages.retry}
+                  </Button>
+                )}
               </>
             ) : (
               locale.messages.loading

@@ -4,7 +4,11 @@ import {
   type DecisionQueryIntent,
   isWholeEntryIdentifier,
 } from "@stll/api-contract/decision-query-intent";
-import type { CaseLawSearchWarning } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_FILTERS,
+  type CaseLawSearchFilter,
+  type CaseLawSearchWarning,
+} from "@stll/api-contract/search";
 
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
@@ -102,16 +106,25 @@ const NARROWING_FILTERS = {
   (body: SearchDecisionsBody) => boolean
 >;
 
+type SameUnion<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : never
+  : never;
+
+// The wire contract names the same filters the effect map derives, so a
+// filter reported back to a reader is always one this request can carry.
+true satisfies SameUnion<NarrowingOption, CaseLawSearchFilter>;
+
 /**
  * The narrowing filters this request carries, named as the request spells
  * them, in a fixed order: two requests carrying the same filters have to
  * produce the same sentence.
  */
-export const narrowingFilters = (body: SearchDecisionsBody): string[] =>
-  Object.entries(NARROWING_FILTERS)
-    .filter(([, carriesFilter]) => carriesFilter(body))
-    .map(([name]) => name)
-    .toSorted();
+export const narrowingFilters = (body: SearchDecisionsBody) =>
+  CASE_LAW_SEARCH_FILTERS.filter((name) =>
+    NARROWING_FILTERS[name](body),
+  ).toSorted();
 
 export type DecisionQueryInterpretation = {
   queryVariant: CorpusIndexQueryVariant;

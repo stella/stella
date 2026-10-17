@@ -6,6 +6,7 @@ import {
 } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
@@ -34,7 +35,6 @@ import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-proven
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of

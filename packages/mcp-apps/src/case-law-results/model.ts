@@ -12,6 +12,7 @@ import type {
   ResolveResults,
   SearchResults,
 } from "../shared/generated/contracts";
+import { projectAppToolArguments } from "../shared/tool-input";
 
 type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
@@ -78,6 +79,48 @@ const searchHeadnote = (
   }
 };
 
+const warningView = (
+  warning: SearchPage["searches"][number]["warnings"][number],
+) => {
+  switch (warning.code) {
+    case "function_words_optional":
+      return {
+        code: warning.code,
+        droppedFunctionWords: warning.droppedFunctionWords.map((word) => word),
+      } as const;
+    case "filter_read":
+      return {
+        code: warning.code,
+        filter: warning.filter,
+        courtAliases: warning.courtAliases.map(({ input, resolved }) => ({
+          input,
+          resolved,
+        })),
+      } as const;
+    case "filter_dropped":
+      return {
+        code: warning.code,
+        filter: warning.filter,
+        received: warning.received,
+      } as const;
+    case "no_hits_filtered":
+      return {
+        code: warning.code,
+        filters: warning.filters.map((filter) => filter),
+      } as const;
+    case "provision_cited_widely":
+      return {
+        code: warning.code,
+        citingDecisions: warning.citingDecisions,
+      } as const;
+    case "no_hits":
+    case "many_required_terms":
+      return { code: warning.code } as const;
+    default:
+      return panic("Unknown app search warning", warning satisfies never);
+  }
+};
+
 // Only the rendered fields and the next-page handle survive in the view state.
 export const searchView = (data: SearchResults) => {
   if (!("results" in data)) {
@@ -116,7 +159,7 @@ export const searchView = (data: SearchResults) => {
           },
     nextCursor: data.nextCursor,
     searches: data.searches.map(({ warnings }) => ({
-      warnings: warnings.map(({ message, hint }) => ({ message, hint })),
+      warnings: warnings.map(warningView),
     })),
     nextStep: data.nextStep,
   } as const;
@@ -190,7 +233,7 @@ export type CaseLawView =
   | ReturnType<typeof searchView>
   | ReturnType<typeof resolveView>;
 
-export type CourtSelection =
+type CourtSelection =
   | { type: "all" }
   | { type: "court"; name: string }
   | { type: "courts"; names: readonly string[] };
@@ -210,6 +253,7 @@ export const searchFilterInput = ({
   from,
   to,
 }: SearchFilterArgs) => {
+  const declared = projectAppToolArguments("search_case_law", input);
   const {
     cursor: _cursor,
     court: _court,
@@ -218,7 +262,7 @@ export const searchFilterInput = ({
     date_to: _to,
     country: _country,
     ...rest
-  } = input;
+  } = declared;
   const base = {
     ...rest,
     country,

@@ -12,4 +12,4 @@ if (!container) {
 }
 const runtime = createDocumentUploadRuntime();
 createRoot(container).render(<DocumentUpload runtime={runtime} />);
-await runtime.connect();
+await runtime.connect(runtime.mountViewport);

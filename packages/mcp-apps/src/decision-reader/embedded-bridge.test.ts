@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { appFailure } from "../shared/app-error";
 import { createReaderController } from "./controller";
 import { createEmbeddedReaderBridge } from "./embedded-bridge";
 import type { OpenDecision, ReaderPage } from "./model";
@@ -7,6 +8,13 @@ import type { OpenDecision, ReaderPage } from "./model";
 type ParentTransport = Parameters<typeof createEmbeddedReaderBridge>[0];
 type ToolResponse = Awaited<ReturnType<ParentTransport["requestTool"]>>;
 type ToolRequest = Parameters<ParentTransport["requestTool"]>[0];
+const unavailableResponse = {
+  isError: true,
+  content: [],
+  structuredContent: {
+    appFailure: appFailure("unavailable", "unavailable-fixture", true),
+  },
+} satisfies ToolResponse;
 const metadata = {
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "1 C 1/2026",
@@ -151,9 +159,17 @@ describe("embedded MCP decision reader session", () => {
   test("failed opens retry their exact input and stale failures do not replace a newer opening", async () => {
     const host = fixture();
     const failed = host.session.call(request);
-    host.nextCall().resolve(undefined);
+    host.nextCall().resolve(unavailableResponse);
     await failed;
     expect(host.session.getSnapshot().result.status).toBe("error");
+    const failure = host.session.getSnapshot().result;
+    if (failure.status !== "error") {
+      throw new TypeError("Expected an opening failure");
+    }
+    expect(failure.failure).toEqual(
+      appFailure("unavailable", "unavailable-fixture", true),
+    );
+    expect(failure.message).toContain("unavailable-fixture");
     const retry = host.session.retry();
     const retryCall = host.nextCall();
     expect(retryCall.request).toEqual(request);
@@ -163,7 +179,7 @@ describe("embedded MCP decision reader session", () => {
     });
     host.nextCall().resolve(response(opened));
     await newer;
-    retryCall.resolve(undefined);
+    retryCall.resolve(unavailableResponse);
     await retry;
     expect(host.session.getSnapshot().result.status).toBe("ready");
     expect(host.parent.getSnapshot().result).toBe(host.originalSearch);

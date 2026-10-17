@@ -138,6 +138,7 @@ import {
   fillTemplateDocx,
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/input-schemas";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import {
@@ -146,7 +147,6 @@ import {
   parseConfigureEntries,
 } from "@/api/mcp/template-tools";
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
-import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 

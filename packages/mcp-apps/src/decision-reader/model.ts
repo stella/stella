@@ -1,4 +1,3 @@
-import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -7,13 +6,13 @@ import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
 
+import { parseAppFailure } from "../shared/app-error";
+import type { AppToolResult } from "../shared/bridge";
 import {
   APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
 } from "../shared/generated/contracts";
-
-type CallToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
 export type OpenDecision = v.InferOutput<typeof APP_OPEN_DECISION_SCHEMA>;
 export type ReaderPage = v.InferOutput<typeof APP_DECISION_BLOCKS_SCHEMA>;
@@ -32,28 +31,11 @@ export const parseProvisionPreview = (payload: unknown) => {
   return parsed.success ? parsed.output : undefined;
 };
 
-const READER_CURSOR_CONFLICT_CODE = "conflict";
-const cursorConflictSchema = v.object({
-  error: v.object({ code: v.literal(READER_CURSOR_CONFLICT_CODE) }),
-});
-
 export const isReaderCursorConflict = (
-  result: Pick<CallToolResult, "isError" | "content"> | undefined,
-) => {
-  if (result?.isError !== true) {
-    return false;
-  }
-  return result.content.some((content) => {
-    if (content.type !== "text") {
-      return false;
-    }
-    const parsed = Result.try((): unknown => JSON.parse(content.text));
-    return (
-      Result.isOk(parsed) &&
-      v.safeParse(cursorConflictSchema, parsed.value).success
-    );
-  });
-};
+  result: Pick<AppToolResult, "isError" | "structuredContent">,
+) =>
+  result.isError === true &&
+  parseAppFailure(result.structuredContent)?.type === "conflict";
 
 type PendingFragment = { blockId: string; totalChars: number; json: string };
 type ReaderPagerData = {

@@ -44,6 +44,23 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import {
+  countryInputSchema,
+  countryNormalization,
+  ELI_NORMALIZATION,
+  FILTER_NORMALIZATION,
+  cursorInput,
+  ISO_DATE_SCHEMA,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
+  anchorInputSchema,
+  eliInputSchema,
+  languageInputSchema,
+  READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
+  readProvisionHistoryArgsSchema,
+} from "@/api/mcp/legislation-input";
+import {
   isProvisionTextCursor,
   windowProvisionText,
 } from "@/api/mcp/provision-text-window";
@@ -70,26 +87,18 @@ import {
   invalidCursorResult,
   buildLegislationDocumentAppUrl,
   legalCitationLinkFields,
-  countryInputSchema,
-  countryNormalization,
-  ELI_NORMALIZATION,
-  FILTER_NORMALIZATION,
-  cursorInput,
   DEFAULT_SEARCH_LIMIT,
   errorResult,
   handlerStatusOf,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
   MCP_CONTENT_MAX_CHARS,
   mapValibotIssues,
   notFoundResult,
-  nullAsAbsent,
   searchIndexUnavailableResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
   validationErrorResult,
-  uuidInputSchema,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 import {
@@ -139,47 +148,12 @@ const PICK_AN_ANCHOR_HINT =
 const WITHHELD_WORDING_MESSAGE =
   "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.";
 
-const eliInputSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(512),
-  v.description(
-    "European Legislation Identifier of the work, as search_legislation " +
-      "returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). " +
-      "It addresses the act, not one consolidation of it.",
-  ),
-);
-
-const anchorInputSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(256),
-  v.description(
-    "Publisher provision anchor; confirm it in read_statute's outline for " +
-      "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
-      "-odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, " +
-      "par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to " +
-      "that subdivision. Other publishers may use different schemes.",
-  ),
-);
-
 const asOfInputSchema = v.pipe(
   ISO_DATE_SCHEMA,
   v.maxLength(10),
   v.description(
     "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it " +
       "for the text in force today.",
-  ),
-);
-
-const languageInputSchema = v.pipe(
-  v.string(),
-  v.minLength(2),
-  v.maxLength(8),
-  v.description(
-    "Language of the consolidation to read. Language is part of the work " +
-      "key, so an act published in two languages has one consolidation in " +
-      "each.",
   ),
 );
 
@@ -325,34 +299,6 @@ const provisionsBatchEnvelopeSchema = nullAsAbsent(
 /** Stage two: one entry, through the element the advertised array declares. */
 const provisionEntrySchema = nullAsAbsent(provisionRequestSchema);
 
-const readProvisionHistoryArgsSchema = nullAsAbsent(
-  v.strictObject({
-    eli: eliInputSchema,
-    anchor: anchorInputSchema,
-    language: v.optional(languageInputSchema),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.legislationProvisionHistoryPageSizeMax),
-        v.description(
-          `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
-        ),
-      ),
-    ),
-    cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous read_provision_history call to read the next page",
-    }),
-    text_cursor: cursorInput({
-      description:
-        "Opaque nextTextCursor from one item in the requested history page",
-      issuedBy: isProvisionTextCursor,
-    }),
-  }),
-);
-
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
@@ -473,7 +419,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "eli, anchor, and version-page cursor until it is null. " +
       "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
-    inputNormalization: { eli: ELI_NORMALIZATION },
+    inputNormalization: READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
     access: "read",
     readClass: "public",
     anonymized: { exposure: "passthrough" },

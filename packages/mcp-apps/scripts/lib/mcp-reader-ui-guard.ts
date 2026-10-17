@@ -1,5 +1,19 @@
 import { ts } from "@stll/scripts/src/typescript-program";
 
+import readerPackage from "../../../../packages/decision-reader/package.json";
+import uiPackage from "../../../../packages/ui/package.json";
+
+export const MCP_SHARED_UI_MODULE_FILES = [
+  ...new Set([
+    ...Object.values(readerPackage.exports)
+      .filter((file) => file.endsWith(".tsx"))
+      .map((file) => `packages/decision-reader/${file.replace(/^\.\//u, "")}`),
+    ...Object.values(uiPackage.exports)
+      .filter((file) => file.endsWith(".tsx"))
+      .map((file) => `packages/ui/${file.replace(/^\.\//u, "")}`),
+  ]),
+];
+
 export const MCP_READER_UI_APP_DIRECTORIES = [
   "case-law-results",
   "decision-reader",

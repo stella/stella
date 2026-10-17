@@ -1,6 +1,8 @@
 import { fireEvent, render } from "@testing-library/react";
 import { expect, test } from "bun:test";
 
+import { appFailure, formatAppFailure } from "../shared/app-error";
+import { appLocale } from "../shared/locale";
 import { CaseLawApp } from "./view";
 import type { CaseLawBridge } from "./view";
 
@@ -14,7 +16,7 @@ const fakeBridge = (snapshot: Snapshot) => {
     supportsTools: () => false,
     connect: async () => {},
     call: async () => {},
-    requestTool: async () => undefined,
+    requestTool: async () => ({ content: [] }),
     requestFullscreen: async () => {},
     requestInline: async () => {},
     retry: async () => {
@@ -37,13 +39,20 @@ const baseSnapshot = {
 } as const;
 
 test("Czech host locale renders headings and retry action with the recoverable failure", () => {
+  const failure = appFailure("unavailable", "app-request", true);
+  const message = formatAppFailure(failure, appLocale("cs-CZ").t);
   const host = fakeBridge({
     ...baseSnapshot,
-    result: { status: "error", message: null },
+    result: {
+      status: "error",
+      message,
+      failure,
+      previous: { status: "empty" },
+    },
   });
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByRole("heading", { name: "Judikatura" })).toBeDefined();
-  expect(ui.getByRole("alert").textContent).toContain("Chyba");
+  expect(ui.getByRole("alert").textContent).toContain(message);
   fireEvent.click(ui.getByRole("button", { name: "Spustit znovu" }));
   expect(host.retries()).toBe(1);
 });

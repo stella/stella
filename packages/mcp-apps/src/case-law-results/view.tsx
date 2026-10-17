@@ -16,6 +16,7 @@ import {
   formatDecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { foldSearchMatchText } from "@stll/text-normalize";
 import { Temporal, todayFor } from "@stll/time";
 import {
   Accordion,
@@ -25,6 +26,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { CourtFilter } from "@stll/ui/court-filter";
 import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -41,6 +43,7 @@ import {
   PaginationItem,
   PaginationLink,
 } from "@stll/ui/pagination";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -49,8 +52,6 @@ import {
 import { SearchField } from "@stll/ui/search-field";
 import {
   Select,
-  SelectGroup,
-  SelectGroupLabel,
   SelectItem,
   SelectPopup,
   SelectTrigger,
@@ -79,13 +80,10 @@ import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
 import { ReaderView } from "../decision-reader/view";
 import type { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
+import { SearchNotice } from "../shared/notice";
+import { getAppToolArrayLimit } from "../shared/tool-input";
 import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
-import type {
-  CaseLawView,
-  CourtSelection,
-  ResultRow,
-  ResultSort,
-} from "./model";
+import type { CaseLawView, ResultRow, ResultSort } from "./model";
 
 export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
@@ -413,7 +411,6 @@ type SearchControlsProps = {
   input: Record<string, unknown>;
   defaults: Extract<ReturnType<typeof filterDefaults>, { status: "ready" }>;
 };
-type CourtFilterState = { value: string; selection: CourtSelection };
 
 const SearchControls = ({
   bridge,
@@ -423,6 +420,8 @@ const SearchControls = ({
 }: SearchControlsProps) => {
   const t = useTranslations();
   const locale = useLocale();
+  const format = useFormatter();
+  const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
   const initialQueries = normalizeStringList(input["queries"], {
     split: "never",
   });
@@ -431,20 +430,33 @@ const SearchControls = ({
   const [country, setCountry] = useState(defaults.country);
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
-  const [court, setCourt] = useState((): CourtFilterState => {
-    if (defaults.courts.length > 0) {
-      return {
-        value: "current",
-        selection: { type: "courts", names: defaults.courts },
-      };
-    }
-    if (defaults.court === "") {
-      return { value: "all", selection: { type: "all" } };
-    }
-    return {
-      value: `court:${defaults.court}`,
-      selection: { type: "court", name: defaults.court },
-    };
+  const [courts, setCourts] = useState(() => {
+    const initial = normalizeStringList(defaults.court, {
+      split: "delimiters",
+    });
+    const selected = (() => {
+      if (defaults.courts.length > 0) {
+        return defaults.courts;
+      }
+      return initial.ok ? initial.value : [];
+    })();
+    const aliases = page.searches.flatMap(({ warnings }) =>
+      warnings.flatMap((warning) =>
+        warning.code === "filter_read" && warning.filter === "court"
+          ? warning.courtAliases
+          : [],
+      ),
+    );
+    return [
+      ...new Set(
+        selected.flatMap((name) => {
+          const resolved = aliases
+            .filter(({ input: value }) => value === name)
+            .map(({ resolved: value }) => value);
+          return resolved.length === 0 ? [name] : resolved;
+        }),
+      ),
+    ];
   });
   const facets = page.facets;
   const dateLabels = {
@@ -473,7 +485,10 @@ const SearchControls = ({
               ...searchFilterInput({
                 input,
                 country,
-                court: court.selection,
+                court:
+                  courts.length === 0
+                    ? { type: "all" }
+                    : { type: "courts", names: courts },
                 from,
                 to,
               }),
@@ -511,7 +526,7 @@ const SearchControls = ({
             onValueChange={(value) => {
               if (value !== null && value !== country) {
                 setCountry(value);
-                setCourt({ value: "all", selection: { type: "all" } });
+                setCourts([]);
               }
             }}
           >
@@ -531,82 +546,58 @@ const SearchControls = ({
           <FieldLabel className="text-muted-foreground text-xs">
             {t("court")}
           </FieldLabel>
-          <Select
-            value={court.value}
-            onValueChange={(value) => {
-              if (value === null) {
-                return;
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-auto min-h-11 w-full flex-wrap justify-start text-start"
+                />
               }
-              let selection: CourtSelection;
-              if (value === "all") {
-                selection = { type: "all" };
-              } else if (value === "current") {
-                selection = { type: "courts", names: defaults.courts };
-              } else if (value.startsWith("court:")) {
-                selection = {
-                  type: "court",
-                  name: value.slice("court:".length),
-                };
-              } else {
-                const tier = facets?.court.find(
-                  (entry) => value === `tier:${entry.tierLabel}`,
-                );
-                if (tier === undefined) {
-                  return;
-                }
-                selection = {
-                  type: "courts",
-                  names: tier.courts.map(({ value: name }) => name),
-                };
-              }
-              setCourt({ value, selection });
-            }}
-          >
-            <SelectTrigger aria-label={t("court")} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="all">{t("all")}</SelectItem>
-              {defaults.courts.length > 0 && (
-                <SelectItem value="current">
-                  {defaults.courts.join(", ")}
-                </SelectItem>
-              )}
-              {defaults.court !== "" &&
-                (facets === null ||
-                  !facets.court.some((tier) =>
-                    tier.courts.some(({ value }) => value === defaults.court),
-                  )) && (
-                  <SelectItem value={`court:${defaults.court}`}>
-                    {defaults.court}
-                  </SelectItem>
-                )}
-              {court.value.startsWith("tier:") &&
-                !facets?.court.some(
-                  ({ tierLabel }) => court.value === `tier:${tierLabel}`,
-                ) && (
-                  <SelectItem value={court.value}>
-                    {t(court.value.slice("tier:".length))}
-                  </SelectItem>
-                )}
-              {facets?.court.map(({ tierLabel, courts }) => (
-                <SelectGroup key={tierLabel}>
-                  <SelectGroupLabel>{t(tierLabel)}</SelectGroupLabel>
-                  <SelectItem
-                    value={`tier:${tierLabel}`}
-                    disabled={courts.length === 0}
-                  >
-                    {t(tierLabel)}
-                  </SelectItem>
-                  {courts.map(({ value }) => (
-                    <SelectItem key={value} value={`court:${value}`}>
-                      {value}
-                    </SelectItem>
+            >
+              <span className="sr-only">{t("court")}</span>
+              {courts.length === 0
+                ? t("all")
+                : courts.map((name) => (
+                    <span
+                      key={name}
+                      className="bg-muted max-w-full rounded px-1.5 py-0.5 text-xs break-words"
+                    >
+                      <bdi>{name}</bdi>
+                    </span>
                   ))}
-                </SelectGroup>
-              ))}
-            </SelectPopup>
-          </Select>
+            </PopoverTrigger>
+            <PopoverPopup
+              align="start"
+              className="w-80 max-w-[calc(100vw-2rem)] p-3"
+            >
+              <CourtFilter
+                mode="multiple"
+                maxSelections={maxCourts}
+                selectionHint={t("courtSelectionHint", {
+                  selected: format.number(courts.length),
+                  maximum: format.number(maxCourts),
+                })}
+                matchText={foldSearchMatchText}
+                groups={
+                  facets === null
+                    ? []
+                    : facets.court.map(({ tierLabel, courts: options }) => ({
+                        value: tierLabel,
+                        label: t(tierLabel),
+                        courts: options,
+                      }))
+                }
+                selected={courts}
+                onChange={setCourts}
+                label={t("court")}
+                searchLabel={t("search")}
+                clearLabel={t("reset")}
+                emptyLabel={t("noResults")}
+              />
+            </PopoverPopup>
+          </Popover>
         </Field>
         <DateRangeFilter
           {...dateLabels}
@@ -658,26 +649,9 @@ const SearchResults = ({
           defaults={defaults}
         />
       )}
-      {[
-        ...new Map(
-          page.searches
-            .flatMap(({ warnings }) => warnings)
-            .map((warning) => [`${warning.message}-${warning.hint}`, warning]),
-        ).values(),
-      ].map((warning) => (
-        <p
-          role="status"
-          className="bg-muted/60 text-muted-foreground rounded-lg p-3 text-xs"
-          key={`${warning.message}-${warning.hint}`}
-        >
-          {warning.message} {warning.hint}
-        </p>
-      ))}
-      {page.nextStep !== undefined && (
-        <p role="status" className="text-muted-foreground text-xs">
-          {page.nextStep}
-        </p>
-      )}
+      <SearchNotice
+        warnings={page.searches.flatMap(({ warnings }) => warnings)}
+      />
       <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
@@ -781,6 +755,75 @@ const LoadingResults = () => {
     </div>
   );
 };
+type CaseLawError = Extract<
+  ReturnType<CaseLawBridge["getSnapshot"]>["result"],
+  { status: "error" }
+>;
+
+const ResultFailure = ({
+  bridge,
+  error,
+}: {
+  bridge: CaseLawBridge;
+  error: CaseLawError;
+}) => {
+  const t = useTranslations();
+  return (
+    <div role="alert" className="space-y-3 rounded-lg border p-4">
+      <p className="text-sm">{error.message}</p>
+      {error.failure.retryable && (
+        <Button
+          variant="outline"
+          onClick={() => bridge.detached(bridge.retry(), "retry case-law read")}
+        >
+          {t("retry")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type ViewResultProps = {
+  bridge: CaseLawBridge;
+  view: CaseLawView;
+  input: Record<string, unknown>;
+  onOpen: OpenReader;
+};
+const ViewResult = ({ bridge, view, input, onOpen }: ViewResultProps) => {
+  switch (view.type) {
+    case "unavailable":
+      return (
+        <p role="status" className="bg-muted rounded-lg p-5 text-sm">
+          {view.message} {view.hint}
+        </p>
+      );
+    case "search":
+      return (
+        <SearchResults
+          bridge={bridge}
+          page={view}
+          input={input}
+          onOpen={onOpen}
+        />
+      );
+    case "resolve":
+      return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
+    default:
+      return panic("Unknown case-law result view", view satisfies never);
+  }
+};
+const ReadyResult = ({
+  bridge,
+  view,
+  input,
+  onOpen,
+  error,
+}: ViewResultProps & { error: CaseLawError | null }) => (
+  <div className="space-y-3">
+    {error !== null && <ResultFailure bridge={bridge} error={error} />}
+    <ViewResult bridge={bridge} view={view} input={input} onOpen={onOpen} />
+  </div>
+);
 const ResultContent = ({
   bridge,
   onOpen,
@@ -792,49 +835,33 @@ const ResultContent = ({
     bridge.subscribe,
     bridge.getSnapshot,
   );
-  const t = useTranslations();
   switch (result.status) {
     case "idle":
     case "loading":
       return <LoadingResults />;
     case "error":
-      return (
-        <div role="alert" className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm">{result.message ?? t("error")}</p>
-          <Button
-            variant="outline"
-            onClick={() =>
-              bridge.detached(bridge.retry(), "retry case-law read")
-            }
-          >
-            {t("retry")}
-          </Button>
-        </div>
-      );
-    case "ready": {
-      const { view } = result;
-      switch (view.type) {
-        case "unavailable":
-          return (
-            <p role="status" className="bg-muted rounded-lg p-5 text-sm">
-              {view.message} {view.hint}
-            </p>
-          );
-        case "search":
-          return (
-            <SearchResults
-              bridge={bridge}
-              page={view}
-              input={input}
-              onOpen={onOpen}
-            />
-          );
-        case "resolve":
-          return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
-        default:
-          return panic("Unknown case-law result view", view satisfies never);
+      if (result.previous.status === "ready") {
+        return (
+          <ReadyResult
+            bridge={bridge}
+            view={result.previous.view}
+            input={input}
+            onOpen={onOpen}
+            error={result}
+          />
+        );
       }
-    }
+      return <ResultFailure bridge={bridge} error={result} />;
+    case "ready":
+      return (
+        <ReadyResult
+          bridge={bridge}
+          view={result.view}
+          input={input}
+          onOpen={onOpen}
+          error={null}
+        />
+      );
     default:
       return panic("Unknown app result state", result satisfies never);
   }
@@ -911,15 +938,15 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
     }
     returnLocation.current = {
       trigger,
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
+      scrollX: document.querySelector("[data-app-viewport]")?.scrollLeft ?? 0,
+      scrollY: document.querySelector("[data-app-viewport]")?.scrollTop ?? 0,
     };
     const appUrl =
       row.appUrl === null ? null : parseLegalCitationHttpUrl(row.appUrl);
     const paragraphs =
       appUrl === null ? null : parseDecisionParagraphFragment(appUrl.hash);
     setScreen("reader");
-    window.scrollTo(0, 0);
+    document.querySelector("[data-app-viewport]")?.scrollTo(0, 0);
     embeddedReaderBridge.detached(
       embeddedReaderBridge.call({
         name: "open_case_law_decision",
@@ -963,7 +990,9 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
               const location = returnLocation.current;
               returnLocation.current = null;
               location.trigger.focus({ preventScroll: true });
-              window.scrollTo(location.scrollX, location.scrollY);
+              document
+                .querySelector("[data-app-viewport]")
+                ?.scrollTo(location.scrollX, location.scrollY);
             }}
             dir={direction}
             className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6"

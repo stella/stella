@@ -87,9 +87,9 @@ export const createGraphController = (bridge: GraphBridge) => {
       return;
     }
     const parsed =
-      result?.isError === true
+      result.isError === true
         ? undefined
-        : parseCitationPage(result?.structuredContent);
+        : parseCitationPage(result.structuredContent);
     if (
       parsed === undefined ||
       parsed.decisionId !== decisionId ||
@@ -98,7 +98,7 @@ export const createGraphController = (bridge: GraphBridge) => {
         parsed.nextCursor !== null &&
         parsed.nextCursor === page.nextCursor)
     ) {
-      fail(result?.content.find((part) => part.type === "text")?.text ?? null);
+      fail(result.content.find((part) => part.type === "text")?.text ?? null);
       return;
     }
     snapshot = { model: mergePage(model, parsed), request: { status: "idle" } };
@@ -133,9 +133,9 @@ export const createGraphController = (bridge: GraphBridge) => {
       name: "open_case_law_decision",
       arguments: { decision_id: decisionId },
     });
-    if (result === undefined || result.isError === true) {
+    if (result.isError === true) {
       onError(
-        result?.content.find((part) => part.type === "text")?.text ?? null,
+        result.content.find((part) => part.type === "text")?.text ?? null,
       );
       return;
     }

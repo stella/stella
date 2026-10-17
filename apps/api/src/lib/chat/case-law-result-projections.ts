@@ -8,15 +8,11 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
-import {
-  CASE_LAW_SEARCH_WARNING_CODES,
-  FACET_COUNT_TYPE,
-  SEARCH_TOTAL_TYPE,
-} from "@stll/api-contract/search";
+import { FACET_COUNT_TYPE, SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
+import { agentCaseLawSearchWarningSchema } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
@@ -167,14 +163,11 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
           // What the search answered that the call did not ask for. Empty for a
           // phrasing that required every word it carried and found something.
           warnings: v.array(
-            v.strictObject({
-              code: v.picklist([
-                ...CASE_LAW_SEARCH_WARNING_CODES,
-                ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
-              ]),
-              message: v.string(),
-              hint: v.string(),
-            }),
+            v.union(
+              agentCaseLawSearchWarningSchema.options.map((warning) =>
+                projectionBranch(warning),
+              ),
+            ),
           ),
         }),
       ),

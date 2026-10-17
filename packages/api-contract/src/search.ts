@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
 import { ENTITY_KINDS } from "./entity-kinds";
 
@@ -101,7 +102,7 @@ export const countedSearchTotal = (
  * second list of them is how a warning the API emits stops being a warning
  * the page knows how to show. The wording belongs to each surface — the API
  * writes an agent-facing sentence, the web renders a translated one — so
- * only the codes are shared.
+ * codes and structured facts are shared.
  *
  * - `function_words_optional`: the query carried words that are grammar
  *   rather than subject matter, and did not require them. The response's
@@ -111,22 +112,51 @@ export const countedSearchTotal = (
  *   narrowed with, which is a different answer from `no_hits` because the
  *   caller can drop a filter.
  */
-export const CASE_LAW_SEARCH_WARNING_CODES = [
-  "function_words_optional",
-  "no_hits",
-  "no_hits_filtered",
+export const CASE_LAW_SEARCH_FILTERS = [
+  "court",
+  "courts",
+  "category",
+  "hasLegalSentence",
+  "provision",
+  "dateFrom",
+  "dateTo",
+  "decisionType",
+  "language",
+  "sourceId",
 ] as const;
 
-export type CaseLawSearchWarningCode =
-  (typeof CASE_LAW_SEARCH_WARNING_CODES)[number];
+export const caseLawSearchFilterSchema = v.picklist(CASE_LAW_SEARCH_FILTERS);
+export type CaseLawSearchFilter = v.InferOutput<
+  typeof caseLawSearchFilterSchema
+>;
 
-export type CaseLawSearchWarning = {
-  readonly code: CaseLawSearchWarningCode;
-  /** What happened, in the caller's own terms. */
-  readonly message: string;
-  /** The concrete next call, never a restatement of the message. */
-  readonly hint: string;
+const caseLawSearchWarningText = {
+  message: v.string(),
+  hint: v.string(),
 };
+
+export const caseLawSearchWarningSchema = v.variant("code", [
+  v.strictObject({
+    code: v.literal("function_words_optional"),
+    droppedFunctionWords: v.array(v.string()),
+    ...caseLawSearchWarningText,
+  }),
+  v.strictObject({ code: v.literal("no_hits"), ...caseLawSearchWarningText }),
+  v.strictObject({
+    code: v.literal("no_hits_filtered"),
+    filters: v.array(caseLawSearchFilterSchema),
+    ...caseLawSearchWarningText,
+  }),
+]);
+
+export type CaseLawSearchWarning = v.InferOutput<
+  typeof caseLawSearchWarningSchema
+>;
+
+export const CASE_LAW_SEARCH_WARNING_CODES =
+  caseLawSearchWarningSchema.options.map(({ entries }) => entries.code.literal);
+
+export type CaseLawSearchWarningCode = CaseLawSearchWarning["code"];
 
 export const GLOBAL_SEARCH_RESULT_TYPES = [
   "matter",

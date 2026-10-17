@@ -10,10 +10,7 @@ import {
 } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
-import {
-  PUBLIC_CASE_LAW_COUNTRIES,
-  publicCaseLawCountry,
-} from "@stll/api-contract/case-law-launch-readiness";
+import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_SOURCE,
@@ -25,8 +22,6 @@ import {
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
-  DEFAULT_SEARCH_SORT,
-  SEARCH_SORTS,
   searchPageEnd,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
@@ -74,7 +69,6 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
   type CaseLawProvisionFilter,
@@ -114,7 +108,6 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
@@ -167,8 +160,22 @@ import {
   MANY_REQUIRED_TERMS_THRESHOLD,
   searchCaseLawTexts,
 } from "@/api/mcp/case-law-search-guidance";
+import {
+  ADMITTED_CASE_LAW_COUNTRIES,
+  SEARCH_CASE_LAW_INPUT_NORMALIZATION,
+  SEARCH_CASE_LAW_TOOL,
+  searchCaseLawArgsSchema,
+} from "@/api/mcp/case-law-search-input";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  countryInputSchema,
+  countryNormalization,
+  cursorInput,
+  MAX_SEARCH_LIMIT,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import {
   defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitationDigest,
@@ -200,30 +207,22 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   legalCitationLinkFields,
-  countryInputSchema,
-  countryNormalization,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   DEFAULT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
-  FILTER_NORMALIZATION,
   handlerResultMessage,
   internalFailureResult,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   MAX_LIST_LIMIT,
-  MAX_SEARCH_LIMIT,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
   searchIndexUnavailableResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -232,6 +231,7 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
@@ -667,14 +667,6 @@ const searchAcrossMattersArgsSchema = nullAsAbsent(
   }),
 );
 
-/**
- * The corpus countries `search_case_law` answers for. Rendered into both the
- * input description and the rejection hint, so a model reading either knows
- * the spelling: asked for German case law, a model wrote `DEU` where the
- * orientation eval expected `DE`, and the corpus admits neither.
- */
-const ADMITTED_CASE_LAW_COUNTRIES = PUBLIC_CASE_LAW_COUNTRIES.join(", ");
-
 const CASE_LAW_COVERAGE_TOOL = "case_law_coverage";
 const caseLawCoverageArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -689,162 +681,15 @@ const caseLawCoverageArgsSchema = nullAsAbsent(
   }),
 );
 
-/** Named because the country ask names the call to change; a census test binds
- *  this to the tool's own `name` so a rename cannot leave a stale hint. */
-const SEARCH_CASE_LAW_TOOL = "search_case_law";
-
 /** What the engine answers for a cursor it cannot decode. */
 const INVALID_CURSOR_MESSAGE = "Invalid cursor";
 const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
-
-/**
- * A merged cursor carries one sub-cursor per query, JSON-wrapped and
- * base64url-encoded. The sub-cursor bound comes from the engine cursor's own
- * codec rather than a number written here: under query expansion an engine
- * cursor carries a 64-character dictionary identity, and a cap guessed below
- * what the engine emits rejects a page boundary this tool itself handed out.
- * The envelope adds three JSON characters per entry, two for the brackets,
- * and four base64 characters per three bytes.
- */
-export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
-  (((CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH + 3) *
-    LIMITS.caseLawSearchQueriesMax +
-    2) *
-    4) /
-    3,
-);
 
 /** Read once at module load: tools/list is fixed for a running server. */
 const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
   envBase.MCP_CASE_LAW_SEARCH_GUIDANCE,
 );
-
-const searchCaseLawArgsSchema = nullAsAbsent(
-  v.strictObject({
-    queries: v.optional(
-      v.pipe(
-        v.array(
-          v.pipe(
-            v.string(),
-            v.minLength(1),
-            v.maxLength(LIMITS.searchQueryMaxLength),
-          ),
-        ),
-        v.minLength(1),
-        v.maxLength(LIMITS.caseLawSearchQueriesMax),
-        v.description(SEARCH_CASE_LAW_TEXTS.queries),
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(MAX_SEARCH_LIMIT),
-        v.description(SEARCH_CASE_LAW_TEXTS.limit),
-      ),
-    ),
-    cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
-      maxLength: CASE_LAW_SEARCH_CURSOR_MAX_LENGTH,
-    }),
-    court: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(512),
-        v.description("Filter by court name"),
-      ),
-    ),
-    courts: v.optional(
-      v.pipe(
-        v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
-        v.minLength(1),
-        v.maxLength(16),
-        v.description(SEARCH_CASE_LAW_TEXTS.courts),
-      ),
-    ),
-    category: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(128),
-        v.description(
-          'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
-        ),
-      ),
-    ),
-    provision: v.optional(
-      v.pipe(
-        v.string(),
-        v.nonEmpty(),
-        v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
-        v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
-        ),
-      ),
-    ),
-    has_legal_sentence: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "True requires a non-empty stored legal sentence (právní věta); false selects decisions without one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.",
-        ),
-      ),
-    ),
-    country: countryInputSchema(
-      `Required corpus country. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
-    ),
-    language: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(8),
-        v.description("Filter by language code"),
-      ),
-    ),
-    decision_type: v.optional(
-      v.pipe(
-        v.string(),
-        v.minLength(1),
-        v.maxLength(128),
-        v.description("Filter by decision type"),
-      ),
-    ),
-    source_id: v.optional(uuidInputSchema("Filter by source ID")),
-    date_from: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
-      ),
-    ),
-    date_to: v.optional(
-      v.pipe(
-        ISO_DATE_SCHEMA,
-        v.maxLength(10),
-        v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
-      ),
-    ),
-    sort: v.optional(
-      v.pipe(
-        v.picklist(SEARCH_SORTS),
-        v.description(
-          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
-        ),
-      ),
-    ),
-    strict: v.optional(
-      v.pipe(
-        v.boolean(),
-        v.description(
-          "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
-        ),
-      ),
-    ),
-  }),
-);
+const searchCaseLawArgs = searchCaseLawArgsSchema(SEARCH_CASE_LAW_TEXTS);
 
 const readContentAcrossMattersArgsSchema = nullAsAbsent(
   v.strictObject({
@@ -939,33 +784,6 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         ),
       ),
     ),
-  }),
-);
-
-const readCaseLawCitationsArgsSchema = nullAsAbsent(
-  v.strictObject({
-    decision_id: uuidInputSchema("Case-law decision ID"),
-    direction: v.pipe(
-      v.picklist(CITATION_READ_DIRECTIONS),
-      v.description(
-        "Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments.",
-      ),
-    ),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.caseLawDecisionCitationPageSize),
-        v.description(
-          `Citations per page; defaults to ${LIMITS.caseLawAgentCitationPageSizeDefault}, at most ${LIMITS.caseLawDecisionCitationPageSize}.`,
-        ),
-      ),
-    ),
-    cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous read_case_law_citations call to read the next page",
-    }),
   }),
 );
 
@@ -1075,19 +893,8 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description: `${SEARCH_CASE_LAW_TEXTS.description} Use \`url\` for the reader and \`source_url\` for the publisher.`,
-    inputSchema: searchCaseLawArgsSchema,
-    inputNormalization: {
-      country: countryNormalization({
-        spelling: "alpha-3",
-        admitted: PUBLIC_CASE_LAW_COUNTRIES,
-        tool: SEARCH_CASE_LAW_TOOL,
-      }),
-      court: FILTER_NORMALIZATION,
-      courts: { kind: "string-list" },
-      category: FILTER_NORMALIZATION,
-      language: FILTER_NORMALIZATION,
-      decision_type: FILTER_NORMALIZATION,
-    },
+    inputSchema: searchCaseLawArgs,
+    inputNormalization: SEARCH_CASE_LAW_INPUT_NORMALIZATION,
     access: "read",
     readClass: "public",
     anonymized: { exposure: "passthrough" },
@@ -2258,7 +2065,7 @@ const caseLawSearchRequestFilters = ({
   date_to: dateTo,
   sort,
   strict,
-}: v.InferOutput<typeof searchCaseLawArgsSchema>) => ({
+}: v.InferOutput<typeof searchCaseLawArgs>) => ({
   ...(category === undefined ? {} : { category }),
   ...(hasLegalSentence === undefined ? {} : { hasLegalSentence }),
   ...(language === undefined ? {} : { language }),
@@ -2465,7 +2272,7 @@ const readSearchProvision = async ({
   context,
   country,
 }: {
-  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  args: v.InferOutput<typeof searchCaseLawArgs>;
   context: McpRequestContext;
   country: string;
 }): Promise<SearchProvisionArgRead> => {
@@ -2505,7 +2312,7 @@ const readSearchProvision = async ({
 };
 
 type ListSearchCaseLawProvisionOptions = {
-  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  args: v.InferOutput<typeof searchCaseLawArgs>;
   context: McpRequestContext;
   country: NonNullable<ReturnType<typeof publicCaseLawCountry>>;
   /** Absent when the call named neither queries nor a provision. */
@@ -2598,7 +2405,7 @@ const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
-  const parsed = v.safeParse(searchCaseLawArgsSchema, args);
+  const parsed = v.safeParse(searchCaseLawArgs, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }

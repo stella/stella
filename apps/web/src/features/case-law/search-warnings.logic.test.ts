@@ -13,11 +13,24 @@ import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logi
  * below is about the keys the code picked, so a message leaking through would
  * show up as one of these strings.
  */
-const warning = (code: CaseLawSearchWarningCode): CaseLawSearchWarning => ({
-  code,
-  message: `wire message for ${code}`,
-  hint: `wire hint for ${code}`,
-});
+const warning = (code: CaseLawSearchWarningCode): CaseLawSearchWarning => {
+  const text = {
+    message: `wire message for ${code}`,
+    hint: `wire hint for ${code}`,
+  };
+  switch (code) {
+    case "function_words_optional":
+      return { code, ...text, droppedFunctionWords: ["na"] };
+    case "no_hits_filtered":
+      return { code, ...text, filters: ["court"] };
+    case "no_hits":
+      return { code, ...text };
+    default:
+      throw new TypeError(
+        `Unknown warning code: ${String(code satisfies never)}`,
+      );
+  }
+};
 
 const answered = (...codes: CaseLawSearchWarningCode[]) => ({
   queryUsed: "výpověď z nájmu",

@@ -4,16 +4,16 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  withModelPlaceholdersOmitted,
+  withOptionalsNullable,
+} from "@stll/agent-input";
+import {
   assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import {
-  withModelPlaceholdersOmitted,
-  withOptionalsNullable,
-} from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   ownJsonKey,

@@ -1,8 +1,11 @@
 import { parseDecisionParagraphFragment } from "@stll/api-contract/decision-paragraph-range";
 
 import { DECISION_READER_APP } from "../manifest";
+import { appFailure, createAppRequestId } from "../shared/app-error";
+import type { AppFailure } from "../shared/app-error";
 import { createPresentationBridge } from "../shared/bridge";
 import type { ProvisionPreview } from "../shared/generated/contracts";
+import { readerToolFailure } from "./failures";
 import {
   appendReaderPage,
   createReaderPager,
@@ -17,6 +20,8 @@ import type { OpenDecision, ReaderPager } from "./model";
 type ReaderControllerSnapshot = {
   document: ReaderPager | null;
   requestStatus: "idle" | "loading" | "error" | "conflict";
+  requestFailure: AppFailure | null;
+  previewFailure: AppFailure | null;
   documentRevision: number;
   previewStatus: "idle" | "loading" | "error";
   preview: ProvisionPreview | null;
@@ -24,6 +29,8 @@ type ReaderControllerSnapshot = {
 const createReaderSnapshot = (): ReaderControllerSnapshot => ({
   document: null,
   requestStatus: "idle",
+  requestFailure: null,
+  previewFailure: null,
   documentRevision: 0,
   previewStatus: "idle",
   preview: null,
@@ -65,7 +72,7 @@ export const createReaderController = (
       return;
     }
     const current = generation;
-    snapshot = { ...snapshot, requestStatus: "loading" };
+    snapshot = { ...snapshot, requestStatus: "loading", requestFailure: null };
     publish();
     const cursor = document.nextCursor;
     const result = await bridge.requestTool({
@@ -78,6 +85,8 @@ export const createReaderController = (
     if (current !== generation) {
       return;
     }
+    const requestFailure =
+      result.isError === true ? readerToolFailure(result) : null;
     if (isReaderCursorConflict(result)) {
       generation += 1;
       previewGeneration += 1;
@@ -86,13 +95,15 @@ export const createReaderController = (
         ...createReaderSnapshot(),
         document: createReaderPager(document.metadata),
         requestStatus: "conflict",
+        requestFailure:
+          requestFailure ?? appFailure("conflict", createAppRequestId(), true),
         documentRevision: snapshot.documentRevision + 1,
       };
       publish();
       return;
     }
     const page =
-      result === undefined || result.isError === true
+      result.isError === true
         ? undefined
         : parseReaderPage(result.structuredContent);
     const appended =
@@ -100,7 +111,13 @@ export const createReaderController = (
         ? undefined
         : appendReaderPage({ state: document, page, cursor });
     if (appended === undefined || appended.status === "invalid") {
-      snapshot = { ...snapshot, requestStatus: "error" };
+      snapshot = {
+        ...snapshot,
+        requestStatus: "error",
+        requestFailure:
+          requestFailure ??
+          appFailure("invalid_response", createAppRequestId()),
+      };
       publish();
       return;
     }
@@ -125,7 +142,7 @@ export const createReaderController = (
     lastProvision = provision;
     const current = generation;
     const currentPreview = ++previewGeneration;
-    snapshot = { ...snapshot, previewStatus: "loading" };
+    snapshot = { ...snapshot, previewStatus: "loading", previewFailure: null };
     publish();
     const result = await bridge.requestTool({
       name: "preview_cited_provision",
@@ -135,13 +152,14 @@ export const createReaderController = (
       return;
     }
     const preview =
-      result === undefined || result.isError === true
+      result.isError === true
         ? undefined
         : parseProvisionPreview(result.structuredContent);
     snapshot = {
       ...snapshot,
       preview: preview ?? null,
       previewStatus: preview === undefined ? "error" : "idle",
+      previewFailure: preview === undefined ? readerToolFailure(result) : null,
     };
     publish();
   };
@@ -196,7 +214,6 @@ export const createReaderController = (
           : createReaderPager(received.metadata),
     };
     publish();
-    bridge.detached(bridge.requestFullscreen(), "request reader display mode");
     if (received.status !== "unavailable") {
       bridge.detached(loadNext(), "load decision blocks");
     }

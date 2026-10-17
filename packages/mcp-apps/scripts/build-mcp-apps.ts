@@ -12,7 +12,6 @@ import {
 } from "@stll/scripts/src/react-compiler-options";
 
 import { formattedArtifactsLikeRepository } from "../../../scripts/generated-artifacts";
-import readerPackage from "../../decision-reader/package.json";
 import {
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
@@ -22,6 +21,7 @@ import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
 import {
   inspectMcpReaderUi,
   MCP_READER_UI_APP_DIRECTORIES,
+  MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
 
 const checking = Bun.argv.includes("--check");
@@ -258,11 +258,8 @@ const buildMcpApp = async ({
       file,
       text: await Bun.file(path.join(repoRoot, file)).text(),
     });
-    const sharedFiles = Object.values(readerPackage.exports)
-      .filter((file) => file.endsWith(".tsx"))
-      .map((file) => `packages/decision-reader/${file.replace(/^\.\//u, "")}`);
     const [sharedModules, astModules, bundleModules] = await Promise.all([
-      Promise.all(sharedFiles.map(loadModule)),
+      Promise.all(MCP_SHARED_UI_MODULE_FILES.map(loadModule)),
       Promise.all(
         [
           "packages/legal-ast/src/document-ast.ts",

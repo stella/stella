@@ -36,11 +36,11 @@ import {
   checkFeedbackApproval,
   createFeedbackApproval,
 } from "@/api/mcp/feedback-approval";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
