@@ -54,6 +54,7 @@ const groupCsId = createSafeId<"caseLawDecision">();
 const groupEnId = createSafeId<"caseLawDecision">();
 const singletonId = createSafeId<"caseLawDecision">();
 const originalFetch = globalThis.fetch;
+const revisionById = new Map<string, string>();
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
@@ -170,6 +171,9 @@ beforeAll(
       indexId: corpusIndexId(GENERATION, country),
       intentId: createSafeId<"corpusIndexProjectionIntent">(),
     }));
+    for (const { entityId, intentId } of held) {
+      revisionById.set(entityId, intentId);
+    }
     await db.insert(corpusIndexProjectionIntents).values(
       held.map(({ entityId, indexId, intentId }) => ({
         id: intentId,
@@ -319,6 +323,7 @@ test.each(
         : [groupCsId, singletonId, groupEnId, supremeId, districtId];
     const engineHits = ids.map((id, index) => ({
       document_id: id,
+      projection_revision: revisionById.get(id),
       chunk_id: `passage-${index}`,
     }));
     // The applied census must describe the physical passages this engine emits.
@@ -379,10 +384,11 @@ test.each(
         extractSnippet: () => null,
         // Force the scan to reach either exhaustion or its round cap.
         unseenScoreUpperBound: (score) => score + 1,
-        rankCandidates: async (candidates) =>
+        rankCandidates: async (candidates, { selectAppliedCandidates }) =>
           await rehydrateCaseLawCandidates({
             body: { country: "CZE", query: "search rank" },
             candidates,
+            selectAppliedCandidates,
             caseLawDb,
             courtWeights: courtWeightMapFromSeed(),
             generation: GENERATION,

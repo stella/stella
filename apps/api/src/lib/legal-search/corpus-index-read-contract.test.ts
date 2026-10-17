@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import {
   caseLawCorpusQueryFields,
+  caseLawIndexGroupReadContract,
+  caseLawJurisdictionReadContract,
   corpusIndexReadContract,
   CorpusIndexReadContractError,
   requireCaseLawDecisionCountField,
@@ -335,4 +337,56 @@ test("the panic carries the tagged contract error as its cause", () => {
       CorpusIndexReadContractError,
     );
   }
+});
+
+test("only the Czech group of the partial generation maps the provision keys field", () => {
+  expect(caseLawIndexGroupReadContract("case_law_v9", "cze")).toEqual({
+    provisionKeysField: "provision_keys",
+  });
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+  ]) {
+    // The serving generations hold no Czech group, and no group of theirs
+    // maps the field.
+    for (const group of ["cze", "aut", "cs_sk", "eu", "hun", "pol", "usa"]) {
+      expect([
+        generation,
+        group,
+        caseLawIndexGroupReadContract(generation, group),
+      ]).toEqual([generation, group, { provisionKeysField: null }]);
+    }
+  }
+  // A name no group declares maps nothing.
+  expect(caseLawIndexGroupReadContract("case_law_v9", "xxx")).toEqual({
+    provisionKeysField: null,
+  });
+});
+
+test("the target serving a jurisdiction answers whether it has provision keys", () => {
+  expect(caseLawJurisdictionReadContract("case_law_v9", "CZE")).toEqual({
+    provisionKeysField: "provision_keys",
+  });
+  expect(caseLawJurisdictionReadContract("case_law_v9", "cze")).toEqual({
+    provisionKeysField: null,
+  });
+  // Until the flip Czech decisions are read through v8, whose group has none.
+  expect(caseLawJurisdictionReadContract("case_law_v8", "CZE")).toEqual({
+    provisionKeysField: null,
+  });
+  for (const jurisdiction of ["SVK", "POL", "AUT", "HUN", "EU", "USA"]) {
+    expect(
+      caseLawJurisdictionReadContract("case_law_v8", jurisdiction),
+    ).toEqual({ provisionKeysField: null });
+    // v9 holds none of them.
+    expect(
+      caseLawJurisdictionReadContract("case_law_v9", jurisdiction),
+    ).toEqual({ provisionKeysField: null });
+  }
+  // A read spanning groups reaches indexes that do not map the field.
+  expect(caseLawJurisdictionReadContract("case_law_v9", undefined)).toEqual({
+    provisionKeysField: null,
+  });
 });

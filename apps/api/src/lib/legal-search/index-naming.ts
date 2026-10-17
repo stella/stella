@@ -3,9 +3,9 @@ import { panic } from "better-result";
 import {
   CASE_LAW_INDEX_GROUP_NAMES,
   CASE_LAW_INDEX_GROUPING_FROM_GENERATION,
-  caseLawIndexGroup,
-  caseLawIndexGroupCountries,
-  isCaseLawIndexGroup,
+  caseLawIndexGroupAt,
+  caseLawIndexGroupCountriesAt,
+  caseLawIndexGroupNamesAt,
   POSTGRES_INTEGER_MAX,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import { CORPUS_INDEX_GENERATION_MAX_LENGTH } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -58,10 +58,15 @@ export const caseLawCorpusGenerationOrder = (value: string): number | null => {
 export const isCaseLawCorpusGeneration = (value: string): boolean =>
   caseLawCorpusGenerationOrder(value) !== null;
 
-/** Whether this generation's case-law indexes are per group, not per country. */
-const isGroupedCaseLawGeneration = (generation: string): boolean => {
+/**
+ * The order of a case-law generation whose indexes are per group, not per
+ * country, or null for every other generation.
+ */
+const groupedCaseLawGenerationOrder = (generation: string): number | null => {
   const order = caseLawCorpusGenerationOrder(generation);
-  return order !== null && order >= CASE_LAW_INDEX_GROUPING_FROM_GENERATION;
+  return order !== null && order >= CASE_LAW_INDEX_GROUPING_FROM_GENERATION
+    ? order
+    : null;
 };
 
 // The jurisdiction segment comes from the trusted `country` column (always
@@ -82,9 +87,11 @@ export const corpusIndexId = (
   if (!isCorpusIndexJurisdiction(jur)) {
     panic(`Invalid jurisdiction for corpus index index id: ${jurisdiction}`);
   }
-  const suffix = isGroupedCaseLawGeneration(generation)
-    ? caseLawIndexGroup(jur)
-    : jur;
+  const groupedOrder = groupedCaseLawGenerationOrder(generation);
+  const suffix =
+    groupedOrder === null
+      ? jur
+      : caseLawIndexGroupAt(groupedOrder, jurisdiction);
   const indexId = `${generation}_${suffix}`;
   if (indexId.length > CORPUS_INDEX_ID_MAX_LENGTH) {
     panic(`Corpus index id exceeds storage limit: ${indexId}`);
@@ -119,8 +126,12 @@ export const corpusIndexJurisdictions = (
     panic(`Corpus index id ${indexId} is not of generation ${generation}`);
   }
   const suffix = indexId.slice(prefix.length);
-  if (isGroupedCaseLawGeneration(generation) && isCaseLawIndexGroup(suffix)) {
-    return caseLawIndexGroupCountries(suffix);
+  const groupedOrder = groupedCaseLawGenerationOrder(generation);
+  if (
+    groupedOrder !== null &&
+    caseLawIndexGroupNamesAt(groupedOrder).some((group) => group === suffix)
+  ) {
+    return caseLawIndexGroupCountriesAt(groupedOrder, suffix);
   }
   if (!isCorpusIndexJurisdiction(suffix)) {
     panic(`Invalid corpus index index id: ${indexId}`);
@@ -142,7 +153,7 @@ export const tryCorpusIndexGeneration = (indexId: string): string | null => {
       continue;
     }
     const generation = indexId.slice(0, -suffix.length);
-    if (isGroupedCaseLawGeneration(generation)) {
+    if (groupedCaseLawGenerationOrder(generation) !== null) {
       return generation;
     }
   }

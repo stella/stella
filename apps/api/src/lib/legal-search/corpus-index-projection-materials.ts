@@ -13,6 +13,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -21,6 +22,7 @@ import {
   legislationProjectionInputFromCanonical,
   readActiveCorpusProjectionManifest,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import {
   CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
@@ -292,12 +294,29 @@ const readCaseLawMaterials = async (
     }
     values.push({ type: identifier.type, value: identifier.value });
   }
+  const provisionKeysByDecision = await readCaseLawProvisionKeys(
+    tx,
+    rows.map(({ documentId, jurisdiction }) => ({
+      id: documentId,
+      jurisdiction,
+    })),
+  );
+  const vacatedByJurisdiction = await readCaseLawJurisdictionVacatedTx(
+    tx,
+    rows.map(({ jurisdiction }) => jurisdiction),
+  );
   return sortLeasesByReadiness({ leases, intents, states, rows }, (row) => {
     const input = caseLawProjectionInputFromCanonical({
       ...row,
       identifiers:
         identifiersByDecision.get(row.documentId) ??
         panic(`Corpus projection material lost identifiers: ${row.documentId}`),
+      vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
+      provisionKeys:
+        provisionKeysByDecision.get(row.documentId) ??
+        panic(
+          `Corpus projection material lost provision keys: ${row.documentId}`,
+        ),
     });
     return {
       descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),

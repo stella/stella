@@ -746,6 +746,29 @@ export const installPgliteServiceClientCredentialCascade = async (
   }
 };
 
+/** Install the country invariant directly from its committed migration. */
+export const installPgliteCaseLawCountryShape = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261016010000_case_law_country_uppercase",
+      "migration.sql",
+    ),
+  );
+  for (const statement of statements) {
+    const source = executableSql(statement);
+    if (
+      source.startsWith("CREATE OR REPLACE FUNCTION") ||
+      source.startsWith("DROP TRIGGER") ||
+      source.startsWith("CREATE TRIGGER")
+    ) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
 const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
   'ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",

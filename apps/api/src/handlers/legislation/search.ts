@@ -49,9 +49,15 @@ import type {
   ServingCorpusIndexGeneration,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
-import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import {
+  type SearchCursor,
+  readCorpusIndexSearchPage,
+  type CorpusCandidateRankingInput,
+} from "@/api/lib/legal-search/corpus-index-pagination";
+import {
+  corpusAppliedProjection,
+  type CorpusAppliedProjection,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -122,7 +128,6 @@ import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
-import type { ScoredCandidate } from "@/api/lib/legal-search/rerank";
 import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   legislationPublicReadDb,
@@ -229,9 +234,8 @@ const extractCorpusSnippet = (
   return raw.replaceAll("<b>", "<mark>").replaceAll("</b>", "</mark>");
 };
 
-type RehydrateLegislationCandidatesOptions = {
+type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
   body: SearchLegislationBody;
-  candidates: readonly ScoredCandidate[];
   /** The generation the hits were read from; it decides row currency. */
   generation: string;
   legislationDb: LegislationReadDb;
@@ -506,6 +510,7 @@ export const readLegislationCandidateRows = async (
 export const rehydrateLegislationCandidates = async ({
   body,
   candidates,
+  selectAppliedCandidates,
   generation,
   legislationDb,
   cursorId,
@@ -571,16 +576,30 @@ export const rehydrateLegislationCandidates = async ({
   const authorityById = new Map(
     read.rows.map((row) => [String(row.id), row.citationAuthority]),
   );
-  const revisionById = new Map<string, CorpusProjectionRevision>();
+  const appliedById = new Map<string, CorpusAppliedProjection>();
+  const manifest = requireCorpusIndexManifest("legislation", generation);
   for (const { id, appliedRevision } of read.rows) {
     if (appliedRevision !== null) {
-      revisionById.set(String(id), appliedRevision);
+      appliedById.set(
+        String(id),
+        corpusAppliedProjection(manifest, appliedRevision),
+      );
     }
   }
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
+  );
+  const appliedCandidates =
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById);
   const rankedCandidates =
     ranking === "authority"
-      ? blendStableCitationAuthority({ candidates, authorityById })
-      : candidates.map(({ id, score }) => ({
+      ? blendStableCitationAuthority({
+          candidates: appliedCandidates,
+          authorityById,
+        })
+      : appliedCandidates.map(({ id, score }) => ({
           id,
           score,
           lexicalScore: score,
@@ -1110,11 +1129,12 @@ const corpusIndexSearch = async ({
       extractSnippet: extractCorpusSnippet,
       unseenScoreUpperBound:
         active.type === "strict" ? stableBlendUpperBound : (score) => score,
-      rankCandidates: async (candidates) =>
+      rankCandidates: async (candidates, { selectAppliedCandidates }) =>
         await rehydrateLegislationCandidates({
           hitDispositions,
           body,
           candidates,
+          selectAppliedCandidates,
           generation,
           legislationDb,
           cursorId: cursor?.id,
