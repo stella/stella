@@ -17,6 +17,7 @@ import {
   validateOnlineConstraints,
 } from "./online-ddl";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
+import { readOnlineLockBlockers } from "./online-lock-blockers";
 import type {
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
@@ -60,12 +61,21 @@ const CONTENDING_LOCK = {
   maintenance: "SHARE UPDATE EXCLUSIVE",
 } as const satisfies Record<Contention, string>;
 
+const HELD_MODE = {
+  writer: "RowExclusiveLock",
+  maintenance: "ShareUpdateExclusiveLock",
+} as const satisfies Record<Contention, string>;
+
+const QUEUE_TABLE = "online_ddl_queue";
+const LOCK_TAKING_TEXT = /^(?:CREATE|DROP|REINDEX|ALTER|ANALYZE)\b/u;
+
 type Scratch = {
   owner: ReservedSQL;
   builder: ReservedSQL;
   observer: ReservedSQL;
   blocker: ReservedSQL;
   pid: number;
+  blockerPid: number;
   connection: OnlineMigrationConnection;
   executed: string[];
   reserveObserver: () => Promise<OnlineMigrationConnection>;
@@ -278,12 +288,19 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
             const pid = (
               await builder<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
             ).at(0)?.pid;
+            const blockerPid = (
+              await blocker<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+            ).at(0)?.pid;
             const now = (
               await observer<
                 { now: number }[]
               >`SELECT extract(epoch FROM clock_timestamp())::double precision * 1000 AS now`
             ).at(0)?.now;
-            if (pid === undefined || now === undefined) {
+            if (
+              pid === undefined ||
+              blockerPid === undefined ||
+              now === undefined
+            ) {
               panic("Missing scratch session state");
             }
             // Ahead of the database clock, so no catalog reading is in the
@@ -300,6 +317,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
               observer,
               blocker,
               pid,
+              blockerPid,
               connection,
               executed,
               reserveObserver: async () => ({
@@ -336,11 +354,20 @@ const healthyEbs = (clock: () => number): OnlineIndexGateOptions["ebs"] => ({
   }),
 });
 
-const gateConfig = (maxSnapshotWaitMs: number): OnlineIndexConfig => ({
+type GateConfigOptions = Pick<
+  OnlineIndexConfig,
+  "maxSnapshotWaitMs" | "idleBlockerMs"
+>;
+
+const gateConfig = ({
+  maxSnapshotWaitMs,
+  idleBlockerMs,
+}: GateConfigOptions): OnlineIndexConfig => ({
   health: { ...defaultConfig, busyWindows: [], longTxMaxAgeMs: 3_600_000 },
   pollMs: 1,
   retryMs: RETRY_MS,
   maxSnapshotWaitMs,
+  idleBlockerMs,
   clientConnectionCheckMs: 10,
   parallelWorkers: 1,
   maintenanceWorkMemMb: 16,
@@ -357,7 +384,7 @@ const untilDone = async (_milliseconds: number, signal: AbortSignal) => {
 };
 
 const healthyGate = ({ clock }: Scratch): OnlineIndexGateOptions => ({
-  config: gateConfig(600_000),
+  config: gateConfig({ maxSnapshotWaitMs: 600_000, idleBlockerMs: 0 }),
   clock,
   ebs: healthyEbs(clock),
   wait: untilDone,
@@ -372,7 +399,7 @@ const contendedGate = (
   { clock, observer, pid }: Scratch,
   records: unknown[],
 ): OnlineIndexGateOptions => ({
-  config: gateConfig(0),
+  config: gateConfig({ maxSnapshotWaitMs: 0, idleBlockerMs: 3_600_000 }),
   clock,
   ebs: healthyEbs(clock),
   wait: async (_milliseconds, signal) => {
@@ -386,6 +413,19 @@ const contendedGate = (
       await Bun.sleep(5);
     }
   },
+  log: (record) => {
+    records.push(record);
+  },
+});
+
+const blockedGate = (
+  { clock }: Scratch,
+  records: unknown[],
+): OnlineIndexGateOptions => ({
+  config: gateConfig({ maxSnapshotWaitMs: 600_000, idleBlockerMs: 0 }),
+  clock,
+  ebs: healthyEbs(clock),
+  wait: untilDone,
   log: (record) => {
     records.push(record);
   },
@@ -425,12 +465,55 @@ const expectDefersThenCompletes = async ({
   rerunIsNoop = true,
 }: StepOptions) => {
   const records: unknown[] = [];
+  const blockedRecords: unknown[] = [];
   await contend(scratch, tableName, contention);
+  scratch.executed.length = 0;
   try {
+    const blocked = await run(blockedGate(scratch, blockedRecords));
+    expect(blocked, name).toMatchObject({
+      type: "deferred",
+      step: name,
+      retryAfterMs: RETRY_MS,
+      cause: { type: "blocked" },
+    });
+    if (blocked.type !== "deferred" || blocked.cause.type !== "blocked") {
+      panic(`${name} was not deferred on its blocker`);
+    }
+    expect(
+      blocked.cause.blockers.map(({ pid, reason, state }) => ({
+        pid,
+        reason,
+        state,
+      })),
+      name,
+    ).toEqual([
+      {
+        pid: scratch.blockerPid,
+        reason: "idle_in_transaction",
+        state: "idle in transaction",
+      },
+    ]);
+    const [blocker] = blocked.cause.blockers;
+    expect(blocker?.heldModes, name).toContain(HELD_MODE[contention]);
+    expect(blocker?.queryId, name).toMatch(/^-?\d+$/u);
+    expect(
+      scratch.executed.filter((statement) => LOCK_TAKING_TEXT.test(statement)),
+      `${name} queued behind its blocker`,
+    ).toEqual([]);
+    expect(blockedRecords, name).toContainEqual(
+      expect.objectContaining({
+        event: "online_lock_blocked",
+        tableName,
+        blockers: blocked.cause.blockers,
+      }),
+    );
+    expect(JSON.stringify(blockedRecords), name).not.toContain("LOCK TABLE");
+    scratch.executed.length = 0;
     expect(await run(contendedGate(scratch, records)), name).toEqual({
       type: "deferred",
       step: name,
       retryAfterMs: RETRY_MS,
+      cause: { type: "cancelled" },
     });
   } finally {
     await scratch.blocker`COMMIT`;
@@ -488,6 +571,52 @@ const failBuildUnderWriter = async (
 };
 
 describe.skipIf(!enabled)("online lock-taking steps under contention", () => {
+  test("reports a long transaction and the head of a lock queue on the table", async () => {
+    await withScratch(async ({ owner, observer, blocker, blockerPid }) => {
+      await owner.unsafe(`CREATE TABLE public.${QUEUE_TABLE} (id integer)`);
+      const read = async (longTransactionMs: number) =>
+        (
+          await readOnlineLockBlockers({
+            connection: adapter(observer),
+            tableName: QUEUE_TABLE,
+            idleInTransactionMs: 3_600_000,
+            longTransactionMs,
+          })
+        ).map(({ pid, reason }) => ({ pid, reason }));
+      const ownerPid = (
+        await owner<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`
+      ).at(0)?.pid;
+      await blocker`BEGIN`;
+      await blocker.unsafe(
+        `LOCK TABLE public.${QUEUE_TABLE} IN ${CONTENDING_LOCK.writer} MODE`,
+      );
+      expect(await read(3_600_000)).toEqual([]);
+      expect(await read(0)).toEqual([
+        { pid: blockerPid, reason: "long_transaction" },
+      ]);
+      await owner`BEGIN`;
+      const queued = owner
+        .unsafe(`LOCK TABLE public.${QUEUE_TABLE} IN ACCESS EXCLUSIVE MODE`)
+        .then(() => undefined);
+      for (let attempt = 0; attempt < 400; attempt++) {
+        const rows = await observer<
+          { waiting: boolean }[]
+        >`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${ownerPid} AND wait_event_type = 'Lock') AS waiting`;
+        if (rows.at(0)?.waiting === true) {
+          break;
+        }
+        await Bun.sleep(5);
+      }
+      expect(await read(3_600_000)).toEqual([
+        { pid: blockerPid, reason: "lock_queue" },
+      ]);
+      await blocker`COMMIT`;
+      await queued;
+      await owner`COMMIT`;
+      expect(await read(0)).toEqual([]);
+    });
+  }, 60_000);
+
   test("every declared index builds, or repairs, under a writer by deferring", async () => {
     await withScratch(async (scratch) => {
       for (const index of ONLINE_MIGRATION_INDEXES) {

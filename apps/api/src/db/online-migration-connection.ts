@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { OnlineTableGate } from "./online-ddl";
+import type { OnlineLockBlocker } from "./online-lock-blockers";
 
 /**
  * The connection the online phase of a migration runs on, and the shape of a
@@ -76,6 +77,11 @@ export type OnlineRepairCompletion =
     }
   | { type: "complete" };
 
+type OnlineDeferralCause =
+  | { type: "held" }
+  | { type: "cancelled" }
+  | { type: "blocked"; blockers: readonly OnlineLockBlocker[] };
+
 /**
  * Where an online step stopped. A step whose table-locking work the gate held
  * or cancelled defers the phase at that step: every later step may depend on
@@ -84,7 +90,12 @@ export type OnlineRepairCompletion =
  */
 export type OnlineMigrationOutcome =
   | { type: "complete" }
-  | { type: "deferred"; step: string; retryAfterMs: number };
+  | {
+      type: "deferred";
+      step: string;
+      retryAfterMs: number;
+      cause: OnlineDeferralCause;
+    };
 
 /**
  * A data repair that a schema migration left to the online phase.

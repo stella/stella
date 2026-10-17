@@ -41,6 +41,7 @@ export const envOnlineIndexServerSchema = {
   ONLINE_INDEX_CLIENT_CHECK_MS: integer(1000),
   ONLINE_INDEX_RETRY_MS: integer(defaultConfig.holdBackoffMs),
   ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS: integer(10 * 60_000),
+  ONLINE_INDEX_IDLE_BLOCKER_MS: integer(5000),
   ONLINE_INDEX_PARALLEL_WORKERS: v.optional(
     v.pipe(
       v.string(),
@@ -63,6 +64,7 @@ export type OnlineIndexConfig = {
   clientConnectionCheckMs: number;
   retryMs: number;
   maxSnapshotWaitMs: number;
+  idleBlockerMs: number;
   parallelWorkers: number;
   maintenanceWorkMemMb: number;
 };
@@ -88,6 +90,7 @@ export const readOnlineIndexConfig = (
     clientConnectionCheckMs: env.ONLINE_INDEX_CLIENT_CHECK_MS,
     retryMs: env.ONLINE_INDEX_RETRY_MS,
     maxSnapshotWaitMs: env.ONLINE_INDEX_MAX_SNAPSHOT_WAIT_MS,
+    idleBlockerMs: env.ONLINE_INDEX_IDLE_BLOCKER_MS,
     parallelWorkers: env.ONLINE_INDEX_PARALLEL_WORKERS,
     maintenanceWorkMemMb: env.ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB,
   };

@@ -123,6 +123,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         pollMs: 1,
         retryMs: 2,
         maxSnapshotWaitMs: 600_000,
+        idleBlockerMs: 3_600_000,
         clientConnectionCheckMs: 10,
         parallelWorkers: 1,
         maintenanceWorkMemMb: 16,
@@ -338,6 +339,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         type: "deferred",
         step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
+        cause: { type: "cancelled" },
       });
       expect(await indexState(fixture)).toMatchObject({ valid: false });
       retryReached = true;
@@ -1014,6 +1016,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         type: "deferred",
         step: fixture.name,
         retryAfterMs: fixture.gate.config.retryMs,
+        cause: { type: "cancelled" },
       });
       expect(
         fixture.records

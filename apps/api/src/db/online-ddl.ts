@@ -12,12 +12,13 @@
  * of these statements out of every other database module.
  */
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { readConstraintValidated } from "./online-constraint-completion";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
+import type { OnlineLockBlocker } from "./online-lock-blockers";
 import type {
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
@@ -185,10 +186,22 @@ type GatedTableWorkOptions = GatedTableWorkRequest & {
   reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
-const sessionOn = (
-  connection: Pick<OnlineMigrationConnection, "execute" | "query">,
-  { tableName }: GatedTableTarget,
-): GatedTableSession => ({
+class OnlineLockBlockedError extends TaggedError("OnlineLockBlockedError")<{
+  message: string;
+  blockers: readonly OnlineLockBlocker[];
+}> {}
+
+type SessionOnOptions = {
+  connection: Pick<OnlineMigrationConnection, "execute" | "query">;
+  target: GatedTableTarget;
+  beforeRun: () => Promise<void>;
+};
+
+const sessionOn = ({
+  connection,
+  target: { tableName },
+  beforeRun,
+}: SessionOnOptions): GatedTableSession => ({
   query: async (query, params) => await connection.query(query, params),
   run: async (statement) => {
     // The gate read the health of this table only.
@@ -197,6 +210,7 @@ const sessionOn = (
         `Gated work on ${tableName} cannot lock ${statement.tableName}; gate each table on its own`,
       );
     }
+    await beforeRun();
     await connection.execute(statement[LOCK_TAKING]);
   },
 });
@@ -226,21 +240,59 @@ export const runGatedTableWork = async ({
       kind,
     });
     try {
-      const outcome = await runtime.attempt(
-        async (guardedConnection) =>
-          await work(sessionOn(guardedConnection, target)),
-      );
+      const attempted = await Result.tryPromise({
+        try: async () =>
+          await runtime.attempt(
+            async (guardedConnection) =>
+              await work(
+                sessionOn({
+                  connection: guardedConnection,
+                  target,
+                  beforeRun: async () => {
+                    const blockers =
+                      await runtime.readBlockers(guardedConnection);
+                    if (blockers.length > 0) {
+                      throw new OnlineLockBlockedError({
+                        message: `Online step ${target.name}: ${String(blockers.length)} sessions block ${target.tableName}`,
+                        blockers,
+                      });
+                    }
+                  },
+                }),
+              ),
+          ),
+        catch: (cause: unknown) => cause,
+      });
+      if (attempted.isErr()) {
+        if (attempted.error instanceof OnlineLockBlockedError) {
+          return {
+            type: "deferred",
+            step: target.name,
+            retryAfterMs: runtime.retryAfterMs,
+            cause: { type: "blocked", blockers: attempted.error.blockers },
+          };
+        }
+        throw attempted.error;
+      }
+      const outcome = attempted.value;
       switch (outcome) {
         case "done":
           return { type: "complete" };
         // Waiting here would hold the migrate run for as long as the database
         // stays unhealthy; the next run re-reads the ledger first.
         case "retry":
+          return {
+            type: "deferred",
+            step: target.name,
+            retryAfterMs: runtime.retryAfterMs,
+            cause: { type: "cancelled" },
+          };
         case "wait":
           return {
             type: "deferred",
             step: target.name,
             retryAfterMs: runtime.retryAfterMs,
+            cause: { type: "held" },
           };
         default:
           outcome satisfies never;
@@ -280,7 +332,13 @@ export const createUngatedTableGateForTests = (
   connection: Pick<OnlineMigrationConnection, "execute" | "query">,
 ): OnlineTableGate => ({
   run: async ({ target, work }) => {
-    await work(sessionOn(connection, target));
+    await work(
+      sessionOn({
+        connection,
+        target,
+        beforeRun: async () => await Promise.resolve(),
+      }),
+    );
     return { type: "complete" };
   },
 });
