@@ -518,16 +518,16 @@ const isInspectorBroadcastMessage = (
     return false;
   }
   const tabs = value["tabs"];
+  const groups = value["groups"];
+  const groupAssignments = value["groupAssignments"];
   return (
     isOptionalString(value["recipientId"]) &&
     typeof value["updatedAt"] === "number" &&
     Array.isArray(tabs) &&
     tabs.every(isInspectorTab) &&
-    (value["groups"] === undefined ||
-      (Array.isArray(value["groups"]) &&
-        value["groups"].every(isInspectorTabGroup))) &&
-    (value["groupAssignments"] === undefined ||
-      isGroupAssignments(value["groupAssignments"]))
+    (groups === undefined ||
+      (Array.isArray(groups) && groups.every(isInspectorTabGroup))) &&
+    (groupAssignments === undefined || isGroupAssignments(groupAssignments))
   );
 };
 

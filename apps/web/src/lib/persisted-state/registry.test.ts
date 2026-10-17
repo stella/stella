@@ -35,11 +35,11 @@ const ownedEntry = definePersistedState({
   key: ownedKey,
   area: "local",
   version: 1,
-  schema: v.nullable(v.object({ ownerId: v.string() })),
+  schema: v.nullable(v.object({ workspaceId: v.string() })),
   maxBytes: 128,
   defaultValue: () => null,
-  scopeCheck: (value, scope: { ownerId: string }) =>
-    value === null || value.ownerId === scope.ownerId
+  scopeCheck: (value, scope: { workspaceId: string }) =>
+    value === null || value.workspaceId === scope.workspaceId
       ? keepInAnyScope(value)
       : { keep: false },
   restoredUi: false,
@@ -77,23 +77,23 @@ describe("persisted state registry", () => {
   test("a scope check rejects a valid non-null value from another scope", () => {
     storage.setItem(
       ownedKey,
-      JSON.stringify({ version: 1, value: { ownerId: "other" } }),
+      JSON.stringify({ version: 1, value: { workspaceId: "other" } }),
     );
-    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toBeNull();
+    expect(readPersistedState(ownedEntry, { workspaceId: "me" })).toBeNull();
     expect(storage.getItem(ownedKey)).toBeNull();
   });
 
   test("a scope check keeps a stored null and the reader's own value", () => {
     storage.setItem(ownedKey, JSON.stringify({ version: 1, value: null }));
-    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toBeNull();
+    expect(readPersistedState(ownedEntry, { workspaceId: "me" })).toBeNull();
     expect(storage.getItem(ownedKey)).not.toBeNull();
 
     storage.setItem(
       ownedKey,
-      JSON.stringify({ version: 1, value: { ownerId: "me" } }),
+      JSON.stringify({ version: 1, value: { workspaceId: "me" } }),
     );
-    expect(readPersistedState(ownedEntry, { ownerId: "me" })).toEqual({
-      ownerId: "me",
+    expect(readPersistedState(ownedEntry, { workspaceId: "me" })).toEqual({
+      workspaceId: "me",
     });
   });
 

@@ -5,19 +5,18 @@ import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import type { StorageArea } from "@/lib/account/storage-families";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
 
-type PersistedStateScope = object;
 type DefaultPersistedStateScope = {
   organizationId?: string | undefined;
   workspaceId?: string | undefined;
 };
 
-type PersistedStateKey<TScope extends PersistedStateScope> =
+type PersistedStateKey<TScope extends object> =
   | string
   | ((scope: TScope) => string);
 
 export type PersistedStateEntry<
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope,
+  TScope extends object,
 > = {
   key: PersistedStateKey<TScope>;
   area: StorageArea;
@@ -59,14 +58,14 @@ const envelopeSchema = <
 
 export const definePersistedState = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope = DefaultPersistedStateScope,
+  TScope extends object = DefaultPersistedStateScope,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
 ) => entry;
 
 const entryKey = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope,
+  TScope extends object,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
@@ -88,7 +87,7 @@ export const isRestoredStateSafeMode = (): boolean => {
 
 export const readPersistedState = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope,
+  TScope extends object,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
@@ -130,7 +129,7 @@ class PersistedStateWriteError extends TaggedError("PersistedStateWriteError")<{
 
 export const writePersistedState = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope,
+  TScope extends object,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
@@ -173,7 +172,7 @@ export const writePersistedState = <
 
 export const removePersistedState = <
   TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
-  TScope extends PersistedStateScope,
+  TScope extends object,
 >(
   entry: PersistedStateEntry<TSchema, TScope>,
   scope: TScope,
