@@ -9,9 +9,18 @@ import {
 } from "@stll/api-contract";
 
 import {
+  OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+  OPENID_CONFIGURATION_DISCOVERY_PATH,
+  ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+} from "@/api/lib/auth/auth-paths";
+import {
   normalizeResponseStatus,
   resolveResponseStatus,
 } from "@/api/lib/observability/response-status";
+import {
+  MCP_RESOURCE_MODE_CONFIG,
+  ROOT_MCP_DISCOVERY_PATH,
+} from "@/api/mcp/resource-policy-contract";
 
 export const CORS_EXPOSED_HEADERS = [
   "Content-Disposition",
@@ -24,6 +33,21 @@ export const CORS_EXPOSED_HEADERS = [
 
 export const CACHE_CONTROL_HEADER = "Cache-Control";
 export const PRIVATE_CACHE_CONTROL = "private, no-store";
+export const DISCOVERY_METADATA_CACHE_POLICY = {
+  kind: "public",
+  maxAge: 300,
+  swr: 3600,
+} as const satisfies CachePolicy;
+
+export const DISCOVERY_METADATA_PATHS = new Set<string>([
+  ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+  OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+  OPENID_CONFIGURATION_DISCOVERY_PATH,
+  ROOT_MCP_DISCOVERY_PATH,
+  ...Object.values(MCP_RESOURCE_MODE_CONFIG).map(
+    ({ discoveryPath }) => discoveryPath,
+  ),
+]);
 
 /**
  * Headers every frame document the web app embeds must send. The web app
@@ -122,6 +146,26 @@ export const applyResponseCachePolicy = ({
   set.headers[CACHE_CONTROL_HEADER] = value;
 
   return value;
+};
+
+export const applyDiscoveryMetadataCachePolicy = ({
+  request,
+  set,
+}: {
+  request: Request;
+  set: Context["set"];
+}) => {
+  if (
+    (request.method !== "GET" && request.method !== "HEAD") ||
+    !DISCOVERY_METADATA_PATHS.has(new URL(request.url).pathname)
+  ) {
+    return;
+  }
+  applyResponseCachePolicy({
+    cache: DISCOVERY_METADATA_CACHE_POLICY,
+    response: undefined,
+    set,
+  });
 };
 
 type FinalizeResponseCachePolicyOptions = {

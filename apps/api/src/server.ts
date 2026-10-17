@@ -202,6 +202,7 @@ import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
+  applyDiscoveryMetadataCachePolicy,
   finalizeResponseCachePolicy,
   API_SECURITY_HEADERS,
   setSecurityHeaders,
@@ -356,8 +357,9 @@ const api = new Elysia()
   // Body parsing is decided before any route runs, so the multipart parser has
   // to sit ahead of every route registration.
   .use(multipartFormParser)
-  .onRequest(({ set }) => {
+  .onRequest(({ request, set }) => {
     setSecurityHeaders(set);
+    applyDiscoveryMetadataCachePolicy({ request, set });
   })
   .onRequest(async (context) => {
     const { request, set } = context;
