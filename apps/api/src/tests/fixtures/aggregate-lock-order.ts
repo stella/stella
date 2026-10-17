@@ -34,6 +34,10 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    dataBoxDirection: {
+      aggregate: "dataBoxDirection",
+      id: { organizationId },
+    },
     professionalUseAcceptance: {
       aggregate: "professionalUseAcceptance",
       id: { userId: mintAuthProviderId<"user">() },

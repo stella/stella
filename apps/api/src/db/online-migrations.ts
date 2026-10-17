@@ -487,6 +487,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "correspondence_attachments",
   },
   {
+    createSql: `CREATE INDEX CONCURRENTLY "contacts_data_box_ids_idx" ON public."contacts" USING gin (("metadata" -> 'dataBoxes') jsonb_path_ops)`,
+    definitionBody:
+      "ON public.contacts USING gin (((metadata -> 'dataBoxes'::text)) jsonb_path_ops)",
+    isUnique: false,
+    name: "contacts_data_box_ids_idx",
+    tableName: "contacts",
+  },
+  {
     createSql:
       'CREATE INDEX CONCURRENTLY "sanctions_contact_marks_retry_idx" ON public."sanctions_contact_marks" USING btree ("next_attempt_at", "scheduled_at", "organization_id", "contact_id")',
     definitionBody:

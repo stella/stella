@@ -76,6 +76,7 @@ export const dockedChatPagePayloads = ({
       originalSignature: null,
       direction: "in" as const,
       channel: "email" as const,
+      dataBox: null,
       subject: "Docked chat correspondence fixture",
       from: { name: "Fixture sender", address: "sender@example.test" },
       to: [{ name: "Fixture recipient", address: "recipient@example.test" }],
@@ -94,6 +95,7 @@ export const dockedChatPagePayloads = ({
     },
     filers: [],
     attachments: [],
+    dataBoxContacts: null,
   };
   const registryLookup = {
     type: "lookup" as const,
