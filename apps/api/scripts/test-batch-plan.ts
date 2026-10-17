@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import ts from "typescript";
 
+import { AhoCorasick } from "@stll/aho-corasick";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -570,6 +571,7 @@ const DB_TEST_MARKERS = [
   "@/api/db/scoped",
   "pglite",
 ] as const;
+const DB_TEST_MARKER_MATCHER = new AhoCorasick([...DB_TEST_MARKERS]);
 const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
 
 const isProcessEnvExpression = (expression: ts.Expression): boolean =>
@@ -693,6 +695,6 @@ export const isDbTest = (testPath: string, source: string) => {
       return false;
     }
     const moduleSpecifier = statement.moduleSpecifier.text;
-    return DB_TEST_MARKERS.some((marker) => moduleSpecifier.includes(marker));
+    return DB_TEST_MARKER_MATCHER.isMatch(moduleSpecifier);
   });
 };

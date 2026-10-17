@@ -2,6 +2,9 @@ import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { AhoCorasick } from "@stll/aho-corasick";
+import { BoundedLruCache } from "@stll/collation";
+
 import {
   batchModuleMockTests,
   readModuleMockMetadata,
@@ -32,7 +35,13 @@ const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
+const MODULE_MOCK_HELPER_MATCHER_CACHE_LIMIT = 16;
+const moduleMockHelperMatcherCache = new BoundedLruCache<
+  string,
+  AhoCorasick | null
+>(MODULE_MOCK_HELPER_MATCHER_CACHE_LIMIT);
 const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
+const PROPERTY_TEST_MARKER_MATCHER = new AhoCorasick(PROPERTY_TEST_MARKERS);
 // Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
 // guard once the additional handler and schema modules share one process.
 const REGULAR_TEST_BATCH_SIZE = 10;
@@ -65,6 +74,9 @@ const HEAVY_DB_SOURCE_MARKERS = [/^\/\/ @api-test-heavy-db\b/mu];
 // graphs/allocations cannot inflate an ordinary 50-file logic batch.
 const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
 const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
+const HEAVY_LOGIC_SOURCE_MARKER_MATCHER = new AhoCorasick([
+  ...HEAVY_LOGIC_SOURCE_MARKERS,
+]);
 const HEAVY_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
 ] as const;
@@ -166,9 +178,31 @@ export const planApiTestBatches = async ({
   testPaths,
 }: PlanApiTestBatchesOptions): Promise<ComposedTestBatches[]> => {
   const moduleMockHelpers = readModuleMockHelpers(apiRoot);
+  const moduleMockHelperSuffixes = moduleMockHelpers.map(
+    ({ suffix }) => suffix,
+  );
+  const moduleMockHelperMatcherKey = JSON.stringify(moduleMockHelperSuffixes);
+  let moduleMockHelperMatcher = moduleMockHelperMatcherCache.get(
+    moduleMockHelperMatcherKey,
+  );
+  if (moduleMockHelperMatcher === undefined) {
+    moduleMockHelperMatcher = moduleMockHelperSuffixes.length
+      ? new AhoCorasick(moduleMockHelperSuffixes)
+      : null;
+    moduleMockHelperMatcherCache.set(
+      moduleMockHelperMatcherKey,
+      moduleMockHelperMatcher,
+    );
+  }
+  const findMatchedModuleMockHelpers = (source: string): Set<number> =>
+    new Set(
+      moduleMockHelperMatcher
+        ?.findOverlappingIter(source)
+        .map(({ pattern }) => pattern),
+    );
   const installsModuleMock = (source: string): boolean =>
     MODULE_MOCK_PATTERN.test(source) ||
-    moduleMockHelpers.some(({ suffix }) => source.includes(suffix));
+    (moduleMockHelperMatcher?.isMatch(source) ?? false);
   const readTestModuleMockMetadata = (source: string, testPath: string) => {
     const directMetadata = readModuleMockMetadata(source, testPath);
     const metadata = {
@@ -177,8 +211,9 @@ export const planApiTestBatches = async ({
       importedModules: new Set(directMetadata.importedModules),
       mockedModules: new Set(directMetadata.mockedModules),
     };
-    for (const helper of moduleMockHelpers) {
-      if (!source.includes(helper.suffix)) {
+    const matchedHelperIndexes = findMatchedModuleMockHelpers(source);
+    for (const [helperIndex, helper] of moduleMockHelpers.entries()) {
+      if (!matchedHelperIndexes.has(helperIndex)) {
         continue;
       }
       metadata.hasUnknownImport ||= helper.hasUnknownImport;
@@ -214,17 +249,14 @@ export const planApiTestBatches = async ({
     if (dbBacked) {
       dbTestPaths.add(testPath);
     }
-    if (
-      propertyOnly &&
-      !PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker))
-    ) {
+    if (propertyOnly && !PROPERTY_TEST_MARKER_MATCHER.isMatch(source)) {
       continue;
     }
     const batchKind = classifyTestBatch({
       dbBacked,
       heavyDb: HEAVY_DB_SOURCE_MARKERS.some((marker) => marker.test(source)),
       heavyLogic:
-        HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
+        HEAVY_LOGIC_SOURCE_MARKER_MATCHER.isMatch(source) ||
         HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
         hasModuleScopeProcessEnvMutation(testPath, source),
       installsModuleMock: installsModuleMock(source),
