@@ -112,7 +112,9 @@ describe("event-loop delay monitoring", () => {
 
   test("reports memory on a timer tick even before the histogram has samples", () => {
     const lines: string[] = [];
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     const originalSetInterval = globalThis.setInterval;
     let reportTick: (() => void) | undefined;
     const interval = spyOn(globalThis, "setInterval").mockImplementation(
@@ -135,7 +137,9 @@ describe("event-loop delay monitoring", () => {
           arrayBuffersBytes: 2,
           uploadFinalizeInFlightBytes: 0,
         }),
-      onReport: (report) => reports.push(report),
+      onReport: (report) => {
+        reports.push(report);
+      },
       onStall: () => {},
     });
     try {
