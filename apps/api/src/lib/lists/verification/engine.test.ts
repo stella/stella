@@ -8,6 +8,7 @@ import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
+import { locateQuote } from "@stll/legal-ast/quote-locate";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -32,7 +33,6 @@ import {
   ListVerificationAccessRevokedError,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
-import { locateQuote } from "@/api/lib/lists/verification/quote-locate";
 import { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";

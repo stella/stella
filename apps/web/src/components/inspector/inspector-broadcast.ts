@@ -27,11 +27,11 @@ import {
   isGenericInspectorTab,
   reconcileSharedInspectorTabs,
 } from "@/components/inspector/inspector-tabs-slice";
-import "@/components/inspector/inspector-persistence-references";
 import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,
   isOptionalLegalDocumentChatKey,
@@ -147,6 +147,16 @@ const RESTORE_SETTLE_DELAY_MS = 2000;
 const restorePendingKey = (scope: InspectorBroadcastScope) =>
   inspectorRestorePendingStorageKey(scope);
 
+// The flag records which page load set it. Another start in the same page (a
+// shell that attaches the store after a client navigation) sees this page's
+// own unsettled restore, which is not a stalled earlier load.
+let pageLoadId = createUuid();
+
+/** Tests model a reload by starting again in a new page load. */
+export const startNewPageLoadForTest = (): void => {
+  pageLoadId = createUuid();
+};
+
 const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
   if (typeof window === "undefined") {
     return false;
@@ -155,7 +165,7 @@ const readRestorePending = (scope: InspectorBroadcastScope): boolean => {
     .andThen((storage) =>
       Result.try(() => storage.getItem(restorePendingKey(scope))),
     )
-    .map((value) => value !== null)
+    .map((value) => value !== null && value !== pageLoadId)
     .unwrapOr(false);
 };
 
@@ -170,7 +180,7 @@ const writeRestorePending = (
     .andThen((storage) =>
       Result.try(() => {
         if (pending) {
-          storage.setItem(restorePendingKey(scope), "1");
+          storage.setItem(restorePendingKey(scope), pageLoadId);
         } else {
           storage.removeItem(restorePendingKey(scope));
         }
