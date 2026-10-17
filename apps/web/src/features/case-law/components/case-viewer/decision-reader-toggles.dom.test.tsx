@@ -15,6 +15,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -430,7 +431,7 @@ const renderReaders = async () => {
         <QueryClientProvider client={client}>
           <PresentationPrefsProvider
             initialPrefs={defaultPresentationPrefs}
-            persist={() => undefined}
+            sync={createTestPresentationPrefsSync()}
           >
             <RouterProvider router={router} />
           </PresentationPrefsProvider>

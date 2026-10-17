@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
+import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import {
   parsePresentationPrefs,
   defaultPresentationPrefs,
@@ -276,3 +277,89 @@ for (const { language, sundayBasedWeekStart } of [
     }
   });
 }
+
+test("overlapping preference changes survive reload and update another mounted tab", async ({
+  page,
+  baseURL,
+  browserErrors,
+}) => {
+  const context = page.context();
+  await context.addCookies([
+    {
+      name: PRESENTATION_PREFS_COOKIE,
+      value: encodeURIComponent(
+        serializePresentationPrefs({
+          ...defaultPresentationPrefs,
+          theme: "light",
+        }),
+      ),
+      url: baseURL ?? "http://localhost:3000",
+    },
+  ]);
+  const peer = await context.newPage();
+  const stopTracking = browserErrors.trackPage(peer);
+  const themeGate = Promise.withResolvers<undefined>();
+  let themeHeld = false;
+  await page.route("**/_serverFn/**", async (route) => {
+    if (
+      route.request().method() === "POST" &&
+      route.request().postData()?.includes('"theme"')
+    ) {
+      themeHeld = true;
+      await themeGate.promise;
+    }
+    await route.continue();
+  });
+  try {
+    await Promise.all([page.goto("/chat"), peer.goto("/chat")]);
+    await page
+      .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
+      .last()
+      .click();
+    await page
+      .getByRole("menuitem", { name: en.appearance.title, exact: true })
+      .hover();
+    await page
+      .getByRole("menuitemradio", { name: en.appearance.dark, exact: true })
+      .click();
+    await expect.poll(() => themeHeld).toBe(true);
+    await peer
+      .locator('[data-slot="sidebar-header"]')
+      .getByRole("button")
+      .click();
+    await expect(peer.locator('[data-slot="sidebar"]')).toHaveAttribute(
+      "data-state",
+      "collapsed",
+    );
+    themeGate.resolve(undefined);
+    await expect
+      .poll(async () => await presentationPrefs(page))
+      .toMatchObject({ theme: "dark", sidebarOpen: false });
+    // Both tabs stay mounted while their queued writes settle.
+    await expect(peer.locator("html")).toHaveClass(/dark/u);
+    for (const tab of [page, peer]) {
+      await tab.reload();
+      await expect(tab.locator("html")).toHaveClass(/dark/u);
+      await expect(tab.locator('[data-slot="sidebar"]')).toHaveAttribute(
+        "data-state",
+        "collapsed",
+      );
+    }
+    await page
+      .locator('[data-slot="sidebar-footer"] button[aria-haspopup="menu"]')
+      .last()
+      .click();
+    await page
+      .getByRole("menuitem", { name: en.appearance.title, exact: true })
+      .hover();
+    await page
+      .getByRole("menuitemradio", { name: en.appearance.light, exact: true })
+      .click();
+    // B makes no write or navigation here; only the broadcast can update it.
+    await expect(peer.locator("html")).not.toHaveClass(/dark/u);
+  } finally {
+    themeGate.resolve(undefined);
+    stopTracking();
+    await peer.close();
+  }
+});

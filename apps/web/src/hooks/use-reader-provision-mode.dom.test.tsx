@@ -4,10 +4,12 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const { useRef } = await import("react");
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render } =
+  await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
 const { useReaderProvisionMode } =
   await import("@/hooks/use-reader-provision-mode");
@@ -44,7 +46,10 @@ test("provision mode is present in the host's first server and client render", (
     readerProvisionMode: "expanded" as const,
   };
   const tree = (
-    <PresentationPrefsProvider initialPrefs={initialPrefs}>
+    <PresentationPrefsProvider
+      initialPrefs={initialPrefs}
+      sync={createTestPresentationPrefsSync(initialPrefs)}
+    >
       <Reader />
     </PresentationPrefsProvider>
   );
@@ -63,14 +68,17 @@ test("provision mode is present in the host's first server and client render", (
   ).toBe("true");
 });
 
-test("mounted readers share the server preference and each toggle", () => {
+test("mounted readers share the server preference and each toggle", async () => {
   const saved: Partial<PresentationPrefs>[] = [];
   const tree = (
     <PresentationPrefsProvider
       initialPrefs={defaultPresentationPrefs}
-      persist={(patch) => {
-        saved.push(patch);
-      }}
+      sync={createTestPresentationPrefsSync(
+        defaultPresentationPrefs,
+        (patch) => {
+          saved.push(patch);
+        },
+      )}
     >
       <Reader label="page" />
       <Reader label="inspector" />
@@ -80,10 +88,14 @@ test("mounted readers share the server preference and each toggle", () => {
   const page = rendered.getByRole("button", { name: "page" });
   const inspector = rendered.getByRole("button", { name: "inspector" });
   expect(page.getAttribute("aria-pressed")).toBe("false");
-  fireEvent.click(page);
+  await act(async () => {
+    fireEvent.click(page);
+  });
   expect(page.getAttribute("aria-pressed")).toBe("true");
   expect(inspector.getAttribute("aria-pressed")).toBe("true");
-  fireEvent.click(inspector);
+  await act(async () => {
+    fireEvent.click(inspector);
+  });
   expect(page.getAttribute("aria-pressed")).toBe("false");
   expect(inspector.getAttribute("aria-pressed")).toBe("false");
   expect(saved).toEqual([

@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { defaultPresentationPrefs } from "../lib/account/presentation-prefs/preferences";
@@ -81,7 +82,10 @@ test("browser chrome follows runtime light to dark and back without duplicate me
   const view = render(
     <PresentationPrefsProvider
       initialPrefs={{ ...defaultPresentationPrefs, theme: "light" }}
-      persist={() => undefined}
+      sync={createTestPresentationPrefsSync({
+        ...defaultPresentationPrefs,
+        theme: "light",
+      })}
     >
       <ThemeProvider>
         <ThemeControls />

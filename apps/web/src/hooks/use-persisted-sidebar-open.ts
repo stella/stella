@@ -13,8 +13,9 @@ export const usePersistedSidebarOpen = ({
 }: PersistedSidebarOpenOptions) => {
   const { prefs, setPrefs } = usePresentationPrefs();
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
-  const open =
-    openOverride ?? (usePreference ? prefs.sidebarOpen : defaultOpen);
+  const open = usePreference
+    ? prefs.sidebarOpen
+    : (openOverride ?? defaultOpen);
   const persistOpen = (nextOpen: boolean) =>
     setPrefs({ sidebarOpen: nextOpen });
   return { open, persistOpen, setOpen: setOpenOverride };

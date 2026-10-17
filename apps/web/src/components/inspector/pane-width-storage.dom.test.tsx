@@ -6,6 +6,7 @@ import nodePath from "node:path";
 
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 
 import { useSharedInspectorPaneWidth } from "./pane-width-storage";
 
@@ -23,6 +24,10 @@ describe("inspector width server snapshot", () => {
       const html = renderToStaticMarkup(
         <PresentationPrefsProvider
           initialPrefs={{ ...defaultPresentationPrefs, inspectorWidth }}
+          sync={createTestPresentationPrefsSync({
+            ...defaultPresentationPrefs,
+            inspectorWidth,
+          })}
         >
           <Dock />
           <Dock />
