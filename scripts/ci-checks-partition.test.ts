@@ -11,6 +11,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
@@ -461,7 +462,34 @@ const withoutStepId = (step: Step): Step => {
   delete original["id"];
   return original;
 };
-const withoutContinuation = (step: Step): Step => {
+// Budget and time-based guards carry the continue-on-error their gate class
+// in scripts/ci-gate-classes.ts implies; that table and its census own it.
+const gateLenience = (name: string) => {
+  for (const job of [
+    "ci-checks-generated",
+    "ci-checks-policy",
+    "ci-checks-rest",
+  ]) {
+    const gate = CI_GATES[job]?.steps?.[name];
+    if (gate !== undefined && gate.enforcedBy === undefined) {
+      return CONTINUE_ON_ERROR[gate.class];
+    }
+  }
+  return undefined;
+};
+
+const withoutGateLenience = (step: Step): Step => {
+  const lenience = gateLenience(step.name);
+  if (lenience === undefined || step["continue-on-error"] !== lenience) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["continue-on-error"];
+  return original;
+};
+
+const withoutContinuation = (gated: Step): Step => {
+  const step = withoutGateLenience(gated);
   const condition = v.parse(
     v.looseObject({ if: v.optional(v.string()) }),
     step,
@@ -1895,7 +1923,7 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
         `${CONTINUATION_PREFIXES.checkout}${leg === "ci-checks-policy" ? "" : ` && (${PACKAGE_SCOPE})`}${safety} }}`,
       );
     }
-    expect(continueOnError, step.name).toBeUndefined();
+    expect(continueOnError, step.name).toBe(gateLenience(step.name));
   }
 };
 
