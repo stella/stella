@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 import { isText } from "domhandler";
 import { Buffer } from "node:buffer";
@@ -33,15 +33,18 @@ export const loadPlKioHtml = (html: string) => {
     rejection = PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED;
   }
   if (rejection !== undefined) {
-    throw new PlKioHtmlBudgetError({
-      message: "KIO HTML exceeds input budget",
-      reason: rejection,
-    });
+    return Result.err(
+      new PlKioHtmlBudgetError({
+        message: "KIO HTML exceeds input budget",
+        reason: rejection,
+      }),
+    );
   }
   let allocations = 0;
   const charge = (count: number) => {
     allocations += count;
     if (allocations > PL_KIO_HTML_BUDGET.maxDomAllocations) {
+      // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- parse5 tree-adapter callbacks cannot return a Result; this aborts the synchronous parser and the enclosing Result.try converts it to Result.err
       throw new PlKioHtmlBudgetError({
         message: "KIO HTML exceeds DOM allocation budget",
         reason: PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
@@ -94,19 +97,19 @@ export const loadPlKioHtml = (html: string) => {
       return adapter.adoptAttributes(...args);
     },
   } satisfies typeof adapter;
-  return cheerio.load(html, { treeAdapter });
-};
-
-export const readPlKioHtml = (html: string) => {
-  const result = Result.try({
-    try: () => loadPlKioHtml(html),
+  return Result.try({
+    try: () => cheerio.load(html, { treeAdapter }),
     catch: (error) => {
       if (error instanceof PlKioHtmlBudgetError) {
         return error;
       }
-      throw error;
+      return panic("Unexpected failure while parsing KIO HTML", error);
     },
   });
+};
+
+export const readPlKioHtml = (html: string) => {
+  const result = loadPlKioHtml(html);
   if (Result.isError(result)) {
     return { type: result.error.reason };
   }

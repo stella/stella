@@ -403,9 +403,9 @@ describe("building a ruling from its three pages", () => {
       expect(
         Object.values(decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {}),
       ).toContain(documentHtml);
-      expect(
-        plKioAdapter.reconciliation?.heldWithoutDocument?.reasons,
-      ).toContain(PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED);
+      expect(plKioAdapter.reconciliation.heldWithoutDocument.reasons).toContain(
+        PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+      );
     },
   );
 

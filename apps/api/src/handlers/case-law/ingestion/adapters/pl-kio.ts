@@ -853,6 +853,15 @@ const plKioParseError = (error: unknown, state: PlKioDocumentReadState) => {
   return errorTag(error);
 };
 
+const loadPlKioHtmlForParser = (html: string) => {
+  const loaded = loadPlKioHtml(html);
+  if (Result.isError(loaded)) {
+    // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- the shared parser's callback contract returns a CheerioAPI; the enclosing Result.try in assemblePlKioDecision records the rejection via plKioParseError
+    throw loaded.error;
+  }
+  return loaded.value;
+};
+
 const plKioDocumentOf = (
   document: AssemblePlKioDecisionOptions["document"],
 ): PlKioDocumentReadState => {
@@ -1060,7 +1069,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
-              loadHtml: loadPlKioHtml,
+              loadHtml: loadPlKioHtmlForParser,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",

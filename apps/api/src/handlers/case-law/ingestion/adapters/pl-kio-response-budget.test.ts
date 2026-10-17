@@ -134,7 +134,7 @@ test("pl-kio.attribute-prescan-upper-bound: accepted scans bound parse5 across m
   );
   const limits = { ...PL_KIO_HTML_BUDGET, maxAttributesPerTag: 2 };
   assertProperty(
-    "pl-kio.attribute-prescan-upper-bound",
+    "pl-kio.attribute-prescan-upper-bound: accepted scans bound parse5 across malformed HTML",
     fc.property(fragments, (parts) => {
       const html = parts.join("");
       if (!hasPlKioAttributeBudget(html, limits)) {

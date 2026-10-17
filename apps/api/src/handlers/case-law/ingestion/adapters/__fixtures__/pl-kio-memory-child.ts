@@ -121,7 +121,7 @@ process.stdout.write(
     targetBytes,
     documentBytes,
     fulltextChars: decision.fulltext?.length ?? 0,
-    astBlocks: decision.documentAst.blocks?.length ?? 0,
+    astBlocks: decision.documentAst.blocks.length,
     rawEnvelopeBytes: Buffer.byteLength(decision.sourceRaw ?? ""),
     rawContainsDocument: true,
     budgetType: decision.metadata["documentStatus"] ?? budget,
