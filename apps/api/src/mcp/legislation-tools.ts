@@ -404,7 +404,8 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "Read one statute by ELI as it stood on a date: `as_of` picks the " +
       "consolidation in force that day, and omitting it reads the text in " +
       "force today. Returns that consolidation's metadata and validity " +
-      "window, `versions` (the newest page of the work's consolidations), " +
+      "window, `pendingChanges` (publisher-stated future or undated effects), " +
+      "`versions` (the newest page of the work's consolidations, with `amendedBy` effects), " +
       "`outline` (its heading anchors, the input read_statute_provisions " +
       "takes) and its plain text. Long text comes back in windows; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
@@ -799,7 +800,9 @@ const handleReadStatuteTool: TypedMcpToolHandler<
         expressionKind: document.expressionKind,
         windowDisposition: document.windowDisposition,
         windowDispositionBasis: document.windowDispositionBasis,
+        pendingChanges: document.pendingChanges,
         versions: versionsPage.items.map((version) => ({
+          amendedBy: version.amendedBy ?? null,
           documentId: version.id,
           resourceName: legislationResourceName(version.id),
           versionValidFrom: version.versionValidFrom,

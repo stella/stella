@@ -5116,6 +5116,8 @@
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
+    "pendingChanges": "Nadcházející novelizace",
+    "pendingChangesIncomplete": "Údaje vydavatele nemusí zahrnovat všechny nadcházející novelizace.",
     "provisionAskContextPrompt": "\n\nPasáže, které toto ustanovení aplikují v nejvlivnějších rozhodnutích:\n{passages}\n\nPomocí nástrojů pro judikaturu si můžeš přečíst kterékoli z těchto rozhodnutí celé nebo dohledat další rozhodnutí, která ustanovení citují.",
     "provisionAskPlaceholder": "Zeptejte se na toto ustanovení",
     "provisionAskQuestionPrompt": "K {subject}: {question}",

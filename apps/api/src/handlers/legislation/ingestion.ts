@@ -48,6 +48,7 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
+import { syncLegislationAmendmentsTx } from "@/api/lib/legal-search/legislation-amendments";
 import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
@@ -620,6 +621,10 @@ const commitLegislationVersion = async ({
   await scopedDb(async (tx) => {
     const input = revision.input;
     await declareWriterContract(tx);
+    await syncLegislationAmendmentsTx(tx, {
+      work: input,
+      snapshot: input.amendments,
+    });
     // Settle and the write-error retry take the projection source before the
     // row; this write takes them in the same order so they cannot deadlock.
     const projectionLock =
@@ -901,6 +906,12 @@ export const processLegislationDocument = async (
     corpusAlreadySettled &&
     hasStoredClassification(existing, classification)
   ) {
+    await scopedDb(async (tx) => {
+      await syncLegislationAmendmentsTx(tx, {
+        work: input,
+        snapshot: input.amendments,
+      });
+    });
     await settleLegislationCorpusProjection({
       documentId: existing.id,
       projection: revision.withoutCorpusWrite(classification),

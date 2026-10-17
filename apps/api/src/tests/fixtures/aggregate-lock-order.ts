@@ -58,6 +58,14 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
+    },
     scoutCensus: {
       aggregate: "scoutCensus",
       id: { type: "run", id: createSafeId<"scoutRun">(), organizationId },

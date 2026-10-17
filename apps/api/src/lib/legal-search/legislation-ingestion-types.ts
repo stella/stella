@@ -127,6 +127,50 @@ type LegislationObservationOrigin =
   | "bulk-snapshot"
   | "stored-raw-replay";
 
+export const LEGISLATION_AMENDMENT_CHANGE_KINDS = [
+  "changed",
+  "inserted",
+  "repealed",
+] as const;
+export const LEGISLATION_AMENDMENT_EFFECTIVE_TYPES = [
+  "date",
+  "not-stated",
+] as const;
+
+/** One publisher-identified amendment instruction affecting one provision. */
+export type LegislationAmendmentRelation = {
+  publisherId: string;
+  amendingEli: string;
+  /** Null when the fetched publisher data states no title. */
+  amendingTitle: string | null;
+  /** Exact publisher fragment IRI, not an inferred reader anchor. */
+  amendingAnchor: string | null;
+  affectedAnchor: string;
+  changeKind: (typeof LEGISLATION_AMENDMENT_CHANGE_KINDS)[number];
+  effective:
+    | { type: "date"; on: string }
+    | { type: "not-stated"; text: string | null };
+  /** Original instruction code, retained alongside its normalized kind. */
+  publisherInstruction: string | null;
+};
+
+export type LegislationAmendmentCoverage =
+  | { type: "complete" }
+  | { type: "partial"; unlocatedRelations: number; reason: string }
+  | { type: "not-stated"; reason: string };
+
+/**
+ * Complete observation of incoming relations for this target Work. Missing
+ * `amendments` leaves the stored snapshot alone. An empty observation clears
+ * it. `observedAt` is the publisher retrieval start, preserved through raw
+ * replay; it must never be replaced with the replay's current time.
+ */
+export type LegislationAmendmentSnapshot = {
+  observedAt: string;
+  relations: LegislationAmendmentRelation[];
+  coverage: LegislationAmendmentCoverage;
+};
+
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
   /**
@@ -204,6 +248,7 @@ export type LegislationDocumentInput = {
    * never be refreshed once the parser learns to read it.
    */
   rawHash: string;
+  amendments?: LegislationAmendmentSnapshot | undefined;
 };
 
 /**

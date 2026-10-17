@@ -5119,6 +5119,8 @@ type Messages = {
     "outline": "Contents";
     "outlineJumpLabel": "Jump to a provision";
     "outlineJumpPlaceholder": "§ 10 or a heading";
+    "pendingChanges": "Upcoming amendments";
+    "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.";
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.";
     "provisionAskPlaceholder": "Ask about this provision";
     "provisionAskQuestionPrompt": "About {subject}: {question}";

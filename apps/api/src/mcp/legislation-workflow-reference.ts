@@ -108,7 +108,18 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `anchors, at most ${LIMITS.legislationOutlineHeadingsMax} of them ` +
       "with `outlineTruncated` when there are more) and the plain `text` " +
       "in windows: pass the returned `nextCursor` back as `cursor` to keep " +
-      "reading. The text and every `versions` entry carry " +
+      "reading. `pendingChanges` contains only publisher-stated effects with " +
+      "dates after today in the source jurisdiction, plus effects whose " +
+      "date is unstated. `effectiveText` preserves stated start conditions; " +
+      "an unknown date does not prove a future start. Null means no " +
+      "amendment snapshot has been ingested. Its `coverage` records source " +
+      "gaps, and `truncated: true` marks a capped preview. The preview " +
+      "does not offer pagination; consult the publisher for further effects. " +
+      "Each version's `amendedBy` filters explicit publisher relations by " +
+      "that eligible wording's opening day; several amending acts can share " +
+      "one day. A date never supplies the actor's identity. An empty preview " +
+      "with incomplete coverage does not establish that no changes exist. " +
+      "The text and every `versions` entry carry " +
       "`expressionKind` and `windowDisposition`; a version applied in its " +
       "window only when both hold: " +
       `\`windowDisposition\` is \`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\` ` +
