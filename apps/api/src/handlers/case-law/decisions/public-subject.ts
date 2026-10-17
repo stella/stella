@@ -106,6 +106,7 @@ const buildGatedSubjectHandler = <
           async () =>
             await withRedistributableSubject(
               caseLawDb,
+              "pages",
               located,
               async (subject) => ({ value: await read(subject, ctx) }),
             ),

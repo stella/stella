@@ -273,7 +273,7 @@ const DescribedWorkspaceFrame = ({
       {frame}
       {inspectorPresentation === "mobile" ? (
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 p-0"
+          className="h-dvh w-full max-w-none border-0"
           showCloseButton={false}
           side="inline-end"
         >

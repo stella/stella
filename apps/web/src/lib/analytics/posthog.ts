@@ -132,10 +132,13 @@ const domExceptionClass = (type: string, value: string): string => {
 const CANCELLED_REQUEST_CLASS = "AbortError";
 
 // Errors whose type names an expected outcome, handled where it happens: no
-// desktop app running, a public-law source down, a signed-out session.
+// desktop app running, a public-law source down, a signed-out session, a
+// model provider's failure the chat shows with its setup guidance (the API
+// reports the provider failures it does not classify itself).
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
 
@@ -790,6 +793,7 @@ export const createPostHogAnalytics = ({
         case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
         case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
         case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+        case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
           return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
         default: {
           event.event satisfies never;
@@ -902,6 +906,12 @@ export const createPostHogAnalytics = ({
     },
     captureProvisionPlacementGaps: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+    },
+    captureInspectorRestoreRecovered: (properties) => {
+      posthog.capture(
+        WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered,
+        properties,
+      );
     },
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")

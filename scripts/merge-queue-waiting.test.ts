@@ -142,11 +142,13 @@ const gate = async ({
   attempt = 1,
   polls,
   actor = "octocat",
+  enabled = true,
 }: {
   states: Queue[];
   attempt?: number;
   polls: number;
   actor?: string;
+  enabled?: boolean;
 }) => {
   const { github, calls } = client(states);
   const notices: string[] = [];
@@ -154,6 +156,7 @@ const gate = async ({
   const result = await mergeQueueGate({
     github,
     context: { actor, repo: { owner: "test", repo: "test" } },
+    enabled,
     attempt,
     polls,
     intervalMs: 60_000,
@@ -228,5 +231,21 @@ test("re-runs and Dependabot runs never yield", async () => {
     expect(
       await gate({ states: [{ queued: 1 }], polls: 0, ...options }),
     ).toEqual({ result: "run", checks: 0, notices: 0, sleeps: [] });
+  }
+});
+
+test("a disabled gate runs at once without reading the merge queue", async () => {
+  for (const polls of [0, 20]) {
+    const disabled = await gate({
+      states: [{ queued: 1 }],
+      polls,
+      enabled: false,
+    });
+    expect(disabled).toEqual({
+      result: "run",
+      checks: 0,
+      notices: 0,
+      sleeps: [],
+    });
   }
 });

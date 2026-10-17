@@ -7,13 +7,16 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  DEFAULT_MODELS,
+  resolveDefaultModel,
   isBYOKModelRoleSupported,
-  isBYOKProviderRoleSupported,
-  MODEL_ROLES,
+  MODEL_TASKS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_OVERRIDE_GROUP_TASK,
   supportsStreamingToolUse,
 } from "@stll/ai-catalog";
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask, ModelOverrideGroup } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { AIErrorKind } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sanitizeQueryErrorText } from "@stll/errors";
@@ -28,8 +31,8 @@ import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispa
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import {
   abortControllerFromSignal,
-  generateTanStackObjectForRole,
-  generateTanStackTextForRole,
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
   mergeGenerationOptions,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
@@ -41,9 +44,9 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 import {
   CANARY_TIERS,
   CANARY_PROVIDERS,
-  modelRoleMaxOutputTokens,
+  modelTaskMaxOutputTokens,
   structuredOutputBudgetEdgeMaxOutputTokens,
-  structuredOutputModelRoleMaxOutputTokens,
+  structuredOutputModelTaskMaxOutputTokens,
   IMPOSSIBLE_STRING_MAX_LENGTH,
   isCanaryProvider,
   NULL_WIDENING_CANARY_PROVIDERS,
@@ -82,10 +85,10 @@ export class CanaryProviderRunError extends TypeError {
   }
 }
 
-const CAPABILITY_ROLE = "fast" satisfies ModelRole;
-const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
+const CAPABILITY_TASK = "short-text" satisfies ModelTask;
+const TOOL_CALL_TASK = "chat" satisfies ModelTask;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
-const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
+const MODEL_TASK_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
 // The budget-edge probe sends the largest schema the canary knows how to
 // build and asks for one answer per property in it (~4K output tokens at
@@ -264,6 +267,7 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   provider_stream_incomplete: true,
   output_incomplete: true,
   output_invalid: false,
+  output_moderated: false,
   deadline_exceeded: true,
   loop_detected: false,
   empty_completion: false,
@@ -937,17 +941,17 @@ type CapabilityProbe = ProbeBase & {
   name: string;
 };
 
-type ModelRoleProbe = ProbeBase & {
-  type: "model-role";
-  role: ModelRole;
+type ModelTaskProbe = ProbeBase & {
+  type: "model-task";
+  task: ModelTask;
 };
 
-type StructuredOutputModelRoleProbe = ProbeBase & {
-  type: "structured-output-role";
-  role: ModelRole;
+type StructuredOutputModelTaskProbe = ProbeBase & {
+  type: "structured-output-task";
+  task: ModelTask;
 };
 
-type Probe = CapabilityProbe | ModelRoleProbe | StructuredOutputModelRoleProbe;
+type Probe = CapabilityProbe | ModelTaskProbe | StructuredOutputModelTaskProbe;
 
 type CanaryContext = {
   config: OrgAIConfig;
@@ -956,19 +960,21 @@ type CanaryContext = {
 
 type PdfCanarySelection = {
   modelId: string;
-  role: "chat" | "pdf";
+  task: "chat" | "pdf";
 };
 
 export const pdfCanarySelection = (
   provider: CanaryProvider,
 ): PdfCanarySelection | null => {
-  const defaultModelId = DEFAULT_MODELS[provider].pdf;
+  const defaultModelId =
+    resolveDefaultModel({ task: "pdf", orgProviders: [provider] })?.modelId ??
+    null;
   if (defaultModelId !== null) {
-    return { modelId: defaultModelId, role: "pdf" };
+    return { modelId: defaultModelId, task: "pdf" };
   }
 
   const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
-  return modelId === undefined ? null : { modelId, role: "chat" };
+  return modelId === undefined ? null : { modelId, task: "chat" };
 };
 
 type WeeklyCanaryContext = CanaryContext & {
@@ -976,28 +982,28 @@ type WeeklyCanaryContext = CanaryContext & {
   rotation: WeeklyCanaryRotation;
 };
 
-const modelRoleProbes = MODEL_ROLES.map(
-  (role) =>
+const modelTaskProbes = MODEL_TASKS.map(
+  (task) =>
     ({
-      type: "model-role",
-      role,
-      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      type: "model-task",
+      task,
+      timeoutMs: MODEL_TASK_PROBE_TIMEOUT_MS,
       run: async (context, signal) => {
-        await runModelRoleProbe({ context, role, signal });
+        await runModelTaskProbe({ context, task, signal });
       },
-    }) satisfies ModelRoleProbe,
+    }) satisfies ModelTaskProbe,
 );
 
-const structuredOutputModelRoleProbes = MODEL_ROLES.map(
-  (role) =>
+const structuredOutputModelTaskProbes = MODEL_TASKS.map(
+  (task) =>
     ({
-      type: "structured-output-role",
-      role,
-      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      type: "structured-output-task",
+      task,
+      timeoutMs: MODEL_TASK_PROBE_TIMEOUT_MS,
       run: async (context, signal) => {
-        await runStructuredOutputModelRoleProbe({ context, role, signal });
+        await runStructuredOutputModelTaskProbe({ context, task, signal });
       },
-    }) satisfies StructuredOutputModelRoleProbe,
+    }) satisfies StructuredOutputModelTaskProbe,
 );
 
 const capabilityProbes = [
@@ -1006,13 +1012,14 @@ const capabilityProbes = [
     name: "structured-output",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
-        maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
-          modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
-          role: CAPABILITY_ROLE,
+        maxOutputTokens: structuredOutputModelTaskMaxOutputTokens({
+          modelId:
+            MODEL_DEFAULTS_LEDGER[CAPABILITY_TASK][provider].candidate.modelId,
+          task: CAPABILITY_TASK,
         }),
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1020,7 +1027,7 @@ const capabilityProbes = [
         outputMode: "generative",
         outputSchema: structuredOutputSchema,
         prompt: "Return an object whose ok field is true.",
-        role: CAPABILITY_ROLE,
+        task: CAPABILITY_TASK,
         serviceTier: "standard",
         tenantWorkspaceIds: NO_TENANT_SCOPE,
       });
@@ -1037,7 +1044,8 @@ const capabilityProbes = [
     name: "structured-output-budget-edge",
     timeoutMs: BUDGET_EDGE_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
-      const modelId = DEFAULT_MODELS[provider][CAPABILITY_ROLE];
+      const modelId =
+        MODEL_DEFAULTS_LEDGER[CAPABILITY_TASK][provider].candidate.modelId;
       const edge = buildBudgetEdgeSchema({ provider, modelId });
       console.log(
         `[ai-canary] ${provider}/structured-output-budget-edge: ` +
@@ -1046,7 +1054,7 @@ const capabilityProbes = [
           `${edge.measured.unionParameters}/${edge.budget.maxUnionParameters} ` +
           `union parameters (${edge.budget.basis} budget, compiler=${edge.compiler})`,
       );
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
@@ -1062,7 +1070,7 @@ const capabilityProbes = [
           "Return an object with one entry per property key in the " +
           'schema. For each, set "answer" to null and "justification" to ' +
           "an empty array.",
-        role: CAPABILITY_ROLE,
+        task: CAPABILITY_TASK,
         serviceTier: "standard",
         tenantWorkspaceIds: NO_TENANT_SCOPE,
       });
@@ -1076,7 +1084,7 @@ const capabilityProbes = [
       const output = await runToolProbe({
         context,
         prompt: TOOL_SCHEMA_PROMPT,
-        role: CAPABILITY_ROLE,
+        task: CAPABILITY_TASK,
         signal,
         tool: strictTool,
       });
@@ -1091,7 +1099,7 @@ const capabilityProbes = [
       const output = await runToolProbe({
         context,
         prompt: TOOL_SCHEMA_PROMPT,
-        role: CAPABILITY_ROLE,
+        task: CAPABILITY_TASK,
         signal,
         tool: openMapTool,
       });
@@ -1111,20 +1119,21 @@ const capabilityProbes = [
     name: "prompt-caching",
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
-      const output = await generateTanStackTextForRole({
+      const output = await generateTanStackTextForTask({
         dataClass: "public_corpus",
         abortSignal: signal,
         caching: CANARY_CACHING,
         finishPolicy: CANARY_TEXT_FINISH_POLICY,
-        maxOutputTokens: modelRoleMaxOutputTokens({
-          modelId: DEFAULT_MODELS[provider][CAPABILITY_ROLE],
-          role: CAPABILITY_ROLE,
+        maxOutputTokens: modelTaskMaxOutputTokens({
+          modelId:
+            MODEL_DEFAULTS_LEDGER[CAPABILITY_TASK][provider].candidate.modelId,
+          task: CAPABILITY_TASK,
         }),
         organizationId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
-        role: CAPABILITY_ROLE,
+        task: CAPABILITY_TASK,
         serviceTier: "standard",
         system: "This is a synthetic provider-contract canary.",
         systemPromptOrigin: "server-built",
@@ -1141,39 +1150,44 @@ export const canaryCapabilityProbeTimeout = (
   capabilityProbes.find((probe) => probe.name === name)?.timeoutMs;
 
 const probes = [
-  ...modelRoleProbes,
-  ...structuredOutputModelRoleProbes,
+  ...modelTaskProbes,
+  ...structuredOutputModelTaskProbes,
   ...capabilityProbes,
 ] satisfies readonly Probe[];
 
-type RunModelRoleProbeOptions = {
+type RunModelTaskProbeOptions = {
   context: CanaryContext;
-  role: ModelRole;
+  task: ModelTask;
   signal: AbortSignal;
 };
 
-const runModelRoleProbe = async ({
+const runModelTaskProbe = async ({
   context: { config, provider },
-  role,
+  task,
   signal,
-}: RunModelRoleProbeOptions): Promise<void> => {
+}: RunModelTaskProbeOptions): Promise<void> => {
   const selection =
-    role === "pdf"
+    task === "pdf"
       ? pdfCanarySelection(provider)
-      : { modelId: DEFAULT_MODELS[provider][role], role };
-  if (selection === null) {
+      : {
+          modelId:
+            resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ??
+            null,
+          task,
+        };
+  if (!selection?.modelId) {
     throw new CanaryError({
       message: "Canary resolved an unexpected provider model.",
     });
   }
   const probeConfig =
-    selection.role === role
+    selection.task === task
       ? config
       : {
           ...config,
           overrideModels: {
             ...config.overrideModels,
-            [selection.role]: {
+            [MODEL_TASK_OVERRIDE_GROUP[selection.task]]: {
               modelId: selection.modelId,
               provider,
             },
@@ -1184,7 +1198,7 @@ const runModelRoleProbe = async ({
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
-    role: selection.role,
+    task: selection.task,
   });
   if (model.provider !== provider || model.modelId !== selection.modelId) {
     throw new CanaryError({
@@ -1192,73 +1206,74 @@ const runModelRoleProbe = async ({
     });
   }
 
-  const output = await generateTanStackTextForRole({
+  const output = await generateTanStackTextForTask({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
-    maxOutputTokens: modelRoleMaxOutputTokens({
+    maxOutputTokens: modelTaskMaxOutputTokens({
       modelId: selection.modelId,
-      role,
+      task,
     }),
-    ...(role === "pdf"
+    ...(task === "pdf"
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
-    role: selection.role,
+    task: selection.task,
     serviceTier: "standard",
     tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
-  requireExpectedRoleOutput(output, role);
+  requireExpectedTaskOutput(output, task);
 };
 
-const runStructuredOutputModelRoleProbe = async ({
+const runStructuredOutputModelTaskProbe = async ({
   context: { config, provider },
-  role,
+  task,
   signal,
-}: RunModelRoleProbeOptions): Promise<void> => {
-  const modelId = DEFAULT_MODELS[provider][role];
+}: RunModelTaskProbeOptions): Promise<void> => {
+  const modelId =
+    resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ?? null;
   if (modelId === null) {
-    return panic("Unsupported role must not run a structured output canary");
+    return panic("Unsupported task must not run a structured output canary");
   }
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
+    maxOutputTokens: structuredOutputModelTaskMaxOutputTokens({
       modelId,
-      role,
+      task,
     }),
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
-    role,
+    task,
     serviceTier: "standard",
     tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
 };
 
-type RunWeeklyModelRoleProbeOptions = {
+type RunWeeklyModelTaskProbeOptions = {
   context: WeeklyCanaryContext;
-  role: ModelRole;
+  task: ModelTask;
   signal: AbortSignal;
 };
 
-const runWeeklyModelRoleProbe = async ({
+const runWeeklyModelTaskProbe = async ({
   context: { provider, rotatedConfig, rotation },
-  role,
+  task,
   signal,
-}: RunWeeklyModelRoleProbeOptions): Promise<void> => {
+}: RunWeeklyModelTaskProbeOptions): Promise<void> => {
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
-    role,
+    task,
   });
   if (model.provider !== provider || model.modelId !== rotation.modelId) {
     throw new CanaryError({
@@ -1266,47 +1281,47 @@ const runWeeklyModelRoleProbe = async ({
     });
   }
 
-  const output = await generateTanStackTextForRole({
+  const output = await generateTanStackTextForTask({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
-    maxOutputTokens: modelRoleMaxOutputTokens({
+    maxOutputTokens: modelTaskMaxOutputTokens({
       modelId: rotation.modelId,
-      role,
+      task,
     }),
-    ...(role === "pdf"
+    ...(task === "pdf"
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
-    role,
+    task,
     serviceTier: "standard",
     tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
-  requireExpectedRoleOutput(output, role);
+  requireExpectedTaskOutput(output, task);
 };
 
-const runWeeklyStructuredOutputModelRoleProbe = async ({
+const runWeeklyStructuredOutputModelTaskProbe = async ({
   context: { rotatedConfig, rotation },
-  role,
+  task,
   signal,
-}: RunWeeklyModelRoleProbeOptions): Promise<void> => {
-  await generateTanStackObjectForRole({
+}: RunWeeklyModelTaskProbeOptions): Promise<void> => {
+  await generateTanStackObjectForTask({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
+    maxOutputTokens: structuredOutputModelTaskMaxOutputTokens({
       modelId: rotation.modelId,
-      role,
+      task,
     }),
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
-    role,
+    task,
     serviceTier: "standard",
     tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
@@ -1340,7 +1355,7 @@ export const runToolCallRoundTripProbe = async ({
     context,
     prompt: toolRoundTripPromptForProvider(context.provider),
     resolveTextModel,
-    role: TOOL_CALL_ROLE,
+    task: TOOL_CALL_TASK,
     signal,
     tool,
   });
@@ -1414,7 +1429,7 @@ const runWeeklyToolShapeProbe = async ({
   await runToolProbe({
     context: { config: context.rotatedConfig, provider: context.provider },
     prompt,
-    role: TOOL_CALL_ROLE,
+    task: TOOL_CALL_TASK,
     signal,
     tool,
   });
@@ -1426,7 +1441,7 @@ type RunToolProbeOptions = {
   context: CanaryContext;
   prompt: string;
   resolveTextModel?: typeof resolveTanStackTextModel | undefined;
-  role: ModelRole;
+  task: ModelTask;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
 };
@@ -1452,7 +1467,7 @@ const runToolProbe = async ({
   context: { config, provider },
   prompt,
   resolveTextModel = resolveTanStackTextModel,
-  role,
+  task,
   signal,
   tool,
 }: RunToolProbeOptions): Promise<string> => {
@@ -1461,7 +1476,7 @@ const runToolProbe = async ({
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
-    role,
+    task,
   });
   const inputSchema = projectSchemaInputJsonSchema(
     tool.inputSchema,
@@ -1505,9 +1520,9 @@ const requireNonEmptyText = (output: string): void => {
   }
 };
 
-const requireExpectedRoleOutput = (output: string, role: ModelRole): void => {
+const requireExpectedTaskOutput = (output: string, task: ModelTask): void => {
   requireNonEmptyText(output);
-  if (role === "pdf" && output.trim() !== PDF_CANARY_TOKEN) {
+  if (task === "pdf" && output.trim() !== PDF_CANARY_TOKEN) {
     throw new CanaryError({
       message: "Provider did not read the attached PDF.",
     });
@@ -1515,20 +1530,27 @@ const requireExpectedRoleOutput = (output: string, role: ModelRole): void => {
 };
 
 const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
-  const modelIdForRole = (role: ModelRole) =>
-    rotatedModelId !== undefined &&
-    isBYOKModelRoleSupported({ modelId: rotatedModelId, provider, role })
-      ? rotatedModelId
-      : DEFAULT_MODELS[provider][role];
-
   const selections: [
-    ModelRole,
+    ModelOverrideGroup,
     { provider: CanaryProvider; modelId: string },
   ][] = [];
-  for (const role of MODEL_ROLES) {
-    const modelId = modelIdForRole(role);
-    if (modelId !== null) {
-      selections.push([role, { provider, modelId }]);
+  for (const group of MODEL_OVERRIDE_GROUPS) {
+    const task = MODEL_OVERRIDE_GROUP_TASK[group];
+    const defaultModel = resolveDefaultModel({
+      task,
+      orgProviders: [provider],
+    });
+    const modelId =
+      rotatedModelId !== undefined &&
+      isBYOKModelRoleSupported({
+        modelId: rotatedModelId,
+        provider,
+        role: group,
+      })
+        ? rotatedModelId
+        : defaultModel?.modelId;
+    if (modelId !== undefined) {
+      selections.push([group, { provider, modelId }]);
     }
   }
   return Object.fromEntries(selections);
@@ -1536,15 +1558,16 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
 
 /**
  * Every model id the catalog can put in front of a user for a provider: the
- * default of each role plus the whole BYOK list, in catalog order, once
+ * default of each task plus the whole BYOK list, in catalog order, once
  * each. The catalog probe below exercises all of them on every run, so a
  * model a provider retires is caught the next night rather than whenever the
  * weekly rotation happens to reach it.
  */
 export const catalogModelIds = (provider: CanaryProvider): string[] => {
   const ids = new Set<string>();
-  for (const role of MODEL_ROLES) {
-    const modelId = DEFAULT_MODELS[provider][role];
+  for (const task of MODEL_TASKS) {
+    const modelId =
+      resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ?? null;
     if (modelId !== null) {
       ids.add(modelId);
     }
@@ -1555,8 +1578,8 @@ export const catalogModelIds = (provider: CanaryProvider): string[] => {
   return [...ids];
 };
 
-// The cheapest role: a short reply, no reasoning budget, no attachment.
-const CATALOG_PROBE_ROLE = "fast" satisfies ModelRole;
+// The cheapest task: a short reply, no reasoning budget, no attachment.
+const CATALOG_PROBE_TASK = "short-text" satisfies ModelTask;
 // The catalog sweep is sequential (one provider quota) and each id may retry
 // with backoff, so the whole sweep gets one aggregate budget: ids left when
 // it runs out are reported as failures rather than silently unprobed, and the
@@ -1698,12 +1721,15 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
   }
 
   const modelId =
-    probe.type === "model-role" && probe.role === "pdf"
+    probe.type === "model-task" && probe.task === "pdf"
       ? pdfCanarySelection(context.provider)?.modelId
-      : DEFAULT_MODELS[context.provider][probe.role];
+      : (resolveDefaultModel({
+          task: probe.task,
+          orgProviders: [context.provider],
+        })?.modelId ?? null);
   const prefix =
-    probe.type === "structured-output-role" ? "structured-role" : "role";
-  return `${prefix}-${probe.role}:${modelId ?? "unsupported"}`;
+    probe.type === "structured-output-task" ? "structured-task" : "task";
+  return `${prefix}-${probe.task}:${modelId ?? "unsupported"}`;
 };
 
 const attemptSummary = (attempts: number): string =>
@@ -1824,7 +1850,7 @@ const run = async (): Promise<void> => {
     } satisfies WeeklyCanaryContext;
     console.log(
       `[ai-canary] ${provider}/weekly-rotation-${rotation.rotationIndex}: ` +
-        `${rotation.modelId}, roles=${rotation.modelRoles.join(",")}, ` +
+        `${rotation.modelId}, tasks=${rotation.modelTasks.join(",")}, ` +
         `tool-shape=${rotation.toolShape}`,
     );
     failures = await runWeeklyCanaryProbes(weeklyContext, failures);
@@ -1842,12 +1868,12 @@ const isSkippedProbe = (context: CanaryContext, probe: Probe): boolean => {
     return false;
   }
 
-  return probe.type === "model-role" && probe.role === "pdf"
+  return probe.type === "model-task" && probe.task === "pdf"
     ? pdfCanarySelection(context.provider) === null
-    : !isBYOKProviderRoleSupported({
-        provider: context.provider,
-        role: probe.role,
-      });
+    : resolveDefaultModel({
+        task: probe.task,
+        orgProviders: [context.provider],
+      }) === null;
 };
 
 const canaryProbeRuns = (context: CanaryContext): CanaryProbeRun[] => {
@@ -1856,7 +1882,7 @@ const canaryProbeRuns = (context: CanaryContext): CanaryProbeRun[] => {
     const label = probeLabel(context, probe);
     if (isSkippedProbe(context, probe)) {
       console.log(
-        `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,
+        `[ai-canary] ${context.provider}/${label}: skipped (unsupported task)`,
       );
       continue;
     }
@@ -1896,7 +1922,7 @@ const runCatalogModelProbe = async ({
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
-    role: CATALOG_PROBE_ROLE,
+    task: CATALOG_PROBE_TASK,
   });
   if (model.provider !== provider || model.modelId !== modelId) {
     throw new CanaryError({
@@ -1904,20 +1930,20 @@ const runCatalogModelProbe = async ({
     });
   }
 
-  const output = await generateTanStackTextForRole({
+  const output = await generateTanStackTextForTask({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
-    maxOutputTokens: modelRoleMaxOutputTokens({
+    maxOutputTokens: modelTaskMaxOutputTokens({
       modelId,
-      role: CATALOG_PROBE_ROLE,
+      task: CATALOG_PROBE_TASK,
     }),
     prompt: SYNTHETIC_PROMPT,
     organizationId: null,
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
-    role: CATALOG_PROBE_ROLE,
+    task: CATALOG_PROBE_TASK,
     serviceTier: "standard",
     tenantWorkspaceIds: NO_TENANT_SCOPE,
   });
@@ -1973,7 +1999,7 @@ export const runCatalogCanaryProbes = async (
       run: async (signal) => {
         await probeModel({ apiKey, modelId, provider, signal });
       },
-      timeoutMs: Math.min(MODEL_ROLE_PROBE_TIMEOUT_MS, remainingMs),
+      timeoutMs: Math.min(MODEL_TASK_PROBE_TIMEOUT_MS, remainingMs),
     });
     const rejectionReason =
       result.status === "failed" ? providerRejectionReason(result.error) : null;
@@ -1997,13 +2023,13 @@ const runWeeklyCanaryProbes = async (
 ): Promise<number> => {
   let totalFailures = failures;
 
-  for (const role of context.rotation.modelRoles) {
-    const label = `weekly-role-${role}:${context.rotation.modelId}`;
+  for (const task of context.rotation.modelTasks) {
+    const label = `weekly-task-${task}:${context.rotation.modelId}`;
     const result = await runCanaryProbe({
       run: async (signal) => {
-        await runWeeklyModelRoleProbe({ context, role, signal });
+        await runWeeklyModelTaskProbe({ context, task, signal });
       },
-      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      timeoutMs: MODEL_TASK_PROBE_TIMEOUT_MS,
     });
     totalFailures += recordProbeResult({
       label,
@@ -2011,16 +2037,16 @@ const runWeeklyCanaryProbes = async (
       result,
     });
 
-    const structuredLabel = `weekly-structured-role-${role}:${context.rotation.modelId}`;
+    const structuredLabel = `weekly-structured-task-${task}:${context.rotation.modelId}`;
     const structuredResult = await runCanaryProbe({
       run: async (signal) => {
-        await runWeeklyStructuredOutputModelRoleProbe({
+        await runWeeklyStructuredOutputModelTaskProbe({
           context,
-          role,
+          task,
           signal,
         });
       },
-      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      timeoutMs: MODEL_TASK_PROBE_TIMEOUT_MS,
     });
     totalFailures += recordProbeResult({
       label: structuredLabel,
