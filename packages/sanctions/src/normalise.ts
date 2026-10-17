@@ -263,6 +263,7 @@ export const nameTokens = (
 };
 
 /** Maximum normalized input count, before repeated spellings are deduplicated. */
+export const MAX_QUERY_CHARACTERS = 512;
 export const MAX_QUERY_TOKENS = 24;
 
 export const hasExcessQueryTokens = (
