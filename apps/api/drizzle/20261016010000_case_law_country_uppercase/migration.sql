@@ -27,27 +27,3 @@ BEFORE INSERT OR UPDATE
 ON "case_law_decisions"
 FOR EACH ROW
 EXECUTE FUNCTION enforce_case_law_decisions_corpus_country_shape();--> statement-breakpoint
-
--- Match the canonical country exactly in the persisted routing function.
-CREATE OR REPLACE FUNCTION case_law_corpus_index_id(generation text, country text)
-RETURNS text
-LANGUAGE sql
-IMMUTABLE STRICT
-AS $function$
-  SELECT CASE
-  WHEN substring(generation from '^case_law_v([1-9][0-9]*)$')::numeric
-       BETWEEN 3
-       AND 2147483647
-  THEN generation || '_' || CASE country
-    WHEN 'AUT' THEN 'aut'
-    WHEN 'CZE' THEN CASE WHEN substring(generation from '^case_law_v([1-9][0-9]*)$')::numeric >= 9 THEN 'cze' ELSE 'cs_sk' END
-    WHEN 'EU' THEN 'eu'
-    WHEN 'HUN' THEN 'hun'
-    WHEN 'POL' THEN 'pol'
-    WHEN 'SVK' THEN 'cs_sk'
-    WHEN 'USA' THEN 'usa'
-    ELSE lower(country)
-  END
-  ELSE generation || '_' || lower(country)
-END
-$function$;--> statement-breakpoint

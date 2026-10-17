@@ -195,10 +195,12 @@ export const CASE_LAW_INDEX_GROUPS: ReadonlyMap<
  * Lowercase index group of a country in the grouped generation of this order;
  * its own code when unlisted.
  */
-export const caseLawIndexGroupAt = (order: number, country: string): string =>
-  isCaseLawJurisdictionKey(country)
-    ? groupOfJurisdictionAt(order, country)
+export const caseLawIndexGroupAt = (order: number, country: string): string => {
+  const canonical = country.toUpperCase();
+  return isCaseLawJurisdictionKey(canonical)
+    ? groupOfJurisdictionAt(order, canonical)
     : country.toLowerCase();
+};
 
 /** The groups the grouped generation of this order has, in declaration order. */
 export const caseLawIndexGroupNamesAt = (
@@ -291,7 +293,7 @@ export const caseLawIndexIdSql = (
   WHEN ${order}
        BETWEEN ${sql.raw(String(CASE_LAW_INDEX_GROUPING_FROM_GENERATION))}
        AND ${sql.raw(String(POSTGRES_INTEGER_MAX))}
-  THEN ${generation} || '_' || CASE ${country}
+  THEN ${generation} || '_' || CASE upper(${country})
     ${groupArms}
     ELSE lower(${country})
   END

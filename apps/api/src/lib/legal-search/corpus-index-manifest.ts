@@ -1111,14 +1111,15 @@ export const corpusIndexIdFromManifest = (
   manifest: CorpusIndexManifest,
   jurisdiction: string,
 ): string => {
-  if (!isCorpusIndexJurisdiction(jurisdiction)) {
+  const canonical = jurisdiction.toUpperCase();
+  if (!isCorpusIndexJurisdiction(canonical)) {
     return panic(`Invalid corpus jurisdiction: ${jurisdiction}`);
   }
 
   switch (manifest.route.type) {
     case "case_law_group":
-      return isCaseLawJurisdiction(jurisdiction)
-        ? corpusIndexId(manifest.generation, jurisdiction)
+      return isCaseLawJurisdiction(canonical)
+        ? corpusIndexId(manifest.generation, canonical)
         : panic(`Undeclared case-law jurisdiction: ${jurisdiction}`);
     case "jurisdiction": {
       const indexId = `${manifest.generation}_${jurisdiction.toLowerCase()}`;
@@ -1232,12 +1233,13 @@ export const corpusIndexRoute = (
       jurisdictionClause: undefined,
     };
   }
-  const indexId = corpusIndexIdFromManifest(manifest, jurisdiction);
+  const canonical = jurisdiction.toUpperCase();
+  const indexId = corpusIndexIdFromManifest(manifest, canonical);
   return {
     indexId,
     jurisdictionClause:
       manifestIndexJurisdictionCount(manifest, indexId) > 1
-        ? jurisdiction
+        ? canonical
         : undefined,
   };
 };
