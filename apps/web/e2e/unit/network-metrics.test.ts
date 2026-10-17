@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type NetworkBaseline,
+  type NetworkCapture,
   type RouteNetworkMetrics,
   browserRequestInterval,
   readResponseBytes,
@@ -980,7 +981,7 @@ describe("diffNetworkBaseline", () => {
   ])(
     "uses completed unencoded transport bytes without weakening decoded-size budgets: %j",
     async ({ worker, transfer, encoding, failure, bytes, expected }) => {
-      const record = {
+      const record: NetworkCapture["requests"][number] = {
         method: "GET",
         pathname: "/v1/contacts",
         dbQueries: null,
