@@ -1,5 +1,6 @@
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   getMcpResourceScopes,
@@ -33,7 +34,7 @@ export const createMcpCorsHeaders = () =>
     "Access-Control-Allow-Methods": MCP_STATELESS_ALLOW_HEADER,
     "Access-Control-Allow-Headers": MCP_ALLOWED_HEADERS.join(", "),
     "Access-Control-Expose-Headers": MCP_EXPOSE_HEADERS.join(", "),
-    "Access-Control-Max-Age": "86400",
+    "Access-Control-Max-Age": String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
     [STELLA_MCP_API_CONTRACT_HEADER]: String(STELLA_MCP_API_CONTRACT_VERSION),
     [STELLA_CLI_MINIMUM_HEADER]: STELLA_CLI_MINIMUM_VERSION,
   });
@@ -55,6 +56,10 @@ export const createMcpPreflightHeaders = () => {
 export const createMcpDiscoveryPreflightHeaders = () => {
   const headers = createMcpMetadataHeaders();
   headers.set("Allow", MCP_DISCOVERY_ALLOW_HEADER);
+  headers.set(
+    "Access-Control-Max-Age",
+    String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+  );
   return headers;
 };
 

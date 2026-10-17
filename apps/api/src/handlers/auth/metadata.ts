@@ -3,7 +3,9 @@ import { panic } from "better-result";
 
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
 import { getAuth } from "@/api/lib/auth";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/lib/public-cors";
 import { CACHE_CONTROL_HEADER } from "@/api/lib/security-headers";
+import { MCP_PROTOCOL_VERSION_HEADER } from "@/api/mcp/constants";
 
 type AuthWithOAuthServerConfig = ReturnType<typeof getAuth> & {
   api: {
@@ -33,11 +35,26 @@ const hasOAuthServerConfig = (
   );
 };
 
-export const createAuthMetadataHeaders = () =>
+const createAuthMetadataHeaders = () =>
   new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
   });
+
+/**
+ * MCP clients send `MCP-Protocol-Version` on discovery, which makes a
+ * browser preflight the request; the preflight has to admit that header and
+ * may be reused rather than repeated before every authorization.
+ */
+export const createAuthMetadataPreflightHeaders = () => {
+  const headers = createAuthMetadataHeaders();
+  headers.set("Access-Control-Allow-Headers", MCP_PROTOCOL_VERSION_HEADER);
+  headers.set(
+    "Access-Control-Max-Age",
+    String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+  );
+  return headers;
+};
 
 const withAuthMetadataHeaders = (response: Response) => {
   const headers = new Headers(response.headers);

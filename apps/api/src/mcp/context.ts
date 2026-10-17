@@ -77,6 +77,11 @@ import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-fil
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import {
+  readPresent,
+  readUnavailable,
+  type ReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
@@ -85,6 +90,8 @@ import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-versi
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -272,15 +279,19 @@ export type McpRequestContext = {
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call cannot execute. Computed once from organization settings and registry
-   * credential availability.
+   * call cannot execute. Read from organization settings and registry
+   * credential availability on first use, at most once per request: only
+   * discovery narrows by it, so a `tools/call` never pays the settings read and
+   * credential decryption behind it.
    *
-   * `undefined` means "not resolved" (a synthetic/test context, or a settings
-   * read fault): the projection then leaves the full enum advertised and the
-   * call-time gate stays the backstop. It is NOT the same as an empty array,
-   * which means the org can reach no registry and the tool is dropped.
+   * Absent (a synthetic/test context) or an unavailable read leaves the full
+   * enum advertised, and the call-time gate stays the backstop. Neither is
+   * the same as a present empty list, which means the org can reach no
+   * registry and the tool is dropped.
    */
-  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
+  resolveEnabledRegistrySlugs?:
+    | (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>)
+    | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -382,6 +393,59 @@ export const loadAccessibleMcpWorkspaces = async ({
     throw error;
   }
   return outcome.value.workspaces;
+};
+
+const REGISTRY_NARROWING_SINK = failureSink({
+  event: "mcp.registry_narrowing.read_failed",
+  expected: [],
+});
+
+type LoadEnabledRegistrySlugsOptions = {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
+};
+
+/**
+ * The registries the org can reach, for narrowing discovery. A read fault in
+ * either source is captured and reported as unavailable, never as an empty
+ * set, which would drop the tool.
+ */
+const loadEnabledRegistrySlugs = async ({
+  organizationId,
+  safeDb,
+  scopedDb,
+}: LoadEnabledRegistrySlugsOptions): Promise<
+  ReadOutcome<readonly BusinessRegistrySlug[]>
+> => {
+  const [settings, dispatch] = await Promise.all([
+    safeDb((tx) =>
+      tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: organizationId } },
+        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+      }),
+    ),
+    Result.tryPromise(
+      async () =>
+        await getOrganizationRegistryDispatch({ organizationId, scopedDb }),
+    ),
+  ]);
+  if (Result.isError(settings)) {
+    observeFailure(settings.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: settings.error });
+  }
+  if (Result.isError(dispatch)) {
+    observeFailure(dispatch.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: dispatch.error });
+  }
+  return readPresent(
+    availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings.value ?? undefined,
+      ),
+      dispatch: dispatch.value,
+    }).map((handler) => handler.slug),
+  );
 };
 
 export const resolveMcpSessionContext = async (
@@ -531,30 +595,9 @@ export const resolveMcpSessionContext = async (
             await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
         );
 
-  // Resolve the org's reachable registries once, so the tools/list projection
-  // can narrow the `lookup_business_registry` enum synchronously. On a read
-  // fault, leave it unresolved (undefined) rather than dropping the tool.
-  const [settingsResult, registryDispatch] = await Promise.all([
-    requestDatabaseScope.safeDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
-      }),
-    ),
-    getOrganizationRegistryDispatch({
-      organizationId,
-      scopedDb: requestDatabaseScope.scopedDb,
-    }),
-  ]);
-  const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
-    Result.isError(settingsResult)
-      ? undefined
-      : availableRegistryHandlersForOrg({
-          disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
-            settingsResult.value ?? undefined,
-          ),
-          dispatch: registryDispatch,
-        }).map((handler) => handler.slug);
+  let enabledRegistrySlugs:
+    | Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>
+    | undefined;
 
   return {
     ...(auditExecution ? { auditExecution } : {}),
@@ -575,7 +618,12 @@ export const resolveMcpSessionContext = async (
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
-    enabledRegistrySlugs,
+    resolveEnabledRegistrySlugs: async () =>
+      await (enabledRegistrySlugs ??= loadEnabledRegistrySlugs({
+        organizationId,
+        safeDb: requestDatabaseScope.safeDb,
+        scopedDb: requestDatabaseScope.scopedDb,
+      })),
     grantedScopes: session.scopes,
     memberRole,
     organizationId,

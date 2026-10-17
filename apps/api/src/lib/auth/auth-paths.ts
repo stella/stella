@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import type { CachePolicy } from "@/api/lib/security-headers";
 
 const AUTH_API_PATH = "/api/auth" as const;
 
@@ -15,6 +16,19 @@ export const OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH =
 
 export const OPENID_CONFIGURATION_DISCOVERY_PATH =
   "/.well-known/openid-configuration" as const;
+
+/**
+ * Shared-cache policy for the OAuth discovery documents (authorization-server
+ * and protected-resource metadata). They change only on deploy, and an MCP
+ * client fetches them before every authorization, so a cache may serve them
+ * for five minutes and keep serving the stored copy for an hour while it
+ * revalidates in the background (RFC 9111, RFC 5861).
+ */
+export const DISCOVERY_DOCUMENT_CACHE = {
+  kind: "public",
+  maxAge: 300,
+  swr: 3600,
+} as const satisfies CachePolicy;
 
 const withTrailingSlash = (url: string) => `${url.replace(/\/$/u, "")}/`;
 

@@ -36,6 +36,7 @@ import { McpGatewayLoadError } from "@/api/mcp/errors";
 import {
   hasGrantedScope,
   listOfferedStaticMcpToolDefinitions,
+  resolveOfferedRegistrySlugs,
 } from "@/api/mcp/gateway/static-tool-visibility";
 
 const AVAILABLE: SkillToolAvailability = {
@@ -93,6 +94,7 @@ const loadSkillTools = async ({
       mode,
       scopes,
       audience: "model",
+      enabledRegistrySlugs: await resolveOfferedRegistrySlugs(context, mode),
     }).flatMap(({ additionalScopes = [], name }) =>
       additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
         ? [name]

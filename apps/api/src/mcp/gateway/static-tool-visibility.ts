@@ -1,7 +1,12 @@
+import { panic } from "better-result";
+
+import { BoundedLruCache } from "@stll/collation";
+
 import {
   hasLawReadScope,
   LAW_READ_SCOPE,
 } from "@/api/handlers/legal-resolve/scope";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
@@ -61,23 +66,88 @@ const isStaticToolVisibleToRole = (
 const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
 
 /**
+ * The registries a session's discovery narrows to: resolved only on the
+ * default surface, the one surface that narrows, so no other audience pays the
+ * settings read and credential decryption behind it. `undefined` leaves the
+ * enum whole; only a read that produced the set narrows it.
+ */
+export const resolveOfferedRegistrySlugs = async (
+  context: McpRequestContext,
+  mode: McpMode,
+): Promise<readonly BusinessRegistrySlug[] | undefined> => {
+  if (mode !== "default" || context.resolveEnabledRegistrySlugs === undefined) {
+    return undefined;
+  }
+  const outcome = await context.resolveEnabledRegistrySlugs();
+  switch (outcome.type) {
+    case "present":
+      return outcome.value;
+    case "absent":
+    case "refused":
+    case "unavailable":
+      return undefined;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled registry read outcome");
+  }
+};
+
+/**
+ * The narrowed definition depends on the definition and the slug set alone,
+ * so it is built once per pair: a stable schema object lets `tools/list`
+ * reuse its wire conversion instead of rebuilding it on every call.
+ */
+const NARROWED_REGISTRY_VARIANTS = 16;
+const narrowedRegistryDefinitions = new WeakMap<
+  McpToolDefinition,
+  BoundedLruCache<string, McpToolDefinition>
+>();
+
+const narrowRegistryDefinition = (
+  definition: McpToolDefinition,
+  enabledSlugs: readonly BusinessRegistrySlug[],
+): McpToolDefinition => {
+  let variants = narrowedRegistryDefinitions.get(definition);
+  if (variants === undefined) {
+    variants = new BoundedLruCache(NARROWED_REGISTRY_VARIANTS);
+    narrowedRegistryDefinitions.set(definition, variants);
+  }
+  const key = enabledSlugs.join(" ");
+  const cached = variants.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const narrowed = {
+    ...definition,
+    inputSchema: {
+      ...definition.inputSchema,
+      properties: {
+        ...definition.inputSchema.properties,
+        registry: enumProp("Business register to query", enabledSlugs),
+      },
+    },
+  };
+  variants.set(key, narrowed);
+  return narrowed;
+};
+
+/**
  * Narrow the `lookup_business_registry` tool's `registry` enum to the
- * registries this org can actually reach (`context.enabledRegistrySlugs`,
- * resolved once at context bootstrap), and drop the tool entirely when none
- * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
- * advertise a registry whose call cannot execute — the same defect the chat
- * tool already avoids. Applied only to the default surface; the
- * anonymized projection stays tenant-neutral and is never narrowed.
+ * registries this org can actually reach (`resolveOfferedRegistrySlugs`),
+ * and drop the tool entirely when none are. Mirrors the in-app chat tool, so
+ * the external MCP surface can no longer advertise a registry whose call
+ * cannot execute — the same defect the chat tool already avoids. Applied only
+ * to the default surface; the anonymized projection stays tenant-neutral and
+ * is never narrowed.
  *
- * `enabledRegistrySlugs === undefined` means the set was not resolved (a
- * synthetic/test context, or a bootstrap settings-read fault): leave the full
- * enum advertised and let the call-time gate stay the backstop.
+ * `enabledSlugs === undefined` means the set was not resolved (a
+ * synthetic/test context, or a settings-read fault): leave the full enum
+ * advertised and let the call-time gate stay the backstop.
  */
 const narrowBusinessRegistryTool = (
-  context: McpRequestContext,
+  enabledSlugs: readonly BusinessRegistrySlug[] | undefined,
   definitions: McpToolDefinition[],
 ): McpToolDefinition[] => {
-  const enabledSlugs = context.enabledRegistrySlugs;
   if (enabledSlugs === undefined) {
     return definitions;
   }
@@ -94,20 +164,8 @@ const narrowBusinessRegistryTool = (
     return definitions.filter((_definition, i) => i !== index);
   }
 
-  return definitions.map((current, i) =>
-    i === index
-      ? {
-          ...definition,
-          inputSchema: {
-            ...definition.inputSchema,
-            properties: {
-              ...definition.inputSchema.properties,
-              registry: enumProp("Business register to query", enabledSlugs),
-            },
-          },
-        }
-      : current,
-  );
+  const narrowed = narrowRegistryDefinition(definition, enabledSlugs);
+  return definitions.map((current, i) => (i === index ? narrowed : current));
 };
 
 /**
@@ -130,11 +188,14 @@ export const listOfferedStaticMcpToolDefinitions = ({
   mode,
   scopes,
   audience,
+  enabledRegistrySlugs,
 }: {
   context: McpRequestContext;
   mode: McpMode;
   scopes?: readonly string[] | undefined;
   audience?: "model" | "app";
+  /** From `resolveOfferedRegistrySlugs`; `undefined` leaves the enum whole. */
+  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined;
 }): readonly McpToolDefinition[] => {
   const staticDefinitions = listStaticMcpToolDefinitions(mode)
     .map((definition) => projectMcpFeatureInput(context, definition))
@@ -153,7 +214,7 @@ export const listOfferedStaticMcpToolDefinitions = ({
         isStaticToolAvailableToConfirmation(context, definition),
     );
   return mode === "default"
-    ? narrowBusinessRegistryTool(context, staticDefinitions)
+    ? narrowBusinessRegistryTool(enabledRegistrySlugs, staticDefinitions)
     : staticDefinitions;
 };
 

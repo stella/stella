@@ -30,7 +30,6 @@ const requestContext = () =>
     userEmail: "reader@example.test",
     memberRole: "owner",
     grantedScopes: ["stella:read"],
-    enabledRegistrySlugs: [],
   });
 
 type CallOptions = {
@@ -114,6 +113,7 @@ describe("app-only reader tool authorization", () => {
       mode: "default",
       scopes: ["stella:read"],
       audience: "model",
+      enabledRegistrySlugs: [],
     });
     const chat = chatScriptReadToolNames();
     for (const name of appOnlyNames) {

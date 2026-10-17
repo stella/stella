@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
@@ -18,16 +20,21 @@ import { handleMcpToolCall } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
-// Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
+// Only the reachable registries and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
 const contextWith = (
-  enabledRegistrySlugs: readonly string[] | undefined,
+  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined,
   memberRole: McpRequestContext["memberRole"] = "owner",
 ): McpRequestContext =>
   asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs,
+    ...(enabledRegistrySlugs === undefined
+      ? {}
+      : {
+          resolveEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(enabledRegistrySlugs)),
+        }),
     grantedScopes: [],
     memberRole,
     // Billing tools are gated by enrolment; this caller is enrolled so role

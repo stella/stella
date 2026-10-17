@@ -10,6 +10,8 @@ import type {
   PublicHandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import { DISCOVERY_DOCUMENT_CACHE } from "@/api/lib/auth/auth-paths";
+import { dropOriginBoundCors } from "@/api/lib/public-cors";
 import {
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -60,7 +62,7 @@ const discoveryMetadataSchema = t.Object({
 
 const config = {
   contract: "patch",
-  cache: { kind: "public", maxAge: 300 },
+  cache: DISCOVERY_DOCUMENT_CACHE,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   response: safePublicHandlerResponseSchemasWithStatusText(
@@ -74,6 +76,7 @@ const readMetadata = async function* (
   mode: McpMode,
   set: Context["set"],
 ): SafeHandlerGenerator<DiscoveryMetadata> {
+  dropOriginBoundCors(set);
   for (const [key, value] of createMcpMetadataHeaders()) {
     set.headers[key] = value;
   }
