@@ -1304,7 +1304,7 @@ test("a push that only merges the base reuses the previous head's green run", as
   // The new head still records its own marker for its own completion.
   expect(outputs.get("marker")).toContain(mergeHead);
 
-  for (const [label, options] of [
+  const refusals: [string, LookupOptions][] = [
     ["a changed patch id", { currentPatchId: "c".repeat(40) }],
     [
       "a non-merge commit",
@@ -1334,7 +1334,8 @@ test("a push that only merges the base reuses the previous head's green run", as
       "a head that is not the untouched automatic merge",
       { cleanBaseMerge: "false" },
     ],
-  ] as const) {
+  ];
+  for (const [label, options] of refusals) {
     expect((await reuse(options)).outputs.get("run_required"), label).toBe(
       "true",
     );
